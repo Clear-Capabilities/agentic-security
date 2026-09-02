@@ -93,7 +93,8 @@ Organize help by **what the user wants to do**, not by command name:
 | Generate a CI gate | `/setup --ci` |
 | Deep-dive one finding (red/blue/auditor) | `/triage --deep <id>` |
 | Experimental / AI-driven analyses | `/labs` |
-| Export the Data Flow Explorer graph (PNG/PDF/SVG/JSON/CSV/HTML) | `/dataflow --format <fmt> --output <file>` |
+| Export the Data Flow Explorer graph (PNG/PDF/SVG/JSON/CSV/HTML) | `/dataflow export --format <fmt> --output <file>` |
+| Diff two scanned snapshots + drift policies | `/dataflow diff --format <fmt> --output <file>` |
 
 ### Legacy alias map (removed in v0.86.0)
 
