@@ -143,13 +143,13 @@ Commands:
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
-  dataflow export [path] --format png|pdf|svg|json|csv|html --output <file>
+  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa --output <file>
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
-                                                      png/pdf/svg only — no-op + warning for json/csv/html)
+                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa)
                                --size standard|2x    AC-23 pinned PNG sizes (default: standard)
                                --width <n> --height <n>   custom PNG size, <= 20000 (mutually exclusive with --size)
-                               --no-redact            include unredacted content (json/html only; no-op + warning for csv)
+                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa)
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv)
 
 Options:
@@ -3298,7 +3298,7 @@ async function cmdExplore(args) {
 // rejected BEFORE any Chrome invocation — Chrome's own dump-failure
 // reason for this case is confusing, not a good user-facing error), or
 // a caught throw/{ok:false} from the underlying export function.
-const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html']);
+const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa']);
 const DATAFLOW_EXPORT_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
 const DATAFLOW_EXPORT_SIZES = { standard: { width: 1680, height: 945 }, '2x': { width: 3360, height: 1890 } };
 
@@ -3331,7 +3331,10 @@ async function cmdDataflowExport(args) {
   // not one captured view) — found by the final whole-branch review: an
   // explicit --view silently did nothing for these three formats, with no
   // warning, while the docs presented --view as a universal option.
-  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html')) {
+  // dpia/ropa (M4 deliverable #10) join this same non-view-scoped set —
+  // emitGraphDpiaArtifact/emitGraphRopaArtifact have no --view concept
+  // either, mirroring json/csv's own precedent exactly.
+  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa')) {
     process.stderr.write(`agentic-security dataflow export: --view has no effect on --format ${format} — ${format} exports are not view-scoped.\n`);
   }
 
@@ -3381,6 +3384,12 @@ async function cmdDataflowExport(args) {
   const redact = args.flags['no-redact'] ? false : true;
   if (!redact && format === 'csv') {
     process.stderr.write('agentic-security dataflow export: --no-redact has no effect on --format csv — CSV export does not support redaction yet.\n');
+  }
+  // dpia/ropa (M4 deliverable #10): emitGraphDpiaArtifact/emitGraphRopaArtifact
+  // never call exportGraphJSON's own redaction path either — same
+  // precedent as csv above, same guard.
+  if (!redact && (format === 'dpia' || format === 'ropa')) {
+    process.stderr.write(`agentic-security dataflow export: --no-redact has no effect on --format ${format} — ${format} export does not support redaction yet.\n`);
   }
 
   let filter;
@@ -3457,6 +3466,12 @@ async function cmdDataflowExport(args) {
     } else if (format === 'html') {
       const { generateHtmlReport } = await import('../scripts/generate-html-report.mjs');
       data = generateHtmlReport(graph, opts);
+    } else if (format === 'dpia') {
+      const { emitGraphDpiaArtifact } = await import('../src/lineage/export-privacy.js');
+      data = emitGraphDpiaArtifact(graph, opts);
+    } else if (format === 'ropa') {
+      const { emitGraphRopaArtifact } = await import('../src/lineage/export-privacy.js');
+      data = emitGraphRopaArtifact(graph, opts);
     }
   } catch (e) {
     process.stderr.write(`agentic-security dataflow export: export failed: ${e && e.message ? e.message : e}\n`);
