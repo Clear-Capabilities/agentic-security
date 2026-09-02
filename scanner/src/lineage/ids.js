@@ -182,3 +182,20 @@ export function storyId(
   const scope = typeof scopeQuery === 'string' ? scopeQuery : JSON.stringify(scopeQuery ?? null);
   return `story:${_hash(_canon([graphDigest, audienceMode, scope, ...discriminatorParts]))}`;
 }
+
+/**
+ * A GraphSnapshot record's id (M4 deliverable #8, FR-503 §14, DFG-022,
+ * sub-project 8a) — NOT a DataFlowGraph v1 entity, mirrors obligationId's/
+ * storyId's own precedent exactly (a real, stable-ID'd extension record
+ * that is deliberately not a base-graph entity). Discriminated by
+ * (graphId, commit, capturedAt) — `commit` is the REAL git HEAD resolved
+ * by graph-snapshot.js's own persistence layer, never `graphId`'s own
+ * embedded commit component (which is the literal string 'uncommitted' on
+ * every real scan today — see graph-snapshot.js's own header comment).
+ */
+export function snapshotId(
+  { graphId, commit, capturedAt },
+  discriminatorParts = [],
+) {
+  return `snapshot:${_hash(_canon([graphId, commit, capturedAt, ...discriminatorParts]))}`;
+}

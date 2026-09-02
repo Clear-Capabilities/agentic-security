@@ -95,6 +95,13 @@ export const ARTIFACT_REGISTRY = [
   // clears by default, same as last-scan.json itself.
   { name: 'lineage-graph.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'lineage-graph.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan' },
+  // M4 deliverable #8 (FR-503 §14, DFG-022, sub-project 8a): the "Data-Flow
+  // Time Machine" foundation — one commit-keyed GraphSnapshot per scan,
+  // written by src/lineage/graph-snapshot.js's persistGraphSnapshot(),
+  // additively alongside (never replacing) lineage-graph.json above. Same
+  // 'generated'/'scan' bucket for the same reason: fully scanner-derived,
+  // regenerable by re-scanning at that commit.
+  { name: 'lineage-snapshots', kind: 'dir', classification: 'generated', retentionClass: 'scan', source: 'src/lineage/graph-snapshot.js (persistGraphSnapshot)' },
   { name: 'shadow-findings.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'mcp-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence' },
   { name: 'egress-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence', note: "FR-604 per-call egress audit log — hash-chained NDJSON written by egress/audit.js's recordEgressCall, never read as config" },

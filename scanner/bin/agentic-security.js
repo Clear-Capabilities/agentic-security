@@ -10,6 +10,7 @@ const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
 import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
+import { persistGraphSnapshot } from '../src/lineage/graph-snapshot.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
 // process.exit() does NOT flush an asynchronous stdout. stdout is asynchronous
@@ -1086,6 +1087,15 @@ async function cmdScan(args) {
           await fsp.writeFile(path.join(stateDirPath, 'lineage-graph.json.sig'), _signLastScan(lineageBody));
         } catch { /* non-fatal — sig file is best-effort, same precedent as last-scan.json.sig above */ }
       } catch { /* non-fatal — the lineage artifact write is best-effort and must never block a scan */ }
+      // M4 deliverable #8 (FR-503 §14, DFG-022, sub-project 8a): ADDITIVELY
+      // persist the SAME graph into the commit-keyed snapshot history
+      // (.agentic-security/lineage-snapshots/<HEAD>.json), never replacing
+      // the single-current-graph artifact written just above. Best-effort,
+      // same precedent as the write above — a snapshot-history failure must
+      // never block a scan.
+      try {
+        persistGraphSnapshot(scan.lineageGraph, targetAbs);
+      } catch { /* non-fatal — snapshot history is best-effort and must never block a scan */ }
     }
   } else {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write state at ${stateDirPath} — no project marker in ${path.resolve(target)}\n`);
