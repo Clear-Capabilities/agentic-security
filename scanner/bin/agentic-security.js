@@ -143,14 +143,16 @@ Commands:
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
-  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa --output <file>
+  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing --output <file>
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
-                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa)
+                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing)
                                --size standard|2x    AC-23 pinned PNG sizes (default: standard)
                                --width <n> --height <n>   custom PNG size, <= 20000 (mutually exclusive with --size)
-                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa)
+                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa/briefing)
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv)
+                               --audience board|ciso|privacy|compliance|regulator|technical
+                                                      (default: technical; briefing only — wording/verbosity, never facts)
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -3298,7 +3300,7 @@ async function cmdExplore(args) {
 // rejected BEFORE any Chrome invocation — Chrome's own dump-failure
 // reason for this case is confusing, not a good user-facing error), or
 // a caught throw/{ok:false} from the underlying export function.
-const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa']);
+const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa', 'briefing']);
 const DATAFLOW_EXPORT_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
 const DATAFLOW_EXPORT_SIZES = { standard: { width: 1680, height: 945 }, '2x': { width: 3360, height: 1890 } };
 
@@ -3333,9 +3335,25 @@ async function cmdDataflowExport(args) {
   // warning, while the docs presented --view as a universal option.
   // dpia/ropa (M4 deliverable #10) join this same non-view-scoped set —
   // emitGraphDpiaArtifact/emitGraphRopaArtifact have no --view concept
-  // either, mirroring json/csv's own precedent exactly.
-  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa')) {
+  // either, mirroring json/csv's own precedent exactly. briefing (FR-501)
+  // joins the same set — emitDecisionStory has no --view concept either.
+  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa' || format === 'briefing')) {
     process.stderr.write(`agentic-security dataflow export: --view has no effect on --format ${format} — ${format} exports are not view-scoped.\n`);
+  }
+
+  // --audience (FR-501, briefing only): parsed and enum-validated
+  // unconditionally, matching --view's own precedent above — an invalid
+  // value is a clear exit-2 error regardless of --format, not silently
+  // accepted and then ignored. Defaults to export-briefing.js's own
+  // documented default ('technical') when omitted. AUDIENCE_MODES is
+  // imported (never hand-copied) so this validation can never drift from
+  // emitDecisionStory's own enum — the same single-source-of-truth
+  // discipline every other enum in this file follows.
+  const { AUDIENCE_MODES } = await import('../src/lineage/export-briefing.js');
+  const audienceMode = args.flags.audience || 'technical';
+  if (!AUDIENCE_MODES.includes(audienceMode)) {
+    process.stderr.write(`agentic-security dataflow export: --audience must be one of ${AUDIENCE_MODES.join('|')} (got ${JSON.stringify(audienceMode)}).\n`);
+    return 2;
   }
 
   // A bare flag (no following value, e.g. "--width --height 500") is
@@ -3387,8 +3405,10 @@ async function cmdDataflowExport(args) {
   }
   // dpia/ropa (M4 deliverable #10): emitGraphDpiaArtifact/emitGraphRopaArtifact
   // never call exportGraphJSON's own redaction path either — same
-  // precedent as csv above, same guard.
-  if (!redact && (format === 'dpia' || format === 'ropa')) {
+  // precedent as csv above, same guard. briefing (FR-501) joins the same
+  // set — emitDecisionStory never calls exportGraphJSON's redaction path
+  // either.
+  if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing')) {
     process.stderr.write(`agentic-security dataflow export: --no-redact has no effect on --format ${format} — ${format} export does not support redaction yet.\n`);
   }
 
@@ -3451,7 +3471,7 @@ async function cmdDataflowExport(args) {
   // same field json/html embed unconditionally), so exporting the
   // identical persisted graph twice on two different days produced two
   // different documents.
-  const opts = { view, width, height, redact, filter, generatedAt: graph.generatedAt };
+  const opts = { view, width, height, redact, filter, generatedAt: graph.generatedAt, audienceMode };
 
   let data;
   try {
@@ -3479,6 +3499,9 @@ async function cmdDataflowExport(args) {
     } else if (format === 'ropa') {
       const { emitGraphRopaArtifact } = await import('../src/lineage/export-privacy.js');
       data = emitGraphRopaArtifact(graph, opts);
+    } else if (format === 'briefing') {
+      const { emitDecisionStory } = await import('../src/lineage/export-briefing.js');
+      data = emitDecisionStory(graph, opts).markdown;
     }
   } catch (e) {
     // dpia/ropa reach frontend/src/views/privacy-view.js via a relative
