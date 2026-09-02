@@ -97,3 +97,44 @@ test('bundleFrontendModules: entry and a non-entry dependency each declaring the
   const fn = new Function(`${out}\nreturn run();`);
   assert.equal(fn(), 'ENTRYB');
 });
+
+// Regression for three real, unsupported forms the final whole-branch
+// review found built with NO error and only failed later, as a page-load
+// SyntaxError blanking the whole page silently — one of them
+// (`export async function`) already exists in the real frontend/ tree
+// today (lib/api-client.js), outside the bundled entry point's own
+// reachable graph only by luck.
+test('bundleFrontendModules: throws a clear error on `export async function`', () => {
+  const root = _mkTmpTree({ 'a.js': `export async function run() {}` });
+  assert.throws(() => bundleFrontendModules(path.join(root, 'a.js')), /unsupported import\/export form/i);
+});
+
+test('bundleFrontendModules: throws a clear error on an `export { x };` re-export list', () => {
+  const root = _mkTmpTree({ 'a.js': `function run() {}\nexport { run };` });
+  assert.throws(() => bundleFrontendModules(path.join(root, 'a.js')), /unsupported import\/export form/i);
+});
+
+test('bundleFrontendModules: throws a clear error on `import { x as y }` renames', () => {
+  const root = _mkTmpTree({
+    'a.js': `import { greet as hi } from './b.js';\nexport function run() { return hi(); }`,
+    'b.js': `export function greet() { return 'hi'; }`,
+  });
+  assert.throws(() => bundleFrontendModules(path.join(root, 'a.js')), /unsupported .*rename/i);
+});
+
+// The general safety net: even an unsupported form none of the named
+// guards above anticipates must still be caught, since the final bundle
+// is validated as syntactically valid JS before being returned — this is
+// what makes the promise in this module's own header comment
+// ("throws a clear error on anything else") actually true, rather than
+// true only for the specific forms someone thought to name.
+test('bundleFrontendModules: the final syntax-validation safety net catches a genuinely unanticipated broken bundle', () => {
+  // Not an import/export form at all — a plain syntax error inside a
+  // module's own body. None of the named regex guards look at a file's
+  // body beyond import/export lines, so nothing upstream of the final
+  // `new Function(bundled)` check could ever catch this — proving the
+  // safety net's own value: it catches ANY reason the assembled bundle
+  // fails to parse, not just the specific forms someone thought to name.
+  const root = _mkTmpTree({ 'a.js': `export function run( { return 1; }` });
+  assert.throws(() => bundleFrontendModules(path.join(root, 'a.js')), /not valid JavaScript/i);
+});

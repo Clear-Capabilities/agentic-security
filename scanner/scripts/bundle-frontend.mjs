@@ -45,6 +45,18 @@ const IMPORT_RE = /import\s*\{([\s\S]*?)\}\s*from\s*['"](\.[^'"]+)['"];?/g;
 const UNSUPPORTED_IMPORT_RE = /^import\s+(?!\{)/m;
 const EXPORT_STAR_RE = /^export\s*\*/m;
 const EXPORT_DEFAULT_RE = /^export\s+default\b/m;
+// Three more real, unsupported forms — added after the final whole-branch
+// review found each builds with NO error (`EXPORT_NAMED_RE` below requires
+// `function`/`class`/`const`/`let`/`var` immediately after `export `, so
+// `export async function` matches none of these guards OR the named-export
+// extractor, and is silently dropped as neither a caught error nor a real
+// export) and only fails later as a page-load SyntaxError, blanking the
+// whole page with no visible error — `export async function` already
+// exists in the real tree today (frontend/src/lib/api-client.js), outside
+// today's bundled entry point's own reachable graph only by luck.
+const EXPORT_ASYNC_RE = /^export\s+async\s+function/m;
+const EXPORT_LIST_RE = /^export\s*\{/m;
+const IMPORT_RENAME_RE = /\bas\b/;
 const EXPORT_NAMED_RE = /^export\s+(?:function\*?|class|const|let|var)\s+([A-Za-z0-9_$]+)/gm;
 
 function _nsName(absPath, seen) {
@@ -59,13 +71,16 @@ function _nsName(absPath, seen) {
 
 function _parseModule(absPath) {
   const src = fs.readFileSync(absPath, 'utf8');
-  if (UNSUPPORTED_IMPORT_RE.test(src) || EXPORT_STAR_RE.test(src) || EXPORT_DEFAULT_RE.test(src)) {
-    throw new Error(`bundleFrontendModules: unsupported import/export form in ${absPath} — only named imports/exports are supported`);
+  if (UNSUPPORTED_IMPORT_RE.test(src) || EXPORT_STAR_RE.test(src) || EXPORT_DEFAULT_RE.test(src) || EXPORT_ASYNC_RE.test(src) || EXPORT_LIST_RE.test(src)) {
+    throw new Error(`bundleFrontendModules: unsupported import/export form in ${absPath} — only named imports/exports are supported (no default/namespace/side-effect imports, no export */export default/export {}-list/export async function)`);
   }
   const imports = [];
   let m;
   IMPORT_RE.lastIndex = 0;
   while ((m = IMPORT_RE.exec(src))) {
+    if (IMPORT_RENAME_RE.test(m[1])) {
+      throw new Error(`bundleFrontendModules: unsupported \`import { x as y }\` rename in ${absPath} — only bare named imports are supported`);
+    }
     const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
     const resolved = path.resolve(path.dirname(absPath), m[2]);
     imports.push({ names, resolved });
@@ -131,5 +146,31 @@ export function bundleFrontendModules(entryAbsPath) {
     const returnObj = mod.exportNames.length ? `  return { ${mod.exportNames.join(', ')} };` : '  return {};';
     chunks.push(`const ${ns} = (function() {\n${destructures}\n${mod.body}\n${returnObj}\n})();`);
   }
-  return chunks.join('\n\n');
+  const bundled = chunks.join('\n\n');
+
+  // Real gap found by the final whole-branch review, live-reproduced: the
+  // UNSUPPORTED_IMPORT_RE/EXPORT_STAR_RE/EXPORT_DEFAULT_RE guards above
+  // only cover THREE specific unsupported forms — real ES syntax this
+  // bundler doesn't handle (`export async function`, `export { g };`
+  // re-export lists, `import { h as hh }` renames) builds with NO error
+  // and only fails later, as a page-load-time SyntaxError that silently
+  // blanks the whole page (export-entry.js's own showError() never runs,
+  // since the entire inline <script> fails to parse before any of its
+  // code executes) — directly contradicting this file's own documented
+  // "throws a clear error on anything else" promise. `export async
+  // function` already exists in the real tree today
+  // (frontend/src/lib/api-client.js) — outside today's bundled entry
+  // point's own reachable graph only by luck. Rather than enumerating
+  // every unsupported form by name (the exact approach that missed these
+  // three), validate the FINAL bundle is syntactically valid JS before
+  // returning it — this converts any parse failure, including forms not
+  // yet imagined, into a clear build-time error. `new Function` compiles
+  // without executing (measured ~1ms on the real ~131KB bundle — cheap).
+  try {
+    // eslint-disable-next-line no-new-func
+    new Function(bundled);
+  } catch (e) {
+    throw new Error(`bundleFrontendModules: the assembled bundle is not valid JavaScript (${e.message}) — one of the ${order.length} modules likely uses an ES form this bundler doesn't support (only named imports/exports, no async/generator export shorthand ambiguity, no \`export { x };\` lists, no \`import { x as y }\` renames)`);
+  }
+  return bundled;
 }
