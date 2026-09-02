@@ -161,3 +161,24 @@ export function obligationId(
 ) {
   return `obligation:${_hash(_canon([framework, frameworkVersion, requirementId, graphId, graphDigest, ...discriminatorParts]))}`;
 }
+
+/**
+ * A DecisionStory record's id (M4 deliverable #7, FR-501 §14, DFG-035) —
+ * NOT a DataFlowGraph v1 entity, mirrors obligationId's own precedent
+ * exactly (a real, stable-ID'd extension record that is deliberately not
+ * a base-graph entity). Discriminated by (graphDigest, audienceMode,
+ * scopeQuery) rather than graphId alone, for the identical reason
+ * obligationId's own comment gives: two stories over the same graphId but
+ * genuinely different graph CONTENT (or a different filter/audience
+ * scope) must not collide onto one id. `scopeQuery` is passed pre-
+ * serialized by the caller (a plain object is not itself hashable
+ * material) so this function stays a thin, generic hasher rather than
+ * embedding export-briefing.js's own scopeQuery shape.
+ */
+export function storyId(
+  { graphDigest, audienceMode, scopeQuery },
+  discriminatorParts = [],
+) {
+  const scope = typeof scopeQuery === 'string' ? scopeQuery : JSON.stringify(scopeQuery ?? null);
+  return `story:${_hash(_canon([graphDigest, audienceMode, scope, ...discriminatorParts]))}`;
+}
