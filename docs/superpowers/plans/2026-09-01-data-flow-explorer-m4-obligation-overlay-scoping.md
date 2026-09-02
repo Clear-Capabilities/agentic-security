@@ -171,27 +171,7 @@ specs), recommend three further-scoped pieces, in dependency order:
    that records are not `DataFlowGraph v1` entities) — following the same
    design-doc-then-module pattern every prior `src/lineage/` addition
    this session used.
-2. **6b — the predicate/mapping engine — scoped (2026-09-01), see own
-   doc.** The real work: a new graph-fact-reading predicate type added
-   to the SAME typed-predicate architecture `auditor-walkthrough.js`
-   already implements, evaluated against 5 real framework catalogs
-   (GDPR/CCPA/HIPAA/EU AI Act/NIST Privacy Framework — reusing the 5
-   that already have real catalogs; PCI DSS excluded per correction
-   #4), honoring the OSCAL precedent's "never claim decided for what
-   wasn't" discipline and AC-28's "evidence ≠ compliance" wording
-   verbatim in any rendered output. Its own scoping doc
-   (`2026-09-01-data-flow-explorer-m4-obligation-predicate-scoping.md`)
-   found `evaluateFramework`'s dispatch is a hardcoded if/else-if chain
-   (a `graph:` branch slots in with zero signature change — it already
-   receives `scan.lineageGraph`), that no catalog carries a real
-   `frameworkVersion` field (ruling: synthesize from `controlsDigest`),
-   that `applicabilityInputs` has no real operator-config source
-   anywhere in this codebase and stays honestly all-`null` in this
-   delivery (a genuinely separate, deferred increment — mirroring the
-   privacy-policy.json precedent), and that the first real, most
-   provable predicate is HIPAA §164.312(e)'s transit-protection check
-   (the one dimension with both a real producer and a real
-   classification join). Not yet planned.
+2. **6b — the predicate/mapping engine — COMPLETE (2026-09-01)**: `obligation-predicates.js` (the graph-fact predicate evaluator + `ObligationMapping` record builder) is wired into `auditor-walkthrough.js`'s typed-predicate dispatch as a new `graph:` branch, with HIPAA §164.312(e)'s transit-protection check as the first real end-to-end case. A new graph-fact-reading predicate type added to the SAME typed-predicate architecture `auditor-walkthrough.js` already implements, evaluated against 5 real framework catalogs (GDPR/CCPA/HIPAA/EU AI Act/NIST Privacy Framework — reusing the 5 that already have real catalogs; PCI DSS excluded per correction #4), honoring the OSCAL precedent's "never claim decided for what wasn't" discipline and AC-28's "evidence ≠ compliance" wording verbatim in any rendered output. `evaluateFramework`'s dispatch is a hardcoded if/else-if chain (a `graph:` branch slots in with zero signature change — it already receives `scan.lineageGraph`), no catalog carries a real `frameworkVersion` field (ruled: synthesize from `controlsDigest`), `applicabilityInputs` has no real operator-config source and stays honestly all-`null` in this delivery (a genuinely separate, deferred increment — mirroring the privacy-policy.json precedent), and HIPAA §164.312(e)'s transit-protection check is the first real, most provable predicate (the one dimension with both a real producer and a real classification join).
 3. **6c — evidence-pack export.** A new, parallel signed-bundle module
    (own schema constant, own allowlist — NOT a widened
    `evidence-bundle.js`) composing `computeGraphDigest`'s reusable
