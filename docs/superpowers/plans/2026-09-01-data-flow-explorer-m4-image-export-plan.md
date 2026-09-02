@@ -515,10 +515,18 @@ git commit -m "feat(scripts): add export-image.mjs — PNG/PDF/SVG export via re
 
 - [ ] **Step 1: Wire the two new test files**
 
-Add `test/chrome-probe.test.js` and `test/export-image.test.js` to
-`scanner/package.json`'s `test:lineage` script (confirmed this session to
-be an explicit space-separated file list, not a glob — re-confirm the
-current exact string before editing).
+**Correction, made during Task 1's own review**: `chrome-probe.mjs` lives
+under `src/ir/`, matching its sibling `parser-py-cst.js`'s own capability-
+probe pattern — and `parser-py-cst.test.js` is wired into `test:dataflow`
+("IR, taint engine, calibration, held-out evaluator" per
+`scanner/CLAUDE.md`'s own test-scope table), not `test:lineage`. Add
+`test/chrome-probe.test.js` to `test:dataflow`, matching its sibling's
+own placement. `test/export-image.test.js` (Task 2) stays in
+`test:lineage`, matching `export-json.test.js`/`export-csv.test.js`'s
+own precedent (it consumes `generate-html-report.mjs`, itself
+`src/lineage/`-adjacent). Both are confirmed this session to be explicit
+space-separated file lists, not globs — re-confirm the current exact
+strings before editing.
 
 - [ ] **Step 2: Document in `scanner/src/lineage/CLAUDE.md`**
 
