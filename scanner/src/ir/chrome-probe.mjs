@@ -39,7 +39,15 @@ let _capability = null;
 // it is a safe integer and `-0 >= 0`, so without the explicit check it
 // would silently mean "no timeout", one character away from the "0"
 // this function deliberately allows.
-function _validTimeoutMs(raw, fallback) {
+// Exported test-only — the outcome-based integration tests (a real
+// probe/export succeeding or not) can't distinguish `timeout: 0` from
+// `timeout: <default>` when the underlying command finishes quickly
+// either way, so a direct table of this function's own input/output
+// pairs is the only thing that actually pins the "0"-vs-default
+// boundary — found by a third scoped re-review: the blank-env-var
+// integration test below passed even with the round-2 blank-handling
+// bug fully reintroduced, for exactly this reason.
+export function _validTimeoutMs(raw, fallback) {
   const s = String(raw ?? '').trim();
   if (!s) return fallback;
   const n = Number(s);

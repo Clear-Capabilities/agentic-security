@@ -4,8 +4,31 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { exportPng, exportPdf, exportSvg } from '../scripts/export-image.mjs';
+import { exportPng, exportPdf, exportSvg, _validTimeoutMs } from '../scripts/export-image.mjs';
 import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
+
+test('_validTimeoutMs: direct input/output table pinning the 0-vs-default boundary', () => {
+  // Found by a third scoped re-review: the outcome-based itChrome tests
+  // below (exporting with a malformed env var) can't distinguish
+  // `timeout: 0` from `timeout: <default>` when the real render
+  // finishes quickly either way. A direct table of this function's own
+  // input/output pairs is what actually pins every boundary all three
+  // rounds fixed. Not itChrome-gated — no Chrome invocation involved.
+  const DEFAULT = 15000;
+  const cases = [
+    [undefined, DEFAULT], [null, DEFAULT], ['', DEFAULT], ['   ', DEFAULT], ['\t\n ', DEFAULT],
+    ['0', 0], ['00', 0], [' 0 ', 0],
+    ['-0', DEFAULT],
+    ['-1', DEFAULT], ['-1.5', DEFAULT],
+    ['oops', DEFAULT], ['NaN', DEFAULT], ['Infinity', DEFAULT], ['-Infinity', DEFAULT],
+    ['1.5', DEFAULT], ['0.5', DEFAULT], ['1e-3', DEFAULT],
+    ['1e400', DEFAULT], [String(Number.MAX_SAFE_INTEGER + 1), DEFAULT],
+    ['1500', 1500], [' 250 ', 250], ['1e3', 1000],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(_validTimeoutMs(input, DEFAULT), expected, `input ${JSON.stringify(input)}`);
+  }
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FLAGSHIP_PATH = path.resolve(__dirname, '../src/lineage/fixtures/flagship-graph.json');

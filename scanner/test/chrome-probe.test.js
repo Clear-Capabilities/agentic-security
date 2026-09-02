@@ -3,7 +3,31 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { probeChromeAvailable, resetChromeProbe } from '../src/ir/chrome-probe.mjs';
+import { probeChromeAvailable, resetChromeProbe, _validTimeoutMs } from '../src/ir/chrome-probe.mjs';
+
+test('_validTimeoutMs: direct input/output table pinning the 0-vs-default boundary', () => {
+  // Found by a third scoped re-review: the outcome-based integration
+  // tests below (probing/exporting with a malformed env var) can't
+  // distinguish `timeout: 0` from `timeout: <default>` when the real
+  // command finishes quickly either way — both a working chrome
+  // --version and a 0ms-vs-5000ms bound look identical from the
+  // outcome. A direct table of this function's own input/output pairs
+  // is what actually pins every boundary all three rounds fixed.
+  const DEFAULT = 5000;
+  const cases = [
+    [undefined, DEFAULT], [null, DEFAULT], ['', DEFAULT], ['   ', DEFAULT], ['\t\n ', DEFAULT],
+    ['0', 0], ['00', 0], [' 0 ', 0],
+    ['-0', DEFAULT],
+    ['-1', DEFAULT], ['-1.5', DEFAULT],
+    ['oops', DEFAULT], ['NaN', DEFAULT], ['Infinity', DEFAULT], ['-Infinity', DEFAULT],
+    ['1.5', DEFAULT], ['0.5', DEFAULT], ['1e-3', DEFAULT],
+    ['1e400', DEFAULT], [String(Number.MAX_SAFE_INTEGER + 1), DEFAULT],
+    ['1500', 1500], [' 250 ', 250], ['1e3', 1000],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(_validTimeoutMs(input, DEFAULT), expected, `input ${JSON.stringify(input)}`);
+  }
+});
 
 test('probeChromeAvailable: finds a real Chrome on this machine (environment-dependent, skip if absent)', () => {
   resetChromeProbe();

@@ -40,7 +40,10 @@ import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
 // allows. Kept identical to chrome-probe.mjs's own copy of this
 // function rather than factored into a shared module — two small
 // functions, not worth a new shared file for.
-function _validTimeoutMs(raw, fallback) {
+// Exported test-only — see chrome-probe.mjs's own copy of this
+// function for why a direct input/output table, not an integration
+// test, is what actually pins the "0"-vs-default boundary.
+export function _validTimeoutMs(raw, fallback) {
   const s = String(raw ?? '').trim();
   if (!s) return fallback;
   const n = Number(s);
