@@ -3427,11 +3427,15 @@ async function cmdDataflowExport(args) {
   // precedent as csv above, same guard. briefing (FR-501) joins the same
   // set — emitDecisionStory never calls exportGraphJSON's redaction path
   // either. recipients (FR-506) joins the same set too — a judgment call,
-  // disclosed: `redact-graph.js`'s own field list has nothing to say about
-  // `graph.recipientProfiles` (it redacts `node.destination`/`storeDetail`/
-  // `queueDetail`/`evidence[]`, never this new array), so the renderer
-  // below never calls exportGraphJSON's redaction path either — matching
-  // dpia/ropa/briefing's own precedent exactly, not a new behavior.
+  // disclosed: as of fix-round-1 (B1), `redact-graph.js`'s `_redactGraph`
+  // DOES cover `graph.recipientProfiles[].technicalEndpoint`/`.legalEntity`/
+  // `.retentionCommitment`/`.transferMechanism` — but `--no-redact` is
+  // still a no-op for `recipients` specifically because
+  // `_renderDataflowRecipientsMarkdown` below never calls
+  // `exportGraphJSON`'s redaction path at all (it reads `graph` directly,
+  // the same way dpia/ropa/briefing's own renderers do) — a fact about
+  // THIS renderer's own code path, unrelated to whether `_redactGraph`
+  // itself has an opinion about the field.
   if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients')) {
     process.stderr.write(`agentic-security dataflow export: --no-redact has no effect on --format ${format} — ${format} export does not support redaction yet.\n`);
   }

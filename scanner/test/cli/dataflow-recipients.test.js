@@ -186,6 +186,72 @@ test('dataflow export --format recipients: --filter genuinely narrows the output
   assert.match(keptMd, /anthropic/);
 });
 
+// fix-round-1, B3 live reproduction: build the filter file from a node id
+// derived INDEPENDENTLY from graph.nodes (never copied from
+// recipientProfiles[].contributingGraphIds itself) — the prior test above
+// used contributingGraphIds to build its own "real" filter, which the
+// final whole-branch review flagged as a vacuous construction: it would
+// pass even if contributingGraphIds still held a bogus CFG-local counter
+// value, since the filter and the field under test came from the exact
+// same (possibly-wrong) source. This test instead re-derives the real
+// AI-provider sink node id directly from graph.nodes (kind:'external',
+// subtype:'ai-model-provider' — sink-registry.js's own CATEGORY_NODE_KIND/
+// CWE_MAP mapping for CWE-201), confirms it's actually a MEMBER of
+// contributingGraphIds (proving B3's fix genuinely wired the real id
+// through), and then proves --filter narrows correctly using that
+// independently-derived id.
+test('dataflow export --format recipients: --filter narrows using a node id derived independently of contributingGraphIds (fix-round-1, B3)', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', PHI_SOURCE);
+  fx.commit('add PHI-to-model-provider flow');
+
+  const scanR = _scanWithLineage(fx);
+  assert.ok(scanR.status <= 3, `scan must exit <=3; got ${scanR.status}: ${scanR.stderr}`);
+
+  const graphPath = path.join(fx.root, '.agentic-security', 'lineage-graph.json');
+  const graph = JSON.parse(fs.readFileSync(graphPath, 'utf8'));
+  assert.ok(Array.isArray(graph.recipientProfiles) && graph.recipientProfiles.length >= 1, 'fixture assumption: at least one real recipient profile');
+
+  // The node's kind is 'unresolved', not 'external': `anthropic.messages
+  // .create()` is a receiver-based SDK call with no literal destination
+  // URL to resolve, so FR-203's own unresolved-destination path applies
+  // (confirmed live against the real persisted graph, not assumed) —
+  // matched on `subtype: 'ai-model-provider'` alone, independent of kind.
+  const independentNode = graph.nodes.find((n) => n.subtype === 'ai-model-provider');
+  assert.ok(independentNode, 'expected a real ai-model-provider sink node in graph.nodes, derived independently of recipientProfiles');
+  assert.match(independentNode.id, /^node:[a-z-]+:[0-9a-f]{12}$/);
+
+  // Real, live proof that B3's fix actually threads the real node id
+  // through: the independently-derived node id must be a member of the
+  // recipient profile's own contributingGraphIds.
+  assert.ok(
+    graph.recipientProfiles[0].contributingGraphIds.includes(independentNode.id),
+    'expected the independently-derived sink node id to appear in contributingGraphIds',
+  );
+
+  const filterPath = path.join(fx.root, 'filter-independent.json');
+  fs.writeFileSync(filterPath, JSON.stringify({ nodeIds: [independentNode.id], edgeIds: [] }));
+  const filteredOut = path.join(fx.root, 'recipients-filtered-independent.md');
+  const filteredR = _exportCli(fx, ['--format', 'recipients', '--output', filteredOut, '--filter', filterPath]);
+  assert.equal(filteredR.status, 0, `filtered export failed: ${filteredR.stderr}`);
+  const filteredMd = fs.readFileSync(filteredOut, 'utf8');
+  assert.match(filteredMd, /anthropic/, 'expected the independently-derived real node id to keep the recipient in the filtered report');
+
+  // A filter naming an unrelated real node (not the sink) must narrow it
+  // out entirely — proves the filter genuinely discriminates, not just
+  // "any node id passes".
+  const otherNode = graph.nodes.find((n) => n.id !== independentNode.id);
+  assert.ok(otherNode, 'fixture assumption: at least one other real node exists');
+  const negFilterPath = path.join(fx.root, 'filter-independent-neg.json');
+  fs.writeFileSync(negFilterPath, JSON.stringify({ nodeIds: [otherNode.id], edgeIds: [] }));
+  const negOut = path.join(fx.root, 'recipients-filtered-independent-neg.md');
+  const negR = _exportCli(fx, ['--format', 'recipients', '--output', negOut, '--filter', negFilterPath]);
+  assert.equal(negR.status, 0);
+  const negMd = fs.readFileSync(negOut, 'utf8');
+  assert.doesNotMatch(negMd, /anthropic/, 'expected an unrelated real node id to narrow the recipient out entirely');
+});
+
 test('dataflow export --format recipients: --view/--no-redact are documented no-ops with a warning', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());

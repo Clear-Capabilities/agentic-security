@@ -36,6 +36,27 @@ test('resolveTechnicalProvider: a real hostname-pattern match against a literalV
   assert.equal(result.provider, 'anthropic');
 });
 
+// fix-round-1, I4: hostname matching must test the BARE HOSTNAME extracted
+// from literalValue, never the raw literal string — testing the raw
+// string let an attacker-controlled destination absorb a real company's
+// declared legal/DPA facts whenever "anthropic.com" appeared anywhere in
+// the URL (a path segment, a query value), not just as the actual host.
+test('resolveTechnicalProvider: I4 — a lookalike path segment does NOT match the real hostname pattern', () => {
+  const result = resolveTechnicalProvider({ literalValue: 'https://attacker.io/anthropic.com' });
+  assert.equal(result, null, 'expected no match — "anthropic.com" here is a PATH segment on attacker.io, not the host');
+});
+
+test('resolveTechnicalProvider: I4 — a lookalike query value does NOT match the real hostname pattern', () => {
+  const result = resolveTechnicalProvider({ literalValue: 'https://attacker.io/proxy?to=https://api.anthropic.com' });
+  assert.equal(result, null, 'expected no match — "api.anthropic.com" here is a QUERY VALUE on attacker.io, not the host');
+});
+
+test('resolveTechnicalProvider: I4 — the legitimate hostname still resolves correctly after the fix', () => {
+  const result = resolveTechnicalProvider({ literalValue: 'https://api.anthropic.com/v1/messages' });
+  assert.ok(result, 'expected the real Anthropic hostname to still match');
+  assert.equal(result.provider, 'anthropic');
+});
+
 test('resolveTechnicalProvider: no match returns null, never throws', () => {
   assert.equal(resolveTechnicalProvider({ framework: 'express' }), null);
   assert.equal(resolveTechnicalProvider({ literalValue: 'https://example.com/webhook' }), null);
@@ -211,6 +232,26 @@ test('loadRecipientConfig: a well-formed file round-trips exactly', () => {
   const file = _tmpFile(JSON.stringify({ recipients: { 'anthropic': entry } }));
   const result = loadRecipientConfig(file);
   assert.deepEqual(result, { recipients: { anthropic: entry } });
+});
+
+// fix-round-1, M7: servicePurpose/observedRegion are real RECIPIENT_FACT_FIELDS
+// (recipient-profile.js) and are real fields buildRecipientProfile's own
+// `facts` object initializes, but were missing from
+// _RECIPIENT_CONFIG_FACT_FIELDS/_isValidRecipientConfigEntry — an operator
+// declaring either in recipient-profiles.json had it silently ignored
+// (never validated, never copied into the built profile).
+test('loadRecipientConfig: servicePurpose/observedRegion round-trip through validation, not silently dropped', () => {
+  const entry = { servicePurpose: 'customer support ticketing', observedRegion: 'us-east-1' };
+  const file = _tmpFile(JSON.stringify({ recipients: { anthropic: entry } }));
+  const result = loadRecipientConfig(file);
+  assert.deepEqual(result, { recipients: { anthropic: entry } });
+});
+
+test('loadRecipientConfig: a malformed servicePurpose/observedRegion (non-string) is rejected like every other declared field', () => {
+  const file1 = _tmpFile(JSON.stringify({ recipients: { anthropic: { servicePurpose: 42 } } }));
+  const file2 = _tmpFile(JSON.stringify({ recipients: { anthropic: { observedRegion: 42 } } }));
+  assert.deepEqual(loadRecipientConfig(file1), { recipients: {} });
+  assert.deepEqual(loadRecipientConfig(file2), { recipients: {} });
 });
 
 test('loadRecipientConfig: an entry that is not a plain object is skipped', () => {
@@ -395,6 +436,28 @@ test('buildRecipientProfile: opts.recipientConfig omitted entirely still works (
   const profile = buildRecipientProfile(site, GRAPH, undefined);
   assert.ok(profile);
   assert.equal(profile.provider, 'anthropic');
+});
+
+// fix-round-1, M7: a real end-to-end proof that operator-declared
+// servicePurpose/observedRegion land in the built profile with a
+// {factType: 'declared', ...} fieldEvidence entry — before the fix these
+// were silently dropped by _RECIPIENT_CONFIG_FACT_FIELDS/
+// _isValidRecipientConfigEntry never mentioning either field.
+test('buildRecipientProfile: M7 — servicePurpose/observedRegion land in the built profile with declared fieldEvidence', () => {
+  const site = _site();
+  const recipientConfig = {
+    recipients: {
+      anthropic: { servicePurpose: 'clinical note summarization', observedRegion: 'us-east-1' },
+    },
+  };
+  const profile = buildRecipientProfile(site, GRAPH, { recipientConfig });
+  assert.ok(profile);
+  assert.equal(profile.servicePurpose, 'clinical note summarization');
+  assert.equal(profile.observedRegion, 'us-east-1');
+  assert.deepEqual(profile.fieldEvidence.servicePurpose, { factType: 'declared', source: RECIPIENT_CONFIG_FILENAME });
+  assert.deepEqual(profile.fieldEvidence.observedRegion, { factType: 'declared', source: RECIPIENT_CONFIG_FILENAME });
+  const { valid, errors } = validateRecipientProfile(profile);
+  assert.equal(valid, true, `expected a valid RecipientProfile, got: ${JSON.stringify(errors)}`);
 });
 
 // =====================================================================

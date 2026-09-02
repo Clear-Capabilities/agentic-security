@@ -104,6 +104,7 @@ import { emptyGraphEnvelope } from './schema.js';
 import { emptyProtection, aggregateVerdicts } from './protection.js';
 import * as ids from './ids.js';
 import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from './source-seeding.js';
+import { RECIPIENT_FACT_FIELDS } from './recipient-profile.js';
 
 // =========================================================================
 // §4.2 / §4.3 — registry-backed sink enumeration, multi-candidate resolution
@@ -568,32 +569,6 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       if (destination) site.destination = destination;
     }
   }
-  // Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence): a
-  // THIRD, SEPARATE, additive hook of the identical shape — composes with,
-  // never replaces, `resolveDestination`/`resolveSiteDecision` above.
-  // Applied once `resolveDestination` has run, at the same pipeline point,
-  // so `opts.buildRecipientProfile` sees each site's final `.destination`.
-  // Deliberately NOT gated on `site.destination` being present: unlike a
-  // protection/policy verdict, a recipient's technical-provider match can
-  // resolve from `site.entry.framework` alone (e.g. a receiver-based
-  // `anthropic.messages.create()` SDK call, AC-07's own real fixture shape,
-  // whose destination frequently never resolves past 'unknown'/'dynamic' —
-  // there is no literal URL to resolve) — skipping every site with no
-  // destination would silently drop exactly that real-world case. A no-op
-  // when omitted, mirroring every sibling hook's own proven contract.
-  if (typeof opts.buildRecipientProfile === 'function') {
-    for (const site of sites) {
-      const profile = opts.buildRecipientProfile(site, graph);
-      if (profile) {
-        const existing = recipientProfilesById.get(profile.id);
-        if (existing) {
-          existing.contributingGraphIds = [...new Set([...existing.contributingGraphIds, site.nodeId])];
-        } else {
-          recipientProfilesById.set(profile.id, { ...profile, contributingGraphIds: [site.nodeId] });
-        }
-      }
-    }
-  }
   const escapesBySite = new Map();
   for (const e of store.nodes()) {
     if (e.kind !== 'escape') continue;
@@ -976,12 +951,63 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // Milestone 2, Sub-project G, increment 1: the first real populator of
   // `graph.evidence[]` — every permitting policy rule minted above.
   graph.evidence = [...evidenceById.values()].sort(byId);
-  // Milestone 4, FR-506: a real, non-core-schema array on the graph
-  // object — never in `dataflow-graph.schema.json`, never routed through
-  // `validate.js`'s `validateGraph()`, mirroring `graph.evidence[]`'s own
-  // established precedent immediately above (both are §10.10-adjacent
-  // records "associated with, but not required inside" the immutable base
-  // graph).
+  // Milestone 4, FR-506 (Third-Party and Cross-Border Intelligence): a
+  // THIRD, SEPARATE, additive hook of the identical shape — composes with,
+  // never replaces, `resolveDestination`/`resolveSiteDecision` above.
+  // Deliberately NOT gated on `site.destination` being present: unlike a
+  // protection/policy verdict, a recipient's technical-provider match can
+  // resolve from `site.entry.framework` alone (e.g. a receiver-based
+  // `anthropic.messages.create()` SDK call, AC-07's own real fixture shape,
+  // whose destination frequently never resolves past 'unknown'/'dynamic' —
+  // there is no literal URL to resolve) — skipping every site with no
+  // destination would silently drop exactly that real-world case. Runs
+  // here, after nodes/edges/flows/dataElements are populated (not right
+  // after resolveDestination, where it originally ran), specifically so
+  // `computeGraphDigest(graph)` inside `buildRecipientProfile` hashes real
+  // graph content instead of the still-empty envelope (fix-round-1, B2). A
+  // no-op when omitted, mirroring every sibling hook's own proven
+  // contract.
+  if (typeof opts.buildRecipientProfile === 'function') {
+    for (const site of sites) {
+      const profile = opts.buildRecipientProfile(site, graph);
+      if (profile) {
+        // fix-round-1, B3: `sinkNodeFor(site).id` is the real, stable
+        // graph node id (`mintNode` dedups by id, so calling it again
+        // here is idempotent) — `site.nodeId` is a CFG-parse-local
+        // counter value (`parser-js.js`'s `_nodeIdSeq`, e.g. `"n6"`),
+        // never a real graph node id, which made `--filter` a permanent
+        // no-op against `contributingGraphIds`.
+        const nodeId = sinkNodeFor(site).id;
+        const existing = recipientProfilesById.get(profile.id);
+        if (existing) {
+          existing.contributingGraphIds = [...new Set([...existing.contributingGraphIds, nodeId])];
+          // fix-round-1, M6: an order-dependent dedup previously kept only
+          // the FIRST-seen site's whole profile, silently dropping a
+          // later site's non-null facts (e.g. a `technicalEndpoint` the
+          // first site never resolved). Merge any fact field the existing
+          // record left empty from this later, non-empty profile.
+          for (const field of RECIPIENT_FACT_FIELDS) {
+            const existingEmpty = existing[field] == null || (Array.isArray(existing[field]) && existing[field].length === 0);
+            const incomingPopulated = profile[field] != null && !(Array.isArray(profile[field]) && profile[field].length === 0);
+            if (existingEmpty && incomingPopulated) {
+              existing[field] = profile[field];
+              existing.fieldEvidence[field] = profile.fieldEvidence[field];
+            }
+          }
+        } else {
+          recipientProfilesById.set(profile.id, { ...profile, contributingGraphIds: [nodeId] });
+        }
+      }
+    }
+  }
+  // Milestone 4, FR-506: unlike `graph.evidence[]` immediately above
+  // (which IS required/core-schema, validated by `validate.js`'s
+  // `_validateEvidence`/`EVIDENCE_TYPES`), `graph.recipientProfiles` is
+  // the FIRST §10.10 extension-record array ever attached directly to
+  // the graph object — every prior extension contract
+  // (ObligationMapping/DecisionStory/GraphSnapshot) is a wholly separate
+  // artifact, never stored on the built graph itself. Never in
+  // `dataflow-graph.schema.json`, never routed through `validateGraph()`.
   graph.recipientProfiles = [...recipientProfilesById.values()].sort(byId);
   // §10's SKETCH of the coverage ledger. E4 owns the finished contract.
   graph.coverage = {

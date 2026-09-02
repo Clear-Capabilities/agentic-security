@@ -219,6 +219,48 @@ test('dataflow_get_graph: redacts node.destination and evidence secrets', async 
   }
 });
 
+// fix-round-1, B1: graph.recipientProfiles[].technicalEndpoint is a
+// scanned-source-derived literal, the same shape node.destination.literalValue
+// already redacts — this is the real, end-to-end reproduction that it
+// reaches dataflow_get_graph redacted, through the MCP tool, not just via a
+// direct _redactGraph unit call (see test/lineage/redact-graph.test.js for
+// that).
+const RECIPIENT_SECRET_GRAPH = {
+  schemaVersion: '1.0.0',
+  graphId: 'dfg:test-recipient-secret',
+  extensions: {},
+  scope: { root: '/tmp/fixture' },
+  coverage: null,
+  limitations: [],
+  nodes: [],
+  edges: [],
+  flows: [],
+  evidence: [],
+  recipientProfiles: [{
+    id: 'recipient:aws-s3:abc123',
+    recipientKey: 'Amazon S3',
+    technicalEndpoint: 'https://my-bucket.s3.amazonaws.com/?token=AKIAABCDEFGHIJKLMNOP',
+    provider: 'Amazon S3',
+    legalEntity: null,
+    retentionCommitment: null,
+    transferMechanism: null,
+  }],
+};
+
+test('dataflow_get_graph: redacts recipientProfiles[].technicalEndpoint secrets', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, RECIPIENT_SECRET_GRAPH);
+    const result = await dataflow_get_graph.handler({}, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    const profile = result.data.recipientProfiles[0];
+    assert.doesNotMatch(profile.technicalEndpoint, /AKIAABCDEFGHIJKLMNOP/);
+    assert.match(profile.technicalEndpoint, /\[REDACTED:aws-access-key\]/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('dataflow_get_node: redacts destination secrets on the single-node response', async () => {
   const root = _mkTmpProject();
   try {

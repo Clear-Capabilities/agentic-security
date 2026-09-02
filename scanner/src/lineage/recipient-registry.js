@@ -90,13 +90,17 @@ export const RECIPIENT_CONFIG_FILENAME = 'recipient-profiles.json';
 // The curated technical-provider catalog.
 // =========================================================================
 
-// Each pattern is tested against the RAW `literalValue` string (a full
-// URL, not a pre-extracted hostname) via `new RegExp(p, 'i').test(...)`,
-// so every pattern anchors on a domain BOUNDARY (`(^|[./])`, a scheme
-// separator or a literal dot) before the hostname and a domain terminator
-// (`(?=[:/]|$)`, a port/path/fragment separator or end-of-string) after
-// it — never a bare `$'` end anchor, which would only ever match a
-// literalValue containing nothing but the bare hostname.
+// Each pattern is tested against the BARE HOSTNAME extracted from
+// `literalValue` via `_bareHostname` (fix-round-1, I4 — testing the RAW
+// literal string let a path/query-embedded lookalike like
+// 'https://attacker.io/anthropic.com' incorrectly match) via
+// `new RegExp(p, 'i').test(...)`, so every pattern anchors on a domain
+// BOUNDARY (`(^|[./])`, start-of-string or a literal dot) before the
+// hostname and a domain terminator (`(?=[:/]|$)`, a port/path separator
+// or end-of-string) after it — never a bare `$'` end anchor, which would
+// only ever match a bareHost string containing nothing but the hostname
+// (still correct against a bare host, since that's exactly what it is
+// now).
 export const TECHNICAL_PROVIDER_CATALOG = Object.freeze([
   Object.freeze({
     provider: 'anthropic',
@@ -149,8 +153,17 @@ export function resolveTechnicalProvider(input) {
     }
 
     if (typeof literalValue === 'string' && literalValue.length > 0) {
+      // fix-round-1, I4: match against the BARE HOSTNAME, never the raw
+      // literal — testing the whole string let
+      // 'https://attacker.io/anthropic.com' (a path, not a host) and
+      // 'https://attacker.io/proxy?to=https://api.anthropic.com' (a query
+      // value) both incorrectly match the Anthropic pattern, attaching a
+      // real company's operator-declared legal/DPA facts to a flow whose
+      // actual destination is attacker.io. `_bareHostname` is defined
+      // below in this same file and hoisted, so it's callable from here.
+      const bareHost = _bareHostname(literalValue) ?? '';
       const byHost = TECHNICAL_PROVIDER_CATALOG.find((e) =>
-        e.hostnamePatterns.some((p) => new RegExp(p, 'i').test(literalValue)));
+        e.hostnamePatterns.some((p) => new RegExp(p, 'i').test(bareHost)));
       if (byHost) return { provider: byHost.provider, serviceType: byHost.serviceType };
     }
 
@@ -199,9 +212,15 @@ function _isCountryArray(v) { return Array.isArray(v) && v.every((c) => typeof c
 // expiration), which need no fieldEvidence of their own (see
 // recipient-profile.js's own header comment on why those five are
 // excluded from RECIPIENT_FACT_FIELDS).
+// fix-round-1, M7: `servicePurpose`/`observedRegion` were both real
+// RECIPIENT_FACT_FIELDS (recipient-profile.js) and both real fields
+// `buildRecipientProfile`'s own `facts` object initializes below, but were
+// missing from this list — an operator declaring either in
+// recipient-profiles.json had it silently ignored (never validated, never
+// copied into the built profile).
 const _RECIPIENT_CONFIG_FACT_FIELDS = Object.freeze([
-  'legalEntity', 'processorRole', 'subprocessorChain', 'processingCountries',
-  'dataResidencyCommitment', 'dpaStatus', 'transferMechanism',
+  'legalEntity', 'processorRole', 'servicePurpose', 'subprocessorChain', 'processingCountries',
+  'dataResidencyCommitment', 'observedRegion', 'dpaStatus', 'transferMechanism',
   'transferImpactReviewStatus', 'retentionCommitment',
 ]);
 // The remaining five operator-declarable fields — confidence/owner/
@@ -221,9 +240,11 @@ function _isValidRecipientConfigEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
   if (!_isStringOrNull(entry.legalEntity)) return false;
   if (entry.processorRole != null && !RECIPIENT_PROCESSOR_ROLES.includes(entry.processorRole)) return false;
+  if (!_isStringOrNull(entry.servicePurpose)) return false;
   if (entry.subprocessorChain != null && !_isStringArray(entry.subprocessorChain)) return false;
   if (entry.processingCountries != null && !_isCountryArray(entry.processingCountries)) return false;
   if (!_isStringOrNull(entry.dataResidencyCommitment)) return false;
+  if (!_isStringOrNull(entry.observedRegion)) return false;
   if (entry.dpaStatus != null && !RECIPIENT_DPA_STATUSES.includes(entry.dpaStatus)) return false;
   if (!_isStringOrNull(entry.transferMechanism)) return false;
   if (!_isStringOrNull(entry.transferImpactReviewStatus)) return false;

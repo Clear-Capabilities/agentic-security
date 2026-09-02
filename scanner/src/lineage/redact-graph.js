@@ -58,6 +58,15 @@ import { redactString } from '../mcp/redact.js';
 //     field on the same node. A caller who trusts `destination` alone is
 //     redacted correctly still gets the identical secret back via this
 //     field. Proven live by the scoped re-review that found this gap.
+//   - `graph.recipientProfiles[].technicalEndpoint`/`.legalEntity`/
+//     `.retentionCommitment`/`.transferMechanism` — fix-round-1 finding B1
+//     (Milestone 4, FR-506): `technicalEndpoint` is lifted verbatim from a
+//     resolved destination literal by `recipient-registry.js`'s
+//     `buildRecipientProfile`, the SAME "literal URL/hostname lifted from
+//     scanned code" shape `node.destination.literalValue` already
+//     redacts, so it reached `dataflow_get_graph` unredacted for a whole
+//     review round before this was caught. The other three fields are
+//     operator-declared free text, covered defensively.
 //   - `evidence[].claim` — composed from resolved values in
 //     graph-builder.js; can echo the same literal content.
 //   - `evidence[].location.note` / `.snippet` — schema-declared free-text
@@ -125,16 +134,50 @@ export function _redactEvidence(evidence) {
   });
 }
 
-// Full-graph redaction: every node's destination, plus the top-level
-// evidence array. Edges/flows carry only evidenceRefs (id strings into
-// graph.evidence), never embedded evidence objects or destination-shaped
-// fields — confirmed against dataflow-graph.schema.json — so they need no
-// redaction pass of their own here.
+// Milestone 4, fix-round 1, B1: `graph.recipientProfiles[]` (FR-506) is a
+// real scanned-source-derived surface `_redactGraph` never touched —
+// `technicalEndpoint` is lifted verbatim from a resolved destination
+// literal by `recipient-registry.js`'s `buildRecipientProfile` (the exact
+// same "literal URL/hostname lifted from scanned code" shape
+// `node.destination.literalValue` already redacts above), so it can
+// carry an embedded credential/token just as easily. `legalEntity`/
+// `retentionCommitment`/`transferMechanism` are operator-declared free
+// text from `recipient-profiles.json`, not scanned-source-derived — but
+// `redactString` is pattern-based and a safe no-op on ordinary text
+// (confirmed by reading `mcp/redact.js`), so covering them defensively
+// costs nothing. Not exported: called only from `_redactGraph` below,
+// the same "internal helper" precedent `_redactDestination`/
+// `_redactQueueDetail`/`_redactStoreDetail` already establish in this
+// file (unlike `_redactNode`/`_redactEvidence`, which ARE exported
+// because callers outside this module invoke them directly).
+function _redactRecipientProfile(p) {
+  if (!p) return p;
+  const hasRedactable = typeof p.technicalEndpoint === 'string'
+    || typeof p.legalEntity === 'string'
+    || typeof p.retentionCommitment === 'string'
+    || typeof p.transferMechanism === 'string';
+  if (!hasRedactable) return p;
+  return {
+    ...p,
+    technicalEndpoint: typeof p.technicalEndpoint === 'string' ? redactString(p.technicalEndpoint) : p.technicalEndpoint,
+    legalEntity: typeof p.legalEntity === 'string' ? redactString(p.legalEntity) : p.legalEntity,
+    retentionCommitment: typeof p.retentionCommitment === 'string' ? redactString(p.retentionCommitment) : p.retentionCommitment,
+    transferMechanism: typeof p.transferMechanism === 'string' ? redactString(p.transferMechanism) : p.transferMechanism,
+  };
+}
+
+// Full-graph redaction: every node's destination, the top-level evidence
+// array, and (fix-round 1, B1) recipientProfiles[]. Edges/flows carry
+// only evidenceRefs (id strings into graph.evidence), never embedded
+// evidence objects or destination-shaped fields — confirmed against
+// dataflow-graph.schema.json — so they need no redaction pass of their
+// own here.
 export function _redactGraph(data) {
   if (!data) return data;
   return {
     ...data,
     nodes: Array.isArray(data.nodes) ? data.nodes.map(_redactNode) : data.nodes,
     evidence: _redactEvidence(data.evidence),
+    recipientProfiles: Array.isArray(data.recipientProfiles) ? data.recipientProfiles.map(_redactRecipientProfile) : data.recipientProfiles,
   };
 }
