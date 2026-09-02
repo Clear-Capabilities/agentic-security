@@ -83,6 +83,8 @@ Wired in `bin/agentic-security.js` after every filter and after `makeDeterminist
 
 **Rule lifecycle** — `custom-rules.js` (YAML pattern DSL), `rule-overrides.js` (`disable:` gated on signature), `rule-packs.js`, `rule-synthesis.js` (proposes suppressions from triage feedback), `ruleset-version.js`.
 
+**First `posture/` → `lineage/` import.** `auditor-walkthrough.js`'s `graph:` mapping branch (Data Flow Explorer M4 sub-project 6b) imports `evaluateGraphFlowPredicate`/`buildObligationMappingFromGraphPredicate` from `../lineage/obligation-predicates.js` — the first time any module in this directory has reached into `lineage/` (previously a one-way boundary: `lineage/` never imports `posture/`, and nothing here imported it back). It mints a real `ObligationMapping` record (see `scanner/src/lineage/CLAUDE.md`) from `scan.lineageGraph` when present, purely additively — never touching the pre-existing `anySignal`/`allCleared`/`anyCleared`/`hasUnverifiableMapping` status machinery.
+
 **NIST Privacy Framework 1.1 (`privacy-framework.js`)** — assessment + remediation
 over the bundled `compliance-frameworks/nist-privacy-1-1.json` (all 104 controls).
 Sits on top of `auditor-walkthrough.js`'s evaluator and adds the half a narrative

@@ -522,18 +522,40 @@ export function evaluateFramework(scanRoot, fw, scan) {
         // for one caller).
         const spec = { type: 'graph-flow', dataClass: 'PHI', sinkKind: 'external', dimension: 'transit', requiredVerdict: 'protected' };
         const graph = scan.lineageGraph ?? null;
-        const evaluation = graph ? evaluateGraphFlowPredicate(spec, graph) : null;
-        const mapping = buildObligationMappingFromGraphPredicate({
-          framework: fw.id,
-          frameworkVersion: fw.controlsDigest,
-          requirementId: c.id,
-          requirementSource: fw.url ?? null,
-          predicateLabel: m,
-          graph,
-          evaluation,
-        });
-        obligationMappings.push(mapping);
-        obs.push(`(graph mapping) ${m} -> ${mapping.state}.`);
+        // Belt-and-suspenders, mirroring the sibling _strengthOfControl
+        // call above: obligation-predicates.js is now defensively
+        // hardened to never throw (see its own header), but this wrap
+        // keeps a future regression there from taking down the whole
+        // evaluateFramework call for every control in the framework
+        // (found by the final whole-branch review).
+        let mapping = null;
+        try {
+          const evaluation = graph ? evaluateGraphFlowPredicate(spec, graph) : null;
+          mapping = buildObligationMappingFromGraphPredicate({
+            framework: fw.id,
+            frameworkVersion: fw.controlsDigest,
+            requirementId: c.id,
+            requirementSource: fw.url ?? null,
+            predicateLabel: m,
+            graph,
+            evaluation,
+          });
+        } catch { /* graph obligation mapping is additive; never block evaluation */ }
+        if (mapping) {
+          obligationMappings.push(mapping);
+          // Found by the final whole-branch review: a graph: mapping's
+          // state is intentionally independent of the pre-existing
+          // present/partial/absent/manual status glyph (Global
+          // Constraint — see the block comment above), so a control can
+          // render a green ✅ header with a 'gap_detected' line buried
+          // underneath it in the observations. A ⚠️ prefix on a genuine
+          // gap keeps that visible to a reader who only scans headers,
+          // without touching the status computation itself.
+          const flag = mapping.state === 'gap_detected' ? '⚠️ ' : '';
+          obs.push(`${flag}(graph mapping) ${m} -> ${mapping.state}.`);
+        } else {
+          obs.push(`(graph mapping) ${m} -> evaluation failed, skipped.`);
+        }
       }
     }
 
