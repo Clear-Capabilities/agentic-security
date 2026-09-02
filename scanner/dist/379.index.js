@@ -364,6 +364,32 @@ function _emptyState() {
   return { selectedId: null };
 }
 
+/**
+ * Collapse embedded newlines to spaces. Every value interpolated into a
+ * Markdown line below can originate from operator-supplied prose (a
+ * governance field from .agentic-security/privacy-governance.json) or
+ * from source-derived identifiers — neither is trusted not to contain a
+ * literal newline, which would otherwise let the value break out of its
+ * line and inject arbitrary Markdown (e.g. a fake heading) mid-document.
+ */
+function _mdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+
+/** _mdInline, plus pipe-escaping for a Markdown table cell — an
+ * unescaped `|` in a cell value shifts every later column in that row. */
+function _mdCell(value) {
+  return _mdInline(value).replace(/\|/g, '\\|');
+}
+
+/** Wrap a value in a Markdown inline-code span, safe even when the value
+ * itself contains a backtick (falls back to a padded double-backtick
+ * fence, the standard Markdown escape for that case). */
+function _mdCode(value) {
+  const s = _mdInline(value);
+  return s.includes('`') ? `\`\` ${s} \`\`` : `\`${s}\``;
+}
+
 function _scopedViewModel(graph, filter) {
   const scopedGraph = filter ? (0,export_json/* _filterGraph */.e)(graph, filter) : graph;
   return computePrivacyViewModel(scopedGraph, _emptyState(), null);
@@ -420,6 +446,11 @@ function emitGraphDpiaArtifact(graph, opts = {}) {
   lines.push('(field identity, path provenance, and protection verdicts). It must be');
   lines.push('reviewed and completed by a privacy officer before use.');
   lines.push('');
+  lines.push('Governance fields reflect .agentic-security/privacy-governance.json as');
+  lines.push('of the scan that produced this graph, not as of the moment this document');
+  lines.push('was exported — re-scan (with lineage deep mode enabled) after editing');
+  lines.push('that config, then re-export, to pick up the change.');
+  lines.push('');
   if (grouped.size === 0) {
     lines.push('No regulated data classes were identified in this graph scope.');
     return lines.join('\n');
@@ -427,14 +458,15 @@ function emitGraphDpiaArtifact(graph, opts = {}) {
   lines.push('## Data classes identified');
   lines.push('');
   for (const [cls, rows] of grouped) {
-    lines.push(`### ${cls} (${rows.length} flow(s))`);
+    lines.push(`### ${_mdInline(cls)} (${rows.length} flow(s))`);
     lines.push('');
     for (const row of rows.slice(0, 20)) {
-      lines.push(`- \`${row.dataElementName}\` — ${row.sourceCategory ?? 'unknown source'} -> ${row.sinkCategory ?? 'unknown sink'} (protection: ${row.protectionSummary})`);
+      const crossClassNote = row.dataClasses.length > 1 ? ` (also: ${row.dataClasses.filter((c) => c !== cls).map(_mdInline).join(', ')})` : '';
+      lines.push(`- ${_mdCode(row.dataElementName)} — ${_mdInline(row.sourceCategory ?? 'unknown source')} -> ${_mdInline(row.sinkCategory ?? 'unknown sink')} (protection: ${_mdInline(row.protectionSummary)})${crossClassNote}`);
     }
     if (rows.length > 20) lines.push(`- ... and ${rows.length - 20} more`);
     lines.push('');
-    lines.push(`**Governance fields for ${cls}:**`);
+    lines.push(`**Governance fields for ${_mdInline(cls)}:**`);
     lines.push('');
     // Worst-case-wins across this class's own rows, the same tie-break
     // Task 1's resolveGovernanceRefs default uses — never silently pick
@@ -447,9 +479,20 @@ function emitGraphDpiaArtifact(graph, opts = {}) {
         if (!merged[field] || merged[field].source === 'manual_required') merged[field] = r;
       }
     }
+    // A flow with >1 dataClasses already carries a single governanceRefs
+    // record merged (worst-case-wins) across ALL of its own classes back
+    // at mint time (coverage.js#resolveGovernanceRefs) — this section can
+    // only re-merge that already-merged record across rows, never recover
+    // per-class distinctness that was lost earlier. Disclose it rather
+    // than silently presenting a cross-class value as if it were specific
+    // to this one class.
+    if (rows.some((row) => row.dataClasses.length > 1)) {
+      lines.push(`_Note: some flows in this section also belong to other data classes; the governance values below are each flow's own record merged across ALL of its classes, not verified as specific to ${_mdInline(cls)} alone._`);
+      lines.push('');
+    }
     for (const field of privacy_governance/* GOVERNANCE_FIELDS */.n4) {
       const r = merged[field] ?? { value: privacy_governance/* MANUAL_REQUIRED */.Dh, source: 'manual_required' };
-      lines.push(`- ${field}: \`${r.value}\`${r.source === 'operator_provided' ? ' (operator-provided)' : ''}`);
+      lines.push(`- ${field}: ${_mdCode(r.value)}${r.source === 'operator_provided' ? ' (operator-provided)' : ''}`);
     }
     lines.push('');
   }
@@ -482,12 +525,17 @@ function emitGraphRopaArtifact(graph, opts = {}) {
   const lines = [];
   lines.push('# Record of Processing Activities (RoPA) — GDPR Art. 30, graph-derived');
   lines.push('');
-  lines.push('Generated by agentic-security scanner (graph-derived). Every governance');
+  lines.push(`Generated by agentic-security scanner (graph-derived) on ${(opts.generatedAt ?? new Date().toISOString()).slice(0, 10)}. Every governance`);
   lines.push('field below is either supplied by an operator');
   lines.push('(.agentic-security/privacy-governance.json) or marked');
   lines.push(`\`${privacy_governance/* MANUAL_REQUIRED */.Dh}\` — none are inferable from source code, and none are`);
   lines.push(`guessed. A privacy officer must fill in every \`${privacy_governance/* MANUAL_REQUIRED */.Dh}\` cell`);
   lines.push('before this document is usable as a real RoPA.');
+  lines.push('');
+  lines.push('Governance fields reflect .agentic-security/privacy-governance.json as');
+  lines.push('of the scan that produced this graph, not as of the moment this document');
+  lines.push('was exported — re-scan (with lineage deep mode enabled) after editing');
+  lines.push('that config, then re-export, to pick up the change.');
   lines.push('');
   if (visibleRows.length === 0) {
     lines.push('No regulated data flows were identified in this graph scope.');
@@ -497,18 +545,31 @@ function emitGraphRopaArtifact(graph, opts = {}) {
   lines.push(`| ${header.join(' | ')} |`);
   lines.push(`|${header.map(() => '---').join('|')}|`);
   let gapCount = 0;
+  let rowCount = 0;
+  let crossClassRows = false;
   for (const row of visibleRows) {
     for (const cls of row.dataClasses.length ? row.dataClasses : ['(unclassified)']) {
+      rowCount++;
       const fieldValues = privacy_governance/* GOVERNANCE_FIELDS */.n4.map((f) => {
         const r = row.governanceRefs?.[f] ?? { value: privacy_governance/* MANUAL_REQUIRED */.Dh, source: 'manual_required' };
         if (r.source === 'manual_required') gapCount++;
         return r.value;
       });
-      lines.push(`| ${[cls, row.dataElementName, row.sourceCategory ?? 'unknown', row.sinkCategory ?? 'unknown', row.protectionSummary, ...fieldValues].join(' | ')} |`);
+      const isCrossClass = row.dataClasses.length > 1;
+      if (isCrossClass) crossClassRows = true;
+      const clsCell = isCrossClass ? `${cls}*` : cls;
+      const cells = [clsCell, row.dataElementName, row.sourceCategory ?? 'unknown source', row.sinkCategory ?? 'unknown destination', row.protectionSummary, ...fieldValues];
+      lines.push(`| ${cells.map(_mdCell).join(' | ')} |`);
     }
   }
   lines.push('');
-  lines.push(`${gapCount} field(s) across ${visibleRows.length} flow(s) require manual input.`);
+  if (crossClassRows) {
+    lines.push('\\* This flow also belongs to other data classes; governance fields are');
+    lines.push("this flow's own record merged across ALL of its classes, not verified as");
+    lines.push('specific to the data class shown in this row alone.');
+    lines.push('');
+  }
+  lines.push(`${gapCount} field(s) across ${rowCount} row(s) (${visibleRows.length} flow(s)) require manual input.`);
   return lines.join('\n');
 }
 

@@ -3481,6 +3481,22 @@ async function cmdDataflowExport(args) {
       data = emitGraphRopaArtifact(graph, opts);
     }
   } catch (e) {
+    // dpia/ropa reach frontend/src/views/privacy-view.js via a relative
+    // import that lives OUTSIDE the published scanner/ package directory
+    // (`../../../frontend/...`, a repo-root sibling of scanner/) — real
+    // for the `agentic-security`/`as` commands (dist/agentic-security.mjs
+    // is ncc-bundled, so that content is already inlined and this path
+    // never triggers there), but a genuine ERR_MODULE_NOT_FOUND when
+    // someone runs THIS raw, unbundled file directly out of an installed
+    // package's node_modules, reproduced live via a real `npm pack` +
+    // install into a fresh consumer project. Give that one narrow case an
+    // actionable message instead of a bare "Cannot find package
+    // '@clear-capabilities/frontend'" that names a package the user has
+    // never heard of.
+    if ((format === 'dpia' || format === 'ropa') && e && e.code === 'ERR_MODULE_NOT_FOUND') {
+      process.stderr.write(`agentic-security dataflow export: export failed: --format ${format} could not load its frontend module (${e.message}). This usually means you ran the raw bin/agentic-security.js file directly out of an installed package instead of using the published \`agentic-security\`/\`as\` command (which is fully self-contained). Use the published command, or run from a full source checkout with frontend/ present alongside scanner/.\n`);
+      return 2;
+    }
     process.stderr.write(`agentic-security dataflow export: export failed: ${e && e.message ? e.message : e}\n`);
     return 2;
   }

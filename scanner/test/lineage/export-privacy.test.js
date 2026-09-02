@@ -47,6 +47,21 @@ const PHI_SOURCE = `function summarizePatient(anthropic, params) {
 }
 `;
 
+// A field name matching TWO real taxonomy classes at once (PII's \bssn\b
+// AND CREDENTIALS's \bpassword\b — bracket-notation access so the literal
+// string can carry the hyphen neither identifier form allows), the same
+// fixture governance-refs.test.js uses for its own multi-data-class
+// tie-break tests. Verified live: classifies as
+// dataClasses: ['PII', 'CREDENTIALS'].
+const MULTI_CLASS_SOURCE = `function summarizePatient(anthropic, params) {
+  const val = params.arguments['ssn-password'];
+  anthropic.messages.create({
+    model: 'claude-3',
+    messages: [{ role: 'user', content: val }],
+  });
+}
+`;
+
 // A real multi-sink shape (mirrors ac01-multi-sink.test.js): one PCI field
 // reaching two distinct sinks (log, database) as two distinct, independently
 // identifiable flows — used for the opts.filter narrowing test below.
@@ -227,6 +242,112 @@ test('an empty graph (no flows) produces the honest "no regulated data" message 
 
   const ropa = emitGraphRopaArtifact(graph, {});
   assert.match(ropa, /No regulated data flows were identified in this graph scope\./);
+});
+
+// Final whole-branch review, BLOCKING 1 (fixed): an unescaped `|` or
+// embedded newline in an operator-supplied governance value corrupted the
+// RoPA table's own column alignment and could inject arbitrary Markdown
+// (a fake heading) into the DPIA — reproduced live with the reviewer's own
+// exact repro values below, mutation-verified against the pre-fix code.
+test('emitGraphRopaArtifact: a governance value containing a literal "|" and an embedded newline does not corrupt the table', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    _writeGovernanceConfig(scanRoot, {
+      byClass: {
+        PHI: {
+          recipient: 'Acme Payments | Ltd',
+          subject: 'Row A\n## INJECTED HEADING\nRow B',
+        },
+      },
+    });
+    const graph = _buildRealGraphViaScan(PHI_SOURCE, { scanRoot });
+    assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected at least one real PHI flow');
+
+    const ropa = emitGraphRopaArtifact(graph, {});
+    const lines = ropa.split('\n');
+    const headerIdx = lines.findIndex((l) => l.startsWith('| Data class |'));
+    assert.ok(headerIdx >= 0, 'RoPA table header must be present');
+    const headerCellCount = lines[headerIdx].split(' | ').length;
+    assert.ok(headerCellCount > 1);
+
+    let i = headerIdx + 2;
+    let dataRowsChecked = 0;
+    while (i < lines.length && lines[i].startsWith('|')) {
+      const cellCount = lines[i].split(' | ').length;
+      assert.equal(cellCount, headerCellCount, `row ${i} column count drifted from the header — a "|"-containing value broke the table: ${JSON.stringify(lines[i])}`);
+      dataRowsChecked++;
+      i++;
+    }
+    assert.ok(dataRowsChecked > 0, 'test setup must produce at least one real data row');
+
+    // The escaped pipe survives as literal text (never silently dropped),
+    // and the embedded newline was collapsed rather than injecting a real
+    // Markdown heading mid-table.
+    assert.match(ropa, /Acme Payments \\\| Ltd/);
+    assert.doesNotMatch(ropa, /^## INJECTED HEADING$/m);
+    assert.match(ropa, /Row A ## INJECTED HEADING Row B/);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+test('emitGraphDpiaArtifact: a governance value with a backtick and an embedded newline stays a single, well-formed inline code span', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    _writeGovernanceConfig(scanRoot, {
+      byClass: {
+        PHI: {
+          purpose: 'Weird `backtick` value\n## INJECTED HEADING',
+        },
+      },
+    });
+    const graph = _buildRealGraphViaScan(PHI_SOURCE, { scanRoot });
+    assert.ok(graph.flows.length >= 1, 'fixture assumption drifted: expected at least one real PHI flow');
+
+    const dpia = emitGraphDpiaArtifact(graph, {});
+    assert.doesNotMatch(dpia, /^## INJECTED HEADING$/m, 'an embedded newline in a governance value must never inject a real Markdown heading');
+    // Backtick-containing values fall back to a padded double-backtick
+    // fence — the standard Markdown escape — rather than a single
+    // backtick span that would terminate early on the value's own
+    // backtick.
+    assert.match(dpia, /`` Weird `backtick` value ## INJECTED HEADING ``/);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+// Final whole-branch review, RECOMMENDED 2 (fixed via disclosure): a flow
+// spanning more than one data class carries a SINGLE governanceRefs record
+// already merged (worst-case-wins) across ALL of its own classes back at
+// mint time (coverage.js#resolveGovernanceRefs) — re-presenting that one
+// merged record under each class's own heading/row, with no indication it
+// isn't class-specific, silently loses a real per-class operator override.
+test('a flow spanning two data classes discloses that its governance values are merged, not class-specific', () => {
+  const scanRoot = _mkScanRoot();
+  try {
+    _writeGovernanceConfig(scanRoot, {
+      byClass: {
+        PII: { purpose: 'PII-specific purpose' },
+        CREDENTIALS: { purpose: 'CREDENTIALS-specific purpose' },
+      },
+    });
+    const graph = _buildRealGraphViaScan(MULTI_CLASS_SOURCE, { scanRoot });
+    const de = graph.dataElements.find((d) => (d.dataClasses ?? []).length > 1);
+    assert.ok(de, 'fixture assumption drifted: expected a real multi-class dataElement');
+    assert.deepEqual(de.dataClasses, ['PII', 'CREDENTIALS']);
+
+    const dpia = emitGraphDpiaArtifact(graph, {});
+    assert.match(dpia, /### PII/);
+    assert.match(dpia, /### CREDENTIALS/);
+    assert.match(dpia, /merged across ALL of its classes/);
+
+    const ropa = emitGraphRopaArtifact(graph, {});
+    assert.match(ropa, /\| PII\* \|/);
+    assert.match(ropa, /\| CREDENTIALS\* \|/);
+    assert.match(ropa, /merged across ALL of its classes/);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
 });
 
 test('REAL CORPUS: sweeping bench/data-lineage/ fixtures never throws building the DPIA or RoPA artifact, with and without a governance config on disk', async () => {

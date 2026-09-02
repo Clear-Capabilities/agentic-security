@@ -23,6 +23,8 @@ this command never triggers a scan itself, matching `/dataflow`'s sibling
 | `dpia` | Data Protection Impact Assessment (Markdown, GDPR Art. 35 framing) | No Chrome needed. Graph-derived — real flows, real protection verdicts, real governance facts (operator-supplied via `.agentic-security/privacy-governance.json`, or honestly marked `manual_required`). Supports `--filter`; **does not support `--view`/`--no-redact`** (both no-ops with a printed warning, same as `csv`). |
 | `ropa` | Record of Processing Activities (Markdown table, GDPR Art. 30 register) | No Chrome needed. One row per (flow × data class) — real source/sink/protection/governance columns. Supports `--filter`; **does not support `--view`/`--no-redact`** (both no-ops with a printed warning, same as `csv`). |
 
+Governance facts in `dpia`/`ropa` reflect `.agentic-security/privacy-governance.json` as of the scan that produced the graph, not as of export time — edit that file, then re-scan (`AGENTIC_SECURITY_LINEAGE_DEEP=1`) and re-export to pick up a change.
+
 ## Options
 
 - `--view architecture|privacy|trace|inventory` — which view to capture (default: `architecture`). **Only affects `png`/`pdf`/`svg`** — a no-op (with warning) for `json`/`csv`/`html`/`dpia`/`ropa`, which are not view-scoped.
