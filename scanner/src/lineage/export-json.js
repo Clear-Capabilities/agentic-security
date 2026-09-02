@@ -146,7 +146,7 @@ export function computeGraphDigest(graph) {
 //   referenced by nothing remaining (orphaned, not dangling — the
 //   opposite direction of the two problems narrowed above), a disclosed,
 //   deliberate non-goal of this filter, not an oversight.
-function _filterGraph(graph, filter) {
+export function _filterGraph(graph, filter) {
   if (!filter) return graph;
   const nodeIds = new Set(filter.nodeIds ?? []);
   const edgeIds = new Set(filter.edgeIds ?? []);
