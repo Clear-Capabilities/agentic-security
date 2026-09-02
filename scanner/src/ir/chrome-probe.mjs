@@ -18,8 +18,20 @@ let _capability = null;
 // _tryBinary's own try/catch swallows that throw and returns null for
 // EVERY candidate, so probeChromeAvailable would misreport
 // `no-chrome-found` on a machine with a perfectly working Chrome install.
+//
+// Blank/whitespace-only is treated as unset (falls back), not as `0` —
+// found by this fix's own scoped re-review: `Number('')` is `0`, and a
+// naive `n >= 0` guard let an empty-but-exported env var (a blanked
+// .env line, an unset-but-exported CI var) through as a real `timeout:
+// 0`, which spawnSync treats as NO timeout at all — an unbounded hang
+// risk inside this exact capability probe, the failure class
+// parser-py-cst.js's own probePythonAvailable() is already careful
+// about. An explicit `"0"` is still honored (matches this file's
+// pre-fix behavior for that literal value).
 function _validTimeoutMs(raw, fallback) {
-  const n = Number(raw);
+  const s = String(raw ?? '').trim();
+  if (!s) return fallback;
+  const n = Number(s);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 const PROBE_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS, 5000);
@@ -41,7 +53,11 @@ const PROBE_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_PRO
 // (a compromised PATH entry named exactly `chrome`/`google-chrome`/etc.
 // is still tried if no absolute-path candidate exists on this machine —
 // this feature already assumes local machine trust, same as every other
-// "optional local tool" this codebase shells out to).
+// "optional local tool" this codebase shells out to). The `linux` list
+// below was empty in this fix's first pass — found by the scoped
+// re-review to make the whole reordering a no-op on the platform CI
+// images actually run on, since every Linux candidate was a bare PATH
+// name. Package-manager and snap install locations are now included.
 function _candidatePaths() {
   const onPath = ['google-chrome-stable', 'google-chrome', 'chromium-browser', 'chromium', 'chrome'];
   const platformPaths = {
@@ -55,7 +71,14 @@ function _candidatePaths() {
       'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
       `${process.env.LOCALAPPDATA || ''}\\Google\\Chrome\\Application\\chrome.exe`,
     ],
-    linux: [],
+    linux: [
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/opt/google/chrome/chrome',
+      '/snap/bin/chromium',
+    ],
   };
   const platformSpecific = platformPaths[process.platform] || [];
   return [...platformSpecific, ...onPath];

@@ -68,20 +68,27 @@ test('probeChromeAvailable: a malformed AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS
   // genuinely working Chrome, since spawnSync throws for EVERY
   // candidate. A fresh module instance (cache-busted query string) is
   // required because the timeout is computed once, at module load.
+  //
+  // Compared against a real baseline probe (env unset), not merely
+  // asserting "any well-shaped {ok:false}" — found by this fix's own
+  // scoped re-review: the bug's own wrong answer (no-chrome-found on a
+  // machine with working Chrome) IS a well-shaped {ok:false, reason:
+  // string}, so the weaker assertion passed with the bug fully present.
+  resetChromeProbe();
+  const baseline = probeChromeAvailable();
+  resetChromeProbe();
+
   const prev = process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS;
   process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = 'oops';
   try {
     const mod = await import(`../src/ir/chrome-probe.mjs?bustcache=${Date.now()}-${Math.random()}`);
     mod.resetChromeProbe();
     const r = mod.probeChromeAvailable();
-    if (r.ok) {
-      assert.equal(typeof r.chrome, 'string');
-    } else {
-      assert.equal(typeof r.reason, 'string');
-    }
+    assert.deepEqual(r, baseline);
   } finally {
     if (prev === undefined) delete process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS;
     else process.env.AGENTIC_SECURITY_CHROME_PROBE_TIMEOUT_MS = prev;
+    resetChromeProbe();
   }
 });
 

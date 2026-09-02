@@ -21,8 +21,20 @@ import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
 // spawnSync `timeout` option throws ERR_OUT_OF_RANGE synchronously, which
 // none of the three export functions below catch (their try/finally only
 // guards cleanup, not this construction-time computation).
+//
+// Blank/whitespace-only is treated as unset (falls back), not as `0` —
+// found by this fix's own scoped re-review: `Number('')` is `0`, and a
+// naive `n >= 0` guard let an empty-but-exported env var through as a
+// real `timeout: 0`, which spawnSync treats as NO timeout at all — an
+// unbounded-hang risk on a wedged Chrome. An explicit `"0"` is still
+// honored (matches this file's pre-fix behavior for that literal
+// value). Kept identical to chrome-probe.mjs's own copy of this
+// function rather than factored into a shared module — two three-line
+// functions, not worth a new shared file for.
 function _validTimeoutMs(raw, fallback) {
-  const n = Number(raw);
+  const s = String(raw ?? '').trim();
+  if (!s) return fallback;
+  const n = Number(s);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 const RENDER_TIMEOUT_MS = _validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS, 15000);

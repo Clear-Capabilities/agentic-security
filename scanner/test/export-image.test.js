@@ -67,8 +67,18 @@ itChrome('exportPng: a temp dir containing "#" does not silently render Chrome\'
   // exiting 0 and writing a correctly-dimensioned-but-wrong PNG, which
   // the old code returned as {ok:true}. pathToFileURL percent-encodes
   // the `#` correctly; _verifyRealRender is the second line of defense
-  // if this ever regresses (it would see no real report DOM and fail
-  // clearly instead of silently succeeding).
+  // if this ever regresses.
+  //
+  // ok:true + correct dimensions alone do NOT prove this — found by
+  // this fix's own scoped re-review: Chrome's own error page renders at
+  // the exact requested --window-size too, so a reverted _hashUrl with
+  // _verifyRealRender also reverted still satisfies those two
+  // assertions on a 19KB screenshot of "ERR_FILE_NOT_FOUND". Also
+  // export the SVG in the same broken-path environment and assert real
+  // rendered CONTENT (matching the flagship-content assertion in the
+  // exportSvg test above) — exportSvg shares the same _hashUrl and its
+  // own _extractArchSvg fails closed on Chrome's error DOM, so this
+  // genuinely fails if the URL-truncation bug is reintroduced.
   const hashDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-hash-#-'));
   const prevTmpdir = process.env.TMPDIR;
   process.env.TMPDIR = hashDir;
@@ -77,6 +87,10 @@ itChrome('exportPng: a temp dir containing "#" does not silently render Chrome\'
     assert.equal(r.ok, true, r.reason);
     assert.equal(r.data.readUInt32BE(16), 1680);
     assert.equal(r.data.readUInt32BE(20), 945);
+
+    const svg = await exportSvg(flagship);
+    assert.equal(svg.ok, true, svg.reason);
+    assert.match(svg.data.toString('utf8'), /Payments Service/);
   } finally {
     if (prevTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = prevTmpdir;
