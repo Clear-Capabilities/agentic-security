@@ -620,6 +620,17 @@ function _chapter4ControlGovernanceGaps(ranked, graph, nodesById, edgesById, wor
   // "no decision needed" (decision-story.js's own _TIER_RANK already
   // distinguishes these 4 states; this chapter was the one place that
   // collapsed them). Split into three honestly-labeled buckets.
+  // manualReviewNeeded and conditionally_permitted have no real producer
+  // in the current pipeline (confirmed directly against
+  // graph-builder.js's own policyVerdict assignment site, Task 2's own
+  // disclosed finding) — only not_evaluated/permitted/prohibited are
+  // ever emitted from real code today. This branch's own correctness
+  // rests on the hand-traced symmetry with policyConflicts/notEvaluated
+  // below, not a real-graph regression test, for the same reason Task 2
+  // never fabricated a hand-built graph carrying an
+  // unreachable-in-practice verdict just to exercise this one branch
+  // (scoped re-review of the final-review fix round, noted but
+  // deliberately not "fixed" with a fake fixture).
   const policyConflicts = [];
   const manualReviewNeeded = [];
   const notEvaluated = [];
