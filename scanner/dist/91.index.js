@@ -2807,6 +2807,7 @@ const _internal = {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   loadFreshLineageGraph: () => (/* binding */ loadFreshLineageGraph),
 /* harmony export */   loadSignedGraph: () => (/* binding */ loadSignedGraph)
 /* harmony export */ });
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
@@ -2901,6 +2902,57 @@ function loadSignedGraph(scanRoot) {
   }
 
   return { ok: true, graph };
+}
+
+/**
+ * Load .agentic-security/lineage-graph.json ONLY when it is genuinely
+ * fresh for THIS scan — never merely because a file happens to exist on
+ * disk. Shared by every caller that signs or narrates a graph:-derived
+ * compliance claim (M4 sub-project 6c's final whole-branch review found
+ * the identical staleness gap independently reachable from
+ * `attest --obligations` AND `compliance --walkthrough`, and required
+ * this predicate to live in exactly one place rather than being
+ * copy-pasted per caller — a safety check that drifts between two
+ * near-identical inline copies is worse than one shared bug).
+ *
+ * `.agentic-security/lineage-graph.json` is only rewritten when a scan
+ * actually finishes building a graph (`if (scan.lineageGraph)` in
+ * bin/agentic-security.js's persistence code) — an ordinary non-deep
+ * rescan, or a deep scan whose lineage build fails, leaves whatever file
+ * was there from an earlier successful deep scan untouched. Loading that
+ * stale graph and joining it to the CURRENT scan's other data would let a
+ * caller assert a graph-derived fact (e.g. "transit protected") about
+ * code that has since changed.
+ *
+ * `enabled: true` in `scan.scanHealth.lineageAnalysis` does NOT by itself
+ * mean the build succeeded — engine.js sets it the moment
+ * AGENTIC_SECURITY_LINEAGE_DEEP=1 is read, before the build even starts,
+ * and leaves it `true` even when the build later throws (only `failure`
+ * gets set in that case). `requested && enabled` alone therefore still
+ * accepts a stale graph after a failed rebuild — reproduced live via the
+ * scan's own already-shipped fault-injection fixture
+ * (test/lineage-fault-injection.test.js) before this `failure === null`
+ * check was added.
+ *
+ * @param {string} scanRoot
+ * @param {object} scan - the parsed last-scan.json for the CURRENT scan
+ * @returns {{graph:object|null, fresh:boolean, loaded:ReturnType<typeof loadSignedGraph>}}
+ *   `fresh` is true only when a signed graph loaded successfully AND this
+ *   scan's own scanHealth confirms lineage analysis was requested,
+ *   enabled, and did not fail. `graph` is `loaded.graph` when fresh, else
+ *   `null` — never the stale file, even when one exists on disk.
+ *   `loaded` is the raw `loadSignedGraph` result, so a caller can still
+ *   distinguish "no file at all" from "a file exists but isn't fresh" for
+ *   its own disclosure message.
+ */
+function loadFreshLineageGraph(scanRoot, scan) {
+  const la = scan?.scanHealth?.lineageAnalysis;
+  const requested = la?.requested === true;
+  const enabled = la?.enabled === true;
+  const failure = la?.failure ?? null;
+  const loaded = loadSignedGraph(scanRoot);
+  const fresh = loaded.ok && requested && enabled && failure === null;
+  return { graph: fresh ? loaded.graph : null, fresh, loaded };
 }
 
 

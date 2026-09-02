@@ -2329,16 +2329,11 @@ async function cmdCompliance(args) {
     // artifact). --walkthrough has read scan.lineageGraph directly since
     // it shipped in sub-project 6b, so every graph: mapping has always
     // read "unknown" through this command regardless of whether
-    // AGENTIC_SECURITY_LINEAGE_DEEP=1 was ever set. Same fix as
-    // --obligations: load the real graph via loadSignedGraph, and only
-    // trust it when THIS scan's own scanHealth confirms lineage analysis
-    // was both requested and enabled (never merely because a stale file
-    // from an earlier deep scan happens to exist on disk).
-    const { loadSignedGraph } = await import('../src/server/graph-loader.js');
-    const wtLineageRequested = scan.scanHealth?.lineageAnalysis?.requested === true;
-    const wtLineageEnabled = scan.scanHealth?.lineageAnalysis?.enabled === true;
-    const wtLoaded = loadSignedGraph(scanRoot);
-    const wtGraph = (wtLoaded.ok && wtLineageRequested && wtLineageEnabled) ? wtLoaded.graph : null;
+    // AGENTIC_SECURITY_LINEAGE_DEEP=1 was ever set. Same shared, freshness
+    // -checked loader --obligations uses (loadFreshLineageGraph's own
+    // header has the full staleness reasoning).
+    const { loadFreshLineageGraph } = await import('../src/server/graph-loader.js');
+    const { graph: wtGraph } = loadFreshLineageGraph(scanRoot, scan);
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: wtGraph });
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
@@ -2474,8 +2469,12 @@ async function cmdAttest(args) {
     // OWN artifact file, never duplicated inside last-scan.json"). The real
     // graph lives at .agentic-security/lineage-graph.json, signed
     // separately — cmdExplore already established the correct way to read
-    // it. Reused directly here rather than re-deriving a second reader.
-    const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+    // it. Final-review finding B2/F1 (blocking): a stale copy of that file
+    // must never be trusted just because it exists — see
+    // loadFreshLineageGraph's own header for the full reasoning
+    // (shared with compliance --walkthrough below, which had the
+    // identical gap).
+    const { loadFreshLineageGraph } = await import('../src/server/graph-loader.js');
 
     let scan;
     try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
@@ -2484,25 +2483,7 @@ async function cmdAttest(args) {
     const fw = loadFramework(scanRoot, frameworkId);
     if (!fw) { console.error(`Unknown framework: ${frameworkId}`); return 2; }
 
-    // Final whole-branch review finding B2 (blocking): lineage-graph.json
-    // is only rewritten when a scan actually built a lineage graph
-    // (engine.js only assigns _lineageGraph when the deep-lineage pass
-    // ran) — an ordinary, non-deep scan run AFTER a real deep scan leaves
-    // the OLD graph on disk untouched while last-scan.json/scanHealth
-    // move on to describe the NEW scan. Loading that stale graph and
-    // joining it to the current scanHealth would let a pack assert a
-    // graph:-derived compliance fact (e.g. "transit protected") about
-    // code that has since regressed — reproduced live: PHI over https
-    // scanned deep (protected), then the same file edited to http and
-    // rescanned WITHOUT the flag, still signed evidence_supported. Only
-    // trust a loaded graph when THIS scan's own scanHealth confirms
-    // lineage analysis was both requested AND enabled — never merely
-    // because a file happens to exist on disk.
-    const lineageRequested = scan.scanHealth?.lineageAnalysis?.requested === true;
-    const lineageEnabled = scan.scanHealth?.lineageAnalysis?.enabled === true;
-    const loaded = loadSignedGraph(scanRoot);
-    const graphIsFresh = loaded.ok && lineageRequested && lineageEnabled;
-    const graph = graphIsFresh ? loaded.graph : null;
+    const { graph, fresh: graphIsFresh, loaded } = loadFreshLineageGraph(scanRoot, scan);
 
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: graph });
     const pack = buildObligationEvidencePack({
@@ -2550,15 +2531,34 @@ async function cmdAttest(args) {
     console.log('');
     console.log('A pack proves its contents are unmodified since signing. It does NOT');
     console.log('certify compliance — read the pack\'s own `disclaimer` field.');
-    if (!loaded.ok) {
+    // Final whole-branch review finding F2 (recommended, fixed): this
+    // NOTE previously keyed on `!loaded.ok`, so the B2/F1 staleness guard
+    // above could silently discard a real graph with NO disclosure at
+    // all — an operator saw "unknown: 1" and nothing explaining why, even
+    // though a signed graph genuinely existed on disk. Keyed on
+    // `!graphIsFresh` instead, so every path that discards a graph also
+    // explains why.
+    if (!graphIsFresh) {
       console.log('');
-      if (loaded.reason === 'missing') {
-        console.log('NOTE: no lineage graph found (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set on');
-        console.log('the scan that produced last-scan.json) — every graph: fact in this pack');
-        console.log('reads "unknown", by design.');
+      if (!loaded.ok) {
+        if (loaded.reason === 'missing') {
+          console.log('NOTE: no lineage graph found (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set on');
+          console.log('the scan that produced last-scan.json) — every graph: fact in this pack');
+          console.log('reads "unknown", by design.');
+        } else {
+          console.log(`NOTE: lineage graph could not be loaded (${loaded.reason}: ${loaded.message})`);
+          console.log('— every graph: fact in this pack reads "unknown", by design.');
+        }
+      } else if (scan.scanHealth?.lineageAnalysis?.failure) {
+        console.log('NOTE: a lineage graph exists on disk, but this scan\'s own lineage build');
+        console.log(`failed (${scan.scanHealth.lineageAnalysis.failure}) — ignoring the stale graph`);
+        console.log('rather than asserting a fact about code it may no longer reflect. Every');
+        console.log('graph: fact in this pack reads "unknown", by design.');
       } else {
-        console.log(`NOTE: lineage graph could not be loaded (${loaded.reason}: ${loaded.message})`);
-        console.log('— every graph: fact in this pack reads "unknown", by design.');
+        console.log('NOTE: a lineage graph exists on disk from an earlier deep scan, but this scan');
+        console.log('did not run one (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set) — ignoring the');
+        console.log('stale graph rather than asserting a fact about code it may no longer reflect.');
+        console.log('Every graph: fact in this pack reads "unknown", by design.');
       }
     }
     return 0;
