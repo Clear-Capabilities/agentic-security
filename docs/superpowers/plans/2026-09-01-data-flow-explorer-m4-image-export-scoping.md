@@ -110,12 +110,24 @@ proof):
   `serializeStateToHash`, already real and shipped), is real, undecided
   scope this document does not resolve.
 - **SVG extraction needs a real, small implementation** (parse the
-  `--dump-dom` output, locate and extract the correct `<svg>` subtree,
-  handle the case of multiple `<svg>` elements on the page — confirmed 8
-  `<svg>` tags in the real dumped DOM this session, most likely small
-  icon/decoration SVGs alongside the one real Architecture View root —
-  disambiguating the RIGHT one is real, un-attempted work, not a
-  one-liner).
+  `--dump-dom` output, locate and extract the `<svg>` subtree) — but
+  disambiguation between multiple candidates is NOT a real concern:
+  re-confirmed by direct source grep (`grep -rn "<svg" frontend/src/`)
+  that `svgEl`/`createElementNS` is used in exactly ONE file,
+  `architecture-view.js`, which mints exactly one root `<svg
+  class="arch-view">` per render. **Correction to an initial finding
+  earlier in this same investigation**: a first-pass `grep -c "<svg"`
+  against the dumped DOM counted 8, which looked like it might mean
+  several real SVG elements needing disambiguation — re-checked with
+  `grep -n` and found 7 of the 8 are substring matches inside plain-text
+  JS *comments* in the bundled script (e.g. `"the &lt;svg&gt; canvas
+  above"`, `"for anything outside the &lt;svg&gt; tree"` — real source
+  comments in `architecture-view.js` describing the SVG, preserved
+  verbatim by `--dump-dom` since script-tag content is dumped as text,
+  not executed-and-discarded), not real elements. There is exactly ONE
+  real `<svg>` in the whole rendered page. Extraction is a simple regex/
+  string search for `<svg class="arch-view"` through its matching
+  `</svg>`, not a disambiguation problem.
 - **PDF's own single-page-vs-multi-page/pagination behavior**,
   print-CSS interaction (`@media print` rules, none of which exist in
   `frontend/styles/` today per this session's own earlier confirmed file
@@ -136,7 +148,7 @@ architecture (generate the HTML report via the already-shipped
 `generateHtmlReport`, then invoke a real local Chrome binary's own
 `--screenshot`/`--print-to-pdf`/`--dump-dom` flags against it), resolving
 the specific open items above (view-selection for a multi-view report,
-correct-SVG-element disambiguation, Chrome-binary discovery/error
-handling) before implementation begins — matching this session's own
-established discipline of a real, grounded scoping pass before writing
+Chrome-binary discovery/error handling) before implementation begins —
+matching this session's own established discipline of a real, grounded
+scoping pass before writing
 task-level code.
