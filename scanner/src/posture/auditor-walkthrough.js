@@ -543,14 +543,25 @@ export function evaluateFramework(scanRoot, fw, scan) {
         } catch { /* graph obligation mapping is additive; never block evaluation */ }
         if (mapping) {
           obligationMappings.push(mapping);
-          // Found by the final whole-branch review: a graph: mapping's
-          // state is intentionally independent of the pre-existing
-          // present/partial/absent/manual status glyph (Global
-          // Constraint — see the block comment above), so a control can
-          // render a green ✅ header with a 'gap_detected' line buried
-          // underneath it in the observations. A ⚠️ prefix on a genuine
-          // gap keeps that visible to a reader who only scans headers,
-          // without touching the status computation itself.
+          // Found by the final whole-branch review of sub-project 6b: a
+          // graph: mapping's state is intentionally independent of the
+          // pre-existing present/partial/absent/manual status glyph
+          // (Global Constraint — see the block comment above), so a
+          // control can render a green ✅ header with a 'gap_detected'
+          // line buried underneath it in the observations. A ⚠️ prefix on
+          // a genuine gap keeps that visible to a reader who only scans
+          // headers, without touching the status computation itself.
+          // RE-CONFIRMED (sub-project 6c's own final review, F4): at the
+          // time this ⚠️ prefix was written, `graph:` mappings could only
+          // ever read 'unknown' end-to-end through the real CLI (a
+          // separate, then-undiscovered bug — see obligation-predicates.js
+          // and cmdCompliance/cmdAttest's own fix history), so this exact
+          // ✅-header-hiding-a-real-gap scenario was structurally
+          // unreachable. Sub-project 6c's CLI fixes make it genuinely
+          // reachable for the first time; the ruling above was written
+          // anticipating exactly this and needs no change — confirmed
+          // live via a real assessed HIPAA §164.312(e) gap
+          // (test/cli/attest-obligations.test.js's own gap_detected case).
           const flag = mapping.state === 'gap_detected' ? '⚠️ ' : '';
           obs.push(`${flag}(graph mapping) ${m} -> ${mapping.state}.`);
         } else {
