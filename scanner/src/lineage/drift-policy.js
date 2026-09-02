@@ -194,7 +194,7 @@ function _describeTransition(changeEntry) {
 function _buildViolation(rule, trigger, ctx, transitionDescriptions) {
   const base = trigger === 'new_flow'
     ? `New flow ${ctx.flow.id} (${ctx.dataClasses.join('/') || 'unclassified data'}) newly reaches sink ${ctx.sinkCategory ?? ctx.sinkNode?.id ?? 'unknown'}`
-    : `Flow ${ctx.flow.id} changed: ${transitionDescriptions.length ? transitionDescriptions.join(', ') : 'matched an unconstrained changed_flow rule'}`;
+    : `Flow ${ctx.flow.id} changed: ${transitionDescriptions.length ? transitionDescriptions.join(', ') : 'matched changed_flow rule (no policyVerdict/protectionSummary transition named by this rule)'}`;
   const reason = rule.reason ? `${base} (${rule.reason})` : base;
 
   return {
