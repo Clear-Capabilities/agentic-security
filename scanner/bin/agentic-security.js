@@ -2320,7 +2320,26 @@ async function cmdCompliance(args) {
       console.error(`Unknown framework "${wt}". Try --list.`);
       return 2;
     }
-    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    // Final whole-branch review finding R2 (sub-project 6c), fixed here
+    // rather than merely disclosed: `scan.lineageGraph` is NEVER present
+    // in last-scan.json (see the identical, already-fixed defect in
+    // cmdAttest's --obligations branch above — engine.js only assigns
+    // scan.lineageGraph in-process; bin/agentic-security.js strips it
+    // before persisting, since the real graph gets its own signed
+    // artifact). --walkthrough has read scan.lineageGraph directly since
+    // it shipped in sub-project 6b, so every graph: mapping has always
+    // read "unknown" through this command regardless of whether
+    // AGENTIC_SECURITY_LINEAGE_DEEP=1 was ever set. Same fix as
+    // --obligations: load the real graph via loadSignedGraph, and only
+    // trust it when THIS scan's own scanHealth confirms lineage analysis
+    // was both requested and enabled (never merely because a stale file
+    // from an earlier deep scan happens to exist on disk).
+    const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+    const wtLineageRequested = scan.scanHealth?.lineageAnalysis?.requested === true;
+    const wtLineageEnabled = scan.scanHealth?.lineageAnalysis?.enabled === true;
+    const wtLoaded = loadSignedGraph(scanRoot);
+    const wtGraph = (wtLoaded.ok && wtLineageRequested && wtLineageEnabled) ? wtLoaded.graph : null;
+    const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: wtGraph });
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
       writeStdout(JSON.stringify(
@@ -2465,8 +2484,25 @@ async function cmdAttest(args) {
     const fw = loadFramework(scanRoot, frameworkId);
     if (!fw) { console.error(`Unknown framework: ${frameworkId}`); return 2; }
 
+    // Final whole-branch review finding B2 (blocking): lineage-graph.json
+    // is only rewritten when a scan actually built a lineage graph
+    // (engine.js only assigns _lineageGraph when the deep-lineage pass
+    // ran) — an ordinary, non-deep scan run AFTER a real deep scan leaves
+    // the OLD graph on disk untouched while last-scan.json/scanHealth
+    // move on to describe the NEW scan. Loading that stale graph and
+    // joining it to the current scanHealth would let a pack assert a
+    // graph:-derived compliance fact (e.g. "transit protected") about
+    // code that has since regressed — reproduced live: PHI over https
+    // scanned deep (protected), then the same file edited to http and
+    // rescanned WITHOUT the flag, still signed evidence_supported. Only
+    // trust a loaded graph when THIS scan's own scanHealth confirms
+    // lineage analysis was both requested AND enabled — never merely
+    // because a file happens to exist on disk.
+    const lineageRequested = scan.scanHealth?.lineageAnalysis?.requested === true;
+    const lineageEnabled = scan.scanHealth?.lineageAnalysis?.enabled === true;
     const loaded = loadSignedGraph(scanRoot);
-    const graph = loaded.ok ? loaded.graph : null;
+    const graphIsFresh = loaded.ok && lineageRequested && lineageEnabled;
+    const graph = graphIsFresh ? loaded.graph : null;
 
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: graph });
     const pack = buildObligationEvidencePack({
@@ -2474,9 +2510,20 @@ async function cmdAttest(args) {
       framework: fw,
       evaluation,
       scanHealth: scan.scanHealth ?? null,
-      engineVersion: scan.engineVersion || null,
-      rulesetVersion: scan.rulesetVersion || null,
-      bundleSha: scan.bundleSha || null,
+      // Final whole-branch review finding B1 (blocking): these three
+      // fields live under scan.attestation (set by computeRunAttestation
+      // at scan time — bin/agentic-security.js's own `scan.attestation =
+      // computeRunAttestation({...})` call), never at the top level of
+      // last-scan.json — reading scan.engineVersion etc. directly always
+      // read undefined, leaving reproducibility permanently null through
+      // the real CLI. NOTE: the sibling attest (finding-bundle) and
+      // attest --provenance code paths a little above this branch read
+      // the SAME wrong top-level fields and carry the identical,
+      // pre-existing bug — real, disclosed, but out of this sub-project's
+      // scope to fix (they predate this branch's own diff).
+      engineVersion: scan.attestation?.engineVersion || null,
+      rulesetVersion: scan.attestation?.rulesetVersion || null,
+      bundleSha: scan.attestation?.bundleSha || null,
     });
 
     const kp = ensureKeyPair();
@@ -2491,7 +2538,15 @@ async function cmdAttest(args) {
     console.log(`Signed evidence pack for ${frameworkId} → ${path.relative(scanRoot, path.join(outDir, name))}`);
     console.log(`Public key (share this with whoever verifies): ${kp.publicKey}`);
     console.log('');
-    console.log(`  facts: ${pack.facts.length}  unknown: ${pack.unknownItems.length}  manual: ${pack.manualItems.length}  accepted exceptions: ${pack.acceptedExceptions.length}`);
+    // Final whole-branch review finding R1 (recommended, fixed): the
+    // summary line named only unknown/manual/acceptedExceptions — an
+    // auditor scanning this output for a real, assessed gap_detected fact
+    // (the state a graph: predicate actually failing produces) saw "0 0 0"
+    // and nothing else, the same "a real gap can hide under an all-clear
+    // summary" failure class auditor-walkthrough.js's own ⚠️ prefix
+    // already exists to prevent (sub-project 6b's own final review).
+    const gapCount = pack.facts.filter((f) => f.state === 'gap_detected').length;
+    console.log(`  facts: ${pack.facts.length}  ${gapCount > 0 ? '⚠️ gaps: ' + gapCount + '  ' : ''}unknown: ${pack.unknownItems.length}  manual: ${pack.manualItems.length}  accepted exceptions: ${pack.acceptedExceptions.length}`);
     console.log('');
     console.log('A pack proves its contents are unmodified since signing. It does NOT');
     console.log('certify compliance — read the pack\'s own `disclaimer` field.');
@@ -2694,7 +2749,11 @@ async function cmdVerifyAttestation(args) {
     console.log('✓ VALID — the evidence pack is exactly what the signer produced.');
     console.log('');
     console.log(`  framework: ${bundle.framework?.id}  version: ${bundle.framework?.version}`);
-    console.log(`  facts: ${bundle.facts?.length ?? 0}  unknown: ${bundle.unknownItems?.length ?? 0}  manual: ${bundle.manualItems?.length ?? 0}  accepted exceptions: ${bundle.acceptedExceptions?.length ?? 0}`);
+    // Final whole-branch review finding R1 (recommended, fixed) — same
+    // "a real gap must never hide under an all-clear summary" guard as
+    // the signing side above.
+    const bundleGapCount = (bundle.facts ?? []).filter((f) => f?.state === 'gap_detected').length;
+    console.log(`  facts: ${bundle.facts?.length ?? 0}  ${bundleGapCount > 0 ? '⚠️ gaps: ' + bundleGapCount + '  ' : ''}unknown: ${bundle.unknownItems?.length ?? 0}  manual: ${bundle.manualItems?.length ?? 0}  accepted exceptions: ${bundle.acceptedExceptions?.length ?? 0}`);
     if (bundle.graphDigest) console.log(`  graph digest: ${bundle.graphDigest}`);
     console.log('');
     console.log(`  ${bundle.disclaimer}`);
