@@ -2448,6 +2448,15 @@ async function cmdAttest(args) {
     const {
       buildObligationEvidencePack, signObligationEvidencePack, ensureKeyPair,
     } = await import('../src/posture/obligation-evidence-pack.js');
+    // Task-2 review finding (blocking): scan.lineageGraph is NEVER present
+    // in last-scan.json — bin/agentic-security.js's own scan persistence
+    // deletes it before writing (`delete persistedScan.lineageGraph`,
+    // Sub-project E increment 5's own comment: "the lineage graph gets its
+    // OWN artifact file, never duplicated inside last-scan.json"). The real
+    // graph lives at .agentic-security/lineage-graph.json, signed
+    // separately — cmdExplore already established the correct way to read
+    // it. Reused directly here rather than re-deriving a second reader.
+    const { loadSignedGraph } = await import('../src/server/graph-loader.js');
 
     let scan;
     try { scan = JSON.parse(fs.readFileSync(statePath(scanRoot, 'last-scan.json'), 'utf8')); }
@@ -2456,9 +2465,12 @@ async function cmdAttest(args) {
     const fw = loadFramework(scanRoot, frameworkId);
     if (!fw) { console.error(`Unknown framework: ${frameworkId}`); return 2; }
 
-    const evaluation = evaluateFramework(scanRoot, fw, scan);
+    const loaded = loadSignedGraph(scanRoot);
+    const graph = loaded.ok ? loaded.graph : null;
+
+    const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: graph });
     const pack = buildObligationEvidencePack({
-      graph: scan.lineageGraph ?? null,
+      graph,
       framework: fw,
       evaluation,
       scanHealth: scan.scanHealth ?? null,
@@ -2483,10 +2495,16 @@ async function cmdAttest(args) {
     console.log('');
     console.log('A pack proves its contents are unmodified since signing. It does NOT');
     console.log('certify compliance — read the pack\'s own `disclaimer` field.');
-    if (!scan.lineageGraph) {
+    if (!loaded.ok) {
       console.log('');
-      console.log('NOTE: this scan has no lineageGraph (AGENTIC_SECURITY_LINEAGE_DEEP=1 was');
-      console.log('not set) — every graph: fact in this pack reads "unknown", by design.');
+      if (loaded.reason === 'missing') {
+        console.log('NOTE: no lineage graph found (AGENTIC_SECURITY_LINEAGE_DEEP=1 was not set on');
+        console.log('the scan that produced last-scan.json) — every graph: fact in this pack');
+        console.log('reads "unknown", by design.');
+      } else {
+        console.log(`NOTE: lineage graph could not be loaded (${loaded.reason}: ${loaded.message})`);
+        console.log('— every graph: fact in this pack reads "unknown", by design.');
+      }
     }
     return 0;
   }

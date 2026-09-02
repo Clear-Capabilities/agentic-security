@@ -16,7 +16,7 @@ const CLI = fileURLToPath(new URL('../../bin/agentic-security.js', import.meta.u
 // state, only to produce SOME real scan.lineageGraph for the CLI plumbing
 // under test here.
 const PHI_SOURCE = `function summarizePatient(anthropic, params) {
-  const patientRecord = params.body.patient_record;
+  const patientRecord = params.arguments.patient_record;
   anthropic.messages.create({
     model: 'claude-3',
     messages: [{ role: 'user', content: patientRecord }],
@@ -55,6 +55,21 @@ test('attest --obligations: signs a real evidence pack from a real scan with a l
   assert.equal(pack.schema, 'agentic-security/obligation-evidence-pack@1');
   assert.equal(pack.framework.id, 'hipaa-security-rule');
   assert.ok(pack.signature?.value, 'expected a real signature value');
+
+  // Task-2 review finding (blocking, now fixed): scan.lineageGraph is
+  // never present in last-scan.json (stripped before persisting — the
+  // real graph lives at .agentic-security/lineage-graph.json, signed
+  // separately). Before the fix, attest --obligations silently read
+  // scan.lineageGraph anyway, so graphDigest/evidenceIndex were ALWAYS
+  // null/empty through the real CLI, even with a real lineage graph on
+  // disk and AGENTIC_SECURITY_LINEAGE_DEEP=1 genuinely set. These
+  // assertions are the regression guard — they fail against the pre-fix
+  // code (graphDigest: null, evidenceIndex: [{...evidence: []}]).
+  assert.ok(pack.graphDigest, `expected a real graph digest, got ${pack.graphDigest} — the CLI likely isn't loading .agentic-security/lineage-graph.json`);
+  assert.match(pack.graphDigest, /^[0-9a-f]{64}$/);
+  assert.ok(pack.evidenceIndex.length >= 1);
+  assert.ok(pack.evidenceIndex[0].evidence.length >= 1, 'expected the evidence index to resolve at least one real contributing flow');
+  assert.deepEqual(pack.evidenceIndex[0].evidence[0].dataClasses, ['PHI']);
 });
 
 test('attest --obligations: with no framework id, exits 2 with a usage message', async (t) => {
