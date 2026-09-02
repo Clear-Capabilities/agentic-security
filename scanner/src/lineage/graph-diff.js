@@ -271,7 +271,7 @@ export function validateGraphDiff(record) {
  * 'application_change'; every removed node/edge/dataElement entry gets
  * 'application_change' unconditionally (see judgment call #2 above).
  */
-export function computeGraphDiff(snapshotBefore, snapshotAfter) {
+export function computeGraphDiff(snapshotBefore, snapshotAfter, opts = {}) {
   const { comparable, reasons } = snapshotsComparable(snapshotBefore, snapshotAfter);
   if (!comparable) {
     throw new Error(`computeGraphDiff: snapshots are not comparable — ${reasons.join('; ')}`);
@@ -328,7 +328,7 @@ export function computeGraphDiff(snapshotBefore, snapshotAfter) {
     added,
     removed,
     changed: { flows: changedFlows },
-    generatedAt: new Date().toISOString(),
+    generatedAt: opts.generatedAt ?? new Date().toISOString(),
   };
 
   const { valid, errors } = validateGraphDiff(record);
