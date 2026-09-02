@@ -30,7 +30,7 @@
 // precedent, and are applied to every governance value and every
 // graph-derived label/name this file interpolates.
 
-import { rankFlows, RANKING_FACTORS, validateDecisionStory } from './decision-story.js';
+import { rankFlows, RANKING_FACTORS, validateDecisionStory, AI_SINK_SUBTYPES } from './decision-story.js';
 import { _filterGraph, computeGraphDigest } from './export-json.js';
 import { storyId } from './ids.js';
 import { EVIDENCE_GRADES } from './protection.js';
@@ -120,11 +120,6 @@ const _AUDIENCE_WORDING = Object.freeze({
 
 const SENSITIVITY_TIER_ORDER = ['critical', 'high', 'medium', 'low', 'none'];
 const SENSITIVITY_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', none: 'None / unclassified' };
-
-// Mirrors decision-story.js's own private _aiUseFactor's subtype list
-// exactly — kept as a small, disclosed duplication rather than importing a
-// non-exported helper.
-const AI_SINK_SUBTYPES = ['ai-model-provider', 'ai-agent', 'ai-tool'];
 
 const POLICY_LABELS = {
   prohibited: 'prohibited by policy',

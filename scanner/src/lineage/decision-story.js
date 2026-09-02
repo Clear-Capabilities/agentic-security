@@ -25,6 +25,13 @@
 
 import { SEVERITY_RANK, DEFAULT_TAXONOMY } from '../dataflow/privacy-taxonomy.js';
 
+// The sink-registry categories (sink-registry.js's own CATEGORY_NODE_KIND
+// vocabulary) that count as an AI destination for the aiUse factor.
+// Exported so export-briefing.js's own "AI providers" chapter-3 listing
+// reads the SAME vocabulary rather than keeping a second, independently
+// drifting copy (Task 2 review finding, fixed).
+export const AI_SINK_SUBTYPES = Object.freeze(['ai-model-provider', 'ai-agent', 'ai-tool']);
+
 export const RANKING_FACTORS = Object.freeze([
   'sensitivity', 'externality', 'controlVerdict', 'recipientJurisdiction',
   'aiUse', 'breadth', 'evidenceConfidence', 'policyState', 'changeRecency',
@@ -113,7 +120,7 @@ function _recipientJurisdictionFactor() {
 
 function _aiUseFactor(flow, nodesById) {
   const sink = nodesById.get(flow.sink);
-  const isAi = sink?.subtype === 'ai-model-provider' || sink?.subtype === 'ai-agent' || sink?.subtype === 'ai-tool';
+  const isAi = AI_SINK_SUBTYPES.includes(sink?.subtype);
   return { available: true, tier: isAi ? 'ai_destination' : 'none', evidence: isAi ? [flow.sink] : [] };
 }
 
