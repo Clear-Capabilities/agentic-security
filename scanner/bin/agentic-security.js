@@ -10,7 +10,7 @@ const PKG_VERSION = __require('../package.json').version;
 import { signLastScan as _signLastScan, verifyLastScan as _verifyLastScanShared } from '../src/posture/integrity.js';
 import { isProvenanceHealthy, sanitizeForTerminal } from '../src/posture/provenance/schema.js';
 import { runScan } from '../src/runScan.js';
-import { persistGraphSnapshot } from '../src/lineage/graph-snapshot.js';
+import { persistGraphSnapshot, loadSnapshots, loadSnapshot, mostRecentPriorSnapshot } from '../src/lineage/graph-snapshot.js';
 
 // Every command is dispatched as `process.exit(await cmdX(args))`, and
 // process.exit() does NOT flush an asynchronous stdout. stdout is asynchronous
@@ -3563,6 +3563,327 @@ async function cmdDataflowExport(args) {
   return 0;
 }
 
+// `agentic-security dataflow diff [path] [--against <commit>]
+// [--drift-policy <path>] --output <file> [--format json|markdown]
+// [--fail-on-drift]` — Milestone 4, FR-503 sub-project 8b, Task 3. Reads
+// two persisted GraphSnapshot records (src/lineage/graph-snapshot.js),
+// computes a GraphDiff (src/lineage/graph-diff.js's computeGraphDiff, which
+// THROWS on an incomparable pair rather than returning an error object —
+// caught below and converted to the same clean-message-then-return-2
+// discipline cmdDataflowExport's own try/catch already established),
+// optionally evaluates operator drift policies against it
+// (src/lineage/drift-policy.js), and writes a JSON or Markdown report.
+//
+// Snapshot resolution — a real design decision the task brief itself left
+// open, disclosed here rather than in a comment only cmdDataflowExport's
+// own precedent would lead a reader to expect: graph-snapshot.js's own
+// git-HEAD resolver (`_gitHead`) is private and unexported, so this
+// function cannot independently ask "what is the current commit" the way
+// the scan-time persistence call site can. Instead, the CLI's own "AFTER"
+// snapshot is always `loadSnapshots(scanRoot)[0]` — the newest persisted
+// snapshot by file mtime — which is consistent with how a scan always
+// persists a snapshot for its own commit before `dataflow diff` would ever
+// run against that scanRoot (see test/cli/lineage-snapshot-persist.test.js
+// for the real, already-shipped precedent this assumption rests on).
+// `loadSnapshots(scanRoot)` returning `[]` is this function's "no snapshot
+// to compare against" exit-2 case. Without an explicit `--against`, the
+// "BEFORE" snapshot defaults to `mostRecentPriorSnapshot(scanRoot,
+// afterSnapshot.commit)` — also exit-2 if that is `null` (only one
+// snapshot exists, nothing to diff against yet). An explicit
+// `--against <commit>` resolves via `loadSnapshot(scanRoot, commit)` —
+// exit-2 with a clear message if that commit has no persisted snapshot.
+//
+// --format: the task brief's own invocation-signature line brackets
+// `[--format json|markdown]` as optional, but its own exit-code contract
+// explicitly lists "missing/invalid --format" as one of the enumerated
+// exit-2 cases — a real conflict between the two, resolved here (disclosed,
+// not silently picked) in favor of the more precisely-worded exit-code
+// contract: --format is REQUIRED, exactly like --output and exactly like
+// cmdDataflowExport's own --format above, never defaulted.
+//
+// --format json emits the raw GraphDiff record plus a `violations` array
+// (from evaluateDriftPolicies when --drift-policy was supplied). The task
+// brief leaves it as this implementation's own call whether to omit
+// `violations` or emit an empty array when no --drift-policy was given —
+// this always emits `violations: []` so the JSON shape is uniform across
+// both cases (a caller/test can always read `.violations` without an
+// `in`/`?.` check), disclosed here per the brief's own request.
+//
+// Exit codes, matching cmdDataflowExport's own documented contract shape:
+// 0 success (no violations, or violations found but --fail-on-drift not
+// passed); 2 usage/argument error (missing --output, missing/invalid
+// --format, no snapshot to compare against, an incomparable pair, a
+// malformed --drift-policy file); 1 if --drift-policy violations were
+// found AND --fail-on-drift was passed — the report is still written to
+// --output in that case, exactly like a passing run, so a CI caller gets
+// both the gate signal AND the artifact in one invocation.
+const DATAFLOW_DIFF_FORMATS = new Set(['json', 'markdown']);
+
+/** Resolves a flow id against a real DataFlowGraph v1 document for
+ * human-readable Markdown rendering — a GraphDiff's own added/removed/
+ * changed entries carry only {id, causeClassification, ...} (see
+ * graph-diff.js's own header), never dataElement/sink names directly.
+ * Mirrors drift-policy.js's own private _resolveFlowContext in spirit
+ * (same id-chasing logic), reimplemented locally here since that helper
+ * is not exported and this CLI's own rendering needs are narrower (labels
+ * only, no dataClasses/sinkCategory matching). Returns raw, UNESCAPED
+ * strings — callers interpolating into Markdown MUST pass every returned
+ * value through _mdInline/_mdCell/_mdCode below, never this function's
+ * output directly. */
+function _dataflowDiffFlowLabel(flowId, graph) {
+  const flow = (graph?.flows ?? []).find((f) => f.id === flowId);
+  if (!flow) return { dataElementNames: [], sinkLabel: null };
+  const dataElementNames = (flow.dataElementIds ?? [])
+    .map((id) => (graph.dataElements ?? []).find((d) => d.id === id)?.name)
+    .filter((n) => typeof n === 'string' && n.length > 0);
+  const sinkNode = (graph.nodes ?? []).find((n) => n.id === flow.sink) ?? null;
+  const sinkLabel = sinkNode?.label ?? sinkNode?.subtype ?? sinkNode?.kind ?? flow.sink ?? null;
+  return { dataElementNames, sinkLabel };
+}
+
+// Local Markdown-escaping helpers — byte-identical to export-briefing.js's/
+// export-privacy.js's own _mdInline/_mdCell/_mdCode, reimplemented locally
+// per this codebase's established per-module-owns-its-own-escaping-helpers
+// convention (see export-briefing.js's own header comment for why these
+// are never imported across modules). Applied to every graph-derived or
+// operator-drift-policy-derived string (flow ids, data element names, sink
+// labels, rule `reason` text) interpolated into the Markdown report below.
+function _dfDiffMdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+function _dfDiffMdCell(value) {
+  return _dfDiffMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+function _dfDiffMdCode(value) {
+  const s = _dfDiffMdInline(value);
+  const runs = s.match(/`+/g);
+  const maxRun = runs ? Math.max(...runs.map((r) => r.length)) : 0;
+  if (maxRun === 0) return `\`${s}\``;
+  const fence = '`'.repeat(maxRun + 1);
+  return `${fence} ${s} ${fence}`;
+}
+
+function _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnapshot, driftPolicyProvided) {
+  const graphAfter = afterSnapshot.graph ?? {};
+  const graphBefore = beforeSnapshot.graph ?? {};
+  const lines = [];
+
+  lines.push('# Data Flow Explorer — Graph Diff');
+  lines.push('');
+  lines.push(`**Before:** commit ${_dfDiffMdCode(beforeSnapshot.commit)} — captured ${_dfDiffMdInline(beforeSnapshot.capturedAt)}`);
+  lines.push(`**After:** commit ${_dfDiffMdCode(afterSnapshot.commit)} — captured ${_dfDiffMdInline(afterSnapshot.capturedAt)}`);
+  lines.push(`**Generated:** ${_dfDiffMdInline(diff.generatedAt)}`);
+  lines.push('');
+
+  // Drift-policy violations get their own top section — flagged
+  // prominently, never buried under the added/removed/changed detail, per
+  // the task brief's own explicit instruction.
+  lines.push('## Drift Policy Violations');
+  lines.push('');
+  if (!driftPolicyProvided) {
+    lines.push('_No `--drift-policy` supplied — policy evaluation was skipped._');
+  } else if (violations.length === 0) {
+    lines.push('No drift-policy violations detected.');
+  } else {
+    lines.push('| Trigger | Flow | Data Elements | Sink | Reason |');
+    lines.push('|---|---|---|---|---|');
+    for (const v of violations) {
+      const cells = [
+        v.trigger,
+        v.flowId,
+        (v.dataElementNames ?? []).join(', ') || '(none)',
+        v.sinkCategory ?? v.sinkNodeId ?? 'unknown',
+        v.reason,
+      ];
+      lines.push(`| ${cells.map(_dfDiffMdCell).join(' | ')} |`);
+    }
+  }
+  lines.push('');
+
+  lines.push('## Summary');
+  lines.push('');
+  lines.push(`- Nodes: +${diff.added.nodes.length} / -${diff.removed.nodes.length}`);
+  lines.push(`- Edges: +${diff.added.edges.length} / -${diff.removed.edges.length}`);
+  lines.push(`- Data elements: +${diff.added.dataElements.length} / -${diff.removed.dataElements.length}`);
+  lines.push(`- Flows: +${diff.added.flows.length} / -${diff.removed.flows.length} / ~${diff.changed.flows.length} changed`);
+  lines.push('');
+
+  const _entityList = (entries) => entries.map((e) => `- ${_dfDiffMdCode(e.id)} (${_dfDiffMdInline(e.causeClassification)})`);
+
+  lines.push('## Added');
+  lines.push('');
+  lines.push('### Flows');
+  if (diff.added.flows.length === 0) {
+    lines.push('_None._');
+  } else {
+    for (const e of diff.added.flows) {
+      const { dataElementNames, sinkLabel } = _dataflowDiffFlowLabel(e.id, graphAfter);
+      const de = dataElementNames.length ? dataElementNames.map(_dfDiffMdCode).join(', ') : 'unclassified data';
+      lines.push(`- ${_dfDiffMdCode(e.id)} — ${de} → ${_dfDiffMdCode(sinkLabel ?? 'unknown sink')} (first seen ${_dfDiffMdInline(e.firstSeen?.commit ?? '')})`);
+    }
+  }
+  lines.push('');
+  for (const [heading, key] of [['Nodes', 'nodes'], ['Edges', 'edges'], ['Data Elements', 'dataElements']]) {
+    lines.push(`### ${heading}`);
+    lines.push(diff.added[key].length === 0 ? '_None._' : _entityList(diff.added[key]).join('\n'));
+    lines.push('');
+  }
+
+  lines.push('## Removed');
+  lines.push('');
+  lines.push('### Flows');
+  if (diff.removed.flows.length === 0) {
+    lines.push('_None._');
+  } else {
+    for (const e of diff.removed.flows) {
+      const { dataElementNames, sinkLabel } = _dataflowDiffFlowLabel(e.id, graphBefore);
+      const de = dataElementNames.length ? dataElementNames.map(_dfDiffMdCode).join(', ') : 'unclassified data';
+      const flag = e.causeClassification === 'possible_coverage_regression' ? ' **(possible coverage regression — see coverageRegressionReasons)**' : '';
+      lines.push(`- ${_dfDiffMdCode(e.id)} — ${de} → ${_dfDiffMdCode(sinkLabel ?? 'unknown sink')} (last seen ${_dfDiffMdInline(e.lastSeen?.commit ?? '')})${flag}`);
+    }
+  }
+  lines.push('');
+  for (const [heading, key] of [['Nodes', 'nodes'], ['Edges', 'edges'], ['Data Elements', 'dataElements']]) {
+    lines.push(`### ${heading}`);
+    lines.push(diff.removed[key].length === 0 ? '_None._' : _entityList(diff.removed[key]).join('\n'));
+    lines.push('');
+  }
+
+  lines.push('## Changed');
+  lines.push('');
+  lines.push('### Flows');
+  if (diff.changed.flows.length === 0) {
+    lines.push('_None._');
+  } else {
+    for (const e of diff.changed.flows) {
+      const changeText = e.changes.map((c) => `${_dfDiffMdInline(c.field)}: ${_dfDiffMdInline(JSON.stringify(c.before))} -> ${_dfDiffMdInline(JSON.stringify(c.after))}`).join('; ');
+      lines.push(`- ${_dfDiffMdCode(e.id)} — ${changeText}`);
+    }
+  }
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+async function cmdDataflowDiff(args) {
+  const target = args._[2] || '.';
+  const targetAbs = path.resolve(target);
+
+  const outputPath = args.flags.output;
+  if (!outputPath || typeof outputPath !== 'string') {
+    process.stderr.write('agentic-security dataflow diff: --output <file> is required.\n');
+    return 2;
+  }
+
+  const format = args.flags.format;
+  if (!format || !DATAFLOW_DIFF_FORMATS.has(format)) {
+    process.stderr.write(`agentic-security dataflow diff: --format must be one of ${[...DATAFLOW_DIFF_FORMATS].join('|')} (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  const againstFlag = args.flags.against;
+  if (againstFlag !== undefined && (typeof againstFlag !== 'string' || !againstFlag)) {
+    process.stderr.write('agentic-security dataflow diff: --against requires a commit value.\n');
+    return 2;
+  }
+
+  const driftPolicyFlag = args.flags['drift-policy'];
+  if (driftPolicyFlag !== undefined && (typeof driftPolicyFlag !== 'string' || !driftPolicyFlag)) {
+    process.stderr.write('agentic-security dataflow diff: --drift-policy requires a file path.\n');
+    return 2;
+  }
+
+  const failOnDrift = !!args.flags['fail-on-drift'];
+
+  // Snapshot resolution — see this function's own header comment above for
+  // the full disclosed reasoning (no unexported git-HEAD resolver
+  // available to this CLI, so "AFTER" is always the newest persisted
+  // snapshot for scanRoot).
+  const snapshots = loadSnapshots(targetAbs);
+  if (snapshots.length === 0) {
+    process.stderr.write(`agentic-security dataflow diff: no persisted GraphSnapshot found for "${targetAbs}" — run a scan with AGENTIC_SECURITY_LINEAGE_DEEP=1 first.\n`);
+    return 2;
+  }
+  const afterSnapshot = snapshots[0];
+
+  let beforeSnapshot;
+  if (againstFlag !== undefined) {
+    beforeSnapshot = loadSnapshot(targetAbs, againstFlag);
+    if (!beforeSnapshot) {
+      process.stderr.write(`agentic-security dataflow diff: no persisted GraphSnapshot found for commit "${againstFlag}" — pass a commit that was actually scanned.\n`);
+      return 2;
+    }
+  } else {
+    beforeSnapshot = mostRecentPriorSnapshot(targetAbs, afterSnapshot.commit);
+    if (!beforeSnapshot) {
+      process.stderr.write(`agentic-security dataflow diff: only one persisted GraphSnapshot exists (commit "${afterSnapshot.commit}") — nothing to compare against yet. Scan again after a code change, or pass --against <commit>.\n`);
+      return 2;
+    }
+  }
+
+  const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
+  let diff;
+  try {
+    diff = computeGraphDiff(beforeSnapshot, afterSnapshot);
+  } catch (e) {
+    // computeGraphDiff THROWS (never returns an error object) on an
+    // incomparable pair — converted to the same clean-message-then-
+    // return-2 discipline cmdDataflowExport's own try/catch establishes.
+    process.stderr.write(`agentic-security dataflow diff: ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+
+  let violations = [];
+  const driftPolicyProvided = driftPolicyFlag !== undefined;
+  if (driftPolicyProvided) {
+    const driftPolicyAbs = path.resolve(driftPolicyFlag);
+    // loadDriftPolicies (src/lineage/drift-policy.js) never throws — a
+    // malformed file degrades to {policies: []} with only a console.error
+    // warning, matching loadPrivacySinkPolicy's own precedent. That is the
+    // right default for a LOADER with no caller-facing error channel, but
+    // this CLI's own exit-code contract explicitly promises exit 2 for "a
+    // malformed --drift-policy file" — so the malformed-JSON case is
+    // detected independently, here, before delegating to the real loader
+    // for the actual (identically-parsed) policy content.
+    if (fs.existsSync(driftPolicyAbs)) {
+      try {
+        JSON.parse(fs.readFileSync(driftPolicyAbs, 'utf8'));
+      } catch (e) {
+        process.stderr.write(`agentic-security dataflow diff: could not parse --drift-policy file "${driftPolicyFlag}": ${e.message}\n`);
+        return 2;
+      }
+    } else {
+      process.stderr.write(`agentic-security dataflow diff: --drift-policy file "${driftPolicyFlag}" does not exist.\n`);
+      return 2;
+    }
+
+    const { loadDriftPolicies, evaluateDriftPolicies } = await import('../src/lineage/drift-policy.js');
+    const policies = loadDriftPolicies(driftPolicyAbs);
+    violations = evaluateDriftPolicies(diff, policies, afterSnapshot.graph).violations;
+  }
+
+  let data;
+  if (format === 'json') {
+    data = JSON.stringify({ ...diff, violations }, null, 2);
+  } else {
+    data = _renderDataflowDiffMarkdown(diff, violations, beforeSnapshot, afterSnapshot, driftPolicyProvided);
+  }
+
+  const outAbs = path.resolve(outputPath);
+  try {
+    await fsp.mkdir(path.dirname(outAbs), { recursive: true });
+    await fsp.writeFile(outAbs, data);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow diff: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+
+  process.stdout.write(`agentic-security dataflow diff: wrote ${format} to ${outAbs} (${violations.length} drift-policy violation(s))\n`);
+
+  if (failOnDrift && violations.length > 0) return 1;
+  return 0;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
@@ -3638,7 +3959,8 @@ async function main() {
       case 'dataflow': {
         const sub = args._[1];
         if (sub === 'export') { process.exit(await cmdDataflowExport(args)); }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export" is supported.\n`);
+        else if (sub === 'diff') { process.exit(await cmdDataflowDiff(args)); }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export" and "diff" are supported.\n`);
         process.exit(2);
       }
       case 'cve-watch': {

@@ -1,6 +1,6 @@
 ---
-description: Export the Data Flow Explorer graph — images, JSON/CSV/DPIA/RoPA/briefing data, or a self-contained HTML report.
-argument-hint: "[path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing --output <file> [--view <name>] [--size standard|2x] [--audience <mode>]"
+description: Export the Data Flow Explorer graph, or diff two scanned snapshots and evaluate drift policies.
+argument-hint: "export|diff [path] [options] --output <file> --format <fmt>"
 ---
 
 ## Data Flow Explorer export
@@ -35,22 +35,64 @@ Governance facts in `dpia`/`ropa` reflect `.agentic-security/privacy-governance.
 
 `briefing`'s own ranking-factor PRIORITY order (which of the nine factors breaks a tie first) is not yet exposed as its own CLI flag — only the CLI-unreachable `emitDecisionStory(graph, {factorOrder})` API parameter, for a future programmatic caller (e.g. an MCP tool). The default order matches `decision-story.js`'s own `RANKING_FACTORS` sequence.
 
-## Examples
+### Examples
 
 ```
-/dataflow --format png --output report.png
-/dataflow --format png --size 2x --output report-2x.png
-/dataflow --format svg --output architecture.svg
-/dataflow --format json --output graph.json --no-redact
-/dataflow --format html --output report.html
-/dataflow --format dpia --output dpia.md
-/dataflow --format ropa --output ropa.md --filter selected-scope.json
-/dataflow --format briefing --output board-briefing.md --audience board
+/dataflow export --format png --output report.png
+/dataflow export --format png --size 2x --output report-2x.png
+/dataflow export --format svg --output architecture.svg
+/dataflow export --format json --output graph.json --no-redact
+/dataflow export --format html --output report.html
+/dataflow export --format dpia --output dpia.md
+/dataflow export --format ropa --output ropa.md --filter selected-scope.json
+/dataflow export --format briefing --output board-briefing.md --audience board
+```
+
+## Data Flow Explorer diff
+
+Compares two already-scanned `GraphSnapshot`s (FR-503, Data-Flow Time
+Machine) — every scan run with `AGENTIC_SECURITY_LINEAGE_DEEP=1` persists
+one, commit-keyed, under `.agentic-security/lineage-snapshots/`, alongside
+the single-current-graph artifact `export` reads. This command never
+triggers a scan itself, same precedent as `export` above: run at least two
+scans (at two different commits) first.
+
+Without `--against`, the comparison is always "the newest scanned commit vs.
+the most recent scan before it" — the same "compare against the last scan"
+default `agentic-security dataflow diff` establishes for this feature (see
+`scanner/src/lineage/graph-snapshot.js`'s own header for why the CLI cannot
+independently resolve "the current commit" any other way). Pass
+`--against <commit>` to compare against a specific, already-scanned commit
+instead.
+
+### Options
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--output <file>` | Yes | Where the report is written. |
+| `--format json\|markdown` | Yes | `json` emits the raw `GraphDiff` record plus a `violations` array (empty when no `--drift-policy` was given). `markdown` renders a human-readable report — added/removed/changed sections, with any drift-policy violations flagged in their own top section. |
+| `--against <commit>` | No | Compare the newest snapshot against this specific prior commit instead of the default "most recent prior scan." Exits 2 if that commit was never scanned. |
+| `--drift-policy <path-to-json>` | No | Evaluate a `{"policies":[...]}` rule file (`new_flow`/`changed_flow` triggers — e.g. "a new PHI flow reaching an AI provider," or "a flow's `policyVerdict`/`protectionSummary` regressed") against the diff. Omitting this flag skips policy evaluation entirely — never an error, always an empty `violations` array. A malformed policy file is a clear exit-2 error. |
+| `--fail-on-drift` | No | Exit 1 (instead of 0) when `--drift-policy` found any violation. The report is still written either way — this only changes the exit code, matching a CI gate's usual needs. |
+
+Exit codes: `0` on success (no violations, or violations found but
+`--fail-on-drift` was not passed); `2` on a usage/argument error (missing
+`--output`, missing/invalid `--format`, no snapshot to compare against, an
+incomparable snapshot pair, a malformed `--drift-policy` file); `1` when
+`--drift-policy` violations were found AND `--fail-on-drift` was passed.
+
+### Examples
+
+```
+/dataflow diff --output diff.json --format json
+/dataflow diff --output diff.md --format markdown
+/dataflow diff --output diff.json --format json --against a1b2c3d
+/dataflow diff --output diff.json --format json --drift-policy drift-policy.json --fail-on-drift
 ```
 
 ## Implementation
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs dataflow export "$@"
+node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs dataflow "$@"
 exit $?
 ```
