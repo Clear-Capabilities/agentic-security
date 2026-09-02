@@ -1,5 +1,4 @@
 import { mountShell, buildContextRailText } from './shell.js';
-import { FLAGSHIP_GRAPH } from './data/flagship-graph.js';
 import { computeArchitectureViewModel, renderArchitectureView, renderFlowSummary } from './views/architecture-view.js';
 import { computePrivacyViewModel, renderPrivacyView } from './views/privacy-view.js';
 import { computeTraceViewModel, renderTraceView } from './views/trace-view.js';
