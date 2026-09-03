@@ -237,8 +237,8 @@ register(${JSON.stringify(hooksPath)}, import.meta.url);
   }
 }, { timeout: 40000 });
 
-test('cli/dataflow-watch-6: `agentic-security dataflow <unknown>` names all real subcommands, including "watch", "scenario", and "impact"', () => {
+test('cli/dataflow-watch-6: `agentic-security dataflow <unknown>` names all real subcommands, including "watch", "scenario", "impact", "observations", and "twin"', () => {
   const run = spawnSync(process.execPath, [BIN, 'dataflow', 'bogus'], { encoding: 'utf8', timeout: 20000 });
   assert.equal(run.status, 2);
-  assert.match(run.stderr, /"export", "diff", "watch", "scenario", and "impact"/);
+  assert.match(run.stderr, /"export", "diff", "watch", "scenario", "impact", "observations", and "twin"/);
 });

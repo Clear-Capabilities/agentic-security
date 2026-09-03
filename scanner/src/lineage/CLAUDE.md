@@ -926,6 +926,159 @@ contract); the HTTP write surface and any UI (same reasoning as
 never rescan-vs-runtime); and a regulation-derived due-date computation
 (PRD line 2072 — `dueDate` stays a plain operator-supplied value).
 
+## Milestone 5, Runtime-Corroborated Digital Twin (FR-505, deliverable #7, 7b only) — COMPLETE
+
+Ships the **RUNTIME-OBSERVED** half of FR-505 only — a metadata-only,
+closed-world `RuntimeObservation` contract, a graph-ID-aware correlation
+pass, an import-keyed observation store, one native-JSONL adapter, an
+additive `graph-builder.js` hook, and the CLI/JSON proof surface
+(`dataflow observations import|list`, `dataflow twin`) — such that every
+clause of AC-29's own `then` is genuinely satisfied at the data/artifact
+layer, without collecting a single payload value.
+
+| Module | Responsibility |
+|---|---|
+| `runtime-observation.js` | **Pure, zero imports.** The §10.10 `RuntimeObservation` contract vocabulary (`RUNTIME_OBSERVATION_FIELDS`, `RUNTIME_ATTRIBUTE_KEYS`, `EVENT_COUNT_BANDS`, `RUNTIME_MATCH_METHODS`/`RUNTIME_MATCH_CONFIDENCE`, `OBSERVATION_LAYERS`) plus `validateRuntimeObservation`/`validateObservationAttributes` — the ONE **closed-world** validator in this whole package. AC-29 clause 5 rests on it entirely. |
+| `observation-adapters.js` | **Pure, zero imports.** The adapter registry (`adapterFor`) plus `parseNativeJsonlObservations(text, context)` — text in, drafts out, no `fs`. Enforces its own closed wire-key set (`NATIVE_JSONL_RECORD_KEYS`), one layer BELOW the record-level closed-world sweep — the two layers together are what catch every smuggling shape in the payload-refusal test corpus. |
+| `observation-correlation.js` | **Pure**, imports exactly `['./runtime-observation.js']`. `matchObservationToGraph` (the import-time match ladder: `destination_literal` → `store_table` → `queue_topic` → `unmatched`) and `correlateObservations` (the read-time environment/window filter and the three-valued per-flow layer). Never mutates or filters a graph entity — AC-29 clause 3 is true by construction. |
+| `observation-store.js` | **Impure.** A directory of independently-readable, immutable, import-keyed whole files under `.agentic-security/runtime-observations/` — `persistObservationImport`/`loadObservationImports`/`loadObservationImport`/`loadObservations`/`deleteObservationImport`. Calls `maybeEncryptForWrite`/`maybeDecryptForRead` itself (the registry's `confidential: true` flag is a declaration, not an enforced control — see Correction 1 below); validates a `loadObservationImport` key's shape BEFORE any `path.join`. |
+| `graph-builder.js` (extended, additively) | `buildDataFlowGraph` gained `opts.correlateObservations(graph) -> CorrelationResult`, applied once, right before the graph is returned. `graph.runtimeCorroboration` is assigned **only when the hook returns truthy** — genuinely ABSENT, never `null`/`{}`, when the hook is omitted (byte-identical-when-omitted, the same contract `resolveDestination`'s own hook established). |
+| `coverage.js` / `index.js` (extended, additively) | `buildGraphWithCoverage` composes a default `correlateObservations` closure over a **pre-loaded** `opts.runtimeObservations` array (never a raw path); `index.js` performs the ONE read per `buildLineageGraph` call (`fs.existsSync(dir) ? loadObservations(scanRoot) : null` — the `null` is deliberate, see below). |
+| `bin/agentic-security.js` (`dataflow observations import\|list`, `dataflow twin`) | The AC-29 proof surface — see `commands/dataflow.md`'s own `## Runtime observations (FR-505)` / `## Runtime Digital Twin layers (AC-29)` sections for the full CLI reference. `observations import` is dry-run-by-default and refuses the WHOLE import on any rejected record; `observations list` never prints an attribute key or value; `dataflow twin` is read-only and never writes into `.agentic-security/`. |
+
+### The five AC-29 properties a future UI increment inherits, and must not break
+
+A future UI increment (deferred here — see the out-of-scope list below) sits
+entirely on top of what this deliverable already proved at the
+data/artifact layer. Breaking any one of these five at the UI layer would
+reopen exactly the gap this sub-project exists to close:
+
+1. **`RUNTIME OBSERVED` is a real, computed layer, never a UI label
+   invented at render time.** It comes from `correlateObservations` setting
+   `byFlow[flowId].layer = 'runtime_observed'` — a UI must render that
+   value, never infer "observed" from the presence of an import file alone.
+2. **The three-valued layer stays three-valued.** `not_observed_in_window`
+   (a store was consulted, genuinely found nothing) and `not_evaluated` (no
+   store was ever consulted) are two DIFFERENT answers — collapsing them
+   into one "no runtime evidence" UI state would silently misrepresent an
+   unevaluated flow as one the operator actually checked (PRD line 2098).
+3. **Non-exclusion is structural.** `correlateObservations` never filters,
+   removes, or reorders a graph entity — a UI's own "show observed flows
+   only" toggle must be a client-side FILTER over the full `byFlow` map,
+   never a request that asks this layer to return fewer flows.
+4. **Match confidence/method/environment/window are shown per flow, not
+   summarized away.** Every `runtime_observed` `byFlow` entry carries all
+   eight fields (`matchMethod`, `matchConfidence`, `environment`,
+   `windowStart`, `windowEnd`, `firstObservedAt`, `lastObservedAt`,
+   `eventCountBand`) non-null; a UI that shows only a boolean "observed"
+   badge with no way to inspect these fields fails AC-29 clause 4.
+5. **No captured payload value ever reaches this artifact, at any layer.**
+   The closed-world validator (below) is the only thing standing between
+   an operator's telemetry export and this codebase's own signed graph
+   artifact — a UI must never grow a second ingestion path (a paste box, a
+   live webhook receiver) that bypasses `validateRuntimeObservation`.
+
+### Why the validator is closed-world when every sibling §10.10 contract is open-world
+
+Every other extension-contract validator in this package
+(`impact-assessment.js`, `recipient-profile.js`, `scenario.js`,
+`obligation-mapping.js`, `graph-snapshot.js`) is open-world: it checks the
+fields it cares about and is silent about anything else, because it is
+validating a record this codebase itself constructed from its OWN
+already-vetted graph content. A `RuntimeObservation` is different in kind —
+it is built from an OPERATOR-SUPPLIED telemetry export this codebase never
+generated and cannot vouch for. PRD line 983 states the requirement
+directly: "Runtime records use approved metadata schemas and **reject**
+fields capable of carrying payload values." AC-29 clause 5 restates it as
+the acceptance bar: "no captured payload, prompt, response, record, log
+message, or sensitive value exists in the observation artifact." Both are
+REJECT requirements — an open-world validator (or a denylist, which fails
+on the identical axis one level down) would let any attribute name nobody
+thought to name in advance sail through unexamined. See
+`runtime-observation.js`'s own header comment for the full reasoning; do
+not widen either sweep from "reject unknown" to "ignore unknown" without
+re-reading it first — that is a silent AC-29 falsification, not a cleanup.
+
+### Why 7a (CONFIG DECLARED) is not here
+
+7a — inferring a graph edge from IaC/config rather than from executed code
+— is Milestone 2 Sub-project F2/F3's own job (already scoped as 2 × Large),
+not this deliverable's. Whoever picks up 7a should read the #7 scoping
+doc's Correction 3 (`byFlow` must be a plain object, never a `Map` — the
+graph is persisted to signed JSON) and Correction 4 (a flow's
+`matchConfidence` is demoted to `'ambiguous'` whenever its matched sink is
+shared with a sibling flow) first — both generalize beyond 7b — and, most
+importantly, the scoping doc's own finding that `edge.provenance` (Sub-
+project F increment 1, `EDGE_PROVENANCE_VALUES`) has **zero consumers**
+today: every downstream reader (`impact-engine.js`, `decision-story.js`,
+`obligation-predicates.js`, `export-csv.js`, `export-privacy.js`,
+`bench/protection-verdict/runner.mjs`) was written assuming
+`edge.provenance === 'code'` invariantly, and 7a would be the first thing
+in this codebase to ever write `'schema'`/`'manual'` to that field — a
+provenance-partitioning pass through every one of those consumers is real,
+separately-scoped work, not a drive-by addition.
+
+### The full out-of-scope list (scoping doc §7, verbatim in substance)
+
+- **7a / CONFIG DECLARED entirely** — descoped to M2 F2/F3 (above).
+- **Setting `edge.provenance = 'runtime'`** — deferred until a deliberate
+  provenance-partitioning pass exists through every downstream consumer.
+  Corroboration is recorded additively instead, on `graph.runtimeCorroboration`.
+- **Any change to `remediation.js`/`remediation-ledger.js`/the
+  `remediation` CLI verbs.** AC-31's own `or` is
+  rescan-vs-manual-attestation; a `runtime_verification` event type is
+  legitimate future FR-507 scope, not this deliverable's.
+- **`ImpactAssessment.scope = 'observed'` / possible-observed
+  partitioning.** `IMPACT_SCOPE_VALUES` already reserves the value; #4
+  (Impact Assessment) is already honest that nothing emits it yet. A
+  half-built partition would be worse than the disclosed gap.
+- **The OpenTelemetry adapter** — its own attribute allowlist and its own
+  review, against an unbounded, actively-evolving external vocabulary.
+- **Gateway/mesh metadata and cloud flow metadata adapters** — FR-505
+  names them; nothing exists; not attempted.
+- **Any UI**: layer toggles, distinct edge treatment, an environment/window
+  selector, an observation inspector, and the D.6
+  `runtime-digital-twin.dark.1680x945.png` golden. Consistent with every
+  decision-intelligence deliverable shipped this session — see the five
+  properties above for what a future UI increment must not break.
+- **Live ingestion of any kind** — no collector, no daemon, no network
+  call. FR-505's own no-egress rule and the root `CLAUDE.md`'s "no runtime
+  cloud calls" convention both forbid it; external evidence arrives as a
+  FILE, always.
+- **Field-level identity from runtime evidence.** FR-505 is explicit that
+  runtime observation "may increase corroboration confidence but cannot
+  prove field-level identity unless safe schema/trace evidence maps that
+  field" — no such mapping exists; observations correlate to node/edge/flow
+  ids only, never to a `dataElement`'s field identity.
+- **Encryption-at-rest implementation.** The registry entry declares
+  `confidential: true`; `observation-store.js` calls
+  `maybeEncryptForWrite`/`maybeDecryptForRead` itself (Correction 1 — see
+  below) — no NEW mechanism is introduced.
+- **Any language beyond JS/TS** — unchanged package-wide boundary.
+
+### The two pre-existing gaps this deliverable touched, and the one it did not
+
+- **Fixed.** `runtime-trace.jsonl`/`runtime.jsonl`/`ebpf-trace.jsonl`
+  (`posture/runtime-correlation.js`'s own `DEFAULT_TRACE_NAMES`) are now
+  ALL THREE registered in `posture/artifact-registry.js` — registering only
+  one of three left the other two exactly as unregistered as before.
+- **Fixed.** `confidential: true` on an artifact-registry.js entry is a
+  DECLARATION, not an enforced control — nothing walks the registry and
+  encrypts on a caller's behalf. `observation-store.js` calls
+  `maybeEncryptForWrite(scanRoot, 'runtime-observations', json)`/
+  `maybeDecryptForRead` itself, the same explicit-call pattern
+  `posture/compliance-policy.js`'s two pre-existing confidential artifacts
+  already established — so the flag this module's own registry entry
+  carries is backed by real behavior, not just a claim.
+- **Disclosed, NOT fixed.** `graph-snapshot.js`'s own `loadSnapshot(scanRoot,
+  commitKey)` joins a caller-supplied key straight onto the history
+  directory with no shape check at all — a real, pre-existing gap this
+  deliverable's own `loadObservationImport` deliberately does NOT inherit
+  (it validates its key against `/^obsimport:[0-9a-f]{12}$/` before any
+  `path.join`), but `graph-snapshot.js` itself is untouched. Not exploited
+  today (every real caller passes a git commit or a `--against` flag); out
+  of scope to fix here.
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

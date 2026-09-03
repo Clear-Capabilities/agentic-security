@@ -4371,6 +4371,399 @@ async function cmdDataflowImpactAssess(args) {
   return 0;
 }
 
+// ── dataflow observations import/list + dataflow twin — M5 deliverable #7
+// (Runtime-Corroborated Digital Twin, "7b" — runtime-observed only; FR-505,
+// AC-29). This is the AC-29 proof surface: the first place a human operator
+// can actually see and act on the whole deliverable.
+//
+// `observations import` is the one mutating verb in this trio, and it is
+// dry-run-by-default exactly like `governance propose-edit`/`remediation
+// open`: without --yes it computes and prints exactly what WOULD be
+// imported and writes nothing; with --yes it writes through
+// `persistObservationImport` (the store's own closed-world validation is
+// the authoritative gate — this command's own `validateRuntimeObservation`
+// call below is a deliberate PREVIEW, so an operator sees a rejection
+// before ever passing --yes) and appends a real `auditCall` entry, never
+// on a dry run and never on a rejected import.
+//
+// Exit-code contract, identical to `dataflow impact assess`'s plus an
+// explicit 4: 0 success (preview or real write); 1 a validation failure (a
+// rejected record, a malformed adapter input, a graph-load failure via
+// `loadSignedGraph`'s own four messages); 2 a usage/argument error or an
+// `isSafeStateDir` refusal; 4 an unexpected I/O error during the write
+// itself — nothing was written and no audit event was recorded.
+//
+// Refuse the WHOLE import, never a partial one (AC-29 clause 5): every
+// adapter parse error AND every per-record `validateRuntimeObservation`
+// failure is collected across the whole file before any exit decision is
+// made, so a payload-shaped record caught at the wire layer (an unknown
+// top-level key) and a payload-shaped record caught one layer up (an
+// unapproved attribute key) are both named in the SAME refusal — silently
+// dropping just the ones the adapter caught and importing the rest would
+// be exactly the partial-import failure this deliverable exists to
+// prevent.
+async function cmdDataflowObservationsImport(args) {
+  const target = args._[3] || '.'; // args._ = ['dataflow', 'observations', 'import', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const { adapterFor } = await import('../src/lineage/observation-adapters.js');
+  const adapterFlag = args.flags.adapter;
+  if (!adapterFlag || typeof adapterFlag !== 'string') {
+    process.stderr.write('agentic-security dataflow observations import: --adapter <name> is required (currently only "native-jsonl" is supported).\n');
+    return 2;
+  }
+  const adapterImpl = adapterFor(adapterFlag);
+  if (!adapterImpl) {
+    process.stderr.write(`agentic-security dataflow observations import: unknown --adapter "${adapterFlag}" — only "native-jsonl" is supported.\n`);
+    return 2;
+  }
+
+  const inputFlag = args.flags.input;
+  if (!inputFlag || typeof inputFlag !== 'string') {
+    process.stderr.write('agentic-security dataflow observations import: --input <file> is required.\n');
+    return 2;
+  }
+  const inputPath = path.resolve(inputFlag);
+  if (!fs.existsSync(inputPath)) {
+    process.stderr.write(`agentic-security dataflow observations import: --input file not found: "${inputFlag}".\n`);
+    return 2;
+  }
+
+  const _isoOk = (v) => typeof v === 'string' && v.length > 0 && Number.isFinite(Date.parse(v));
+  const windowStart = args.flags['window-start'];
+  const windowEnd = args.flags['window-end'];
+  if (!_isoOk(windowStart) || !_isoOk(windowEnd)) {
+    process.stderr.write('agentic-security dataflow observations import: --window-start and --window-end are both required and must be parseable ISO-8601 date-times.\n');
+    return 2;
+  }
+  if (Date.parse(windowStart) > Date.parse(windowEnd)) {
+    process.stderr.write('agentic-security dataflow observations import: --window-start must not be after --window-end.\n');
+    return 2;
+  }
+
+  const retainUntilFlag = args.flags['retain-until'];
+  let retainUntil = null;
+  if (retainUntilFlag !== undefined) {
+    if (!_isoOk(retainUntilFlag)) {
+      process.stderr.write('agentic-security dataflow observations import: --retain-until must be a parseable ISO-8601 date-time.\n');
+      return 2;
+    }
+    retainUntil = retainUntilFlag;
+  }
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security dataflow observations import: ${loaded.message}\n`);
+    return 1;
+  }
+
+  const adapter = adapterFlag;
+  const source = (typeof args.flags.source === 'string' && args.flags.source) || path.basename(inputPath);
+  const environment = (typeof args.flags.environment === 'string' && args.flags.environment) || 'unspecified';
+
+  let text;
+  try {
+    text = fs.readFileSync(inputPath, 'utf8');
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow observations import: could not read --input "${inputFlag}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+
+  const { RUNTIME_OBSERVATION_VERSION, validateRuntimeObservation } = await import('../src/lineage/runtime-observation.js');
+  const importedAt = new Date().toISOString();
+  const context = {
+    adapter, source, environment, windowStart, windowEnd, importedAt,
+    retention: { expiresAt: retainUntil },
+    version: RUNTIME_OBSERVATION_VERSION,
+  };
+  const { drafts, errors: parseErrors } = adapterImpl.parse(text, context);
+
+  const { matchObservationToGraph } = await import('../src/lineage/observation-correlation.js');
+  const { observationId, observationImportId } = await import('../src/lineage/ids.js');
+
+  // Never print an attribute VALUE anywhere in this function (AC-29
+  // clause 5's own "no captured payload... exists in the observation
+  // artifact" extends to this preview, which is not the artifact itself
+  // but must not become a second leak channel for the same values).
+  const records = [];
+  const recordErrors = [];
+  let matchedCount = 0;
+  let unmatchedCount = 0;
+  drafts.forEach((draft, i) => {
+    const match = matchObservationToGraph(loaded.graph, draft);
+    const fingerprint = Object.entries(draft.attributes ?? {})
+      .sort()
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      .join('&');
+    const id = observationId(
+      { adapter, environment: draft.environment, windowStart: draft.windowStart, windowEnd: draft.windowEnd },
+      [fingerprint],
+    );
+    const record = {
+      id, version: draft.version, adapter: draft.adapter, source: draft.source,
+      environment: draft.environment, windowStart: draft.windowStart, windowEnd: draft.windowEnd,
+      matchedNodeIds: match.matchedNodeIds, matchedEdgeIds: match.matchedEdgeIds, matchedFlowIds: match.matchedFlowIds,
+      attributes: draft.attributes, eventCountBand: draft.eventCountBand,
+      firstObservedAt: draft.firstObservedAt, lastObservedAt: draft.lastObservedAt,
+      matchMethod: match.matchMethod, matchConfidence: match.matchConfidence,
+      retention: draft.retention, importedAt: draft.importedAt,
+    };
+    const { valid, errors } = validateRuntimeObservation(record);
+    if (!valid) {
+      recordErrors.push({ index: i + 1, errors });
+    } else {
+      records.push(record);
+      if (match.matchMethod === 'unmatched') unmatchedCount++; else matchedCount++;
+    }
+  });
+
+  // Refuse the WHOLE import — deliberately, so a partial import can never
+  // silently drop the offending record (AC-29 clause 5). Both error
+  // sources (the adapter's own wire-shape rejections AND this command's
+  // preview validateRuntimeObservation rejections) are combined into one
+  // report before any exit decision is made.
+  if (parseErrors.length > 0 || recordErrors.length > 0) {
+    process.stderr.write('agentic-security dataflow observations import: refusing the WHOLE import — a partial import that silently drops an offending record would misrepresent what the operator believes the artifact holds (AC-29 clause 5). Nothing was written. Every offending record:\n');
+    for (const e of parseErrors) {
+      process.stderr.write(`  line ${e.line}: ${e.message}\n`);
+    }
+    for (const re of recordErrors) {
+      for (const e of re.errors) {
+        process.stderr.write(`  record ${re.index}: ${e.path}: ${e.message}\n`);
+      }
+    }
+    return 1;
+  }
+
+  const { OBSERVATION_IMPORT_VERSION } = await import('../src/lineage/observation-store.js');
+  const importId = observationImportId({ adapter, source, environment, windowStart, windowEnd, importedAt });
+  const importRecord = {
+    id: importId, version: OBSERVATION_IMPORT_VERSION, adapter, source, environment,
+    windowStart, windowEnd, importedAt, retention: { expiresAt: retainUntil },
+    observations: records,
+  };
+
+  const preview = {
+    adapter, source, environment, windowStart, windowEnd,
+    recordCount: records.length, matched: matchedCount, unmatched: unmatchedCount,
+    retention: { expiresAt: retainUntil }, importId, written: false,
+  };
+
+  const yes = !!args.flags.yes;
+  if (!yes) {
+    process.stdout.write(JSON.stringify(preview, null, 2) + '\n');
+    return 0;
+  }
+
+  // `isSafeStateDir(statePath(targetAbs, 'runtime-observations'))` —
+  // string literal, third registry-guard call site (the other two are
+  // `observation-store.js` and `index.js`) — before any mkdirSync/write.
+  const dir = statePath(targetAbs, 'runtime-observations');
+  const { isSafeStateDir } = await import('../src/posture/state-dir.js');
+  if (!isSafeStateDir(dir)) {
+    process.stderr.write(`agentic-security dataflow observations import: refusing to write — "${targetAbs}" does not look like a project directory.\n`);
+    return 2;
+  }
+
+  const { persistObservationImport } = await import('../src/lineage/observation-store.js');
+  let result;
+  try {
+    result = persistObservationImport(targetAbs, importRecord);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow observations import: unexpected error writing the store: ${e && e.message ? e.message : e}\n`);
+    return 4;
+  }
+  if (!result.ok) {
+    process.stderr.write(`agentic-security dataflow observations import: ${result.reason}\n`);
+    return result.reason && result.reason.startsWith('invalid ObservationImport record') ? 1 : 4;
+  }
+
+  const { auditCall } = await import('../src/mcp/audit.js');
+  auditCall({
+    sessionRoot: targetAbs,
+    tool: 'dataflow_observations_import',
+    args: { adapter, source, environment, windowStart, windowEnd, observations: records.length, matched: matchedCount, importId },
+    outcome: 'ok',
+  });
+
+  preview.written = true;
+  process.stdout.write(JSON.stringify(preview, null, 2) + '\n');
+  return 0;
+}
+
+// agentic-security dataflow observations list [path] [--json] — read-only,
+// never writes, exit 0 always (an empty store is not an error). Never
+// prints an attribute key or value anywhere (CLI/list-2) — every row is
+// built from ONLY the import-level metadata fields below; no per-
+// observation `.attributes` object is ever touched by this function.
+async function cmdDataflowObservationsList(args) {
+  const target = args._[3] || '.'; // args._ = ['dataflow', 'observations', 'list', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const { loadObservationImports } = await import('../src/lineage/observation-store.js');
+  const imports = loadObservationImports(targetAbs);
+
+  const rows = imports.map((imp) => ({
+    importId: imp.id,
+    adapter: imp.adapter,
+    source: imp.source,
+    environment: imp.environment,
+    windowStart: imp.windowStart,
+    windowEnd: imp.windowEnd,
+    observations: Array.isArray(imp.observations) ? imp.observations.length : 0,
+    importedAt: imp.importedAt,
+    expiresAt: imp.retention?.expiresAt ?? 'no expiry declared',
+  }));
+
+  if (args.flags.json) {
+    process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+    return 0;
+  }
+
+  if (rows.length === 0) {
+    process.stdout.write('No runtime observation imports found.\n');
+    return 0;
+  }
+
+  for (const r of rows) {
+    process.stdout.write(
+      `${r.importId}  adapter=${r.adapter}  source=${r.source}  environment=${r.environment}  `
+      + `window=${r.windowStart}..${r.windowEnd}  observations=${r.observations}  `
+      + `importedAt=${r.importedAt}  expiresAt=${r.expiresAt}\n`,
+    );
+  }
+  return 0;
+}
+
+// Local Markdown-escaping helpers for `dataflow twin --format markdown` —
+// byte-identical to _dfCoverageMdInline/_dfCoverageMdCell above,
+// reimplemented locally per this codebase's established
+// per-module-owns-its-own-escaping-helpers convention.
+function _dfTwinMdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+function _dfTwinMdCell(value) {
+  return _dfTwinMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+
+const _TWIN_LAYER_DISPLAY = Object.freeze({
+  runtime_observed: 'RUNTIME OBSERVED',
+  not_observed_in_window: 'not_observed_in_window',
+  not_evaluated: 'not_evaluated',
+});
+
+// agentic-security dataflow twin [path] --output <file> [--format
+// json|markdown] [--environment <name>] [--window-start <iso>]
+// [--window-end <iso>] — the AC-29 Runtime Digital Twin proof surface.
+// Read-only: never writes into .agentic-security/ (CLI/twin-7). `null`
+// (never `[]`) observations means "no store was consulted" — the
+// not_evaluated signal correlateObservations relies on to keep the
+// three-valued layer honest (AC-29 clause 2).
+async function cmdDataflowTwin(args) {
+  const target = args._[2] || '.'; // args._ = ['dataflow', 'twin', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const outputPath = args.flags.output;
+  if (!outputPath || typeof outputPath !== 'string') {
+    process.stderr.write('agentic-security dataflow twin: --output <file> is required.\n');
+    return 2;
+  }
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'markdown') {
+    process.stderr.write(`agentic-security dataflow twin: --format must be one of json|markdown (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security dataflow twin: ${loaded.message}\n`);
+    return 1;
+  }
+
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const windowStart = typeof args.flags['window-start'] === 'string' ? args.flags['window-start'] : null;
+  const windowEnd = typeof args.flags['window-end'] === 'string' ? args.flags['window-end'] : null;
+
+  // Fourth registry-guard call site — string literal, matching
+  // observation-store.js/index.js/cmdDataflowObservationsImport above.
+  const dir = statePath(targetAbs, 'runtime-observations');
+  const observations = fs.existsSync(dir)
+    ? (await import('../src/lineage/observation-store.js')).loadObservations(targetAbs)
+    : null;
+
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const result = correlateObservations(loaded.graph, observations, { environment, windowStart, windowEnd });
+
+  let data;
+  if (format === 'json') {
+    data = JSON.stringify(result, null, 2);
+  } else {
+    const { computeGraphDigest } = await import('../src/lineage/export-json.js');
+    const nodesById = new Map(loaded.graph.nodes.map((n) => [n.id, n]));
+    const flowsById = new Map(loaded.graph.flows.map((f) => [f.id, f]));
+    const lines = [];
+    lines.push('# Runtime Digital Twin', '');
+    lines.push(`**Graph:** \`${_dfTwinMdInline(loaded.graph.graphId ?? '(no graphId)')}\``);
+    lines.push(`**Graph digest:** \`${_dfTwinMdInline(computeGraphDigest(loaded.graph))}\``);
+    lines.push(`**Environment filter:** ${_dfTwinMdInline(result.environment ?? '(none)')}`);
+    lines.push(`**Window:** ${_dfTwinMdInline(result.windowStart ?? '(open)')} .. ${_dfTwinMdInline(result.windowEnd ?? '(open)')}`, '');
+    lines.push('## Layers', '');
+    lines.push('| Flow | Source | Sink | Layer |');
+    lines.push('|---|---|---|---|');
+    const flowIds = Object.keys(result.byFlow).sort();
+    for (const fid of flowIds) {
+      const flow = flowsById.get(fid);
+      const srcLabel = flow ? (nodesById.get(flow.source)?.label ?? flow.source) : '(unknown)';
+      const snkLabel = flow ? (nodesById.get(flow.sink)?.label ?? flow.sink) : '(unknown)';
+      const entry = result.byFlow[fid];
+      const layerDisplay = _TWIN_LAYER_DISPLAY[entry.layer] ?? entry.layer;
+      lines.push(`| ${_dfTwinMdCell(fid)} | ${_dfTwinMdCell(srcLabel)} | ${_dfTwinMdCell(snkLabel)} | ${_dfTwinMdCell(layerDisplay)} |`);
+    }
+    lines.push('');
+
+    const observedFlowIdsSorted = flowIds.filter((fid) => result.byFlow[fid].layer === 'runtime_observed');
+    if (observedFlowIdsSorted.length > 0) {
+      lines.push('## Runtime-observed flow detail', '');
+      for (const fid of observedFlowIdsSorted) {
+        const entry = result.byFlow[fid];
+        lines.push(`### ${_dfTwinMdInline(fid)}`, '');
+        lines.push(`- Match method: ${_dfTwinMdInline(entry.matchMethod ?? '(none)')}`);
+        lines.push(`- Match confidence: ${_dfTwinMdInline(entry.matchConfidence ?? '(none)')}`);
+        lines.push(`- Environment: ${_dfTwinMdInline(entry.environment ?? '(none)')}`);
+        lines.push(`- Window: ${_dfTwinMdInline(entry.windowStart ?? '(none)')} .. ${_dfTwinMdInline(entry.windowEnd ?? '(none)')}`);
+        lines.push(`- First observed: ${_dfTwinMdInline(entry.firstObservedAt ?? '(none)')}`);
+        lines.push(`- Last observed: ${_dfTwinMdInline(entry.lastObservedAt ?? '(none)')}`);
+        lines.push(`- Event count band: ${_dfTwinMdInline(entry.eventCountBand ?? '(none)')}`);
+        if (entry.siblingFlowCount) {
+          lines.push(`- Sibling flow count: ${_dfTwinMdInline(entry.siblingFlowCount)} — this observation corroborates the destination NODE, never which sibling flow produced the traffic, which is why matchConfidence reads 'ambiguous' here.`);
+        }
+        lines.push('');
+      }
+    }
+
+    lines.push('## Limitations', '');
+    for (const l of result.limitations ?? []) {
+      lines.push(`- ${_dfTwinMdInline(l)}`);
+    }
+    lines.push("- `not_observed_in_window` means the flow was not observed in the selected environment/window — it does NOT mean the flow does not occur (PRD line 2098).");
+    lines.push('- Runtime observation increases corroboration confidence but cannot prove field-level identity — observations correlate to node/edge/flow ids only, never a specific data element instance (FR-505).');
+    lines.push('- Every statically possible path in this graph is listed above regardless of layer; nothing was filtered out (AC-29 clause 3).');
+    lines.push('');
+    data = lines.join('\n');
+  }
+
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow twin: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+  return 0;
+}
+
 // Mirrors posture/fix-history.js's own _writeAtomicAndSync (temp file in
 // the same directory, fsync, then rename over the target) — a crash
 // mid-write must never leave recipient-profiles.json as invalid JSON,
@@ -5691,7 +6084,18 @@ async function main() {
           }
           break;
         }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", and "impact" are supported.\n`);
+        else if (sub === 'observations') {
+          const obsSub = args._[2];
+          if (obsSub === 'import') { process.exit(await cmdDataflowObservationsImport(args)); }
+          else if (obsSub === 'list') { process.exit(await cmdDataflowObservationsList(args)); }
+          else {
+            process.stderr.write(`agentic-security dataflow observations: unrecognized sub-command "${obsSub}" — must be "import" or "list".\n`);
+            process.exit(2);
+          }
+          break;
+        }
+        else if (sub === 'twin') { process.exit(await cmdDataflowTwin(args)); }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", "impact", "observations", and "twin" are supported.\n`);
         process.exit(2);
       }
       case 'governance': {

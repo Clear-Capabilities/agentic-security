@@ -1,6 +1,6 @@
 ---
 description: Export/diff/watch the Data Flow Explorer graph, apply a what-if scenario, or assess blast-radius impact.
-argument-hint: "export|diff|watch|scenario apply|impact assess [path] [options] --output <file> --format <fmt>"
+argument-hint: "export|diff|watch|scenario apply|impact assess|observations import|observations list|twin [path] [options] --output <file> --format <fmt>"
 ---
 
 ## Data Flow Explorer export
@@ -244,6 +244,163 @@ or a `--target` with no recognized canonical-id prefix).
 ```
 /dataflow impact assess --target node:abc123 --output impact.json
 /dataflow impact assess --target flow:def456 --output impact.md --format markdown
+```
+
+## Runtime observations (FR-505)
+
+M5, "Runtime-Corroborated Digital Twin" (deliverable #7, the RUNTIME-OBSERVED
+half only — "7b"). Imports operator-exported runtime telemetry (an
+OpenTelemetry-adjacent trace export, an access log, a queue's own delivery
+metadata) as **metadata-only, closed-world** `RuntimeObservation` records,
+matched against the already-scanned lineage graph's own node/edge/flow ids —
+never a payload, prompt, response, log message, or any other captured value.
+
+**Four disclosed limitations — read before relying on this in a workflow:**
+
+1. **CLI/JSON only — no UI.** Layer toggles, distinct edge treatment, an
+   environment/window selector, and an observation inspector are all
+   unbuilt. AC-29's clauses are satisfied at the data/artifact layer only.
+2. **One adapter — `native-jsonl`.** OpenTelemetry, gateway/mesh, and cloud
+   flow adapters are unbuilt; `--adapter otlp` (or anything else) is a clear
+   exit-2 error.
+3. **Node-granular corroboration, not flow-granular.** An observation proves
+   a destination was contacted — never which of several flows sharing that
+   sink did it. A flow whose matched sink is shared with sibling flows reads
+   `matchConfidence: 'ambiguous'` for exactly that reason.
+4. **`edge.provenance` stays `'code'`, always.** Corroboration is additive
+   and is never used to reclassify an edge as `'runtime'`-provenanced.
+
+### `agentic-security dataflow observations import`
+
+Dry-run by default, exactly like `governance propose-edit`/`remediation
+open`: without `--yes` this computes and prints exactly what WOULD be
+imported and writes nothing; with `--yes` it validates, matches against the
+graph, and writes one new immutable file under
+`.agentic-security/runtime-observations/` (never overwriting a prior
+import), then appends a real `mcp-audit.log` entry.
+
+**Refuses the WHOLE import, never a partial one.** If ANY record in the
+input file fails validation — at the adapter's own wire-shape layer, or one
+layer up at `RuntimeObservation`'s closed-world validator — the entire
+import is rejected and every failing record is named by line/index. A
+partial import that silently drops the offending record would misrepresent
+what the operator believes the artifact holds.
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--adapter native-jsonl` | Yes | The only adapter implemented today. Any other value is a clear exit-2 error. |
+| `--input <file>` | Yes | The operator-exported observation file. A missing/nonexistent path is a clear exit-2 error. |
+| `--source <name>` | No | Defaults to the input file's own basename. |
+| `--environment <name>` | No | Defaults to `"unspecified"`. Scopes correlation at `dataflow twin` read time. |
+| `--window-start <iso>` / `--window-end <iso>` | Yes | The telemetry export's own time window. Both must be parseable ISO-8601 date-times with `start <= end`, or this is a clear exit-2 error. |
+| `--retain-until <iso>` | No | When given, must parse as ISO-8601. Recorded as `retention.expiresAt`; omitted means no expiry was declared by the operator (still swept by the artifact registry's own `retentionClass: 'evidence'`). |
+| `--yes` | No | Without it: preview only, nothing written. With it: writes the import and appends an audit event. |
+
+**The native-JSONL wire format** — one JSON object per line, up to 5
+top-level keys (`environment`, `attributes`, `eventCountBand`,
+`firstObservedAt`, `lastObservedAt`; nothing else is accepted — a
+pre-declared `matchedNodeIds`/`id`/`matchMethod`/etc. is rejected, not
+ignored):
+
+```
+{"environment":"production","attributes":{"destination.host":"api.stripe.com","destination.scheme":"https","tls.version":"1.3"},"eventCountBand":"101-1k","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-30T10:00:00.000Z"}
+```
+
+`attributes` keys must be drawn from the closed metadata allowlist
+(service/workload identity, endpoint/destination identity, protocol/TLS
+metadata, schema/attribute NAMES — never a value like a URL, SQL statement,
+prompt, or log message); `eventCountBand` is a coarse band
+(`1`/`2-10`/`11-100`/`101-1k`/`1k+`), never a raw count.
+
+Exit codes: `0` success (preview or real write); `1` a validation failure (a
+rejected record, a malformed adapter input, or a graph-load failure — see
+`export`/`diff`'s own four `loadSignedGraph` messages); `2` a usage/argument
+error or an unsafe target directory; `4` an unexpected I/O error during the
+write itself — nothing was written and no audit event was recorded.
+
+### `agentic-security dataflow observations list`
+
+Read-only, never writes, exit 0 always (an empty store is not an error).
+Lists every persisted import — adapter, source, environment, window,
+observation count, importedAt, and expiry — **but never an attribute key or
+value**, in either the plain-text or `--json` form.
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--json` | No | Emit the same rows as a JSON array instead of one line of text per import. |
+
+### Examples
+
+```
+/dataflow observations import --adapter native-jsonl --input runtime-export.jsonl --environment production --window-start 2026-08-01T00:00:00Z --window-end 2026-08-31T00:00:00Z --yes
+/dataflow observations list
+/dataflow observations list --json
+```
+
+## Runtime Digital Twin layers (AC-29)
+
+`agentic-security dataflow twin` renders every statically possible flow in
+the already-scanned graph annotated with a **three-valued** runtime-observed
+layer — the AC-29 proof surface. Read-only: never writes into
+`.agentic-security/`, never triggers a scan, never mutates the graph.
+
+**Four disclosed limitations — read before relying on this in a workflow:**
+
+1. **CLI/JSON only — no UI.** Same as `observations` above — layer
+   toggles, distinct edge treatment, an environment/window selector, and an
+   observation inspector are all unbuilt.
+2. **One adapter — `native-jsonl`.** The twin can only ever be as complete
+   as what an operator has imported through that one adapter.
+3. **Node-granular corroboration.** A `RUNTIME OBSERVED` flow whose sink is
+   shared with sibling flows reports `matchConfidence: 'ambiguous'` — the
+   destination genuinely was contacted, but not provably by this specific
+   path.
+4. **`edge.provenance` stays `'code'`, always.** A `RUNTIME OBSERVED` layer
+   is an ADDITIVE annotation, never a reclassification of the edge itself.
+
+**The three layers, and why there are three, not two:**
+
+- **`RUNTIME OBSERVED`** — a real, imported observation matched this flow's
+  own sink node/edge, in the requested environment and window. The
+  markdown report shows the match method, match confidence, environment,
+  and window for every such flow.
+- **`not_observed_in_window`** — a real observation store WAS consulted for
+  this flow, and genuinely found nothing for it in the requested
+  environment/window. This means the flow was **not observed in the
+  selected window** — it does **not** mean the flow does not occur (PRD
+  line 2098). An unobserved flow may simply sit outside the telemetry
+  window, or the operator's export may not cover that destination at all.
+- **`not_evaluated`** — no observation store was consulted at all (nothing
+  has ever been imported via `observations import`). This is genuinely
+  different from `not_observed_in_window`: the former means "nobody
+  checked," the latter means "somebody checked and found nothing." A
+  `dataflow twin` run against a project with no imports reports every flow
+  `not_evaluated`, never `not_observed_in_window`.
+
+Both statically possible paths always remain visible — `dataflow twin`
+never filters, removes, or reorders a graph entity; every flow in the graph
+appears in the output exactly once, regardless of its layer.
+
+### Options
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--output <file>` | Yes | Where the report is written. |
+| `--format json\|markdown` | No | `json` (default) emits the raw correlation record (`byFlow`, `observedFlowIds`, `notObservedFlowIds`, `notEvaluatedFlowIds`, `limitations`, ...). `markdown` renders a human-readable report — a header (graph id/digest, environment filter, window), a Layers table (one row per flow: flow id, source label, sink label, layer), a detail section per `RUNTIME OBSERVED` flow, and a Limitations section stating the `not_observed_in_window`/`not_evaluated` distinction explicitly. |
+| `--environment <name>` | No | Narrows correlation to observations imported under this exact environment name. |
+| `--window-start <iso>` / `--window-end <iso>` | No | Narrows correlation to observations whose own window overlaps this one. |
+
+Exit codes: `0` success; `1` when the base lineage graph could not be
+loaded (missing/unsigned/tampered/malformed — the same four messages
+`export`/`diff`/`scenario apply`/`impact assess` already use); `2` on a
+usage/argument error (missing `--output`, an unrecognized `--format`).
+
+### Examples
+
+```
+/dataflow twin --output twin.json
+/dataflow twin --output twin.md --format markdown
+/dataflow twin --output twin-staging.json --environment staging
 ```
 
 ## Implementation

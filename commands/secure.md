@@ -95,6 +95,9 @@ Organize help by **what the user wants to do**, not by command name:
 | Experimental / AI-driven analyses | `/labs` |
 | Export the Data Flow Explorer graph (PNG/PDF/SVG/JSON/CSV/HTML) | `/dataflow export --format <fmt> --output <file>` |
 | Diff two scanned snapshots + drift policies | `/dataflow diff --format <fmt> --output <file>` |
+| Import runtime observation metadata (FR-505) | `/dataflow observations import --adapter native-jsonl --input <file> --environment <name> [--yes]` |
+| List imported runtime observation windows | `/dataflow observations list` |
+| Show Runtime Digital Twin layers per flow (AC-29) | `/dataflow twin --output <file> --format markdown` |
 | Propose a validated edit to recipient-profiles.json | `/governance propose-edit --patch <file.json> [--yes]` |
 | Open a remediation work item from an impact assessment | `/remediation open --assessment <report.json> --owner <id> --due <YYYY-MM-DD> --control <text> --required-evidence <flowIds> [--yes]` |
 | Verify a remediation item against a fresh lineage scan | `/remediation verify --id <itemId> [--yes]` |
