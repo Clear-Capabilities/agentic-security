@@ -134,7 +134,14 @@ test('_redactGraph: redacts crossRepoLinks[].rationale carrying a real secret pa
   assert.match(graph.crossRepoLinks[0].rationale, new RegExp(SECRET_ANTHROPIC_KEY));
 });
 
-test('_redactGraph: redacts crossRepoLinks[].remote.sourceFile/.repository', () => {
+// Re-review, fix round 2: `remote.sourceFile` is a real local filesystem
+// path (machine layout/username disclosure), never a secret-pattern
+// match — the ORIGINAL version of this test embedded a secret pattern
+// INSIDE the path and only asserted the secret was gone, which is
+// exactly the test shape that hid the round-1 bug (the ordinary
+// username/path portion around the embedded secret survived verbatim).
+// Now asserts the WHOLE field becomes the literal full-token string.
+test('_redactGraph: redacts crossRepoLinks[].remote.sourceFile as a full-token replacement, and .repository via pattern-based redactString', () => {
   const graph = {
     nodes: [],
     evidence: [],
@@ -144,22 +151,59 @@ test('_redactGraph: redacts crossRepoLinks[].remote.sourceFile/.repository', () 
   };
   const result = _redactGraph(graph);
   const link = result.crossRepoLinks[0];
-  assert.doesNotMatch(link.remote.sourceFile, new RegExp(SECRET_ANTHROPIC_KEY));
+  assert.equal(link.remote.sourceFile, '[REDACTED:local-path]');
   assert.doesNotMatch(link.remote.repository, new RegExp(SECRET_ANTHROPIC_KEY));
-  assert.match(link.remote.sourceFile, /\[REDACTED:anthropic-key\]/);
   assert.match(link.remote.repository, /\[REDACTED:anthropic-key\]/);
   // Non-redactable fields survive untouched.
   assert.equal(link.remote.nodeId, 'node:source:2');
   assert.equal(link.local.nodeId, 'node:sink:1');
 });
 
+// Re-review, fix round 2: the exact gap the round-1 test suite never
+// tried — a PLAIN path with no secret pattern at all inside it.
+// `redactString` is a no-op on this by construction (nothing matches
+// any of its 14 secret regexes), which is precisely why the round-1
+// version of `_redactCrossRepoLink` left it verbatim.
+test('_redactGraph: redacts crossRepoLinks[].remote.sourceFile even when it carries no secret pattern at all', () => {
+  const graph = {
+    nodes: [],
+    evidence: [],
+    crossRepoLinks: [crossRepoLinkFixture({
+      remote: { graphId: 'dfg:remote:def:cfg', graphDigest: 'beefdead', nodeId: 'node:source:2', repository: 'payments-service', sourceFile: '/Users/alice/repos/payments-service/remote-export.json' },
+    })],
+  };
+  const result = _redactGraph(graph);
+  const link = result.crossRepoLinks[0];
+  assert.equal(link.remote.sourceFile, '[REDACTED:local-path]');
+  // rationale/remote.repository stay on redactString's pattern-based
+  // treatment — an ordinary string with no secret pattern passes through
+  // unchanged, confirming this round didn't accidentally widen their
+  // treatment to full-token replacement too.
+  assert.equal(link.remote.repository, 'payments-service');
+});
+
+// Re-review, fix round 2: `declaredBy` (a real OS username) was never
+// touched by round 1's `_redactCrossRepoLink` at all.
+test('_redactGraph: redacts crossRepoLinks[].declaredBy as a full-token username replacement', () => {
+  const graph = {
+    nodes: [],
+    evidence: [],
+    crossRepoLinks: [crossRepoLinkFixture({ declaredBy: 'alice' })],
+  };
+  const result = _redactGraph(graph);
+  const link = result.crossRepoLinks[0];
+  assert.equal(link.declaredBy, '[REDACTED:username]');
+});
+
 test('_redactGraph: crossRepoLinks with no redactable string fields pass through unchanged', () => {
-  // The `hasRedactable` false-path: rationale is null and remote carries
-  // neither a string sourceFile nor a string repository.
+  // The `hasRedactable` false-path: rationale and declaredBy are both
+  // null, and remote carries neither a string sourceFile nor a string
+  // repository.
   const graphWithNoRedactableFields = {
     nodes: [], evidence: [],
     crossRepoLinks: [crossRepoLinkFixture({
       rationale: null,
+      declaredBy: null,
       remote: { graphId: 'dfg:remote:def:cfg', graphDigest: 'beefdead', nodeId: 'node:source:2', repository: undefined, sourceFile: undefined },
     })],
   };

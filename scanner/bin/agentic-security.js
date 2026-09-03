@@ -5161,13 +5161,18 @@ async function cmdFederateDeclare(args) {
       fs.copyFileSync(configPath, candidateBackupPath);
       backupPath = candidateBackupPath;
     }
-    // Dedupe by id — final whole-branch review, M5 deliverable #8, B3.
-    // A second declaration of the identical (local, remote, relationship)
-    // fact now produces the SAME id (fix #1 above), so replace the
-    // existing entry in place rather than appending a duplicate; every
-    // OTHER existing entry, malformed or not, is preserved untouched.
-    const withoutThisId = currentDoc.links.filter((l) => !(l && l.id === record.id));
-    const merged = { ...currentDoc, links: [...withoutThisId, record] };
+    // Dedupe by id, IN PLACE — final whole-branch review, M5 deliverable
+    // #8, B3, refined in round 2 per the re-review's own Minor finding:
+    // a redeclare of the identical fact now replaces the existing entry
+    // at its ORIGINAL array position, rather than moving it to the end
+    // (round 1's filter-then-append did the latter — harmless, but an
+    // unnecessary, undocumented ordering change `federate list`'s own
+    // output would otherwise silently exhibit on every redeclare).
+    const existingIndex = currentDoc.links.findIndex((l) => l && l.id === record.id);
+    const newLinks = existingIndex === -1
+      ? [...currentDoc.links, record]
+      : currentDoc.links.map((l, i) => (i === existingIndex ? record : l));
+    const merged = { ...currentDoc, links: newLinks };
     await _writeConfigAtomic(configPath, JSON.stringify(merged, null, 2));
     written = true;
     const { auditCall } = await import('../src/mcp/audit.js');

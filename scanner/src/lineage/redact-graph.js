@@ -167,26 +167,40 @@ function _redactRecipientProfile(p) {
 }
 
 // CrossRepoLink redaction (final whole-branch review, M5 deliverable
-// #8, B2) — mirrors `_redactRecipientProfile`'s own shape exactly. Every
-// field here is operator-declared free text or a local filesystem path,
-// never scanned-source-derived — `redactString` is a safe no-op on
-// ordinary text (same precedent `_redactRecipientProfile`'s own header
-// cites), so covering them defensively costs nothing. `remote.sourceFile`
-// is a local filesystem path (machine layout / username disclosure risk,
-// not a secret-pattern match) — redacted the same way `node.destination.raw`
-// is, for the same reason.
+// #8, B2; extended in a second fix round after the round-1 re-review
+// found `remote.sourceFile`/`declaredBy` still leaking). Two DIFFERENT
+// treatments for two DIFFERENT kinds of field:
+//   - `rationale`/`remote.repository` are genuine operator-declared free
+//     text — `redactString` (pattern-based secret scrubbing) is the
+//     correct, established treatment, same precedent
+//     `_redactRecipientProfile` already uses for similarly-shaped
+//     fields; a safe no-op on ordinary text.
+//   - `remote.sourceFile` (a real local filesystem path) and
+//     `declaredBy` (a real OS username, from `process.env.USER`/
+//     `USERNAME`) are STRUCTURALLY guaranteed to carry machine-layout/
+//     identity information regardless of content — no secret PATTERN
+//     to match, so `redactString` is a no-op on them by construction,
+//     which is exactly the round-1 mistake this round fixes. These two
+//     get UNCONDITIONAL full-token replacement whenever present, never
+//     partial pattern-based scrubbing — there is no "clean" version of
+//     a local path or username worth preserving in an exported artifact
+//     (the REAL value is still needed internally by `federate list`
+//     re-validation, which reads the stored `cross-repo-links.json`
+//     directly, never this redacted export view).
 function _redactCrossRepoLink(link) {
   if (!link) return link;
   const hasRedactable = typeof link.rationale === 'string'
+    || typeof link.declaredBy === 'string'
     || (link.remote && typeof link.remote.sourceFile === 'string')
     || (link.remote && typeof link.remote.repository === 'string');
   if (!hasRedactable) return link;
   return {
     ...link,
     rationale: typeof link.rationale === 'string' ? redactString(link.rationale) : link.rationale,
+    declaredBy: typeof link.declaredBy === 'string' ? '[REDACTED:username]' : link.declaredBy,
     remote: link.remote ? {
       ...link.remote,
-      sourceFile: typeof link.remote.sourceFile === 'string' ? redactString(link.remote.sourceFile) : link.remote.sourceFile,
+      sourceFile: typeof link.remote.sourceFile === 'string' ? '[REDACTED:local-path]' : link.remote.sourceFile,
       repository: typeof link.remote.repository === 'string' ? redactString(link.remote.repository) : link.remote.repository,
     } : link.remote,
   };
