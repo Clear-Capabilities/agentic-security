@@ -169,6 +169,17 @@ Commands:
                                Propose a validated, reviewable edit to
                                recipient-profiles.json. Without --yes,
                                previews the diff and writes nothing.
+  federate declare [path] --local-node <node-id> --remote-graph <file>
+                               --remote-node <node-id> [--repository <label>]
+                               [--relationship data_flow] [--rationale <text>]
+                               [--output <file>] [--yes] [--base-digest <hex>]
+                               Declare a CrossRepoLink between a node in the
+                               current locally-scanned graph and a node in a
+                               remote graph export (dataflow export --format
+                               json). Without --yes, previews and writes nothing.
+  federate list [path] [--output <file>]
+                               List every declared cross-repo link, reporting
+                               whether each side still resolves.
   remediation open [path] --assessment <impact-report.json> --owner <id> --due <YYYY-MM-DD>
                                --control <text> --required-evidence <flowId,...>
                                [--id <itemId>] [--snapshot <commit>] [--allow-manual-attestation]
@@ -4976,6 +4987,265 @@ async function cmdGovernancePropose(args) {
   return 0;
 }
 
+// agentic-security federate declare [path] --local-node <node-id>
+// --remote-graph <file> --remote-node <node-id> [--repository <label>]
+// [--relationship data_flow] [--rationale <text>] [--output <file>]
+// [--yes] [--base-digest <hex>] — M5 deliverable #8 (FR-304's "declared"
+// half). Declares a CrossRepoLink between a node in the CURRENT
+// locally-scanned graph and a node in a REMOTE graph export
+// (`dataflow export --format json`'s own artifact, loaded via
+// federation-loader.js's loadRemoteGraphExport — never loadSignedGraph,
+// which authenticates against a per-install HMAC key, the wrong trust
+// model for a file that crossed a repo/machine boundary).
+//
+// Reuses cmdGovernancePropose's exact write contract: (1) version guard
+// on cross-repo-links.json BEFORE any read of the remote file or any
+// validation; (2) loads+validates the remote export (a digest-mismatch
+// is a printed warning, never silently swallowed, and never blocks
+// --yes — the operator is explicitly asserting this file); (3) confirms
+// --local-node exists in the CURRENT locally-scanned graph and
+// --remote-node exists in the loaded remote export's own nodes[];
+// (4) on --yes: backup, atomic write (via the already-shipped
+// _writeConfigAtomic), a real hash-chained audit event. Exit codes
+// mirror cmdGovernancePropose's own scheme: 0 success (incl. preview),
+// 1 validation failure, 2 usage/version-guard/node-not-found, 4 an
+// unexpected I/O error during the write itself — uncaught, falling
+// through to main()'s own outer catch/process.exit(4), the identical,
+// deliberate non-pattern cmdGovernancePropose itself relies on (no local
+// try/catch here either).
+async function cmdFederateDeclare(args) {
+  const target = args._[2] || '.'; // args._ = ['federate', 'declare', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const localNodeFlag = args.flags['local-node'];
+  const remoteGraphFlag = args.flags['remote-graph'];
+  const remoteNodeFlag = args.flags['remote-node'];
+  if (!localNodeFlag || typeof localNodeFlag !== 'string') {
+    process.stderr.write('agentic-security federate declare: --local-node <node-id> is required.\n');
+    return 2;
+  }
+  if (!remoteGraphFlag || typeof remoteGraphFlag !== 'string') {
+    process.stderr.write('agentic-security federate declare: --remote-graph <file> is required.\n');
+    return 2;
+  }
+  if (!remoteNodeFlag || typeof remoteNodeFlag !== 'string') {
+    process.stderr.write('agentic-security federate declare: --remote-node <node-id> is required.\n');
+    return 2;
+  }
+
+  const { CROSS_REPO_LINK_VERSION, CROSS_REPO_LINKS_FILENAME, CROSS_REPO_LINK_RELATIONSHIP, validateCrossRepoLink } = await import('../src/lineage/cross-repo-link.js');
+
+  const relationshipFlag = args.flags.relationship ?? CROSS_REPO_LINK_RELATIONSHIP;
+  if (relationshipFlag !== CROSS_REPO_LINK_RELATIONSHIP) {
+    process.stderr.write(`agentic-security federate declare: --relationship must be "${CROSS_REPO_LINK_RELATIONSHIP}" (got "${relationshipFlag}") — no other relationship value is defined.\n`);
+    return 2;
+  }
+
+  const { statePath, isSafeStateDir } = await import('../src/posture/state-dir.js');
+  const { crossRepoLinkId } = await import('../src/lineage/ids.js');
+  const { loadRemoteGraphExport } = await import('../src/lineage/federation-loader.js');
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const { computeGraphDigest } = await import('../src/lineage/export-json.js');
+
+  const configPath = statePath(targetAbs, CROSS_REPO_LINKS_FILENAME);
+  const currentRaw = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '{"links":[]}';
+  const currentDigest = crypto.createHash('sha256').update(currentRaw).digest('hex');
+
+  // Version guard runs BEFORE any read of the remote file or any
+  // validation — mirrors cmdGovernancePropose's own ordering exactly.
+  const baseDigestFlag = args.flags['base-digest'];
+  if (baseDigestFlag && baseDigestFlag !== currentDigest) {
+    process.stderr.write('agentic-security federate declare: the cross-repo-links file changed since --base-digest was computed (a concurrent edit) — refusing to write. Re-read the current file and recompute your declaration.\n');
+    return 2;
+  }
+
+  let currentDoc;
+  try {
+    currentDoc = JSON.parse(currentRaw);
+  } catch (e) {
+    process.stderr.write(`agentic-security federate declare: the current cross-repo-links file is not valid JSON: ${e.message}\n`);
+    return 2;
+  }
+  if (!currentDoc || typeof currentDoc !== 'object' || Array.isArray(currentDoc) || !Array.isArray(currentDoc.links)) {
+    process.stderr.write('agentic-security federate declare: the current cross-repo-links file has no "links" array (expected {"links": [...]}).\n');
+    return 2;
+  }
+
+  // Step 2: load and validate the remote export. A digest-mismatch is a
+  // printed WARNING, never a blocking failure — the operator is
+  // explicitly asserting this file.
+  const remote = loadRemoteGraphExport(path.resolve(remoteGraphFlag));
+  if (!remote.ok) {
+    process.stderr.write(`agentic-security federate declare: could not load --remote-graph "${remoteGraphFlag}": ${remote.message}\n`);
+    return 2;
+  }
+  if (!remote.digestMatches) {
+    process.stderr.write(`agentic-security federate declare: WARNING — ${remote.message}\n`);
+  }
+  const remoteNode = (remote.graph.nodes ?? []).find((n) => n.id === remoteNodeFlag);
+  if (!remoteNode) {
+    process.stderr.write(`agentic-security federate declare: --remote-node "${remoteNodeFlag}" was not found in the remote export's own nodes.\n`);
+    return 2;
+  }
+
+  // Step 3: confirm --local-node exists in the CURRENT locally-scanned
+  // graph — loadSignedGraph is the correct mechanism here (the LOCAL
+  // side, same install, same machine).
+  const local = loadSignedGraph(targetAbs);
+  if (!local.ok) {
+    process.stderr.write(`agentic-security federate declare: could not load the local scanned graph: ${local.message}\n`);
+    return 2;
+  }
+  const localNode = (local.graph.nodes ?? []).find((n) => n.id === localNodeFlag);
+  if (!localNode) {
+    process.stderr.write(`agentic-security federate declare: --local-node "${localNodeFlag}" was not found in the current locally-scanned graph.\n`);
+    return 2;
+  }
+
+  const localGraphDigest = computeGraphDigest(local.graph);
+  const idInputs = {
+    localGraphId: local.graph.graphId, localGraphDigest, localNodeId: localNodeFlag,
+    remoteGraphId: remote.graph.graphId, remoteGraphDigest: remote.digest, remoteNodeId: remoteNodeFlag,
+    relationship: relationshipFlag,
+  };
+  const record = {
+    id: crossRepoLinkId(idInputs),
+    version: CROSS_REPO_LINK_VERSION,
+    provenance: 'manual',
+    relationship: relationshipFlag,
+    local: { graphId: local.graph.graphId, graphDigest: localGraphDigest, nodeId: localNodeFlag },
+    remote: {
+      // Honest placeholder literal when the operator supplied none — no
+      // code-derived signal exists to name "which repo" a bare exported
+      // JSON file came from (mirrors recipient-registry.js's own
+      // `graphId ?? '(no graph)'` precedent).
+      repository: args.flags.repository ?? '(unspecified)',
+      sourceFile: path.resolve(remoteGraphFlag),
+      graphId: remote.graph.graphId, graphDigest: remote.digest, nodeId: remoteNodeFlag,
+    },
+    rationale: args.flags.rationale ?? null,
+    declaredBy: process.env.USER || process.env.USERNAME || '(unspecified)',
+    declaredAt: new Date().toISOString(),
+  };
+
+  const { valid, errors } = validateCrossRepoLink(record);
+  if (!valid) {
+    process.stderr.write(`agentic-security federate declare: constructed record failed validation:\n${errors.map((e) => `  ${e.path}: ${e.message}`).join('\n')}\n`);
+    return 1;
+  }
+
+  const yes = !!args.flags.yes;
+  let written = false;
+  let backupPath = null;
+  if (yes) {
+    if (!isSafeStateDir(path.dirname(configPath))) {
+      process.stderr.write(`agentic-security federate declare: refusing to write — "${targetAbs}" does not look like a project directory.\n`);
+      return 2;
+    }
+    const backupDir = statePath(targetAbs, 'cross-repo-links-backups');
+    const candidateBackupPath = path.join(backupDir, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.bak`);
+    if (fs.existsSync(configPath)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+      fs.copyFileSync(configPath, candidateBackupPath);
+      backupPath = candidateBackupPath;
+    }
+    const merged = { ...currentDoc, links: [...currentDoc.links, record] };
+    await _writeConfigAtomic(configPath, JSON.stringify(merged, null, 2));
+    written = true;
+    const { auditCall } = await import('../src/mcp/audit.js');
+    auditCall({
+      sessionRoot: targetAbs, tool: 'federate_declare',
+      args: {
+        file: CROSS_REPO_LINKS_FILENAME, id: record.id, localNodeId: localNodeFlag, remoteNodeId: remoteNodeFlag,
+        digestMatches: remote.digestMatches, beforeDigest: currentDigest, backupPath,
+      },
+      outcome: 'ok',
+    });
+  }
+
+  const report = { currentDigest, record, digestMatches: remote.digestMatches, written, backupPath };
+  const outputPath = args.flags.output;
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), JSON.stringify(report, null, 2));
+  } else {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  }
+  return 0;
+}
+
+// agentic-security federate list [path] [--output <file>] — M5
+// deliverable #8. Read-only. Reads cross-repo-links.json and, for each
+// entry, reports whether local.nodeId still resolves against the
+// current loadSignedGraph output and whether remote.sourceFile still
+// exists/parses/digest-matches/still names the declared remote node —
+// never fabricates "still valid" when it cannot check (mirrors
+// `dataflow observations list`'s own precedent). Exit codes: 0 success
+// (including an empty list), 2 a malformed cross-repo-links.json.
+async function cmdFederateList(args) {
+  const target = args._[2] || '.'; // args._ = ['federate', 'list', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const { statePath } = await import('../src/posture/state-dir.js');
+  const { CROSS_REPO_LINKS_FILENAME } = await import('../src/lineage/cross-repo-link.js');
+  const { loadRemoteGraphExport } = await import('../src/lineage/federation-loader.js');
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+
+  const configPath = statePath(targetAbs, CROSS_REPO_LINKS_FILENAME);
+  let links = [];
+  if (fs.existsSync(configPath)) {
+    let doc;
+    try {
+      doc = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      process.stderr.write(`agentic-security federate list: ${configPath} is not valid JSON: ${e.message}\n`);
+      return 2;
+    }
+    links = Array.isArray(doc?.links) ? doc.links : [];
+  }
+
+  const local = loadSignedGraph(targetAbs);
+  const localNodeIds = local.ok ? new Set((local.graph.nodes ?? []).map((n) => n.id)) : null;
+
+  const results = links.map((record) => {
+    // `stillValid` is null — "could not check" — whenever there is no
+    // current local graph to check against, never fabricated as true or
+    // false.
+    const localStillValid = localNodeIds ? localNodeIds.has(record?.local?.nodeId) : null;
+
+    let remoteStatus;
+    const sourceFile = record?.remote?.sourceFile;
+    if (typeof sourceFile !== 'string' || !sourceFile) {
+      remoteStatus = { checked: false, reason: 'no sourceFile recorded on this record' };
+    } else {
+      const remote = loadRemoteGraphExport(sourceFile);
+      if (!remote.ok) {
+        remoteStatus = { checked: true, ok: false, reason: remote.reason, message: remote.message };
+      } else {
+        const nodeStillPresent = (remote.graph.nodes ?? []).some((n) => n.id === record?.remote?.nodeId);
+        remoteStatus = { checked: true, ok: true, digestMatches: remote.digestMatches, nodeStillPresent };
+      }
+    }
+
+    return {
+      id: record?.id ?? null,
+      local: { nodeId: record?.local?.nodeId ?? null, stillValid: localStillValid },
+      remote: { sourceFile: sourceFile ?? null, nodeId: record?.remote?.nodeId ?? null, ...remoteStatus },
+      rationale: record?.rationale ?? null,
+      declaredBy: record?.declaredBy ?? null,
+      declaredAt: record?.declaredAt ?? null,
+    };
+  });
+
+  const report = { links: results, localGraphAvailable: local.ok };
+  const outputPath = args.flags.output;
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), JSON.stringify(report, null, 2));
+  } else {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  }
+  return 0;
+}
+
 // ── remediation open/update/accept-risk/list — M5 deliverable #6
 // (Blast-Radius: Remediation Command Center, FR-507 + AC-31), Task 3.
 // The CLI wiring for the non-GraphDiff-dependent half of the `remediation`
@@ -6153,6 +6423,21 @@ async function main() {
         if (sub === 'propose-edit') { process.exit(await cmdGovernancePropose(args)); }
         else {
           process.stderr.write(`agentic-security governance: unrecognized sub-command "${sub}" — must be "propose-edit".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'federate': {
+        // NOT a `dataflow` subcommand — this writes operator-declared
+        // config (cross-repo-links.json), never the scanned graph. Same
+        // distinction that made `governance`/`remediation` their own
+        // dispatchers. See cmdFederateDeclare's own header comment for
+        // the full exit-code/backup/audit contract.
+        const sub = args._[1];
+        if (sub === 'declare') { process.exit(await cmdFederateDeclare(args)); }
+        else if (sub === 'list') { process.exit(await cmdFederateList(args)); }
+        else {
+          process.stderr.write(`agentic-security federate: unrecognized sub-command "${sub}" — must be "declare" or "list".\n`);
           process.exit(2);
         }
         break;

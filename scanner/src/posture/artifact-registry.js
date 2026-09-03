@@ -200,6 +200,12 @@ export const ARTIFACT_REGISTRY = [
   // only supports exact-name matches, never a per-file timestamped name.
   { name: 'recipient-profiles-backups', kind: 'dir', classification: 'generated', retentionClass: 'backup', note: 'per-edit backups written by `governance propose-edit --yes`, mirrors the fix-history/ precedent — one directory entry covers every timestamped .bak file inside it' },
 
+  // M5 deliverable #8 (FR-304 "declared" half): backups of
+  // cross-repo-links.json written by `federate declare --yes`, mirrors
+  // the `recipient-profiles-backups` precedent immediately above
+  // exactly.
+  { name: 'cross-repo-links-backups', kind: 'dir', classification: 'generated', retentionClass: 'backup', note: 'per-declare backups written by `federate declare --yes`, mirrors the recipient-profiles-backups/ precedent — one directory entry covers every timestamped .bak file inside it' },
+
   // ── Operator-config: hand-authored (or agent-authored) input, never wiped ──
   { name: 'rules.yml', kind: 'file', classification: 'operator-config' },
   { name: 'rules', kind: 'dir', classification: 'operator-config' },
@@ -229,6 +235,7 @@ export const ARTIFACT_REGISTRY = [
   { name: 'provenance-providers.yml', kind: 'file', classification: 'operator-config', note: 'Finding Provenance M3 §3.4 GitHub/GitLab provider enrichment opt-in ({token} or provider-scoped tokens) — read by posture/provenance/providers/config.js, never written by the scanner; env vars (AGENTIC_SECURITY_GITHUB_TOKEN/AGENTIC_SECURITY_GITLAB_TOKEN) take precedence when set' },
   { name: 'repo-lineage.json', kind: 'file', classification: 'operator-config', note: 'Finding Provenance M4 §4.2 cross-repository lineage declaration ({linkedFrom: {path, atCommit}}) — read by posture/provenance/repo-lineage.js, never written by the scanner; the linked path is verified as a real local git repo before use, no remote fetch' },
   { name: 'recipient-profiles.json', kind: 'file', classification: 'operator-config', note: 'FR-506 recipient/subprocessor governance profiles — hand- or agent-authored via `governance propose-edit`, never scanner-regenerable, so a routine reset must never delete it' },
+  { name: 'cross-repo-links.json', kind: 'file', classification: 'operator-config', note: 'M5 deliverable #8 (FR-304 "declared" half) — declared local<->remote node links between two independently-scanned repos, written via `federate declare --yes`, never scanner-regenerable, so a routine reset must never delete it' },
   { name: 'logic-claims.json', kind: 'file', classification: 'operator-config', note: 'authored by an external reviewing agent; engine.js only ever reads it (fs.readFileSync, never written)' },
   { name: 'current-intent.md', kind: 'file', classification: 'operator-config', note: 'developer-authored; no writer exists anywhere in src/ or bin/' },
   { name: 'exploit-history.jsonl', kind: 'file', classification: 'operator-config', note: 'own header comment: "operator-curated record of past confirmed exploits"' },
