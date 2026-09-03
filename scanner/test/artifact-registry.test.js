@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import {
   ARTIFACT_REGISTRY, listGeneratedArtifacts, listOperatorConfigArtifacts,
-  isRegisteredArtifact, classificationOf,
+  isRegisteredArtifact, classificationOf, confidentialOf, retentionClassOf,
 } from '../src/posture/artifact-registry.js';
 
 const SCANNER = path.resolve(process.cwd());
@@ -193,6 +193,61 @@ test('reset: lineage-graph.json + .sig are registered as generated and ARE wiped
     const remaining = fs.readdirSync(stateDir);
     assert.ok(!remaining.includes('lineage-graph.json'), `expected lineage-graph.json to be removed, remaining: ${JSON.stringify(remaining)}`);
     assert.ok(!remaining.includes('lineage-graph.json.sig'), `expected lineage-graph.json.sig to be removed, remaining: ${JSON.stringify(remaining)}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// M5 deliverable #7 (Runtime-Corroborated Digital Twin, "7b"): the
+// observation store's own artifact-registry entries, plus the
+// pre-existing runtime-trace.jsonl/runtime.jsonl/ebpf-trace.jsonl gap
+// fixed alongside it (see artifact-registry.js's own comment above these
+// entries).
+
+test('OS/reg-1: runtime-observations is registered as generated/evidence/confidential', () => {
+  assert.equal(classificationOf('runtime-observations'), 'generated');
+  assert.equal(retentionClassOf('runtime-observations'), 'evidence');
+  assert.equal(confidentialOf('runtime-observations'), true);
+});
+
+test('OS/reg-2: reset genuinely deletes a populated .agentic-security/runtime-observations/ directory', () => {
+  const { root, stateDir } = makeFixtureProject();
+  try {
+    writeState(stateDir, 'runtime-observations/0123456789ab.json', '{"id":"obsimport:0123456789ab"}');
+    writeState(stateDir, 'runtime-observations/deadbeefcafe.json', '{"id":"obsimport:deadbeefcafe"}');
+
+    const dry = runReset(root);
+    assert.equal(dry.status, 0, dry.stderr);
+    assert.ok(dry.stdout.includes('runtime-observations'), 'dry-run must list runtime-observations as a removal target');
+    assert.ok(!dry.stdout.includes('Preserving operator-authored config: runtime-observations'),
+      'runtime-observations must never be reported as preserved operator-authored config');
+
+    const run = runReset(root, ['--yes']);
+    assert.equal(run.status, 0, run.stderr);
+    assert.ok(!fs.existsSync(path.join(stateDir, 'runtime-observations')),
+      'expected the whole runtime-observations directory to be removed by reset --yes');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('OS/reg-3: all three runtime-trace filenames are registered as operator-config, and a real reset does NOT delete them', () => {
+  for (const name of ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl']) {
+    assert.equal(classificationOf(name), 'operator-config', `expected ${name} to be registered as operator-config`);
+  }
+
+  const { root, stateDir } = makeFixtureProject();
+  try {
+    writeState(stateDir, 'runtime-trace.jsonl', '{}\n');
+    writeState(stateDir, 'runtime.jsonl', '{}\n');
+    writeState(stateDir, 'ebpf-trace.jsonl', '{}\n');
+
+    const run = runReset(root, ['--yes']);
+    assert.equal(run.status, 0, run.stderr);
+    const remaining = fs.readdirSync(stateDir);
+    for (const name of ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl']) {
+      assert.ok(remaining.includes(name), `expected ${name} to survive reset, remaining: ${JSON.stringify(remaining)}`);
+    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

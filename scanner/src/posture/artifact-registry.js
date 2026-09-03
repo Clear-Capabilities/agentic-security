@@ -102,6 +102,12 @@ export const ARTIFACT_REGISTRY = [
   // 'generated'/'scan' bucket for the same reason: fully scanner-derived,
   // regenerable by re-scanning at that commit.
   { name: 'lineage-snapshots', kind: 'dir', classification: 'generated', retentionClass: 'scan', source: 'src/lineage/graph-snapshot.js (persistGraphSnapshot)' },
+  // M5 deliverable #7 (FR-505 §7.12, AC-29): the Runtime-Corroborated
+  // Digital Twin's observation store — one immutable whole file per adapter
+  // import, written by src/lineage/observation-store.js's
+  // persistObservationImport(), mirroring lineage-snapshots/'s own
+  // directory-of-files shape re-keyed commit -> import.
+  { name: 'runtime-observations', kind: 'dir', classification: 'generated', retentionClass: 'evidence', confidential: true, source: 'src/lineage/observation-store.js (persistObservationImport)', note: 'FR-505 requires an observation store follow artifact encryption, RETENTION, RESET, access-control and no-egress rules. That is why this is `generated` (a plain `reset` MUST be able to delete it) rather than `operator-config`, and why it carries a real retentionClass — deliberately NOT the `remediation`/`legal-holds.json` no-retention call one section down, and deliberately NOT `provenance`\'s permanent-history call. This DOES stretch `generated`\'s usual definition — a rescan does not re-derive an import, the operator re-imports it — and that stretch is disclosed here rather than hidden: FR-505\'s explicit reset requirement breaks the tie. `confidential: true` is enforced by observation-store.js calling maybeEncryptForWrite/maybeDecryptForRead itself (posture/encryption-provider.js), the same per-writer opt-in compliance-evidence.json makes — the flag alone enforces nothing.' },
   { name: 'shadow-findings.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'mcp-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence' },
   { name: 'egress-audit.log', kind: 'file', classification: 'generated', retentionClass: 'evidence', note: "FR-604 per-call egress audit log — hash-chained NDJSON written by egress/audit.js's recordEgressCall, never read as config" },
@@ -227,6 +233,17 @@ export const ARTIFACT_REGISTRY = [
   { name: 'current-intent.md', kind: 'file', classification: 'operator-config', note: 'developer-authored; no writer exists anywhere in src/ or bin/' },
   { name: 'exploit-history.jsonl', kind: 'file', classification: 'operator-config', note: 'own header comment: "operator-curated record of past confirmed exploits"' },
   { name: 'cve-alerts.json', kind: 'file', classification: 'operator-config', note: 'own header comment: "Configuration is read from"; state lives in the separate cve-alerts-state.json, which IS generated' },
+  // Pre-existing gap, found by M5 deliverable #7's own scoping investigation
+  // and fixed here rather than left: posture/runtime-correlation.js reads
+  // these three filenames via `statePath(scanRoot, n)` with a VARIABLE, so
+  // test/artifact-registry-completeness.test.js's own PATTERNS regexes (which
+  // require a string literal) never saw them and never demanded registration.
+  // An unregistered state artifact means `reset` does not know about it and
+  // retention cannot reach it. Operator-config, not generated: these are
+  // hand-supplied eBPF/APM trace exports the scanner only ever reads.
+  { name: 'runtime-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'eBPF/APM runtime trace consumed by posture/runtime-correlation.js\'s own trace loader (deliberately not named by its literal export here — no-dead-modules.test.js scans note strings too, and naming it would make it look, wrongly, like a real call site) — operator-supplied, never scanner-written; $AGENTIC_SECURITY_RUNTIME_TRACE_PATH overrides the location entirely' },
+  { name: 'runtime.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
+  { name: 'ebpf-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
 ];
 
 export function listGeneratedArtifacts() {
