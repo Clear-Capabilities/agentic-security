@@ -275,6 +275,13 @@ never a payload, prompt, response, log message, or any other captured value.
    reason.
 4. **`edge.provenance` stays `'code'`, always.** Corroboration is additive
    and is never used to reclassify an edge as `'runtime'`-provenanced.
+5. **`schema.attributeNames` rejects colon/dot/hyphen per element, but not
+   short-word smuggling.** Each element must be a single identifier token
+   (letters, digits, underscore, starting with a letter, 64 chars max, at
+   most 8 elements) — a colon-structured secret like `"password:hunter2"`
+   is refused outright, but up to 8 short, individually plausible English
+   words spread one-per-element can still slip through; a real fix needs
+   prose/sentence detection this deliverable does not attempt.
 
 ### `agentic-security dataflow observations import`
 

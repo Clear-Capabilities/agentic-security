@@ -92,6 +92,27 @@
 // this module mints a non-code-derived edge or otherwise touches
 // `edge.provenance`.
 //
+// ── Disclosed, accepted residual: short-word array smuggling ──────────
+//
+// Even with schema.attributeNames' own stricter per-element grammar
+// (letters/digits/underscore only, no ':'/'.'/'-', 8 elements max), an
+// adversarial or misconfigured exporter can still supply up to 8 short,
+// individually-plausible-looking single words as separate array elements
+// (e.g. a handful of English words split one-per-element). This is an
+// INHERENT limitation of any bounded, per-element, character-class-only
+// grammar with no semantic/natural-language-detection layer — the same
+// class of residual as a base64-encoded secret hidden inside an
+// otherwise-valid single value (also disclosed, also not attempted here).
+// A real fix needs prose/sentence detection across the whole array, which
+// is expensive and fuzzy by nature — explicitly out of scope for this
+// deliverable. What this round's fix DOES close completely: every
+// key:value-shaped smuggling case (a colon-structured secret like
+// "password:hunter2"), which is what turned the original live repro into
+// an unambiguous, directly-readable credential/PII leak rather than a mere
+// word list. Operators integrating an automated telemetry exporter into an
+// unattended `dataflow observations import` pipeline should still audit
+// what that exporter actually sends.
+//
 // ── Data/artifact layer only ────────────────────────────────────────────
 //
 // AC-29's clauses are satisfied here at the data/artifact layer alone — no
@@ -158,13 +179,33 @@ export const RUNTIME_ARRAY_ATTRIBUTE_KEYS = Object.freeze(['schema.attributeName
 // array) to 128 — still generous for any real hostname/service/table name,
 // and small enough that it is no longer a meaningful free-text channel.
 export const RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH = 128; // was 256 — see comment above
-export const RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH = 64;
+export const RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH = 8; // was 64 — see final review round 2 (I-NEW1)
 export const RUNTIME_ATTRIBUTE_MAX_KEYS = 32;
 
 const _IDENTIFIER_VALUE_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 function _isIdentifierValue(v) {
   return typeof v === 'string' && v.length <= RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH && _IDENTIFIER_VALUE_RE.test(v);
+}
+
+// schema.attributeNames-specific grammar (final review round 2, I-NEW1): a
+// real attribute/field NAME is always a single identifier token — letters,
+// digits, underscore only, starting with a letter. It never legitimately
+// contains ':', '.', or '-' — those are precisely what let an individual
+// array element become a `key:value` pair (the round-1 re-review's own
+// live repro: "password:hunter2", "ssn:123-45-6789",
+// "pan:4111111111111111", each individually "identifier-shaped" under the
+// GENERAL _isIdentifierValue grammar, since that grammar allows ':' for
+// OTHER keys that genuinely need it — destination.host doesn't need a
+// colon, but this field never needs one at all). Forbidding ':'/'.'/'-'
+// here closes every key:value-shaped smuggling case completely, while
+// still accepting every real attribute name shape (user_id, email,
+// created_at, SSN, PAN — all pass; none of the disclosed-in-repro secrets
+// do).
+const _ATTRIBUTE_NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+function _isAttributeName(v) {
+  return typeof v === 'string' && _ATTRIBUTE_NAME_RE.test(v);
 }
 
 // A count/frequency BAND (PRD line 971) — never a raw number. An exact
@@ -226,8 +267,8 @@ export function validateObservationAttributes(attributes) {
     }
     if (RUNTIME_ARRAY_ATTRIBUTE_KEYS.includes(key)) {
       if (!Array.isArray(value) || value.length > RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH
-        || !value.every((x) => _isIdentifierValue(x))) {
-        err(`$.attributes["${key}"]`, `must be an array of at most ${RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH} strings, each looking like an identifier (letters, digits, '.', '_', ':', '-', ${RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH} characters max) — an element containing whitespace, quotes, or punctuation is how a payload arrives disguised as metadata`);
+        || !value.every((x) => _isAttributeName(x))) {
+        err(`$.attributes["${key}"]`, `must be an array of at most ${RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH} attribute-name-shaped strings (letters, digits, underscore only, starting with a letter, 64 characters max) — an element containing ':', '.', '-', whitespace, or other punctuation is how a payload arrives disguised as an attribute name`);
       }
       continue;
     }
