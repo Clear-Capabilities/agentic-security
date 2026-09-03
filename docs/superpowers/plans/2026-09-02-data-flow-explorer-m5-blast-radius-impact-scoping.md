@@ -57,16 +57,13 @@ one) — disclosed as deferred, not built.
   own new module reuses the identical pattern: import
   `showUpstream`/`showDownstream`/`showAllPaths` from
   `'../../../frontend/src/lib/focus-controls.js'`.
-- **`RecipientProfile` (`recipient-profile.js`) and `ObligationMapping`
-  (`obligation-mapping.js`) both carry a real `contributingGraphIds:
-  string[]` field**, confirmed by direct grep of both files
-  (`obligation-mapping.js:102`: `validateObligationMapping` requires it
-  be a string array; `recipient-profile.js`'s own record shape,
-  established and reused throughout M4/M5, carries the identical
-  field). This is the exact membership-filter mechanic FR-507 needs for
-  "affected recipients"/"affected policies and regulatory obligations":
-  given a traversal's `nodeIds` set, a `RecipientProfile`/
-  `ObligationMapping` record is "affected" iff its own
+- **`RecipientProfile` (`recipient-profile.js`) carries a real
+  `contributingGraphIds: string[]` field**, populated at graph-build
+  time and already attached to the graph as `graph.recipientProfiles[]`
+  (confirmed: `graph-builder.js:1011`). This is the exact membership-
+  filter mechanic FR-507 needs for "affected recipients": given a
+  traversal's `nodeIds` set, a `RecipientProfile` record is "affected"
+  iff its own
   `contributingGraphIds` intersects that set. No new data acquisition,
   a pure array filter over already-shipped, already-populated arrays
   (when they exist on the graph — see the disclosed limitation below).
@@ -75,6 +72,25 @@ one) — disclosed as deferred, not built.
   for M5 3a): `validateX(record) -> {valid, errors}`, never throws;
   `xId(...)` object-argument ID minting in `ids.js`, mirroring
   `recipientProfileId`'s/`scenarioId`'s own pattern.
+- **A real correction found this session, before writing the plan**:
+  `ObligationMapping` (`obligation-mapping.js`) is NOT a stored
+  `graph.obligationMappings[]` array the way `RecipientProfile` is.
+  Confirmed by direct read of `obligation-predicates.js`: a record is
+  built ON DEMAND per compliance-framework requirement via
+  `buildObligationMappingFromGraphPredicate({framework,
+  frameworkVersion, requirementId, ..., graph, evaluation})`, where
+  `evaluation` itself comes from a separate
+  `evaluateGraphFlowPredicate(spec, graph)` call keyed to one specific
+  requirement's own declarative match spec — there is no "all
+  obligations for this graph" array to filter by
+  `contributingGraphIds`. Aggregating "affected policies and regulatory
+  obligations" would require iterating every bundled compliance
+  framework's own requirement specs and evaluating each one against the
+  traversal's own subgraph — real, meaningfully larger integration work
+  than a membership filter, not attempted in this first cut. **Ruling:
+  `affectedObligationIds` is dropped from this sub-project's own scope
+  entirely** — disclosed below under "Out of scope," not silently
+  narrowed.
 - **`dataElement.dataClasses`** (already real, already populated by
   `graph-builder.js`) is the source for "affected fields/classes" — a
   traversal's touched flows' own `dataElementIds` resolve to real
@@ -146,8 +162,12 @@ prior M4/M5 extension-contract module):
   affectedDataClasses,                    // dataClasses touching the
                                             // affected flow set
   affectedRecipientProfileIds,            // contributingGraphIds
-                                            // membership filter
-  affectedObligationIds,                  // same filter
+                                            // membership filter over
+                                            // graph.recipientProfiles[]
+                                            // (no affectedObligationIds
+                                            // field — see the design
+                                            // gap on ObligationMapping,
+                                            // above, and Out of scope)
   coverageLimitations,                    // honest, non-empty when the
                                             // graph's own coverage
                                             // ledger shows gaps in the
@@ -167,9 +187,8 @@ element touches), unions the results, then:
 - filters `graph.dataElements` to those referenced by any flow whose
   `edgeIds` intersects the affected edge set → `affectedDataClasses`
   (deduplicated `dataClasses` union)
-- filters `graph.recipientProfiles ?? []` /
-  `graph.obligationMappings ?? []` by `contributingGraphIds`
-  intersecting `affectedNodeIds`
+- filters `graph.recipientProfiles ?? []` by `contributingGraphIds`
+  intersecting `affectedNodeIds` → `affectedRecipientProfileIds`
 - pulls `coverageLimitations` from `graph.coverage` for only the
   affected node/edge subset (reusing `coverage.js`'s already-shipped
   per-language tier data, scoped down — a filter, not new
@@ -197,10 +216,9 @@ loader/error-message contract exactly (0/1/2 exit codes).
   objects with no stable graph-entity id; "compromised finding" from
   FR-507's own text is read as "the flow/node the finding's own sink
   resolves to," a mapping this deliverable does not attempt to build).
-- `affectedRecipientProfileIds`/`affectedObligationIds` degrade
-  honestly to `[]` when `graph.recipientProfiles`/
-  `graph.obligationMappings` don't exist on the graph at all (both are
-  optional extension arrays, not core `DataFlowGraph v1` fields) —
+- `affectedRecipientProfileIds` degrades honestly to `[]` when
+  `graph.recipientProfiles` doesn't exist on the graph at all (an
+  optional extension array, not a core `DataFlowGraph v1` field) —
   never an error.
 - No new npm dependency.
 - Every new module follows this package's own established precedent:
@@ -217,6 +235,16 @@ loader/error-message contract exactly (0/1/2 exit codes).
   sub-project.
 - Configurable notification/contractual deadlines.
 - `finding:*` targets (see constraint above).
+- **"Affected policies and regulatory obligations"** — no
+  `affectedObligationIds` field. `ObligationMapping` records are built
+  on demand, per compliance-framework requirement, via
+  `buildObligationMappingFromGraphPredicate`/
+  `evaluateGraphFlowPredicate` — there is no stored
+  `graph.obligationMappings[]` array to filter the way
+  `graph.recipientProfiles[]` exists for recipients. Aggregating this
+  would mean iterating every bundled framework's own requirement specs
+  and evaluating each against the affected subgraph — real, separate,
+  meaningfully larger integration work, not attempted here.
 - "Data subjects" and "owner"/"first observed"/"last observed" per
   entity — no real graph field exists for any of these today; reported
   as absent, not fabricated, not built around.
