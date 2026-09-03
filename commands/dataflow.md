@@ -167,6 +167,10 @@ exist in the graph is skipped (reported in the output's
 `skippedOperations`, never a fatal error) — a scenario written against an
 older snapshot degrades honestly rather than failing outright.
 
+`replace_recipient_fact` overrides only the graph node's `destination`
+field — a recipient's legal/jurisdiction/provider facts are not
+simulated by this operation.
+
 ### Options
 
 | Flag | Required | Notes |

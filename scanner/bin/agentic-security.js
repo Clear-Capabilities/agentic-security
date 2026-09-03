@@ -157,6 +157,9 @@ Commands:
   dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Simulate a hypothetical architecture change against the
                                already-scanned lineage graph — never mutates the real scan.
+                               --privacy-sink-policy <path-to-json>   re-evaluate each touched
+                                                      flow's policyVerdict under this policy file
+                               --environment <name>   environment context for --privacy-sink-policy
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -4171,12 +4174,18 @@ async function cmdDataflowScenarioApply(args) {
   const baseGraph = loaded.graph;
 
   const { validateScenario } = await import('../src/lineage/scenario.js');
+  const { computeGraphDigest } = await import('../src/lineage/export-json.js');
+  const { scenarioId } = await import('../src/lineage/ids.js');
+  const baseGraphDigest = computeGraphDigest(baseGraph);
+  const cliAuthor = opsInput.author ?? 'cli';
+  const cliCreatedAt = new Date().toISOString();
   const scenarioDraft = {
-    id: 'scenario:cli-draft', version: '1.0.0',
-    baseGraphId: baseGraph.graphId, baseGraphDigest: baseGraph.graphId,
+    id: scenarioId({ graphId: baseGraph.graphId, graphDigest: baseGraphDigest }, [cliAuthor, cliCreatedAt]),
+    version: '1.0.0',
+    baseGraphId: baseGraph.graphId, baseGraphDigest,
     operations: opsInput.operations ?? [],
-    assumptions: opsInput.assumptions ?? [], author: opsInput.author ?? 'cli',
-    createdAt: new Date().toISOString(), expiration: null,
+    assumptions: opsInput.assumptions ?? [], author: cliAuthor,
+    createdAt: cliCreatedAt, expiration: null,
     simulatedDelta: null, verificationRequirements: opsInput.verificationRequirements ?? [],
   };
   const { valid, errors } = validateScenario(scenarioDraft);

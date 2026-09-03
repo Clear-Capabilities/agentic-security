@@ -79,6 +79,35 @@ test('replace_recipient_fact overrides node.destination and recomputes policyVer
   assert.equal(flow.policyVerdict, 'permitted');
 });
 
+// B1 (final-review.md): replace_recipient_fact overriding node.destination
+// must invalidate the STALE edge.protection.transit verdict that was
+// derived from the OLD destination — never let a real, code-graded
+// 'protected' verdict survive a scheme change to cleartext. Reproduces the
+// review's own repro: a base edge carrying a real https-derived verdict
+// (verdict: 'protected', evidenceGrade: 'code'), then a scenario swapping
+// the destination to an http literal.
+test('replace_recipient_fact invalidates a stale edge.protection.transit verdict after the destination changes', () => {
+  const base = _fixtureGraph();
+  const externalEdge = base.edges.find((e) => e.id === 'edge:2');
+  externalEdge.protection.transit = { verdict: 'protected', evidenceGrade: 'code' };
+  const { graph } = applyScenario(base, {
+    operations: [{
+      kind: 'replace_recipient_fact', targetNodeId: 'node:sink-external', field: 'destination',
+      value: { resolutionStatus: 'literal', literalValue: 'http://cleartext.evil.example.com', raw: null, blockingExpression: null },
+    }],
+  });
+  const edge = graph.edges.find((e) => e.id === 'edge:2');
+  // Never still 'protected'/'code' — the evidence it rested on no longer
+  // applies once the destination changed.
+  assert.deepEqual(edge.protection.transit, { verdict: 'not_assessed', evidenceGrade: 'none' });
+  assert.notEqual(edge.protection.transit.verdict, 'protected');
+  assert.notEqual(edge.protection.transit.evidenceGrade, 'code');
+  // protectionSummary recomputes via aggregateVerdicts, so it demotes to
+  // 'not_assessed' too (no other dimension is set on this edge).
+  const flow = graph.flows.find((f) => f.id === 'flow:2');
+  assert.equal(flow.protectionSummary, 'not_assessed');
+});
+
 test('policyVerdict recomputation is skipped (base value kept) when no policy is supplied', () => {
   const { graph } = applyScenario(_fixtureGraph(), {
     operations: [{ kind: 'replace_recipient_fact', targetNodeId: 'node:sink-external', field: 'destination', value: { literalValue: 'trusted.example.com' } }],
@@ -186,4 +215,70 @@ test('protectionSummary recomputation aggregates across ALL of a multi-edge flow
   assert.deepEqual(edgeB.protection.transit, { verdict: 'protected', evidenceGrade: 'assumed' });
   const flow = graph.flows.find((f) => f.id === 'flow:multi');
   assert.equal(flow.protectionSummary, 'protected');
+});
+
+// I3 (final-review.md): the CALLER's own op.value object must never be
+// stored by reference into the returned clone — mutating it after the
+// call must not silently rewrite an already-returned scenario graph.
+// Reproduces the review's own repro against replace_recipient_fact.
+test('replace_recipient_fact does not alias the caller\'s own op.value object', () => {
+  const value = { resolutionStatus: 'literal', literalValue: 'https://new.example.com', raw: null, blockingExpression: null };
+  const { graph } = applyScenario(_fixtureGraph(), {
+    operations: [{ kind: 'replace_recipient_fact', targetNodeId: 'node:sink-external', field: 'destination', value }],
+  });
+  const node = graph.nodes.find((n) => n.id === 'node:sink-external');
+  assert.equal(node.destination.literalValue, 'https://new.example.com');
+  assert.notEqual(node.destination, value); // not the same object reference
+  value.literalValue = 'http://ATTACKER-EDITED.example.com';
+  assert.equal(node.destination.literalValue, 'https://new.example.com'); // unaffected by the caller's later mutation
+});
+
+test('change_storage_fact does not alias the caller\'s own op.value object', () => {
+  const value = { provider: 'aws', region: 'us-east-1' };
+  const { graph } = applyScenario(_fixtureGraph(), {
+    operations: [{ kind: 'change_storage_fact', targetNodeId: 'node:sink-store', field: 'config', value }],
+  });
+  const node = graph.nodes.find((n) => n.id === 'node:sink-store');
+  assert.notEqual(node.storeDetail.config, value);
+  value.region = 'eu-west-1';
+  assert.equal(node.storeDetail.config.region, 'us-east-1');
+});
+
+test('change_governance_fact does not alias the caller\'s own op.value object', () => {
+  const value = { owner: 'legal-team', reviewers: ['alice'] };
+  const { graph } = applyScenario(_fixtureGraph(), {
+    operations: [{ kind: 'change_governance_fact', targetFlowId: 'flow:1', field: 'approval', value }],
+  });
+  const flow = graph.flows.find((f) => f.id === 'flow:1');
+  assert.notEqual(flow.governanceRefs.approval, value);
+  value.owner = 'ATTACKER-EDITED';
+  assert.equal(flow.governanceRefs.approval.owner, 'legal-team');
+});
+
+// I2 (final-review.md): remove_entity must cascade-prune
+// graph.recipientProfiles[] — a RecipientProfile whose contributingGraphIds
+// becomes empty once the removed node id is excluded must not survive
+// dangling, and a profile with a SURVIVING contributing id must keep the
+// record but drop the removed id from its own array.
+test('remove_entity prunes a recipientProfile whose contributingGraphIds becomes empty', () => {
+  const base = _fixtureGraph();
+  base.recipientProfiles = [
+    { id: 'recipient:vendor', provider: 'vendor', contributingGraphIds: ['node:sink-external'] },
+  ];
+  const { graph } = applyScenario(base, {
+    operations: [{ kind: 'remove_entity', targetNodeId: 'node:sink-external' }],
+  });
+  assert.equal(graph.recipientProfiles.length, 0);
+});
+
+test('remove_entity keeps a recipientProfile with a surviving contributing id, filtering out only the removed one', () => {
+  const base = _fixtureGraph();
+  base.recipientProfiles = [
+    { id: 'recipient:shared', provider: 'shared-vendor', contributingGraphIds: ['node:sink-external', 'node:sink-store'] },
+  ];
+  const { graph } = applyScenario(base, {
+    operations: [{ kind: 'remove_entity', targetNodeId: 'node:sink-external' }],
+  });
+  assert.equal(graph.recipientProfiles.length, 1);
+  assert.deepEqual(graph.recipientProfiles[0].contributingGraphIds, ['node:sink-store']);
 });

@@ -10,8 +10,6 @@
 // 'assumed' instead of reusing 'declared', and why this module's own
 // operations catalog excludes synthetic node/edge insertion (deferred).
 
-import { OBLIGATION_FACT_TYPES } from './obligation-mapping.js';
-
 export const SCENARIO_VERSION = '1.0.0';
 
 // The 6 in-scope hypothetical-change kinds (FR-502's own 7, minus the
@@ -28,8 +26,11 @@ export const SCENARIO_OPERATION_KINDS = Object.freeze([
 ]);
 
 // Per-operation-kind required fields, beyond the universal `kind`. Kept
-// as data (not inline in validateScenario) so scenario-engine.js can
-// import the same table rather than re-deriving it.
+// as data (not inline in validateScenario) for the same reason
+// SCENARIO_OPERATION_KINDS above is — a single source of truth a table
+// can be checked against — though scenario-engine.js does not currently
+// import this table itself; it only mentions it in a prose comment on
+// its own _applyReplaceRecipientFact.
 export const SCENARIO_OPERATION_REQUIRED_FIELDS = Object.freeze({
   require_transit_protection: ['targetEdgeId'],
   apply_handling: ['targetEdgeId', 'handling'],
@@ -98,10 +99,3 @@ export function validateScenario(record) {
   }
   return { valid: errors.length === 0, errors };
 }
-
-// Re-exported for scenario-engine.js's own use tagging overridden
-// fields — 'hypothetical' is already a real OBLIGATION_FACT_TYPES value
-// (unused by any producer before this module), never a new vocabulary.
-export const SCENARIO_FACT_TYPE = OBLIGATION_FACT_TYPES.includes('hypothetical') ? 'hypothetical' : (() => {
-  throw new Error('scenario.js: OBLIGATION_FACT_TYPES no longer includes "hypothetical" — this module\'s core assumption broke');
-})();

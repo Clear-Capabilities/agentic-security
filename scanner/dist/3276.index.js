@@ -8,8 +8,7 @@ export const modules = {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   validateScenario: () => (/* binding */ validateScenario)
 /* harmony export */ });
-/* unused harmony exports SCENARIO_VERSION, SCENARIO_OPERATION_KINDS, SCENARIO_OPERATION_REQUIRED_FIELDS, SCENARIO_FACT_TYPE */
-/* harmony import */ var _obligation_mapping_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2101);
+/* unused harmony exports SCENARIO_VERSION, SCENARIO_OPERATION_KINDS, SCENARIO_OPERATION_REQUIRED_FIELDS */
 // scenario.js — M5 deliverable #3a (FR-502 §10.10, DFG-0xx): the
 // Scenario extension contract — a hypothetical set of graph overrides,
 // NOT a DataFlowGraph v1 entity, mirrors recipient-profile.js's own
@@ -21,8 +20,6 @@ export const modules = {
 // for the full design reasoning, including why EVIDENCE_GRADES gained
 // 'assumed' instead of reusing 'declared', and why this module's own
 // operations catalog excludes synthetic node/edge insertion (deferred).
-
-
 
 const SCENARIO_VERSION = '1.0.0';
 
@@ -40,8 +37,11 @@ const SCENARIO_OPERATION_KINDS = Object.freeze([
 ]);
 
 // Per-operation-kind required fields, beyond the universal `kind`. Kept
-// as data (not inline in validateScenario) so scenario-engine.js can
-// import the same table rather than re-deriving it.
+// as data (not inline in validateScenario) for the same reason
+// SCENARIO_OPERATION_KINDS above is — a single source of truth a table
+// can be checked against — though scenario-engine.js does not currently
+// import this table itself; it only mentions it in a prose comment on
+// its own _applyReplaceRecipientFact.
 const SCENARIO_OPERATION_REQUIRED_FIELDS = Object.freeze({
   require_transit_protection: ['targetEdgeId'],
   apply_handling: ['targetEdgeId', 'handling'],
@@ -110,13 +110,6 @@ function validateScenario(record) {
   }
   return { valid: errors.length === 0, errors };
 }
-
-// Re-exported for scenario-engine.js's own use tagging overridden
-// fields — 'hypothetical' is already a real OBLIGATION_FACT_TYPES value
-// (unused by any producer before this module), never a new vocabulary.
-const SCENARIO_FACT_TYPE = _obligation_mapping_js__WEBPACK_IMPORTED_MODULE_0__/* .OBLIGATION_FACT_TYPES */ .m7.includes('hypothetical') ? 'hypothetical' : (() => {
-  throw new Error('scenario.js: OBLIGATION_FACT_TYPES no longer includes "hypothetical" — this module\'s core assumption broke');
-})();
 
 
 /***/ })

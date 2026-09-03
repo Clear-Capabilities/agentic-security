@@ -159,10 +159,10 @@ function buildObligationEvidencePack({
     acceptedExceptions: facts.filter((f) => f?.state === 'accepted_exception'),
     scanHealth: scanHealth ?? null,
     limitations: _asArray(graph?.limitations),
-    graphDigest: graph ? (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__/* .computeGraphDigest */ .a)(graph) : null,
+    graphDigest: graph ? (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__.computeGraphDigest)(graph) : null,
     reproducibility: {
       graphId: graph?.graphId ?? null,
-      graphDigest: graph ? (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__/* .computeGraphDigest */ .a)(graph) : null,
+      graphDigest: graph ? (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__.computeGraphDigest)(graph) : null,
       engineVersion: engineVersion ?? null,
       rulesetVersion: rulesetVersion ?? null,
       bundleSha: bundleSha ?? null,

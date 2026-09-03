@@ -820,7 +820,7 @@ function emitDecisionStory(graph, opts = {}) {
   // export-json.js#exportGraphJSON's own established rule (AC-25's
   // "preserves graph digest" requirement, satisfied against the graph the
   // caller actually handed in, not a view of it).
-  const graphDigest = (0,export_json/* computeGraphDigest */.a)(graph);
+  const graphDigest = (0,export_json.computeGraphDigest)(graph);
 
   const evidenceGrade = ranked.length === 0 ? 'none' : 'code';
   if (!protection/* EVIDENCE_GRADES */.xE.includes(evidenceGrade)) {

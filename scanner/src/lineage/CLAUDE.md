@@ -527,6 +527,11 @@ tell "this edge is protected because the operator declared it so in a
 what-if" apart from "this edge is protected because the scanner found
 real evidence of it."
 
+**`replace_recipient_fact` scope, disclosed**: it overrides only the
+graph node's `destination` field — a recipient's legal/jurisdiction/
+provider facts (the separate `RecipientProfile` record's own fields,
+`recipient-profile.js`) are not simulated by this operation.
+
 **The 6 in-scope operation kinds** (`SCENARIO_OPERATION_KINDS`):
 `require_transit_protection`, `apply_handling`, `remove_entity`,
 `replace_recipient_fact`, `change_storage_fact`,

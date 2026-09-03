@@ -69,6 +69,24 @@ test('dataflow scenario apply: writes a JSON delta report and exits 0', () => {
   assert.ok(report.changedEntities.some((c) => c.id === 'flow:1'));
 });
 
+// I4 (final-review.md): the synthetic scenario record's id/baseGraphDigest
+// must be real, not the literal placeholder 'scenario:cli-draft' and not
+// baseGraphId reused as the digest (which carries no content information).
+test('dataflow scenario apply: report.scenarioId is a real scenario:<hash> id, not the literal placeholder', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const opsFile = path.join(root, 'ops.json');
+  fs.writeFileSync(opsFile, JSON.stringify({
+    operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:1' }],
+  }));
+  const outFile = path.join(root, 'delta.json');
+  const r = spawnSync(process.execPath, [CLI, 'dataflow', 'scenario', 'apply', root, '--operations', opsFile, '--output', outFile, '--format', 'json'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(r.status, 0, r.stderr);
+  const report = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.notEqual(report.scenarioId, 'scenario:cli-draft');
+  assert.match(report.scenarioId, /^scenario:[0-9a-f]+$/);
+});
+
 test('dataflow scenario apply: an operation with an unrecognized kind exits 2 with a validateScenario error on stderr', () => {
   const root = _mkTmpProject();
   _writeSignedGraph(root);

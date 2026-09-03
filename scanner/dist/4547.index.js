@@ -123,6 +123,19 @@ function _applyRemoveEntity(graph, op) {
   graph.flows = graph.flows.filter((f) => f.source !== node.id && f.sink !== node.id
     && !f.edgeIds.some((id) => removedEdgeIds.has(id)));
   graph.nodes = graph.nodes.filter((n) => n.id !== node.id);
+  // Cascade-prune graph.recipientProfiles[] too — a RecipientProfile whose
+  // contributingGraphIds referenced ONLY this now-removed node must not
+  // survive dangling (a downstream `dataflow export --format recipients`
+  // consumer filters by exactly contributingGraphIds against surviving
+  // node ids); a profile with OTHER surviving contributing ids just loses
+  // this one id, never the whole record. Guarded on the array existing —
+  // the base graph shape used throughout this sub-project's own tests
+  // doesn't always include it.
+  if (graph.recipientProfiles?.length) {
+    graph.recipientProfiles = graph.recipientProfiles
+      .map((rp) => ({ ...rp, contributingGraphIds: (rp.contributingGraphIds ?? []).filter((id) => id !== node.id) }))
+      .filter((rp) => rp.contributingGraphIds.length > 0);
+  }
   return { ok: true };
 }
 
@@ -146,7 +159,19 @@ function _applyReplaceRecipientFact(graph, op) {
   if (op.field !== 'destination') {
     return { ok: false, reason: `replace_recipient_fact only supports field "destination" (got "${op.field}") — this operation is scoped to a node's recipient/destination fact only` };
   }
-  node[op.field] = op.value;
+  node[op.field] = _deepClone(op.value);
+  // The destination just changed — any edge.protection.transit verdict INTO
+  // this node was derived from the OLD destination (transit-protection.js's
+  // resolveTransitProtectionForSite is keyed on the sink's own destination)
+  // and is now stale. Never let a stale verdict survive with a real (non-
+  // 'assumed') evidence grade — reset to the honest "we don't know anymore"
+  // state rather than re-derive (re-deriving needs transitEvidenceByFile,
+  // IR-level data unavailable post-build) or silently keep the old verdict.
+  for (const edge of graph.edges) {
+    if (edge.to === node.id) {
+      edge.protection.transit = { verdict: 'not_assessed', evidenceGrade: 'none' };
+    }
+  }
   _recomputeTouchedFlows(graph, { nodeId: node.id }, op._opts);
   return { ok: true };
 }
@@ -154,14 +179,14 @@ function _applyReplaceRecipientFact(graph, op) {
 function _applyChangeStorageFact(graph, op) {
   const node = _byId(graph.nodes).get(op.targetNodeId);
   if (!node) return { ok: false, reason: `targetNodeId "${op.targetNodeId}" not found in graph.nodes` };
-  node.storeDetail = { ...(node.storeDetail ?? {}), [op.field]: op.value };
+  node.storeDetail = { ...(node.storeDetail ?? {}), [op.field]: _deepClone(op.value) };
   return { ok: true };
 }
 
 function _applyChangeGovernanceFact(graph, op) {
   const flow = _byId(graph.flows).get(op.targetFlowId);
   if (!flow) return { ok: false, reason: `targetFlowId "${op.targetFlowId}" not found in graph.flows` };
-  flow.governanceRefs = { ...(flow.governanceRefs ?? {}), [op.field]: op.value };
+  flow.governanceRefs = { ...(flow.governanceRefs ?? {}), [op.field]: _deepClone(op.value) };
   return { ok: true };
 }
 
