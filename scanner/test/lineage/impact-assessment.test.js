@@ -4,6 +4,7 @@ import { impactAssessmentId } from '../../src/lineage/ids.js';
 import {
   IMPACT_TARGET_KINDS,
   IMPACT_SCOPE_VALUES,
+  IMPACT_TRACE_KINDS,
   validateImpactAssessment,
 } from '../../src/lineage/impact-assessment.js';
 
@@ -27,6 +28,7 @@ test('validateImpactAssessment: a well-formed record is valid', () => {
     graphId: 'graph:abc', graphDigest: 'sha256:aaa',
     targetId: 'node:sink', targetKind: 'node',
     scope: 'possible',
+    traceKind: 'topology_reachable',
     affectedNodeIds: ['node:sink'], affectedEdgeIds: [],
     affectedDataClasses: ['PII'],
     affectedRecipientProfileIds: [],
@@ -36,6 +38,24 @@ test('validateImpactAssessment: a well-formed record is valid', () => {
   const { valid, errors } = validateImpactAssessment(record);
   assert.deepEqual(errors, []);
   assert.equal(valid, true);
+});
+
+test('IMPACT_TRACE_KINDS is exactly the 2 semantics discriminators', () => {
+  assert.deepEqual(IMPACT_TRACE_KINDS, ['topology_reachable', 'flow_restricted']);
+});
+
+test('validateImpactAssessment: rejects a missing/unrecognized traceKind', () => {
+  const record = {
+    id: 'impact:x', version: '1.0.0', graphId: 'g', graphDigest: 'd',
+    targetId: 'flow:x', targetKind: 'flow', scope: 'possible',
+    traceKind: 'topologically-reachable-ish',
+    affectedNodeIds: [], affectedEdgeIds: [], affectedDataClasses: [],
+    affectedRecipientProfileIds: [], coverageLimitations: [],
+    generatedAt: '2026-09-02T00:00:00.000Z',
+  };
+  const { valid, errors } = validateImpactAssessment(record);
+  assert.equal(valid, false);
+  assert.ok(errors.some((e) => e.path === '$.traceKind'));
 });
 
 test('validateImpactAssessment: never throws on garbage input, reports errors instead', () => {

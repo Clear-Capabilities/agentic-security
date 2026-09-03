@@ -265,12 +265,20 @@ export function scenarioId(
  * An ImpactAssessment record's id (M5 deliverable #4, FR-507 §10.10) —
  * NOT a DataFlowGraph v1 entity, mirrors recipientProfileId's/
  * scenarioId's own precedent exactly. Discriminated by (graphId,
- * graphDigest, targetId) — graphDigest is required for the identical
- * reason every other extension-contract id in this file requires it
- * (graphId alone never distinguishes two same-commit graphs with
- * genuinely different content); targetId is the compromised entity the
- * assessment was computed FROM, so two assessments over the same graph
- * but different targets never collide.
+ * graphDigest, targetId) plus caller-supplied discriminatorParts —
+ * graphDigest is required for the identical reason every other
+ * extension-contract id in this file requires it (graphId alone never
+ * distinguishes two same-commit graphs with genuinely different
+ * content); targetId is the compromised entity the assessment was
+ * computed FROM, so two assessments over the same graph but different
+ * targets never collide. Mirrors scenarioId's own (author, createdAt)
+ * precedent for discriminatorParts: the only real caller
+ * (impact-engine.js) always supplies `[generatedAt]`, so two
+ * back-to-back assessments of the SAME target over an UNCHANGED graph
+ * get distinct ids per run (a content-addressed id that collided
+ * across runs would be strictly worse than a per-run one — graphDigest
+ * already covers "the graph changed", generatedAt is purely a per-run
+ * nonce, the same role snapshotId's own capturedAt plays).
  */
 export function impactAssessmentId(
   { graphId, graphDigest, targetId },

@@ -161,6 +161,9 @@ Commands:
                                                       flow's policyVerdict under this policy file
                                --environment <name>   environment context for --privacy-sink-policy
   dataflow impact assess [path] --target <canonical-id> --output <file> [--format json|markdown]
+                               Blast-radius impact assessment over the already-scanned lineage
+                               graph — read-only, never mutates anything, never re-runs a scan.
+                               --target node:*|edge:*|flow:*|data:*  the compromised entity's id
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -4250,8 +4253,12 @@ async function cmdDataflowScenarioApply(args) {
 // loadSignedGraph (same loader/error-message contract as every other
 // dataflow subcommand), computes an ImpactAssessment via
 // computeImpactAssessment, writes it to --output. Exit codes: 0
-// success, 1 graph-load failure (loadSignedGraph's own 4 messages), 2
-// argument problem.
+// success; 1 graph-load failure (loadSignedGraph's own 4 messages) OR
+// a structurally malformed graph reaching computeImpactAssessment
+// (loadSignedGraph performs no schema validation — a graph-CONTENT
+// problem, not a CLI argument problem); 2 a genuine CLI argument
+// problem (missing --target/--output, or a --target with no
+// recognized canonical-id prefix).
 async function cmdDataflowImpactAssess(args) {
   const target = args._[3] || '.'; // args._ = ['dataflow', 'impact', 'assess', <path>?]
   const targetAbs = path.resolve(target);
@@ -4284,8 +4291,14 @@ async function cmdDataflowImpactAssess(args) {
   try {
     record = computeImpactAssessment(loaded.graph, targetIdFlag);
   } catch (e) {
-    process.stderr.write(`agentic-security dataflow impact assess: ${e && e.message ? e.message : e}\n`);
-    return 2;
+    const message = e && e.message ? e.message : String(e);
+    process.stderr.write(`agentic-security dataflow impact assess: ${message}\n`);
+    // A malformed graph (e.g. a signed-but-structurally-broken document —
+    // loadSignedGraph performs no schema validation, only signature +
+    // JSON.parse) is a graph-CONTENT problem, not a CLI argument
+    // problem — exit 1, matching loadSignedGraph's own failure exit
+    // code above, not the exit-2 "bad --target/--output" case below.
+    return message.startsWith('computeImpactAssessment: malformed graph') ? 1 : 2;
   }
 
   let data;
@@ -4294,8 +4307,12 @@ async function cmdDataflowImpactAssess(args) {
   } else {
     const lines = [
       `# Impact assessment`, '',
+      `id: \`${record.id}\``,
+      `graphId: \`${record.graphId}\``,
+      `graphDigest: \`${record.graphDigest}\``,
+      `generatedAt: ${record.generatedAt}`, '',
       `Target: \`${record.targetId}\` (${record.targetKind})`,
-      `Scope: ${record.scope}`, '',
+      `Scope: ${record.scope} (traceKind: ${record.traceKind})`, '',
       `## Affected nodes (${record.affectedNodeIds.length})`, '',
       ...record.affectedNodeIds.map((id) => `- ${id}`), '',
       `## Affected edges (${record.affectedEdgeIds.length})`, '',

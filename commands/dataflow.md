@@ -208,9 +208,17 @@ graph's own already-scanned evidence."
 `--target` accepts a canonical `node:*`/`edge:*`/`flow:*`/`data:*` id
 only — no other id shape is recognized. `scope` in the output is always
 `'possible'` today: there is no runtime-corroboration layer yet to
-report `'observed'` instead, so every assessment reports the
-pessimistic "everything topologically reachable" blast radius, never a
-narrower "confirmed exploited" one.
+report `'observed'` instead (a narrower "confirmed exploited" blast
+radius). Within that, two genuinely different traversal semantics
+apply depending on the target kind, both disclosed via the output's own
+`traceKind` field: a `node:*` target reports `traceKind:
+'topology_reachable'` — the pessimistic "everything this compromised
+node could push to," since compromising a node genuinely puts
+everything reachable from it in the blast radius. An `edge:*`/`flow:*`/
+`data:*` target reports `traceKind: 'flow_restricted'` — only the
+flows that actually carry that specific edge/flow/data element, since
+compromising one channel does not compromise the process node at each
+end of it.
 
 ### Options
 
@@ -218,7 +226,7 @@ narrower "confirmed exploited" one.
 |---|---|---|
 | `--target <canonical-id>` | Yes | The compromised entity's canonical id — `node:*`, `edge:*`, `flow:*`, or `data:*`. An unrecognized prefix is a clear exit-2 error. |
 | `--output <file>` | Yes | Where the assessment report is written. |
-| `--format json\|markdown` | No | `json` (default) emits the raw `ImpactAssessment` record. `markdown` renders a human-readable report — affected nodes/edges, affected data classes, affected recipients, and any coverage limitations. |
+| `--format json\|markdown` | No | `json` (default) emits the raw `ImpactAssessment` record. `markdown` renders a human-readable report — a header tying the report back to the graph/moment it was computed (`id`/`graphId`/`graphDigest`/`generatedAt`), then affected nodes/edges, affected data classes, affected recipients, and any coverage limitations. |
 
 Exit codes: `0` on success; `1` when the base lineage graph could not be
 loaded (missing/unsigned/tampered/malformed — the same four messages

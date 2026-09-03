@@ -626,33 +626,62 @@ future obligation/decision-story analyzer can never quietly start
 treating a hypothetical-adjacent blast-radius traversal as a real
 compliance or executive-risk fact.
 
-**`scope` is always `'possible'`.** No runtime-corroboration signal
-exists yet (a future Digital Twin, M5 deliverable #7), so every
-assessment reports the pessimistic "everything topologically
-reachable" blast radius — `node`/`edge`/`flow` targets via
-`frontend/src/lib/focus-controls.js`'s `showAllPaths` (see below),
-`dataElement` targets via a direct flow-based trace, deliberately never
-`showAllPaths` (that BFS is topology-wide and unrestricted to any
-particular flow — seeding it from a data element's own source/sink
-nodes was reproduced live during this sub-project's own review to
-sweep in an unrelated sink reached by a different flow through the
-same node). `IMPACT_SCOPE_VALUES` already carries `'observed'` as a
-valid schema value today so that a later runtime-corroboration
-increment needs no breaking change to this contract — nothing emits it
-yet.
+**`scope` is always `'possible'`; `traceKind` discloses WHICH
+traversal semantics produced the record.** No runtime-corroboration
+signal exists yet (a future Digital Twin, M5 deliverable #7), so
+`scope` never reports a narrower "confirmed exploited" blast radius —
+only `'possible'`. But `'possible'` alone conflates two genuinely
+different questions, found by the final whole-branch review (I1/I2):
+a `node` target's blast radius is the pessimistic "everything
+topologically reachable" — `frontend/src/lib/focus-controls.js`'s
+`showAllPaths`, seeded from the node itself — because compromising a
+node genuinely puts everything it can reach in the blast radius.
+`edge`/`flow`/`dataElement` targets instead get a direct, flow-
+restricted trace (`_flowRestrictedAffectedSet`) over only the flows
+that actually carry that specific edge/flow/data element, DELIBERATELY
+never `showAllPaths` — that BFS is topology-wide and unrestricted to
+any particular flow, so seeding it from an edge's/flow's/data
+element's own endpoint nodes would sweep in an unrelated sibling flow
+that merely shares a node (reproduced live, twice: once for
+`dataElement` targets in the original fix round, then again for
+`edge`/`flow` targets by the final whole-branch review on the
+identical bug class it had missed the first time) — silently
+upgrading "this channel is compromised" to "the process node at each
+end is compromised." Both families are honestly disclosed on the
+record itself via `traceKind` (`impact-assessment.js`'s
+`IMPACT_TRACE_KINDS`): `'topology_reachable'` for `node` targets,
+`'flow_restricted'` for the other three — so a JSON consumer (or a
+reader comparing two assessments of the same incident) can always tell
+"exact carrier trace" apart from "topological presumption," never
+conflated under one `scope` value. `IMPACT_SCOPE_VALUES` already
+carries `'observed'` as a valid schema value today so that a later
+runtime-corroboration increment needs no breaking change to this
+contract — nothing emits it yet.
 
-**Whole-graph (not subgraph-scoped) coverage-limitations
-simplification, and why.** The sub-project's own scoping doc originally
-specified narrowing `coverageLimitations` to only the languages backing
-the affected node/edge subset. The shipped `_coverageLimitations`
-(`impact-engine.js`) reports the WHOLE graph's own non-`full`-tier
-languages instead, unscoped — because no node in `DataFlowGraph v1`
-carries a `language` field to filter by at all, so narrowing to "the
-languages of the affected subset" has no real data to compute from.
-Reporting the graph's own honest, whole-scan coverage gap on every
-assessment is the disclosed simplification: a real limitation,
-correctly attributed to the graph as a whole, never silently narrowed
-to a subset the engine cannot actually compute.
+**Coverage limitations: whole-graph language disclosure, PLUS
+per-entity `coverageStatus` — both real, both reported.** The
+sub-project's own scoping doc originally specified narrowing
+`coverageLimitations` to only the languages backing the affected
+node/edge subset. The shipped `_coverageLimitations` (`impact-
+engine.js`) still reports the WHOLE graph's own non-`full`-tier
+languages, unscoped — no node in `DataFlowGraph v1` carries a
+`language` field to filter by at all, so narrowing THAT figure to "the
+languages of the affected subset" has no real data to compute from,
+and this half of the disclosure is unchanged. What the final
+whole-branch review (I3) found is a DIFFERENT, cheaper, real
+alternative that the "no real data" justification did not rule out:
+every node/edge/flow already carries a real, REQUIRED `coverageStatus`
+field (`modeled|partial|candidate|unsupported|manual` — populated by
+`graph-builder.js`, already consumed by `export-csv.js`/
+`graph-diff.js`), which IS scoped per-entity and needs no language
+lookup at all. `_affectedCoverageLimitations` (`impact-engine.js`)
+reports a one-pass filter over the assessment's own
+`affectedNodeIds`/`affectedEdgeIds` — "N of the M affected nodes/edges
+have less-than-modeled coverage" — and its output is MERGED with, never
+substituted for, the whole-graph language disclosure above: both are
+real, complementary limitations of the same assessment, one whole-scan
+and language-scoped, one per-entity and scoped to exactly what this
+assessment says is affected.
 
 **`frontend/src/lib/focus-controls.js` cross-import reuse.**
 `impact-engine.js` imports `showAllPaths` directly from

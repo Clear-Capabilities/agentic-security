@@ -23,6 +23,18 @@ export const IMPACT_TARGET_KINDS = Object.freeze(['node', 'edge', 'flow', 'dataE
 // that increment needs no breaking change to this contract later.
 export const IMPACT_SCOPE_VALUES = Object.freeze(['possible', 'observed']);
 
+// Discloses WHICH of the two genuinely different traversal semantics
+// produced this record (final-review I2 fix) — `scope` alone cannot
+// distinguish them, since both families emit `scope: 'possible'`.
+// 'topology_reachable': a `node` target's topology-wide showAllPaths
+// BFS — "everything this compromised node could push to." 'flow_
+// restricted': an `edge`/`flow`/`dataElement` target's direct trace
+// over the flows that actually carry it — never the topology-wide BFS.
+// Without this field a JSON consumer cannot tell "exact carrier trace"
+// from "topological presumption" apart, the exact silent-conflation
+// this codebase's own disclosure discipline exists to prevent.
+export const IMPACT_TRACE_KINDS = Object.freeze(['topology_reachable', 'flow_restricted']);
+
 function _isNonEmptyString(v) { return typeof v === 'string' && v.length > 0; }
 function _isStringArray(v) { return Array.isArray(v) && v.every((x) => typeof x === 'string'); }
 
@@ -50,6 +62,9 @@ export function validateImpactAssessment(record) {
   }
   if (!IMPACT_SCOPE_VALUES.includes(record.scope)) {
     err('$.scope', `scope must be one of ${IMPACT_SCOPE_VALUES.join('|')}`);
+  }
+  if (!IMPACT_TRACE_KINDS.includes(record.traceKind)) {
+    err('$.traceKind', `traceKind must be one of ${IMPACT_TRACE_KINDS.join('|')}`);
   }
   if (!_isStringArray(record.affectedNodeIds ?? [])) err('$.affectedNodeIds', 'affectedNodeIds must be an array of strings');
   if (!_isStringArray(record.affectedEdgeIds ?? [])) err('$.affectedEdgeIds', 'affectedEdgeIds must be an array of strings');
