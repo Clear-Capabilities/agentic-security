@@ -55,6 +55,39 @@ test('proposeGovernanceEdit: an unchanged recipient never appears in the diff at
   assert.deepEqual(diff.changed, []);
 });
 
+test('proposeGovernanceEdit: a recipient whose patch entry has identical values but different KEY INSERTION ORDER is never flagged as changed (task-1 review finding)', () => {
+  // Reproduces the review's own exact repro: raw JSON.stringify comparison
+  // spuriously flags a recipient as "changed" purely because its patch
+  // entry's keys were inserted in a different order than the stored
+  // config's own order — a real scenario once Task 2 starts reading
+  // hand-authored patch files from disk, since a human editing JSON has no
+  // reason to preserve the exact key order of the file they're editing.
+  const current = {
+    recipients: {
+      vendor1: { legalEntity: 'Acme', dpaStatus: 'in_place', processorRole: 'processor' },
+    },
+  };
+  const patch = {
+    recipients: {
+      vendor1: { processorRole: 'processor', dpaStatus: 'in_place', legalEntity: 'Acme' },
+    },
+  };
+  const { diff } = proposeGovernanceEdit(current, patch);
+  assert.deepEqual(diff.added, []);
+  assert.deepEqual(diff.removed, []);
+  assert.deepEqual(diff.changed, []);
+});
+
+test('proposeGovernanceEdit: a recipient whose subprocessorChain ARRAY is merely reordered is still correctly flagged as changed — array order stays semantically meaningful', () => {
+  const current = { recipients: { vendor1: _validEntry({ subprocessorChain: ['a', 'b'] }) } };
+  const patch = { recipients: { vendor1: _validEntry({ subprocessorChain: ['b', 'a'] }) } };
+  const { diff } = proposeGovernanceEdit(current, patch);
+  assert.deepEqual(diff.added, []);
+  assert.deepEqual(diff.removed, []);
+  assert.equal(diff.changed.length, 1);
+  assert.equal(diff.changed[0].key, 'vendor1');
+});
+
 test('proposeGovernanceEdit: a malformed entry in the patch is rejected with a clear, per-key error, and never marked valid', () => {
   const current = { recipients: {} };
   // NOTE: every field `isValidRecipientConfigEntry` checks is nullable/optional

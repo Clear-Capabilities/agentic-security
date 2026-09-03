@@ -37,6 +37,24 @@ function _validateEntries(recipients) {
   return errors;
 }
 
+// Canonical (key-order-independent) JSON serialization for change
+// detection — mirrors ids.js's own _canon precedent. A hand-authored
+// patch file has no reason to preserve the stored config's own key
+// order, so a raw JSON.stringify comparison would spuriously flag a
+// semantically-unchanged recipient as "changed" (found by the task
+// review, reproduced live). Arrays keep their own order (order is
+// semantically meaningful there — e.g. subprocessorChain); only OBJECT
+// key order is normalized.
+function _canonicalize(value) {
+  if (Array.isArray(value)) return value.map(_canonicalize);
+  if (value && typeof value === 'object') {
+    const sorted = {};
+    for (const key of Object.keys(value).sort()) sorted[key] = _canonicalize(value[key]);
+    return sorted;
+  }
+  return value;
+}
+
 function _diffRecipients(currentRecipients, patchRecipients) {
   const added = [];
   const removed = [];
@@ -45,7 +63,7 @@ function _diffRecipients(currentRecipients, patchRecipients) {
   const patchKeys = new Set(Object.keys(patchRecipients));
   for (const key of patchKeys) {
     if (!currentKeys.has(key)) { added.push(key); continue; }
-    if (JSON.stringify(currentRecipients[key]) !== JSON.stringify(patchRecipients[key])) {
+    if (JSON.stringify(_canonicalize(currentRecipients[key])) !== JSON.stringify(_canonicalize(patchRecipients[key]))) {
       changed.push({ key, before: currentRecipients[key], after: patchRecipients[key] });
     }
   }
