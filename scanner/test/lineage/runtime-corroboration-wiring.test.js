@@ -134,6 +134,56 @@ test('WIRE/6: opts.environment/opts.observationWindowStart/opts.observationWindo
   assert.equal(graph.runtimeCorroboration.windowEnd, '2026-02-01T00:00:00.000Z');
 });
 
+test('I3 (final review): with AGENTIC_SECURITY_ENVIRONMENT set and no explicit opts.environment, the default hook\'s own environment filter falls back to it — matching graph-builder.js\'s own flow.policyVerdict precedent', () => {
+  const code = "function h(req) { fetch('https://api.stripe.com/v1/charges', { body: req.body.card_number }); }";
+  const cg = irOf({ 'a.js': code });
+  const probe = buildGraphWithCoverage(cg, { repository: 'r', generatedAt: '2026-01-01T00:00:00.000Z' });
+  const stripeNode = probe.graph.nodes.find((n) => n.destination?.literalValue === 'https://api.stripe.com/v1/charges');
+  assert.ok(stripeNode, 'the fetch() site must resolve a literal destination');
+  const stripeFlow = probe.graph.flows.find((f) => f.sink === stripeNode.id);
+  assert.ok(stripeFlow);
+
+  // A 'developer-laptop' observation that WOULD match the stripe flow —
+  // the whole point is proving it is correctly EXCLUDED once the
+  // environment fallback is live, not that matching itself works.
+  const draft = {
+    version: RUNTIME_OBSERVATION_VERSION, adapter: 'native-jsonl',
+    source: 'native.jsonl:i3', environment: 'developer-laptop',
+    windowStart: '2026-01-01T00:00:00.000Z', windowEnd: '2026-01-02T00:00:00.000Z',
+    importedAt: '2026-01-02T00:00:00.000Z', retention: { expiresAt: null },
+    attributes: { 'destination.host': 'api.stripe.com' },
+    eventCountBand: '1',
+    firstObservedAt: '2026-01-01T05:00:00.000Z', lastObservedAt: '2026-01-01T06:00:00.000Z',
+  };
+  const observation = {
+    ...draft,
+    id: observationId(draft, [JSON.stringify(draft.attributes)]),
+    ...matchObservationToGraph(probe.graph, draft),
+  };
+  assert.deepEqual(observation.matchedFlowIds, [stripeFlow.id], 'sanity: the observation would match the stripe flow absent an environment filter');
+
+  const prevEnv = process.env.AGENTIC_SECURITY_ENVIRONMENT;
+  process.env.AGENTIC_SECURITY_ENVIRONMENT = 'production';
+  try {
+    const cg2 = irOf({ 'a.js': code });
+    // Deliberately NO opts.environment — proving the FALLBACK, not an
+    // explicit override (WIRE/6 already proves the explicit-override path).
+    const { graph } = buildGraphWithCoverage(cg2, {
+      repository: 'r', generatedAt: '2026-01-01T00:00:00.000Z',
+      runtimeObservations: [observation],
+    });
+    const rc = graph.runtimeCorroboration;
+    assert.ok(rc);
+    assert.equal(rc.environment, 'production', 'the default hook\'s own environment filter must resolve to the env var, not null');
+    assert.ok(rc.otherEnvironmentObservationIds.includes(observation.id), 'the developer-laptop observation must land in otherEnvironmentObservationIds');
+    assert.equal(rc.observedFlowIds.includes(stripeFlow.id), false, 'a wrong-environment observation must never corroborate a flow in a graph scanned under a different environment');
+    assert.equal(rc.byFlow[stripeFlow.id].layer, 'not_observed_in_window');
+  } finally {
+    if (prevEnv === undefined) delete process.env.AGENTIC_SECURITY_ENVIRONMENT;
+    else process.env.AGENTIC_SECURITY_ENVIRONMENT = prevEnv;
+  }
+});
+
 test('WIRE/7: validateGraph(graph) returns zero errors with runtimeCorroboration present — the extension is never routed through the validator, exactly like graph.recipientProfiles', () => {
   const cg = irOf({ 'a.js': SIMPLE_CODE });
   const { graph } = buildGraphWithCoverage(cg, {

@@ -465,8 +465,8 @@ test('OC/5a: correlateObservations(graph, null, {}) pins the not_evaluated case 
     notObservedFlowIds: [],
     notEvaluatedFlowIds: ['flow:a', 'flow:b'],
     byFlow: {
-      'flow:a': { layer: 'not_evaluated', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0 },
-      'flow:b': { layer: 'not_evaluated', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0 },
+      'flow:a': { layer: 'not_evaluated', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0, contributingEnvironments: [] },
+      'flow:b': { layer: 'not_evaluated', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0, contributingEnvironments: [] },
     },
     consideredObservationIds: [],
     outOfWindowObservationIds: [],
@@ -495,8 +495,8 @@ test('OC/5b: correlateObservations(graph, [], {}) pins the evaluated-but-empty c
     notObservedFlowIds: ['flow:a', 'flow:b'],
     notEvaluatedFlowIds: [],
     byFlow: {
-      'flow:a': { layer: 'not_observed_in_window', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0 },
-      'flow:b': { layer: 'not_observed_in_window', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0 },
+      'flow:a': { layer: 'not_observed_in_window', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0, contributingEnvironments: [] },
+      'flow:b': { layer: 'not_observed_in_window', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0, contributingEnvironments: [] },
     },
     consideredObservationIds: [],
     outOfWindowObservationIds: [],
@@ -840,4 +840,67 @@ test('OC/10a: each limitations string is present exactly in its case, and absent
   assert.ok(!cleanResult.limitations.some((l) => l.toLowerCase().includes(NO_STORE_SUBSTR)));
   assert.ok(!cleanResult.limitations.some((l) => l.toLowerCase().includes(NON_OBSERVATION_SUBSTR)));
   assert.ok(!cleanResult.limitations.some((l) => l.includes(NODE_GRANULARITY_SUBSTR)));
+});
+
+// =====================================================================
+// OC/11 — I2 (final review): a multi-observation byFlow entry is scoped
+// to the representative's OWN environment, and discloses the rest.
+// =====================================================================
+
+test('OC/11a: the final review\'s own exact repro — production window Aug 1-10 band 1, staging window Aug 15-25 band 1k+ — the resulting entry draws every aggregate from production only, with contributingEnvironments naming both', () => {
+  const graph = _oneFlowGraph();
+  const match = matchObservationToGraph(graph, { attributes: { 'destination.host': 'api.stripe.com' } });
+
+  const production = _obs({
+    ...match, id: 'observation:production',
+    environment: 'production', matchConfidence: 'high',
+    windowStart: '2026-08-01T00:00:00.000Z', windowEnd: '2026-08-10T00:00:00.000Z',
+    firstObservedAt: '2026-08-01T05:00:00.000Z', lastObservedAt: '2026-08-09T05:00:00.000Z',
+    eventCountBand: '1',
+  });
+  const staging = _obs({
+    ...match, id: 'observation:staging',
+    environment: 'staging', matchConfidence: 'high',
+    windowStart: '2026-08-15T00:00:00.000Z', windowEnd: '2026-08-25T00:00:00.000Z',
+    firstObservedAt: '2026-08-15T05:00:00.000Z', lastObservedAt: '2026-08-20T11:00:00.000Z',
+    eventCountBand: '1k+',
+  });
+
+  // No opts.environment filter, so both are considered — the production/
+  // staging split happens entirely inside the fold, not the filter.
+  const result = correlateObservations(graph, [production, staging], {});
+  const entry = result.byFlow['flow:1'];
+
+  assert.equal(entry.layer, 'runtime_observed');
+  assert.equal(entry.environment, 'production', 'the representative — both are matchConfidence high, tie broken by matchMethod order');
+  assert.equal(entry.windowStart, '2026-08-01T00:00:00.000Z');
+  assert.equal(entry.windowEnd, '2026-08-10T00:00:00.000Z');
+  // The bug this closes: these three used to aggregate across BOTH
+  // contributors, so lastObservedAt (Aug 20) landed OUTSIDE the window
+  // shown one line above (Aug 1-10), and eventCountBand read staging's
+  // '1k+' under a "production" header.
+  assert.equal(entry.firstObservedAt, '2026-08-01T05:00:00.000Z');
+  assert.equal(entry.lastObservedAt, '2026-08-09T05:00:00.000Z', 'must never be staging\'s Aug 20 timestamp — that is now excluded, scoped to production only');
+  assert.equal(entry.eventCountBand, '1', 'must never be staging\'s 1k+ band under a production header');
+  assert.deepEqual(entry.contributingEnvironments, ['production', 'staging'], 'the full set of contributing environments must still be disclosed');
+
+  assert.ok(
+    result.limitations.some((l) => l.includes('more than one environment')),
+    'a multi-environment contribution must be disclosed in limitations',
+  );
+});
+
+test('OC/11b: a single-environment flow carries contributingEnvironments with exactly that one environment, and no multi-environment limitation fires', () => {
+  const graph = _oneFlowGraph();
+  const match = matchObservationToGraph(graph, { attributes: { 'destination.host': 'api.stripe.com' } });
+  const obs = _obs({ ...match, id: 'observation:single', environment: 'production' });
+  const result = correlateObservations(graph, [obs], {});
+  assert.deepEqual(result.byFlow['flow:1'].contributingEnvironments, ['production']);
+  assert.ok(!result.limitations.some((l) => l.includes('more than one environment')));
+});
+
+test('OC/11c: a flow with zero contributions carries contributingEnvironments: [] (never null)', () => {
+  const graph = _oneFlowGraph();
+  const result = correlateObservations(graph, [], {});
+  assert.deepEqual(result.byFlow['flow:1'].contributingEnvironments, []);
 });

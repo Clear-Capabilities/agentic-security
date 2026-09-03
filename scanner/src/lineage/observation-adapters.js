@@ -200,8 +200,13 @@ export function parseNativeJsonlObservations(text, context) {
     let record;
     try {
       record = JSON.parse(rawLine);
-    } catch (e) {
-      errors.push({ line, message: `invalid JSON on line ${line}: ${e.message}` });
+    } catch {
+      // M2 (final review): every OTHER rejection path in this module is
+      // key-only/value-free by design — V8's own JSON.parse error message
+      // quotes a snippet of the offending input (`e.message`), which would
+      // make this the sole value-echo channel in the whole command. Name
+      // only the line number, never the parse error's own text.
+      errors.push({ line, message: `invalid JSON on line ${line}` });
       continue;
     }
 

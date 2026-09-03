@@ -39,15 +39,31 @@
 // here ever rewrites a file in place, and nothing here ever folds two
 // files into one logical state.
 //
-// ── No lock, and why ──────────────────────────────────────────────────
+// ── No lock, and why (CORRECTED — final review B2) ─────────────────────
 //
-// Every import is an independent whole file. The only concurrency hazard
-// a lock would address is two writers targeting the SAME file — and
-// `observationImportId` (ids.js) includes `importedAt` in its discriminator,
-// so two genuinely distinct imports can never collide onto one file name.
-// There is no read-fold-validate-write critical section anywhere in this
-// module (contrast the remediation ledger, which locks for exactly that
-// reason) — so there is nothing for a lock to protect.
+// Every import is an independent whole file. The only concurrency hazard a
+// lock would address is two writers targeting the SAME file. This
+// module's own header USED TO claim `observationImportId`'s `importedAt`
+// discriminator alone made that impossible — that claim was FALSE:
+// `importedAt` (`new Date().toISOString()`) is millisecond-resolution, so
+// two concurrent `dataflow observations import --yes` invocations sharing
+// adapter/source/environment/window and landing in the same millisecond
+// minted the IDENTICAL import id, and the second write silently clobbered
+// the first while BOTH processes reported success. Live-reproduced by the
+// final review: 5 of 8 concurrent-round trials lost an entire import.
+// Fixed two ways, belt and suspenders: (1) the CALLER
+// (`cmdDataflowObservationsImport`, `bin/agentic-security.js`) now mints
+// `observationImportId` with a fresh random discriminator part, so two
+// invocations can never collide regardless of timing; (2) this module's
+// own write is now ATOMIC (`_writeAtomicSync`, temp-file-then-rename)
+// rather than a bare `writeFileSync`, so even a genuine same-name write
+// race (a caller that skipped the id fix, or two callers racing on a
+// hand-supplied id) can no longer produce a torn file — the worst case is
+// now "one writer's complete content wins," never "a half-written file."
+// There is still no read-fold-validate-write critical section anywhere in
+// this module (contrast the remediation ledger, which locks for exactly
+// that reason) — so there is still nothing for a LOCK specifically to
+// protect; the fix is collision-proof ids plus an atomic write, not a lock.
 //
 // ── `statePath` is called with a STRING LITERAL at every site ──────────
 //
@@ -95,9 +111,20 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { statePath, isSafeStateDir, stateWritesEnabled } from '../posture/state-dir.js';
 import { maybeEncryptForWrite, maybeDecryptForRead } from '../posture/encryption-provider.js';
 import { validateRuntimeObservation, RUNTIME_OBSERVATION_ADAPTERS } from './runtime-observation.js';
+// I1 (final review): every other evidence-bearing artifact in this codebase
+// (lineage-graph.json, last-scan.json, the remediation ledger's hash chain)
+// carries tamper-evidence — the observation store did not, so a hand-planted
+// forged import (a fabricated matchMethod/matchConfidence naming a real
+// flow's ids) was indistinguishable from real evidence on read and could
+// launder into the signed graph as genuine runtime corroboration. Reused
+// UNCHANGED — the same generic, filename-agnostic HMAC primitive
+// `lineage-graph.json` itself already uses (confirmed by direct read of
+// this file: no filename baked in anywhere).
+import { signLastScan, verifyLastScan } from '../posture/integrity.js';
 
 /**
  * The literal top-level directory name under `.agentic-security/`.
@@ -141,6 +168,44 @@ function _isIsoDateTime(v) {
  */
 export function observationsDir(scanRoot) {
   return statePath(scanRoot, 'runtime-observations');
+}
+
+// B2 (final review, Part 2): a faithful LOCAL PORT of the established
+// temp-file-then-rename shape (`_writeConfigAtomic` in
+// `bin/agentic-security.js`, `_writeAtomicAndSync` in
+// `posture/fix-history.js`) — NOT an import, since both those helpers are
+// module-private and this module's own `persistObservationImport` is
+// synchronous (every real caller, including the CLI and this file's own
+// test suite, calls it without `await`), so the async `fsp`-based originals
+// cannot be reused directly. Mirrors the remediation-ledger module's own
+// documented precedent (posture/remediation-ledger, M5 deliverable #6) for
+// porting rather than importing an unexported helper. Temp file in the
+// SAME directory (so the final `renameSync` is
+// same-filesystem and therefore atomic), a random suffix (so two
+// concurrent writers can never collide on the temp file itself even before
+// B2 Part 1's id-collision fix), fsync before rename when available, and
+// the temp file is unlinked on any failure so a crash never leaves a stray
+// partial file behind. Closes the "torn file on a genuine write race" risk
+// even after Part 1 makes true id collisions impossible — belt and
+// suspenders — and fixes `loadObservationImports`'s own silent-swallow-of-
+// a-torn-file gap as a side effect (a write can no longer be torn at all).
+function _writeAtomicSync(fp, content) {
+  const dir = path.dirname(fp);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(fp)}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
+  try {
+    const fd = fs.openSync(tmp, 'w');
+    try {
+      fs.writeSync(fd, content);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, fp);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch { /* never existed, or already gone — fine either way */ }
+    throw e;
+  }
 }
 
 /**
@@ -251,12 +316,14 @@ export function validateObservationImport(record) {
 
 /**
  * Persist `importRecord` as one immutable whole file, keyed by its own
- * `id`. Refuses (never partially writes) when the record fails
- * validation, when state writes are disabled, when the target directory
- * is not a safe state directory, when the id cannot be turned into a file
- * name, or when the confidentiality gate (`maybeEncryptForWrite`) itself
- * refuses. The store is the last line of defense: no path exists by which
- * an unvalidated observation reaches disk.
+ * `id`, written ATOMICALLY (B2) and SIGNED (I1, a sibling `<file>.sig`
+ * carrying `signLastScan` of the exact bytes written). Refuses (never
+ * partially writes) when the record fails validation, when state writes
+ * are disabled, when the target directory is not a safe state directory,
+ * when the id cannot be turned into a file name, or when the
+ * confidentiality gate (`maybeEncryptForWrite`) itself refuses. The store
+ * is the last line of defense: no path exists by which an unvalidated,
+ * unsigned, or torn observation reaches disk.
  *
  * @returns {{ok:true, path:string} | {ok:false, reason:string}}
  */
@@ -288,7 +355,13 @@ export function persistObservationImport(scanRoot, importRecord) {
   const full = path.join(dir, fileName);
   try {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(full, gated.content);
+    // B2 Part 2: atomic write (temp-file-then-rename), replacing the prior
+    // bare writeFileSync.
+    _writeAtomicSync(full, gated.content);
+    // I1: sign the EXACT bytes just written (post-encryption, if any) —
+    // the same content a reader will read back and verify against, mirroring
+    // `lineage-graph.json`'s own sign-what-you-wrote discipline.
+    _writeAtomicSync(`${full}.sig`, signLastScan(gated.content));
   } catch (e) {
     return { ok: false, reason: `write failed: ${e.message}` };
   }
@@ -296,13 +369,38 @@ export function persistObservationImport(scanRoot, importRecord) {
   return { ok: true, path: full };
 }
 
+// I1: shared signature check for both readers below — a file nobody
+// validated on write (planted by hand, or copied without its .sig sibling)
+// must not become trusted by being on disk, at the SAME level of scrutiny
+// a torn/malformed file already gets. `false` (tampered — the body doesn't
+// match the .sig) and `null` (missing signature entirely — including every
+// pre-existing unsigned import a hand-crafted forgery would produce) are
+// both UNTRUSTED and treated identically: skip the record, never promote
+// it to "valid" just because JSON.parse succeeded. Disclosed via a
+// `console.error`, mirroring `recipient-registry.js#loadRecipientConfig`'s
+// own established "tolerant degradation, never a silent drop with no
+// trace" pattern — never an attribute key/value, only the file path and
+// the verification outcome.
+function _verifiedOrDisclose(full, raw) {
+  const verified = verifyLastScan(raw, `${full}.sig`);
+  if (verified === true) return true;
+  console.error(
+    verified === null
+      ? `agentic-security: runtime observation import ${full} has no .sig file — refusing to trust an unsigned import (a hand-planted forgery would look identical). Skipped.`
+      : `agentic-security: runtime observation import ${full} FAILED signature verification — its contents do not match ${full}.sig. Refusing to trust a tampered import. Skipped.`,
+  );
+  return false;
+}
+
 /**
  * All persisted imports for scanRoot, newest first by mtime. Never
  * throws — a missing/empty directory, a corrupt file, a non-`.json` file,
- * or a file whose content fails `validateObservationImport` are all
- * silently skipped, mirroring `graph-snapshot.js#loadSnapshots`'s own
- * tolerance. A file nobody validated on write (planted by hand) must not
- * become trusted by being on disk — hence the validate-on-read step.
+ * an UNSIGNED or TAMPERED file (I1), or a file whose content fails
+ * `validateObservationImport` are all silently skipped, mirroring
+ * `graph-snapshot.js#loadSnapshots`'s own tolerance. A file nobody
+ * validated on write (planted by hand) must not become trusted by being on
+ * disk — hence the validate-on-read step, now preceded by the signature
+ * check.
  */
 export function loadObservationImports(scanRoot) {
   const dir = observationsDir(scanRoot);
@@ -319,7 +417,9 @@ export function loadObservationImports(scanRoot) {
   const out = [];
   for (const { full } of withMtime) {
     try {
-      const raw = maybeDecryptForRead(fs.readFileSync(full, 'utf8'));
+      const onDisk = fs.readFileSync(full, 'utf8');
+      if (!_verifiedOrDisclose(full, onDisk)) continue;
+      const raw = maybeDecryptForRead(onDisk);
       const parsed = JSON.parse(raw);
       const { valid } = validateObservationImport(parsed);
       if (valid) out.push(parsed);
@@ -337,7 +437,9 @@ export function loadObservationImport(scanRoot, importId) {
   if (!fileName) return null;
   const full = path.join(observationsDir(scanRoot), fileName);
   try {
-    const raw = maybeDecryptForRead(fs.readFileSync(full, 'utf8'));
+    const onDisk = fs.readFileSync(full, 'utf8');
+    if (!_verifiedOrDisclose(full, onDisk)) return null;
+    const raw = maybeDecryptForRead(onDisk);
     const parsed = JSON.parse(raw);
     const { valid } = validateObservationImport(parsed);
     return valid ? parsed : null;
@@ -383,6 +485,11 @@ export function deleteObservationImport(scanRoot, importId) {
   const full = path.join(observationsDir(scanRoot), fileName);
   try {
     fs.unlinkSync(full);
+    // I1: best-effort cleanup of the sibling .sig — never load-bearing for
+    // this function's own true/false return (the main file's own unlink is
+    // what determines success/failure), just hygiene so a deleted import
+    // doesn't leave an orphaned signature file behind.
+    try { fs.unlinkSync(`${full}.sig`); } catch { /* absent or already gone — fine either way */ }
     return true;
   } catch {
     return false;

@@ -279,3 +279,20 @@ test('observationImportId is deterministic, correctly prefixed, and discriminate
   assert.notEqual(observationImportId({ ...base, importedAt: '2026-09-01T12:00:01.000Z' }), id,
     'importedAt is a per-run nonce, mirroring snapshotId\'s own capturedAt');
 });
+
+test('B2 (final review): observationImportId honors discriminatorParts — a fresh random discriminator makes two SAME-millisecond imports collision-proof', () => {
+  const base = {
+    adapter: 'native-jsonl', source: 'f.jsonl', environment: 'production',
+    windowStart: 'a', windowEnd: 'b', importedAt: '2026-09-01T12:00:00.000Z',
+  };
+  // Two invocations sharing EVERY field the pre-fix discriminator used
+  // (including importedAt down to the millisecond — the exact collision
+  // the final review reproduced live, 5 of 8 concurrent-round trials) must
+  // still mint distinct ids once a fresh discriminator part is supplied,
+  // mirroring cmdDataflowObservationsImport's own real call site.
+  const a = observationImportId(base, ['aaaaaaaa']);
+  const b = observationImportId(base, ['bbbbbbbb']);
+  assert.notEqual(a, b, 'two same-millisecond imports with distinct random discriminators must never collide');
+  assert.match(a, /^obsimport:[0-9a-f]{12}$/);
+  assert.match(b, /^obsimport:[0-9a-f]{12}$/);
+});

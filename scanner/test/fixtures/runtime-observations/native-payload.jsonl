@@ -2,3 +2,4 @@
 {"attributes":{"destination.host":"db.internal","db.statement":"SELECT ssn FROM patients"},"eventCountBand":"1","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-02T10:00:00.000Z"}
 {"attributes":{"destination.host":"api.anthropic.com"},"eventCountBand":"1","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-02T10:00:00.000Z","prompt":"the patient's SSN is 123-45-6789"}
 {"attributes":{"destination.host":"api.stripe.com"},"eventCountBand":"1","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-02T10:00:00.000Z","matchedNodeIds":["node:aaaaaaaaaaaa"],"matchConfidence":"high"}
+{"attributes":{"destination.host":"api.stripe.com","schema.name":"SELECT * FROM users WHERE ssn='123-45-6789'"},"eventCountBand":"1","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-02T10:00:00.000Z"}

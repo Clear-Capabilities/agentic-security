@@ -62,19 +62,26 @@
 // is not the same fact as a store consulted and found empty) — pinned as
 // literal JSON by this module's own test suite (`OC/5`).
 //
-// ── Correction 4's node-granularity boundary ────────────────────────────
+// ── Correction 4's node-granularity boundary (wording corrected, I4) ────
 //
 // A RuntimeObservation corroborates that a DESTINATION NODE was contacted
-// — never which of several flows sharing that sink node actually produced
-// the traffic. FR-505's own "cannot prove field-level identity" applies
-// here at the granularity the evidence genuinely has: when a matched sink
-// node is the endpoint of more than one flow, every one of those sibling
-// flows is demoted to `matchConfidence: 'ambiguous'` for THAT FLOW'S OWN
-// per-flow answer — the underlying observation record's own `high`/
-// `medium`/`low` confidence is never rewritten (the demotion is a property
-// of the per-flow READING, not a mutation of the evidence). `OC/8` proves
-// this both ways: demoted when siblings exist, undemoted when the sink has
-// exactly one flow.
+// — never which of several flows ENDING AT that node actually produced the
+// traffic. This is NOT the same claim as "these flows share a real
+// destination": a graph node is a REGISTRY DECISION
+// (`graph-builder.js`'s §6.1), and more than one distinct real-world
+// destination can collapse onto one node (a pre-existing, disclosed
+// coarsening) — so an observation of ONE real destination can
+// over-attribute corroboration to a sibling flow whose real destination
+// was never observed at all, not merely a flow that happens to share the
+// same destination. FR-505's own "cannot prove field-level identity"
+// applies here at the granularity the evidence genuinely has: when a
+// matched sink node is the endpoint of more than one flow, every one of
+// those sibling flows is demoted to `matchConfidence: 'ambiguous'` for
+// THAT FLOW'S OWN per-flow answer — the underlying observation record's
+// own `high`/`medium`/`low` confidence is never rewritten (the demotion is
+// a property of the per-flow READING, not a mutation of the evidence).
+// `OC/8` proves this both ways: demoted when siblings exist, undemoted
+// when the sink has exactly one flow.
 //
 // ── `byFlow` is a plain object, never a `Map` ───────────────────────────
 //
@@ -344,6 +351,11 @@ function _emptyByFlowEntry(layer) {
     lastObservedAt: null,
     eventCountBand: null,
     siblingFlowCount: 0,
+    // I2 (final review): an empty array (never null) for a flow with no
+    // contributions at all — keeps the field's type consistent whether or
+    // not the flow has evidence, mirroring every other array-valued field
+    // on this shape.
+    contributingEnvironments: [],
   };
 }
 
@@ -503,6 +515,7 @@ export function correlateObservations(graph, observations, opts) {
   }
 
   let anySiblingDemotion = false;
+  let anyMultiEnvironment = false;
   for (const [fid, contribs] of flowContribs) {
     const entry = byFlow[fid];
     if (!entry) continue; // defensive — fid is always a real flow id (filtered above)
@@ -510,21 +523,37 @@ export function correlateObservations(graph, observations, opts) {
     const siblingFlowCount = siblingCountByFlowId.get(fid) ?? 0;
     if (siblingFlowCount > 0) anySiblingDemotion = true;
 
+    // I2 (final review): the aggregated fields below (firstObservedAt/
+    // lastObservedAt/eventCountBand/matchConfidence) used to be computed
+    // across ALL contributors, while matchMethod/environment/windowStart/
+    // windowEnd came from the representative's OWN environment alone — a
+    // self-contradictory mix whenever more than one environment
+    // contributed (e.g. a "production" window shown next to a "staging"
+    // event-count band). Scoped to the representative's OWN environment
+    // only, so every field on one entry now describes ONE real,
+    // consistent, deterministic environment — with contributingEnvironments
+    // disclosing the rest, never silently discarding them.
+    const repEnvironmentContribs = contribs.filter((c) => c.environment === rep.environment);
+    const contributingEnvironments = _sortUnique(contribs.map((c) => c.environment));
+    if (contributingEnvironments.length > 1) anyMultiEnvironment = true;
+
     entry.layer = LAYER_RUNTIME_OBSERVED;
     entry.observationIds = _sortUnique(contribs.map((c) => c.obsId));
     entry.matchMethod = rep.matchMethod;
     // Correction 4's node-granularity boundary: sharing a sink node with
     // ANY other flow demotes this flow's own confidence to 'ambiguous',
     // regardless of every contributing observation's own confidence —
-    // the observation records themselves are never rewritten.
-    entry.matchConfidence = siblingFlowCount > 0 ? 'ambiguous' : _worstConfidence(contribs.map((c) => c.matchConfidence));
+    // the observation records themselves are never rewritten. Scoped to
+    // repEnvironmentContribs per I2 above (never cross-environment).
+    entry.matchConfidence = siblingFlowCount > 0 ? 'ambiguous' : _worstConfidence(repEnvironmentContribs.map((c) => c.matchConfidence));
     entry.environment = rep.environment;
     entry.windowStart = rep.windowStart;
     entry.windowEnd = rep.windowEnd;
-    entry.firstObservedAt = _minIso(contribs.map((c) => c.firstObservedAt));
-    entry.lastObservedAt = _maxIso(contribs.map((c) => c.lastObservedAt));
-    entry.eventCountBand = _highestBand(contribs.map((c) => c.eventCountBand));
+    entry.firstObservedAt = _minIso(repEnvironmentContribs.map((c) => c.firstObservedAt));
+    entry.lastObservedAt = _maxIso(repEnvironmentContribs.map((c) => c.lastObservedAt));
+    entry.eventCountBand = _highestBand(repEnvironmentContribs.map((c) => c.eventCountBand));
     entry.siblingFlowCount = siblingFlowCount;
+    entry.contributingEnvironments = contributingEnvironments;
   }
 
   const observedFlowIds = [];
@@ -550,9 +579,30 @@ export function correlateObservations(graph, observations, opts) {
   }
   if (anySiblingDemotion) {
     limitations.push(
-      'A runtime observation corroborates that a matched destination node was contacted, never which '
-      + 'of several flows sharing that node produced the traffic — every such flow is reported at '
-      + "matchConfidence 'ambiguous' (node-granularity boundary, Correction 4).",
+      // I4 (final review): the prior wording ("never which of several
+      // flows sharing that node produced the traffic") reads as "these
+      // flows share a real destination" — false in the case this fires
+      // for. A graph NODE is a registry decision (graph-builder.js §6.1)
+      // that can represent more than one distinct real-world destination
+      // collapsing onto it (a pre-existing, disclosed coarsening,
+      // Correction 4/M2-A1) — an observation of one real destination
+      // over-attributes corroboration to a sibling flow whose real
+      // destination was never observed at all, not merely "shared" with
+      // the one that was.
+      'A runtime observation corroborates that a matched destination NODE was contacted — but a graph '
+      + 'node can represent more than one distinct real-world destination that happens to collapse onto '
+      + "it (a pre-existing graph-projection coarsening), not just several flows sharing one real "
+      + 'destination. Every flow ending at that node is reported at matchConfidence \'ambiguous\' for '
+      + 'exactly this reason (node-granularity boundary, Correction 4).',
+    );
+  }
+  if (anyMultiEnvironment) {
+    limitations.push(
+      'One or more flows had contributing observations from more than one environment — each such '
+      + "flow's own reported fields (matchMethod/matchConfidence/environment/window/firstObservedAt/"
+      + 'lastObservedAt/eventCountBand) describe only its representative (strongest-confidence) '
+      + "environment; see that flow's own contributingEnvironments for the full set of environments "
+      + 'that actually contributed (I2).',
     );
   }
 

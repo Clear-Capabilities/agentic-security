@@ -29,7 +29,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { statePath, stateDir } from '../../src/posture/state-dir.js';
 import { loadObservationImports, loadObservations } from '../../src/lineage/observation-store.js';
 import { validateRuntimeObservation } from '../../src/lineage/runtime-observation.js';
@@ -118,6 +118,24 @@ function runTwin(argsList) {
   return spawnSync(process.execPath, [CLI, 'dataflow', 'twin', ...argsList], { encoding: 'utf8', timeout: 15_000 });
 }
 
+// B2 (final review): a real, non-blocking subprocess launch — spawnSync
+// above cannot exercise genuine OS-level concurrency (it blocks until the
+// child exits), which is exactly what the review's own live repro needed
+// to reproduce the millisecond-resolution id collision. Resolves to
+// {status, stdout, stderr}, mirroring spawnSync's own shape closely enough
+// that assertions read identically either way.
+function runImportAsync(argsList) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI, 'dataflow', 'observations', 'import', ...argsList], { encoding: 'utf8' });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', reject);
+    child.on('close', (status) => resolve({ status, stdout, stderr }));
+  });
+}
+
 // A single record whose destination.host matches the fixture's own
 // literal `https://payments.example/charge` external-api sink.
 function _matchingObsRecord(overrides = {}) {
@@ -159,7 +177,9 @@ test('CLI/import-2: --yes writes exactly one import file and audits exactly one 
   const r = runImport([root, '--adapter', 'native-jsonl', '--input', obsFile, '--environment', 'production', '--window-start', WINDOW_START, '--window-end', WINDOW_END, '--yes']);
   assert.equal(r.status, 0, r.stderr);
   const dir = statePath(root, 'runtime-observations');
-  const files = fs.readdirSync(dir);
+  // I1 (final review): each import now also writes a sibling `.sig` file —
+  // filter to `.json` so this assertion counts IMPORTS, not files.
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
   assert.equal(files.length, 1, 'exactly one import file must exist after the first --yes import');
   const auditLogPath = statePath(root, 'mcp-audit.log');
   assert.ok(fs.existsSync(auditLogPath));
@@ -264,11 +284,66 @@ test('CLI/import-8: re-running the same import with --yes writes a SECOND import
   assert.equal(r2.status, 0, r2.stderr);
 
   const dir = statePath(root, 'runtime-observations');
-  assert.equal(fs.readdirSync(dir).length, 2, 'immutable store: a second import must write a SECOND file, never overwrite the first');
+  assert.equal(fs.readdirSync(dir).filter((f) => f.endsWith('.json')).length, 2, 'immutable store: a second import must write a SECOND file, never overwrite the first');
   const preview1 = JSON.parse(r1.stdout);
   const preview2 = JSON.parse(r2.stdout);
   assert.notEqual(preview1.importId, preview2.importId, 'importedAt is part of the import id, so re-importing must mint a new import id');
   assert.equal(loadObservations(root).length, 1, 'the two imports carry the identical observation (same adapter/environment/window/attributes), so it must dedupe to one');
+});
+
+test('CLI/import-6b (M5, final review): a --source value that does not look like an identifier is refused, exit 2, nothing written, before any --input file content is read', () => {
+  const root = _mkTmpProject();
+  _scanFixture(root);
+  const obsFile = _writeObsFile(root, [_matchingObsRecord()]);
+  for (const bad of ['has space', 'quote"mark', 'a=b', 'a?b#x', '<tag>', '../../etc/passwd; rm -rf']) {
+    const r = runImport([root, '--adapter', 'native-jsonl', '--input', obsFile, '--source', bad, '--environment', 'production', '--window-start', WINDOW_START, '--window-end', WINDOW_END, '--yes']);
+    assert.equal(r.status, 2, `--source ${JSON.stringify(bad)} must be refused: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /--source must look like an identifier/);
+  }
+  assert.equal(loadObservationImports(root).length, 0, 'nothing must be written when --source is refused');
+});
+
+test('CLI/import-9 (B2, final review): N genuinely concurrent imports sharing adapter/source/environment/window each mint a distinct import id and a distinct file — no import is silently lost', async () => {
+  const root = _mkTmpProject();
+  _scanFixture(root);
+
+  // Mirrors the final review's own live repro exactly: every invocation
+  // shares --source (the collision precondition — --source defaults to the
+  // input file's own basename, so two collectors exporting a same-named
+  // file, or a retried CI step racing itself, hit this), the same
+  // --environment, and the same window — the ONLY things the pre-fix id
+  // discriminator ever varied on was importedAt, millisecond-resolution.
+  const N = 8;
+  const sharedSource = 'shared.jsonl';
+  const files = [];
+  for (let i = 0; i < N; i++) {
+    // Each file carries a DIFFERENT host, so a lost import would also be
+    // detectable via the observation set, not just the file count.
+    const p = path.join(root, `input-${i}.jsonl`);
+    fs.writeFileSync(p, JSON.stringify(_matchingObsRecord({ attributes: { 'destination.host': `host${i}.example.com` } })) + '\n');
+    files.push(p);
+  }
+
+  const results = await Promise.all(files.map((f) => runImportAsync([
+    root, '--adapter', 'native-jsonl', '--input', f, '--source', sharedSource,
+    '--environment', 'production', '--window-start', WINDOW_START, '--window-end', WINDOW_END, '--yes',
+  ])));
+
+  for (const r of results) {
+    assert.equal(r.status, 0, `every concurrent import must succeed: ${r.stdout}${r.stderr}`);
+  }
+
+  const dir = statePath(root, 'runtime-observations');
+  const jsonFiles = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  assert.equal(jsonFiles.length, N, `expected exactly ${N} distinct import files — a collision would silently overwrite one, losing an entire import (the final review reproduced this live, 5 of 8 concurrent-round trials)`);
+
+  const importIds = results.map((r) => JSON.parse(r.stdout).importId);
+  assert.equal(new Set(importIds).size, N, 'every concurrent invocation must mint a distinct import id');
+
+  const allObs = loadObservations(root);
+  const hosts = allObs.map((o) => o.attributes['destination.host']).sort();
+  const expectedHosts = Array.from({ length: N }, (_, i) => `host${i}.example.com`).sort();
+  assert.deepEqual(hosts, expectedHosts, 'every one of the N distinct observations must survive — no loss');
 });
 
 // --- dataflow observations list ---------------------------------------------
@@ -320,7 +395,10 @@ test('CLI/list-2: observations list NEVER prints an attribute VALUE', () => {
   // Non-vacuous: the sentinel really is in the raw store file, so the two
   // assertions above are proving something real.
   const dir = statePath(root, 'runtime-observations');
-  const files = fs.readdirSync(dir);
+  // I1 (final review): the directory also carries a sibling `.sig` file
+  // now — filter to `.json` so this reads the real import body, not
+  // (non-deterministically, depending on readdir ordering) the signature.
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
   const raw = fs.readFileSync(path.join(dir, files[0]), 'utf8');
   assert.ok(raw.includes('sentinel-host.example'), 'sanity check: the raw store file must actually contain the sentinel');
 });
@@ -366,6 +444,33 @@ test('CLI/twin-2 (AC-29 clauses 1 and 4): the observed flow reads layer runtime_
   assert.match(md, /\bhigh\b/);
   assert.match(md, /production/);
   assert.ok(md.includes(WINDOW_START) && md.includes(WINDOW_END), 'the window must be printed');
+});
+
+test('CLI/twin-2b (I2, final review): two imports from different environments matching the same flow disclose contributingEnvironments in both JSON and markdown', () => {
+  const root = _mkTmpProject();
+  _scanFixture(root);
+  const prodFile = _writeObsFile(root, [_matchingObsRecord({ environment: 'production' })], 'prod.jsonl');
+  const rProd = runImport([root, '--adapter', 'native-jsonl', '--input', prodFile, '--environment', 'production', '--window-start', WINDOW_START, '--window-end', WINDOW_END, '--yes']);
+  assert.equal(rProd.status, 0, rProd.stderr);
+  const stagingFile = _writeObsFile(root, [_matchingObsRecord({ environment: 'staging' })], 'staging.jsonl');
+  const rStaging = runImport([root, '--adapter', 'native-jsonl', '--input', stagingFile, '--environment', 'staging', '--window-start', WINDOW_START, '--window-end', WINDOW_END, '--yes']);
+  assert.equal(rStaging.status, 0, rStaging.stderr);
+
+  const graph = _readGraph(root);
+  const externalFlow = _flowFor(graph, 'external');
+
+  const jsonOut = path.join(root, 'twin.json');
+  const rJson = runTwin([root, '--output', jsonOut, '--format', 'json']);
+  assert.equal(rJson.status, 0, rJson.stderr);
+  const result = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+  assert.deepEqual(result.byFlow[externalFlow.id].contributingEnvironments, ['production', 'staging']);
+  assert.ok(result.limitations.some((l) => l.includes('more than one environment')));
+
+  const mdOut = path.join(root, 'twin.md');
+  const rMd = runTwin([root, '--output', mdOut, '--format', 'markdown']);
+  assert.equal(rMd.status, 0, rMd.stderr);
+  const md = fs.readFileSync(mdOut, 'utf8');
+  assert.match(md, /Contributing environments:.*production.*staging/);
 });
 
 test('CLI/twin-3 (AC-29 clause 2): the unobserved flow reads not_observed_in_window, and the markdown states this is not evidence of non-occurrence', () => {

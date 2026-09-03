@@ -127,8 +127,14 @@ export const RUNTIME_ATTRIBUTE_KEYS = Object.freeze([
   // service/workload identity
   'service.name', 'service.namespace', 'service.version', 'service.instance.id',
   'workload.name', 'workload.kind',
-  // endpoint or destination identity
-  'destination.host', 'destination.port', 'destination.scheme', 'destination.path', 'destination.service',
+  // endpoint or destination identity — 'destination.path' REMOVED (final
+  // review B1): it had zero consumers anywhere in this codebase and is a
+  // pure payload-smuggling channel (a URL path/query string can carry
+  // arbitrary key=value content by construction) — the module's own
+  // stated design ("REJECT, not redact") is best served by not accepting
+  // a field with no analytic value at all, rather than trying to sanitize
+  // one.
+  'destination.host', 'destination.port', 'destination.scheme', 'destination.service',
   // protocol/TLS metadata
   'network.protocol', 'network.transport', 'tls.version', 'tls.cipher', 'tls.verified',
   // schema/attribute NAMES already approved for telemetry
@@ -139,9 +145,27 @@ export const RUNTIME_ATTRIBUTE_KEYS = Object.freeze([
 // itself must be a member of RUNTIME_ATTRIBUTE_KEYS.
 export const RUNTIME_ARRAY_ATTRIBUTE_KEYS = Object.freeze(['schema.attributeNames']);
 
-export const RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH = 256;
+// A value-axis identifier grammar (final review B1): every approved
+// attribute key holds an identifier-shaped token (a hostname, a port, a
+// protocol/cipher/TLS-version string, a service/workload name, a table or
+// attribute name) — none has a legitimate reason to contain whitespace, a
+// quote, '=', '?', '#', '<', '>', ';', or free-form prose. This is what
+// makes AC-29 clause 5 genuinely true rather than merely closed on the key
+// axis: a value that doesn't look like an identifier is REJECTED outright
+// (PRD line 983's own "reject", never "redact"), not truncated or
+// sanitized. Tightened from the prior 256-char cap (which alone let an
+// 18.5KB multi-entry payload through via schema.attributeNames' 64-entry
+// array) to 128 — still generous for any real hostname/service/table name,
+// and small enough that it is no longer a meaningful free-text channel.
+export const RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH = 128; // was 256 — see comment above
 export const RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH = 64;
 export const RUNTIME_ATTRIBUTE_MAX_KEYS = 32;
+
+const _IDENTIFIER_VALUE_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+function _isIdentifierValue(v) {
+  return typeof v === 'string' && v.length <= RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH && _IDENTIFIER_VALUE_RE.test(v);
+}
 
 // A count/frequency BAND (PRD line 971) — never a raw number. An exact
 // event count is itself a weak information channel.
@@ -202,15 +226,15 @@ export function validateObservationAttributes(attributes) {
     }
     if (RUNTIME_ARRAY_ATTRIBUTE_KEYS.includes(key)) {
       if (!Array.isArray(value) || value.length > RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH
-        || !value.every((x) => typeof x === 'string' && x.length <= RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH)) {
-        err(`$.attributes["${key}"]`, `must be an array of at most ${RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH} strings, each at most ${RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH} characters`);
+        || !value.every((x) => _isIdentifierValue(x))) {
+        err(`$.attributes["${key}"]`, `must be an array of at most ${RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH} strings, each looking like an identifier (letters, digits, '.', '_', ':', '-', ${RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH} characters max) — an element containing whitespace, quotes, or punctuation is how a payload arrives disguised as metadata`);
       }
       continue;
     }
     const t = typeof value;
     if (t === 'string') {
-      if (value.length > RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH) {
-        err(`$.attributes["${key}"]`, `string value exceeds ${RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH} characters — a long "metadata" value is how a payload arrives disguised`);
+      if (!_isIdentifierValue(value)) {
+        err(`$.attributes["${key}"]`, `string value must look like an identifier (letters, digits, '.', '_', ':', '-', ${RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH} characters max) — a value containing whitespace, quotes, or punctuation is how a payload arrives disguised as metadata`);
       }
     } else if (t === 'number') {
       if (!Number.isFinite(value)) {

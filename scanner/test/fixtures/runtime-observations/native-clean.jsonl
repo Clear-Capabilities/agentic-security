@@ -1,4 +1,4 @@
 {"attributes":{"destination.host":"api.stripe.com","destination.scheme":"https","tls.version":"1.3"},"eventCountBand":"101-1k","firstObservedAt":"2026-08-02T10:00:00.000Z","lastObservedAt":"2026-08-30T10:00:00.000Z"}
 {"attributes":{"destination.service":"User","schema.attributeNames":["email","created_at"]},"eventCountBand":"11-100","firstObservedAt":"2026-08-03T10:00:00.000Z","lastObservedAt":"2026-08-29T10:00:00.000Z"}
 {"environment":"staging","attributes":{"destination.host":"api.stripe.com"},"eventCountBand":"1","firstObservedAt":"2026-08-04T10:00:00.000Z","lastObservedAt":"2026-08-04T10:00:00.000Z"}
-{"attributes":{"destination.service":"https://sqs.us-east-1.amazonaws.com/1/orders","network.protocol":"https"},"eventCountBand":"2-10","firstObservedAt":"2026-08-05T10:00:00.000Z","lastObservedAt":"2026-08-06T10:00:00.000Z"}
+{"attributes":{"destination.service":"orders-queue","network.protocol":"https"},"eventCountBand":"2-10","firstObservedAt":"2026-08-05T10:00:00.000Z","lastObservedAt":"2026-08-06T10:00:00.000Z"}

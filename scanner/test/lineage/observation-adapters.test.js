@@ -21,7 +21,12 @@
 // line 2's `db.statement` attribute key) are structurally fine at the WIRE
 // layer and are caught one layer up, by `validateRuntimeObservation`, at
 // IMPORT time (`CLI/import-4`, a future task's own test — not a hole in
-// this one).
+// this one). Line 5 (added by the final review's B1 fix round) is a
+// VALUE-axis smuggling attempt through an APPROVED key (`schema.name`
+// carrying a raw SQL statement) — structurally fine at the wire layer
+// (a scalar string), so it also parses to a draft here; it is caught one
+// layer up by `validateRuntimeObservation`'s new identifier-shaped value
+// grammar (B1 Part 2), never by this module.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -148,18 +153,28 @@ test('AD/3a: a malformed JSON line yields one {line, message} error naming the 1
   assert.equal(typeof errors[0].message, 'string');
 });
 
+test('AD/3b (M2, final review): the malformed-JSON error never echoes the raw offending text — V8\'s own JSON.parse error message quotes a snippet of the input', () => {
+  const secret = 'this-line-is-not-json-MALFORMEDSECRET-4111111111111111';
+  const { errors } = parseNativeJsonlObservations(`${secret}\n`, baseContext());
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].message, 'invalid JSON on line 1');
+  assert.equal(errors[0].message.includes('MALFORMEDSECRET'), false, 'the raw line must never be echoed back');
+  assert.equal(errors[0].message.includes('4111111111111111'), false, 'the raw line must never be echoed back');
+});
+
 // =====================================================================
 // AD/4 — the two-layer split, against the payload fixture.
 // =====================================================================
 
-test('AD/4a: the payload fixture yields exactly 2 errors and 2 drafts — the two-layer rejection split', () => {
+test('AD/4a: the payload fixture yields exactly 2 errors and 3 drafts — the two-layer rejection split', () => {
   const { drafts, errors } = parseNativeJsonlObservations(PAYLOAD_TEXT, baseContext());
-  // Lines 1 and 2 carry a structurally-fine (scalar) but UNAPPROVED
-  // attribute key (`http.url`, `db.statement`) — this module has no
-  // opinion on the attribute-key allowlist, so both parse to drafts here.
-  // `validateRuntimeObservation` is what rejects them, one layer up
-  // (CLI/import-4, a future task's own test).
-  assert.equal(drafts.length, 2);
+  // Lines 1, 2, and 5 carry a structurally-fine (scalar) but either
+  // UNAPPROVED attribute key (`http.url`, `db.statement`) or an approved
+  // key with a non-identifier-shaped VALUE (`schema.name` carrying a raw
+  // SQL statement, B1) — this module has no opinion on either axis, so all
+  // three parse to drafts here. `validateRuntimeObservation` is what
+  // rejects them, one layer up (CLI/import-4).
+  assert.equal(drafts.length, 3);
   // Lines 3 and 4 carry a top-level wire key outside NATIVE_JSONL_RECORD_KEYS
   // (`prompt`, `matchedNodeIds`/`matchConfidence`) — caught here.
   assert.equal(errors.length, 2);

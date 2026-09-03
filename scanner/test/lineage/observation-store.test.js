@@ -24,6 +24,7 @@ import { observationImportId, observationId } from '../../src/lineage/ids.js';
 import { RUNTIME_OBSERVATION_VERSION } from '../../src/lineage/runtime-observation.js';
 import { matchObservationToGraph } from '../../src/lineage/observation-correlation.js';
 import { parseNativeJsonlObservations } from '../../src/lineage/observation-adapters.js';
+import { signLastScan } from '../../src/posture/integrity.js';
 
 const MODULE_PATH = fileURLToPath(new URL('../../src/lineage/observation-store.js', import.meta.url));
 const FIXTURES_DIR = fileURLToPath(new URL('../fixtures/runtime-observations/', import.meta.url));
@@ -413,13 +414,15 @@ test('OS/8: a persisted clean import never carries a forbidden substring on disk
       assert.ok(!rawOnDisk.includes(substr), `the clean import's on-disk bytes must never contain "${substr}"`);
     }
 
-    // Direction two: the payload fixture's two wire-layer-clean-but-
-    // attribute-layer-dirty lines (http.url / db.statement attribute keys)
-    // must be refused at validateRuntimeObservation, so the whole import
-    // is refused and the store stays exactly as it was.
+    // Direction two: the payload fixture's three wire-layer-clean-but-
+    // attribute-layer-dirty lines (http.url / db.statement attribute KEYS,
+    // plus B1's schema.name-carrying-a-SQL-statement VALUE smuggling
+    // attempt through an APPROVED key) must be refused at
+    // validateRuntimeObservation, so the whole import is refused and the
+    // store stays exactly as it was.
     const { drafts: payloadDrafts, errors: payloadErrors } = parseNativeJsonlObservations(payloadText, fixtureContext());
-    assert.equal(payloadErrors.length, 2, 'precondition: exactly 2 of the 4 payload lines are caught at the wire layer (AD/4a)');
-    assert.equal(payloadDrafts.length, 2, 'precondition: exactly 2 lines pass the wire layer and reach RuntimeObservation validation');
+    assert.equal(payloadErrors.length, 2, 'precondition: exactly 2 of the 5 payload lines are caught at the wire layer (AD/4a)');
+    assert.equal(payloadDrafts.length, 3, 'precondition: exactly 3 lines pass the wire layer and reach RuntimeObservation validation');
 
     const payloadImport = baseImport({ importedAt: '2026-08-31T14:00:00.000Z', observations: draftsToObservations(payloadDrafts) });
     const { valid: payloadValid } = validateObservationImport(payloadImport);
@@ -532,4 +535,107 @@ test('OS/10b: an import file whose content fails validateObservationImport on re
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// =====================================================================
+// OS/11 — I1 (final review): signing, and the forged-import repro.
+// =====================================================================
+
+test('OS/11a: a real import written through persistObservationImport carries a real .sig sibling that verifies, and loads normally', () => {
+  withIsolatedXdgHome(() => {
+    const root = makeTempProject();
+    try {
+      const good = baseImport();
+      const result = persistObservationImport(root, good);
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.ok(fs.existsSync(`${result.path}.sig`), 'persistObservationImport must write a sibling .sig');
+
+      const imports = loadObservationImports(root);
+      assert.equal(imports.length, 1);
+      assert.deepEqual(imports[0], good);
+      assert.deepEqual(loadObservationImport(root, good.id), good);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test('OS/11b (I1): a hand-planted import file with NO .sig sibling is refused as untrusted — indistinguishable from a real forged import — even when it is otherwise perfectly well-formed', () => {
+  withIsolatedXdgHome(() => {
+    const root = makeTempProject();
+    try {
+      // First write a real, signed import so the directory is genuinely
+      // safe to write into (mkdirSync side effect), then hand-plant a
+      // SECOND, perfectly well-formed import with no .sig at all —
+      // mirroring the reviewer's own exact repro: a hand-crafted file
+      // naming a real flow's ids with a fabricated matchMethod/
+      // matchConfidence, accepted on read before this fix because
+      // structural validation alone cannot tell it apart from a real one.
+      const real = persistObservationImport(root, baseImport());
+      assert.equal(real.ok, true, JSON.stringify(real));
+
+      const forged = baseImport({ importedAt: '2026-08-31T16:00:00.000Z' });
+      const { valid } = validateObservationImport(forged);
+      assert.equal(valid, true, 'precondition: the forged file must be structurally perfect — that is exactly the attack this fix defeats');
+      const dir = observationsDir(root);
+      const forgedFileName = importFileName(forged.id);
+      fs.writeFileSync(path.join(dir, forgedFileName), JSON.stringify(forged, null, 2));
+      // Deliberately NO .sig written for the forged file.
+
+      const imports = loadObservationImports(root);
+      assert.equal(imports.length, 1, 'only the real, signed import may load — the unsigned forgery must be refused');
+      assert.equal(imports[0].id, baseImport().id);
+      assert.equal(loadObservationImport(root, forged.id), null, 'loadObservationImport must also refuse the unsigned forgery directly');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test('OS/11c (I1): a hand-planted import file with a .sig that does NOT verify (tampered, or signed under a different key) is refused', () => {
+  withIsolatedXdgHome(() => {
+    const root = makeTempProject();
+    try {
+      const real = persistObservationImport(root, baseImport());
+      assert.equal(real.ok, true, JSON.stringify(real));
+
+      const forged = baseImport({ importedAt: '2026-08-31T17:00:00.000Z' });
+      const dir = observationsDir(root);
+      const forgedFileName = importFileName(forged.id);
+      const forgedContent = JSON.stringify(forged, null, 2);
+      fs.writeFileSync(path.join(dir, forgedFileName), forgedContent);
+      // A .sig that verifies against DIFFERENT content — the shape a real
+      // signature file has, but for the wrong bytes (tampered post-sign,
+      // or signed by a different install's key).
+      fs.writeFileSync(path.join(dir, `${forgedFileName}.sig`), signLastScan('not the real content'));
+
+      const imports = loadObservationImports(root);
+      assert.equal(imports.length, 1, 'a .sig that fails verification must refuse the import exactly like a missing one');
+      assert.equal(imports[0].id, baseImport().id);
+      assert.equal(loadObservationImport(root, forged.id), null);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test('OS/11d (I1): a tampered import — real .sig present but the .json body edited after signing — is refused', () => {
+  withIsolatedXdgHome(() => {
+    const root = makeTempProject();
+    try {
+      const good = baseImport();
+      const result = persistObservationImport(root, good);
+      assert.equal(result.ok, true, JSON.stringify(result));
+
+      // Tamper the on-disk body AFTER signing — the .sig now verifies
+      // against stale content, never the bytes actually on disk.
+      const tampered = { ...good, source: 'tampered-source' };
+      fs.writeFileSync(result.path, JSON.stringify(tampered, null, 2));
+
+      assert.equal(loadObservationImports(root).length, 0, 'a tampered body must be refused, never silently trusted');
+      assert.equal(loadObservationImport(root, good.id), null);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

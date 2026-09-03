@@ -589,7 +589,17 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
     correlateObservations: opts.correlateObservations
       ?? (opts.runtimeObservations !== undefined
         ? ((graph) => correlateObservations(graph, opts.runtimeObservations, {
-          environment: opts.environment ?? null,
+          // I3 (final review): this default hook used to resolve
+          // opts.environment ?? null with no environment-variable
+          // fallback, unlike the sibling flow.policyVerdict path
+          // (graph-builder.js's own opts.environment || process.env
+          // .AGENTIC_SECURITY_ENVIRONMENT || null) — so a scan run under
+          // AGENTIC_SECURITY_ENVIRONMENT=production correlated runtime
+          // observations with NO environment filter at all, letting a
+          // stale/wrong-environment observation corroborate a flow in the
+          // signed production graph. Matches graph-builder.js's own
+          // established convention exactly.
+          environment: opts.environment || process.env.AGENTIC_SECURITY_ENVIRONMENT || null,
           windowStart: opts.observationWindowStart ?? null,
           windowEnd: opts.observationWindowEnd ?? null,
         }))

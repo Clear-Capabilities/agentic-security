@@ -4402,6 +4402,19 @@ async function cmdDataflowImpactAssess(args) {
 // dropping just the ones the adapter caught and importing the rest would
 // be exactly the partial-import failure this deliverable exists to
 // prevent.
+// M5 (final review): --source is a second unconstrained, ≤512-char,
+// verbatim-persisted, verbatim-echoed-by-`observations list` value channel
+// — smaller than B1's own attribute-value hole but the same shape. Mirrors
+// runtime-observation.js's own `_isIdentifierValue` character class
+// locally rather than importing it — that module's own constant caps at
+// 128 characters (the attribute-value cap), while `source` is validated up
+// to 512 characters (`validateRuntimeObservation`'s own `$.source` check),
+// so reusing the 128-char-capped version verbatim would reject a
+// legitimate long-but-real source name the schema itself still permits.
+// A real filename basename (this flag's own default) already satisfies
+// this grammar.
+const _SOURCE_IDENTIFIER_RE = /^[A-Za-z0-9._:-]{1,512}$/;
+
 async function cmdDataflowObservationsImport(args) {
   const target = args._[3] || '.'; // args._ = ['dataflow', 'observations', 'import', <path>?]
   const targetAbs = path.resolve(target);
@@ -4441,11 +4454,21 @@ async function cmdDataflowObservationsImport(args) {
     return 2;
   }
 
+  // M1 (final review): --retain-until is recorded as retention.expiresAt
+  // and NOTHING ELSE — it is not currently enforced in either direction.
+  // An import past its declared expiresAt is not automatically deleted
+  // (grep confirms zero consumers of retention.expiresAt outside this
+  // store's own validator and `observations list`'s display column), and
+  // `reset --yes` sweeps the WHOLE store regardless of any individual
+  // import's own expiresAt. Real enforcement is separate, larger scope
+  // (touching `reset`/`retention-policy.js`) — this comment (and
+  // `commands/dataflow.md`'s own matching wording) exists so this flag's
+  // NAME never implies protection the implementation does not provide.
   const retainUntilFlag = args.flags['retain-until'];
   let retainUntil = null;
   if (retainUntilFlag !== undefined) {
     if (!_isoOk(retainUntilFlag)) {
-      process.stderr.write('agentic-security dataflow observations import: --retain-until must be a parseable ISO-8601 date-time.\n');
+      process.stderr.write('agentic-security dataflow observations import: --retain-until must be a parseable ISO-8601 date-time. Note: this value is recorded as retention.expiresAt but is NOT currently enforced by anything — an import past its declared expiresAt is not auto-deleted, and `reset --yes` sweeps the whole store regardless.\n');
       return 2;
     }
     retainUntil = retainUntilFlag;
@@ -4461,6 +4484,16 @@ async function cmdDataflowObservationsImport(args) {
   const adapter = adapterFlag;
   const source = (typeof args.flags.source === 'string' && args.flags.source) || path.basename(inputPath);
   const environment = (typeof args.flags.environment === 'string' && args.flags.environment) || 'unspecified';
+
+  // M5 (final review): refuse a --source value that doesn't look like an
+  // identifier/filename-shaped token, BEFORE reading the --input file's
+  // own content — the same value-axis smuggling shape B1 closed on
+  // attribute values, applied here since --source is persisted verbatim
+  // and echoed by `observations list`.
+  if (!_SOURCE_IDENTIFIER_RE.test(source)) {
+    process.stderr.write(`agentic-security dataflow observations import: --source must look like an identifier/filename (letters, digits, '.', '_', ':', '-', 512 characters max) — a value containing whitespace, quotes, or punctuation is how a payload arrives disguised as metadata (got ${JSON.stringify(source)}).\n`);
+    return 2;
+  }
 
   let text;
   try {
@@ -4537,7 +4570,17 @@ async function cmdDataflowObservationsImport(args) {
   }
 
   const { OBSERVATION_IMPORT_VERSION } = await import('../src/lineage/observation-store.js');
-  const importId = observationImportId({ adapter, source, environment, windowStart, windowEnd, importedAt });
+  // B2 (final review): importedAt alone is millisecond-resolution, so two
+  // concurrent imports sharing adapter/source/environment/window CAN land
+  // in the same millisecond and mint the identical import id — the same
+  // file name, one silently clobbering the other while both report
+  // success. A fresh random discriminator makes that collision impossible
+  // regardless of timing, mirroring this package's own established
+  // discriminatorParts convention (pathId/scenarioId/etc., ids.js).
+  const importId = observationImportId(
+    { adapter, source, environment, windowStart, windowEnd, importedAt },
+    [crypto.randomBytes(4).toString('hex')],
+  );
   const importRecord = {
     id: importId, version: OBSERVATION_IMPORT_VERSION, adapter, source, environment,
     windowStart, windowEnd, importedAt, retention: { expiresAt: retainUntil },
@@ -4736,6 +4779,9 @@ async function cmdDataflowTwin(args) {
         lines.push(`- First observed: ${_dfTwinMdInline(entry.firstObservedAt ?? '(none)')}`);
         lines.push(`- Last observed: ${_dfTwinMdInline(entry.lastObservedAt ?? '(none)')}`);
         lines.push(`- Event count band: ${_dfTwinMdInline(entry.eventCountBand ?? '(none)')}`);
+        if (Array.isArray(entry.contributingEnvironments) && entry.contributingEnvironments.length > 1) {
+          lines.push(`- Contributing environments: ${_dfTwinMdInline(entry.contributingEnvironments.join(', '))} — the fields above describe only the representative (strongest-confidence) environment (I2).`);
+        }
         if (entry.siblingFlowCount) {
           lines.push(`- Sibling flow count: ${_dfTwinMdInline(entry.siblingFlowCount)} — this observation corroborates the destination NODE, never which sibling flow produced the traffic, which is why matchConfidence reads 'ambiguous' here.`);
         }

@@ -264,9 +264,15 @@ never a payload, prompt, response, log message, or any other captured value.
    flow adapters are unbuilt; `--adapter otlp` (or anything else) is a clear
    exit-2 error.
 3. **Node-granular corroboration, not flow-granular.** An observation proves
-   a destination was contacted — never which of several flows sharing that
-   sink did it. A flow whose matched sink is shared with sibling flows reads
-   `matchConfidence: 'ambiguous'` for exactly that reason.
+   a destination NODE was contacted — never which of several flows ending
+   at that node produced the traffic. This is not just "these flows share a
+   destination": a graph node is a registry decision that can represent
+   more than one distinct real-world destination collapsing onto it (a
+   pre-existing, disclosed coarsening), so an observation of one real
+   destination can over-attribute corroboration to a sibling flow whose
+   real destination was never observed at all. Every flow ending at a
+   matched node reads `matchConfidence: 'ambiguous'` for exactly this
+   reason.
 4. **`edge.provenance` stays `'code'`, always.** Corroboration is additive
    and is never used to reclassify an edge as `'runtime'`-provenanced.
 
@@ -290,10 +296,10 @@ what the operator believes the artifact holds.
 |---|---|---|
 | `--adapter native-jsonl` | Yes | The only adapter implemented today. Any other value is a clear exit-2 error. |
 | `--input <file>` | Yes | The operator-exported observation file. A missing/nonexistent path is a clear exit-2 error. |
-| `--source <name>` | No | Defaults to the input file's own basename. |
+| `--source <name>` | No | Defaults to the input file's own basename. Must look like an identifier/filename (letters, digits, `.`, `_`, `:`, `-`, 512 characters max) — a value containing whitespace, quotes, or punctuation is refused with exit 2, before the `--input` file's own content is ever read. |
 | `--environment <name>` | No | Defaults to `"unspecified"`. Scopes correlation at `dataflow twin` read time. |
 | `--window-start <iso>` / `--window-end <iso>` | Yes | The telemetry export's own time window. Both must be parseable ISO-8601 date-times with `start <= end`, or this is a clear exit-2 error. |
-| `--retain-until <iso>` | No | When given, must parse as ISO-8601. Recorded as `retention.expiresAt`; omitted means no expiry was declared by the operator (still swept by the artifact registry's own `retentionClass: 'evidence'`). |
+| `--retain-until <iso>` | No | When given, must parse as ISO-8601. Recorded as `retention.expiresAt` — and **NOTHING ELSE**: this value is not currently enforced in either direction. An import past its declared `expiresAt` is **not** automatically deleted, and `reset --yes` sweeps the WHOLE store regardless of any individual import's own `expiresAt`. Omitted means no expiry was declared by the operator. Real enforcement is separate, larger scope (touching `reset`/`retention-policy.js`) — do not read this flag's name as a promise of protection. |
 | `--yes` | No | Without it: preview only, nothing written. With it: writes the import and appends an audit event. |
 
 **The native-JSONL wire format** — one JSON object per line, up to 5
@@ -309,8 +315,12 @@ ignored):
 `attributes` keys must be drawn from the closed metadata allowlist
 (service/workload identity, endpoint/destination identity, protocol/TLS
 metadata, schema/attribute NAMES — never a value like a URL, SQL statement,
-prompt, or log message); `eventCountBand` is a coarse band
-(`1`/`2-10`/`11-100`/`101-1k`/`1k+`), never a raw count.
+prompt, or log message), **and every value must itself look like an
+identifier** (letters, digits, `.`, `_`, `:`, `-`, 128 characters max) —
+a value containing whitespace, quotes, or punctuation is rejected outright,
+never truncated or sanitized, on the KEY axis and the VALUE axis alike;
+`eventCountBand` is a coarse band (`1`/`2-10`/`11-100`/`101-1k`/`1k+`),
+never a raw count.
 
 Exit codes: `0` success (preview or real write); `1` a validation failure (a
 rejected record, a malformed adapter input, or a graph-load failure — see

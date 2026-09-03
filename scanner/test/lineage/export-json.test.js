@@ -333,3 +333,38 @@ test('exportGraphJSON: does not inject undefined own-keys for absent destination
   assert.ok(!('storeDetail' in node), 'storeDetail must not appear as an own key when the source node never had one');
   assert.doesNotMatch(node.queueDetail.topic, /hooks\.slack\.com\/services\/T00000000/);
 });
+
+// M4 (final review, M5 deliverable #7 fix round): dataflow export --format
+// json (exportGraphJSON) must never silently drop graph.runtimeCorroboration
+// when present on the source graph. Confirmed (see this fix round's own
+// report) that runtimeCorroboration's own byFlow entries never carry a raw
+// attribute value — only matchMethod/matchConfidence/environment/window/
+// timestamps/eventCountBand/observationIds/contributingEnvironments, all
+// metadata, never `attributes` itself — so surfacing it is safe post-B1.
+test('exportGraphJSON: graph.runtimeCorroboration survives export, both filtered/unfiltered and redacted/unredacted', () => {
+  const runtimeCorroboration = {
+    version: '1.0.0', evaluated: true, environment: 'production',
+    windowStart: '2026-08-01T00:00:00.000Z', windowEnd: '2026-08-31T00:00:00.000Z',
+    observedNodeIds: [], observedEdgeIds: [], observedFlowIds: [],
+    notObservedFlowIds: [], notEvaluatedFlowIds: [],
+    byFlow: { 'flow:sentinel': { layer: 'not_observed_in_window', observationIds: [], matchMethod: null, matchConfidence: null, environment: null, windowStart: null, windowEnd: null, firstObservedAt: null, lastObservedAt: null, eventCountBand: null, siblingFlowCount: 0, contributingEnvironments: [] } },
+    consideredObservationIds: [], outOfWindowObservationIds: [], otherEnvironmentObservationIds: [],
+    unmatchedObservationIds: [], invalidObservationIds: [], limitations: [],
+  };
+  const graph = { ...flagship, runtimeCorroboration };
+
+  const unfiltered = exportGraphJSON(graph);
+  assert.deepEqual(unfiltered.graph.runtimeCorroboration, runtimeCorroboration);
+
+  const noRedact = exportGraphJSON(graph, { redact: false });
+  assert.deepEqual(noRedact.graph.runtimeCorroboration, runtimeCorroboration);
+
+  const firstNodeId = flagship.nodes[0].id;
+  const filtered = exportGraphJSON(graph, { filter: { nodeIds: [firstNodeId], edgeIds: [] } });
+  assert.deepEqual(filtered.graph.runtimeCorroboration, runtimeCorroboration, 'runtimeCorroboration is graph-level metadata, never itself narrowed by the nodes/edges/flows filter');
+
+  // And genuinely absent when the source graph never had it — never a
+  // fabricated null/{} placeholder.
+  const noRc = exportGraphJSON(flagship);
+  assert.equal('runtimeCorroboration' in noRc.graph, false);
+});
