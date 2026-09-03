@@ -180,6 +180,17 @@ Commands:
                                [--base-event <hash>] [--output <file>] [--yes]
                                Advance a remediation item's state. --state verified is
                                always refused — see remediation verify (AC-31).
+  remediation verify [path] --id <itemId> [--against <commit>]
+                               [--manual-attestation --approver <id> --reason <text> [--author <id>]]
+                               [--base-event <hash>] [--output <file>] [--yes]
+                               Verify a remediation item against a fresh lineage scan (or an
+                               explicitly-permitted manual attestation). AC-31: marking work
+                               complete never sets "verified" — only this command can.
+  remediation reopen-check [path] [--drift-policy <file>] [--against <commit>]
+                               [--output <file>] [--yes]
+                               Reopen verified items whose control regressed (drift-policy match,
+                               or an affected flow removed/changed in the latest diff). No
+                               --base-event: this can append events across many items at once.
   remediation accept-risk [path] --id <itemId> --approver <id> --reason <text>
                                --scope <text> --expires <YYYY-MM-DD> [--author <id>]
                                [--base-event <hash>] [--output <file>] [--yes]
@@ -4557,8 +4568,15 @@ function _emitRemediationReport(report, args) {
 //   4. --yes: appendLedgerEvent (which is the ONLY caller of
 //      validateTransition), then auditCall — never the reverse, and
 //      never auditCall on a rejected or previewed write.
+// `extraReport` (Task 4) is an optional object of additional fields merged
+// into the emitted report, in BOTH the dry-run-preview and the real-write
+// branches — e.g. cmdRemediationVerify's own beforeSnapshotId/
+// afterSnapshotId/beforeSnapshotSource/evidenceOutcome. It is never
+// consulted for validity — only validateTransition (inside
+// appendLedgerEvent, or this function's own preview call below) decides
+// that — so a caller cannot use it to smuggle a write past validation.
 // Returns an exit code; the caller returns it verbatim.
-async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args) {
+async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args, extraReport = {}) {
   const { ledgerPaths, latestEventHash, readLedgerEvents, appendLedgerEvent } =
     await import('../src/posture/remediation-ledger.js');
   const { foldRemediationLedger, validateTransition } = await import('../src/lineage/remediation.js');
@@ -4597,7 +4615,7 @@ async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args)
     const currentItem = itemId != null ? (currentItems[itemId] ?? null) : null;
     const wouldBeItems = foldRemediationLedger([...events, eventPayload]);
     const wouldBe = itemId != null ? (wouldBeItems[itemId] ?? null) : null;
-    const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: false, wouldBe };
+    const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: false, wouldBe, ...extraReport };
     const { valid, errors } = validateTransition(currentItem, eventPayload);
     if (!valid) {
       report.errors = errors;
@@ -4628,7 +4646,7 @@ async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args)
     args: { itemId, eventType: eventPayload.type, baseEvent: currentBaseEvent, eventHash: result.hash },
     outcome: 'ok',
   });
-  const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: true, eventHash: result.hash };
+  const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: true, eventHash: result.hash, ...extraReport };
   _emitRemediationReport(report, args);
   return 0;
 }
@@ -4884,6 +4902,382 @@ async function cmdRemediationList(args) {
   } else {
     process.stdout.write(data.endsWith('\n') ? data : data + '\n');
   }
+  return 0;
+}
+
+// ── remediation verify / reopen-check — M5 deliverable #6, Task 4. The
+// AC-31-CRITICAL half: nothing in this sub-project satisfies AC-31 until
+// these two verbs land — they are the only callers of computeGraphDiff/
+// evaluateVerificationEvidence/drift-policy.js that actually gate the
+// remediation ledger's own `verified`/`reopened` transitions.
+
+// agentic-security remediation verify [path] --id <itemId> [--against <commit>]
+//   [--manual-attestation --approver <id> --reason <text> [--author <id>]]
+//   [--base-event <hash>] [--output <file>] [--yes]
+//
+// Two branches:
+//
+//  - `--manual-attestation`: after the same approver/separation-of-duties
+//    gating `accept-risk` uses, builds a manual_attestation payload and
+//    delegates straight to `_remediationWrite` — NEVER computes a diff.
+//    The `manualAttestationPermitted` check is `validateTransition`'s job
+//    (enforced inside `appendLedgerEvent`), not duplicated here — V/7
+//    proves it fires through the ledger, not through this handler.
+//
+//  - default (scan-verification): resolves the AFTER snapshot exactly as
+//    `cmdDataflowDiff` does (`loadSnapshots(targetAbs)[0]`; `--against
+//    <commit>` is a COMMIT KEY resolved via `loadSnapshot`, never a
+//    snapshot id — same resolution `cmdDataflowDiff` uses). The BEFORE
+//    snapshot is preferentially the item's own incident snapshot
+//    (`item.assessment.snapshotId`, resolved by scanning `loadSnapshots`
+//    for a record whose `.id` matches) — that is what makes AC-31's
+//    "fixed to the incident snapshot" clause true in verification too.
+//    When the incident snapshot is no longer on disk, falls back to the
+//    `cmdDataflowDiff` resolution (`mostRecentPriorSnapshot`), and says so
+//    (`beforeSnapshotSource`) rather than silently substituting a
+//    different baseline. An explicit `--against` always wins over both.
+//    `computeGraphDiff` is wrapped in a try/catch — it THROWS on an
+//    incomparable pair (`graph-diff.js:319`) — converted to an
+//    `incomparable_snapshots` unverifiable outcome, never an abort:
+//    verification was genuinely attempted and genuinely refused, and the
+//    ledger records that.
+//
+// A `snapshotsComparable`-passed pair means "same schemaVersion" and
+// nothing more (`graph-snapshot.js:173`) — two snapshots from genuinely
+// different analyzer configurations are reported comparable; this is a
+// disclosed limitation, not papered over (see commands/remediation.md).
+async function cmdRemediationVerify(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'verify', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const idFlag = args.flags.id;
+  if (!idFlag || typeof idFlag !== 'string') {
+    process.stderr.write('agentic-security remediation verify: --id <itemId> is required.\n');
+    return 2;
+  }
+
+  const { readLedgerEvents } = await import('../src/posture/remediation-ledger.js');
+  const { foldRemediationLedger, evaluateVerificationEvidence } = await import('../src/lineage/remediation.js');
+  const items = foldRemediationLedger(readLedgerEvents(targetAbs));
+  const item = items[idFlag];
+  if (!item) {
+    process.stderr.write(`agentic-security remediation verify: no remediation item found with id "${idFlag}".\n`);
+    return 1;
+  }
+
+  // ── Manual-attestation branch. Never computes a diff. ──────────────────
+  if (args.flags['manual-attestation']) {
+    const approverFlag = args.flags.approver;
+    const reasonFlag = args.flags.reason;
+    if (!approverFlag || typeof approverFlag !== 'string' || !reasonFlag || typeof reasonFlag !== 'string') {
+      process.stderr.write('agentic-security remediation verify: --manual-attestation requires --approver <id> and --reason <text>.\n');
+      return 2;
+    }
+    const { loadApproverRegistry, verifyApprover, checkSeparationOfDuties } =
+      await import('../src/fix/approver-registry.js');
+    const registry = loadApproverRegistry(targetAbs);
+    const v = verifyApprover(registry, approverFlag, []);
+    if (!v.verified) {
+      process.stderr.write(`agentic-security remediation verify: ${v.reason}\n`);
+      return 1;
+    }
+    const sod = checkSeparationOfDuties(registry, args.flags.author, approverFlag);
+    if (!sod.ok) {
+      process.stderr.write(`agentic-security remediation verify: ${sod.reason}\n`);
+      return 1;
+    }
+    const payload = {
+      type: 'manual_attestation',
+      at: new Date().toISOString(),
+      itemId: idFlag,
+      approver: approverFlag,
+      reason: reasonFlag,
+    };
+    return _remediationWrite(targetAbs, 'verify', 'remediation_verify', payload, args);
+  }
+
+  // ── Scan-verification branch (the default). ─────────────────────────────
+  const snapshots = loadSnapshots(targetAbs);
+  if (snapshots.length === 0) {
+    process.stderr.write(`agentic-security remediation verify: no persisted GraphSnapshot found for "${targetAbs}" — run a scan with AGENTIC_SECURITY_LINEAGE_DEEP=1 first.\n`);
+    return 2;
+  }
+  const afterSnapshot = snapshots[0];
+
+  const againstFlag = args.flags.against;
+  if (againstFlag !== undefined && (typeof againstFlag !== 'string' || !againstFlag)) {
+    process.stderr.write('agentic-security remediation verify: --against requires a commit value.\n');
+    return 2;
+  }
+
+  let beforeSnapshot;
+  let beforeSnapshotSource;
+  if (againstFlag !== undefined) {
+    beforeSnapshot = loadSnapshot(targetAbs, againstFlag);
+    if (!beforeSnapshot) {
+      process.stderr.write(`agentic-security remediation verify: no persisted GraphSnapshot found for commit "${againstFlag}" — pass a commit that was actually scanned.\n`);
+      return 2;
+    }
+    beforeSnapshotSource = 'against';
+  } else {
+    const incidentSnapshotId = item.assessment?.snapshotId;
+    const incidentSnapshot = incidentSnapshotId ? snapshots.find((s) => s.id === incidentSnapshotId) : null;
+    if (incidentSnapshot) {
+      beforeSnapshot = incidentSnapshot;
+      beforeSnapshotSource = 'incident';
+    } else {
+      beforeSnapshot = mostRecentPriorSnapshot(targetAbs, afterSnapshot.commit);
+      beforeSnapshotSource = 'most-recent-prior';
+    }
+  }
+
+  if (!beforeSnapshot || beforeSnapshot.commit === afterSnapshot.commit) {
+    process.stderr.write(`agentic-security remediation verify: an item cannot be verified until a second lineage scan exists — only one persisted GraphSnapshot is available (commit "${afterSnapshot.commit}"). Scan again after a code change, or pass --against <commit>.\n`);
+    return 2;
+  }
+
+  const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
+  let evidenceOutcome;
+  try {
+    const diff = computeGraphDiff(beforeSnapshot, afterSnapshot);
+    evidenceOutcome = evaluateVerificationEvidence(diff, item.requiredEvidence);
+  } catch (e) {
+    // computeGraphDiff THROWS on an incomparable pair — this is NOT an
+    // exit-2 abort: verification was genuinely attempted and genuinely
+    // refused, and the ledger must record why.
+    evidenceOutcome = { outcome: 'unverifiable', reason: 'incomparable_snapshots', detail: e && e.message ? e.message : String(e) };
+  }
+
+  const at = new Date().toISOString();
+  let payload;
+  if (evidenceOutcome.outcome === 'verified') {
+    payload = { type: 'scan_verification', at, itemId: idFlag, outcome: 'verified', snapshotId: afterSnapshot.id };
+  } else {
+    // Carry every detail field through verbatim so the ledger records WHY,
+    // not just THAT — unsatisfiedFlowIds/coverageRegressionReasons/
+    // reidentifiedTo/flowId/detail are all conditionally present depending
+    // on which evaluateVerificationEvidence branch fired.
+    payload = { type: 'scan_verification', at, itemId: idFlag, outcome: 'unverifiable', reason: evidenceOutcome.reason };
+    for (const field of ['unsatisfiedFlowIds', 'coverageRegressionReasons', 'reidentifiedTo', 'flowId', 'detail']) {
+      if (evidenceOutcome[field] !== undefined) payload[field] = evidenceOutcome[field];
+    }
+  }
+
+  const extraReport = {
+    beforeSnapshotId: beforeSnapshot.id,
+    afterSnapshotId: afterSnapshot.id,
+    beforeSnapshotSource,
+    evidenceOutcome,
+  };
+  return _remediationWrite(targetAbs, 'verify', 'remediation_verify', payload, args, extraReport);
+}
+
+// agentic-security remediation reopen-check [path] [--drift-policy <file>]
+//   [--against <commit>] [--output <file>] [--yes]
+//
+// AC-31's automatic-reopening half. Resolves the AFTER snapshot exactly
+// like `cmdDataflowDiff`/`cmdRemediationVerify`; `--against <commit>`
+// pins a DEFAULT/FALLBACK before-commit (never used per-item directly —
+// see below). Every item currently in state `verified` is checked
+// against TWO independently-evaluated, separately-labelled mechanisms
+// (scoping doc §4.5) — never collapsed into one unlabelled "reopened"
+// reason:
+//
+//  - mechanism 'drift-policy' (Mechanism A, regression via operator
+//    policy): requires `--drift-policy`; a violation whose own `flowId`
+//    names one of the item's own `affectedFlowIds` is a hit.
+//  - mechanism 'affected-flow-diff' (Mechanism B, control went away, a
+//    direct diff read): any of the item's `affectedFlowIds` appearing in
+//    `diff.removed.flows` or `diff.changed.flows` is a hit. This exists
+//    because `drift-policy.js`'s trigger vocabulary is exactly
+//    `['new_flow', 'changed_flow']` — there is no `removed_flow` trigger,
+//    so a control that goes away (the flow itself disappears from a
+//    later scan) cannot be expressed as a drift policy at ALL.
+//
+// Per item, the BEFORE snapshot is preferentially the item's own
+// `verificationSnapshotId` (the snapshot its verification was granted
+// against — the only defensible "has it regressed since" baseline),
+// falling back to the CLI-resolved default BEFORE (`--against` /
+// `mostRecentPriorSnapshot`) when that snapshot is no longer on disk.
+//
+// No `--base-event`: this appends N events across N items, so a single
+// whole-ledger token has no coherent meaning (documented in
+// commands/remediation.md, not left for a reader to wonder about).
+async function cmdRemediationReopenCheck(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'reopen-check', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const snapshots = loadSnapshots(targetAbs);
+  if (snapshots.length === 0) {
+    process.stderr.write(`agentic-security remediation reopen-check: no persisted GraphSnapshot found for "${targetAbs}" — run a scan with AGENTIC_SECURITY_LINEAGE_DEEP=1 first.\n`);
+    return 2;
+  }
+  const afterSnapshot = snapshots[0];
+
+  const againstFlag = args.flags.against;
+  if (againstFlag !== undefined && (typeof againstFlag !== 'string' || !againstFlag)) {
+    process.stderr.write('agentic-security remediation reopen-check: --against requires a commit value.\n');
+    return 2;
+  }
+
+  let defaultBeforeSnapshot;
+  if (againstFlag !== undefined) {
+    defaultBeforeSnapshot = loadSnapshot(targetAbs, againstFlag);
+    if (!defaultBeforeSnapshot) {
+      process.stderr.write(`agentic-security remediation reopen-check: no persisted GraphSnapshot found for commit "${againstFlag}" — pass a commit that was actually scanned.\n`);
+      return 2;
+    }
+  } else {
+    defaultBeforeSnapshot = mostRecentPriorSnapshot(targetAbs, afterSnapshot.commit);
+    if (!defaultBeforeSnapshot) {
+      process.stderr.write(`agentic-security remediation reopen-check: only one persisted GraphSnapshot exists (commit "${afterSnapshot.commit}") — nothing to compare against yet. Scan again after a code change, or pass --against <commit>.\n`);
+      return 2;
+    }
+  }
+
+  const driftPolicyFlag = args.flags['drift-policy'];
+  const driftPolicyProvided = driftPolicyFlag !== undefined;
+  let policies = { policies: [] };
+  if (driftPolicyProvided) {
+    if (typeof driftPolicyFlag !== 'string' || !driftPolicyFlag) {
+      process.stderr.write('agentic-security remediation reopen-check: --drift-policy requires a file path.\n');
+      return 2;
+    }
+    const driftPolicyAbs = path.resolve(driftPolicyFlag);
+    const check = _validateDriftPolicyFile(driftPolicyAbs, driftPolicyFlag, 'reopen-check');
+    if (!check.ok) {
+      process.stderr.write(check.message);
+      return 2;
+    }
+    const { loadDriftPolicies } = await import('../src/lineage/drift-policy.js');
+    policies = loadDriftPolicies(driftPolicyAbs);
+  }
+
+  const { readLedgerEvents, appendLedgerEvent } = await import('../src/posture/remediation-ledger.js');
+  const { foldRemediationLedger } = await import('../src/lineage/remediation.js');
+  const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
+  let evaluateDriftPolicies = null;
+  if (driftPolicyProvided) {
+    ({ evaluateDriftPolicies } = await import('../src/lineage/drift-policy.js'));
+  }
+
+  const verifiedItems = Object.values(foldRemediationLedger(readLedgerEvents(targetAbs)))
+    .filter((it) => it.state === 'verified')
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  const findings = []; // {itemId, mechanism, reason, beforeSnapshotSource}
+  const skipped = []; // {itemId, reason}
+
+  for (const item of verifiedItems) {
+    let beforeSnapshot;
+    let beforeSnapshotSource;
+    if (item.verificationSnapshotId) {
+      const found = snapshots.find((s) => s.id === item.verificationSnapshotId);
+      if (found) { beforeSnapshot = found; beforeSnapshotSource = 'verification'; }
+    }
+    if (!beforeSnapshot) { beforeSnapshot = defaultBeforeSnapshot; beforeSnapshotSource = 'default'; }
+
+    if (!beforeSnapshot || beforeSnapshot.commit === afterSnapshot.commit) {
+      skipped.push({ itemId: item.id, reason: 'no distinct before-snapshot could be resolved for this item' });
+      continue;
+    }
+
+    let diff;
+    try {
+      diff = computeGraphDiff(beforeSnapshot, afterSnapshot);
+    } catch (e) {
+      // Never a crash and never a silent pass — a diff-error item is
+      // recorded as skipped, with its real reason.
+      skipped.push({ itemId: item.id, reason: `incomparable snapshots: ${e && e.message ? e.message : e}` });
+      continue;
+    }
+
+    const affectedFlowIds = new Set(item.affectedFlowIds ?? []);
+    let hit = null;
+
+    // Mechanism A: drift-policy regression.
+    if (driftPolicyProvided) {
+      const { violations } = evaluateDriftPolicies(diff, policies, afterSnapshot.graph);
+      const violation = violations.find((v) => affectedFlowIds.has(v.flowId));
+      if (violation) {
+        hit = { mechanism: 'drift-policy', reason: `drift-policy rule (${violation.trigger}) matched flow ${violation.flowId}: ${violation.reason}` };
+      }
+    }
+
+    // Mechanism B: control went away, a direct diff read.
+    if (!hit) {
+      const removedHit = (diff.removed?.flows ?? []).find((e) => affectedFlowIds.has(e.id));
+      const changedHit = !removedHit ? (diff.changed?.flows ?? []).find((e) => affectedFlowIds.has(e.id)) : null;
+      if (removedHit) {
+        hit = { mechanism: 'affected-flow-diff', reason: `affected flow ${removedHit.id} appeared in diff.removed.flows (causeClassification: ${removedHit.causeClassification})` };
+      } else if (changedHit) {
+        hit = { mechanism: 'affected-flow-diff', reason: `affected flow ${changedHit.id} appeared in diff.changed.flows (${changedHit.changes.map((c) => c.field).join(', ')})` };
+      }
+    }
+
+    if (hit) {
+      findings.push({ itemId: item.id, mechanism: hit.mechanism, reason: hit.reason, beforeSnapshotSource });
+    }
+  }
+
+  const yes = !!args.flags.yes;
+
+  if (!yes) {
+    const report = {
+      verb: 'reopen-check', afterSnapshotId: afterSnapshot.id, driftPolicyProvided,
+      written: false, wouldReopen: findings, skipped,
+    };
+    _emitRemediationReport(report, args);
+    return 0;
+  }
+
+  if (findings.length > 0) {
+    const { isSafeStateDir } = await import('../src/posture/state-dir.js');
+    const { ledgerPaths } = await import('../src/posture/remediation-ledger.js');
+    const { ledgerPath } = ledgerPaths(targetAbs);
+    if (!isSafeStateDir(path.dirname(ledgerPath))) {
+      process.stderr.write(`agentic-security remediation reopen-check: refusing to write — "${targetAbs}" does not look like a project directory.\n`);
+      return 2;
+    }
+  }
+
+  const reopened = [];
+  const failedToReopen = [];
+  try {
+    for (const f of findings) {
+      const payload = { type: 'reopened', at: new Date().toISOString(), itemId: f.itemId, reason: f.reason };
+      // Each event is independently validated by appendLedgerEvent's own
+      // (sole-authoritative) validateTransition call — an item that raced
+      // into a non-`verified` state between the fold above and this append
+      // is correctly rejected here and reported as skipped, never
+      // force-written.
+      const result = await appendLedgerEvent(targetAbs, payload);
+      if (result.valid) {
+        reopened.push({ itemId: f.itemId, mechanism: f.mechanism, reason: f.reason, eventHash: result.hash });
+      } else {
+        failedToReopen.push({ itemId: f.itemId, errors: result.errors });
+      }
+    }
+  } catch (e) {
+    process.stderr.write(`agentic-security remediation reopen-check: unexpected error writing the ledger: ${e && e.message ? e.message : e}\n`);
+    return 4;
+  }
+
+  if (reopened.length > 0) {
+    const { auditCall } = await import('../src/mcp/audit.js');
+    auditCall({
+      sessionRoot: targetAbs,
+      tool: 'remediation_reopen_check',
+      args: { itemIds: reopened.map((r) => r.itemId) },
+      outcome: 'ok',
+    });
+  }
+
+  const report = {
+    verb: 'reopen-check', afterSnapshotId: afterSnapshot.id, driftPolicyProvided,
+    written: reopened.length > 0, reopened, failedToReopen, skipped,
+  };
+  _emitRemediationReport(report, args);
   return 0;
 }
 
@@ -5236,7 +5630,9 @@ async function main() {
         const sub = args._[1];
         if (sub === 'open') { process.exit(await cmdRemediationOpen(args)); }
         else if (sub === 'update') { process.exit(await cmdRemediationUpdate(args)); }
+        else if (sub === 'verify') { process.exit(await cmdRemediationVerify(args)); }
         else if (sub === 'accept-risk') { process.exit(await cmdRemediationAcceptRisk(args)); }
+        else if (sub === 'reopen-check') { process.exit(await cmdRemediationReopenCheck(args)); }
         else if (sub === 'list') { process.exit(await cmdRemediationList(args)); }
         else {
           process.stderr.write(`agentic-security remediation: unrecognized sub-command "${sub}" — must be one of open|update|verify|accept-risk|reopen-check|list.\n`);

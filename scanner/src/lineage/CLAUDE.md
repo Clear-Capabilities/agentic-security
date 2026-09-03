@@ -806,6 +806,126 @@ confirmed live: `isValidRecipientConfigEntry({provider: 'x'})` returns
 outside `RECIPIENT_PROCESSOR_ROLES` (`recipient-profile.js`), which
 `isValidRecipientConfigEntry` genuinely rejects.
 
+## Milestone 5, Blast-Radius: Remediation Command Center (deliverable #6) — implementation plan written
+
+This section is an **initial plan note, not a completion note** — a
+sub-project's own implementation, once it lands, gets its own COMPLETE
+section the way deliverables #3a/#4/#5 above do; this entry documents the
+plan Tasks 1-4 were built against.
+
+**The load-bearing PRD difference from #5.** Deliverable #5 (Governance
+Editing Workflow) shipped with no PRD acceptance criterion gating it at
+all — "the PRD's richer vision is real but unbuilt; this sub-project
+ships the narrower CLI-first slice." That argument is **not available**
+here: this deliverable **is** gated by a named acceptance criterion,
+AC-31, explicitly named in the Milestone 5 exit gate (PRD line 1854).
+Surface area still narrows the same way #5's did (CLI-only, no HTTP write
+surface, no UI, no external ticketing connector) — but AC-31's three
+properties do not narrow with it; they are load-bearing on every task in
+this sub-project.
+
+**The module split**, mirroring `governance-edit.js`'s own CLI-write
+boundary precedent:
+
+| Module | Responsibility |
+|---|---|
+| `remediation.js` (this directory) | Pure, zero-imports: the `RemediationItem` contract, `foldRemediationItem`/`foldRemediationLedger` (event-sourced fold, never throws), `validateOpenPayload`, `validateTransition` (AC-31's own state machine — `state_changed` can NEVER reach `verified`, checked FIRST and unconditionally), and `evaluateVerificationEvidence` (a `GraphDiff` + a list of required-evidence flow ids in, `{outcome, ...}` out — never touches fs, never calls `computeGraphDiff` itself). |
+| `posture/remediation-ledger.js` | All fs: `ledgerPaths`, `readLedgerEvents`/`latestEventHash` (tolerant, longest-verifying-prefix reads), and `appendLedgerEvent` — the **single** production call site of `validateTransition`, inside a ported (not imported — `provenance/lifecycle.js`'s `withLock` is module-private) file lock. |
+| `bin/agentic-security.js` (the CLI) | `remediation open/update/accept-risk/list` (Task 3) plus `verify`/`reopen-check` (Task 4, this section's own focus) — the only caller of `computeGraphDiff`/`evaluateVerificationEvidence`/`drift-policy.js` in this whole sub-project. Nothing in the ledger or the pure module ever computes a diff itself. |
+
+**Storage ruling.** Append-only JSONL + a hash chain mirroring
+`mcp/audit.js`'s `prev`/`GENESIS` chain exactly (`sha256` of the previous
+line's exact serialized text; the first event's `prev` is the literal
+string `'GENESIS'`), under a lock ported from `provenance/lifecycle.js`.
+Current item state is **always a fold**, replayed forward from the raw
+event stream — never a stored, independently-mutable field — so a
+tampered or torn tail is detected by the chain, not trusted by a cached
+summary.
+
+**The three AC-31 rules, each with its PRD citation:**
+
+1. *Fixed to the incident snapshot* (PRD line 171's non-goal framing,
+   restated positively): `remediation open` refuses (exit 2) when no
+   persisted `GraphSnapshot` exists, and the `opened` event's
+   `assessment.snapshotId` is always a real, resolved snapshot id — never
+   fabricated, never optional.
+2. *Marking work complete does not set `verified`* (PRD line 171):
+   `update --state` accepts only `in_progress`/`awaiting_verification`;
+   `validateTransition` rejects `state_changed` reaching `verified` as
+   the FIRST thing it does, before even checking whether an item exists —
+   a rejection placed after a state check would be reachable-around by
+   construction, so this ordering is itself part of the guarantee, not
+   an implementation detail.
+3. *A later regression automatically reopens it* (PRD line 1854, the
+   Milestone 5 exit gate's own wording): `remediation reopen-check`
+   evaluates every `verified` item against two independently-evaluated
+   mechanisms — a `--drift-policy` match (Mechanism A) and a direct
+   `affectedFlowIds` appearance in `diff.removed.flows`/`diff.changed.flows`
+   (Mechanism B, needed because `drift-policy.js`'s trigger vocabulary
+   has no `removed_flow` trigger at all) — and reports which mechanism
+   produced each hit, never an unlabelled "reopened."
+
+**Five corrections this plan made against live code** (verified, not
+guessed — the discipline this whole sub-project ran on):
+
+1. `ImpactAssessment` (`impact-assessment.js`) has **no `affectedFlowIds`
+   field of its own** — `cmdRemediationOpen` DERIVES it as the sorted,
+   deduplicated union of `--required-evidence` and (the assessment's own
+   `targetId`, when it is itself a `flow:`-prefixed id), never copies a
+   field that doesn't exist.
+2. `provenance/lifecycle.js`'s `withLock` is **not exported** —
+   `remediation-ledger.js`'s own `withLock` is a faithful local PORT, not
+   an import, confirmed by reading that file directly before writing this
+   one.
+3. The hash-chain semantics are `mcp/audit.js`'s real, verified shape
+   (`prev` = sha256 of the previous line's exact text, first event's
+   `prev` = the literal string `'GENESIS'`) — confirmed against that file
+   directly, not assumed from the general pattern description.
+4. **`--against` is a COMMIT KEY**, resolved via `loadSnapshot(scanRoot,
+   commitKey)`, mirroring `cmdDataflowDiff`'s own resolution exactly —
+   an earlier draft of this plan (and this task's own first-pass brief)
+   read it as a snapshot id, corrected after reading
+   `cmdDataflowDiff`'s real call site directly.
+5. **The CLI owns approver gating**, not the pure module or the ledger:
+   `remediation accept-risk` and `remediation verify --manual-attestation`
+   both call `loadApproverRegistry`/`verifyApprover`/
+   `checkSeparationOfDuties` (`fix/approver-registry.js`) themselves,
+   before ever building a payload — `remediation.js`'s own
+   `validateTransition` only enforces `manualAttestationPermitted` (a
+   flag set at `open` time), never approver identity, which has no
+   graph/ledger-level meaning to check against.
+
+**Disclosed limitations, unchanged by Task 4 landing:**
+
+- `snapshotsComparable` (`graph-snapshot.js`) is schemaVersion-only — two
+  snapshots from genuinely different analyzer configurations are reported
+  comparable. `remediation verify` inherits this exactly as `dataflow
+  diff` does.
+- No verification is possible before a second lineage scan exists —
+  `remediation verify`'s default (scan-verification) path needs two real
+  `GraphSnapshot` records; an item opened against the only snapshot on
+  disk exits 2 with an honest message rather than fabricating a
+  comparison.
+- The "flow still exists but is more protected" verification case is
+  **deliberately out of scope** for this first cut — `evaluateVerificationEvidence`
+  only recognizes a required-evidence flow as satisfied when it is
+  genuinely GONE from the graph (`causeClassification:
+  'application_change'` in `diff.removed.flows`), never when it merely
+  transitions to a better `protectionSummary` while still present. See
+  `remediation.js`'s own header comment for the full reasoning — a future
+  increment could add this, but it needs its own deliberate, disclosed
+  heuristic for "protected enough," which this module does not attempt.
+
+**Explicit out-of-scope list** (scoping doc §7, unchanged by
+implementation): external ticketing/messaging/GRC/case-management
+connectors (PRD lines 575, 2071 — `scanner/src/integrations/tickets.js`'s
+existing finding-keyed sync does not satisfy PRD line 575's connector
+contract); the HTTP write surface and any UI (same reasoning as
+`governance propose-edit`'s own deferral); runtime-observation evidence
+(FR-505 / Digital Twin — AC-31's own `or` is rescan-vs-manual-attestation,
+never rescan-vs-runtime); and a regulation-derived due-date computation
+(PRD line 2072 — `dueDate` stays a plain operator-supplied value).
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

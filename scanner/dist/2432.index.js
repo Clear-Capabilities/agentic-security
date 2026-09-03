@@ -6,11 +6,12 @@ export const modules = {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   evaluateVerificationEvidence: () => (/* binding */ evaluateVerificationEvidence),
 /* harmony export */   foldRemediationLedger: () => (/* binding */ foldRemediationLedger),
 /* harmony export */   validateOpenPayload: () => (/* binding */ validateOpenPayload),
 /* harmony export */   validateTransition: () => (/* binding */ validateTransition)
 /* harmony export */ });
-/* unused harmony exports REMEDIATION_STATES, REMEDIATION_EVENT_TYPES, ACCEPTED_RISK_REQUIRED_FIELDS, foldRemediationItem, evaluateVerificationEvidence */
+/* unused harmony exports REMEDIATION_STATES, REMEDIATION_EVENT_TYPES, ACCEPTED_RISK_REQUIRED_FIELDS, foldRemediationItem */
 // remediation.js — M5 deliverable #6 (Blast-Radius: Remediation Command
 // Center, FR-507 + AC-31): the pure RemediationItem contract, its event
 // fold, its state machine, and the verification-evidence decision.
