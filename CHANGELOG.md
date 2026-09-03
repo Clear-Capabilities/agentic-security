@@ -11,6 +11,97 @@
 
 
 
+## 0.146.0 — Data Flow Explorer: trace sensitive data through your architecture, not just through one finding
+
+Every prior release answers "is this line of code dangerous?" This one adds a
+different question: "where does this piece of sensitive data actually go, and
+what protects it along the way?" `agentic-security dataflow` builds a
+`DataFlowGraph` from a real scan — sources, sinks, the data elements that
+flow between them, and a verdict per hop on transit/at-rest/handling
+protection — and a new local, read-only, loopback-only server
+(`agentic-security explore`) serves it to a clickable UI. Six milestones,
+built in dependency order over this release cycle:
+
+**The graph itself (Milestones 0-2).** A stable-ID'd, schema-versioned graph
+contract; an interprocedural field-identity taint engine purpose-built for
+this graph (deliberately separate from the SAST engine's own taint
+analysis — different state shape, different precision goals) with
+context-sensitive summaries and a compact path-provenance DAG that tracks
+*why* a field reached a sink, not just *that* it did; source/sink/
+transformation registries reclassifying this project's existing detection
+catalogs into the graph's own vocabulary; and protection-verdict analyzers
+for transit (TLS presence and validity), at-rest (encryption-before-store),
+and handling (masking/hashing/tokenization — never treated as synonyms).
+
+**A local server and reference UI (Milestone 3).** `agentic-security explore`
+— the first HTTP server anywhere in this codebase (the MCP and LSP servers
+are both stdio) — serves the signed, already-scanned graph read-only,
+loopback-only, to a zero-build-step frontend prototype with architecture,
+privacy-lifecycle, and evidence-trace views.
+
+**Export and decision-intelligence surfaces (Milestone 4).** JSON/CSV/HTML/
+PNG/PDF/SVG export; a Regulatory Obligation Overlay mapping graph facts
+against bundled compliance frameworks (never claiming "compliant" from a
+single mapping); an Executive Risk Story mode ranking flows on nine
+transparent, disclosed factors — never a blended, uncalibrated score; a
+Data-Flow Time Machine (`dataflow diff`) comparing two scans with real
+drift-policy alerting on newly-introduced disclosures; and Third-Party and
+Cross-Border Intelligence, keeping legal/jurisdiction facts honestly
+`unknown` rather than inferred from brand recognition.
+
+**Simulation, corroboration, and cross-repo linkage (Milestone 5).** A
+What-If Architecture Simulator (`dataflow scenario apply`) that clones and
+overrides a graph to test a hypothetical fix, never mutating the real scan,
+with every simulated verdict marked `HYPOTHETICAL` and `assumed`-graded so
+it can never be mistaken for a real one; Blast-Radius Impact Assessment and
+a Remediation Command Center with a hash-chained ledger enforcing that
+closing an item requires either a clean rescan or an explicit, permitted
+manual attestation — and that a later regression reopens it automatically;
+a Runtime-Corroborated Digital Twin (`dataflow observations import`) that
+layers operator-supplied runtime telemetry onto the static graph through a
+closed-world contract that rejects, not merely redacts, any field capable
+of carrying a payload value; per-language coverage-tier disclosure so a
+partially-supported language is labeled as such rather than silently
+under-reported; and `federate declare` — an operator-declared edge between
+two independently-scanned repositories' own graphs, with each graph staying
+its own separate, unmodified artifact.
+
+**New top-level commands:** `explore`, `dataflow`, `governance`,
+`remediation`, `federate` — the latter three write operator-declared
+config through the same reviewable contract (preview, version guard,
+backup, audit event) established for exactly this class of write.
+
+**On rigor, again.** As with 0.145.0's own provenance work, a dedicated
+final-review pass — after every task-level review and a green test
+suite — found real Blocking or Important bugs in nearly every one of
+these sub-projects: a remediation item that could be marked verified from
+a snapshot chronologically *older* than the incident it was supposed to
+fix; a runtime-observation payload-refusal grammar that closed single-value
+smuggling but missed the same payload split across array elements; a
+cross-repo link's own self-consistency digest compared against the wrong
+half of a redacted export, so an untampered file permanently read as
+tampered; and — found only in this release's own post-completion
+re-audit, prompted by checking every named acceptance criterion's text
+against the actual shipped code rather than trusting a summary — one
+acceptance criterion (`AC-26`, on the What-If Simulator) that had never
+been checked against its own literal wording by any prior document, and
+was quietly unmet until this audit closed it. Every one of these was
+found, fixed, and independently re-verified — including personally
+reproducing the bug and its fix live, not just re-reading a diff — before
+this release.
+
+**Disclosed, not built.** Full graph-merge across repositories (only
+declared, single-edge cross-repo links ship); synthetic node/edge
+insertion for the What-If Simulator (every node/edge today derives from a
+real registry decision or call site — inventing one has no precedent yet);
+automatic destination/schema correlation for cross-repo edges (needs
+prerequisite work — schema-derived edges, fuller destination resolution —
+that isn't built); an HTML-table stress-test pass for the largest graphs;
+config-declared (as opposed to runtime-observed) corroboration for the
+Digital Twin, folded into already-scoped backlog rather than duplicated.
+None of these block the acceptance criteria this release's milestones are
+gated on.
+
 ## 0.145.0 — Finding Provenance ships, and two audits find what the first one missed
 
 Every finding now carries a `findingProvenance` record answering "when did this

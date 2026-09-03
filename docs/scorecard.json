@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.145.0",
-    "bundleSha256": "c3e348bfe6580ae0e55ec2b9029b6b9b9570f3d504c19f26736a0c9c9f765aa5",
-    "commit": "08c30b32e91c1012fb98681be8fe96acf7d191ca",
+    "engineVersion": "0.146.0",
+    "bundleSha256": "0cfc21d9bdecf4422a0934216444b948dccc8c4c978b0f7eca92d318d8b61e9c",
+    "commit": "6da61e3eef6d8b9650b8bc26f69c5c77e6f4ba2b",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-08-29T10:29:19.838Z",
+    "generatedAt": "2026-09-03T18:56:53.182Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -576,7 +576,7 @@
         }
       },
       "scanner/src": {
-        "total": 455,
+        "total": 485,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -597,6 +597,7 @@
           "history-scan.js": 1,
           "integrations/index.js": 11,
           "integrations/tickets.js": 9,
+          "ir/chrome-probe.mjs": 1,
           "ir/cpp-preprocessor.js": 1,
           "ir/ir-stats.js": 1,
           "ir/parser-cpp.js": 4,
@@ -610,6 +611,15 @@
           "ir/type-stubs.js": 8,
           "ir/universal-ir.js": 1,
           "leaderboard.js": 3,
+          "lineage/CLAUDE.md": 4,
+          "lineage/drift-policy.js": 1,
+          "lineage/federation-loader.js": 2,
+          "lineage/fixtures/build-flagship-fixture.mjs": 1,
+          "lineage/graph-snapshot.js": 4,
+          "lineage/index.js": 1,
+          "lineage/observation-store.js": 2,
+          "lineage/recipient-registry.js": 1,
+          "lineage/remediation.js": 6,
           "llm-validator/consistency.js": 1,
           "llm-validator/index.js": 5,
           "lsp/server.js": 3,
@@ -689,6 +699,7 @@
           "posture/provenance/providers/config.js": 1,
           "posture/provenance/repo-lineage.js": 1,
           "posture/realtime-cve-monitor.js": 5,
+          "posture/remediation-ledger.js": 1,
           "posture/retention-policy.js": 1,
           "posture/risk-dollars.js": 3,
           "posture/root-cause-sweep.js": 1,
@@ -760,11 +771,14 @@
           "sca/llm-function-extract.js": 2,
           "sca/py-package-functions.js": 1,
           "sca/sigstore-verify.js": 7,
+          "server/CLAUDE.md": 3,
+          "server/graph-loader.js": 2,
+          "server/http-server.js": 1,
           "util/untrusted.js": 1
         }
       },
       "scripts": {
-        "total": 29,
+        "total": 31,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -777,7 +791,7 @@
           "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
           "self-test-runner.mjs": 2,
-          "synthesize-detector.mjs": 5,
+          "synthesize-detector.mjs": 7,
           "trust-page.py": 1
         }
       }
@@ -789,8 +803,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 311,
-    "d": 341
+    "n": 326,
+    "d": 368
   },
   "taintRecall": {
     "measuredThisRun": true,
