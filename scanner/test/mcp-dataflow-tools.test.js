@@ -104,6 +104,51 @@ test('dataflow_get_graph: real signed graph -> hasResult:true, full graph body',
   }
 });
 
+test('dataflow_get_graph: an optional filter narrows the returned graph via _filterGraph', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SAMPLE_GRAPH);
+    const result = await dataflow_get_graph.handler({ filter: { nodeIds: ['node:api'], edgeIds: [] } }, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    assert.equal(result.data.nodes.length, 1);
+    assert.equal(result.data.nodes[0].id, 'node:api');
+    assert.equal(result.data.edges.length, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow_get_graph: omitting filter still returns the whole graph, unchanged', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SAMPLE_GRAPH);
+    const result = await dataflow_get_graph.handler({}, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    assert.equal(result.data.nodes.length, 1);
+    assert.equal(result.data.edges.length, 1);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow_get_graph: a malformed filter returns a clear tool-error result, never throws', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SAMPLE_GRAPH);
+    const result = await dataflow_get_graph.handler({ filter: { nodeIds: 'not-an-array' } }, { sessionRoot: root });
+    assert.equal(result.hasResult, false);
+    assert.equal(result.reason, 'invalid-filter');
+    assert.match(result.message, /must be a JSON object/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dataflow_get_graph: inputSchema accepts a well-formed filter and rejects an unknown top-level property', () => {
+  assert.equal(dataflow_get_graph.inputSchema.properties.filter.type, 'object');
+  assert.equal(dataflow_get_graph.inputSchema.additionalProperties, false);
+});
+
 test('dataflow_get_node: real signed graph, found -> the node', async () => {
   const root = _mkTmpProject();
   try {

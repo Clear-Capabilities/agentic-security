@@ -12,6 +12,7 @@
 import { loadSignedGraph } from '../server/graph-loader.js';
 import { handleGraph, handleNode, handleEdge, handleFlow } from '../server/routes.js';
 import { _redactNode, _redactEvidence, _redactGraph } from '../lineage/redact-graph.js';
+import { _filterGraph, validateFilterShape } from '../lineage/export-json.js';
 
 const META = { source: 'agentic-security-mcp', untrusted_excerpts: true };
 
@@ -28,32 +29,50 @@ function _loadOrFailure(sessionRoot) {
   };
 }
 
-// KNOWN, DISCLOSED GAP (not fixed in this increment): this plan's own scope
-// item 1 required dataflow_get_graph to paginate/offload per query_taint's
-// precedent (`_maybeOffload` in tools.js) once a graph is large. That
-// precedent offloads a single flat array; a graph has three (nodes/edges/
-// flows) plus a top-level evidence array, so a correct offload design needs
-// its own real scoping pass, not a same-shape reuse. Returning the whole
-// graph inline risks exceeding stdio.js's MAX_LINE_BYTES (4MB) on a large
-// scan. Left for a follow-up increment rather than shipping a rushed,
-// under-designed pagination scheme in a security-fix round.
+// Milestone 5, large-graph pagination: an optional `filter` input narrows the
+// returned graph via the exact same `validateFilterShape`/`_filterGraph`
+// pair the CLI's own `--filter` and the `explore` server's new
+// `POST /api/v1/query` endpoint both already use — one real, shared
+// primitive, not a third drifting copy. KNOWN, DISCLOSED GAP (still open):
+// an OMITTED filter still returns the whole graph inline, with the same
+// stdio.js MAX_LINE_BYTES (4MB) risk on a very large, unfiltered scan as
+// before this change — this increment adds an opt-in capability for a
+// caller that supplies a filter, it does not add a forced fallback/offload
+// for a caller that doesn't. That remains a follow-up increment.
 export const dataflow_get_graph = {
   name: 'dataflow_get_graph',
-  description: 'Return the full DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. KNOWN GAP: does not yet paginate/offload for very large graphs (may exceed the stdio transport line cap) — a future increment will add this, matching query_taint\'s own precedent.',
+  description: 'Return the DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. Optional `filter: {nodeIds, edgeIds}` narrows the returned nodes/edges/flows/dataElements (same primitive as the CLI\'s `--filter` and the `explore` server\'s `POST /api/v1/query`). KNOWN GAP: an OMITTED filter still returns the whole graph inline with no pagination/offload — may exceed the stdio transport line cap on a very large, unfiltered graph; supply a filter to narrow the response.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    properties: {},
+    properties: {
+      filter: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          nodeIds: { type: 'array', items: { type: 'string' } },
+          edgeIds: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
   },
-  async handler(_args, ctx) {
+  async handler(args, ctx) {
     const { graph, failure } = _loadOrFailure(ctx.sessionRoot);
     if (failure) return failure;
+    // Milestone 5, large-graph pagination: reuses the exact same
+    // validateFilterShape/_filterGraph pair the new POST /api/v1/query
+    // server endpoint and the CLI's own --filter both use — one real,
+    // shared primitive, not a third drifting copy.
+    const filterCheck = validateFilterShape(args?.filter);
+    if (!filterCheck.valid) {
+      return { _meta: META, hasResult: false, reason: 'invalid-filter', message: filterCheck.error };
+    }
     const { status, body } = handleGraph(graph);
     return {
       _meta: META,
       hasResult: true,
       status,
-      data: _redactGraph(body.data),
+      data: _redactGraph(args?.filter ? _filterGraph(body.data, args.filter) : body.data),
       digest: body.digest,
       schemaVersion: body.schemaVersion,
       extensions: body.extensions,

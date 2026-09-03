@@ -23,7 +23,7 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `query_triage_memory` | ✓ | reads past triage decisions (wont-fix/false-positive) by natural-language query |
 | `query_findings_memory` | ✓ | reads accumulated scan memory (findings + triage history + AGENTS.md) by natural-language query |
 | `query_cache_telemetry` | ✓ | reads prompt-cache economics from the current session transcript; no network |
-| `dataflow_get_graph` | ✓ | reads the signed `lineage-graph.json` (via `server/graph-loader.js`, reused unmodified); returns the full DataFlowGraph v1 artifact. **Known gap**: no pagination/offload yet for a very large graph — see `dataflow-tools.js`'s own header comment |
+| `dataflow_get_graph` | ✓ | reads the signed `lineage-graph.json` (via `server/graph-loader.js`, reused unmodified); returns the DataFlowGraph v1 artifact. Milestone 5: an optional `filter: {nodeIds, edgeIds}` input narrows the returned nodes/edges/flows/dataElements via the exact same `validateFilterShape`/`_filterGraph` pair the CLI's `--filter` and the `explore` server's `POST /api/v1/query` endpoint use — closes the large-graph gap FOR A CALLER THAT SUPPLIES A FILTER. **Known gap, still real**: an OMITTED filter still returns the whole graph inline with no pagination/offload — a very large, unfiltered graph can still exceed the stdio transport line cap — see `dataflow-tools.js`'s own header comment |
 | `dataflow_get_node` | ✓ | as above, ID-scoped node lookup (via `server/routes.js`'s `handleNode`, reused unmodified) |
 | `dataflow_get_edge` | ✓ | as above, ID-scoped edge lookup (`handleEdge`) |
 | `dataflow_get_flow` | ✓ | as above, ID-scoped flow lookup (`handleFlow`), includes contributing node/edge canonical ids |
