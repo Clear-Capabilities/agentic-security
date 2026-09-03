@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-29T03:37:21.047Z",
-  "commit": "572fe91805de9a0fbe8ea381c4ad09bdba0211b9",
+  "generatedAt": "2026-09-03T19:16:44.920Z",
+  "commit": "66512928423efdae04717f1e0303b734edae0c35",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 29,
+      "total": 31,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -31,12 +31,12 @@
         "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
         "self-test-runner.mjs": 2,
-        "synthesize-detector.mjs": 5,
+        "synthesize-detector.mjs": 7,
         "trust-page.py": 1
       }
     },
     "scanner/src": {
-      "total": 455,
+      "total": 485,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -57,6 +57,7 @@
         "history-scan.js": 1,
         "integrations/index.js": 11,
         "integrations/tickets.js": 9,
+        "ir/chrome-probe.mjs": 1,
         "ir/cpp-preprocessor.js": 1,
         "ir/ir-stats.js": 1,
         "ir/parser-cpp.js": 4,
@@ -70,6 +71,15 @@
         "ir/type-stubs.js": 8,
         "ir/universal-ir.js": 1,
         "leaderboard.js": 3,
+        "lineage/CLAUDE.md": 4,
+        "lineage/drift-policy.js": 1,
+        "lineage/federation-loader.js": 2,
+        "lineage/fixtures/build-flagship-fixture.mjs": 1,
+        "lineage/graph-snapshot.js": 4,
+        "lineage/index.js": 1,
+        "lineage/observation-store.js": 2,
+        "lineage/recipient-registry.js": 1,
+        "lineage/remediation.js": 6,
         "llm-validator/consistency.js": 1,
         "llm-validator/index.js": 5,
         "lsp/server.js": 3,
@@ -149,6 +159,7 @@
         "posture/provenance/providers/config.js": 1,
         "posture/provenance/repo-lineage.js": 1,
         "posture/realtime-cve-monitor.js": 5,
+        "posture/remediation-ledger.js": 1,
         "posture/retention-policy.js": 1,
         "posture/risk-dollars.js": 3,
         "posture/root-cause-sweep.js": 1,
@@ -220,6 +231,9 @@
         "sca/llm-function-extract.js": 2,
         "sca/py-package-functions.js": 1,
         "sca/sigstore-verify.js": 7,
+        "server/CLAUDE.md": 3,
+        "server/graph-loader.js": 2,
+        "server/http-server.js": 1,
         "util/untrusted.js": 1
       }
     }
