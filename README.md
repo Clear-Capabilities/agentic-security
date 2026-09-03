@@ -202,7 +202,19 @@ On by default (advisory only — a hook can't switch your model for you); disabl
 A finding tells you one line is dangerous. The **Data Flow Explorer** tells
 you where a piece of data — a credit card number, a patient record, a
 password — comes from, everywhere it flows to, and what protects it at
-every hop, across your whole architecture.
+every hop, across your whole architecture. Same field, same sink, two code
+paths, two honestly different verdicts — never one call flagged "dangerous"
+in the abstract:
+
+```mermaid
+flowchart LR
+    Web(["🌐 Web App<br/>checkout form"]) -->|card_number| Pay["⚙️ Payments Service"]
+    Pay -->|"✅ maskCard() → masked"| Logs["📄 Application Logs"]
+    Pay -->|"❌ logged raw, no transform"| Logs
+
+    linkStyle 1 stroke:#1e8449,stroke-width:3px
+    linkStyle 2 stroke:#c0392b,stroke-width:3px
+```
 
 ```bash
 AGENTIC_SECURITY_LINEAGE_DEEP=1 npx @clear-capabilities/agentic-security-scanner scan .

@@ -30,6 +30,101 @@ separate crawler.
 
 ---
 
+## A worked example
+
+Say a `card_number` field reaches `logger.info(...)` two different ways in
+two different handlers — masked in one, raw in the other:
+
+```js
+// checkout-masked.js
+function handleCheckout(req, logger) {
+  const cardNumber = req.body.card_number;
+  const maskedPan = maskCard(cardNumber);      // real transform on this path
+  logger.info('processing payment', { pan: maskedPan });
+}
+
+// checkout-raw.js — same field, no transform on this path
+function handleCheckout(req, logger) {
+  const cardNumber = req.body.card_number;
+  logger.info('processing payment', { pan: cardNumber });
+}
+```
+
+(the same shape as this package's own AC-02 regression fixture pair,
+`bench/data-lineage/fixtures/js-api-to-log-{masked,raw}/`.) A line-by-line
+scanner sees one call, `logger.info(...)`, and has no way to say "this
+field is safe on this path and unsafe on that one." The Data Flow Explorer
+tracks the *field*, not the line, so both paths land on the same sink
+node (the graph's nodes are categories like "Application Logs," not
+individual call sites), but each path keeps its own edge and its own
+verdict:
+
+```mermaid
+flowchart LR
+    Web(["🌐 Web App<br/>checkout form"]) -->|card_number| Pay["⚙️ Payments Service"]
+    Pay -->|"✅ maskCard() → masked"| Logs["📄 Application Logs"]
+    Pay -->|"❌ logged raw, no transform"| Logs
+
+    linkStyle 1 stroke:#1e8449,stroke-width:3px
+    linkStyle 2 stroke:#c0392b,stroke-width:3px
+```
+
+That's the whole idea in miniature: one **source** (where `card_number`
+enters), one **sink** (where it ends up), and an edge per path with a real,
+evidence-backed verdict — never a single "this call is dangerous" guess
+averaged across both branches.
+
+Zoom out from one field/one sink to a whole application and the same model
+holds — every source, every sink, every hop between them, still graded
+per-edge. This is the shipped reference topology (`payments-platform`, the
+"flagship" fixture this package's own test suite is built against —
+`scanner/src/lineage/fixtures/build-flagship-fixture.mjs`), reduced to its
+data flows:
+
+```mermaid
+flowchart LR
+    Web(["🌐 Web App<br/>(source)"])
+
+    Web -->|card_number| Pay["⚙️ Payments Service"]
+    Web -->|diagnosis| AI["🤖 AI Assistant"]
+    Web -->|email| Events["⚙️ Events Service"]
+
+    Pay -->|"✅ masked"| Logs["📄 Application Logs"]
+    Pay -->|"❌ raw"| Logs
+    Pay -->|"❓ at-rest unknown"| DB[("🗄️ PostgreSQL")]
+    Pay -->|"❌ cleartext HTTP"| PayAPI{{"💳 Payment API"}}
+    Pay -->|prompt context| AI
+
+    AI -->|"❓ manual review required"| Model{{"🧠 Model Provider"}}
+    AI -->|diagnosis| Vector[("📚 Vector Store")]
+
+    Events -->|email| Analytics{{"📊 Analytics API"}}
+    Web -->|"❓ dynamic destination"| Unknown{{"❔ Unresolved"}}
+
+    linkStyle 3 stroke:#1e8449,stroke-width:3px
+    linkStyle 4 stroke:#c0392b,stroke-width:3px
+    linkStyle 5 stroke:#b7791f,stroke-width:2px,stroke-dasharray: 4 3
+    linkStyle 6 stroke:#c0392b,stroke-width:3px
+```
+
+Reading it: **✅ green** is a real, evidenced protection (masking proven on
+that path); **❌ red** is a real, evidenced gap (no TLS, no masking); **❓
+amber/gray** is an honest "don't know" — no fabricated at-rest configuration
+was found for PostgreSQL, and the AI/model-provider path is flagged for
+manual review rather than silently marked either way. That honesty is the
+point: a flow the scanner can't evidence never gets upgraded to "protected"
+just because a sibling flow nearby is.
+
+The four browser views described below are different lenses on this same
+graph — the architecture view *is* this diagram (interactive, colored by
+verdict); the trace/evidence view is what backs each ✅/❌/❓ when you click
+an edge; the privacy lifecycle view groups the same nodes by data class
+(PCI/PHI/PII) instead of by system; the inventory view lists every node
+here, including `Unresolved Destination`, which nothing in this diagram's
+prose even mentions reaching.
+
+---
+
 ## Build the graph
 
 ```bash
