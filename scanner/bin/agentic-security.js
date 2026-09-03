@@ -160,6 +160,7 @@ Commands:
                                --privacy-sink-policy <path-to-json>   re-evaluate each touched
                                                       flow's policyVerdict under this policy file
                                --environment <name>   environment context for --privacy-sink-policy
+  dataflow impact assess [path] --target <canonical-id> --output <file> [--format json|markdown]
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -4243,6 +4244,82 @@ async function cmdDataflowScenarioApply(args) {
   return 0;
 }
 
+// agentic-security dataflow impact assess [path] --target <canonical-id>
+// --output <file> [--format json|markdown] — M5 deliverable #4
+// (FR-507). Loads the already-scanned, already-signed graph via
+// loadSignedGraph (same loader/error-message contract as every other
+// dataflow subcommand), computes an ImpactAssessment via
+// computeImpactAssessment, writes it to --output. Exit codes: 0
+// success, 1 graph-load failure (loadSignedGraph's own 4 messages), 2
+// argument problem.
+async function cmdDataflowImpactAssess(args) {
+  const target = args._[3] || '.'; // args._ = ['dataflow', 'impact', 'assess', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const targetIdFlag = args.flags.target;
+  if (!targetIdFlag || typeof targetIdFlag !== 'string') {
+    process.stderr.write('agentic-security dataflow impact assess: --target <canonical-id> is required.\n');
+    return 2;
+  }
+  const outputPath = args.flags.output;
+  if (!outputPath || typeof outputPath !== 'string') {
+    process.stderr.write('agentic-security dataflow impact assess: --output <file> is required.\n');
+    return 2;
+  }
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'markdown') {
+    process.stderr.write(`agentic-security dataflow impact assess: --format must be one of json|markdown (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security dataflow impact assess: ${loaded.message}\n`);
+    return 1;
+  }
+
+  const { computeImpactAssessment } = await import('../src/lineage/impact-engine.js');
+  let record;
+  try {
+    record = computeImpactAssessment(loaded.graph, targetIdFlag);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow impact assess: ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+
+  let data;
+  if (format === 'json') {
+    data = JSON.stringify(record, null, 2);
+  } else {
+    const lines = [
+      `# Impact assessment`, '',
+      `Target: \`${record.targetId}\` (${record.targetKind})`,
+      `Scope: ${record.scope}`, '',
+      `## Affected nodes (${record.affectedNodeIds.length})`, '',
+      ...record.affectedNodeIds.map((id) => `- ${id}`), '',
+      `## Affected edges (${record.affectedEdgeIds.length})`, '',
+      ...record.affectedEdgeIds.map((id) => `- ${id}`), '',
+      `## Affected data classes`, '',
+      record.affectedDataClasses.length ? record.affectedDataClasses.map((c) => `- ${c}`).join('\n') : '_none_', '',
+      `## Affected recipients`, '',
+      record.affectedRecipientProfileIds.length ? record.affectedRecipientProfileIds.map((id) => `- ${id}`).join('\n') : '_none_', '',
+    ];
+    if (record.coverageLimitations.length) {
+      lines.push('## Coverage limitations', '', ...record.coverageLimitations.map((s) => `- ${s}`), '');
+    }
+    data = lines.join('\n') + '\n';
+  }
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow impact assess: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+  return 0;
+}
+
 // Terse [watch-dataflow] status line — mirrors watch-mode.js's own
 // renderStatusLine terse style, adapted to a GraphDiff's own
 // added/removed/changed shape (computeGraphDiff's `changed` bucket is
@@ -4558,7 +4635,16 @@ async function main() {
           }
           break;
         }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", and "scenario" are supported.\n`);
+        else if (sub === 'impact') {
+          const impactSub = args._[2];
+          if (impactSub === 'assess') { process.exit(await cmdDataflowImpactAssess(args)); }
+          else {
+            process.stderr.write(`agentic-security dataflow impact: unrecognized sub-command "${impactSub}" — must be "assess".\n`);
+            process.exit(2);
+          }
+          break;
+        }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", and "impact" are supported.\n`);
         process.exit(2);
       }
       case 'cve-watch': {

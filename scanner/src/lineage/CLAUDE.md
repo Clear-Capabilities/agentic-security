@@ -583,6 +583,104 @@ were real, pinned by `test/lineage/scenario-no-obligation-wiring.test.js`
 (a source-text import check, not a runtime assertion, since none of the
 three modules ever construct a graph themselves to runtime-test against).
 
+## Milestone 5, Blast-Radius: Impact Assessment (FR-507, deliverable #4) — COMPLETE
+
+A pure read/aggregate engine: given a compromised
+node/edge/flow/dataElement's canonical id, answer "what is reachable
+from here, per the graph's own already-scanned evidence." Unlike
+Scenario (3a) it never clones, mutates, or hypothesizes — no new
+operation catalog, no clone-and-override — a materially simpler shape
+than 3a's own engine.
+
+| Module | Responsibility |
+|---|---|
+| `impact-assessment.js` | The `ImpactAssessment` §10.10 extension contract — mirrors `scenario.js`'s/`obligation-mapping.js`'s own shape exactly (structural-only `{valid, errors}` validator, zero graph access at construction time, never a `DataFlowGraph v1` entity). Exports `IMPACT_TARGET_KINDS` (`node`/`edge`/`flow`/`dataElement`) and `IMPACT_SCOPE_VALUES` (`possible`/`observed` — see below). |
+| `impact-engine.js` | `computeImpactAssessment(graph, targetId, opts)` — resolves `targetId`'s kind from its canonical-id prefix (`node:`/`edge:`/`flow:`/`data:`; throws only on an unrecognized prefix, a genuine caller error), then computes the affected set and every derived field. |
+
+**`RecipientProfile`-only aggregation — no `ObligationMapping`
+aggregation, and why.** `affectedRecipientProfileIds` is a pure
+membership filter: `graph.recipientProfiles ?? []` filtered by
+`contributingGraphIds` intersecting the traversal's own
+`affectedNodeIds` — the identical mechanic `graph.recipientProfiles[]`
+was built for, already a real, populated array on the graph
+(`graph-builder.js`). `ObligationMapping` has no equivalent array to
+filter: a record is built ON DEMAND per compliance-framework
+requirement via `obligation-predicates.js`'s
+`buildObligationMappingFromGraphPredicate`/`evaluateGraphFlowPredicate`,
+keyed to one specific requirement's own declarative match spec — there
+is no "all obligations for this graph" array the way
+`graph.recipientProfiles[]` exists for recipients. Aggregating
+"affected policies and regulatory obligations" would mean iterating
+every bundled framework's own requirement specs and evaluating each
+one against the affected subgraph — real, separate, meaningfully
+larger integration work, not attempted here. So `ImpactAssessment` has
+no `affectedObligationIds` field at all, a deliberate omission
+disclosed in this sub-project's own scoping doc, not a silent gap.
+`test/lineage/impact-no-obligation-wiring.test.js` pins the mirror
+image of this decision — `obligation-mapping.js`/
+`obligation-predicates.js`/`decision-story.js` must never import
+`impact-assessment.js`/`impact-engine.js`, the same
+source-text-import-check pattern
+`scenario-no-obligation-wiring.test.js` already established, so a
+future obligation/decision-story analyzer can never quietly start
+treating a hypothetical-adjacent blast-radius traversal as a real
+compliance or executive-risk fact.
+
+**`scope` is always `'possible'`.** No runtime-corroboration signal
+exists yet (a future Digital Twin, M5 deliverable #7), so every
+assessment reports the pessimistic "everything topologically
+reachable" blast radius — `node`/`edge`/`flow` targets via
+`frontend/src/lib/focus-controls.js`'s `showAllPaths` (see below),
+`dataElement` targets via a direct flow-based trace, deliberately never
+`showAllPaths` (that BFS is topology-wide and unrestricted to any
+particular flow — seeding it from a data element's own source/sink
+nodes was reproduced live during this sub-project's own review to
+sweep in an unrelated sink reached by a different flow through the
+same node). `IMPACT_SCOPE_VALUES` already carries `'observed'` as a
+valid schema value today so that a later runtime-corroboration
+increment needs no breaking change to this contract — nothing emits it
+yet.
+
+**Whole-graph (not subgraph-scoped) coverage-limitations
+simplification, and why.** The sub-project's own scoping doc originally
+specified narrowing `coverageLimitations` to only the languages backing
+the affected node/edge subset. The shipped `_coverageLimitations`
+(`impact-engine.js`) reports the WHOLE graph's own non-`full`-tier
+languages instead, unscoped — because no node in `DataFlowGraph v1`
+carries a `language` field to filter by at all, so narrowing to "the
+languages of the affected subset" has no real data to compute from.
+Reporting the graph's own honest, whole-scan coverage gap on every
+assessment is the disclosed simplification: a real limitation,
+correctly attributed to the graph as a whole, never silently narrowed
+to a subset the engine cannot actually compute.
+
+**`frontend/src/lib/focus-controls.js` cross-import reuse.**
+`impact-engine.js` imports `showAllPaths` directly from
+`'../../../frontend/src/lib/focus-controls.js'` — the same established
+`scanner/src/` → `frontend/src/` cross-import precedent
+`export-privacy.js`'s `computePrivacyViewModel` import already set
+(confirmed safe for the identical reason: `focus-controls.js` is a
+pure graph-traversal module with no `document`/`window` access).
+`showAllPaths` unconditionally seeds its own result with the start id
+itself, even when that id does not exist in the graph at all — so
+`computeImpactAssessment` filters every seed node id against the
+graph's own real node ids BEFORE calling it, or a well-formed-but-
+nonexistent `targetId` would surface as a phantom single-node
+"affected" set instead of degrading honestly to empty arrays (the same
+honest-degradation contract `applyScenario` established for a
+stale/missing scenario target).
+
+**CLI wiring**: `agentic-security dataflow impact assess [path]
+--target <canonical-id> --output <file> [--format json|markdown]`
+(`bin/agentic-security.js`'s `cmdDataflowImpactAssess`) — loads the
+already-scanned, already-signed graph via the same `loadSignedGraph`
+loader/error-message contract `export`/`diff`/`scenario apply` already
+use. Exit codes: `0` success, `1` graph-load failure (`loadSignedGraph`'s
+own 4 messages), `2` a CLI argument problem (missing
+`--target`/`--output`, or a `--target` with no recognized canonical-id
+prefix — `computeImpactAssessment`'s own thrown error, caught and
+reported at the CLI boundary rather than crashing).
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

@@ -1,6 +1,6 @@
 ---
-description: Export the Data Flow Explorer graph, diff two scanned snapshots, watch for live drift, or apply a what-if scenario.
-argument-hint: "export|diff|watch|scenario apply [path] [options] --output <file> --format <fmt>"
+description: Export/diff/watch the Data Flow Explorer graph, apply a what-if scenario, or assess blast-radius impact.
+argument-hint: "export|diff|watch|scenario apply|impact assess [path] [options] --output <file> --format <fmt>"
 ---
 
 ## Data Flow Explorer export
@@ -193,6 +193,44 @@ an operation that fails validation).
 /dataflow scenario apply --operations scenario.json --output delta.json
 /dataflow scenario apply --operations scenario.json --output delta.md --format markdown
 /dataflow scenario apply --operations scenario.json --output delta.json --privacy-sink-policy policy.json --environment production
+```
+
+## Data Flow Explorer impact assess
+
+Computes a blast-radius impact assessment (M5, "Impact Assessment,"
+FR-507) over the already-scanned lineage graph — a read-only
+computation that never mutates anything, and never re-runs a scan.
+Loads the already-scanned, already-signed graph (same loader as
+`export`/`diff`/`scenario apply` above), then answers "what is
+reachable from this compromised node/edge/flow/data element, per the
+graph's own already-scanned evidence."
+
+`--target` accepts a canonical `node:*`/`edge:*`/`flow:*`/`data:*` id
+only — no other id shape is recognized. `scope` in the output is always
+`'possible'` today: there is no runtime-corroboration layer yet to
+report `'observed'` instead, so every assessment reports the
+pessimistic "everything topologically reachable" blast radius, never a
+narrower "confirmed exploited" one.
+
+### Options
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--target <canonical-id>` | Yes | The compromised entity's canonical id — `node:*`, `edge:*`, `flow:*`, or `data:*`. An unrecognized prefix is a clear exit-2 error. |
+| `--output <file>` | Yes | Where the assessment report is written. |
+| `--format json\|markdown` | No | `json` (default) emits the raw `ImpactAssessment` record. `markdown` renders a human-readable report — affected nodes/edges, affected data classes, affected recipients, and any coverage limitations. |
+
+Exit codes: `0` on success; `1` when the base lineage graph could not be
+loaded (missing/unsigned/tampered/malformed — the same four messages
+`export`/`diff`/`scenario apply` already use); `2` on a usage/argument
+error (missing `--target`/`--output`, or a `--target` with no
+recognized canonical-id prefix).
+
+### Examples
+
+```
+/dataflow impact assess --target node:abc123 --output impact.json
+/dataflow impact assess --target flow:def456 --output impact.md --format markdown
 ```
 
 ## Implementation
