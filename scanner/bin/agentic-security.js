@@ -4273,7 +4273,7 @@ async function cmdDataflowScenarioApply(args) {
     }
     lines.push('## Changed entities', '');
     for (const c of changedEntities) {
-      lines.push(`- **${c.kind} ${c.id}**`);
+      lines.push(`- **${c.kind} ${c.id}**${c.label ? ` — **${c.label}**` : ''}`);
       for (const f of c.changedFields) lines.push(`  - \`${f.field}\`: ${JSON.stringify(f.before)} → ${JSON.stringify(f.after)}`);
     }
     if (removedEntityIds.length) {

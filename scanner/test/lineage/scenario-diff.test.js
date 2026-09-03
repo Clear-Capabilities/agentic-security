@@ -82,6 +82,49 @@ test('a replace_recipient_fact operation surfaces node.destination as changed, a
   assert.equal(node.subtype, 'external-api');
 });
 
+// AC-26 ("What-if changes cannot masquerade as implementation"): the
+// PRD's own worked example — "the user simulates TLS on a cleartext...
+// edge" — must produce a changedEntities[] entry LITERALLY labeled
+// HYPOTHETICAL, not just an evidenceGrade:'assumed' value buried in the
+// before/after diff.
+test('AC-26: a require_transit_protection operation labels its edge entry HYPOTHETICAL', () => {
+  const base = _fixtureGraph();
+  const { graph } = applyScenario(base, { operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:1' }] });
+  const { changedEntities } = diffScenarioGraph(base, graph);
+  const edgeChange = changedEntities.find((c) => c.id === 'edge:1');
+  assert.equal(edgeChange.label, 'HYPOTHETICAL');
+});
+
+test('AC-26: an apply_handling operation (also evidenceGrade:assumed) also labels its edge entry HYPOTHETICAL', () => {
+  const base = _fixtureGraph();
+  const { graph } = applyScenario(base, { operations: [{ kind: 'apply_handling', targetEdgeId: 'edge:1', handling: 'masked' }] });
+  const { changedEntities } = diffScenarioGraph(base, graph);
+  const edgeChange = changedEntities.find((c) => c.id === 'edge:1');
+  assert.equal(edgeChange.kind, 'edge');
+  assert.ok(edgeChange.changedFields.some((f) => f.field === 'protection.handling'));
+  assert.equal(edgeChange.label, 'HYPOTHETICAL');
+});
+
+test('AC-26: a NODE-kind changed entity (replace_recipient_fact) never carries a label field at all', () => {
+  const base = _fixtureGraph();
+  const { graph } = applyScenario(base, {
+    operations: [{ kind: 'replace_recipient_fact', targetNodeId: 'node:sink', field: 'destination', value: { literalValue: 'moved.example.com' } }],
+  });
+  const { changedEntities } = diffScenarioGraph(base, graph);
+  const nodeChange = changedEntities.find((c) => c.id === 'node:sink');
+  assert.equal(nodeChange.kind, 'node');
+  assert.ok(!('label' in nodeChange), 'a node-kind changed entity must not carry a label field at all');
+});
+
+test('AC-26: a FLOW-kind changed entity never carries a label field at all', () => {
+  const base = _fixtureGraph();
+  const { graph } = applyScenario(base, { operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:1' }] });
+  const { changedEntities } = diffScenarioGraph(base, graph);
+  const flowChange = changedEntities.find((c) => c.id === 'flow:1');
+  assert.equal(flowChange.kind, 'flow');
+  assert.ok(!('label' in flowChange), 'a flow-kind changed entity must not carry a label field at all');
+});
+
 test('WATCHED_SCENARIO_FIELDS never includes an entity-identity field like id/kind/from/to', () => {
   for (const fields of Object.values(WATCHED_SCENARIO_FIELDS)) {
     assert.ok(!fields.includes('id'));

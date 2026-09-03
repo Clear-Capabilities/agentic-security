@@ -87,6 +87,35 @@ test('dataflow scenario apply: report.scenarioId is a real scenario:<hash> id, n
   assert.match(report.scenarioId, /^scenario:[0-9a-f]+$/);
 });
 
+// AC-26 ("What-if changes cannot masquerade as implementation"): the
+// PRD's own worked example ("simulates TLS on a cleartext... edge")
+// through the REAL CLI, both output formats — proving the fix end to
+// end, not just at the library-function level scenario-diff.test.js
+// already covers.
+test('dataflow scenario apply: AC-26 — require_transit_protection is labeled HYPOTHETICAL in both JSON and Markdown output', () => {
+  const root = _mkTmpProject();
+  _writeSignedGraph(root);
+  const opsFile = path.join(root, 'ops.json');
+  fs.writeFileSync(opsFile, JSON.stringify({
+    operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:1' }],
+  }));
+
+  const jsonOut = path.join(root, 'delta.json');
+  const rJson = spawnSync(process.execPath, [CLI, 'dataflow', 'scenario', 'apply', root, '--operations', opsFile, '--output', jsonOut, '--format', 'json'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(rJson.status, 0, rJson.stderr);
+  const report = JSON.parse(fs.readFileSync(jsonOut, 'utf8'));
+  const edgeChange = report.changedEntities.find((c) => c.id === 'edge:1');
+  assert.ok(edgeChange, 'edge:1 must be present in changedEntities');
+  assert.equal(edgeChange.label, 'HYPOTHETICAL');
+
+  const mdOut = path.join(root, 'delta.md');
+  const rMd = spawnSync(process.execPath, [CLI, 'dataflow', 'scenario', 'apply', root, '--operations', opsFile, '--output', mdOut, '--format', 'markdown'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(rMd.status, 0, rMd.stderr);
+  const md = fs.readFileSync(mdOut, 'utf8');
+  assert.match(md, /HYPOTHETICAL/);
+  assert.match(md, /edge:1.*HYPOTHETICAL/);
+});
+
 test('dataflow scenario apply: an operation with an unrecognized kind exits 2 with a validateScenario error on stderr', () => {
   const root = _mkTmpProject();
   _writeSignedGraph(root);

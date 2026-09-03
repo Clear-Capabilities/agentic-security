@@ -64,6 +64,18 @@ function _diffKind(beforeArr, afterArr, kind) {
   return { changed, removed };
 }
 
+// AC-26 ("What-if changes cannot masquerade as implementation"): a
+// simulated edge must be LABELED `HYPOTHETICAL`, not merely carry an
+// `evidenceGrade: 'assumed'` value a reader has to notice buried inside
+// a before/after diff. Mirrors AC-29's own precedent
+// (`observation-correlation.js`'s literal `'runtime_observed'` layer
+// value) — a named acceptance criterion that specifies an exact string
+// gets an exact string in the shipped output, not an inference left to
+// the reader.
+function _hasAssumedEvidence(changedEntity) {
+  return changedEntity.changedFields.some((f) => f.after && typeof f.after === 'object' && f.after.evidenceGrade === 'assumed');
+}
+
 /**
  * Compare `baseGraph` against `scenarioGraph` (either a real
  * applyScenario({graph}) result, or another Scenario's own graph, for a
@@ -74,8 +86,10 @@ function diffScenarioGraph(baseGraph, scenarioGraph) {
   const nodeDiff = _diffKind(baseGraph.nodes ?? [], scenarioGraph.nodes ?? [], 'node');
   const edgeDiff = _diffKind(baseGraph.edges ?? [], scenarioGraph.edges ?? [], 'edge');
   const flowDiff = _diffKind(baseGraph.flows ?? [], scenarioGraph.flows ?? [], 'flow');
+  const changedEntities = [...nodeDiff.changed, ...edgeDiff.changed, ...flowDiff.changed]
+    .map((e) => (e.kind === 'edge' && _hasAssumedEvidence(e) ? { ...e, label: 'HYPOTHETICAL' } : e));
   return {
-    changedEntities: [...nodeDiff.changed, ...edgeDiff.changed, ...flowDiff.changed],
+    changedEntities,
     removedEntityIds: [...nodeDiff.removed, ...edgeDiff.removed, ...flowDiff.removed],
   };
 }
