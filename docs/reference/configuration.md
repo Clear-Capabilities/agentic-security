@@ -101,6 +101,10 @@ files you author.
 | `scan-checkpoint.jsonl` | a resumable scan | `--resume` |
 | `provenance/lifecycle.json` | every scan (git repos) | [finding provenance](../guides/finding-provenance.md) — the introduce/remediate/reintroduce ledger; **not** subject to normal cache expiry, since it's permanent history |
 | `provenance-cache/` | provenance resolution | provenance resolution — a pure `HEAD`-keyed memo, safe to delete, subject to normal cache retention |
+| `lineage-snapshots/` | a scan with `AGENTIC_SECURITY_LINEAGE_DEEP=1` | commit-keyed `GraphSnapshot` history — what `dataflow diff` compares |
+| `runtime-observations/` | `dataflow observations import` | imported runtime telemetry for the Digital Twin — **confidential, encrypted at rest**; deliberately `generated` (not operator-config) so a plain `reset` can delete it, per FR-505's own retention rule |
+| `recipient-profiles-backups/` | `governance propose-edit --yes` | one timestamped `.bak` per edit to `recipient-profiles.json` (see Policy, below) |
+| `cross-repo-links-backups/` | `federate declare --yes` | one timestamped `.bak` per edit to `cross-repo-links.json` (see Policy, below) |
 
 `last-scan.json` is signed with the per-install HMAC key; tampering with it
 outside the scanner makes the next read warn and re-scan.
@@ -116,6 +120,9 @@ outside the scanner makes the next read warn and re-scan.
 | `compliance/<id>/controls.json` | Bring-your-own compliance controls |
 | `provenance-providers.yml` | Opt-in GitHub/GitLab PR-metadata + CODEOWNERS enrichment config (token per provider) — see [finding provenance](../guides/finding-provenance.md) |
 | `repo-lineage.json` | Cross-repository lineage link (`{linkedFrom: {path, atCommit}}`) for a root-commit finding origin — local clones only, no remote fetch |
+| `remediation/` (`items.jsonl` + `items.lock`) | Append-only remediation work-item ledger — owner assignment, approvals, manual attestations, accepted-risk exceptions. Written by the CLI (`remediation open\|update\|verify\|accept-risk\|reopen-check --yes`), but classified `operator-config` deliberately: a plain `reset` must never delete the audit trail an AC-31 verification depends on, and nothing regenerates a human decision from a rescan |
+| `recipient-profiles.json` | FR-506 recipient/subprocessor governance profiles — written via `governance propose-edit --yes`, never scanner-regenerable |
+| `cross-repo-links.json` | Declared local↔remote node links between two independently-scanned repos — written via `federate declare --yes`, never scanner-regenerable |
 
 ### The `rules.yml` gate
 

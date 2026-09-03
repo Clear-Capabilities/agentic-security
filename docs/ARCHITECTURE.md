@@ -49,6 +49,7 @@
                        │  CLI · JSON · SARIF · JUnit · CSV │
                        │  HTML · CycloneDX · SPDX · PBOM   │
                        │  AI-BOM · ship-verdict · pro-table│
+                       │  OSCAL                            │
                        └──────────────────┬───────────────┘
                                           │
               ┌───────────────────────────┼─────────────────────────┐
@@ -76,6 +77,71 @@
                      change, malware-analyst, refactor-cleaner.
 ```
 
+## Data Flow Explorer (separate subsystem)
+
+A deliberately isolated second pipeline — not a mode of the engine above.
+Where the diagram above answers "is this line dangerous," this one answers
+"where does this piece of sensitive data actually go, across my whole
+architecture, and what protects it at every hop." It shares only pure,
+stateless utilities with the taint engine (never live taint state), and is
+opt-in per scan via `AGENTIC_SECURITY_LINEAGE_DEEP=1`.
+
+```
+                     ┌──────────────────────────────────┐
+                     │   fileContents + a real scan     │
+                     └──────────────────┬───────────────┘
+                                        │
+     ┌──────────────────────────────────▼──────────────────────────────────┐
+     │  scanner/src/lineage/  — the DataFlowGraph v1 contract + engines     │
+     │                                                                      │
+     │  schema.js / ids.js / protection.js / classification.js              │
+     │             the graph contract: stable content-hash IDs, the        │
+     │             transit/at-rest/handling protection-verdict model,      │
+     │             data classes (PII/PHI/PCI/financial) + AI contexts      │
+     │  field-identity engine  interprocedural, context-sensitive taint    │
+     │             purpose-built for this graph (k-CFA summaries, its own  │
+     │             fixed-point worklist) — never the SAST dataflow/        │
+     │             engine's own live state                                │
+     │  path provenance DAG   why a field reached a sink, not just that   │
+     │             it did — bounded backward reconstruction, truncation   │
+     │             honestly distinguished from "no flow"                  │
+     │  source/sink/transform registries   reclassify the existing SAST/  │
+     │             SCA catalogs into the graph's own vocabulary           │
+     │  graph-builder.js   projects the above into nodes/edges/flows —    │
+     │             one node per REGISTRY DECISION, so node count is       │
+     │             bounded by taxonomy, not repository size               │
+     │  protection analyzers   transit (TLS presence+validity) ·          │
+     │             at-rest (encryption-before-store) · handling           │
+     │             (mask/hash/tokenize/encrypt — never synonyms) ·        │
+     │             policy verdict (operator-declared sink permissions)    │
+     └──────────────────────────────────┬──────────────────────────────────┘
+                                        │
+              ┌─────────────────────────┼─────────────────────────┐
+              ▼                         ▼                         ▼
+   ┌───────────────────┐   ┌────────────────────────┐  ┌──────────────────────┐
+   │ scanner/src/server/│   │ export-*.js / scripts/  │  │ decision-intelligence │
+   │ agentic-security   │   │ dataflow export         │  │ extensions            │
+   │ explore — local,   │   │ png/pdf/svg/json/csv/   │  │ scenario (what-if     │
+   │ read-only,         │   │ html/dpia/ropa/         │  │ simulation) · impact  │
+   │ loopback-only HTTP │   │ briefing/recipients/    │  │ (blast radius) ·      │
+   │ server + a         │   │ coverage                │  │ remediation (hash-    │
+   │ zero-build-step    │   │                          │  │ chained ledger) ·     │
+   │ frontend prototype │   │                          │  │ observations/twin     │
+   │ (4 linked views)   │   │                          │  │ (runtime corroboration│
+   │                    │   │                          │  │ , metadata-only) ·    │
+   │                    │   │                          │  │ federate (declared    │
+   │                    │   │                          │  │ cross-repo edges)     │
+   └────────────────────┘   └──────────────────────────┘  └───────────────────────┘
+```
+
+Every write surface above (`governance propose-edit`, `remediation open`,
+`federate declare`) goes through the same reviewable contract: preview,
+version guard, backup, hash-chained audit event — never a silent
+hand-edit. Full command reference — [CLI reference](reference/cli.md);
+narrative walkthrough — [Data Flow Explorer guide](guides/data-flow-explorer.md).
+
+---
+
 **Methodology layer.** On top of the deterministic engine, a set of default-on posture
 annotators add agentic-hunter discipline (see the Agentic Methodology PRD (removed post-implementation)):
 `falsification` (refute each taint finding — demote the ones a control blocks, recall-
@@ -85,5 +151,16 @@ preserving), `entrypoint-inventory` (attack-surface coverage ledger on `scan.ent
 (residual-risk guard + FULL/MITIGATION/WORKAROUND completeness tiers on applied fixes). A
 `util/untrusted.js` helper plus `docs/AGENT_THREAT_MODEL.md` harden the agent surface against
 untrusted scanned content. A judged real-world recall harness lives at `bench/realworld-recall/`.
+
+**OSCAL.** One of the reporters above emits NIST OSCAL 1.1.2 —
+specifically `assessment-results` documents only, never `catalog`,
+`profile`, `component-definition`, `system-security-plan`, or
+`assessment-plan`/POA&M, because only `assessment-results` describes
+"something examined a system and reports what it found." Every control
+verdict is binary — `satisfied` or `not-satisfied` — so a control this
+run never assessed gets no finding at all, rather than a fabricated
+verdict; that honesty constraint is deliberate and load-bearing, not an
+accident of the schema. Deterministic, produced from `scan --format
+oscal` or `compliance --format oscal`. Full detail: [OSCAL](OSCAL.md).
 
 The whole engine ships as a single ~3.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon by default — `scan --watch` opts into a long-running incremental-rescan process.

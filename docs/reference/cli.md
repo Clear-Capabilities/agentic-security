@@ -29,6 +29,11 @@ context. Run any command with `--help` for its live flags.
 | `attest [--id <finding>]` | Write signed evidence bundles to `.agentic-security/attestations/`. `--provenance [<finding-id>]` signs [finding-provenance](../guides/finding-provenance.md) records instead of ordinary finding evidence — bare `--provenance` signs every finding that has one, `--provenance <finding-id>` scopes to one (note: this is a *different* argument shape from `--id` above, and from `scan`'s own `--provenance <standard\|deep>` — `attest --provenance deep` looks for a finding literally named `deep`, not a mode). |
 | `verify-attestation <bundle.json> --public-key <path>` | Verify a signed bundle (finding evidence, a run attestation, or a provenance record — auto-detected) with only the public key. Exits `0` valid, `1` invalid. |
 | `scan-baseline --current <f> --previous <f>` | Finding-level diff between two scan JSON outputs. |
+| `explore [path] [--port <n>] [--keep-open]` | Serve the already-scanned Data Flow Explorer graph as a local, read-only, loopback-only web UI. Needs a scan with `AGENTIC_SECURITY_LINEAGE_DEEP=1` first — see the [Data Flow Explorer guide](../guides/data-flow-explorer.md). CLI-only, no slash-command equivalent. |
+| `dataflow export\|diff\|scenario apply\|impact assess\|observations import\|observations list\|twin` | Export the Data Flow Explorer graph (png/pdf/svg/json/csv/html/dpia/ropa/briefing/recipients/coverage), diff two scans, simulate a hypothetical change, assess blast radius, or layer in runtime observations. See the [Data Flow Explorer guide](../guides/data-flow-explorer.md) and `/dataflow --help`. |
+| `governance propose-edit --patch <file.json> [--yes]` | Propose a validated, reviewable edit to `recipient-profiles.json` (preview → confirm → audit-logged write). |
+| `remediation open\|update\|verify\|accept-risk\|reopen-check\|list` | Track a remediation item against a blast-radius assessment. Closing it requires a clean rescan or an explicitly permitted manual attestation; a later regression reopens it automatically. |
+| `federate declare\|list` | Declare (or list) a link between a node in this repo's scanned graph and a node in a separately-scanned remote repo's graph — each repo's graph stays its own separate, unmodified artifact. |
 | `reset` | Wipe accumulated learned state under `.agentic-security/` (preserves operator-authored config). `--yes`, `--keep <...>`. |
 | `mcp` | Start the MCP stdio server. See [MCP tools](../../scanner/src/mcp/CLAUDE.md). |
 | `version` / `banner` | Print the version / the mascot lockup. |
@@ -114,3 +119,4 @@ assess, `1` only with `--fail-on gap` and a failing control.
 
 - [Configuration & env vars](configuration.md)
 - [Guides](../guides/) — every command shown in context
+- [Data Flow Explorer guide](../guides/data-flow-explorer.md) — `explore`/`dataflow`/`governance`/`remediation`/`federate` in context

@@ -98,10 +98,14 @@ Organize help by **what the user wants to do**, not by command name:
 | Import runtime observation metadata (FR-505) | `/dataflow observations import --adapter native-jsonl --input <file> --environment <name> [--yes]` |
 | List imported runtime observation windows | `/dataflow observations list` |
 | Show Runtime Digital Twin layers per flow (AC-29) | `/dataflow twin --output <file> --format markdown` |
+| Simulate a hypothetical architecture change | `/dataflow scenario apply --operations <file.json> --output <file> --format <fmt>` |
+| Assess blast radius from a compromised node/edge/flow | `/dataflow impact assess --target <canonical-id> --output <file> --format <fmt>` |
+| Browse the Data Flow Explorer graph in a browser | `agentic-security explore` *(CLI-only, no slash command — see the [Data Flow Explorer guide](../docs/guides/data-flow-explorer.md))* |
 | Propose a validated edit to recipient-profiles.json | `/governance propose-edit --patch <file.json> [--yes]` |
 | Open a remediation work item from an impact assessment | `/remediation open --assessment <report.json> --owner <id> --due <YYYY-MM-DD> --control <text> --required-evidence <flowIds> [--yes]` |
 | Verify a remediation item against a fresh lineage scan | `/remediation verify --id <itemId> [--yes]` |
 | Reopen verified items whose control regressed | `/remediation reopen-check [--drift-policy <file>] [--yes]` |
+| Link a node to a node in another repo's own scanned graph | `/federate declare --local-node <id> --remote-graph <file> --remote-node <id> [--yes]` |
 
 ### Legacy alias map (removed in v0.86.0)
 
