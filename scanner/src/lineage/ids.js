@@ -260,3 +260,21 @@ export function scenarioId(
 ) {
   return `scenario:${_hash(_canon([graphId, graphDigest, ...discriminatorParts]))}`;
 }
+
+/**
+ * An ImpactAssessment record's id (M5 deliverable #4, FR-507 §10.10) —
+ * NOT a DataFlowGraph v1 entity, mirrors recipientProfileId's/
+ * scenarioId's own precedent exactly. Discriminated by (graphId,
+ * graphDigest, targetId) — graphDigest is required for the identical
+ * reason every other extension-contract id in this file requires it
+ * (graphId alone never distinguishes two same-commit graphs with
+ * genuinely different content); targetId is the compromised entity the
+ * assessment was computed FROM, so two assessments over the same graph
+ * but different targets never collide.
+ */
+export function impactAssessmentId(
+  { graphId, graphDigest, targetId },
+  discriminatorParts = [],
+) {
+  return `impact:${_hash(_canon([graphId, graphDigest, targetId, ...discriminatorParts]))}`;
+}
