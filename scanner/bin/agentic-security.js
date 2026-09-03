@@ -144,14 +144,14 @@ Commands:
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
-  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing|recipients --output <file>
+  dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing|recipients|coverage --output <file>
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
-                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing/recipients)
+                                                      png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing/recipients/coverage)
                                --size standard|2x    AC-23 pinned PNG sizes (default: standard)
                                --width <n> --height <n>   custom PNG size, <= 20000 (mutually exclusive with --size)
-                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa/briefing/recipients)
-                               --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv)
+                               --no-redact            include unredacted content (json/html only; no-op + warning for csv/dpia/ropa/briefing/recipients/coverage)
+                               --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv/coverage)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
 
@@ -3310,7 +3310,7 @@ async function cmdExplore(args) {
 // rejected BEFORE any Chrome invocation — Chrome's own dump-failure
 // reason for this case is confusing, not a good user-facing error), or
 // a caught throw/{ok:false} from the underlying export function.
-const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa', 'briefing', 'recipients']);
+const DATAFLOW_EXPORT_FORMATS = new Set(['png', 'pdf', 'svg', 'json', 'csv', 'html', 'dpia', 'ropa', 'briefing', 'recipients', 'coverage']);
 const DATAFLOW_EXPORT_VIEWS = new Set(['architecture', 'privacy', 'trace', 'inventory']);
 const DATAFLOW_EXPORT_SIZES = { standard: { width: 1680, height: 945 }, '2x': { width: 3360, height: 1890 } };
 
@@ -3349,7 +3349,10 @@ async function cmdDataflowExport(args) {
   // joins the same set — emitDecisionStory has no --view concept either.
   // recipients (FR-506) joins the same set — a Markdown table over
   // graph.recipientProfiles[] has no --view concept either.
-  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients')) {
+  // coverage (M5, language coverage-tier disclosure) joins the same set —
+  // a Markdown table over graph.coverage.languages[] has no --view concept
+  // either.
+  if (viewExplicit && (format === 'json' || format === 'csv' || format === 'html' || format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients' || format === 'coverage')) {
     process.stderr.write(`agentic-security dataflow export: --view has no effect on --format ${format} — ${format} exports are not view-scoped.\n`);
   }
 
@@ -3436,7 +3439,11 @@ async function cmdDataflowExport(args) {
   // the same way dpia/ropa/briefing's own renderers do) — a fact about
   // THIS renderer's own code path, unrelated to whether `_redactGraph`
   // itself has an opinion about the field.
-  if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients')) {
+  // coverage (M5, language coverage-tier disclosure) joins the same set —
+  // graph.coverage.languages[] carries only curated static tier data and
+  // plain per-repo file counts, never a destination literal or evidence
+  // snippet redact-graph.js has any opinion about.
+  if (!redact && (format === 'dpia' || format === 'ropa' || format === 'briefing' || format === 'recipients' || format === 'coverage')) {
     process.stderr.write(`agentic-security dataflow export: --no-redact has no effect on --format ${format} — ${format} export does not support redaction yet.\n`);
   }
 
@@ -3480,8 +3487,10 @@ async function cmdDataflowExport(args) {
     // got everything instead), with no warning, while both this file's
     // own USAGE text and commands/dataflow.md presented --filter as a
     // universal option.
-    if (format === 'csv') {
-      process.stderr.write('agentic-security dataflow export: --filter has no effect on --format csv — CSV export does not support scoping yet.\n');
+    // coverage (M5, language coverage-tier disclosure) joins the same set —
+    // a per-language table has no node/edge-id-scoped meaning to narrow by.
+    if (format === 'csv' || format === 'coverage') {
+      process.stderr.write(`agentic-security dataflow export: --filter has no effect on --format ${format} — ${format} export does not support scoping yet.\n`);
     }
   }
 
@@ -3532,6 +3541,8 @@ async function cmdDataflowExport(args) {
       data = emitDecisionStory(graph, opts).markdown;
     } else if (format === 'recipients') {
       data = _renderDataflowRecipientsMarkdown(graph, opts);
+    } else if (format === 'coverage') {
+      data = _renderDataflowCoverageMarkdown(graph, opts);
     }
   } catch (e) {
     // dpia/ropa reach frontend/src/views/privacy-view.js via a relative
@@ -3696,6 +3707,53 @@ function _renderDataflowRecipientsMarkdown(graph, opts = {}) {
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+// Local Markdown-escaping helpers for `--format coverage` — byte-identical
+// to _dfRecipientsMdInline/_dfRecipientsMdCell/_dfRecipientsMdCode above,
+// reimplemented locally per this codebase's established
+// per-module-owns-its-own-escaping-helpers convention.
+function _dfCoverageMdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+function _dfCoverageMdCell(value) {
+  return _dfCoverageMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+
+// Milestone 5, language coverage-tier disclosure. Renders graph.coverage.
+// languages[] (Task 1's own additive fields: tier/irTaintRecallPct/
+// measuredAt/source, alongside the pre-existing filesExpected/filesAnalyzed)
+// as a Markdown table, with an explicit disclosure paragraph distinguishing
+// the two different KINDS of fact in this report: real, per-repo file
+// counts (filesAnalyzed/filesExpected, computed fresh on every scan) versus
+// a curated, product-level recall estimate (irTaintRecallPct/measuredAt/
+// source, unchanged since docs/METRICS.md was last measured) — never
+// presented as one number, since conflating them would imply this scan
+// itself measured its own recall, which it did not.
+function _renderDataflowCoverageMarkdown(graph, opts = {}) {
+  const lines = [];
+  lines.push('# Language Coverage');
+  lines.push('');
+  lines.push(`**Graph:** \`${_dfCoverageMdInline(graph.graphId ?? '(no graphId)')}\``);
+  lines.push(`**Generated:** ${_dfCoverageMdInline(opts.generatedAt ?? graph.generatedAt ?? '')}`);
+  lines.push('');
+  lines.push('`Files Analyzed`/`Files Expected` are real counts from THIS scan. `Tier` and `Recall (docs/METRICS.md)` are a curated, product-level estimate — unchanged since the date shown, not measured on this repository. The two are never the same kind of fact.');
+  lines.push('');
+  const languages = Array.isArray(graph.coverage?.languages) ? graph.coverage.languages : [];
+  if (languages.length === 0) {
+    lines.push('_No language coverage data available for this scan._');
+  } else {
+    lines.push('| Language | Files Analyzed | Files Expected | Tier | Recall (docs/METRICS.md) |');
+    lines.push('|---|---|---|---|---|');
+    for (const l of languages) {
+      const recall = typeof l.irTaintRecallPct === 'number'
+        ? `${l.irTaintRecallPct}% (as of ${_dfCoverageMdInline(l.measuredAt ?? '?')})`
+        : '—';
+      lines.push(`| ${_dfCoverageMdCell(l.language)} | ${_dfCoverageMdCell(l.filesAnalyzed)} | ${_dfCoverageMdCell(l.filesExpected)} | ${_dfCoverageMdCell(l.tier)} | ${recall} |`);
+    }
+  }
+  lines.push('');
+  return lines.join('\n');
 }
 
 // `agentic-security dataflow diff [path] [--against <commit>]
