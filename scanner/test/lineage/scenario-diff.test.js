@@ -47,6 +47,41 @@ test('a remove_entity operation reports removedEntityIds for the node, its edge,
   assert.equal(changedEntities.find((c) => c.id === 'node:sink'), undefined);
 });
 
+// Finding 1 (task-3-review.md), the live reproduction: with
+// replace_recipient_fact now restricted to field:'destination' at the
+// applier level (scenario-engine.js), 'destination' is the ONLY field it
+// can ever write on a node — and that field IS watched, so a real applied
+// mutation is genuinely, verifiably visible to the diff. This is the
+// regression test for the review's exact scenario (previously
+// `field: 'subtype'`, silently invisible; now the one field the applier
+// still allows, correctly surfaced).
+test('a replace_recipient_fact operation surfaces node.destination as changed, and rejects a non-destination field so nothing else can ever go unwatched', () => {
+  const base = _fixtureGraph();
+  const { graph, skippedOperations } = applyScenario(base, {
+    operations: [
+      { kind: 'replace_recipient_fact', targetNodeId: 'node:sink', field: 'destination', value: { literalValue: 'moved.example.com' } },
+      // Proves, in the same scenario, that a non-destination field never
+      // reaches the node at all — so there is nothing WATCHED_SCENARIO_FIELDS
+      // would need to additionally watch for this operation kind.
+      { kind: 'replace_recipient_fact', targetNodeId: 'node:sink', field: 'subtype', value: 'webhook' },
+    ],
+  });
+  assert.equal(skippedOperations.length, 1);
+  assert.match(skippedOperations[0].reason, /only supports field "destination"/);
+
+  const { changedEntities } = diffScenarioGraph(base, graph);
+  const nodeChange = changedEntities.find((c) => c.id === 'node:sink');
+  assert.equal(nodeChange.kind, 'node');
+  const destinationChange = nodeChange.changedFields.find((f) => f.field === 'destination');
+  assert.ok(destinationChange, 'node.destination change must be visible to diffScenarioGraph');
+  assert.equal(destinationChange.after.literalValue, 'moved.example.com');
+
+  // The rejected subtype write never happened, so the node's real subtype
+  // is untouched — nothing for the diff to have missed.
+  const node = graph.nodes.find((n) => n.id === 'node:sink');
+  assert.equal(node.subtype, 'external-api');
+});
+
 test('WATCHED_SCENARIO_FIELDS never includes an entity-identity field like id/kind/from/to', () => {
   for (const fields of Object.values(WATCHED_SCENARIO_FIELDS)) {
     assert.ok(!fields.includes('id'));

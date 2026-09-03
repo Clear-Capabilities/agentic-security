@@ -104,6 +104,24 @@ test('change_governance_fact overrides flow.governanceRefs', () => {
   assert.equal(flow.governanceRefs.lawfulBasis, 'consent');
 });
 
+// Finding 1 (task-3-review.md): replace_recipient_fact must be restricted
+// to exactly node.destination at the applier level — scenario.js's own
+// SCENARIO_OPERATION_REQUIRED_FIELDS never restricts `field`'s value, so
+// without this guard a real applied write to an arbitrary field (e.g.
+// 'subtype') would land on the node but be completely invisible to
+// scenario-diff.js's WATCHED_SCENARIO_FIELDS.node (which only watches
+// 'destination'/'storeDetail').
+test('replace_recipient_fact with a non-"destination" field is skipped, never applied', () => {
+  const { graph, appliedOperations, skippedOperations } = applyScenario(_fixtureGraph(), {
+    operations: [{ kind: 'replace_recipient_fact', targetNodeId: 'node:sink-external', field: 'subtype', value: 'webhook' }],
+  });
+  assert.equal(appliedOperations.length, 0);
+  assert.equal(skippedOperations.length, 1);
+  assert.match(skippedOperations[0].reason, /only supports field "destination"/);
+  const node = graph.nodes.find((n) => n.id === 'node:sink-external');
+  assert.equal(node.subtype, 'external-api'); // unchanged — the write never happened
+});
+
 test('an operation targeting a non-existent id is skipped, never throws', () => {
   const { graph, appliedOperations, skippedOperations } = applyScenario(_fixtureGraph(), {
     operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:does-not-exist' }],

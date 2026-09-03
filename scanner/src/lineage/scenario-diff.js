@@ -12,6 +12,15 @@
 // cause classification and no reidentification.
 
 export const WATCHED_SCENARIO_FIELDS = Object.freeze({
+  // 'destination' + 'storeDetail' are exhaustive by construction, not by
+  // convention: change_storage_fact/change_governance_fact write into an
+  // already-watched CONTAINER object, so any field they set is caught
+  // regardless of key; replace_recipient_fact is the one operation that
+  // writes directly onto the node's own top level, and scenario-engine.js
+  // restricts it, at the applier level, to exactly node.destination (any
+  // other `field` value is skipped, never applied) — so this list never
+  // needs to name a field replace_recipient_fact could reach beyond
+  // 'destination'. See scenario-engine.js's _applyReplaceRecipientFact.
   node: Object.freeze(['destination', 'storeDetail']),
   edge: Object.freeze(['protection.transit', 'protection.atRest', 'protection.handling']),
   flow: Object.freeze(['policyVerdict', 'protectionSummary', 'governanceRefs']),

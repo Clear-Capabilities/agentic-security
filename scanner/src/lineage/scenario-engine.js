@@ -114,9 +114,26 @@ function _applyRemoveEntity(graph, op) {
   return { ok: true };
 }
 
+// Scoped, at the applier level, to exactly `node.destination` — this
+// sub-project's own scoping doc maps "replace a provider or move region"
+// onto node.destination, the graph-level equivalent of a recipient's
+// technical endpoint, and nothing else. scenario.js's own
+// SCENARIO_OPERATION_REQUIRED_FIELDS only requires `field` be a non-empty
+// string, never restricts its value — a real applied write to any other
+// top-level node field (e.g. 'subtype') would land on the node but be
+// completely invisible to scenario-diff.js's WATCHED_SCENARIO_FIELDS.node
+// (which only watches 'destination'/'storeDetail'), since that list can
+// only stay exhaustive if this applier never writes outside it. Rejecting
+// any other field here — never widening the watch list — is what keeps
+// that list exhaustive by construction. Mirrors the existing "skip a
+// target id it can't find" pattern: reported in skippedOperations, never
+// thrown.
 function _applyReplaceRecipientFact(graph, op) {
   const node = _byId(graph.nodes).get(op.targetNodeId);
   if (!node) return { ok: false, reason: `targetNodeId "${op.targetNodeId}" not found in graph.nodes` };
+  if (op.field !== 'destination') {
+    return { ok: false, reason: `replace_recipient_fact only supports field "destination" (got "${op.field}") — this operation is scoped to a node's recipient/destination fact only` };
+  }
   node[op.field] = op.value;
   _recomputeTouchedFlows(graph, { nodeId: node.id }, op._opts);
   return { ok: true };
