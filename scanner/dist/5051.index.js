@@ -232,6 +232,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/api\/v1\/nodes\/([^/]+)\/?$/, handler: (graph, m) => (0,routes/* handleNode */.d5)(graph, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/v1\/edges\/([^/]+)\/?$/, handler: (graph, m) => (0,routes/* handleEdge */.Yu)(graph, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/v1\/flows\/([^/]+)\/?$/, handler: (graph, m) => (0,routes/* handleFlow */.jg)(graph, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/api\/v1\/query\/?$/, handler: (graph, m, body) => (0,routes/* handleQuery */.rR)(graph, body?.filter) },
 ];
 
 /**
@@ -395,9 +396,11 @@ function createExploreServer({
     _resetIdleTimer();
 
     // 3. Request-size cap, applied uniformly (S1's GET endpoints have no
-    // meaningful body, but the middleware exists now so S2's POST
-    // endpoints inherit it without retrofitting).
+    // meaningful body; Milestone 5's own POST /api/v1/query is the first
+    // real consumer). Milestone 5 also starts accumulating the actual body
+    // BYTES (not just the size) — no earlier route needed them.
     let bodySize = 0;
+    let bodyChunks = [];
     let aborted = false;
     req.on('data', (chunk) => {
       if (aborted) return;
@@ -411,7 +414,9 @@ function createExploreServer({
         // stream immediately can race the response write and cut it off
         // before the client sees it.
         res.once('finish', () => { try { req.destroy(); } catch { /* best-effort */ } });
+        return;
       }
+      bodyChunks.push(chunk);
     });
 
     req.on('end', () => {
@@ -431,8 +436,23 @@ function createExploreServer({
         return;
       }
 
+      // Milestone 5: parse the body ONLY for a matched route, and only as
+      // JSON when non-empty — every pre-M5 GET route still ignores this
+      // 3rd argument entirely, so an empty/missing body for them is a
+      // no-op, not an error.
+      let body;
+      if (bodyChunks.length > 0) {
+        try {
+          body = JSON.parse(Buffer.concat(bodyChunks).toString('utf8'));
+        } catch {
+          _sendJson(res, 400, { error: 'malformed JSON request body' });
+          finish(400);
+          return;
+        }
+      }
+
       try {
-        const result = matched.handler(graph, match);
+        const result = matched.handler(graph, match, body);
         _sendJson(res, result.status, result.body);
         finish(result.status);
       } catch {
@@ -472,9 +492,11 @@ function createExploreServer({
 /* harmony export */   Yu: () => (/* binding */ handleEdge),
 /* harmony export */   d5: () => (/* binding */ handleNode),
 /* harmony export */   fn: () => (/* binding */ handleGraph),
-/* harmony export */   jg: () => (/* binding */ handleFlow)
+/* harmony export */   jg: () => (/* binding */ handleFlow),
+/* harmony export */   rR: () => (/* binding */ handleQuery)
 /* harmony export */ });
 /* unused harmony export wrapResponse */
+/* harmony import */ var _lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(859);
 // routes.js — Milestone 3, sub-project Server, increment 1.
 //
 // Five pure GET-endpoint handlers, each `(graph, ...) -> {status, body}`.
@@ -486,6 +508,8 @@ function createExploreServer({
 // envelope fields PRD line 1326 names (quoted in the implementation plan):
 // "base graph/snapshot digest, schema/extension versions, scope, coverage,
 // limitations, and contributing canonical IDs."
+
+
 
 /**
  * Shared response envelope. Maps PRD line 1326's required fields onto the
@@ -547,6 +571,23 @@ function handleScan(graph) {
 /** The full graph document. No pagination/filtering in S1 (that's `query`'s job, S2). */
 function handleGraph(graph) {
   return { status: 200, body: wrapResponse(graph, graph, { canonicalIds: null }) };
+}
+
+/**
+ * A deterministic typed projection query — Milestone 5's own
+ * `POST /api/v1/query`, the S2 endpoint `handleGraph`'s own header
+ * comment named and deferred. `filter` is the exact `{nodeIds, edgeIds}`
+ * shape `dataflow export --filter`/`exportGraphJSON` already use — reused
+ * via `_filterGraph`, never reimplemented. `undefined`/`{}` returns the
+ * whole graph, identical to `handleGraph`. A malformed filter is a 400,
+ * never a thrown exception reaching the caller.
+ */
+function handleQuery(graph, filter) {
+  const check = (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__.validateFilterShape)(filter);
+  if (!check.valid) {
+    return { status: 400, body: { error: check.error } };
+  }
+  return { status: 200, body: wrapResponse((0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__/* ._filterGraph */ .e)(graph, filter), graph, { canonicalIds: null }) };
 }
 
 /** Look up one node by id. 404 with a clear body if not found. */

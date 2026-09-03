@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { handleScan, handleGraph, handleNode, handleEdge, handleFlow, wrapResponse } from '../../src/server/routes.js';
+import { handleScan, handleGraph, handleNode, handleEdge, handleFlow, handleQuery, wrapResponse } from '../../src/server/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The committed flagship reference fixture — small, real, and already used
@@ -36,6 +36,28 @@ test('handleGraph: the full graph document, wrapped in the envelope', () => {
   assert.deepEqual(body.data.nodes, graph.nodes);
   assert.deepEqual(body.data.edges, graph.edges);
   assert.deepEqual(body.data.flows, graph.flows);
+});
+
+test('handleQuery: valid filter narrows the graph via _filterGraph, same envelope as handleGraph', () => {
+  const targetNode = graph.nodes[0];
+  const { status, body } = handleQuery(graph, { nodeIds: [targetNode.id], edgeIds: [] });
+  assert.equal(status, 200);
+  assert.equal(body.digest, graph.graphId);
+  assert.equal(body.canonicalIds, null);
+  assert.deepEqual(body.data.nodes, [targetNode]);
+  assert.equal(body.data.edges.length, 0);
+});
+
+test('handleQuery: undefined/empty filter returns the whole graph, same as handleGraph', () => {
+  const { status, body } = handleQuery(graph, undefined);
+  assert.equal(status, 200);
+  assert.deepEqual(body.data.nodes, graph.nodes);
+});
+
+test('handleQuery: malformed filter -> 400 with a clear message, never throws', () => {
+  const { status, body } = handleQuery(graph, { nodeIds: 'not-an-array' });
+  assert.equal(status, 400);
+  assert.match(body.error, /must be a JSON object/);
 });
 
 test('handleNode: found -> 200 with the node and its own id as canonicalIds', () => {

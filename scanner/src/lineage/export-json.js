@@ -146,6 +146,35 @@ export function computeGraphDigest(graph) {
 //   referenced by nothing remaining (orphaned, not dangling — the
 //   opposite direction of the two problems narrowed above), a disclosed,
 //   deliberate non-goal of this filter, not an oversight.
+/**
+ * `validateFilterShape(filter) -> {valid, error}` — shape-validates an
+ * `opts.filter` value BEFORE it ever reaches `_filterGraph`. `_filterGraph`
+ * does `new Set(filter.nodeIds ?? [])`, and `new Set("not-an-array")`
+ * iterates a string as characters instead of throwing (a real JS
+ * foot-gun) — a malformed-but-truthy filter would otherwise silently
+ * produce an empty/wrong graph instead of a clear error. `undefined`
+ * (no filter at all) and `{}` (an empty, valid filter) both pass.
+ * Extracted from `bin/agentic-security.js`'s own original inline
+ * `--filter` validation (verbatim logic, not rewritten) so the CLI,
+ * the `explore` server's new `POST /api/v1/query` endpoint, and the
+ * `dataflow_get_graph` MCP tool all share the identical protection
+ * rather than three independent, potentially-drifting copies.
+ */
+export function validateFilterShape(filter) {
+  if (filter === undefined) return { valid: true, error: null };
+  if (typeof filter !== 'object' || filter === null || Array.isArray(filter)
+    || (filter.nodeIds !== undefined && !Array.isArray(filter.nodeIds))
+    || (filter.edgeIds !== undefined && !Array.isArray(filter.edgeIds))) {
+    // Deliberately starts with "must be", not "filter must be" — the CLI
+    // wraps this with its own "--filter file \"X\"" prefix (see
+    // bin/agentic-security.js's own call site); the server/MCP call sites
+    // use it standalone, where "must be a JSON object..." already reads
+    // correctly with no file-path context needed.
+    return { valid: false, error: 'must be a JSON object of the form {"nodeIds":[...],"edgeIds":[...]} (both optional, but if present must be arrays)' };
+  }
+  return { valid: true, error: null };
+}
+
 export function _filterGraph(graph, filter) {
   if (!filter) return graph;
   const nodeIds = new Set(filter.nodeIds ?? []);

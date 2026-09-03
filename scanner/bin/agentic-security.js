@@ -3467,18 +3467,15 @@ async function cmdDataflowExport(args) {
       process.stderr.write(`agentic-security dataflow export: could not read/parse --filter file "${args.flags.filter}": ${e.message}\n`);
       return 2;
     }
-    // Shape-validate rather than pass through whatever JSON.parse returned —
-    // found by Task 1's own review: exportGraphJSON's _filterGraph does
-    // `new Set(filter.nodeIds ?? [])`, and `new Set("not-an-array")`
-    // iterates a string as characters instead of throwing (a real JS
-    // foot-gun, reproduced live by the reviewer), so a malformed-but-valid
-    // --filter file silently produced an empty graph instead of a clear
-    // error. Only nodeIds/edgeIds are ever read by any consumer of this
-    // opts.filter — reject anything else here, before it reaches them.
-    if (typeof filter !== 'object' || filter === null || Array.isArray(filter)
-      || (filter.nodeIds !== undefined && !Array.isArray(filter.nodeIds))
-      || (filter.edgeIds !== undefined && !Array.isArray(filter.edgeIds))) {
-      process.stderr.write(`agentic-security dataflow export: --filter file "${args.flags.filter}" must be a JSON object of the form {"nodeIds":[...],"edgeIds":[...]} (both optional, but if present must be arrays).\n`);
+    // Milestone 5, large-graph pagination: this shape check now lives in
+    // export-json.js's validateFilterShape (extracted verbatim from what
+    // was previously this file's own inline copy) so the server's new
+    // POST /api/v1/query endpoint and the dataflow_get_graph MCP tool
+    // share the identical protection rather than a third, drifting copy.
+    const { validateFilterShape } = await import('../src/lineage/export-json.js');
+    const filterCheck = validateFilterShape(filter);
+    if (!filterCheck.valid) {
+      process.stderr.write(`agentic-security dataflow export: --filter file "${args.flags.filter}" ${filterCheck.error}.\n`);
       return 2;
     }
     // exportFlowsCSV(graph) takes no opts at all — found by the final

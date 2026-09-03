@@ -10,6 +10,8 @@
 // "base graph/snapshot digest, schema/extension versions, scope, coverage,
 // limitations, and contributing canonical IDs."
 
+import { _filterGraph, validateFilterShape } from '../lineage/export-json.js';
+
 /**
  * Shared response envelope. Maps PRD line 1326's required fields onto the
  * graph's own real fields:
@@ -70,6 +72,23 @@ export function handleScan(graph) {
 /** The full graph document. No pagination/filtering in S1 (that's `query`'s job, S2). */
 export function handleGraph(graph) {
   return { status: 200, body: wrapResponse(graph, graph, { canonicalIds: null }) };
+}
+
+/**
+ * A deterministic typed projection query — Milestone 5's own
+ * `POST /api/v1/query`, the S2 endpoint `handleGraph`'s own header
+ * comment named and deferred. `filter` is the exact `{nodeIds, edgeIds}`
+ * shape `dataflow export --filter`/`exportGraphJSON` already use — reused
+ * via `_filterGraph`, never reimplemented. `undefined`/`{}` returns the
+ * whole graph, identical to `handleGraph`. A malformed filter is a 400,
+ * never a thrown exception reaching the caller.
+ */
+export function handleQuery(graph, filter) {
+  const check = validateFilterShape(filter);
+  if (!check.valid) {
+    return { status: 400, body: { error: check.error } };
+  }
+  return { status: 200, body: wrapResponse(_filterGraph(graph, filter), graph, { canonicalIds: null }) };
 }
 
 /** Look up one node by id. 404 with a clear body if not found. */

@@ -389,3 +389,136 @@ test('a rejected static path returns 404, never 403 (never confirms a path\'s ex
     server.close();
   }
 });
+
+// --- Milestone 5, large-graph pagination: POST /api/v1/query ---
+
+test('POST /api/v1/query: valid filter narrows the graph over a real live request', async () => {
+  const { server, port, sessionToken } = await startTestServer();
+  try {
+    const targetNodeId = GRAPH.nodes[0].id;
+    const payload = JSON.stringify({ filter: { nodeIds: [targetNodeId], edgeIds: [] } });
+    const res = await request(
+      port,
+      {
+        method: 'POST',
+        path: '/api/v1/query',
+        headers: {
+          host: `127.0.0.1:${port}`,
+          [TOKEN_HEADER]: sessionToken,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(payload),
+        },
+      },
+      payload,
+    );
+    assert.equal(res.status, 200, `expected 200, got ${res.status}: ${JSON.stringify(res.body)}`);
+    assert.equal(res.body.data.nodes.length, 1);
+    assert.equal(res.body.data.nodes[0].id, targetNodeId);
+    assert.equal(res.body.digest, GRAPH.graphId);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/v1/query: omitting the body returns the whole graph, unchanged', async () => {
+  const { server, port, sessionToken } = await startTestServer();
+  try {
+    const res = await request(port, {
+      method: 'POST',
+      path: '/api/v1/query',
+      headers: { host: `127.0.0.1:${port}`, [TOKEN_HEADER]: sessionToken },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.nodes.length, GRAPH.nodes.length);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/v1/query: missing session token -> 401, same as every other route', async () => {
+  const { server, port } = await startTestServer();
+  try {
+    const res = await request(port, {
+      method: 'POST',
+      path: '/api/v1/query',
+      headers: { host: `127.0.0.1:${port}` },
+    });
+    assert.equal(res.status, 401);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/v1/query: malformed JSON body -> 400, never a 500', async () => {
+  const { server, port, sessionToken } = await startTestServer();
+  try {
+    const bad = '{not valid json';
+    const res = await request(
+      port,
+      {
+        method: 'POST',
+        path: '/api/v1/query',
+        headers: {
+          host: `127.0.0.1:${port}`,
+          [TOKEN_HEADER]: sessionToken,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(bad),
+        },
+      },
+      bad,
+    );
+    assert.equal(res.status, 400);
+    assert.match(String(res.body.error ?? res.body), /malformed JSON/);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/v1/query: an invalid filter shape -> 400 with a clear message', async () => {
+  const { server, port, sessionToken } = await startTestServer();
+  try {
+    const payload = JSON.stringify({ filter: { nodeIds: 'not-an-array' } });
+    const res = await request(
+      port,
+      {
+        method: 'POST',
+        path: '/api/v1/query',
+        headers: {
+          host: `127.0.0.1:${port}`,
+          [TOKEN_HEADER]: sessionToken,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(payload),
+        },
+      },
+      payload,
+    );
+    assert.equal(res.status, 400);
+    assert.match(res.body.error, /must be a JSON object/);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/v1/query: oversized body -> 413, same cap as every other route', async () => {
+  const { server, port, sessionToken } = await startTestServer();
+  try {
+    const big = 'x'.repeat(70 * 1024); // > MAX_REQUEST_BODY_BYTES (64KB)
+    const res = await request(
+      port,
+      {
+        method: 'POST',
+        path: '/api/v1/query',
+        headers: {
+          host: `127.0.0.1:${port}`,
+          [TOKEN_HEADER]: sessionToken,
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(big),
+        },
+      },
+      big,
+    );
+    assert.equal(res.status, 413);
+  } finally {
+    server.close();
+  }
+});

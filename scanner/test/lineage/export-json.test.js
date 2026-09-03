@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeGraphDigest, exportGraphJSON } from '../../src/lineage/export-json.js';
+import { computeGraphDigest, exportGraphJSON, validateFilterShape } from '../../src/lineage/export-json.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FLAGSHIP_PATH = path.join(__dirname, '../../src/lineage/fixtures/flagship-graph.json');
@@ -151,6 +151,24 @@ test('exportGraphJSON: flow narrowing requires the FULL edgeIds subset, not just
   assert.deepEqual(new Set(result.graph.edges.map((e) => e.id)), new Set(keptEdgeIds));
   assert.equal(result.graph.flows.length, 1, 'both candidate flows share source+sink; only the one whose full edgeIds[] survives should remain');
   assert.equal(result.graph.flows[0].id, 'flow:f7273b6e7b61');
+});
+
+test('validateFilterShape: accepts undefined, {}, and well-formed {nodeIds,edgeIds}', () => {
+  assert.deepEqual(validateFilterShape(undefined), { valid: true, error: null });
+  assert.deepEqual(validateFilterShape({}), { valid: true, error: null });
+  assert.deepEqual(validateFilterShape({ nodeIds: ['a'], edgeIds: ['b'] }), { valid: true, error: null });
+  assert.deepEqual(validateFilterShape({ nodeIds: [] }), { valid: true, error: null });
+});
+
+test('validateFilterShape: rejects non-object, array, and non-array nodeIds/edgeIds', () => {
+  assert.equal(validateFilterShape('not-an-object').valid, false);
+  assert.equal(validateFilterShape(null).valid, false);
+  assert.equal(validateFilterShape([]).valid, false);
+  assert.equal(validateFilterShape({ nodeIds: 'not-an-array' }).valid, false);
+  assert.equal(validateFilterShape({ edgeIds: 'not-an-array' }).valid, false);
+  assert.equal(validateFilterShape(42).valid, false);
+  const r = validateFilterShape('bad');
+  assert.match(r.error, /must be a JSON object/);
 });
 
 // The negative (redact:false) test above proves nothing is redacted when

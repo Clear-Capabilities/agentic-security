@@ -13,7 +13,7 @@ import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isValidHost, constantTimeEqual, CSP_HEADER_VALUE } from './security.js';
-import { handleScan, handleGraph, handleNode, handleEdge, handleFlow } from './routes.js';
+import { handleScan, handleGraph, handleNode, handleEdge, handleFlow, handleQuery } from './routes.js';
 import { resolveStaticAsset, FRONTEND_ROOT, STATIC_CSP_HEADER_VALUE } from './static-assets.js';
 
 // Idle-timeout default. No PRD-specified duration exists (confirmed by the
@@ -63,6 +63,7 @@ const ROUTES = [
   { method: 'GET', pattern: /^\/api\/v1\/nodes\/([^/]+)\/?$/, handler: (graph, m) => handleNode(graph, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/v1\/edges\/([^/]+)\/?$/, handler: (graph, m) => handleEdge(graph, decodeURIComponent(m[1])) },
   { method: 'GET', pattern: /^\/api\/v1\/flows\/([^/]+)\/?$/, handler: (graph, m) => handleFlow(graph, decodeURIComponent(m[1])) },
+  { method: 'POST', pattern: /^\/api\/v1\/query\/?$/, handler: (graph, m, body) => handleQuery(graph, body?.filter) },
 ];
 
 /**
@@ -226,9 +227,11 @@ export function createExploreServer({
     _resetIdleTimer();
 
     // 3. Request-size cap, applied uniformly (S1's GET endpoints have no
-    // meaningful body, but the middleware exists now so S2's POST
-    // endpoints inherit it without retrofitting).
+    // meaningful body; Milestone 5's own POST /api/v1/query is the first
+    // real consumer). Milestone 5 also starts accumulating the actual body
+    // BYTES (not just the size) — no earlier route needed them.
     let bodySize = 0;
+    let bodyChunks = [];
     let aborted = false;
     req.on('data', (chunk) => {
       if (aborted) return;
@@ -242,7 +245,9 @@ export function createExploreServer({
         // stream immediately can race the response write and cut it off
         // before the client sees it.
         res.once('finish', () => { try { req.destroy(); } catch { /* best-effort */ } });
+        return;
       }
+      bodyChunks.push(chunk);
     });
 
     req.on('end', () => {
@@ -262,8 +267,23 @@ export function createExploreServer({
         return;
       }
 
+      // Milestone 5: parse the body ONLY for a matched route, and only as
+      // JSON when non-empty — every pre-M5 GET route still ignores this
+      // 3rd argument entirely, so an empty/missing body for them is a
+      // no-op, not an error.
+      let body;
+      if (bodyChunks.length > 0) {
+        try {
+          body = JSON.parse(Buffer.concat(bodyChunks).toString('utf8'));
+        } catch {
+          _sendJson(res, 400, { error: 'malformed JSON request body' });
+          finish(400);
+          return;
+        }
+      }
+
       try {
-        const result = matched.handler(graph, match);
+        const result = matched.handler(graph, match, body);
         _sendJson(res, result.status, result.body);
         finish(result.status);
       } catch {
