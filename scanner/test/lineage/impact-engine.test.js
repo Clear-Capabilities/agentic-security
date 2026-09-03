@@ -99,6 +99,45 @@ test('computeImpactAssessment: graph.recipientProfiles absent degrades to empty 
   assert.deepEqual(record.affectedRecipientProfileIds, []);
 });
 
+test('computeImpactAssessment: a dataElement target on a branching topology does NOT sweep in an unrelated sink reached only by a different flow (fix round 1, review-reported)', () => {
+  // One source, three sinks (A/B/C). data:shared flows via real Flow
+  // records to sinks A and B only; sink C is reached only by a
+  // structurally separate flow carrying a different data element.
+  // showAllPaths (a topology-wide BFS) would incorrectly sweep sink C
+  // in via node:src's edge to it, since it doesn't restrict to any
+  // particular flow's own edges — the exact bug this fix closes.
+  const graph = {
+    graphId: 'graph:branching', schemaVersion: '1.0.0',
+    nodes: [
+      { id: 'node:src', kind: 'source', subtype: 'user-input' },
+      { id: 'node:sinkA', kind: 'sink', subtype: 'external-api' },
+      { id: 'node:sinkB', kind: 'sink', subtype: 'external-api' },
+      { id: 'node:sinkC', kind: 'sink', subtype: 'log' },
+    ],
+    edges: [
+      { id: 'edge:srcA', from: 'node:src', to: 'node:sinkA', relationship: 'flows_to' },
+      { id: 'edge:srcB', from: 'node:src', to: 'node:sinkB', relationship: 'flows_to' },
+      { id: 'edge:srcC', from: 'node:src', to: 'node:sinkC', relationship: 'flows_to' },
+    ],
+    dataElements: [
+      { id: 'data:shared', name: 'shared', dataClasses: ['PII'] },
+      { id: 'data:other', name: 'other', dataClasses: ['CONFIDENTIAL'] },
+    ],
+    flows: [
+      { id: 'flow:a', dataElementIds: ['data:shared'], source: 'node:src', sink: 'node:sinkA', edgeIds: ['edge:srcA'] },
+      { id: 'flow:b', dataElementIds: ['data:shared'], source: 'node:src', sink: 'node:sinkB', edgeIds: ['edge:srcB'] },
+      { id: 'flow:c', dataElementIds: ['data:other'], source: 'node:src', sink: 'node:sinkC', edgeIds: ['edge:srcC'] },
+    ],
+  };
+
+  const record = computeImpactAssessment(graph, 'data:shared');
+  assert.equal(record.targetKind, 'dataElement');
+  assert.deepEqual([...record.affectedNodeIds].sort(), ['node:sinkA', 'node:sinkB', 'node:src']);
+  assert.ok(!record.affectedNodeIds.includes('node:sinkC'), 'unrelated sink C must not be swept in');
+  assert.deepEqual([...record.affectedEdgeIds].sort(), ['edge:srcA', 'edge:srcB']);
+  assert.ok(!record.affectedEdgeIds.includes('edge:srcC'));
+});
+
 test('computeImpactAssessment: id, graphId, graphDigest, generatedAt are all real, non-placeholder values', () => {
   const record = computeImpactAssessment(_fixtureGraph(), 'node:source');
   assert.match(record.id, /^impact:[0-9a-f]+$/);

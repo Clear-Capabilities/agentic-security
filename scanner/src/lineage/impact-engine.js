@@ -29,9 +29,10 @@ function _resolveTargetKind(targetId) {
 
 // Every node id a target resolves to, as the seed set for showAllPaths.
 // A node target is itself; an edge target is its own from/to; a flow
-// target is its own source/sink; a dataElement target is every node any
-// flow carrying that data element touches (source/sink, since a flow's
-// own intermediate hops aren't separately recorded on the flow object).
+// target is its own source/sink. dataElement targets never reach this
+// function — they get their own direct trace via _dataElementAffectedSet
+// below, never seeded into the topology-wide showAllPaths BFS. See that
+// function's header comment for why.
 function _seedNodeIds(graph, targetId, targetKind) {
   if (targetKind === 'node') return [targetId];
   if (targetKind === 'edge') {
@@ -42,14 +43,37 @@ function _seedNodeIds(graph, targetId, targetKind) {
     const flow = (graph.flows ?? []).find((f) => f.id === targetId);
     return flow ? [flow.source, flow.sink] : [];
   }
-  if (targetKind === 'dataElement') {
-    const ids = new Set();
-    for (const f of graph.flows ?? []) {
-      if (f.dataElementIds?.includes(targetId)) { ids.add(f.source); ids.add(f.sink); }
-    }
-    return [...ids];
-  }
   return [];
+}
+
+// dataElement targets get their own direct trace, deliberately NOT
+// showAllPaths — a data element's blast radius is "which flows
+// actually carry this specific piece of data", not "everything
+// topologically reachable from a node this data happened to touch".
+// showAllPaths is a topology-wide BFS (unrestricted to any particular
+// flow), so seeding it from a data element's own source/sink nodes
+// would sweep in unrelated sinks reached by OTHER flows through the
+// same node — reproduced live by this task's own review on a
+// branching-topology graph (one source, three sinks, the target data
+// element flowing to only two of them; showAllPaths incorrectly
+// included the third). Node/edge/flow targets keep the showAllPaths
+// BFS below — for those, "everything topologically reachable from the
+// compromised node/edge/flow's own endpoints" IS the intended
+// pessimistic scope:'possible' semantics.
+function _dataElementAffectedSet(graph, targetId) {
+  const nodeIds = new Set();
+  const edgeIds = new Set();
+  for (const f of graph.flows ?? []) {
+    if (!f.dataElementIds?.includes(targetId)) continue;
+    nodeIds.add(f.source);
+    nodeIds.add(f.sink);
+    for (const eId of f.edgeIds ?? []) {
+      edgeIds.add(eId);
+      const edge = (graph.edges ?? []).find((e) => e.id === eId);
+      if (edge) { nodeIds.add(edge.from); nodeIds.add(edge.to); }
+    }
+  }
+  return { nodeIds, edgeIds };
 }
 
 function _affectedDataClasses(graph, affectedEdgeIds) {
@@ -90,6 +114,13 @@ function _coverageLimitations(graph) {
  * that does not exist in the graph degrades honestly to empty
  * affected-* arrays, never an error — mirrors applyScenario's own
  * skip-not-throw contract for a stale/missing target.
+ *
+ * `node`/`edge`/`flow` targets report a deliberately pessimistic
+ * "everything topologically reachable" blast radius (matching
+ * `scope: 'possible'`), while `dataElement` targets report only the
+ * flows/nodes/edges that actually carry that specific data element —
+ * the two target-kind families answer genuinely different questions,
+ * both honestly disclosed rather than silently conflated.
  */
 export function computeImpactAssessment(graph, targetId, opts = {}) {
   const targetKind = _resolveTargetKind(targetId);
@@ -105,13 +136,22 @@ export function computeImpactAssessment(graph, targetId, opts = {}) {
   // would surface as a phantom single-node "affected" set instead of
   // degrading honestly to empty arrays.
   const realNodeIds = new Set((graph.nodes ?? []).map((n) => n.id));
-  const seedNodeIds = _seedNodeIds(graph, targetId, targetKind).filter((id) => realNodeIds.has(id));
   const affectedNodeIds = new Set();
   const affectedEdgeIds = new Set();
-  for (const seedId of seedNodeIds) {
-    const { nodeIds, edgeIds } = showAllPaths(graph, seedId);
-    for (const id of nodeIds) affectedNodeIds.add(id);
+
+  if (targetKind === 'dataElement') {
+    // Direct flow-based trace — never showAllPaths. See
+    // _dataElementAffectedSet's own header comment for why.
+    const { nodeIds, edgeIds } = _dataElementAffectedSet(graph, targetId);
+    for (const id of nodeIds) if (realNodeIds.has(id)) affectedNodeIds.add(id);
     for (const id of edgeIds) affectedEdgeIds.add(id);
+  } else {
+    const seedNodeIds = _seedNodeIds(graph, targetId, targetKind).filter((id) => realNodeIds.has(id));
+    for (const seedId of seedNodeIds) {
+      const { nodeIds, edgeIds } = showAllPaths(graph, seedId);
+      for (const id of nodeIds) affectedNodeIds.add(id);
+      for (const id of edgeIds) affectedEdgeIds.add(id);
+    }
   }
 
   const graphDigest = computeGraphDigest(graph);
