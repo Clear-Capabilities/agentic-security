@@ -219,6 +219,16 @@ export function exportGraphJSON(graph, opts = {}) {
     // content should re-filter/re-redact the source and compare, not
     // treat this digest as a hash of the returned body.
     digest: computeGraphDigest(graph),
+    // A SEPARATE digest of the emitted `graph:` body itself (final
+    // whole-branch review, M5 deliverable #8, B1) — this is the field a
+    // consumer that received ONLY this exported file (no access to the
+    // source graph) must compare against to detect tampering in transit.
+    // `digest` above cannot serve that purpose whenever redact/filter
+    // changed anything, which is the DEFAULT case (redact is on by
+    // default) — comparing `digest` against a recomputation over `body`
+    // is exactly the bug this field exists to prevent a future consumer
+    // from re-introducing.
+    bodyDigest: computeGraphDigest(body),
     scope: graph?.scope ?? null,
     coverage: graph?.coverage ?? null,
     limitations: graph?.limitations ?? [],

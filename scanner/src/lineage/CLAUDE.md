@@ -1094,12 +1094,53 @@ problem.
 |---|---|
 | `docs/superpowers/plans/2026-09-02-data-flow-explorer-m5-cross-repo-scoping.md` + `…-plan.md` | The scoping investigation's own real correction against the parent M5 row: FR-304's "declared or imported" is two mechanisms with two different dependency profiles (`DFG-025`'s own `DFG-002`+`DFG-007` dependencies only make sense once this split is explicit), not one phrase to scope as a unit — this deliverable covers only the "declared" half. Also settles, via direct reading of `validate.js`'s `_validateEdge`, that a cross-repo entry can never be a core-schema `graph.edges[]` member at all (both endpoints must resolve against the ONE graph's own `nodeIds` set) — the id-collision risk the parent row named cannot actually occur under a correctly-scoped design, since a foreign node id is never looked up against a merged set. |
 | `cross-repo-link.js` | The `CrossRepoLink` §10.10 extension contract — mirrors `recipient-profile.js`'s own file shape exactly (pure module, `{valid, errors}` validator, zero graph access at construction time), with the one real, disclosed departure that module's own header discloses for itself: no per-field `fieldEvidence` map, since every field on a `CrossRepoLink` is uniformly operator-declared. `provenance` reuses `schema.js`'s already-shipped `EDGE_PROVENANCE_VALUES` — this deliverable's CLI is the first real producer of `'manual'` anywhere in this codebase (every shipped edge is `provenance: 'code'`, per Milestone 2 Sub-project F increment 1). `relationship` is fixed to `'data_flow'`, mirroring `edge.relationship`'s own single legal value. `ids.js` gained `crossRepoLinkId({localGraphId, localGraphDigest, localNodeId, remoteGraphId, remoteGraphDigest, remoteNodeId, relationship}, discriminatorParts)` — mirrors `recipientProfileId`'s own `(graphId, graphDigest, ...)` discriminator shape, doubled for both endpoints. |
-| `federation-loader.js` | `loadRemoteGraphExport(filePath) -> {ok, graph, digest, digestMatches, reason, message}` — reads an `exportGraphJSON`-shaped file (`dataflow export --format json`'s own artifact), recomputes `computeGraphDigest(parsed.graph)` and compares it to the file's own embedded `digest`, then runs the existing `validateGraph(parsed.graph)` before anything reads a referenced remote node id. Deliberately does NOT reuse `scanner/src/server/graph-loader.js`'s `loadSignedGraph` for the remote side — that function authenticates against a PER-INSTALL HMAC key, the wrong trust model for a file that crossed a repo/machine boundary in the common case (two repos scanned on two different machines sign under two different keys by default). Four distinct outcomes: `missing`, `malformed` (not JSON, or not an `exportGraphJSON` envelope), `invalid-graph` (fails `validateGraph()`), and `digest-mismatch` — the one outcome that is NOT a blocking failure (`ok:true, digestMatches:false`): a self-consistency check, never authentication, surfaced as a warning the CLI must show and does not by itself refuse. |
+| `federation-loader.js` | `loadRemoteGraphExport(filePath) -> {ok, graph, digest, digestMatches, reason, message}` — reads an `exportGraphJSON`-shaped file (`dataflow export --format json`'s own artifact), recomputes `computeGraphDigest(parsed.graph)` and compares it to the file's own embedded `bodyDigest` (final whole-branch review, fix round 1, B1 — corrected from `digest`; see below), then runs the existing `validateGraph(parsed.graph)` before anything reads a referenced remote node id. `digest` identifies the SOURCE graph regardless of redaction/filtering; `bodyDigest` identifies the exact bytes this file actually contains, which is what a self-consistency check over a received file needs. Deliberately does NOT reuse `scanner/src/server/graph-loader.js`'s `loadSignedGraph` for the remote side — that function authenticates against a PER-INSTALL HMAC key, the wrong trust model for a file that crossed a repo/machine boundary in the common case (two repos scanned on two different machines sign under two different keys by default). Four distinct outcomes: `missing`, `malformed` (not JSON, or not an `exportGraphJSON` envelope), `invalid-graph` (fails `validateGraph()`), and `digest-mismatch` — the one outcome that is NOT a blocking failure (`ok:true, digestMatches:false`): a self-consistency check, never authentication, surfaced as a warning the CLI must show and does not by itself refuse. |
 | `graph-builder.js` (extended, additively) | Gained a SIXTH additive hook of the `opts.buildRecipientProfile`/`opts.correlateObservations` shape: `opts.crossRepoLinks(graph) -> CrossRepoLink[]`, applied once every graph array AND `recipientProfiles` are populated (the hook can validate a declared `local.nodeId` against the CURRENT graph's own real node set). `graph.crossRepoLinks` is always present — mirrors `graph.recipientProfiles[]`'s own "always an array, possibly empty" shape (unlike `graph.runtimeCorroboration`'s own "genuinely absent when the hook is omitted" shape, since a `CrossRepoLink` array has no `not_evaluated` state to preserve). Never in `dataflow-graph.schema.json`, never routed through `validateGraph()` — the SECOND §10.10 extension array ever attached directly to the graph object. |
 | `coverage.js` (extended, additively) | `buildGraphWithCoverage` composes a default `opts.crossRepoLinks` hook over a PRE-LOADED `opts.crossRepoLinkRecords` array (mirroring `opts.recipientConfig`'s own precedent) — installed only when `opts.crossRepoLinkRecords !== undefined`. The default hook DROPS any record whose `local.nodeId` no longer resolves against the graph's own current node set (a stale declaration from before a rescan renamed/removed the node), reporting every drop via `console.error` rather than silently keeping it stale — matching `applyScenario`'s own "skippedOperations, never thrown" honesty precedent. |
 | `index.js` (extended, additively) | Loads `.agentic-security/cross-repo-links.json` exactly once per `buildLineageGraph` call, gated on `fs.existsSync` — mirroring the `privacySinkPolicy` existence-gated pattern, not `recipientConfig`'s unconditional-call one, since a missing file here means "no links declared." A small, local, tolerant `_loadCrossRepoLinkRecords` reader (per-entry validated via `validateCrossRepoLink`, mirroring `loadRecipientConfig`'s own fail-closed, skip-the-whole-entry-on-any-defect discipline) lives in this file rather than in `cross-repo-link.js` (which must stay a pure, zero-fs-access module) or `federation-loader.js` (which owns only the REMOTE side). |
 | `bin/agentic-security.js` (extended, additively) | `cmdFederateDeclare`/`cmdFederateList`, dispatched via a NEW top-level `case 'federate':` (not a `dataflow` subcommand — this writes operator-declared config, never the scanned graph, the identical reasoning `commands/governance.md`/`commands/remediation.md` already establish, now a THREE-times-repeated pattern). `federate declare` reuses `governance-edit.js`'s exact 5-part write contract (version guard before any read of the remote file or validation; load+validate the remote export, a digest-mismatch printed as a warning that never blocks `--yes`; confirm `--local-node` exists in the current local graph via `loadSignedGraph` and `--remote-node` exists in the remote export's own `nodes[]`; on `--yes`, backup to `cross-repo-links-backups/` then an atomic write (via the already-shipped `_writeConfigAtomic`) then a real hash-chained `federate_declare` audit event via `auditCall`). `federate list` mirrors `dataflow observations list`'s own precedent — read-only, never fabricates "still valid" when it cannot check. Both registered in `posture/artifact-registry.js` (`cross-repo-links.json`: `operator-config`; `cross-repo-links-backups/`: `generated`/`backup`). |
 | `commands/federate.md` | New top-level dispatcher markdown (14th dispatcher, root `CLAUDE.md`'s own dispatcher count updated to match) — same frontmatter/Options-table/Examples/Implementation-block shape as `commands/governance.md`. States plainly: CLI-only, "declared" flavor of FR-304 only, every write backs up the prior file and appends a real audit event, the remote-side trust model is a self-consistency digest check, never cryptographic authentication. |
+
+**Final whole-branch review, fix round 1** — 3 real bugs that survived five
+clean task-level reviews and a fully green test suite, plus one small
+exit-code alignment fix. **B1 (Blocking):** the remote self-consistency
+digest check was inverted for the DEFAULT case — `exportGraphJSON` embeds
+`digest: computeGraphDigest(graph)` (the SOURCE graph's digest, deliberately
+unaffected by redaction/filtering) but `graph: body` (the redacted/filtered
+view, redaction ON by default); `federation-loader.js` recomputed the
+digest over `body` and compared it to `digest`, so an un-tampered,
+default-redacted export permanently read `digestMatches: false`, and a
+genuine tamper was indistinguishable from routine redaction. Fixed by
+adding a SEPARATE `bodyDigest: computeGraphDigest(body)` field to the
+export envelope (`export-json.js`) and switching `federation-loader.js`'s
+self-consistency check to compare against it instead — additive, zero
+change to `digest`'s own meaning or any other consumer of it. The shipped
+test suite never caught this because `federation-loader.test.js`'s own
+fixture builder called `exportGraphJSON(graph, { redact: false })` — the
+NON-default option — for every fixture; now fixed to build via the real
+default. **B2 (Important):** `redact-graph.js`'s `_redactGraph` covered
+`nodes`/`evidence`/`recipientProfiles` but not `crossRepoLinks` — the THIRD
+time this exact gap class recurred in this file's own history (see that
+file's own header comment), and this deliverable did it again: a
+`--rationale` containing a secret pattern, and `remote.sourceFile`/
+`remote.repository`, all exported verbatim under default redaction. Fixed
+by adding `_redactCrossRepoLink` (mirrors `_redactRecipientProfile`'s own
+shape) and wiring it into `_redactGraph`. **B3 (Important):** two related
+bugs in `cmdFederateDeclare` — (1) `localGraphDigest` was computed over
+the FULL local graph, including `crossRepoLinks` (which
+`computeGraphDigest`'s `EXCLUDE_KEYS` does not exclude), creating a
+feedback loop where declare → rescan (the graph now carries the new link,
+changing its own digest) → declaring the SAME real-world fact again mints
+a DIFFERENT id, since the digest that fed the id changed for reasons
+unrelated to the application's own data-flow shape — fixed by stripping
+`crossRepoLinks` from the graph object before hashing; (2) the write path
+had no dedupe-by-id, so two identical `federate declare --yes` runs
+appended two entries with the same id — fixed by filtering out any
+existing entry with the new record's id before appending (replace in
+place, preserve every other entry untouched). **Exit-code alignment:**
+`cmdFederateDeclare`'s `loadSignedGraph` failure path returned exit `2`,
+the sole outlier among all six other `loadSignedGraph` call sites in
+`bin/agentic-security.js` (all exit `1`) — corrected to `1`.
 
 **Explicitly NOT modified**: `dataflow-graph.schema.json`, `validate.js`'s
 `validateGraph()` (the new record is never routed through it, mirroring
@@ -1122,6 +1163,24 @@ cut here); automatic cross-repo `RecipientProfile` consolidation (a
 `RecipientProfile` records describe the same real-world vendor); a
 live-refresh/auto-resync mechanism (`federate list`'s own validity check
 is read-only and on-demand).
+
+**Two Minor findings, disclosed (final whole-branch review), not fixed —
+each matches an EXISTING, already-accepted limitation this codebase
+already carries elsewhere, so fixing either here would be new,
+out-of-proportion scope for this deliverable, not a regression it
+introduced uniquely.** `_filterGraph` (`export-json.js`) narrows only
+nodes/edges/flows/dataElements — a `--filter` can produce an export where
+a `crossRepoLink.local.nodeId` is no longer present in the filtered
+`graph.nodes`; `graph.recipientProfiles` has the identical shape today
+(also unfiltered) and is not treated as a bug requiring a fix in this
+deliverable's own scope either. And `index.js`'s
+`_loadCrossRepoLinkRecords` never re-derives `crossRepoLinkId` from a
+loaded record's own fields (a hand-edited `cross-repo-links.json` could
+carry a mismatched id) and does not restrict `provenance` to `'manual'`
+on the READ path (only the CLI writer hardcodes it) — this matches the
+established operator-config trust model this whole package uses
+everywhere else (a hand-edited config file is trusted as declared, the
+way `recipient-profiles.json`/`privacy-policy.json` already are).
 
 ## Conventions
 

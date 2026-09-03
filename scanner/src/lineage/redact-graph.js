@@ -166,12 +166,38 @@ function _redactRecipientProfile(p) {
   };
 }
 
+// CrossRepoLink redaction (final whole-branch review, M5 deliverable
+// #8, B2) — mirrors `_redactRecipientProfile`'s own shape exactly. Every
+// field here is operator-declared free text or a local filesystem path,
+// never scanned-source-derived — `redactString` is a safe no-op on
+// ordinary text (same precedent `_redactRecipientProfile`'s own header
+// cites), so covering them defensively costs nothing. `remote.sourceFile`
+// is a local filesystem path (machine layout / username disclosure risk,
+// not a secret-pattern match) — redacted the same way `node.destination.raw`
+// is, for the same reason.
+function _redactCrossRepoLink(link) {
+  if (!link) return link;
+  const hasRedactable = typeof link.rationale === 'string'
+    || (link.remote && typeof link.remote.sourceFile === 'string')
+    || (link.remote && typeof link.remote.repository === 'string');
+  if (!hasRedactable) return link;
+  return {
+    ...link,
+    rationale: typeof link.rationale === 'string' ? redactString(link.rationale) : link.rationale,
+    remote: link.remote ? {
+      ...link.remote,
+      sourceFile: typeof link.remote.sourceFile === 'string' ? redactString(link.remote.sourceFile) : link.remote.sourceFile,
+      repository: typeof link.remote.repository === 'string' ? redactString(link.remote.repository) : link.remote.repository,
+    } : link.remote,
+  };
+}
+
 // Full-graph redaction: every node's destination, the top-level evidence
-// array, and (fix-round 1, B1) recipientProfiles[]. Edges/flows carry
-// only evidenceRefs (id strings into graph.evidence), never embedded
-// evidence objects or destination-shaped fields — confirmed against
-// dataflow-graph.schema.json — so they need no redaction pass of their
-// own here.
+// array, (fix-round 1, B1) recipientProfiles[], and (final review, M5 #8
+// B2) crossRepoLinks[]. Edges/flows carry only evidenceRefs (id strings
+// into graph.evidence), never embedded evidence objects or
+// destination-shaped fields — confirmed against dataflow-graph.schema.json
+// — so they need no redaction pass of their own here.
 export function _redactGraph(data) {
   if (!data) return data;
   return {
@@ -179,5 +205,6 @@ export function _redactGraph(data) {
     nodes: Array.isArray(data.nodes) ? data.nodes.map(_redactNode) : data.nodes,
     evidence: _redactEvidence(data.evidence),
     recipientProfiles: Array.isArray(data.recipientProfiles) ? data.recipientProfiles.map(_redactRecipientProfile) : data.recipientProfiles,
+    crossRepoLinks: Array.isArray(data.crossRepoLinks) ? data.crossRepoLinks.map(_redactCrossRepoLink) : data.crossRepoLinks,
   };
 }

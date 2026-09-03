@@ -115,7 +115,13 @@ test('federate declare: with --yes, writes atomically, no backup on the first wr
   assert.match(auditContent, /"outcome":"ok"/);
 });
 
-test('federate declare: a second declare on the same repo pair creates a backup of the first write and APPENDS, never replaces', async (t) => {
+// B3 (final whole-branch review, M5 deliverable #8): a second declaration
+// of the IDENTICAL (local, remote, relationship) fact now produces the
+// SAME id (rationale is not part of the id discriminator) and DEDUPES on
+// write — replacing the existing entry in place, never appending a
+// duplicate. A backup is still made before every real write, dedupe or
+// not — only the final CONTENT differs from the pre-fix behavior.
+test('federate declare: a second declare of the IDENTICAL fact creates a backup of the first write and DEDUPES to one entry with the same id', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
   fx.writeFile('server.js', SINK_SOURCE);
@@ -128,16 +134,86 @@ test('federate declare: a second declare on the same repo pair creates a backup 
 
   const r1 = _declare(fx, ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--repository', 'remote-svc', '--yes']);
   assert.equal(r1.status, 0, r1.stderr);
+  const report1 = JSON.parse(r1.stdout);
   const r2 = _declare(fx, ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--repository', 'remote-svc', '--rationale', 'a second link', '--yes']);
   assert.equal(r2.status, 0, r2.stderr);
+  const report2 = JSON.parse(r2.stdout);
+
+  // Same real-world fact -> same id, even though --rationale differs
+  // (rationale is not part of crossRepoLinkId's own discriminator).
+  assert.equal(report1.record.id, report2.record.id);
 
   const backupDir = statePath(fx.root, 'cross-repo-links-backups');
   const backups = fs.readdirSync(backupDir);
-  assert.equal(backups.length, 1, 'exactly one backup after the second write');
+  assert.equal(backups.length, 1, 'a backup is still made before every real write, dedupe or not');
 
   const configPath = statePath(fx.root, 'cross-repo-links.json');
   const written = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  assert.equal(written.links.length, 2, 'the second declare must APPEND, never replace');
+  assert.equal(written.links.length, 1, 'the second declare of the identical fact must DEDUPE, never append a duplicate');
+  assert.equal(written.links[0].id, report2.record.id);
+  assert.equal(written.links[0].rationale, 'a second link', 'the dedupe write keeps the LATEST record content for that id');
+});
+
+// B3's own two-part live reproduction (brief's verification checklist,
+// item 3): two identical `federate declare --yes` invocations (same
+// flags) produce ONE entry with the SAME id.
+test('federate declare: two IDENTICAL back-to-back declares (same flags) produce exactly one entry with the same id', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', SINK_SOURCE);
+  fx.commit('add sink');
+  const scanR = _scanWithLineage(fx);
+  assert.ok(scanR.status <= 3, scanR.stderr);
+  const localNodeId = _localGraphNodeId(fx);
+  const remoteExportPath = path.join(fx.root, 'remote-export.json');
+  const remoteNodeId = _buildRemoteExport(remoteExportPath);
+  const args = ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--repository', 'remote-svc', '--yes'];
+
+  const r1 = _declare(fx, args);
+  assert.equal(r1.status, 0, r1.stderr);
+  const r2 = _declare(fx, args);
+  assert.equal(r2.status, 0, r2.stderr);
+
+  const configPath = statePath(fx.root, 'cross-repo-links.json');
+  const written = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  assert.equal(written.links.length, 1, 'two identical declarations must produce exactly ONE entry, not two');
+  assert.equal(written.links[0].local.nodeId, localNodeId);
+  assert.equal(written.links[0].remote.nodeId, remoteNodeId);
+});
+
+// B3's root-cause half: declaring the identical fact again after a RESCAN
+// of the local repo must still produce the SAME id — the local graph's own
+// digest must not be perturbed by a previously-declared crossRepoLinks
+// entry being re-attached to it by the next scan.
+test('federate declare: declaring the identical fact again after a rescan of the local repo produces the SAME id', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', SINK_SOURCE);
+  fx.commit('add sink');
+  const scanR = _scanWithLineage(fx);
+  assert.ok(scanR.status <= 3, scanR.stderr);
+  const localNodeId = _localGraphNodeId(fx);
+  const remoteExportPath = path.join(fx.root, 'remote-export.json');
+  const remoteNodeId = _buildRemoteExport(remoteExportPath);
+
+  const r1 = _declare(fx, ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--repository', 'remote-svc', '--yes']);
+  assert.equal(r1.status, 0, r1.stderr);
+  const report1 = JSON.parse(r1.stdout);
+
+  // Rescan — this re-attaches cross-repo-links.json's own content onto
+  // graph.crossRepoLinks (Task 3's own wiring), which is exactly the
+  // feedback loop B3's fix strips out of the digest computation.
+  const rescanR = _scanWithLineage(fx);
+  assert.ok(rescanR.status <= 3, rescanR.stderr);
+
+  const r2 = _declare(fx, ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--repository', 'remote-svc', '--yes']);
+  assert.equal(r2.status, 0, r2.stderr);
+  const report2 = JSON.parse(r2.stdout);
+
+  assert.equal(report1.record.id, report2.record.id, 'the identical real-world fact must produce the same id across a rescan');
+  const configPath = statePath(fx.root, 'cross-repo-links.json');
+  const written = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  assert.equal(written.links.length, 1, 'still exactly one entry after the rescan + re-declare');
 });
 
 test('federate declare: missing --local-node/--remote-graph/--remote-node each exit 2', async (t) => {
@@ -200,6 +276,28 @@ test('federate declare: a missing --remote-graph file exits 2 with a clear messa
   assert.match(r.stderr, /No remote graph export found/);
 });
 
+// Exit-code alignment (final whole-branch review, M5 deliverable #8):
+// cmdFederateDeclare's loadSignedGraph failure path must exit 1, matching
+// every OTHER call site of loadSignedGraph in bin/agentic-security.js
+// (explore, dataflow export, scenario apply, impact assess, observations
+// import, dataflow twin) — this deliverable had introduced the sole
+// exit-2 outlier.
+test('federate declare: no local lineage graph could be loaded (never scanned) exits 1, matching every other loadSignedGraph call site', async (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  fx.writeFile('server.js', SINK_SOURCE);
+  fx.commit('add sink');
+  // Deliberately never scanned — no .agentic-security/lineage-graph.json.
+  const remoteExportPath = path.join(fx.root, 'remote-export.json');
+  const remoteNodeId = _buildRemoteExport(remoteExportPath);
+
+  const r = _declare(fx, ['--local-node', 'node:sink:doesnotexist000000', '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--yes']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /could not load the local scanned graph/);
+  const configPath = statePath(fx.root, 'cross-repo-links.json');
+  assert.equal(fs.existsSync(configPath), false);
+});
+
 test('federate declare: --base-digest mismatch (a concurrent edit) is refused, exit 2, never writes', async (t) => {
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
@@ -230,9 +328,13 @@ test('federate declare: a digest-mismatched remote export is a printed warning, 
 
   const remoteExportPath = path.join(fx.root, 'remote-export.json');
   const remoteNodeId = _buildRemoteExport(remoteExportPath);
-  // Tamper the digest AFTER building a genuinely valid export.
+  // Tamper the bodyDigest AFTER building a genuinely valid export — B1's
+  // own self-consistency field, which is what loadRemoteGraphExport
+  // actually compares a recomputation against (final whole-branch review,
+  // M5 deliverable #8, B1 — `digest` identifies the SOURCE graph
+  // regardless of redaction and would never move here).
   const exported = JSON.parse(fs.readFileSync(remoteExportPath, 'utf8'));
-  exported.digest = 'sha256:0000000000000000000000000000000000000000000000000000000000000000';
+  exported.bodyDigest = 'sha256:0000000000000000000000000000000000000000000000000000000000000000';
   fs.writeFileSync(remoteExportPath, JSON.stringify(exported));
 
   const r = _declare(fx, ['--local-node', localNodeId, '--remote-graph', remoteExportPath, '--remote-node', remoteNodeId, '--yes']);

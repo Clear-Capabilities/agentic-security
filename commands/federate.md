@@ -69,13 +69,15 @@ graph and a node in a remote repo's graph export.
 Exit codes: `0` success (both the dry-run-preview path and the real
 write path, including a digest-mismatch warning on the remote export);
 `1` the constructed record fails structural validation (should not
-normally happen — every field is derived from already-validated inputs);
-`2` a usage/argument error (a missing required flag, an unreadable
-`--remote-graph`, `--local-node`/`--remote-node` not found on their
-respective sides), a version-guard rejection, or the target not looking
-like a real project directory; `4` an unexpected I/O error during the
-write itself — nothing was written, and no audit event is recorded for a
-failed attempt.
+normally happen — every field is derived from already-validated
+inputs), or no local lineage graph could be loaded (missing/unsigned/
+tampered — matches every other command's own `loadSignedGraph`
+failure convention); `2` a usage/argument error (a missing required flag,
+an unreadable `--remote-graph`, `--local-node`/`--remote-node` not found
+on their respective sides), a version-guard rejection, or the target not
+looking like a real project directory; `4` an unexpected I/O error during
+the write itself — nothing was written, and no audit event is recorded
+for a failed attempt.
 
 ### `list`
 

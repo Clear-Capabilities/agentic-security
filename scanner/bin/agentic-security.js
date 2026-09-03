@@ -5094,7 +5094,7 @@ async function cmdFederateDeclare(args) {
   const local = loadSignedGraph(targetAbs);
   if (!local.ok) {
     process.stderr.write(`agentic-security federate declare: could not load the local scanned graph: ${local.message}\n`);
-    return 2;
+    return 1;
   }
   const localNode = (local.graph.nodes ?? []).find((n) => n.id === localNodeFlag);
   if (!localNode) {
@@ -5102,7 +5102,19 @@ async function cmdFederateDeclare(args) {
     return 2;
   }
 
-  const localGraphDigest = computeGraphDigest(local.graph);
+  // Strip crossRepoLinks before hashing — final whole-branch review,
+  // M5 deliverable #8, B3: computeGraphDigest has no exclusion for this
+  // field, so a graph's own digest otherwise depends on what
+  // cross-repo links have ALREADY been declared and re-attached by a
+  // later scan (graph-builder.js's own opts.crossRepoLinks hook). Left
+  // unfixed, every declare-then-rescan cycle changes the digest that
+  // the NEXT declaration's own id is derived from, minting a new,
+  // unrelated id for the identical real-world fact. Using an object
+  // without the key (not a key set to undefined) guarantees this is
+  // hash-equivalent to a graph that never had the field at all,
+  // regardless of how the hashing internals treat undefined values.
+  const { crossRepoLinks: _omitForDigest, ...localGraphForDigest } = local.graph;
+  const localGraphDigest = computeGraphDigest(localGraphForDigest);
   const idInputs = {
     localGraphId: local.graph.graphId, localGraphDigest, localNodeId: localNodeFlag,
     remoteGraphId: remote.graph.graphId, remoteGraphDigest: remote.digest, remoteNodeId: remoteNodeFlag,
@@ -5149,7 +5161,13 @@ async function cmdFederateDeclare(args) {
       fs.copyFileSync(configPath, candidateBackupPath);
       backupPath = candidateBackupPath;
     }
-    const merged = { ...currentDoc, links: [...currentDoc.links, record] };
+    // Dedupe by id — final whole-branch review, M5 deliverable #8, B3.
+    // A second declaration of the identical (local, remote, relationship)
+    // fact now produces the SAME id (fix #1 above), so replace the
+    // existing entry in place rather than appending a duplicate; every
+    // OTHER existing entry, malformed or not, is preserved untouched.
+    const withoutThisId = currentDoc.links.filter((l) => !(l && l.id === record.id));
+    const merged = { ...currentDoc, links: [...withoutThisId, record] };
     await _writeConfigAtomic(configPath, JSON.stringify(merged, null, 2));
     written = true;
     const { auditCall } = await import('../src/mcp/audit.js');
