@@ -282,3 +282,15 @@ test('remove_entity keeps a recipientProfile with a surviving contributing id, f
   assert.equal(graph.recipientProfiles.length, 1);
   assert.deepEqual(graph.recipientProfiles[0].contributingGraphIds, ['node:sink-store']);
 });
+
+test('remove_entity never prunes a recipientProfile with no contributingGraphIds array — a missing array is not evidence it referenced the removed node', () => {
+  const base = _fixtureGraph();
+  base.recipientProfiles = [
+    { id: 'recipient:no-array', provider: 'unattributed-vendor' },
+  ];
+  const { graph } = applyScenario(base, {
+    operations: [{ kind: 'remove_entity', targetNodeId: 'node:sink-external' }],
+  });
+  assert.equal(graph.recipientProfiles.length, 1);
+  assert.equal(graph.recipientProfiles[0].id, 'recipient:no-array');
+});

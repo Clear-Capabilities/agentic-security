@@ -130,11 +130,23 @@ function _applyRemoveEntity(graph, op) {
   // node ids); a profile with OTHER surviving contributing ids just loses
   // this one id, never the whole record. Guarded on the array existing —
   // the base graph shape used throughout this sub-project's own tests
-  // doesn't always include it.
+  // doesn't always include it. A profile with NO contributingGraphIds at
+  // all (null/undefined — real graph-builder.js output always mints a
+  // non-empty array, so this is defensive against a hand-built/external
+  // graph only) is left untouched rather than normalized to `[]` and
+  // dropped, since a missing array is not evidence the profile referenced
+  // this node.
+  // NOTE (final-review re-review N2, disclosed not fixed): this cascade
+  // is real graph mutation, but scenario-diff.js's WATCHED_SCENARIO_FIELDS
+  // has no `recipientProfile` kind, so diffScenarioGraph's own delta
+  // report stays silent about a recipient record that disappeared or lost
+  // a contributing id here — a future increment's fuller fix, not scope
+  // creep for this pass.
   if (graph.recipientProfiles?.length) {
     graph.recipientProfiles = graph.recipientProfiles
-      .map((rp) => ({ ...rp, contributingGraphIds: (rp.contributingGraphIds ?? []).filter((id) => id !== node.id) }))
-      .filter((rp) => rp.contributingGraphIds.length > 0);
+      .map((rp) => (rp.contributingGraphIds == null ? rp
+        : { ...rp, contributingGraphIds: rp.contributingGraphIds.filter((id) => id !== node.id) }))
+      .filter((rp) => rp.contributingGraphIds == null || rp.contributingGraphIds.length > 0);
   }
   return { ok: true };
 }
@@ -167,6 +179,20 @@ function _applyReplaceRecipientFact(graph, op) {
   // 'assumed') evidence grade — reset to the honest "we don't know anymore"
   // state rather than re-derive (re-deriving needs transitEvidenceByFile,
   // IR-level data unavailable post-build) or silently keep the old verdict.
+  // NOTE (final-review re-review N1, disclosed not fixed): this demotion is
+  // per-EDGE and is always honest at that level (and always visible in
+  // diffScenarioGraph's own delta, since edge.protection.transit is a
+  // WATCHED_SCENARIO_FIELDS.edge entry) — but flow.protectionSummary
+  // aggregates transit/atRest/handling via aggregateVerdicts, whose
+  // precedence ranks not_assessed LAST, so a scenario that ALSO sets this
+  // edge's own handling dimension to 'protected' (via apply_handling) in
+  // the SAME operations list can mask the demotion at the flow-summary
+  // level, even though the masking verdict itself is honestly graded
+  // 'assumed'. graph-builder.js's own cross-dimension aggregation is
+  // documented safe only because transit/atRest are mutually exclusive by
+  // construction and handling is "never written" by any real analyzer —
+  // this module (scenario-engine.js) is the one exception to that last
+  // clause, which is exactly what makes the masking reachable here.
   for (const edge of graph.edges) {
     if (edge.to === node.id) {
       edge.protection.transit = { verdict: 'not_assessed', evidenceGrade: 'none' };

@@ -532,6 +532,30 @@ graph node's `destination` field — a recipient's legal/jurisdiction/
 provider facts (the separate `RecipientProfile` record's own fields,
 `recipient-profile.js`) are not simulated by this operation.
 
+**Two disclosed, known limitations, found by the final whole-branch
+review's own re-review round (not fixed — cheap to fix later, real
+scope for a future increment, not silently papered over):**
+- `_recomputeProtectionSummaryForFlow` aggregates `transit`/`atRest`/
+  `handling` via `aggregateVerdicts`, whose precedence ranks
+  `not_assessed` LAST — so a scenario that demotes an edge's `transit`
+  (e.g. via `replace_recipient_fact`'s own destination-change
+  invalidation, above) while ALSO setting that same edge's `handling`
+  to `'protected'` (via `apply_handling`, in the same operations list)
+  can mask the demotion at `flow.protectionSummary`, even though the
+  masking verdict itself is honestly graded `'assumed'` and the
+  per-edge `transit` field stays correctly demoted and visible in
+  `diffScenarioGraph`'s own delta. `graph-builder.js`'s own
+  cross-dimension `aggregateVerdicts` reuse is documented safe only
+  because `transit`/`atRest` are mutually exclusive by construction and
+  `handling` is "never written" by any real analyzer — `scenario-
+  engine.js` is the one exception to that last clause, which is what
+  makes this masking reachable here and nowhere else.
+- `_applyRemoveEntity`'s `recipientProfiles[]` cascade is real graph
+  mutation, but `scenario-diff.js`'s `WATCHED_SCENARIO_FIELDS` has no
+  `recipientProfile` kind, so `diffScenarioGraph`'s own delta report
+  stays silent about a recipient record that disappeared or lost a
+  contributing id when `remove_entity` runs.
+
 **The 6 in-scope operation kinds** (`SCENARIO_OPERATION_KINDS`):
 `require_transit_protection`, `apply_handling`, `remove_entity`,
 `replace_recipient_fact`, `change_storage_fact`,
