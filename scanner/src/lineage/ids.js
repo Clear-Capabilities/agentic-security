@@ -286,3 +286,37 @@ export function impactAssessmentId(
 ) {
   return `impact:${_hash(_canon([graphId, graphDigest, targetId, ...discriminatorParts]))}`;
 }
+
+/**
+ * A RuntimeObservation record's id (M5 deliverable #7, FR-505 §10.10) —
+ * NOT a DataFlowGraph v1 entity, mirrors impactAssessmentId's/scenarioId's
+ * own precedent exactly. Discriminated by (adapter, environment,
+ * windowStart, windowEnd) plus caller-supplied discriminatorParts, which
+ * the adapter fills with the observation's own attribute fingerprint —
+ * two observations of the SAME destination in the SAME environment and
+ * window are the same observation and must collapse to one id, which is
+ * what makes an accidental double-import idempotent at the record level.
+ */
+export function observationId(
+  { adapter, environment, windowStart, windowEnd },
+  discriminatorParts = [],
+) {
+  return `observation:${_hash(_canon([adapter, environment, windowStart, windowEnd, ...discriminatorParts]))}`;
+}
+
+/**
+ * One adapter IMPORT's id (M5 deliverable #7, FR-505 §10.10) — the store's
+ * own file key, mirroring graph-snapshot.js's commit key one dimension
+ * over (import, not commit; see that sub-project's scoping doc §4.4 for
+ * why commit-keying cannot express many observations per graph entity).
+ * `importedAt` is a per-run nonce, exactly the role snapshotId's own
+ * capturedAt plays: re-importing the same file must produce a NEW import
+ * file, never silently overwrite the earlier one, because the store is a
+ * directory of IMMUTABLE whole files.
+ */
+export function observationImportId(
+  { adapter, source, environment, windowStart, windowEnd, importedAt },
+  discriminatorParts = [],
+) {
+  return `obsimport:${_hash(_canon([adapter, source, environment, windowStart, windowEnd, importedAt, ...discriminatorParts]))}`;
+}

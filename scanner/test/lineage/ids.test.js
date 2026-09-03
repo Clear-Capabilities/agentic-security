@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   graphId, nodeId, dataElementId, edgeId, flowId, transformationId, evidenceId,
   provenanceNodeId, provenanceEdgeId, pathId, obligationId,
+  observationId, observationImportId,
 } from '../../src/lineage/ids.js';
 
 test('graphId follows the dfg:<repo>:<commit>:<configHash> shape from PRD 10.2', () => {
@@ -234,4 +235,47 @@ test('obligationId discriminates on graphDigest even when graphId is identical (
 test('obligationId honors an extra discriminator (e.g. for a re-evaluated mapping against the same graph)', () => {
   const base = { framework: 'gdpr', frameworkVersion: '2016/679', requirementId: 'Art.30', graphId: 'dfg:repo:abc:default', graphDigest: 'aaaaaaaa' };
   assert.notEqual(obligationId(base, ['re-eval-2']), obligationId(base, ['re-eval-1']));
+});
+
+// M5 deliverable #7 (FR-505 §10.10, "Runtime-Corroborated Digital Twin",
+// 7b only): the two RuntimeObservation stable-ID functions. Mirrors
+// obligationId's own precedent — deterministic, correctly prefixed, and
+// discriminates on every input field.
+
+test('observationId is deterministic, correctly prefixed, and discriminates on every input field', () => {
+  const base = { adapter: 'native-jsonl', environment: 'production', windowStart: 'a', windowEnd: 'b' };
+  const id = observationId(base);
+  assert.match(id, /^observation:[0-9a-f]{12}$/);
+  assert.equal(observationId(base), id, 'same inputs must produce the same id');
+
+  assert.notEqual(observationId({ ...base, adapter: 'otlp' }), id);
+  assert.notEqual(observationId({ ...base, environment: 'staging' }), id);
+  assert.notEqual(observationId({ ...base, windowStart: 'c' }), id);
+  assert.notEqual(observationId({ ...base, windowEnd: 'd' }), id);
+});
+
+test('observationId honors discriminatorParts (the adapter\'s own attribute fingerprint)', () => {
+  const base = { adapter: 'native-jsonl', environment: 'production', windowStart: 'a', windowEnd: 'b' };
+  assert.notEqual(
+    observationId(base, ['destination.host=api.stripe.com']),
+    observationId(base, ['destination.host=api.other.com']),
+  );
+});
+
+test('observationImportId is deterministic, correctly prefixed, and discriminates on every input field', () => {
+  const base = {
+    adapter: 'native-jsonl', source: 'f.jsonl', environment: 'production',
+    windowStart: 'a', windowEnd: 'b', importedAt: '2026-09-01T12:00:00.000Z',
+  };
+  const id = observationImportId(base);
+  assert.match(id, /^obsimport:[0-9a-f]{12}$/);
+  assert.equal(observationImportId(base), id, 'same inputs must produce the same id');
+
+  assert.notEqual(observationImportId({ ...base, adapter: 'otlp' }), id);
+  assert.notEqual(observationImportId({ ...base, source: 'g.jsonl' }), id);
+  assert.notEqual(observationImportId({ ...base, environment: 'staging' }), id);
+  assert.notEqual(observationImportId({ ...base, windowStart: 'c' }), id);
+  assert.notEqual(observationImportId({ ...base, windowEnd: 'd' }), id);
+  assert.notEqual(observationImportId({ ...base, importedAt: '2026-09-01T12:00:01.000Z' }), id,
+    'importedAt is a per-run nonce, mirroring snapshotId\'s own capturedAt');
 });
