@@ -20,7 +20,7 @@ is now the default.
 
 ![agentic-security demo](docs/brand/demo.gif)
 
-**Contents:** [What you get](#what-you-get) · [Install](#install) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
+**Contents:** [What you get](#what-you-get) · [Install](#install) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Trace where your sensitive data actually goes](#trace-where-your-sensitive-data-actually-goes) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
 
 ---
 
@@ -111,7 +111,7 @@ You'll get a plain-English verdict, per-finding fixes, and an exit code you can 
 | I'm here to… | Start with |
 |---|---|
 | **Try it** — get a win in 15 minutes | [Quickstart](docs/guides/quickstart.md) |
-| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) · [finding provenance](docs/guides/finding-provenance.md) |
+| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) · [finding provenance](docs/guides/finding-provenance.md) · [Data Flow Explorer](docs/guides/data-flow-explorer.md) |
 | **Evaluate it for my company** | [Architecture](docs/ARCHITECTURE.md) · [Metrics](docs/METRICS.md) · [Scorecard](docs/SCORECARD.md) · [Compliance coverage](docs/compliance/) · [Threat model](docs/AGENT_THREAT_MODEL.md) |
 | **Reference** | [CLI](docs/reference/cli.md) · [Configuration & env vars](docs/reference/configuration.md) · [Cost optimization](docs/MODEL_COST_OPTIMIZATION.md) |
 
@@ -194,6 +194,45 @@ Your agentic workforce runs on tokens. agentic-security watches each prompt and 
 - **Opt-in: an actual choice, not just a tip.** Set `interactive: true` and a qualifying prompt gets you a real `AskUserQuestion` menu — keep your defaults, get the `/model` command to run yourself, or have Claude apply the cheaper model to its own delegated sub-agent work for the rest of the session. Costs a little real context on the prompts where it fires, unlike everything else in this section.
 
 On by default (advisory only — a hook can't switch your model for you); disable per-project via `/setup --model-optimizer` or the kill switch. Full detail, including the live cost HUD, session budget, and interactive mode — [cache economics](docs/MODEL_COST_OPTIMIZATION.md).
+
+---
+
+## Trace where your sensitive data actually goes
+
+A finding tells you one line is dangerous. The **Data Flow Explorer** tells
+you where a piece of data — a credit card number, a patient record, a
+password — comes from, everywhere it flows to, and what protects it at
+every hop, across your whole architecture.
+
+```bash
+AGENTIC_SECURITY_LINEAGE_DEEP=1 npx @clear-capabilities/agentic-security-scanner scan .
+npx @clear-capabilities/agentic-security-scanner explore .
+```
+
+```text
+agentic-security explore: serving /Users/you/your-project
+  URL: http://127.0.0.1:53214/#token=3f9a1c...(64 hex chars)
+  Open this URL in a browser — the page authenticates itself automatically.
+```
+
+That starts a local, **read-only, loopback-only** web server over your
+already-scanned graph — nothing leaves your machine — with four linked
+views: the architecture graph itself (colored by protection status),
+a privacy lifecycle view (where PII/PHI/PCI/financial data goes), a
+trace/evidence view (click any flow for the exact hops and evidence),
+and an inventory of every source and sink, including ones nothing
+currently reaches.
+
+Everything the browser shows also exports — `png`/`svg` for a doc, a
+self-contained `html` report, a DPIA or RoPA for compliance, an executive
+risk briefing, or raw `json`/`csv`. Compare two scans to catch newly
+introduced disclosures (`dataflow diff`), simulate a hypothetical fix
+before making it (`dataflow scenario apply` — every simulated verdict is
+honestly labeled `HYPOTHETICAL`, never mistaken for a real one), assess
+blast radius from a compromised node, or link data flow across two
+separately-scanned repositories (`federate declare`).
+
+Full walkthrough — [Data Flow Explorer guide](docs/guides/data-flow-explorer.md).
 
 ---
 
