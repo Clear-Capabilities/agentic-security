@@ -95,6 +95,7 @@ Organize help by **what the user wants to do**, not by command name:
 | Experimental / AI-driven analyses | `/labs` |
 | Export the Data Flow Explorer graph (PNG/PDF/SVG/JSON/CSV/HTML) | `/dataflow export --format <fmt> --output <file>` |
 | Diff two scanned snapshots + drift policies | `/dataflow diff --format <fmt> --output <file>` |
+| Propose a validated edit to recipient-profiles.json | `/governance propose-edit --patch <file.json> [--yes]` |
 
 ### Legacy alias map (removed in v0.86.0)
 

@@ -734,6 +734,47 @@ partial implementation of the richer vision.
 | `bin/agentic-security.js` (Task 2) | `cmdGovernancePropose` — the CLI handler for `agentic-security governance propose-edit [path] --patch <file.json> [--output <file>] [--yes] [--base-digest <hex>]`. `governance` is a NEW **top-level** command, not a `dataflow` subcommand — this edits operator config, never the scanned graph, the same distinction that keeps `dataflow scenario apply`'s hypothetical clone-and-override engine separate from a real write. **The version-guard/backup/audit mechanism, in real execution order** (pinned by the CLI test suite, below): (1) the version guard (`--base-digest` vs. the config file's real current SHA-256) runs BEFORE validation and BEFORE any write — a concurrent-edit rejection can never partially validate or partially write first; (2) `proposeGovernanceEdit` validates the patch — a failure exits 1, still before any write; (3) only on `--yes` AND a valid patch AND a passed version guard: the current file (if any) is backed up to `<file>.bak-<timestamp>` BEFORE the new content is written, so a failed write below that point leaves the backup intact and the original untouched; (4) the new content is written atomically; (5) `auditCall` (`src/mcp/audit.js`) appends a real, hash-chained NDJSON audit event — `tool: 'governance_propose_edit'`, `outcome: 'ok'`, `args: {file, added, removed, changedKeys}` — invoked ONLY on this real write path, never on a dry-run preview, never on a validation failure. Exit codes: `0` success (both the preview path and the real write path), `1` validation failure, `2` a usage/argument error or the version-guard rejection. |
 | `commands/governance.md` (Task 2) | A NEW top-level slash-command dispatcher (`commands/` gained a 12th dispatcher), not a mode of `commands/dataflow.md` — mirrors every other dispatcher's frontmatter/Options-table/Examples/Implementation-block shape. States plainly: CLI-only, no PRD acceptance criterion gates this deliverable, the HTTP interactive write surface is explicitly deferred, and every write backs up the prior file and appends a real audit event. |
 
+**Final whole-branch review, fix round 1— a real Blocking data-loss bug plus
+4 Important and 7 Minor findings, closed.** The review found the write's
+merge base was `loadRecipientConfig`'s SANITIZED view of the current file
+(dropping any per-entry-invalid recipient, any non-string/empty key, and any
+top-level key other than `recipients`), not the file's own real bytes — so an
+unrelated edit permanently deleted whatever the loader dropped, with the
+preview and audit event both falsely reporting nothing removed (B1). Fixed by
+making `cmdGovernancePropose` parse `currentRaw` directly (`JSON.parse`) as
+the ONLY read of the current file — `loadRecipientConfig` is no longer
+imported by this function at all — and by adding a shared container-shape
+validator (`governance-edit.js`'s `_validateContainerShape`) applied to BOTH
+the current config and the patch: a missing/non-object/array `recipients`, or
+an empty-string/`__proto__` recipient key, is now a validation failure
+(`valid: false`, `merged: null`) on either side, never a silent empty-object
+fallback (this also closes I2, I3, and M1's `__proto__`-reported-but-never-
+written case). `proposeGovernanceEdit`'s `merged` now also preserves every
+OTHER top-level key from the current config (e.g. `$schema`, `version`)
+verbatim — only `recipients` itself is merged. Four more fixes, all in
+`cmdGovernancePropose`/`_writeConfigAtomic`: **I4** — `_writeConfigAtomic`
+now `stat`s the target first and `chmod`s the temp file to the same mode
+before renaming, so a deliberately restricted file (e.g. `chmod 600`) no
+longer silently widens to the process umask on every write. **I5/M6** —
+backups moved from a sibling `<file>.bak-<timestamp>` file to a dedicated
+`recipient-profiles-backups/` subdirectory (mirroring `fix-history/`'s own
+precedent exactly), named `<ms>-<8 hex>.bak` so two writes in the same
+millisecond no longer collide; both `recipient-profiles.json`
+(`operator-config`) and `recipient-profiles-backups` (`generated`/`backup`)
+are now registered in `posture/artifact-registry.js`, so `reset` correctly
+sweeps the backups while preserving the config itself. **M2** — the audit
+event's `args` now also carries `beforeDigest`/`backupPath`, so a later
+auditor can tell which bytes an event produced. **M5** — the `--yes` path now
+calls `isSafeStateDir(path.dirname(configPath))` before any
+mkdirSync/backup/write, refusing (exit 2) rather than littering a
+non-project directory with a stray `.agentic-security/`, matching every
+other write path in this file. Exit codes gained `4` (an unexpected I/O
+error during the write itself — nothing was written, no audit event
+recorded), documented in `commands/governance.md`. See
+`.superpowers/sdd/2026-09-02-data-flow-explorer-m5-governance-editing/final-review.md`
+and `final-fix-round-1-report.md` for the live repro steps and the full
+before/after verification.
+
 **The HTTP-write-surface deferral, explicit.** `scanner/src/server/` (the
 `agentic-security explore` loopback server, `scanner/src/server/CLAUDE.md`)
 is read-only today — serving the already-scanned, already-signed

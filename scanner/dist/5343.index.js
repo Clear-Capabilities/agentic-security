@@ -32,10 +32,30 @@ export const modules = {
 
 
 
-function _recipientsOf(config) {
-  return config && typeof config === 'object' && config.recipients && typeof config.recipients === 'object'
-    ? config.recipients
-    : {};
+// Validates the top-level `{recipients: {...}}` container shape — used
+// for BOTH the current on-disk config and the --patch file. A patch is
+// user input the command's whole job is to validate, so it gets no
+// tolerant degradation (fixes I2/I3: previously a patch missing
+// `recipients` entirely, or with `recipients` as an array, degraded
+// silently to an empty no-op write). The CURRENT config gets the same
+// check for a different reason: if its top-level shape is unrecognized
+// (e.g. a typo'd `Recipients` key), the tool must refuse rather than
+// silently treating "no recognizable data" as "start from empty" and
+// overwriting whatever WAS there (this was B1's second live repro —
+// the whole file being replaced under a misspelled key).
+function _validateContainerShape(recipients, label) {
+  if (recipients === undefined) {
+    return [{ key: '(top-level)', message: `${label} is missing a "recipients" object` }];
+  }
+  if (recipients === null || typeof recipients !== 'object' || Array.isArray(recipients)) {
+    return [{ key: '(top-level)', message: `${label}'s "recipients" must be a plain object, not ${Array.isArray(recipients) ? 'an array' : recipients === null ? 'null' : typeof recipients}` }];
+  }
+  const errors = [];
+  for (const key of Object.keys(recipients)) {
+    if (key.length === 0) errors.push({ key, message: `${label} contains an empty-string recipient key, which is never valid` });
+    if (key === '__proto__') errors.push({ key, message: `${label} contains a "__proto__" recipient key, which is never valid` });
+  }
+  return errors;
 }
 
 function _validateEntries(patchRecipients) {
@@ -109,9 +129,15 @@ function _diffRecipients(currentRecipients, patchRecipients) {
 /**
  * Propose a patch to a recipient-profiles.json-shaped config. Pure,
  * never throws, never touches the filesystem. `currentConfig`/`patch`
- * are both `{recipients: {...}}`-shaped; a malformed shape degrades to
- * an empty `recipients` object rather than throwing (mirrors
- * `loadRecipientConfig`'s own tolerant-degradation contract).
+ * are both expected to be `{recipients: {...}}`-shaped — a malformed
+ * top-level shape on EITHER side (missing `recipients`, `recipients`
+ * not a plain object, or an empty-string/`__proto__` recipient key) is
+ * a validation failure (`valid: false`, `merged: null`), never a
+ * silent empty-object fallback. The stored config gets this treatment
+ * so an unrecognized shape (e.g. a typo'd top-level key) refuses to
+ * write rather than being silently treated as "nothing here yet" and
+ * overwritten; the patch gets it because it is user input the command's
+ * whole job is to validate.
  *
  * `patch.recipients` is an RFC-7396-style JSON MERGE PATCH against
  * `currentConfig.recipients`, keyed at the recipient level — never a
@@ -119,21 +145,38 @@ function _diffRecipients(currentRecipients, patchRecipients) {
  * value REPLACES that key's entire entry (never deep-merged within
  * itself); a key present with value `null` DELETES it (the only way to
  * remove a recipient); a key the patch never mentions is left
- * untouched in the merged result.
+ * untouched in the merged result. Every OTHER top-level key on the
+ * current config (e.g. `$schema`, `version`) is preserved verbatim into
+ * `merged` — only `recipients` itself is merged.
  *
  * Returns `{valid, errors, diff, merged}` — `diff`/`merged` are always
- * computed, even when `valid` is false, so an operator can see what
- * they attempted before fixing a validation error. `merged` is the
- * full `{recipients: {...}}` result the caller should write — never
- * the raw patch.
+ * computed when both container shapes are valid, even when `valid` is
+ * false due to a per-entry error, so an operator can see what they
+ * attempted before fixing a validation error. `merged` is `null` only
+ * when there is no safe merge base to compute (a container-shape
+ * failure on either side). `merged`, when non-null, is the full
+ * config-shaped result the caller should write — never the raw patch.
  */
 function proposeGovernanceEdit(currentConfig, patch) {
-  const currentRecipients = _recipientsOf(currentConfig);
-  const patchRecipients = _recipientsOf(patch);
-  const errors = _validateEntries(patchRecipients);
+  const currentContainerErrors = _validateContainerShape(currentConfig?.recipients, 'the current config file');
+  const patchContainerErrors = _validateContainerShape(patch?.recipients, 'the --patch file');
+  if (currentContainerErrors.length || patchContainerErrors.length) {
+    return {
+      valid: false,
+      errors: [...currentContainerErrors, ...patchContainerErrors],
+      diff: { added: [], removed: [], changed: [] },
+      merged: null,
+    };
+  }
+  const currentRecipients = currentConfig.recipients;
+  const patchRecipients = patch.recipients;
+  const entryErrors = _validateEntries(patchRecipients);
   const diff = _diffRecipients(currentRecipients, patchRecipients);
-  const merged = { recipients: _mergeRecipients(currentRecipients, patchRecipients) };
-  return { valid: errors.length === 0, errors, diff, merged };
+  const mergedRecipients = _mergeRecipients(currentRecipients, patchRecipients);
+  // Preserve every OTHER top-level key from the current config verbatim
+  // (e.g. $schema, version) — only `recipients` itself is merged.
+  const merged = { ...(currentConfig && typeof currentConfig === 'object' ? currentConfig : {}), recipients: mergedRecipients };
+  return { valid: entryErrors.length === 0, errors: entryErrors, diff, merged };
 }
 
 

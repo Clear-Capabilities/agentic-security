@@ -165,3 +165,78 @@ test('proposeGovernanceEdit: never throws on a malformed current/patch shape', (
     assert.doesNotThrow(() => proposeGovernanceEdit({ recipients: {} }, bad));
   }
 });
+
+// --- Final review fix round 1: B1 (real merge base) + I2/I3 (real
+// container-shape validation) -------------------------------------------
+
+test('proposeGovernanceEdit (B1): a current-config entry that fails isValidRecipientConfigEntry survives UNCHANGED in merged when the patch touches an unrelated key', () => {
+  // Reuses the invalid-processorRole shape from the malformed-entry test
+  // above — this simulates what loadRecipientConfig would have silently
+  // dropped, but proposeGovernanceEdit now receives the RAW current
+  // config (parsed directly from disk by the CLI, never sanitized), so
+  // the invalid entry must survive byte-identical.
+  const invalidLegacyEntry = { provider: 'x', dpaStatus: 'not_a_real_status' };
+  const current = { recipients: { 'legacy-vendor': invalidLegacyEntry, 'good-vendor': _validEntry() } };
+  const patch = { recipients: { 'new-vendor': _validEntry({ provider: 'New Vendor' }) } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.deepEqual(diff.removed, []);
+  assert.deepEqual(merged.recipients['legacy-vendor'], invalidLegacyEntry, 'the invalid legacy entry must survive exactly, not be dropped');
+  assert.deepEqual(merged.recipients['good-vendor'], current.recipients['good-vendor']);
+  assert.ok(merged.recipients['new-vendor']);
+});
+
+test('proposeGovernanceEdit (B1): an extra top-level key on the current config (e.g. version) survives into merged after a patch touching only recipients', () => {
+  const current = { recipients: { vendor1: _validEntry() }, version: 3, $schema: 'https://example.com/schema.json' };
+  const patch = { recipients: { vendor2: _validEntry({ provider: 'Other' }) } };
+  const { valid, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.equal(merged.version, 3);
+  assert.equal(merged.$schema, 'https://example.com/schema.json');
+  assert.ok(merged.recipients.vendor1);
+  assert.ok(merged.recipients.vendor2);
+});
+
+test('proposeGovernanceEdit (B1): a current config with the wrong top-level key (typo, e.g. "Recipients") is invalid — never a silent empty-object treatment', () => {
+  const current = { Recipients: { vendor1: _validEntry() } }; // capital R — .recipients is undefined
+  const patch = { recipients: { vendor2: _validEntry() } };
+  const { valid, errors, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, false);
+  assert.ok(errors.some((e) => /recipients/i.test(e.message)));
+  assert.equal(merged, null, 'there is no safe merge base when the current config shape is unrecognized');
+});
+
+test('proposeGovernanceEdit (I2): a patch missing the recipients wrapper entirely is invalid, never a silent empty-diff success', () => {
+  const current = { recipients: { vendor1: _validEntry() } };
+  const patch = { vendor2: _validEntry() }; // forgot the "recipients" wrapper
+  const { valid, errors, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, false);
+  assert.ok(errors.some((e) => e.key === '(top-level)'));
+  assert.equal(merged, null);
+});
+
+test('proposeGovernanceEdit (I3): a patch with recipients as an array is invalid, never index-keyed recipients', () => {
+  const current = { recipients: {} };
+  const patch = { recipients: [{ legalEntity: 'ArrayVendor' }] };
+  const { valid, errors, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, false);
+  assert.ok(errors.some((e) => /array/i.test(e.message)));
+  assert.equal(merged, null);
+});
+
+test('proposeGovernanceEdit (I3/M1): a patch containing a "" or "__proto__" recipient key is invalid', () => {
+  const current = { recipients: {} };
+  const emptyKeyPatch = { recipients: { '': _validEntry() } };
+  const r1 = proposeGovernanceEdit(current, emptyKeyPatch);
+  assert.equal(r1.valid, false);
+  assert.ok(r1.errors.some((e) => e.key === ''));
+  // Object-literal syntax (`{ __proto__: x }`) sets the PROTOTYPE, not an
+  // own enumerable property — JSON.parse does not have that footgun (it
+  // uses CreateDataProperty internally), and it's how the real CLI reads
+  // a --patch file, so this reproduces a genuine `__proto__`-keyed patch.
+  const protoKeyPatch = JSON.parse('{"recipients":{"__proto__":' + JSON.stringify(_validEntry()) + '}}');
+  assert.ok(Object.prototype.hasOwnProperty.call(protoKeyPatch.recipients, '__proto__'), 'sanity: this must be a real own property, not the actual prototype link');
+  const r2 = proposeGovernanceEdit(current, protoKeyPatch);
+  assert.equal(r2.valid, false);
+  assert.ok(r2.errors.some((e) => e.key === '__proto__'));
+});

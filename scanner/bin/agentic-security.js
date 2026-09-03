@@ -4359,6 +4359,15 @@ async function _writeConfigAtomic(fp, content) {
     } finally {
       await handle.close();
     }
+    // Preserve the target's existing permissions (if any) — this file
+    // may hold sensitive governance data (DPA/jurisdiction/transfer
+    // facts) an operator deliberately restricted; a fresh temp file
+    // would otherwise silently widen it to the process umask (real bug
+    // found live by the final review: chmod 600 -> 0644 after a write).
+    try {
+      const { mode } = await fsp.stat(fp);
+      await fsp.chmod(tmp, mode & 0o777);
+    } catch { /* target doesn't exist yet — nothing to preserve */ }
     await fsp.rename(tmp, fp);
   } catch (e) {
     try { await fsp.unlink(tmp); } catch { /* never existed, or already gone — fine either way */ }
@@ -4395,12 +4404,28 @@ async function cmdGovernancePropose(args) {
     return 2;
   }
 
-  const { RECIPIENT_CONFIG_FILENAME, loadRecipientConfig } = await import('../src/lineage/recipient-registry.js');
+  const { RECIPIENT_CONFIG_FILENAME } = await import('../src/lineage/recipient-registry.js');
   const { statePath } = await import('../src/posture/state-dir.js');
   const configPath = statePath(targetAbs, RECIPIENT_CONFIG_FILENAME);
-  const currentRaw = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : JSON.stringify({ recipients: {} });
-  const currentConfig = loadRecipientConfig(fs.existsSync(configPath) ? configPath : null);
+  const currentRaw = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '{"recipients":{}}';
   const currentDigest = crypto.createHash('sha256').update(currentRaw).digest('hex');
+  // The merge base is the file's REAL bytes, parsed directly — never
+  // loadRecipientConfig's sanitized view, which silently drops any
+  // entry failing isValidRecipientConfigEntry, any non-string/empty
+  // key, and any top-level key other than `recipients`. Merging against
+  // that sanitized object and writing it back permanently deletes
+  // whatever it dropped (B1, the final review's Blocking finding), with
+  // the preview and audit event both falsely reporting nothing removed.
+  // This single JSON.parse is now the ONLY read of the current file, so
+  // currentDigest and the merge base provably describe the same bytes
+  // (also closes M3).
+  let currentConfig;
+  try {
+    currentConfig = JSON.parse(currentRaw);
+  } catch (e) {
+    process.stderr.write(`agentic-security governance propose-edit: the current config file is not valid JSON: ${e.message}\n`);
+    return 2;
+  }
 
   // Version guard runs BEFORE validation and BEFORE any write — a
   // concurrent-edit rejection must never partially validate or
@@ -4422,29 +4447,53 @@ async function cmdGovernancePropose(args) {
   let written = false;
   let backupPath = null;
   if (yes) {
+    // Refuse before touching disk if the target doesn't look like a real
+    // project directory — the same guard every other write path in this
+    // file uses, applied here before any mkdirSync/backup/write (M5).
+    const { isSafeStateDir } = await import('../src/posture/state-dir.js');
+    if (!isSafeStateDir(path.dirname(configPath))) {
+      process.stderr.write(`agentic-security governance propose-edit: refusing to write — "${targetAbs}" does not look like a project directory.\n`);
+      return 2;
+    }
     // Backup BEFORE the new content is written — a failed write below
     // this point leaves the backup intact and the original untouched.
     // Only recorded when a backup actually happened (i.e. a prior file
-    // existed) — reporting a `.bak-...` path that was never written
-    // would mislead a consumer trusting the report.
-    const candidateBackupPath = `${configPath}.bak-${Date.now()}`;
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    // existed) — reporting a backup path that was never written would
+    // mislead a consumer trusting the report. Backups live in their own
+    // dedicated subdirectory (mirroring posture/fix-history.js's own
+    // `fix-history/` precedent), never as a sibling `.bak-*` file next
+    // to the config — that's what lets artifact-registry.js register the
+    // WHOLE DIRECTORY as one entry (I5) so `reset` can sweep it, since
+    // the registry only supports exact-name matches, never a per-file
+    // timestamped name. The `Date.now()-<random>` naming (mirroring this
+    // file's own temp-file naming convention in `_writeConfigAtomic`)
+    // closes M6 — two writes in the same millisecond no longer collide.
+    const backupDir = statePath(targetAbs, 'recipient-profiles-backups');
+    const candidateBackupPath = path.join(backupDir, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.bak`);
     if (fs.existsSync(configPath)) {
+      fs.mkdirSync(backupDir, { recursive: true });
       fs.copyFileSync(configPath, candidateBackupPath);
       backupPath = candidateBackupPath;
     }
     // The write is the MERGE RESULT (`merged`, per proposeGovernanceEdit's
     // merge-patch semantics), never the raw patch — writing the patch
     // verbatim would silently delete every recipient it doesn't name.
+    // `merged` is never null here — a null merge base only happens on a
+    // container-shape validation failure, which already returned 1 above.
     await _writeConfigAtomic(configPath, JSON.stringify(merged, null, 2));
     written = true;
     // Audited ONLY on the real write path — --yes supplied AND
     // validation passed AND the version guard passed. Never on a
-    // dry-run preview, never on a validation failure.
+    // dry-run preview, never on a validation failure. Carries the
+    // pre-write digest and the backup path so a later auditor can tell
+    // which bytes this event produced (M2).
     const { auditCall } = await import('../src/mcp/audit.js');
     auditCall({
       sessionRoot: targetAbs, tool: 'governance_propose_edit',
-      args: { file: RECIPIENT_CONFIG_FILENAME, added: diff.added, removed: diff.removed, changedKeys: diff.changed.map((c) => c.key) },
+      args: {
+        file: RECIPIENT_CONFIG_FILENAME, added: diff.added, removed: diff.removed,
+        changedKeys: diff.changed.map((c) => c.key), beforeDigest: currentDigest, backupPath,
+      },
       outcome: 'ok',
     });
   }
