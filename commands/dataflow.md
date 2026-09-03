@@ -1,6 +1,6 @@
 ---
-description: Export the Data Flow Explorer graph, diff two scanned snapshots, or watch for live drift while you edit.
-argument-hint: "export|diff|watch [path] [options] --output <file> --format <fmt>"
+description: Export the Data Flow Explorer graph, diff two scanned snapshots, watch for live drift, or apply a what-if scenario.
+argument-hint: "export|diff|watch|scenario apply [path] [options] --output <file> --format <fmt>"
 ---
 
 ## Data Flow Explorer export
@@ -145,6 +145,50 @@ and has no "success" exit code — it runs until stopped.
 /dataflow watch
 /dataflow watch ./my-service
 /dataflow watch . --drift-policy drift-policy.json --fail-on-drift
+```
+
+## Data Flow Explorer scenario apply
+
+Simulates a hypothetical architecture change against the already-scanned
+lineage graph (M5, "What-If Architecture Simulator," FR-502) — never
+mutates the real scan artifact, and never re-runs a scan. Loads the
+already-scanned, already-signed graph (same loader as `export`/`diff`
+above), applies the operations declared in `--operations` to a clone of
+it, and reports what changed. Every field a scenario overrides carries
+`'assumed'` evidence — never real evidence — so a scenario report can
+never be mistaken for a genuine re-scan result.
+
+The `--operations` file is a JSON object of the form
+`{"operations": [...]}`, where each operation is one of the six
+supported kinds: `require_transit_protection`, `apply_handling`,
+`remove_entity`, `replace_recipient_fact`, `change_storage_fact`,
+`change_governance_fact`. An operation targeting an id that does not
+exist in the graph is skipped (reported in the output's
+`skippedOperations`, never a fatal error) — a scenario written against an
+older snapshot degrades honestly rather than failing outright.
+
+### Options
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--operations <path-to-json>` | Yes | The `{"operations":[...]}` file describing the hypothetical change. A malformed file, or an operation of an unrecognized kind, is a clear exit-2 error. |
+| `--output <file>` | Yes | Where the delta report is written. |
+| `--format json\|markdown` | No | `json` (default) emits the raw delta record (`appliedOperations`, `skippedOperations`, `changedEntities`, `removedEntityIds`). `markdown` renders a human-readable report of the same content. |
+| `--privacy-sink-policy <path-to-json>` | No | Re-evaluate each touched flow's `policyVerdict` under this policy file, mirroring `dataflow export`'s own privacy-sink-policy evaluation. Omitting this flag leaves every touched flow's `policyVerdict` untouched. |
+| `--environment <name>` | No | The environment context used when re-evaluating `--privacy-sink-policy`. |
+
+Exit codes: `0` on success; `1` when the base lineage graph could not be
+loaded (missing/unsigned/tampered/malformed — the same four messages
+`export`/`diff` already use); `2` on a usage/argument error (missing
+`--operations`/`--output`, an unreadable/malformed `--operations` file,
+an operation that fails validation).
+
+### Examples
+
+```
+/dataflow scenario apply --operations scenario.json --output delta.json
+/dataflow scenario apply --operations scenario.json --output delta.md --format markdown
+/dataflow scenario apply --operations scenario.json --output delta.json --privacy-sink-policy policy.json --environment production
 ```
 
 ## Implementation

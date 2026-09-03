@@ -145,6 +145,7 @@ Commands:
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
   dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing|recipients|coverage --output <file>
+  dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
                                                       png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing/recipients/coverage)
@@ -4121,6 +4122,116 @@ async function cmdDataflowDiff(args) {
   return 0;
 }
 
+// agentic-security dataflow scenario apply [path] --operations <file>
+// --output <file> [--format json|markdown] [--privacy-sink-policy <file>]
+// [--environment <name>] — M5 deliverable #3a (FR-502). Loads the
+// already-scanned, already-signed graph via loadSignedGraph (same
+// loader/error-message contract as cmdDataflowExport/cmdDataflowDiff),
+// applies the Scenario in --operations via applyScenario, diffs the
+// result against the base graph via diffScenarioGraph, writes the
+// report to --output. Exit codes: 0 success, 1 graph-load failure
+// (loadSignedGraph's own 4 messages), 2 argument/operations-file
+// problem.
+async function cmdDataflowScenarioApply(args) {
+  const target = args._[3] || '.'; // args._ = ['dataflow', 'scenario', 'apply', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const operationsFlag = args.flags.operations;
+  if (!operationsFlag || typeof operationsFlag !== 'string') {
+    process.stderr.write('agentic-security dataflow scenario apply: --operations <file> is required.\n');
+    return 2;
+  }
+  const outputPath = args.flags.output;
+  if (!outputPath || typeof outputPath !== 'string') {
+    process.stderr.write('agentic-security dataflow scenario apply: --output <file> is required.\n');
+    return 2;
+  }
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'markdown') {
+    process.stderr.write(`agentic-security dataflow scenario apply: --format must be one of json|markdown (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  let opsInput;
+  try {
+    opsInput = JSON.parse(fs.readFileSync(path.resolve(operationsFlag), 'utf8'));
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow scenario apply: could not read/parse --operations file "${operationsFlag}": ${e.message}\n`);
+    return 2;
+  }
+
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security dataflow scenario apply: ${loaded.message}\n`);
+    return 1;
+  }
+  const baseGraph = loaded.graph;
+
+  const { validateScenario } = await import('../src/lineage/scenario.js');
+  const scenarioDraft = {
+    id: 'scenario:cli-draft', version: '1.0.0',
+    baseGraphId: baseGraph.graphId, baseGraphDigest: baseGraph.graphId,
+    operations: opsInput.operations ?? [],
+    assumptions: opsInput.assumptions ?? [], author: opsInput.author ?? 'cli',
+    createdAt: new Date().toISOString(), expiration: null,
+    simulatedDelta: null, verificationRequirements: opsInput.verificationRequirements ?? [],
+  };
+  const { valid, errors } = validateScenario(scenarioDraft);
+  if (!valid) {
+    process.stderr.write(`agentic-security dataflow scenario apply: --operations file failed validation:\n${errors.map((e) => `  ${e.path}: ${e.message}`).join('\n')}\n`);
+    return 2;
+  }
+
+  let privacySinkPolicy;
+  const policyFlag = args.flags['privacy-sink-policy'];
+  if (policyFlag !== undefined) {
+    try {
+      privacySinkPolicy = JSON.parse(fs.readFileSync(path.resolve(policyFlag), 'utf8'));
+    } catch (e) {
+      process.stderr.write(`agentic-security dataflow scenario apply: could not read/parse --privacy-sink-policy file "${policyFlag}": ${e.message}\n`);
+      return 2;
+    }
+  }
+
+  const { applyScenario } = await import('../src/lineage/scenario-engine.js');
+  const { diffScenarioGraph } = await import('../src/lineage/scenario-diff.js');
+  const opts = { privacySinkPolicy, environment: args.flags.environment };
+  const { graph: scenarioGraph, appliedOperations, skippedOperations } = applyScenario(baseGraph, scenarioDraft, opts);
+  const { changedEntities, removedEntityIds } = diffScenarioGraph(baseGraph, scenarioGraph);
+
+  const report = { scenarioId: scenarioDraft.id, appliedOperations, skippedOperations, changedEntities, removedEntityIds, generatedAt: new Date().toISOString() };
+  let data;
+  if (format === 'json') {
+    data = JSON.stringify(report, null, 2);
+  } else {
+    const lines = [`# Scenario delta`, '', `Applied ${appliedOperations.length} operation(s), skipped ${skippedOperations.length}.`, ''];
+    if (skippedOperations.length) {
+      lines.push('## Skipped operations', '');
+      for (const s of skippedOperations) lines.push(`- \`${s.operation.kind}\`: ${s.reason}`);
+      lines.push('');
+    }
+    lines.push('## Changed entities', '');
+    for (const c of changedEntities) {
+      lines.push(`- **${c.kind} ${c.id}**`);
+      for (const f of c.changedFields) lines.push(`  - \`${f.field}\`: ${JSON.stringify(f.before)} → ${JSON.stringify(f.after)}`);
+    }
+    if (removedEntityIds.length) {
+      lines.push('', '## Removed entities', '');
+      for (const id of removedEntityIds) lines.push(`- ${id}`);
+    }
+    data = lines.join('\n') + '\n';
+  }
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) {
+    process.stderr.write(`agentic-security dataflow scenario apply: could not write --output "${outputPath}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+  return 0;
+}
+
 // Terse [watch-dataflow] status line — mirrors watch-mode.js's own
 // renderStatusLine terse style, adapted to a GraphDiff's own
 // added/removed/changed shape (computeGraphDiff's `changed` bucket is
@@ -4427,7 +4538,16 @@ async function main() {
           if (code !== 0) process.exit(code);
           break;
         }
-        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", and "watch" are supported.\n`);
+        else if (sub === 'scenario') {
+          const scenarioSub = args._[2];
+          if (scenarioSub === 'apply') { process.exit(await cmdDataflowScenarioApply(args)); }
+          else {
+            process.stderr.write(`agentic-security dataflow scenario: unrecognized sub-command "${scenarioSub}" — must be "apply".\n`);
+            process.exit(2);
+          }
+          break;
+        }
+        process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", and "scenario" are supported.\n`);
         process.exit(2);
       }
       case 'cve-watch': {

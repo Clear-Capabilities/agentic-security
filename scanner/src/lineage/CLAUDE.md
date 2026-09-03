@@ -496,6 +496,64 @@ improvement initiative (cited, never duplicated, here).
 
 **Disclosed, not fixed (Minor, per the final whole-branch review):** the CLI test suite exercises the `unknown`-tier row end-to-end but not a `pattern-only` (rust/solidity/swift/dart) row through the real CLI subprocess path — only unit-tested at `coverage.js` level. Low risk, since the renderer's `pattern-only` and `unknown` cases share identical code (`typeof l.irTaintRecallPct === 'number'`, falling back to `'—'` either way).
 
+## Milestone 5, What-If Architecture Simulator (FR-502, sub-project 3a) — COMPLETE
+
+A CLONE-AND-OVERRIDE engine: a `Scenario` names a set of hypothetical
+graph overrides; applying one produces a NEW graph (a deep clone of the
+already-scanned base graph, never a mutation of it) plus a delta report
+against the base — never a re-scan, never a change to the real scan
+artifact on disk.
+
+| Module | Responsibility |
+|---|---|
+| `scenario.js` | The `Scenario` §10.10 extension contract — mirrors `obligation-mapping.js`'s/`decision-story.js`'s own shape (pure validator, zero graph access, never a `DataFlowGraph v1` entity). Exports `SCENARIO_OPERATION_KINDS` (the 6 in-scope kinds, below) and `validateScenario(record)`, a structural-only `{valid, errors}` check — it never confirms a `targetEdgeId`/`targetNodeId`/`targetFlowId` actually exists in any real graph, since this module has zero graph access by design; that check is `scenario-engine.js`'s job at apply time. |
+| `scenario-engine.js` | `applyScenario(baseGraph, scenario, opts)` — deep-clones `baseGraph`, applies each operation, then re-runs the SAME two pure aggregators `graph-builder.js`'s own real pipeline uses (`aggregateVerdicts`, `isSinkPermitted`) over only the flows an operation actually touched — never re-running the taint/path pipeline. An operation whose target id does not exist in the graph is skipped (reported in `skippedOperations`, never thrown) — a Scenario written against an older snapshot degrades honestly. Never mutates `baseGraph`. |
+| `scenario-diff.js` | `diffScenarioGraph(baseGraph, scenarioGraph)` + `WATCHED_SCENARIO_FIELDS` — a DEDICATED comparison, deliberately NOT `graph-diff.js`'s `computeGraphDiff`: that function's flow-reidentification pairing and `causeClassification` vocabulary (`'application_change'`, `'possible_coverage_regression'`, `'reidentified'`) are shaped for a REAL rescan across two commits, where the cause of a change is genuinely ambiguous. A Scenario's own delta has no such ambiguity — every difference between the base graph and a scenario clone IS the declared hypothetical operation that produced it — so this module reports only "what differs," with no cause classification and no reidentification. |
+
+**The `'assumed'` evidence grade.** Every field a scenario operation
+overrides (`edge.protection.transit`/`.atRest`/`.handling`) is written
+with `evidenceGrade: 'assumed'` — a value on `protection.js`'s own
+`EVIDENCE_GRADES` enum (the SAME axis every real `edge.protection.*`
+verdict is graded on: `runtime`/`code_and_config`/`code`/`config`/
+`declared`/`assumed`/`manual`/`none`), never `flow-grade.js`'s
+`FLOW_EVIDENCE_GRADES` — that enum grades a DIFFERENT thing entirely
+("how explicit a recorded data movement is," per that module's own
+header), and reusing/extending it here would validate a hypothetical
+protection override as a flow-movement grade, a category error on top of
+the collision. `'assumed'` exists specifically so a scenario-derived
+verdict can never be mistaken for a `code`/`runtime`-graded real one —
+every downstream reader (the CLI's own delta report, a future UI) can
+tell "this edge is protected because the operator declared it so in a
+what-if" apart from "this edge is protected because the scanner found
+real evidence of it."
+
+**The 6 in-scope operation kinds** (`SCENARIO_OPERATION_KINDS`):
+`require_transit_protection`, `apply_handling`, `remove_entity`,
+`replace_recipient_fact`, `change_storage_fact`,
+`change_governance_fact`. **The 7th, deferred to sub-project 3b**:
+synthetic node/edge INSERTION (modeling "what if we added a new service
+to this architecture," as opposed to overriding a fact about an
+EXISTING node/edge) — every kind implemented here operates on an id that
+must already exist in the base graph; inventing a wholly new entity is a
+materially different problem (fresh, collision-free stable ids; no real
+provenance/coverage data to inherit) left for a later increment.
+
+**CLI wiring**: `agentic-security dataflow scenario apply [path]
+--operations <file.json> --output <file> [--format json|markdown]
+[--privacy-sink-policy <file>] [--environment <name>]`
+(`bin/agentic-security.js`'s `cmdDataflowScenarioApply`) — loads the
+already-scanned, already-signed graph via the same `loadSignedGraph`
+loader/error-message contract `export`/`diff` already use, validates
+`--operations` via `validateScenario` before ever calling
+`applyScenario`, then reports the `diffScenarioGraph` delta. Exit codes
+0/1/2 mirror `export`/`diff`'s own contract exactly. Deliberately has NO
+wiring into `obligation-mapping.js`/`obligation-predicates.js`/
+`decision-story.js` — a scenario's hypothetical graph must never feed a
+compliance-obligation evaluation or an executive risk narrative as if it
+were real, pinned by `test/lineage/scenario-no-obligation-wiring.test.js`
+(a source-text import check, not a runtime assertion, since none of the
+three modules ever construct a graph themselves to runtime-test against).
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add
