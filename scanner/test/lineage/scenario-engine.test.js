@@ -8,8 +8,8 @@ function _fixtureGraph() {
     graphId: 'graph:abc', schemaVersion: '1.0.0', generatedAt: '2026-09-02T00:00:00.000Z',
     nodes: [
       { id: 'node:source', kind: 'source', subtype: 'user-input', destination: null, storeDetail: null },
-      { id: 'node:sink-store', kind: 'sink', subtype: 'database', destination: { literalValue: 'db.internal.example.com' }, storeDetail: { operation: 'write' } },
-      { id: 'node:sink-external', kind: 'sink', subtype: 'external-api', destination: { literalValue: 'api.vendor.example.com' }, storeDetail: null },
+      { id: 'node:sink-store', kind: 'store', subtype: 'database', destination: { literalValue: 'db.internal.example.com' }, storeDetail: { operation: 'write' } },
+      { id: 'node:sink-external', kind: 'external', subtype: 'external-api', destination: { literalValue: 'api.vendor.example.com' }, storeDetail: null },
     ],
     edges: [
       { id: 'edge:1', from: 'node:source', to: 'node:sink-store', relationship: 'flows_to', protection: emptyProtection() },
@@ -122,4 +122,50 @@ test('multiple operations in one scenario apply in order and each is independent
     ],
   });
   assert.equal(appliedOperations.length, 2);
+});
+
+// Finding 1 (task-2-review.md): apply_handling('encrypted') must only set
+// edge.protection.atRest on an edge whose sink node is store-kind (mirrors
+// graph-builder.js's own gate, ~line 757: `handlingResult === 'encrypted'
+// && snk.kind === 'store'`). For any other sink kind (e.g. edge:2's
+// external-api sink), it must fall through to the 'handling' dimension
+// instead — never claim a false 'protected' atRest verdict for a
+// destination with no "at rest" concept at all.
+test('apply_handling(encrypted) on a non-store-sink edge sets handling, not atRest', () => {
+  const { graph } = applyScenario(_fixtureGraph(), {
+    operations: [{ kind: 'apply_handling', targetEdgeId: 'edge:2', handling: 'encrypted' }],
+  });
+  const edge = graph.edges.find((e) => e.id === 'edge:2');
+  assert.deepEqual(edge.protection.handling, { verdict: 'protected', evidenceGrade: 'assumed' });
+  assert.deepEqual(edge.protection.atRest, emptyProtection().atRest);
+});
+
+// Finding 2 (task-2-review.md): protectionSummary recomputation must
+// aggregate over EVERY edge in flow.edgeIds, not just the first one
+// `graph.edges.find` happens to return. Build a two-edge flow and change
+// the SECOND edge — the flow's protectionSummary must reflect it.
+function _multiEdgeFlowGraph() {
+  const base = _fixtureGraph();
+  base.nodes.push({ id: 'node:mid', kind: 'process', subtype: 'process', destination: null, storeDetail: null });
+  base.edges.push({ id: 'edge:mid-a', from: 'node:source', to: 'node:mid', relationship: 'flows_to', protection: emptyProtection() });
+  base.edges.push({ id: 'edge:mid-b', from: 'node:mid', to: 'node:sink-external', relationship: 'flows_to', protection: emptyProtection() });
+  base.flows.push({
+    id: 'flow:multi', dataElementIds: ['de:1'], source: 'node:source', sink: 'node:sink-external',
+    edgeIds: ['edge:mid-a', 'edge:mid-b'], transformationIds: [], alternatePathCount: 0,
+    policyVerdict: 'not_evaluated', protectionSummary: 'not_assessed', evidenceRefs: [],
+    confidence: { score: 0.8, tier: 'high' }, governanceRefs: {},
+  });
+  return base;
+}
+
+test('protectionSummary recomputation aggregates across ALL of a multi-edge flow\'s edges, not just the first', () => {
+  const { graph } = applyScenario(_multiEdgeFlowGraph(), {
+    // Targets edge:mid-b — the SECOND edge in flow:multi.edgeIds, not the
+    // one graph.edges.find(...) would return first by array order.
+    operations: [{ kind: 'require_transit_protection', targetEdgeId: 'edge:mid-b' }],
+  });
+  const edgeB = graph.edges.find((e) => e.id === 'edge:mid-b');
+  assert.deepEqual(edgeB.protection.transit, { verdict: 'protected', evidenceGrade: 'assumed' });
+  const flow = graph.flows.find((f) => f.id === 'flow:multi');
+  assert.equal(flow.protectionSummary, 'protected');
 });
