@@ -98,3 +98,33 @@ test('dataflow impact assess: missing graph -> exit 1, one of loadSignedGraph\'s
   const r = spawnSync(process.execPath, [CLI, 'dataflow', 'impact', 'assess', root, '--target', 'node:source', '--output', path.join(root, 'out.json')], { encoding: 'utf8', timeout: 10_000 });
   assert.equal(r.status, 1);
 });
+
+// M4 (final-review fix round): a signed-but-structurally-malformed graph
+// (loadSignedGraph verifies only the SIGNATURE, never the schema — see
+// graph-loader.js) must be classified as a graph-content problem (exit 1),
+// never as a CLI argument problem (exit 2) — the two are structurally
+// distinct and computeImpactAssessment's own malformed-graph guard exists
+// specifically so this CLI boundary can tell them apart. A malformed
+// --target (already covered above) is the real exit-2 case; this is its
+// exit-1 sibling, not a duplicate of the "missing graph file entirely"
+// test above.
+test('dataflow impact assess: a signed but structurally malformed graph (missing edges array) exits 1, not 2', () => {
+  const root = _mkTmpProject();
+  const graphPath = statePath(root, 'lineage-graph.json');
+  fs.mkdirSync(path.dirname(graphPath), { recursive: true });
+  const body = JSON.stringify({
+    schemaVersion: '1.0.0', graphId: 'dfg:cli-dataflow-impact-malformed-test',
+    generatedAt: '1970-01-01T00:00:00.000Z', scope: { source: 'fixture' }, scanHealth: {},
+    nodes: [{ id: 'node:source', kind: 'source', subtype: 'user-input' }],
+    // edges deliberately omitted entirely — a structurally malformed graph
+    // that still verifies as SIGNED (loadSignedGraph checks the signature
+    // only, never the schema).
+    dataElements: [], transformations: [], flows: [], recipientProfiles: [],
+    controls: [], policies: [], evidence: [], coverage: {}, limitations: [], extensions: {},
+  }, null, 2);
+  fs.writeFileSync(graphPath, body);
+  fs.writeFileSync(graphPath + '.sig', signLastScan(body));
+  const r = spawnSync(process.execPath, [CLI, 'dataflow', 'impact', 'assess', root, '--target', 'node:source', '--output', path.join(root, 'out.json')], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /malformed graph/);
+});
