@@ -3747,7 +3747,7 @@ function _renderDataflowCoverageMarkdown(graph, opts = {}) {
     lines.push('|---|---|---|---|---|');
     for (const l of languages) {
       const recall = typeof l.irTaintRecallPct === 'number'
-        ? `${l.irTaintRecallPct}% (as of ${_dfCoverageMdInline(l.measuredAt ?? '?')})`
+        ? `${l.irTaintRecallPct}% (as of ${_dfCoverageMdCell(l.measuredAt ?? '?')})`
         : '—';
       lines.push(`| ${_dfCoverageMdCell(l.language)} | ${_dfCoverageMdCell(l.filesAnalyzed)} | ${_dfCoverageMdCell(l.filesExpected)} | ${_dfCoverageMdCell(l.tier)} | ${recall} |`);
     }
