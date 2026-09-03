@@ -236,7 +236,7 @@ const _RECIPIENT_CONFIG_FACT_FIELDS = Object.freeze([
  * mirrors `loadDriftPolicies`' own "validate the whole shape, skip the
  * whole entry on a defect" discipline most closely.
  */
-function _isValidRecipientConfigEntry(entry) {
+export function isValidRecipientConfigEntry(entry) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
   if (!_isStringOrNull(entry.legalEntity)) return false;
   if (entry.processorRole != null && !RECIPIENT_PROCESSOR_ROLES.includes(entry.processorRole)) return false;
@@ -279,7 +279,7 @@ export function loadRecipientConfig(configFilePath) {
   const recipients = {};
   let skipped = 0;
   for (const [key, entry] of Object.entries(raw.recipients)) {
-    if (!_isNonEmptyString(key) || !_isValidRecipientConfigEntry(entry)) {
+    if (!_isNonEmptyString(key) || !isValidRecipientConfigEntry(entry)) {
       skipped += 1;
       continue;
     }
