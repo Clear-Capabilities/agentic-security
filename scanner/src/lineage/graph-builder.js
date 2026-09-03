@@ -73,6 +73,21 @@
 // own defaults. A no-op when omitted, mirroring every prior additive
 // hook's own "byte-identical when the hook is absent" contract.
 //
+// M5 deliverable #7 (FR-505 §7.12, AC-29, Runtime-Corroborated Digital Twin,
+// "7b" only): `opts.correlateObservations(graph) -> correlationResult |
+// undefined`, a FIFTH additive hook of the identical shape as the four
+// above — applied once every graph array (`nodes`/`edges`/`flows`/
+// `dataElements`) AND `recipientProfiles` are populated (the same
+// placement lesson `opts.buildRecipientProfile`'s own fix round already
+// established: a hook that runs before those arrays exist gets an empty
+// envelope to reason over). Assigned to `graph.runtimeCorroboration` ONLY
+// when the hook returns truthy — the key is genuinely ABSENT, never `null`,
+// when the hook is omitted or returns falsy, which is what keeps the output
+// byte-identical to a build with no hook at all (`M2A1/hook-1`'s own proven
+// contract) and is also AC-29 clause 2's `not_evaluated` state expressed at
+// the top level. See this hook's own inline comment below for the full
+// reasoning, including why it never touches `edge.provenance`.
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -1009,6 +1024,34 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // artifact, never stored on the built graph itself. Never in
   // `dataflow-graph.schema.json`, never routed through `validateGraph()`.
   graph.recipientProfiles = [...recipientProfilesById.values()].sort(byId);
+  // M5 deliverable #7 (FR-505 §7.12, AC-29): a FIFTH additive hook of the
+  // identical shape — `opts.correlateObservations(graph) -> correlationResult
+  // | undefined`. Runs here, after nodes/edges/flows/dataElements AND
+  // recipientProfiles are populated, for the same reason
+  // `opts.buildRecipientProfile` was moved here in its own fix round: the hook
+  // reads the real, finished graph, never a still-empty envelope.
+  //
+  // Assigned ONLY when the hook returns truthy — `graph.runtimeCorroboration`
+  // is genuinely ABSENT otherwise, never `null` and never `{}`. That is what
+  // makes the output byte-identical to a build with no hook at all (the
+  // contract `M2A1/hook-1` proved for `resolveDestination`), and it is also
+  // AC-29 clause 2's `not_evaluated` state expressed at the top level: a graph
+  // with no `runtimeCorroboration` key was never evaluated against any
+  // observation store, which is a DIFFERENT answer from a graph that was
+  // evaluated and found nothing in the window (PRD line 2098 — non-observation
+  // is never non-occurrence).
+  //
+  // Deliberately does NOT touch `edge.provenance`, which stays `'code'` on
+  // every edge. Corroboration is ADDITIVE: an observed edge is still a
+  // code-derived edge that was ALSO observed. Flipping `edge.provenance` needs
+  // a deliberate provenance-partitioning pass through impact-engine.js,
+  // decision-story.js, obligation-predicates.js and the export family first —
+  // that is M2 Sub-project F2/F3's job, not this one's. See the M5 #7 scoping
+  // doc §4.5 and §3's "edge.provenance has zero consumers" finding.
+  if (typeof opts.correlateObservations === 'function') {
+    const corroboration = opts.correlateObservations(graph);
+    if (corroboration) graph.runtimeCorroboration = corroboration;
+  }
   // §10's SKETCH of the coverage ledger. E4 owns the finished contract.
   graph.coverage = {
     languages: [], parseFailures: [],

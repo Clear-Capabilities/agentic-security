@@ -87,6 +87,12 @@ import { buildRecipientProfile } from './recipient-registry.js';
 // pure, static data, no cycle risk (mirrors how every other sibling import
 // above composes into this file's own hooks/computations).
 import { coverageTierForLanguage } from './language-coverage-tiers.js';
+// M5 deliverable #7 (FR-505/AC-29, Runtime-Corroborated Digital Twin, "7b"):
+// `correlateObservations` composes into `opts.correlateObservations` the
+// same way every other sibling default hook in this file composes — see
+// `buildGraphWithCoverage`'s own wiring below. No ES module cycle here —
+// `observation-correlation.js` never imports anything back from this file.
+import { correlateObservations } from './observation-correlation.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -474,6 +480,26 @@ export function buildCoverageLedger(built, opts = {}) {
  *   `privacySinkPolicy`'s own single-computation discipline). This function
  *   never reads the filesystem itself — it only closes over this value for
  *   `opts.buildRecipientProfile`'s own default hook, below.
+ * @param {Array<object>} [opts.runtimeObservations] M5 deliverable #7
+ *   (FR-505/AC-29): a PRE-LOADED `RuntimeObservation[]` array — never a
+ *   path, the read happens once, upstream, in `index.js`'s
+ *   `buildLineageGraph` (mirroring `opts.recipientConfig`'s own wording).
+ *   `undefined` means "no observation store was consulted" (`index.js`'s
+ *   own `existsSync` gate against `.agentic-security/runtime-observations/`
+ *   never found the directory) and installs NO default
+ *   `opts.correlateObservations` hook at all, so `graph.runtimeCorroboration`
+ *   stays genuinely absent — the `not_evaluated` state. `[]` means "a store
+ *   was consulted and is genuinely empty" and DOES install the default
+ *   hook, producing a real correlation result whose every flow reads
+ *   `not_observed_in_window` — the `opts.privacySinkPolicy`
+ *   `undefined`-vs-`[]` precedent (`index.js:129-150`) applied to
+ *   observations.
+ * @param {string} [opts.observationWindowStart] optional ISO-8601 lower
+ *   bound for the correlation window, threaded verbatim into
+ *   `correlateObservations`'s own `opts.windowStart`.
+ * @param {string} [opts.observationWindowEnd] optional ISO-8601 upper
+ *   bound for the correlation window, threaded verbatim into
+ *   `correlateObservations`'s own `opts.windowEnd`.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
   // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`
@@ -551,6 +577,23 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
         }
         return record;
       }),
+    // M5 deliverable #7 (FR-505/AC-29): identical composition pattern — a
+    // caller-supplied hook always wins. The default is installed ONLY when
+    // `opts.runtimeObservations` is genuinely defined; when it is `undefined`
+    // (no store on disk, per index.js's own existsSync gate) NO hook is
+    // installed at all, so `graph.runtimeCorroboration` stays absent and reads
+    // as `not_evaluated`. This is exactly the `undefined`-vs-`[]` distinction
+    // `opts.privacySinkPolicy` already draws for a missing privacy-policy.json,
+    // and collapsing the two would make "we never looked" indistinguishable
+    // from a genuine "we looked and saw nothing" — PRD line 2098's own prohibition.
+    correlateObservations: opts.correlateObservations
+      ?? (opts.runtimeObservations !== undefined
+        ? ((graph) => correlateObservations(graph, opts.runtimeObservations, {
+          environment: opts.environment ?? null,
+          windowStart: opts.observationWindowStart ?? null,
+          windowEnd: opts.observationWindowEnd ?? null,
+        }))
+        : undefined),
   });
   built.graph.coverage = buildCoverageLedger(built, opts);
   return built;

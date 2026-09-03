@@ -77,7 +77,7 @@ test('E5/5: buildLineageGraph.status is failed, with a recorded failure string, 
   if (r.status === 'failed') assert.ok(r.failure && r.failure.length > 0);
 });
 
-test('E5/6: reuse boundary — index.js imports only coverage.js, transit-protection.js (M2 Sub-project B1), node:fs plus the modules needed to load the privacy sink policy exactly once (M2 Sub-project G1), (M4 deliverable #10, DFG-020) dataflow/privacy-governance.js to load the operator\'s governance config exactly once, and (M4, FR-506) recipient-registry.js to load the operator\'s recipient config exactly once', async () => {
+test('E5/6: reuse boundary — index.js imports only coverage.js, transit-protection.js (M2 Sub-project B1), node:fs plus the modules needed to load the privacy sink policy exactly once (M2 Sub-project G1), (M4 deliverable #10, DFG-020) dataflow/privacy-governance.js to load the operator\'s governance config exactly once, (M4, FR-506) recipient-registry.js to load the operator\'s recipient config exactly once, and (M5 deliverable #7, FR-505/AC-29) observation-store.js to load the operator\'s runtime-observation store exactly once', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/index.js', import.meta.url), 'utf8');
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
@@ -89,5 +89,6 @@ test('E5/6: reuse boundary — index.js imports only coverage.js, transit-protec
     '../dataflow/privacy-governance.js',
     '../posture/state-dir.js',
     './recipient-registry.js',
+    './observation-store.js',
   ]);
 });

@@ -48,6 +48,14 @@ import { statePath } from '../posture/state-dir.js';
 // since `loadRecipientConfig` (unlike `loadPrivacyGovernanceConfig`) takes
 // a literal file path, not a scanRoot.
 import { loadRecipientConfig, RECIPIENT_CONFIG_FILENAME } from './recipient-registry.js';
+// M5 deliverable #7 (FR-505/AC-29, Runtime-Corroborated Digital Twin, "7b"):
+// loaded ONCE, here — mirroring `loadPrivacySinkPolicy`'s own
+// single-computation discipline above, including the SAME explicit
+// `fs.existsSync` gate and the SAME reason: `loadObservations` returns the
+// identical empty array whether the store directory is missing or
+// present-and-empty, and those are two DIFFERENT answers under AC-29
+// clause 2 — see the function body below for the full reasoning.
+import { loadObservations } from './observation-store.js';
 
 /**
  * @param {{functions: Map}} callGraph a real callGraph — the same shape
@@ -97,6 +105,17 @@ import { loadRecipientConfig, RECIPIENT_CONFIG_FILENAME } from './recipient-regi
  * default `opts.buildRecipientProfile` hook — no separate `opts` field
  * needed, unlike `privacySinkPolicy`, since `loadRecipientConfig` already
  * degrades a missing/malformed file gracefully on its own.
+ * M5 deliverable #7 (FR-505/AC-29): the operator's runtime-observation
+ * store (`.agentic-security/runtime-observations/`, resolved against
+ * `opts.scanRoot`) is loaded exactly once here, existence-gated exactly
+ * like `privacySinkPolicy` above, and threaded to `buildGraphWithCoverage`'s
+ * `opts.runtimeObservations`.
+ * @param {string} [opts.observationWindowStart] optional ISO-8601 lower
+ *   bound for runtime-observation correlation, threaded to
+ *   `buildGraphWithCoverage`'s `opts.observationWindowStart`.
+ * @param {string} [opts.observationWindowEnd] optional ISO-8601 upper
+ *   bound for runtime-observation correlation, threaded to
+ *   `buildGraphWithCoverage`'s `opts.observationWindowEnd`.
  * @returns {{status: 'not_available'|'complete'|'failed', graph: object|null, transitEvidence: Map<string,object[]>, failure: string|null, elapsedMs: number}}
  *   `status` is never `'not_requested'` — that decision belongs to the
  *   CALLER (whether to call this function at all), not to this function's
@@ -164,6 +183,22 @@ export function buildLineageGraph(callGraph, opts = {}) {
     // contract `loadPrivacyGovernanceConfig` has.
     const recipientConfigPath = opts.scanRoot ? statePath(opts.scanRoot, RECIPIENT_CONFIG_FILENAME) : null;
     const recipientConfig = loadRecipientConfig(recipientConfigPath);
+    // M5 deliverable #7 (FR-505/AC-29): the operator's runtime-observation
+    // store, loaded exactly ONCE here — the same single-computation discipline
+    // scanTransitEvidence and loadPrivacySinkPolicy already follow. Existence
+    // is checked EXPLICITLY, exactly like privacySinkPolicy and for the
+    // identical reason: `loadObservations` returns the same empty array whether
+    // the store directory is missing or present-and-empty, and those are two
+    // DIFFERENT answers under AC-29 clause 2. A MISSING store must leave
+    // `graph.runtimeCorroboration` absent (`not_evaluated` — nothing was
+    // consulted); a PRESENT-but-empty store must produce a real correlation
+    // result whose every flow reads `not_observed_in_window` (a store WAS
+    // consulted and the window genuinely contained nothing). PRD line 2098:
+    // absence of observation is never non-occurrence.
+    const _observationsDir = opts.scanRoot ? statePath(opts.scanRoot, 'runtime-observations') : null;
+    const runtimeObservations = _observationsDir && fs.existsSync(_observationsDir)
+      ? loadObservations(opts.scanRoot)
+      : undefined;
     const built = buildGraphWithCoverage(callGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
@@ -174,6 +209,9 @@ export function buildLineageGraph(callGraph, opts = {}) {
       privacyGovernanceConfig,
       environment: opts.environment,
       recipientConfig,
+      runtimeObservations,
+      observationWindowStart: opts.observationWindowStart,
+      observationWindowEnd: opts.observationWindowEnd,
     });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {
