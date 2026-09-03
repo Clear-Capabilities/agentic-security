@@ -42,6 +42,23 @@ actually took — and are flagged `reliable:false` below n=10 rather than hidden
 or quoted as settled. Recording goes through `isSafeStateDir`, so it declines
 rather than creating a stray state dir outside a project.
 
+**Remediation ledger (M5 deliverable #6)** — `remediation-ledger.js`. The
+I/O half of Blast-Radius: Remediation Command Center (FR-507 + AC-31) —
+locking, JSONL append, tolerant read, and a hash chain over
+`.agentic-security/remediation/items.jsonl`/`items.lock`, matching
+`fix-metrics.js`'s own append-and-tolerant-read shape above (one
+newline-terminated record per `appendFileSync`, a torn tail dropped on
+read, never a whole-file rewrite). The pure state machine it writes
+through — `foldRemediationItem`/`foldRemediationLedger`/
+`validateTransition` — lives at `../lineage/remediation.js`, making this
+the SECOND `posture/` → `lineage/` import in the codebase
+(`auditor-walkthrough.js`'s `graph:` branch was the first — see "First
+`posture/` → `lineage/` import" below). `appendLedgerEvent` is the single
+place `validateTransition` is enforced; no CLI command computes validity
+for itself. Its `withLock` is a faithful local PORT of
+`provenance/lifecycle.js`'s own `withLock` — not an import, since that
+function is not exported.
+
 **Agentic verification** — `verifier.js`, `verifier-target.js`, `verifier-ephemeral.js`, `harness-discovery.js`, `adversary-agent.js`, `defender-agent.js`, `auditor-agent.js`, `three-agent-pipeline.js`.
 
 **Methodology additions (Agentic Methodology PRD, removed post-implementation)** — default-on annotators/artifacts that layer the agentic-hunter methodology on the deterministic engine:
