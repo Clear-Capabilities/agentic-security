@@ -114,6 +114,54 @@ test('governance propose-edit: --base-digest mismatch (a concurrent edit) is ref
   assert.deepEqual(written.recipients, {});
 });
 
+test('governance propose-edit (merge-patch semantics, fix round 1): a patch naming only a NEW vendor leaves a pre-existing, unmentioned recipient untouched in the written file', () => {
+  // Reproduces the review's own live-reproduced data-loss bug: before the
+  // fix, `--patch` was written to disk verbatim, so any recipient the
+  // patch didn't name (like `vendor0-preexisting` here) silently vanished.
+  const root = _mkTmpProject();
+  const preexisting = _validEntry({ provider: 'Preexisting Vendor' });
+  const { configPath } = _writeConfig(root, { 'vendor0-preexisting': preexisting });
+  const patchFile = path.join(root, 'patch.json');
+  fs.writeFileSync(patchFile, JSON.stringify({ recipients: { 'vendor1-new': _validEntry({ provider: 'New Vendor' }) } }));
+  const outFile = path.join(root, 'preview.json');
+  const r = spawnSync(process.execPath, [CLI, 'governance', 'propose-edit', root, '--patch', patchFile, '--output', outFile, '--yes'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(r.status, 0, r.stderr);
+  const written = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  assert.deepEqual(written.recipients['vendor0-preexisting'], preexisting, 'the pre-existing recipient must survive byte-identical');
+  assert.ok(written.recipients['vendor1-new']);
+  const report = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.deepEqual(report.diff.removed, []);
+});
+
+test('governance propose-edit (merge-patch semantics, fix round 1): an explicit null patch value deletes a recipient', () => {
+  const root = _mkTmpProject();
+  const { configPath } = _writeConfig(root, { 'vendor0-preexisting': _validEntry() });
+  const patchFile = path.join(root, 'patch.json');
+  fs.writeFileSync(patchFile, JSON.stringify({ recipients: { 'vendor0-preexisting': null } }));
+  const outFile = path.join(root, 'preview.json');
+  const r = spawnSync(process.execPath, [CLI, 'governance', 'propose-edit', root, '--patch', patchFile, '--output', outFile, '--yes'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(r.status, 0, r.stderr);
+  const written = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  assert.ok(!('vendor0-preexisting' in written.recipients));
+  const report = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.deepEqual(report.diff.removed, ['vendor0-preexisting']);
+});
+
+test('governance propose-edit: a first-ever write (no prior config file) reports backupPath as null, not a phantom path', () => {
+  const root = _mkTmpProject();
+  // No _writeConfig call — the config file genuinely does not exist yet.
+  const patchFile = path.join(root, 'patch.json');
+  fs.writeFileSync(patchFile, JSON.stringify({ recipients: { vendor1: _validEntry() } }));
+  const outFile = path.join(root, 'preview.json');
+  const r = spawnSync(process.execPath, [CLI, 'governance', 'propose-edit', root, '--patch', patchFile, '--output', outFile, '--yes'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(r.status, 0, r.stderr);
+  const report = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+  assert.equal(report.backupPath, null);
+  const configPath = statePath(root, 'recipient-profiles.json');
+  const backups = fs.readdirSync(path.dirname(configPath)).filter((f) => f.startsWith('recipient-profiles.json.bak-'));
+  assert.equal(backups.length, 0, 'no backup file should exist when nothing existed to back up');
+});
+
 test('governance propose-edit: missing --patch exits 2', () => {
   const root = _mkTmpProject();
   _writeConfig(root, {});

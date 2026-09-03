@@ -4342,6 +4342,30 @@ async function cmdDataflowImpactAssess(args) {
   return 0;
 }
 
+// Mirrors posture/fix-history.js's own _writeAtomicAndSync (temp file in
+// the same directory, fsync, then rename over the target) — a crash
+// mid-write must never leave recipient-profiles.json as invalid JSON,
+// since loadRecipientConfig silently degrades a malformed file to "no
+// recipients" with only a console warning, not a hard failure.
+async function _writeConfigAtomic(fp, content) {
+  const dir = path.dirname(fp);
+  await fsp.mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(fp)}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`);
+  try {
+    const handle = await fsp.open(tmp, 'w');
+    try {
+      await handle.writeFile(content);
+      if (typeof handle.sync === 'function') await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fsp.rename(tmp, fp);
+  } catch (e) {
+    try { await fsp.unlink(tmp); } catch { /* never existed, or already gone — fine either way */ }
+    throw e;
+  }
+}
+
 // agentic-security governance propose-edit [path] --patch <file>
 // [--output <file>] [--yes] [--base-digest <hex>] — M5 deliverable #5.
 // Proposes a validated, reviewable edit to recipient-profiles.json.
@@ -4388,7 +4412,7 @@ async function cmdGovernancePropose(args) {
   }
 
   const { proposeGovernanceEdit } = await import('../src/lineage/governance-edit.js');
-  const { valid, errors, diff } = proposeGovernanceEdit(currentConfig, patch);
+  const { valid, errors, diff, merged } = proposeGovernanceEdit(currentConfig, patch);
   if (!valid) {
     process.stderr.write(`agentic-security governance propose-edit: --patch file failed validation:\n${errors.map((e) => `  ${e.key}: ${e.message}`).join('\n')}\n`);
     return 1;
@@ -4400,10 +4424,19 @@ async function cmdGovernancePropose(args) {
   if (yes) {
     // Backup BEFORE the new content is written — a failed write below
     // this point leaves the backup intact and the original untouched.
-    backupPath = `${configPath}.bak-${Date.now()}`;
+    // Only recorded when a backup actually happened (i.e. a prior file
+    // existed) — reporting a `.bak-...` path that was never written
+    // would mislead a consumer trusting the report.
+    const candidateBackupPath = `${configPath}.bak-${Date.now()}`;
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    if (fs.existsSync(configPath)) fs.copyFileSync(configPath, backupPath);
-    fs.writeFileSync(configPath, JSON.stringify(patch, null, 2));
+    if (fs.existsSync(configPath)) {
+      fs.copyFileSync(configPath, candidateBackupPath);
+      backupPath = candidateBackupPath;
+    }
+    // The write is the MERGE RESULT (`merged`, per proposeGovernanceEdit's
+    // merge-patch semantics), never the raw patch — writing the patch
+    // verbatim would silently delete every recipient it doesn't name.
+    await _writeConfigAtomic(configPath, JSON.stringify(merged, null, 2));
     written = true;
     // Audited ONLY on the real write path — --yes supplied AND
     // validation passed AND the version guard passed. Never on a

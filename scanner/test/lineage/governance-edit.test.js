@@ -23,13 +23,60 @@ test('proposeGovernanceEdit: a well-formed patch adding a new recipient is valid
   assert.deepEqual(diff.changed, []);
 });
 
-test('proposeGovernanceEdit: removing a recipient is reflected in the diff', () => {
+test('proposeGovernanceEdit: an explicit null patch value removes a recipient, reflected in the diff and in merged', () => {
+  // Merge-patch semantics (fix round 1): an OMITTED key is left
+  // untouched, not deleted — `null` is the only way to delete. See the
+  // "a patch naming only a NEW key ... leaves the untouched key
+  // present" test below for the omission case this test used to (wrongly)
+  // exercise as a deletion.
   const current = { recipients: { vendor1: _validEntry() } };
-  const patch = { recipients: {} };
-  const { valid, diff } = proposeGovernanceEdit(current, patch);
+  const patch = { recipients: { vendor1: null } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
   assert.equal(valid, true);
   assert.deepEqual(diff.removed, ['vendor1']);
   assert.deepEqual(diff.added, []);
+  assert.ok(!('vendor1' in merged.recipients));
+});
+
+test('proposeGovernanceEdit (merge-patch semantics): a patch naming only a NEW key leaves an existing, unmentioned key untouched in merged, and out of diff.removed', () => {
+  const current = { recipients: { 'vendor0-preexisting': _validEntry() } };
+  const patch = { recipients: { 'vendor1-new': _validEntry({ provider: 'New Vendor' }) } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.deepEqual(diff.removed, []);
+  assert.deepEqual(diff.added, ['vendor1-new']);
+  assert.deepEqual(merged.recipients['vendor0-preexisting'], current.recipients['vendor0-preexisting']);
+  assert.ok('vendor1-new' in merged.recipients);
+});
+
+test('proposeGovernanceEdit (merge-patch semantics): a patch explicitly setting an existing key to null deletes it', () => {
+  const current = { recipients: { vendor1: _validEntry(), vendor2: _validEntry({ provider: 'Other' }) } };
+  const patch = { recipients: { vendor1: null } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.deepEqual(diff.removed, ['vendor1']);
+  assert.ok(!('vendor1' in merged.recipients));
+  // The untouched sibling survives.
+  assert.deepEqual(merged.recipients.vendor2, current.recipients.vendor2);
+});
+
+test('proposeGovernanceEdit (merge-patch semantics): a patch setting a NONEXISTENT key to null is a no-op', () => {
+  const current = { recipients: { vendor1: _validEntry() } };
+  const patch = { recipients: { 'never-existed': null } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.deepEqual(diff.removed, []);
+  assert.deepEqual(merged.recipients, current.recipients);
+});
+
+test('proposeGovernanceEdit (merge-patch semantics): a patch entry that fully replaces an existing key still reports it as changed', () => {
+  const current = { recipients: { vendor1: _validEntry({ dpaStatus: 'not_in_place' }) } };
+  const patch = { recipients: { vendor1: _validEntry({ dpaStatus: 'in_place' }) } };
+  const { valid, diff, merged } = proposeGovernanceEdit(current, patch);
+  assert.equal(valid, true);
+  assert.equal(diff.changed.length, 1);
+  assert.equal(diff.changed[0].key, 'vendor1');
+  assert.equal(merged.recipients.vendor1.dpaStatus, 'in_place');
 });
 
 test('proposeGovernanceEdit: changing an existing recipient field is reflected in the diff as changed, not added+removed', () => {

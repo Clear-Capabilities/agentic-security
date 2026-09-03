@@ -26,10 +26,10 @@ audited, with no exception.
 
 | Flag | Required | Notes |
 |---|---|---|
-| `--patch <path-to-json>` | Yes | The `{"recipients": {...}}` patch file — full desired content for every recipient key it names, not a partial merge. A malformed patch file, or a recipient entry that fails `isValidRecipientConfigEntry`'s validation, is a clear exit-1 error, and nothing is written. |
+| `--patch <path-to-json>` | Yes | The `{"recipients": {...}}` patch file — an RFC-7396-style JSON MERGE PATCH against the current config, applied at the recipient-key level, never a full replacement of the whole file. Each key named in `recipients` **REPLACES that key's entire entry** (a named entry is never deep-merged with its old value). A key set to `null` **DELETES** that recipient — this is the only way to remove one. **A key NOT mentioned in the patch at all is left untouched** in the written file. A malformed patch file, or a recipient entry that fails `isValidRecipientConfigEntry`'s validation, is a clear exit-1 error, and nothing is written. |
 | `--output <file>` | No | Where the preview/result report is written. Omitting this prints the report to stdout instead. |
 | `--yes` | No | Perform the real write (backup + atomic write + audit event). Omitted, this is a dry-run preview only — the diff is computed and reported, the real file is never touched. |
-| `--base-digest <hex>` | No | A SHA-256 digest of the config file content the patch was computed against. If the file's real current digest doesn't match, the write is refused as a concurrent-edit conflict (exit 2) — before any validation or write happens. Omitting this flag skips the version-guard check entirely. |
+| `--base-digest <hex>` | No | A SHA-256 digest of the config file content the patch was computed against. If the file's real current digest doesn't match, the write is refused as a concurrent-edit conflict (exit 2) — before any validation or write happens. Omitting this flag skips the version-guard check entirely. When the project has no `recipient-profiles.json` yet, the digest to compute is `sha256('{"recipients":{}}')` (the compact, no-whitespace literal — distinct from the pretty-printed JSON a real write produces, since a digest is only ever compared to another digest, never to file bytes). |
 
 Exit codes: `0` on success (both the dry-run-preview path and the real
 write path); `1` when the patch itself fails validation (never writes,

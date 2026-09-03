@@ -38,14 +38,32 @@ function _recipientsOf(config) {
     : {};
 }
 
-function _validateEntries(recipients) {
+function _validateEntries(patchRecipients) {
   const errors = [];
-  for (const [key, entry] of Object.entries(recipients)) {
+  for (const [key, entry] of Object.entries(patchRecipients)) {
+    if (entry === null) continue; // explicit deletion marker, not a config entry
     if (!(0,_recipient_registry_js__WEBPACK_IMPORTED_MODULE_0__/* .isValidRecipientConfigEntry */ .cw)(entry)) {
       errors.push({ key, message: `recipient "${key}" is not a valid recipient-profile-shaped config entry` });
     }
   }
   return errors;
+}
+
+// RFC-7396-style merge patch at the recipient-key level: a non-null
+// patch value REPLACES that key's entire entry; a null value DELETES
+// it; a key the patch never mentions is left untouched. This is the
+// fix for a real data-loss bug (found by this task's own review,
+// live-reproduced): the prior design treated `patch.recipients` as
+// the ENTIRE new recipients object, so omitting a key silently
+// deleted it — a reasonable operator adding one vendor had no reason
+// to expect every other vendor's compliance facts to vanish.
+function _mergeRecipients(currentRecipients, patchRecipients) {
+  const merged = { ...currentRecipients };
+  for (const [key, value] of Object.entries(patchRecipients)) {
+    if (value === null) delete merged[key];
+    else merged[key] = value;
+  }
+  return merged;
 }
 
 // Canonical (key-order-independent) JSON serialization for change
@@ -71,15 +89,16 @@ function _diffRecipients(currentRecipients, patchRecipients) {
   const removed = [];
   const changed = [];
   const currentKeys = new Set(Object.keys(currentRecipients));
-  const patchKeys = new Set(Object.keys(patchRecipients));
-  for (const key of patchKeys) {
-    if (!currentKeys.has(key)) { added.push(key); continue; }
-    if (JSON.stringify(_canonicalize(currentRecipients[key])) !== JSON.stringify(_canonicalize(patchRecipients[key]))) {
-      changed.push({ key, before: currentRecipients[key], after: patchRecipients[key] });
+  for (const [key, value] of Object.entries(patchRecipients)) {
+    if (value === null) {
+      if (currentKeys.has(key)) removed.push(key);
+      // deleting a key that never existed is a no-op, not reported
+      continue;
     }
-  }
-  for (const key of currentKeys) {
-    if (!patchKeys.has(key)) removed.push(key);
+    if (!currentKeys.has(key)) { added.push(key); continue; }
+    if (JSON.stringify(_canonicalize(currentRecipients[key])) !== JSON.stringify(_canonicalize(value))) {
+      changed.push({ key, before: currentRecipients[key], after: value });
+    }
   }
   added.sort();
   removed.sort();
@@ -92,17 +111,29 @@ function _diffRecipients(currentRecipients, patchRecipients) {
  * never throws, never touches the filesystem. `currentConfig`/`patch`
  * are both `{recipients: {...}}`-shaped; a malformed shape degrades to
  * an empty `recipients` object rather than throwing (mirrors
- * `loadRecipientConfig`'s own tolerant-degradation contract). Returns
- * `{valid, errors, diff}` — `diff` is always computed, even when
- * `valid` is false, so an operator can see what they attempted before
- * fixing a validation error.
+ * `loadRecipientConfig`'s own tolerant-degradation contract).
+ *
+ * `patch.recipients` is an RFC-7396-style JSON MERGE PATCH against
+ * `currentConfig.recipients`, keyed at the recipient level — never a
+ * full replacement of the whole object: a key present with a non-null
+ * value REPLACES that key's entire entry (never deep-merged within
+ * itself); a key present with value `null` DELETES it (the only way to
+ * remove a recipient); a key the patch never mentions is left
+ * untouched in the merged result.
+ *
+ * Returns `{valid, errors, diff, merged}` — `diff`/`merged` are always
+ * computed, even when `valid` is false, so an operator can see what
+ * they attempted before fixing a validation error. `merged` is the
+ * full `{recipients: {...}}` result the caller should write — never
+ * the raw patch.
  */
 function proposeGovernanceEdit(currentConfig, patch) {
   const currentRecipients = _recipientsOf(currentConfig);
   const patchRecipients = _recipientsOf(patch);
   const errors = _validateEntries(patchRecipients);
   const diff = _diffRecipients(currentRecipients, patchRecipients);
-  return { valid: errors.length === 0, errors, diff };
+  const merged = { recipients: _mergeRecipients(currentRecipients, patchRecipients) };
+  return { valid: errors.length === 0, errors, diff, merged };
 }
 
 
