@@ -56,6 +56,55 @@ import { loadRecipientConfig, RECIPIENT_CONFIG_FILENAME } from './recipient-regi
 // present-and-empty, and those are two DIFFERENT answers under AC-29
 // clause 2 — see the function body below for the full reasoning.
 import { loadObservations } from './observation-store.js';
+// M5 deliverable #8 (FR-304 "declared" half): loaded ONCE, here —
+// mirroring `privacySinkPolicy`'s own existence-gated, single-computation
+// discipline below (never `recipientConfig`'s unconditional-call one — a
+// missing cross-repo-links.json here means "no links declared", a real,
+// distinguishable-from-empty state worth keeping honest the same way
+// `privacy-policy.json`'s absence is, per this deliverable's own scoping
+// doc). `validateCrossRepoLink` is imported directly (not a separate
+// loader module) — see `_loadCrossRepoLinkRecords` below for why this
+// small, local, tolerant reader lives here rather than in
+// `cross-repo-link.js` (which must stay a PURE, zero-fs-access module,
+// mirroring `scenario.js`'s own boundary) or `federation-loader.js`
+// (which owns only the REMOTE side).
+import { validateCrossRepoLink, CROSS_REPO_LINKS_FILENAME } from './cross-repo-link.js';
+
+// A small, LOCAL, tolerant loader for the operator-declared
+// cross-repo-links.json config file — mirrors `loadRecipientConfig`'s own
+// fail-closed, skip-the-whole-entry-on-any-defect discipline
+// (recipient-registry.js), but kept local to this file rather than
+// exported from `cross-repo-link.js`/`federation-loader.js` (see the
+// import comment above for the full reasoning). Never throws; a missing
+// file is never reached here at all (the caller already gated on
+// `fs.existsSync`); a malformed file or a malformed individual link
+// degrades to an empty/partial array with a console warning naming the
+// count skipped, mirroring `loadRecipientConfig`'s own per-entry
+// discipline.
+function _loadCrossRepoLinkRecords(filePath) {
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.error(`agentic-security: bad JSON in cross-repo links file (${filePath}) — falling back to no declared links (${e.message})`);
+    return [];
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !Array.isArray(raw.links)) {
+    console.error(`agentic-security: cross-repo links file ${filePath} has no "links" array — falling back to no declared links (expected {"links": [...]})`);
+    return [];
+  }
+  const records = [];
+  let skipped = 0;
+  for (const record of raw.links) {
+    const { valid } = validateCrossRepoLink(record);
+    if (!valid) { skipped += 1; continue; }
+    records.push(record);
+  }
+  if (skipped > 0) {
+    console.error(`agentic-security: skipped ${skipped} malformed cross-repo-link entr${skipped === 1 ? 'y' : 'ies'} in ${filePath} (each must be a valid CrossRepoLink-shaped object)`);
+  }
+  return records;
+}
 
 /**
  * @param {{functions: Map}} callGraph a real callGraph — the same shape
@@ -199,6 +248,15 @@ export function buildLineageGraph(callGraph, opts = {}) {
     const runtimeObservations = _observationsDir && fs.existsSync(_observationsDir)
       ? loadObservations(opts.scanRoot)
       : undefined;
+    // M5 deliverable #8 (FR-304 "declared" half): the operator's declared
+    // cross-repo links, loaded exactly once here — the same
+    // single-computation discipline every other config load in this
+    // function follows. Existence is checked EXPLICITLY, exactly like
+    // `privacySinkPolicy` above.
+    const _crossRepoLinksFile = opts.scanRoot ? statePath(opts.scanRoot, CROSS_REPO_LINKS_FILENAME) : null;
+    const crossRepoLinkRecords = _crossRepoLinksFile && fs.existsSync(_crossRepoLinksFile)
+      ? _loadCrossRepoLinkRecords(_crossRepoLinksFile)
+      : undefined;
     const built = buildGraphWithCoverage(callGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
@@ -210,6 +268,7 @@ export function buildLineageGraph(callGraph, opts = {}) {
       environment: opts.environment,
       recipientConfig,
       runtimeObservations,
+      crossRepoLinkRecords,
       observationWindowStart: opts.observationWindowStart,
       observationWindowEnd: opts.observationWindowEnd,
     });

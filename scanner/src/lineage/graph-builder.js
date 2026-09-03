@@ -88,6 +88,19 @@
 // the top level. See this hook's own inline comment below for the full
 // reasoning, including why it never touches `edge.provenance`.
 //
+//
+// M5 deliverable #8 (FR-304 "declared" half only, §10.10): `opts.
+// crossRepoLinks(graph) -> CrossRepoLink[]`, a SIXTH additive hook of
+// the identical shape — applied once every graph array AND
+// `recipientProfiles` are populated, mirroring `opts.buildRecipientProfile`'s
+// own placement exactly (the hook can validate a declared
+// `local.nodeId` against the CURRENT graph's own real node set).
+// `graph.crossRepoLinks` is always present — mirrors
+// `graph.recipientProfiles[]`'s own "always an array, possibly empty"
+// shape, NOT `graph.runtimeCorroboration`'s own "genuinely absent when
+// the hook is omitted" shape, since a CrossRepoLink array has no
+// `not_evaluated` state to preserve the way runtime corroboration does.
+//
 // Reuse boundary (§12, confirmed against the source): imports ONLY
 // `matchSource`/`matchSinkOrSanitizer` from `../dataflow/catalog.js`,
 // `matchPrivacySink` from `../dataflow/privacy-catalog.js`, and
@@ -1024,6 +1037,27 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   // artifact, never stored on the built graph itself. Never in
   // `dataflow-graph.schema.json`, never routed through `validateGraph()`.
   graph.recipientProfiles = [...recipientProfilesById.values()].sort(byId);
+  // M5 deliverable #8 (FR-304 "declared" half only, §10.10): a SIXTH
+  // additive hook of the identical shape — `opts.crossRepoLinks(graph) ->
+  // CrossRepoLink[]`. Runs here, after nodes/edges/flows/dataElements AND
+  // recipientProfiles are populated, mirroring `opts.buildRecipientProfile`'s
+  // own placement exactly: the hook can validate a declared `local.nodeId`
+  // against the CURRENT graph's own real node set (a stale declaration, from
+  // before a node was renamed/removed in a later rescan, is DROPPED and
+  // reported by the hook itself, never silently kept stale — matching
+  // `applyScenario`'s own "skippedOperations, never thrown" honesty
+  // precedent; see `coverage.js`'s default hook for where that drop/report
+  // logic lives). `graph.crossRepoLinks` is always present (mirrors
+  // `graph.recipientProfiles`'s own "always an array, possibly empty" shape,
+  // not `graph.runtimeCorroboration`'s own "genuinely absent when the hook
+  // is omitted" shape — a CrossRepoLink array has no not_evaluated-vs-empty
+  // distinction to preserve the way runtime corroboration does). Never in
+  // `dataflow-graph.schema.json`, never routed through `validateGraph()` —
+  // the SECOND §10.10 extension array ever attached directly to the graph
+  // object (after `graph.recipientProfiles[]`).
+  graph.crossRepoLinks = typeof opts.crossRepoLinks === 'function'
+    ? [...(opts.crossRepoLinks(graph) || [])].sort(byId)
+    : [];
   // M5 deliverable #7 (FR-505 §7.12, AC-29): a FIFTH additive hook of the
   // identical shape — `opts.correlateObservations(graph) -> correlationResult
   // | undefined`. Runs here, after nodes/edges/flows/dataElements AND

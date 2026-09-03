@@ -500,6 +500,23 @@ export function buildCoverageLedger(built, opts = {}) {
  * @param {string} [opts.observationWindowEnd] optional ISO-8601 upper
  *   bound for the correlation window, threaded verbatim into
  *   `correlateObservations`'s own `opts.windowEnd`.
+ * @param {Array<object>} [opts.crossRepoLinkRecords] M5 deliverable #8
+ *   (FR-304 "declared" half): a PRE-LOADED `CrossRepoLink[]` array —
+ *   never a path, the read happens once, upstream, in `index.js`'s
+ *   `buildLineageGraph` (mirroring `opts.recipientConfig`'s own
+ *   wording). `undefined` means "no cross-repo-links.json was
+ *   consulted" (`index.js`'s own `existsSync` gate never found the
+ *   file) and installs NO default `opts.crossRepoLinks` hook at all —
+ *   `graph.crossRepoLinks` still reads `[]` either way (the same
+ *   visible OUTCOME as "consulted and genuinely empty"), unlike
+ *   `opts.runtimeObservations`'s own `undefined`-vs-`[]` distinction,
+ *   because a CrossRepoLink array carries no `not_evaluated` state to
+ *   preserve the way runtime corroboration does (see `graph-builder.js`'s
+ *   own comment on this hook for the full reasoning). The default hook,
+ *   when installed, DROPS any record whose `local.nodeId` is not present
+ *   in the graph's own current `nodes[]` (a stale declaration from
+ *   before a rescan), reporting each dropped id via `console.error`
+ *   rather than silently keeping it.
  */
 export function buildGraphWithCoverage(callGraph, opts = {}) {
   // NITPICK 4: compose with a caller-supplied `opts.resolveSiteDecision`
@@ -603,6 +620,37 @@ export function buildGraphWithCoverage(callGraph, opts = {}) {
           windowStart: opts.observationWindowStart ?? null,
           windowEnd: opts.observationWindowEnd ?? null,
         }))
+        : undefined),
+    // M5 deliverable #8 (FR-304 "declared" half): identical composition
+    // pattern to `opts.correlateObservations` immediately above — a
+    // caller-supplied hook always wins. The default is installed ONLY when
+    // `opts.crossRepoLinkRecords` is genuinely defined (`index.js`'s own
+    // `existsSync` gate against `.agentic-security/cross-repo-links.json`
+    // found the file); when it is `undefined`, NO hook is installed and
+    // `graph.crossRepoLinks` stays `[]` via `graph-builder.js`'s own
+    // unconditional default — there is no `not_evaluated` state for this
+    // array to preserve, unlike `correlateObservations`'s own
+    // `undefined`-vs-`[]` distinction. When installed, the default hook
+    // drops any record whose `local.nodeId` no longer resolves against the
+    // CURRENT graph's own real node set (a stale declaration from before a
+    // rescan renamed/removed the node) rather than silently keeping it —
+    // matching `applyScenario`'s own "skippedOperations, never thrown"
+    // honesty precedent — and reports every drop via `console.error`.
+    crossRepoLinks: opts.crossRepoLinks
+      ?? (opts.crossRepoLinkRecords !== undefined
+        ? ((graph) => {
+          const nodeIds = new Set((graph.nodes ?? []).map((n) => n.id));
+          const kept = [];
+          const dropped = [];
+          for (const record of opts.crossRepoLinkRecords) {
+            if (record && record.local && nodeIds.has(record.local.nodeId)) kept.push(record);
+            else dropped.push(record);
+          }
+          if (dropped.length > 0) {
+            console.error(`agentic-security: dropped ${dropped.length} stale cross-repo link${dropped.length === 1 ? '' : 's'} (local.nodeId not found in the current graph): ${dropped.map((r) => (r && r.id) || '(malformed)').join(', ')}`);
+          }
+          return kept;
+        })
         : undefined),
   });
   built.graph.coverage = buildCoverageLedger(built, opts);
