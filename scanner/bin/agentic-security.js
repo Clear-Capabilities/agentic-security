@@ -169,6 +169,24 @@ Commands:
                                Propose a validated, reviewable edit to
                                recipient-profiles.json. Without --yes,
                                previews the diff and writes nothing.
+  remediation open [path] --assessment <impact-report.json> --owner <id> --due <YYYY-MM-DD>
+                               --control <text> --required-evidence <flowId,...>
+                               [--id <itemId>] [--snapshot <commit>] [--allow-manual-attestation]
+                               [--output <file>] [--yes]
+                               Open a new remediation work item against an incident
+                               snapshot. Without --yes, previews the folded item and
+                               writes nothing to the append-only ledger.
+  remediation update [path] --id <itemId> --state <in_progress|awaiting_verification>
+                               [--base-event <hash>] [--output <file>] [--yes]
+                               Advance a remediation item's state. --state verified is
+                               always refused — see remediation verify (AC-31).
+  remediation accept-risk [path] --id <itemId> --approver <id> --reason <text>
+                               --scope <text> --expires <YYYY-MM-DD> [--author <id>]
+                               [--base-event <hash>] [--output <file>] [--yes]
+                               Record an accepted-risk exception, gated on the operator's
+                               authorized-approvers registry when one exists.
+  remediation list [path] [--format json|markdown] [--output <file>]
+                               List every remediation item folded from the ledger.
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -4508,6 +4526,367 @@ async function cmdGovernancePropose(args) {
   return 0;
 }
 
+// ── remediation open/update/accept-risk/list — M5 deliverable #6
+// (Blast-Radius: Remediation Command Center, FR-507 + AC-31), Task 3.
+// The CLI wiring for the non-GraphDiff-dependent half of the `remediation`
+// dispatcher (Task 4 adds `verify`/`reopen-check`). Same shape as
+// `cmdGovernancePropose` above: dry-run-by-default, `--yes` to write,
+// `isSafeStateDir` guard, `auditCall` on every real write, exit codes
+// 0/1/2/4 — but writing through Task 2's `appendLedgerEvent` (an
+// append-only JSONL event log) rather than a whole-file rewrite.
+
+function _emitRemediationReport(report, args) {
+  const data = JSON.stringify(report, null, 2);
+  const outputPath = args.flags.output;
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), data);
+  } else {
+    process.stdout.write(data + '\n');
+  }
+}
+
+// Shared write path for every mutating `remediation` verb. Order is the
+// same one cmdGovernancePropose established and is load-bearing:
+//   1. --base-event optimistic-concurrency guard (BEFORE any validation
+//      or write) — the append-only analogue of #5's whole-file
+//      --base-digest, keyed to the last EVENT hash per the scoping doc's
+//      §3 "reuse this shape, with one genuine adaptation."
+//   2. isSafeStateDir refusal (--yes path only).
+//   3. Dry run: fold the CURRENT ledger, report what WOULD happen, write
+//      nothing, exit 0 (or 1 if the proposed event is itself illegal).
+//   4. --yes: appendLedgerEvent (which is the ONLY caller of
+//      validateTransition), then auditCall — never the reverse, and
+//      never auditCall on a rejected or previewed write.
+// Returns an exit code; the caller returns it verbatim.
+async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args) {
+  const { ledgerPaths, latestEventHash, readLedgerEvents, appendLedgerEvent } =
+    await import('../src/posture/remediation-ledger.js');
+  const { foldRemediationLedger, validateTransition } = await import('../src/lineage/remediation.js');
+
+  const { ledgerPath } = ledgerPaths(targetAbs);
+  const itemId = eventPayload.itemId ?? eventPayload.id ?? null;
+
+  // 1. --base-event guard — before any validation or write.
+  const currentBaseEvent = latestEventHash(targetAbs);
+  const baseEventFlag = args.flags['base-event'];
+  if (baseEventFlag !== undefined && baseEventFlag !== currentBaseEvent) {
+    process.stderr.write(`agentic-security remediation ${verb}: the ledger changed since --base-event was computed (a concurrent write) — refusing to append. Re-read the ledger with \`remediation list\` and retry.\n`);
+    return 2;
+  }
+
+  const yes = !!args.flags.yes;
+
+  // 2. isSafeStateDir refusal — --yes path only.
+  if (yes) {
+    const { isSafeStateDir } = await import('../src/posture/state-dir.js');
+    if (!isSafeStateDir(path.dirname(ledgerPath))) {
+      process.stderr.write(`agentic-security remediation ${verb}: refusing to write — "${targetAbs}" does not look like a project directory.\n`);
+      return 2;
+    }
+  }
+
+  // 3. Dry run — a genuine preview of the resulting state, computed by
+  // folding the CURRENT ledger with the proposed event appended in
+  // memory. The proposed event's own legality is checked here too (for
+  // the preview only — the authoritative call remains the one inside
+  // appendLedgerEvent below), so --yes never surprises an operator who
+  // previewed first.
+  if (!yes) {
+    const events = readLedgerEvents(targetAbs);
+    const currentItems = foldRemediationLedger(events);
+    const currentItem = itemId != null ? (currentItems[itemId] ?? null) : null;
+    const wouldBeItems = foldRemediationLedger([...events, eventPayload]);
+    const wouldBe = itemId != null ? (wouldBeItems[itemId] ?? null) : null;
+    const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: false, wouldBe };
+    const { valid, errors } = validateTransition(currentItem, eventPayload);
+    if (!valid) {
+      report.errors = errors;
+      _emitRemediationReport(report, args);
+      for (const e of errors) process.stderr.write(`agentic-security remediation ${verb}: ${e.field}: ${e.message}\n`);
+      return 1;
+    }
+    _emitRemediationReport(report, args);
+    return 0;
+  }
+
+  // 4. --yes: the real write.
+  let result;
+  try {
+    result = await appendLedgerEvent(targetAbs, eventPayload);
+  } catch (e) {
+    process.stderr.write(`agentic-security remediation ${verb}: unexpected error writing the ledger: ${e && e.message ? e.message : e}\n`);
+    return 4;
+  }
+  if (!result.valid) {
+    for (const e of result.errors) process.stderr.write(`agentic-security remediation ${verb}: ${e.field}: ${e.message}\n`);
+    return 1;
+  }
+  const { auditCall } = await import('../src/mcp/audit.js');
+  auditCall({
+    sessionRoot: targetAbs,
+    tool: auditTool,
+    args: { itemId, eventType: eventPayload.type, baseEvent: currentBaseEvent, eventHash: result.hash },
+    outcome: 'ok',
+  });
+  const report = { verb, itemId, proposedEvent: eventPayload, baseEvent: currentBaseEvent, written: true, eventHash: result.hash };
+  _emitRemediationReport(report, args);
+  return 0;
+}
+
+// agentic-security remediation open [path] --assessment <impact-report.json>
+//   --owner <id> --due <YYYY-MM-DD> --control <text>
+//   --required-evidence <flowId,...> [--id <itemId>] [--snapshot <commit>]
+//   [--allow-manual-attestation] [--output <file>] [--yes]
+async function cmdRemediationOpen(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'open', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const assessmentFlag = args.flags.assessment;
+  const ownerFlag = args.flags.owner;
+  const dueFlag = args.flags.due;
+  const controlFlag = args.flags.control;
+  const requiredEvidenceFlag = args.flags['required-evidence'];
+
+  for (const [name, val] of [
+    ['--assessment', assessmentFlag], ['--owner', ownerFlag], ['--due', dueFlag],
+    ['--control', controlFlag], ['--required-evidence', requiredEvidenceFlag],
+  ]) {
+    if (!val || typeof val !== 'string') {
+      process.stderr.write(`agentic-security remediation open: ${name} is required.\n`);
+      return 2;
+    }
+  }
+
+  // This is the RAW `dataflow impact assess --format json --output`
+  // report — cmdDataflowImpactAssess writes JSON.stringify(record, null,
+  // 2), so the file on disk IS the record. No hand-extraction needed.
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(path.resolve(assessmentFlag), 'utf8'));
+  } catch (e) {
+    process.stderr.write(`agentic-security remediation open: could not read/parse --assessment file "${assessmentFlag}": ${e && e.message ? e.message : e}\n`);
+    return 2;
+  }
+  const { validateImpactAssessment } = await import('../src/lineage/impact-assessment.js');
+  const { valid: assessmentValid, errors: assessmentErrors } = validateImpactAssessment(record);
+  if (!assessmentValid) {
+    process.stderr.write(`agentic-security remediation open: --assessment file failed validation:\n${assessmentErrors.map((e) => `  ${e.path}: ${e.message}`).join('\n')}\n`);
+    return 2;
+  }
+
+  // Resolve the incident snapshot: --snapshot <commit> pins one specific
+  // persisted snapshot; otherwise the newest one is used. Refuses (exit
+  // 2) when no snapshot exists at all — an item with no incident
+  // snapshot can never be verified, so opening one would be a
+  // guaranteed dead end.
+  const snapshotFlag = args.flags.snapshot;
+  let snapshot;
+  if (snapshotFlag !== undefined) {
+    snapshot = loadSnapshot(targetAbs, snapshotFlag);
+    if (!snapshot) {
+      process.stderr.write(`agentic-security remediation open: no persisted GraphSnapshot found for commit "${snapshotFlag}" — pass a commit that was actually scanned.\n`);
+      return 2;
+    }
+  } else {
+    const snapshots = loadSnapshots(targetAbs);
+    if (snapshots.length === 0) {
+      process.stderr.write(`agentic-security remediation open: no persisted GraphSnapshot found for "${targetAbs}" — run a scan with AGENTIC_SECURITY_LINEAGE_DEEP=1 first.\n`);
+      return 2;
+    }
+    snapshot = snapshots[0];
+  }
+
+  const requiredEvidence = String(requiredEvidenceFlag).split(',').map((s) => s.trim()).filter(Boolean);
+  if (requiredEvidence.length === 0) {
+    process.stderr.write('agentic-security remediation open: --required-evidence must name at least one flow id.\n');
+    return 2;
+  }
+
+  const itemId = args.flags.id || `rem-${crypto.randomBytes(6).toString('hex')}`;
+  // affectedFlowIds is DERIVED, not copied — ImpactAssessment carries no
+  // affectedFlowIds field of its own (impact-assessment.js). The sorted,
+  // deduplicated union of --required-evidence and (the target itself,
+  // when it names a flow) is the only real flow-id source available.
+  const affectedFlowIds = [...new Set([
+    ...requiredEvidence,
+    ...(typeof record.targetId === 'string' && record.targetId.startsWith('flow:') ? [record.targetId] : []),
+  ])].sort();
+
+  const payload = {
+    type: 'opened',
+    at: new Date().toISOString(),
+    itemId,
+    id: itemId,
+    owner: ownerFlag,
+    dueDate: dueFlag,
+    recommendedControl: controlFlag,
+    assessment: {
+      assessmentId: record.id,
+      targetId: record.targetId,
+      targetKind: record.targetKind,
+      traceKind: record.traceKind,
+      scope: record.scope,
+      graphId: record.graphId,
+      graphDigest: record.graphDigest,
+      snapshotId: snapshot.id,
+      assessmentPath: path.resolve(assessmentFlag),
+    },
+    affectedFlowIds,
+    affectedNodeIds: record.affectedNodeIds ?? [],
+    affectedEdgeIds: record.affectedEdgeIds ?? [],
+    requiredEvidence,
+    manualAttestationPermitted: !!args.flags['allow-manual-attestation'],
+  };
+
+  const { validateOpenPayload } = await import('../src/lineage/remediation.js');
+  const { valid, errors } = validateOpenPayload(payload);
+  if (!valid) {
+    process.stderr.write(`agentic-security remediation open: ${errors.map((e) => `${e.field}: ${e.message}`).join('\n')}\n`);
+    return 1;
+  }
+
+  return _remediationWrite(targetAbs, 'open', 'remediation_open', payload, args);
+}
+
+// agentic-security remediation update [path] --id <itemId>
+//   --state <in_progress|awaiting_verification> [--base-event <hash>]
+//   [--output <file>] [--yes]
+async function cmdRemediationUpdate(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'update', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const idFlag = args.flags.id;
+  if (!idFlag || typeof idFlag !== 'string') {
+    process.stderr.write('agentic-security remediation update: --id <itemId> is required.\n');
+    return 2;
+  }
+  const stateFlag = args.flags.state;
+  if (!stateFlag || typeof stateFlag !== 'string') {
+    process.stderr.write('agentic-security remediation update: --state <in_progress|awaiting_verification> is required.\n');
+    return 2;
+  }
+  // AC-31 at the CLI boundary: `state_changed` can never reach `verified`
+  // — this is the friendlier of two independent guards for the one rule
+  // that matters most (the ledger's own validateTransition rejection,
+  // enforced inside appendLedgerEvent, is the one that cannot be
+  // bypassed). Checked BEFORE the recognized-values check below so a
+  // caller gets this specific message rather than a generic usage error.
+  if (stateFlag === 'verified') {
+    process.stderr.write('agentic-security remediation update: state_changed can never reach "verified" — run `agentic-security remediation verify` instead.\n');
+    return 1;
+  }
+  if (stateFlag !== 'in_progress' && stateFlag !== 'awaiting_verification') {
+    process.stderr.write(`agentic-security remediation update: --state must be one of in_progress|awaiting_verification (got ${JSON.stringify(stateFlag)}).\n`);
+    return 2;
+  }
+
+  const payload = { type: 'state_changed', at: new Date().toISOString(), itemId: idFlag, state: stateFlag };
+  return _remediationWrite(targetAbs, 'update', 'remediation_update', payload, args);
+}
+
+// agentic-security remediation accept-risk [path] --id <itemId>
+//   --approver <id> --reason <text> --scope <text> --expires <YYYY-MM-DD>
+//   [--author <id>] [--base-event <hash>] [--output <file>] [--yes]
+async function cmdRemediationAcceptRisk(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'accept-risk', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const idFlag = args.flags.id;
+  const approverFlag = args.flags.approver;
+  const reasonFlag = args.flags.reason;
+  const scopeFlag = args.flags.scope;
+  const expiresFlag = args.flags.expires;
+
+  for (const [name, val] of [
+    ['--id', idFlag], ['--approver', approverFlag], ['--reason', reasonFlag],
+    ['--scope', scopeFlag], ['--expires', expiresFlag],
+  ]) {
+    if (!val || typeof val !== 'string') {
+      process.stderr.write(`agentic-security remediation accept-risk: ${name} is required.\n`);
+      return 2;
+    }
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresFlag)) {
+    process.stderr.write(`agentic-security remediation accept-risk: --expires must be a YYYY-MM-DD date (got ${JSON.stringify(expiresFlag)}).\n`);
+    return 2;
+  }
+
+  const { loadApproverRegistry, verifyApprover, checkSeparationOfDuties } =
+    await import('../src/fix/approver-registry.js');
+  const registry = loadApproverRegistry(targetAbs);
+  const v = verifyApprover(registry, approverFlag, []);
+  if (!v.verified) {
+    process.stderr.write(`agentic-security remediation accept-risk: ${v.reason}\n`);
+    return 1;
+  }
+  const sod = checkSeparationOfDuties(registry, args.flags.author, approverFlag);
+  if (!sod.ok) {
+    process.stderr.write(`agentic-security remediation accept-risk: ${sod.reason}\n`);
+    return 1;
+  }
+
+  const payload = {
+    type: 'accepted_risk',
+    at: new Date().toISOString(),
+    itemId: idFlag,
+    approver: approverFlag,
+    reason: reasonFlag,
+    scope: scopeFlag,
+    expiration: expiresFlag,
+  };
+  return _remediationWrite(targetAbs, 'accept-risk', 'remediation_accept_risk', payload, args);
+}
+
+// Byte-identical in behavior to _dfDiffMdInline/_dfDiffMdCell's own bodies
+// (bin/agentic-security.js), reimplemented locally per this codebase's
+// established per-module-owns-its-own-escaping-helpers convention.
+function _remMdInline(value) {
+  return String(value).replace(/\r\n|\r|\n/g, ' ');
+}
+function _remMdCell(value) {
+  return _remMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+
+function _renderRemediationListMarkdown(items) {
+  if (items.length === 0) return '_no remediation items_\n';
+  const lines = [
+    '| id | state | owner | dueDate | recommendedControl |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  for (const item of items) {
+    const control = String(item.recommendedControl ?? '');
+    const truncated = control.length > 60 ? control.slice(0, 60) + '…' : control;
+    lines.push(`| ${_remMdCell(item.id)} | ${_remMdCell(item.state)} | ${_remMdCell(item.owner)} | ${_remMdCell(item.dueDate)} | ${_remMdCell(truncated)} |`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+// agentic-security remediation list [path] [--format json|markdown] [--output <file>]
+async function cmdRemediationList(args) {
+  const target = args._[2] || '.'; // args._ = ['remediation', 'list', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'markdown') {
+    process.stderr.write(`agentic-security remediation list: --format must be one of json|markdown (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  const { readLedgerEvents } = await import('../src/posture/remediation-ledger.js');
+  const { foldRemediationLedger } = await import('../src/lineage/remediation.js');
+  const items = Object.values(foldRemediationLedger(readLedgerEvents(targetAbs)))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  const data = format === 'json' ? JSON.stringify(items, null, 2) : _renderRemediationListMarkdown(items);
+  const outputPath = args.flags.output;
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), data);
+  } else {
+    process.stdout.write(data.endsWith('\n') ? data : data + '\n');
+  }
+  return 0;
+}
+
 // Terse [watch-dataflow] status line — mirrors watch-mode.js's own
 // renderStatusLine terse style, adapted to a GraphDiff's own
 // added/removed/changed shape (computeGraphDiff's `changed` bucket is
@@ -4844,6 +5223,23 @@ async function main() {
         if (sub === 'propose-edit') { process.exit(await cmdGovernancePropose(args)); }
         else {
           process.stderr.write(`agentic-security governance: unrecognized sub-command "${sub}" — must be "propose-edit".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'remediation': {
+        // NOT a `dataflow` subcommand — this writes operator/incident
+        // state (the append-only remediation ledger), never the scanned
+        // graph. Same distinction that made `governance` its own
+        // dispatcher. See _remediationWrite's own header for the full
+        // base-event/isSafeStateDir/audit/exit-code contract.
+        const sub = args._[1];
+        if (sub === 'open') { process.exit(await cmdRemediationOpen(args)); }
+        else if (sub === 'update') { process.exit(await cmdRemediationUpdate(args)); }
+        else if (sub === 'accept-risk') { process.exit(await cmdRemediationAcceptRisk(args)); }
+        else if (sub === 'list') { process.exit(await cmdRemediationList(args)); }
+        else {
+          process.stderr.write(`agentic-security remediation: unrecognized sub-command "${sub}" — must be one of open|update|verify|accept-risk|reopen-check|list.\n`);
           process.exit(2);
         }
         break;

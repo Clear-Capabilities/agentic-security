@@ -1477,9 +1477,9 @@ const apply_fix = {
             materialClassification,
           };
         }
-        const approverRegistry = (0,approver_registry/* loadApproverRegistry */.P4)(ctx.sessionRoot);
-        const requiredRoles = (0,approver_registry/* requiredRolesFor */.Kq)(approverRegistry, materialClassification.highImpactCategories);
-        const identityCheck = (0,approver_registry/* verifyApprover */.$N)(approverRegistry, approval.approvedBy, requiredRoles);
+        const approverRegistry = (0,approver_registry.loadApproverRegistry)(ctx.sessionRoot);
+        const requiredRoles = (0,approver_registry/* requiredRolesFor */.K)(approverRegistry, materialClassification.highImpactCategories);
+        const identityCheck = (0,approver_registry.verifyApprover)(approverRegistry, approval.approvedBy, requiredRoles);
         if (!identityCheck.verified) {
           return {
             _meta: tools_META, applied: false,
@@ -1489,7 +1489,7 @@ const apply_fix = {
         }
         // FR-1003: separation-of-duties, same no-op-unless-configured gate
         // as apply-fix-service.js's own copy — see approver-registry.js.
-        const sodCheck = (0,approver_registry/* checkSeparationOfDuties */.I0)(approverRegistry, fixMeta?.author, approval.approvedBy);
+        const sodCheck = (0,approver_registry.checkSeparationOfDuties)(approverRegistry, fixMeta?.author, approval.approvedBy);
         if (!sodCheck.ok) {
           return {
             _meta: tools_META, applied: false,
