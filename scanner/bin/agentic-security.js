@@ -145,7 +145,6 @@ Commands:
                                already-scanned lineage graph (run
                                AGENTIC_SECURITY_LINEAGE_DEEP=1 scan first)
   dataflow export [path] --format png|pdf|svg|json|csv|html|dpia|ropa|briefing|recipients|coverage --output <file>
-  dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Export the already-scanned lineage graph.
                                --view architecture|privacy|trace|inventory  (default: architecture;
                                                       png/pdf/svg only — no-op + warning for json/csv/html/dpia/ropa/briefing/recipients/coverage)
@@ -155,6 +154,9 @@ Commands:
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv/coverage)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
+  dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
+                               Simulate a hypothetical architecture change against the
+                               already-scanned lineage graph — never mutates the real scan.
 
 Options:
   --profile vibecoder|pro      Override profile for this run
