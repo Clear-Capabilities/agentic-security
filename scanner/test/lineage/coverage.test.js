@@ -251,9 +251,45 @@ test('C1/8: languages/parseFailures are populated correctly from opts.perFile/op
     perFile: { 'a.js': {}, 'b.js': {} },
     parseFailures: [{ file: 'c.js', message: 'unexpected token' }],
   });
-  assert.deepEqual(ledger.languages, [{ language: 'js', filesExpected: 3, filesAnalyzed: 2 }]);
+  assert.deepEqual(ledger.languages, [{
+    language: 'js', filesExpected: 3, filesAnalyzed: 2,
+    // M5: js is a lineage-wired language, so a real curated tier is attached
+    // (see language-coverage-tiers.js) — additive to this test's pre-M5 shape.
+    tier: 'partial', irTaintRecallPct: 58, measuredAt: '2026-08-19', source: 'docs/METRICS.md',
+  }]);
   assert.equal(ledger.parseFailures.length, 1);
   assert.equal(ledger.parseFailures[0].language, 'js', 'language is derived from the extension when not supplied');
+});
+
+// ── M5: language coverage-tier disclosure ──
+
+test('M5: buildCoverageLedger attaches a real tier to each language bucket, never fabricating one for an unrecognized language', () => {
+  const cg = irOf({ 'a.py': "def h(): print(input())" });
+  const built = buildDataFlowGraph(cg, { repository: 'lang-tier-check' });
+  const ledger = buildCoverageLedger(built, { perFile: { 'a.py': {} } });
+  const py = ledger.languages.find((l) => l.language === 'python');
+  assert.equal(py.tier, 'partial');
+  assert.equal(py.irTaintRecallPct, 66);
+  assert.equal(py.measuredAt, '2026-08-19');
+  assert.equal(py.source, 'docs/METRICS.md');
+});
+
+test('M5: an unrecognized language file gets tier "unknown" and no recall fields', () => {
+  const cg = irOf({});
+  const built = buildDataFlowGraph(cg, { repository: 'lang-tier-unknown' });
+  const ledger = buildCoverageLedger(built, { perFile: { 'a.zig': {} } });
+  const unk = ledger.languages.find((l) => l.language === 'unknown');
+  assert.equal(unk.tier, 'unknown');
+  assert.equal('irTaintRecallPct' in unk, false);
+});
+
+test('M5: a rust file gets tier "pattern-only" with no recall number, distinct from "unknown"', () => {
+  const cg = irOf({});
+  const built = buildDataFlowGraph(cg, { repository: 'lang-tier-rust' });
+  const ledger = buildCoverageLedger(built, { perFile: { 'a.rs': {} } });
+  const rust = ledger.languages.find((l) => l.language === 'rust');
+  assert.equal(rust.tier, 'pattern-only');
+  assert.equal('irTaintRecallPct' in rust, false);
 });
 
 // ── determinism ──
@@ -327,7 +363,7 @@ test('M2A1/wire-4: the resulting graph is validateGraph()-clean with real, non-n
 
 // ── isolation / reuse boundary ──
 
-test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, graph-builder.js, resolve-destination.js (Milestone 2, Sub-project A, increment 1), transit-protection.js (Milestone 2, Sub-project B, increment 2), recipient-registry.js (Milestone 4, FR-506), and dataflow/privacy-governance.js (M4 deliverable #10, DFG-020 — reused UNMODIFIED, never re-implemented)', async () => {
+test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, path-query.js, graph-builder.js, resolve-destination.js (Milestone 2, Sub-project A, increment 1), transit-protection.js (Milestone 2, Sub-project B, increment 2), recipient-registry.js (Milestone 4, FR-506), language-coverage-tiers.js (Milestone 5, language coverage-tier disclosure), and dataflow/privacy-governance.js (M4 deliverable #10, DFG-020 — reused UNMODIFIED, never re-implemented)', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../../src/lineage/coverage.js', import.meta.url), 'utf8');
   // MUST-FIX 2: the sibling boundary-test pattern (path-store.test.js,
@@ -336,5 +372,5 @@ test('C1/10: coverage.js\'s only local-package imports are sink-registry.js, pat
   // that weaker pattern let 4 of 5 mutants adding '../dataflow/engine.js'
   // (the exact import this boundary exists to forbid) slip past undetected.
   const specifiers = [...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-  assert.deepEqual(specifiers.sort(), ['../dataflow/privacy-governance.js', './graph-builder.js', './path-query.js', './recipient-registry.js', './resolve-destination.js', './sink-registry.js', './transit-protection.js']);
+  assert.deepEqual(specifiers.sort(), ['../dataflow/privacy-governance.js', './graph-builder.js', './language-coverage-tiers.js', './path-query.js', './recipient-registry.js', './resolve-destination.js', './sink-registry.js', './transit-protection.js']);
 });

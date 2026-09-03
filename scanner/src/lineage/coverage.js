@@ -82,6 +82,11 @@ import { governanceRecordFor, GOVERNANCE_FIELDS } from '../dataflow/privacy-gove
 // cycle here — `recipient-registry.js` never imports anything back from
 // this file.
 import { buildRecipientProfile } from './recipient-registry.js';
+// Milestone 5, language coverage-tier disclosure: `coverageTierForLanguage`
+// composes into `buildCoverageLedger`'s `languages` computation below —
+// pure, static data, no cycle risk (mirrors how every other sibling import
+// above composes into this file's own hooks/computations).
+import { coverageTierForLanguage } from './language-coverage-tiers.js';
 
 // =========================================================================
 // FR-203 — the destination-unresolved heuristic.
@@ -318,6 +323,16 @@ const LANGUAGE_EXT_PATTERNS = Object.freeze([
   [/\.(?:php|phtml)$/i, 'php'],
   [/\.rb$/i, 'ruby'],
   [/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i, 'cpp'],
+  // Milestone 5, language coverage-tier disclosure: these 4 have ZERO
+  // lineage/taint wiring (tree-sitter-pattern-only, sast/tree-sitter-sinks.js
+  // only) — added here purely so a coverage-ledger `languages[]` entry can
+  // honestly attribute their files to a real language bucket, distinct from
+  // a genuinely unrecognized extension, rather than silently folding them
+  // into the shared 'unknown' fallback below.
+  [/\.rs$/i, 'rust'],
+  [/\.sol$/i, 'solidity'],
+  [/\.swift$/i, 'swift'],
+  [/\.dart$/i, 'dart'],
 ]);
 function languageForFile(file) {
   for (const [re, lang] of LANGUAGE_EXT_PATTERNS) if (re.test(file)) return lang;
@@ -370,7 +385,16 @@ export function buildCoverageLedger(built, opts = {}) {
   const allLangs = new Set([...filesAnalyzedByLang.keys(), ...filesFailedByLang.keys()]);
   const languages = [...allLangs].sort().map((language) => {
     const filesAnalyzed = filesAnalyzedByLang.get(language) ?? 0;
-    return { language, filesExpected: filesAnalyzed + (filesFailedByLang.get(language) ?? 0), filesAnalyzed };
+    const base = { language, filesExpected: filesAnalyzed + (filesFailedByLang.get(language) ?? 0), filesAnalyzed };
+    // Milestone 5, language coverage-tier disclosure: coverageTierForLanguage
+    // never fabricates — a language with no curated entry (including the
+    // shared 'unknown' bucket for anything languageForFile can't recognize)
+    // gets tier: 'unknown' and no recall/measuredAt/source fields at all,
+    // never a guessed or zeroed-out number.
+    const tierEntry = coverageTierForLanguage(language);
+    if (!tierEntry) return { ...base, tier: 'unknown' };
+    const { tier, irTaintRecallPct, measuredAt, source } = tierEntry;
+    return irTaintRecallPct == null ? { ...base, tier } : { ...base, tier, irTaintRecallPct, measuredAt, source };
   });
 
   const unresolvedDestinations = built.sites.filter((s) => s.decision.kind === 'unresolved').length;

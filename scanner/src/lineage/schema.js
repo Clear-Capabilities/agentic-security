@@ -48,6 +48,16 @@ export const EXTERNALITY_VALUES = Object.freeze(['internal', 'external', 'unknow
 
 export const COVERAGE_STATUS_VALUES = Object.freeze(['modeled', 'partial', 'candidate', 'unsupported', 'manual']);
 
+// Milestone 5, language coverage-tier disclosure: a product-level tier for
+// an entire LANGUAGE (per docs/METRICS.md's own curated recall measurements),
+// deliberately NOT a reuse of COVERAGE_STATUS_VALUES above — that enum
+// answers a different question (is this one NODE's own classification
+// confident), not "does this language, as a whole, clear the PRD's own
+// field-to-sink recall bar." 'full' is real and reachable (a future
+// docs/METRICS.md update crossing 85% needs no code change here to report
+// it) even though no language currently resolves to it.
+export const LANGUAGE_COVERAGE_TIER_VALUES = Object.freeze(['full', 'partial', 'pattern-only', 'unknown']);
+
 export const DESTINATION_RESOLUTION_VALUES = Object.freeze([
   'literal', 'resolved_from_constant', 'resolved_from_config', 'resolved_from_schema',
   'declared_service', 'runtime_corroborated', 'dynamic', 'unknown',
