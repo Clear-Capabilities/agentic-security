@@ -69,7 +69,7 @@ export function handleScan(graph) {
   return { status: 200, body: wrapResponse(data, graph, { canonicalIds: null }) };
 }
 
-/** The full graph document. No pagination/filtering in S1 (that's `query`'s job, S2). */
+/** The full graph document, unfiltered. For a scoped/narrowed projection, use `handleQuery` (`POST /api/v1/query`, Milestone 5) below instead. */
 export function handleGraph(graph) {
   return { status: 200, body: wrapResponse(graph, graph, { canonicalIds: null }) };
 }
@@ -79,9 +79,15 @@ export function handleGraph(graph) {
  * `POST /api/v1/query`, the S2 endpoint `handleGraph`'s own header
  * comment named and deferred. `filter` is the exact `{nodeIds, edgeIds}`
  * shape `dataflow export --filter`/`exportGraphJSON` already use — reused
- * via `_filterGraph`, never reimplemented. `undefined`/`{}` returns the
- * whole graph, identical to `handleGraph`. A malformed filter is a 400,
- * never a thrown exception reaching the caller.
+ * via `_filterGraph`, never reimplemented. Final whole-branch review
+ * finding: `undefined` (filter omitted entirely) returns the WHOLE graph,
+ * identical to `handleGraph` — but `{}` (an empty, well-formed filter
+ * object) is NOT the same thing, and does NOT mean "no restriction": both
+ * `nodeIds`/`edgeIds` default to empty Sets inside `_filterGraph`, so `{}`
+ * narrows the graph down to EMPTY node/edge/flow/dataElement arrays. A
+ * caller that wants the whole graph must omit `filter` entirely, never
+ * pass `{}` meaning "everything." A malformed filter is a 400, never a
+ * thrown exception reaching the caller.
  */
 export function handleQuery(graph, filter) {
   const check = validateFilterShape(filter);

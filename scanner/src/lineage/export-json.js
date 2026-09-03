@@ -153,7 +153,15 @@ export function computeGraphDigest(graph) {
  * iterates a string as characters instead of throwing (a real JS
  * foot-gun) — a malformed-but-truthy filter would otherwise silently
  * produce an empty/wrong graph instead of a clear error. `undefined`
- * (no filter at all) and `{}` (an empty, valid filter) both pass.
+ * (no filter at all) and `{}` (an empty, well-formed filter object) BOTH
+ * PASS VALIDATION — but they do NOT behave the same downstream. Final
+ * whole-branch review finding: `_filterGraph(graph, undefined)` returns
+ * the graph unchanged (`if (!filter) return graph;`), while
+ * `_filterGraph(graph, {})` narrows `nodeIds`/`edgeIds` to empty Sets and
+ * returns an EMPTY node/edge/flow/dataElement result — "valid shape" is
+ * not "equivalent meaning." Every caller of `validateFilterShape` must
+ * treat a validation pass as "safe to hand to `_filterGraph`," never as
+ * "produces the same result as omitting the filter."
  * Extracted from `bin/agentic-security.js`'s own original inline
  * `--filter` validation (verbatim logic, not rewritten) so the CLI,
  * the `explore` server's new `POST /api/v1/query` endpoint, and the

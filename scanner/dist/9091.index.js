@@ -158,9 +158,16 @@ function _loadOrFailure(sessionRoot) {
 // before this change — this increment adds an opt-in capability for a
 // caller that supplies a filter, it does not add a forced fallback/offload
 // for a caller that doesn't. That remains a follow-up increment.
+// Final whole-branch review finding: `filter: {}` is NOT the same as
+// omitting `filter` — `_filterGraph` treats an empty (but well-formed)
+// filter object as "narrow to nothing" (empty nodeIds/edgeIds Sets), so
+// `filter: {}` returns an EMPTY graph (zero nodes/edges/flows), not the
+// whole one. Called out explicitly in this tool's own `description` below
+// so an agent reaching for "no restriction" reaches for OMITTING the
+// argument, never for `{}`.
 const dataflow_get_graph = {
   name: 'dataflow_get_graph',
-  description: 'Return the DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. Optional `filter: {nodeIds, edgeIds}` narrows the returned nodes/edges/flows/dataElements (same primitive as the CLI\'s `--filter` and the `explore` server\'s `POST /api/v1/query`). KNOWN GAP: an OMITTED filter still returns the whole graph inline with no pagination/offload — may exceed the stdio transport line cap on a very large, unfiltered graph; supply a filter to narrow the response.',
+  description: 'Return the DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. Optional `filter: {nodeIds, edgeIds}` narrows the returned nodes/edges/flows/dataElements (same primitive as the CLI\'s `--filter` and the `explore` server\'s `POST /api/v1/query`). IMPORTANT: omit `filter` entirely for the whole graph — passing `filter: {}` returns an EMPTY graph (zero nodes/edges/flows), not the whole one, since an empty filter narrows to nothing rather than meaning "no restriction". KNOWN GAP: an OMITTED filter still returns the whole graph inline with no pagination/offload — may exceed the stdio transport line cap on a very large, unfiltered graph; supply a real, non-empty filter to narrow the response.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -3063,7 +3070,7 @@ function handleScan(graph) {
   return { status: 200, body: wrapResponse(data, graph, { canonicalIds: null }) };
 }
 
-/** The full graph document. No pagination/filtering in S1 (that's `query`'s job, S2). */
+/** The full graph document, unfiltered. For a scoped/narrowed projection, use `handleQuery` (`POST /api/v1/query`, Milestone 5) below instead. */
 function handleGraph(graph) {
   return { status: 200, body: wrapResponse(graph, graph, { canonicalIds: null }) };
 }
@@ -3073,9 +3080,15 @@ function handleGraph(graph) {
  * `POST /api/v1/query`, the S2 endpoint `handleGraph`'s own header
  * comment named and deferred. `filter` is the exact `{nodeIds, edgeIds}`
  * shape `dataflow export --filter`/`exportGraphJSON` already use — reused
- * via `_filterGraph`, never reimplemented. `undefined`/`{}` returns the
- * whole graph, identical to `handleGraph`. A malformed filter is a 400,
- * never a thrown exception reaching the caller.
+ * via `_filterGraph`, never reimplemented. Final whole-branch review
+ * finding: `undefined` (filter omitted entirely) returns the WHOLE graph,
+ * identical to `handleGraph` — but `{}` (an empty, well-formed filter
+ * object) is NOT the same thing, and does NOT mean "no restriction": both
+ * `nodeIds`/`edgeIds` default to empty Sets inside `_filterGraph`, so `{}`
+ * narrows the graph down to EMPTY node/edge/flow/dataElement arrays. A
+ * caller that wants the whole graph must omit `filter` entirely, never
+ * pass `{}` meaning "everything." A malformed filter is a 400, never a
+ * thrown exception reaching the caller.
  */
 function handleQuery(graph, filter) {
   const check = (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__.validateFilterShape)(filter);

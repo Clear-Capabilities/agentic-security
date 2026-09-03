@@ -48,10 +48,24 @@ test('handleQuery: valid filter narrows the graph via _filterGraph, same envelop
   assert.equal(body.data.edges.length, 0);
 });
 
-test('handleQuery: undefined/empty filter returns the whole graph, same as handleGraph', () => {
+test('handleQuery: an OMITTED filter (undefined) returns the whole graph, same as handleGraph', () => {
   const { status, body } = handleQuery(graph, undefined);
   assert.equal(status, 200);
   assert.deepEqual(body.data.nodes, graph.nodes);
+});
+
+// Final whole-branch review finding: {} is NOT the same as omitting the
+// filter — _filterGraph treats an empty (but well-formed) filter object as
+// "narrow to nothing," not "no restriction." A prior version of this test
+// file was misleadingly TITLED "undefined/empty filter" but never actually
+// exercised {}, which is exactly why this real behavior went unproven.
+test('handleQuery: an EMPTY filter object ({}) narrows to an EMPTY graph — NOT the same as omitting the filter', () => {
+  const { status, body } = handleQuery(graph, {});
+  assert.equal(status, 200);
+  assert.equal(body.data.nodes.length, 0);
+  assert.equal(body.data.edges.length, 0);
+  assert.equal(body.data.flows.length, 0);
+  assert.equal(body.data.dataElements.length, 0);
 });
 
 test('handleQuery: malformed filter -> 400 with a clear message, never throws', () => {

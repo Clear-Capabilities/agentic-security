@@ -118,7 +118,7 @@ test('dataflow_get_graph: an optional filter narrows the returned graph via _fil
   }
 });
 
-test('dataflow_get_graph: omitting filter still returns the whole graph, unchanged', async () => {
+test('dataflow_get_graph: omitting filter (no `filter` key in args at all) still returns the whole graph, unchanged', async () => {
   const root = _mkTmpProject();
   try {
     _writeGraph(root, SAMPLE_GRAPH);
@@ -126,6 +126,25 @@ test('dataflow_get_graph: omitting filter still returns the whole graph, unchang
     assert.equal(result.hasResult, true);
     assert.equal(result.data.nodes.length, 1);
     assert.equal(result.data.edges.length, 1);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Final whole-branch review finding: an explicit `filter: {}` is NOT the
+// same as omitting `filter` entirely (the test immediately above) — an
+// empty filter OBJECT narrows to nothing, since `_filterGraph` defaults
+// both nodeIds/edgeIds to empty Sets. An agent naively passing `filter: {}`
+// meaning "no restriction" would otherwise silently get an empty graph
+// back with `hasResult: true`, reading as "no data flows exist."
+test('dataflow_get_graph: an EXPLICIT filter: {} narrows to an EMPTY graph — NOT the same as omitting filter', async () => {
+  const root = _mkTmpProject();
+  try {
+    _writeGraph(root, SAMPLE_GRAPH);
+    const result = await dataflow_get_graph.handler({ filter: {} }, { sessionRoot: root });
+    assert.equal(result.hasResult, true);
+    assert.equal(result.data.nodes.length, 0);
+    assert.equal(result.data.edges.length, 0);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

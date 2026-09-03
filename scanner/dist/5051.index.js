@@ -193,11 +193,12 @@ function resolveStaticAsset(requestPath) {
 // stdout/scrollback) listening indefinitely.
 const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
-// Request-size cap. S1 ships GET-only endpoints with no meaningful request
-// body, so this mostly matters for S2's future POST endpoints — but the
-// cap-checking middleware exists NOW, applied uniformly to every request,
-// so S2 does not have to retrofit it. 64KB is generous for any header/body
-// this server should ever legitimately receive.
+// Request-size cap, applied uniformly to every request. Milestone 5's own
+// POST /api/v1/query is the first real consumer of a request body — every
+// pre-M5 GET endpoint has no meaningful body of its own, so this mostly
+// protects that one route today, but the cap applies to any future
+// body-bearing route without retrofitting. 64KB is generous for any
+// header/body this server should ever legitimately receive.
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
 // Session token header. A custom header (never a query param) so the
@@ -439,7 +440,18 @@ function createExploreServer({
       // Milestone 5: parse the body ONLY for a matched route, and only as
       // JSON when non-empty — every pre-M5 GET route still ignores this
       // 3rd argument entirely, so an empty/missing body for them is a
-      // no-op, not an error.
+      // no-op, not an error. Disclosed, real, low-risk behavior change
+      // (final whole-branch review finding): this JSON-parse pass applies
+      // to ANY matched route with a non-empty body, not just the new POST
+      // /api/v1/query — a GET request that (unusually) carries a
+      // non-JSON-parseable body now gets a clean 400 instead of the
+      // pre-M5 behavior (body silently drained, request processed
+      // normally). No real client sends a body on a GET here
+      // (frontend/src/lib/api-client.js's own fetch() calls never do), so
+      // this is not expected to affect any real caller — narrower
+      // per-method gating was judged unnecessary complexity for a case
+      // with no real-world traffic, but is a real, disclosed option if
+      // this ever needs revisiting.
       let body;
       if (bodyChunks.length > 0) {
         try {
@@ -568,7 +580,7 @@ function handleScan(graph) {
   return { status: 200, body: wrapResponse(data, graph, { canonicalIds: null }) };
 }
 
-/** The full graph document. No pagination/filtering in S1 (that's `query`'s job, S2). */
+/** The full graph document, unfiltered. For a scoped/narrowed projection, use `handleQuery` (`POST /api/v1/query`, Milestone 5) below instead. */
 function handleGraph(graph) {
   return { status: 200, body: wrapResponse(graph, graph, { canonicalIds: null }) };
 }
@@ -578,9 +590,15 @@ function handleGraph(graph) {
  * `POST /api/v1/query`, the S2 endpoint `handleGraph`'s own header
  * comment named and deferred. `filter` is the exact `{nodeIds, edgeIds}`
  * shape `dataflow export --filter`/`exportGraphJSON` already use — reused
- * via `_filterGraph`, never reimplemented. `undefined`/`{}` returns the
- * whole graph, identical to `handleGraph`. A malformed filter is a 400,
- * never a thrown exception reaching the caller.
+ * via `_filterGraph`, never reimplemented. Final whole-branch review
+ * finding: `undefined` (filter omitted entirely) returns the WHOLE graph,
+ * identical to `handleGraph` — but `{}` (an empty, well-formed filter
+ * object) is NOT the same thing, and does NOT mean "no restriction": both
+ * `nodeIds`/`edgeIds` default to empty Sets inside `_filterGraph`, so `{}`
+ * narrows the graph down to EMPTY node/edge/flow/dataElement arrays. A
+ * caller that wants the whole graph must omit `filter` entirely, never
+ * pass `{}` meaning "everything." A malformed filter is a 400, never a
+ * thrown exception reaching the caller.
  */
 function handleQuery(graph, filter) {
   const check = (0,_lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__.validateFilterShape)(filter);

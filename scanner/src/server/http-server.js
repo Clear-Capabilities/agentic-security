@@ -24,11 +24,12 @@ import { resolveStaticAsset, FRONTEND_ROOT, STATIC_CSP_HEADER_VALUE } from './st
 // stdout/scrollback) listening indefinitely.
 export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
-// Request-size cap. S1 ships GET-only endpoints with no meaningful request
-// body, so this mostly matters for S2's future POST endpoints — but the
-// cap-checking middleware exists NOW, applied uniformly to every request,
-// so S2 does not have to retrofit it. 64KB is generous for any header/body
-// this server should ever legitimately receive.
+// Request-size cap, applied uniformly to every request. Milestone 5's own
+// POST /api/v1/query is the first real consumer of a request body — every
+// pre-M5 GET endpoint has no meaningful body of its own, so this mostly
+// protects that one route today, but the cap applies to any future
+// body-bearing route without retrofitting. 64KB is generous for any
+// header/body this server should ever legitimately receive.
 export const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
 // Session token header. A custom header (never a query param) so the
@@ -270,7 +271,18 @@ export function createExploreServer({
       // Milestone 5: parse the body ONLY for a matched route, and only as
       // JSON when non-empty — every pre-M5 GET route still ignores this
       // 3rd argument entirely, so an empty/missing body for them is a
-      // no-op, not an error.
+      // no-op, not an error. Disclosed, real, low-risk behavior change
+      // (final whole-branch review finding): this JSON-parse pass applies
+      // to ANY matched route with a non-empty body, not just the new POST
+      // /api/v1/query — a GET request that (unusually) carries a
+      // non-JSON-parseable body now gets a clean 400 instead of the
+      // pre-M5 behavior (body silently drained, request processed
+      // normally). No real client sends a body on a GET here
+      // (frontend/src/lib/api-client.js's own fetch() calls never do), so
+      // this is not expected to affect any real caller — narrower
+      // per-method gating was judged unnecessary complexity for a case
+      // with no real-world traffic, but is a real, disclosed option if
+      // this ever needs revisiting.
       let body;
       if (bodyChunks.length > 0) {
         try {

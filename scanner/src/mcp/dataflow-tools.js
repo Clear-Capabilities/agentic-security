@@ -39,9 +39,16 @@ function _loadOrFailure(sessionRoot) {
 // before this change — this increment adds an opt-in capability for a
 // caller that supplies a filter, it does not add a forced fallback/offload
 // for a caller that doesn't. That remains a follow-up increment.
+// Final whole-branch review finding: `filter: {}` is NOT the same as
+// omitting `filter` — `_filterGraph` treats an empty (but well-formed)
+// filter object as "narrow to nothing" (empty nodeIds/edgeIds Sets), so
+// `filter: {}` returns an EMPTY graph (zero nodes/edges/flows), not the
+// whole one. Called out explicitly in this tool's own `description` below
+// so an agent reaching for "no restriction" reaches for OMITTING the
+// argument, never for `{}`.
 export const dataflow_get_graph = {
   name: 'dataflow_get_graph',
-  description: 'Return the DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. Optional `filter: {nodeIds, edgeIds}` narrows the returned nodes/edges/flows/dataElements (same primitive as the CLI\'s `--filter` and the `explore` server\'s `POST /api/v1/query`). KNOWN GAP: an OMITTED filter still returns the whole graph inline with no pagination/offload — may exceed the stdio transport line cap on a very large, unfiltered graph; supply a filter to narrow the response.',
+  description: 'Return the DataFlowGraph v1 artifact from the last signed, verified deep-mode scan: nodes, edges, flows, scope, coverage, and limitations. Requires a prior `AGENTIC_SECURITY_LINEAGE_DEEP=1 agentic-security scan`. Optional `filter: {nodeIds, edgeIds}` narrows the returned nodes/edges/flows/dataElements (same primitive as the CLI\'s `--filter` and the `explore` server\'s `POST /api/v1/query`). IMPORTANT: omit `filter` entirely for the whole graph — passing `filter: {}` returns an EMPTY graph (zero nodes/edges/flows), not the whole one, since an empty filter narrows to nothing rather than meaning "no restriction". KNOWN GAP: an OMITTED filter still returns the whole graph inline with no pagination/offload — may exceed the stdio transport line cap on a very large, unfiltered graph; supply a real, non-empty filter to narrow the response.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
