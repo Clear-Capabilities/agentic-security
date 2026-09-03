@@ -279,10 +279,13 @@ function _resolveTargetKind(targetId) {
 // function any more (final-review I1 fix). See
 // _flowRestrictedAffectedSet's header comment for why: compromising a
 // NODE genuinely puts everything reachable from it in the blast
-// radius, but compromising one EDGE/FLOW/data-element does not — it
-// silently upgrades "this channel is compromised" to "the process
-// node at each end is compromised", the same over-inclusion class the
-// original dataElement fix removed.
+// radius, but compromising one EDGE/FLOW/data-element does not — the
+// affected record still NAMES that edge/flow's own two endpoint nodes
+// (you need them to know what the compromised channel actually
+// touches), it just never treats either endpoint as ITSELF fully
+// compromised for the purpose of finding everything ELSE reachable
+// from it via unrelated edges — that further step is exactly the
+// over-inclusion class the original dataElement fix removed.
 function _seedNodeIds(graph, targetId, targetKind) {
   if (targetKind === 'node') return [targetId];
   return [];
@@ -415,10 +418,13 @@ function _affectedCoverageLimitations(graph, affectedNodeIds, affectedEdgeIds) {
  * everything it can reach in the blast radius. `edge`/`flow`/
  * `dataElement` targets report only the flows/nodes/edges that
  * actually carry that specific edge/flow/data element (`traceKind:
- * 'flow_restricted'`) — compromising one channel does not compromise
- * the process node at each end. The two target-kind families answer
- * genuinely different questions, both honestly disclosed via
- * `traceKind` rather than silently conflated under one `scope` value.
+ * 'flow_restricted'`) — the record still names that edge/flow's own
+ * two endpoint nodes (you need them to know what the channel actually
+ * touches), it just never treats either endpoint as itself fully
+ * compromised for finding everything ELSE reachable from it via
+ * unrelated edges. The two target-kind families answer genuinely
+ * different questions, both honestly disclosed via `traceKind` rather
+ * than silently conflated under one `scope` value.
  */
 function computeImpactAssessment(graph, targetId, opts = {}) {
   if (!Array.isArray(graph?.nodes) || !Array.isArray(graph?.edges)) {
@@ -464,6 +470,23 @@ function computeImpactAssessment(graph, targetId, opts = {}) {
     const { nodeIds, edgeIds, dataClasses } = _flowRestrictedAffectedSet(graph, matchesFlow);
     for (const id of nodeIds) if (realNodeIds.has(id)) affectedNodeIds.add(id);
     for (const id of edgeIds) affectedEdgeIds.add(id);
+    // N3 (final-review re-review): an edge: target that exists in
+    // graph.edges but appears in NO flow's own edgeIds (real for the
+    // real graph — an edge with zero flows using it is a legitimate
+    // graph shape, e.g. a dead-end connection no data currently
+    // traverses) must never come back fully empty — "this edge is
+    // compromised" means, at minimum, that edge and its own two
+    // endpoints are affected, flow or no flow. A nonexistent edge id
+    // still correctly degrades to fully empty (realNodeIds/the edge
+    // lookup below both filter it out).
+    if (targetKind === 'edge') {
+      const edge = (graph.edges ?? []).find((e) => e.id === targetId);
+      if (edge) {
+        affectedEdgeIds.add(edge.id);
+        if (realNodeIds.has(edge.from)) affectedNodeIds.add(edge.from);
+        if (realNodeIds.has(edge.to)) affectedNodeIds.add(edge.to);
+      }
+    }
     affectedDataClasses = [...dataClasses].sort();
   }
 

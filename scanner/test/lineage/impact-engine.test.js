@@ -208,6 +208,20 @@ test('computeImpactAssessment: the equivalent edge: target does not sweep in unr
   assert.deepEqual(record.affectedDataClasses, ['PCI']);
 });
 
+test('computeImpactAssessment: an edge: target carried by NO flow still reports itself and its own endpoints, never a fully empty record (N3, final-review re-review)', () => {
+  const graph = _reviewReproGraph();
+  // A real, dead-end edge no flow currently uses — a legitimate graph
+  // shape (e.g. a connection nothing traverses yet), distinct from a
+  // genuinely nonexistent edge id.
+  graph.nodes.push({ id: 'node:sinkD', kind: 'sink', subtype: 'log' });
+  graph.edges.push({ id: 'edge:D', from: 'node:app', to: 'node:sinkD', relationship: 'flows_to' });
+  const record = computeImpactAssessment(graph, 'edge:D');
+  assert.equal(record.targetKind, 'edge');
+  assert.equal(record.traceKind, 'flow_restricted');
+  assert.deepEqual(record.affectedEdgeIds, ['edge:D']);
+  assert.deepEqual([...record.affectedNodeIds].sort(), ['node:app', 'node:sinkD']);
+});
+
 // I3: an affected node's real, required coverageStatus surfaces a
 // concrete, non-empty limitation naming it; an unaffected node with the
 // identical coverageStatus must not appear.

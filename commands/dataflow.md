@@ -216,9 +216,11 @@ apply depending on the target kind, both disclosed via the output's own
 node could push to," since compromising a node genuinely puts
 everything reachable from it in the blast radius. An `edge:*`/`flow:*`/
 `data:*` target reports `traceKind: 'flow_restricted'` — only the
-flows that actually carry that specific edge/flow/data element, since
-compromising one channel does not compromise the process node at each
-end of it.
+flows that actually carry that specific edge/flow/data element. The
+report still names that edge/flow's own two endpoint nodes (you need
+them to know what the compromised channel actually touches), it just
+never treats either endpoint as itself fully compromised for finding
+everything else reachable from it via unrelated edges.
 
 ### Options
 
@@ -230,9 +232,12 @@ end of it.
 
 Exit codes: `0` on success; `1` when the base lineage graph could not be
 loaded (missing/unsigned/tampered/malformed — the same four messages
-`export`/`diff`/`scenario apply` already use); `2` on a usage/argument
-error (missing `--target`/`--output`, or a `--target` with no
-recognized canonical-id prefix).
+`export`/`diff`/`scenario apply` already use), OR when a graph loads
+and verifies but is structurally malformed (e.g. missing its own
+`nodes`/`edges` arrays — `loadSignedGraph` verifies only the signature,
+never the schema, so a signed-but-malformed graph can still reach this
+point); `2` on a usage/argument error (missing `--target`/`--output`,
+or a `--target` with no recognized canonical-id prefix).
 
 ### Examples
 

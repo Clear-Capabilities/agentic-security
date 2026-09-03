@@ -69,6 +69,14 @@ test('dataflow impact assess: --format markdown writes a real Markdown report', 
   const md = fs.readFileSync(outFile, 'utf8');
   assert.match(md, /# Impact assessment/);
   assert.match(md, /node:sink/);
+  // N4 (final-review re-review): the header must tie the report back
+  // to the graph/moment it was computed — these three assertions would
+  // fail if id/graphId/graphDigest were ever dropped from the Markdown
+  // branch (the pre-M3 shape), unlike the two assertions above, which
+  // would still pass with the whole header removed.
+  assert.match(md, /^id: `impact:[0-9a-f]+`$/m);
+  assert.match(md, /^graphId: `dfg:cli-dataflow-impact-test`$/m);
+  assert.match(md, /^graphDigest: `[0-9a-f]+`$/m);
 });
 
 test('dataflow impact assess: a malformed --target (no recognized prefix) exits 2', () => {

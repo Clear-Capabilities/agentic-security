@@ -645,9 +645,13 @@ element's own endpoint nodes would sweep in an unrelated sibling flow
 that merely shares a node (reproduced live, twice: once for
 `dataElement` targets in the original fix round, then again for
 `edge`/`flow` targets by the final whole-branch review on the
-identical bug class it had missed the first time) — silently
-upgrading "this channel is compromised" to "the process node at each
-end is compromised." Both families are honestly disclosed on the
+identical bug class it had missed the first time). The record still
+names that edge/flow's own two endpoint nodes — you need them to know
+what the compromised channel actually touches — it just never treats
+either endpoint as itself fully compromised for finding everything ELSE
+reachable from it via unrelated edges; that further step is exactly
+the over-inclusion class this fix removed. Both families are honestly
+disclosed on the
 record itself via `traceKind` (`impact-assessment.js`'s
 `IMPACT_TRACE_KINDS`): `'topology_reachable'` for `node` targets,
 `'flow_restricted'` for the other three — so a JSON consumer (or a
