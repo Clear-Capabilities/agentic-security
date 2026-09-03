@@ -33,11 +33,21 @@ recorded, and displayed, as MANUAL evidence, forever (`verificationSnapshotId`
 stays `null`; the approval carries `evidenceKind: 'manual'`).
 
 **"Compatible rescan evidence" currently means only that the two
-snapshots share a `schemaVersion`** (`snapshotsComparable`, checked
-before `computeGraphDiff` ever runs). Two snapshots produced by
-genuinely different analyzer configurations are reported comparable —
-there is no `configHash`-level check yet. This is a disclosed limitation,
-not fixed by this deliverable.
+snapshots share a `schemaVersion`** (`snapshotsComparable` — `computeGraphDiff`
+itself checks comparability first and throws on an incomparable pair,
+which this command catches and reports as `incomparable_snapshots`). Two
+snapshots produced by genuinely different analyzer configurations are
+reported comparable — there is no `configHash`-level check yet. This is a
+disclosed limitation, not fixed by this deliverable.
+
+**A `verified` outcome also requires the AFTER snapshot to be genuinely
+newer than the BEFORE snapshot.** `remediation verify` refuses to emit
+`outcome: 'verified'` when the AFTER snapshot's own `capturedAt` is not
+strictly later than the BEFORE snapshot's — reported as
+`reason: 'stale_after_snapshot'` instead. This guards against the
+snapshot-selection mechanism being reordered by anything that rewrites
+snapshot files without preserving mtimes (`cp -R`, `rsync` without `-t`,
+a CI cache restore, a `tar` extract, a Docker `COPY`).
 
 **An incomplete scan can never produce a `verified` outcome.** Any
 measured coverage regression on the AFTER snapshot (fewer matched
@@ -114,7 +124,7 @@ Verifies a remediation item — the ONLY two routes to `verified`.
 |---|---|---|
 | `--id <itemId>` | Yes | The item to verify. Must currently be `awaiting_verification`. |
 | `--against <commit>` | No | A COMMIT KEY (never a snapshot id) resolved via the same mechanism `dataflow diff` uses, pinning the BEFORE snapshot. Without it, the BEFORE snapshot preferentially resolves to the item's own incident snapshot, falling back to the most recent prior snapshot when the incident snapshot is no longer on disk. |
-| `--manual-attestation` | No | Switches to the manual-attestation branch — never computes a diff. Requires `--approver`/`--reason`, and requires the item to have been opened with `--allow-manual-attestation` (enforced by the ledger's own `validateTransition`, not this flag). |
+| `--manual-attestation` | No | Switches to the manual-attestation branch — never computes a diff. Requires `--approver`/`--reason`, and requires the item to have been opened with `--allow-manual-attestation` (enforced by the ledger's own `validateTransition`, not this flag). Records the newest available snapshot (if any) as the item's new verification baseline, so the attestation survives a later `reopen-check` instead of being immediately undone by a stale anchor. Combining this with `--against` prints a warning — `--against` has no effect here. |
 | `--approver <id>` | With `--manual-attestation` | Gated on the operator's `authorized-approvers.json` registry when one exists — same mechanism `accept-risk` uses. |
 | `--reason <text>` | With `--manual-attestation` | Why manual attestation is being used instead of a rescan. |
 | `--author <id>` | No | For separation-of-duties checking against `--approver`. |
@@ -152,11 +162,22 @@ reason:
   `changed_flow`) matches a violation whose own flow id names one of the
   item's `affectedFlowIds`.
 - **`mechanism: 'affected-flow-diff'`** — any of the item's
-  `affectedFlowIds` appears in the diff's `removed.flows` or
-  `changed.flows` bucket. This exists because `drift-policy.js`'s trigger
-  vocabulary is exactly `new_flow`/`changed_flow` — there is no
-  `removed_flow` trigger, so "the control itself disappeared from a later
-  scan" cannot be expressed as a drift policy at all.
+  `affectedFlowIds` (or a flow `reidentifiedFrom` one of them) REAPPEARS
+  in the diff's `added.flows` bucket, relative to the item's own
+  verification baseline. A regression is the flow coming BACK, which by
+  construction shows up in `added.flows`, never `removed.flows`/
+  `changed.flows` — a flow disappearing is always a fix, never a
+  regression. This exists because `drift-policy.js`'s trigger vocabulary
+  is exactly `new_flow`/`changed_flow` — there is no `removed_flow`
+  trigger, so "the control itself disappeared from a later scan" cannot
+  be expressed as a drift policy at all.
+
+  **Disclosed limitation:** a manually-attested item whose flagged flow
+  was ALREADY present at attestation time (the typical manual-attestation
+  scenario — a compensating control, not flow removal) can never trigger
+  Mechanism B this way, since the flow never left `added.flows`'s scope
+  (it's already present in both before/after). Such an item can only be
+  reopened via Mechanism A (`--drift-policy`).
 
 **No `--base-event`.** `reopen-check` can append events across many
 items in one invocation, so a single whole-ledger optimistic-concurrency
@@ -187,7 +208,16 @@ configured) when one exists.
 
 ### `list`
 
-Lists every remediation item folded from the ledger.
+Lists every remediation item folded from the ledger. `--format json`
+returns `{items, integrity}` — not a bare array — so a programmatic
+caller always has the ledger-integrity signal available alongside the
+items, never just a human-readable stderr warning. `integrity` is
+`{ok, totalLines, verifiedLines}`: when the ledger's real on-disk content
+has more raw lines than the longest hash-verifying prefix (a torn tail or
+a tampered middle line), `ok` is `false` and a loud stderr warning is
+also printed (and prepended to the markdown output) — the item list
+itself may be missing recent items or reflect a truncated/tampered
+history, and should not be treated as complete.
 
 #### Options
 
@@ -218,10 +248,13 @@ not in the required state, an unregistered/unauthorized approver, a
 manual attestation the item was not opened to permit) — never writes;
 `2` a usage/argument error, a malformed input file, an
 optimistic-concurrency (`--base-event`) rejection, the target not
-looking like a real project directory, or (for `verify`) fewer than two
-comparable snapshots being available; `4` an unexpected I/O error during
-the write itself — nothing was written, and no audit event is recorded
-for a failed attempt.
+looking like a real project directory, state writes being disabled
+(`AGENTIC_SECURITY_NO_STATE`), or (for `verify`) fewer than two
+comparable snapshots being available — a state-writes-disabled or
+unsafe-target refusal is a usage/environment condition, never a rejected
+transition, even though both are detected inside the same ledger-write
+call; `4` an unexpected I/O error during the write itself — nothing was
+written, and no audit event is recorded for a failed attempt.
 
 ## Implementation
 

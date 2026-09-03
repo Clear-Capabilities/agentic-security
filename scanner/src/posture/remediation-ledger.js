@@ -73,14 +73,28 @@
 // `appendLedgerEvent` is async and is the SINGLE place `validateTransition`
 // is called in this codebase. No CLI command (Task 3) computes validity
 // for itself — every proposed event is validated at this one write
-// boundary, inside the lock, against the real current folded state.
+// boundary, inside the lock, against the real current folded state. As of
+// final-review fix round 1, this is also the single place THREE more
+// things are enforced, all inside the same lock so none of them can race
+// the write they guard: an `opened` event is additionally checked against
+// `validateOpenPayload` (I4/M11 — previously only the CLI validated an
+// `opened` payload's own shape, so a non-CLI caller could append a
+// malformed one); the ledger's on-disk tail is checked for tearing before
+// anything is appended onto it (I4 — appending onto a torn line would
+// merge them into one unparseable line, silently losing the new event,
+// and everything after it, forever); and an optional
+// `opts.expectedBaseHash` optimistic-concurrency check runs against the
+// real `lastHash` computed inside the lock (I5 — previously the CLI's own
+// `--base-event` guard ran OUTSIDE the lock, a real TOCTOU: another
+// process could append in the window between that check and this
+// function's own lock acquisition).
 
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { statePath, isSafeStateDir, stateWritesEnabled } from './state-dir.js';
-import { validateTransition, foldRemediationLedger } from '../lineage/remediation.js';
+import { validateTransition, validateOpenPayload, foldRemediationLedger } from '../lineage/remediation.js';
 
 const GENESIS = 'GENESIS';
 
@@ -139,6 +153,28 @@ export function readLedgerEvents(scanRoot) {
 // GENESIS when the ledger is empty/missing, or when nothing in it verifies.
 export function latestEventHash(scanRoot) {
   return _walkLedger(scanRoot).lastHash;
+}
+
+// Reports whether the ledger's real content on disk has more raw lines than
+// the longest verifying prefix — i.e. a torn tail OR a tampered middle line
+// broke the hash chain partway through. Never throws. This is a read-only
+// diagnostic; it does not change what readLedgerEvents/latestEventHash
+// return (both still return the longest verifying prefix, unconditionally
+// safe by construction) — it exists so a caller (the CLI's `list` command)
+// can surface a loud warning instead of silently presenting a shorter or
+// stale history as if it were the whole truth. (I7, final-review fix
+// round 1.)
+export function ledgerIntegrity(scanRoot) {
+  const { ledgerPath } = ledgerPaths(scanRoot);
+  let raw;
+  try {
+    raw = fs.readFileSync(ledgerPath, 'utf8');
+  } catch {
+    return { ok: true, totalLines: 0, verifiedLines: 0 };
+  }
+  const totalLines = raw.split('\n').filter(Boolean).length;
+  const { events } = _walkLedger(scanRoot);
+  return { ok: events.length === totalLines, totalLines, verifiedLines: events.length };
 }
 
 function isProcessAlive(pid) {
@@ -217,8 +253,12 @@ function _resolveItemId(eventPayload) {
 }
 
 // This function is the single place `validateTransition` is called. No CLI
-// command computes validity for itself.
-export async function appendLedgerEvent(scanRoot, eventPayload) {
+// command computes validity for itself. `opts.expectedBaseHash` (I5) is an
+// optional optimistic-concurrency check, compared against the real
+// `lastHash` computed INSIDE the lock — the authoritative half of the
+// `--base-event` guard; `undefined` (the flag was never passed) performs no
+// check.
+export async function appendLedgerEvent(scanRoot, eventPayload, opts = {}) {
   const { ledgerPath, lockPath } = ledgerPaths(scanRoot);
   const dir = path.dirname(ledgerPath);
 
@@ -238,10 +278,50 @@ export async function appendLedgerEvent(scanRoot, eventPayload) {
   }
 
   return withLock(lockPath, async () => {
+    // I4 (final-review fix round 1): refuse to append onto a torn tail —
+    // concatenating a new event onto an unterminated final line would
+    // merge them into one unparseable line, silently losing this event
+    // (and everything after it) forever while still reporting success. A
+    // crash/ENOSPC mid-write leaves exactly this shape. Checked first,
+    // inside the lock, before anything else touches the file.
+    try {
+      const raw = fs.readFileSync(ledgerPath, 'utf8');
+      if (raw.length > 0 && !raw.endsWith('\n')) {
+        return {
+          valid: false,
+          errors: [{ field: '(ledger)', message: 'the ledger file has a torn/unterminated final line — refusing to append onto it. Recover the file (restore from backup, or manually truncate to its last complete, newline-terminated line) before retrying.' }],
+        };
+      }
+    } catch { /* missing file — nothing to check */ }
+
     const { events, lastHash } = _walkLedger(scanRoot);
+
+    // I5 (final-review fix round 1): the authoritative optimistic-
+    // concurrency check, run against the real `lastHash` computed inside
+    // this same critical section — the CLI's own pre-lock check is still
+    // useful as a cheap, early fail, but this is the one that cannot be
+    // raced by a concurrent writer.
+    if (opts.expectedBaseHash !== undefined && opts.expectedBaseHash !== lastHash) {
+      return {
+        valid: false,
+        errors: [{ field: '(base-event)', message: 'the ledger changed since --base-event was computed (a concurrent write) — refusing to append.' }],
+      };
+    }
+
     const items = foldRemediationLedger(events);
     const itemId = _resolveItemId(eventPayload);
     const item = itemId != null ? (items[itemId] ?? null) : null;
+
+    // M11: an `opened` event's own shape is validated here too, not just
+    // by the CLI — mirrors "the single place validity is enforced" for
+    // the one event type `validateTransition` deliberately does not
+    // shape-check (it only checks that no item with this id exists yet).
+    if (eventPayload && eventPayload.type === 'opened') {
+      const openCheck = validateOpenPayload(eventPayload);
+      if (!openCheck.valid) {
+        return { valid: false, errors: openCheck.errors };
+      }
+    }
 
     const { valid, errors } = validateTransition(item, eventPayload);
     if (!valid) {

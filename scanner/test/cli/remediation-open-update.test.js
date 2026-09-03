@@ -210,7 +210,7 @@ test('remediation update: --state in_progress --yes from open succeeds and folds
   assert.equal(report.written, true);
   const listR = _run(['remediation', 'list', root, '--format', 'json']);
   assert.equal(listR.status, 0, listR.stderr);
-  const items = JSON.parse(listR.stdout);
+  const { items } = JSON.parse(listR.stdout);
   const item = items.find((i) => i.id === 'rem-c7');
   assert.ok(item);
   assert.equal(item.state, 'in_progress');
@@ -284,7 +284,7 @@ test('remediation accept-risk: --yes with all four fields succeeds and folds to 
     '--scope', 'production only', '--expires', '2027-01-01', '--yes']);
   assert.equal(r.status, 0, r.stderr);
   const listR = _run(['remediation', 'list', root, '--format', 'json']);
-  const items = JSON.parse(listR.stdout);
+  const { items } = JSON.parse(listR.stdout);
   const item = items.find((i) => i.id === 'rem-c11');
   assert.ok(item);
   assert.equal(item.state, 'accepted_risk');
@@ -351,17 +351,18 @@ test('remediation accept-risk: separation-of-duties refuses self-approval with c
 
 // --- C/14 ------------------------------------------------------------------
 
-test('remediation list: --format json returns an array of folded items; --format markdown returns a table (C/14)', () => {
+test('remediation list: --format json returns {items, integrity}; --format markdown returns a table (C/14)', () => {
   const { root, assessmentPath } = _setupProject();
   const open = _run(_openArgs(root, assessmentPath, { id: 'rem-c14' }));
   assert.equal(open.status, 0, open.stderr);
 
   const rJson = _run(['remediation', 'list', root, '--format', 'json']);
   assert.equal(rJson.status, 0, rJson.stderr);
-  const items = JSON.parse(rJson.stdout);
+  const { items, integrity } = JSON.parse(rJson.stdout);
   assert.ok(Array.isArray(items));
   assert.equal(items.length, 1);
   assert.equal(items[0].id, 'rem-c14');
+  assert.equal(integrity.ok, true); // I7: a clean, untampered ledger reports ok
 
   const rMd = _run(['remediation', 'list', root, '--format', 'markdown']);
   assert.equal(rMd.status, 0, rMd.stderr);
@@ -378,7 +379,7 @@ test('remediation list: exits 0 on an empty ledger for both formats (C/14)', () 
   const root = _mkTmpProject();
   const rJson = _run(['remediation', 'list', root, '--format', 'json']);
   assert.equal(rJson.status, 0, rJson.stderr);
-  assert.deepEqual(JSON.parse(rJson.stdout), []);
+  assert.deepEqual(JSON.parse(rJson.stdout).items, []);
   const rMd = _run(['remediation', 'list', root, '--format', 'markdown']);
   assert.equal(rMd.status, 0, rMd.stderr);
   assert.match(rMd.stdout, /no remediation items/i);
@@ -409,4 +410,90 @@ test('remediation open: refuses exit 2 via isSafeStateDir even with a snapshot/a
   const r = _run(_openArgs(root, assessmentPath));
   assert.equal(r.status, 2);
   assert.ok(!fs.existsSync(_ledgerPath(root)));
+});
+
+// === I7 (final-review fix round 1): a tampered ledger surfaces a loud
+// warning via `remediation list`, in both JSON and Markdown, instead of
+// silently presenting a shorter/tampered history with no signal ============
+
+test('remediation list: a tampered mid-file ledger line prints a stderr warning and integrity.ok:false in the JSON output (I7)', () => {
+  const { root, assessmentPath } = _setupProject();
+  const open1 = _run(_openArgs(root, assessmentPath, { id: 'rem-i7a' }));
+  assert.equal(open1.status, 0, open1.stderr);
+  const toInProgress = _run(['remediation', 'update', root, '--id', 'rem-i7a', '--state', 'in_progress', '--yes']);
+  assert.equal(toInProgress.status, 0, toInProgress.stderr);
+
+  // Tamper the FIRST (opened) line in place -- breaks the hash chain for
+  // every line after it, exactly as the reviewer's own I7 repro did. This
+  // silently reverts the item from `in_progress` back to `open` on a
+  // plain read (the tampered line's own `prev` is untouched, so it still
+  // verifies against GENESIS and IS returned with the tampered content;
+  // it's the SECOND line's prev that no longer matches).
+  const ledgerPath = _ledgerPath(root);
+  const lines = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
+  assert.equal(lines.length, 2);
+  const tampered = JSON.parse(lines[0]);
+  tampered.owner = 'mallory';
+  fs.writeFileSync(ledgerPath, [JSON.stringify(tampered), lines[1]].join('\n') + '\n', 'utf8');
+
+  const rJson = _run(['remediation', 'list', root, '--format', 'json']);
+  assert.equal(rJson.status, 0, rJson.stderr);
+  assert.match(rJson.stderr, /WARNING/);
+  assert.match(rJson.stderr, /ledger/i);
+  const { items, integrity } = JSON.parse(rJson.stdout);
+  assert.equal(integrity.ok, false);
+  assert.equal(integrity.totalLines, 2);
+  assert.equal(integrity.verifiedLines, 1);
+  // The item list itself silently reflects the tampered, truncated view
+  // (owner: mallory, state reverted to open) -- exactly what the warning
+  // exists to flag, since nothing about the list ITSELF looks wrong.
+  const item = items.find((i) => i.id === 'rem-i7a');
+  assert.equal(item.owner, 'mallory');
+  assert.equal(item.state, 'open');
+
+  const rMd = _run(['remediation', 'list', root, '--format', 'markdown']);
+  assert.equal(rMd.status, 0, rMd.stderr);
+  assert.match(rMd.stderr, /WARNING/);
+  assert.match(rMd.stdout, /WARNING/); // I7: also prepended into the markdown output itself
+});
+
+test('remediation list: a clean, untampered ledger prints no warning and reports integrity.ok:true (I7 does not over-warn)', () => {
+  const { root, assessmentPath } = _setupProject();
+  const open1 = _run(_openArgs(root, assessmentPath, { id: 'rem-i7b' }));
+  assert.equal(open1.status, 0, open1.stderr);
+
+  const rJson = _run(['remediation', 'list', root, '--format', 'json']);
+  assert.equal(rJson.status, 0, rJson.stderr);
+  assert.equal(rJson.stderr, '');
+  const { integrity } = JSON.parse(rJson.stdout);
+  assert.equal(integrity.ok, true);
+});
+
+// === M10 (final-review fix round 1): AGENTIC_SECURITY_NO_STATE=1 is a
+// usage/environment refusal (exit 2), never a rejected transition (exit 1)
+
+test('remediation open --yes with AGENTIC_SECURITY_NO_STATE=1 exits 2 (a usage/environment refusal, not exit 1) and writes nothing (M10)', () => {
+  const { root, assessmentPath } = _setupProject();
+  const r = spawnSync(process.execPath, [CLI, ...(_openArgs(root, assessmentPath, { id: 'rem-m10' }))], {
+    encoding: 'utf8', timeout: TIMEOUT, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1' },
+  });
+  assert.equal(r.status, 2);
+  assert.ok(!fs.existsSync(_ledgerPath(root)));
+});
+
+test('remediation update --yes with AGENTIC_SECURITY_NO_STATE=1 exits 2, distinct from a genuine rejected-transition exit 1 (M10)', () => {
+  const { root, assessmentPath } = _setupProject();
+  const open = _run(_openArgs(root, assessmentPath, { id: 'rem-m10b' }));
+  assert.equal(open.status, 0, open.stderr);
+
+  // A genuine rejected transition still exits 1 -- this is the contrast
+  // M10 exists to preserve: a real validation/state-machine rejection
+  // must NOT be reclassified to 2 by this fix.
+  const rejected = _run(['remediation', 'update', root, '--id', 'rem-m10b', '--state', 'awaiting_verification', '--yes']); // skips in_progress
+  assert.equal(rejected.status, 1);
+
+  const rNoState = spawnSync(process.execPath, [CLI, 'remediation', 'update', root, '--id', 'rem-m10b', '--state', 'in_progress', '--yes'], {
+    encoding: 'utf8', timeout: TIMEOUT, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1' },
+  });
+  assert.equal(rNoState.status, 2);
 });

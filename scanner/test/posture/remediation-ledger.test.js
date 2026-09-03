@@ -17,6 +17,7 @@ import {
   readLedgerEvents,
   latestEventHash,
   appendLedgerEvent,
+  ledgerIntegrity,
 } from '../../src/posture/remediation-ledger.js';
 
 // Same temp-project helper shape test/cli/governance-propose-edit.test.js
@@ -29,8 +30,21 @@ function _mkTmpProject() {
 
 function _sha(s) { return crypto.createHash('sha256').update(s).digest('hex'); }
 
+// M11 (final-review fix round 1): appendLedgerEvent now calls
+// validateOpenPayload for every `opened` event, not just the CLI — so
+// this fixture must be a schema-valid opened payload (a real `assessment`
+// object plus `requiredEvidence`), not the minimal shape a pre-fix ledger
+// silently accepted from any caller.
 function _openedEvent(id, overrides = {}) {
-  return { type: 'opened', id, owner: 'alice', dueDate: '2026-12-01', recommendedControl: 'mask-field', ...overrides };
+  return {
+    type: 'opened', id, owner: 'alice', dueDate: '2026-12-01', recommendedControl: 'mask-field',
+    assessment: {
+      assessmentId: 'impact:test', targetId: 'flow:target', targetKind: 'flow', traceKind: 'flow_restricted',
+      scope: 'possible', graphId: 'graph:test-repo', graphDigest: 'digest-test', snapshotId: 'snapshot:test',
+    },
+    requiredEvidence: ['flow:target'],
+    ...overrides,
+  };
 }
 
 // L/1
@@ -232,4 +246,160 @@ test('foldRemediationLedger(readLedgerEvents(root)) over a multi-item ledger rep
   assert.equal(items['item-2'].state, 'accepted_risk');
   assert.equal(items['item-2'].exceptions.length, 1);
   assert.equal(items['item-2'].exceptions[0].approver, 'carol');
+});
+
+// === I4 (final-review fix round 1): a write onto a torn tail is refused,
+// never silently appended ====================================================
+
+// L/15
+test('appendLedgerEvent refuses to append onto a torn/unterminated tail (I4)', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  const { ledgerPath } = ledgerPaths(root);
+  const beforeLines = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
+  assert.equal(beforeLines.length, 1);
+
+  // Simulate a crash/ENOSPC mid-write: a partial line with NO trailing
+  // newline, written directly (not through appendLedgerEvent).
+  fs.appendFileSync(ledgerPath, '{"type":"state_ch');
+  const rawBefore = fs.readFileSync(ledgerPath, 'utf8');
+  assert.ok(!rawBefore.endsWith('\n'));
+
+  const res = await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' });
+  assert.equal(res.valid, false);
+  assert.ok(res.errors.some((e) => e.field === '(ledger)'), JSON.stringify(res.errors));
+  assert.match(res.errors.find((e) => e.field === '(ledger)').message, /torn/);
+
+  // Nothing was appended -- the torn fragment is untouched, byte for byte.
+  const rawAfter = fs.readFileSync(ledgerPath, 'utf8');
+  assert.equal(rawAfter, rawBefore);
+});
+
+// L/16
+test('appendLedgerEvent still succeeds on a clean, newline-terminated ledger (I4 does not over-refuse)', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  const res = await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' });
+  assert.equal(res.valid, true, JSON.stringify(res.errors));
+  assert.equal(readLedgerEvents(root).length, 2);
+});
+
+// === I5 (final-review fix round 1): the --base-event guard is
+// authoritative INSIDE the lock, not just a pre-lock check ==================
+
+// L/17
+test('appendLedgerEvent: opts.expectedBaseHash rejects a stale hash and accepts a matching one (I5)', async () => {
+  const root = _mkTmpProject();
+  const first = await appendLedgerEvent(root, _openedEvent('item-1'));
+  assert.equal(first.valid, true, JSON.stringify(first.errors));
+  const realHash = first.hash;
+
+  const stale = await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' }, { expectedBaseHash: 'a'.repeat(64) });
+  assert.equal(stale.valid, false);
+  assert.ok(stale.errors.some((e) => e.field === '(base-event)'), JSON.stringify(stale.errors));
+  assert.equal(readLedgerEvents(root).length, 1, 'the stale-base-event write appended nothing');
+
+  const matching = await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' }, { expectedBaseHash: realHash });
+  assert.equal(matching.valid, true, JSON.stringify(matching.errors));
+  assert.equal(readLedgerEvents(root).length, 2);
+});
+
+// L/18
+test('appendLedgerEvent: opts.expectedBaseHash catches a TOCTOU a pre-lock-only check would miss — exactly one of N concurrent writers sharing the SAME captured base hash succeeds (I5)', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  // Every caller captures the SAME base hash BEFORE any of them start —
+  // the exact shape a pre-lock-only check cannot protect, since the lock
+  // is what actually serializes the writes; this is the authoritative,
+  // inside-the-lock check that must catch it instead.
+  const capturedBase = latestEventHash(root);
+
+  const N = 6;
+  const calls = [];
+  for (let i = 0; i < N; i++) {
+    calls.push(appendLedgerEvent(
+      root,
+      { type: 'state_changed', itemId: 'item-1', state: 'in_progress' },
+      { expectedBaseHash: capturedBase },
+    ));
+  }
+  const results = await Promise.all(calls);
+  const succeeded = results.filter((r) => r.valid === true);
+  const failedBaseEvent = results.filter((r) => r.valid === false && r.errors.some((e) => e.field === '(base-event)'));
+  assert.equal(succeeded.length, 1, 'exactly one of N concurrent writers sharing one captured base hash should win');
+  assert.equal(failedBaseEvent.length, N - 1, 'every other writer must be rejected specifically as a base-event mismatch, not a race where more than one silently wins');
+
+  const events = readLedgerEvents(root);
+  assert.equal(events.length, 2, 'only the opened event plus the one successful transition were appended');
+});
+
+// L/19
+test('appendLedgerEvent: opts.expectedBaseHash undefined (the flag was never passed) performs no check (backward compatible)', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  const res = await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' });
+  assert.equal(res.valid, true, JSON.stringify(res.errors));
+});
+
+// === I7 (final-review fix round 1): ledgerIntegrity surfaces a
+// tampered/truncated ledger instead of silently presenting a shorter
+// history ====================================================================
+
+// L/20
+test('ledgerIntegrity: ok:true, totalLines:0 on a missing ledger', () => {
+  const root = _mkTmpProject();
+  assert.deepEqual(ledgerIntegrity(root), { ok: true, totalLines: 0, verifiedLines: 0 });
+});
+
+// L/21
+test('ledgerIntegrity: ok:true on a clean, fully-verifying ledger, with real totalLines/verifiedLines counts', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' });
+  const integrity = ledgerIntegrity(root);
+  assert.equal(integrity.ok, true);
+  assert.equal(integrity.totalLines, 2);
+  assert.equal(integrity.verifiedLines, 2);
+});
+
+// L/22
+test('ledgerIntegrity: ok:false when a tampered middle line breaks the hash chain partway through', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  await appendLedgerEvent(root, { type: 'state_changed', itemId: 'item-1', state: 'in_progress' });
+  const { ledgerPath } = ledgerPaths(root);
+  const lines = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
+  const tampered = JSON.parse(lines[0]);
+  tampered.owner = 'mallory';
+  fs.writeFileSync(ledgerPath, [JSON.stringify(tampered), lines[1]].join('\n') + '\n', 'utf8');
+
+  const integrity = ledgerIntegrity(root);
+  assert.equal(integrity.ok, false);
+  assert.equal(integrity.totalLines, 2);
+  assert.equal(integrity.verifiedLines, 1); // only the (tampered but self-consistent) first line verifies
+});
+
+// L/23
+test('ledgerIntegrity: ok:false on a torn tail, distinguishing it from a clean shorter ledger', async () => {
+  const root = _mkTmpProject();
+  await appendLedgerEvent(root, _openedEvent('item-1'));
+  const { ledgerPath } = ledgerPaths(root);
+  fs.appendFileSync(ledgerPath, '{"type":"state_ch'); // torn, no trailing newline
+  const integrity = ledgerIntegrity(root);
+  assert.equal(integrity.ok, false);
+  assert.equal(integrity.totalLines, 2); // the torn fragment counts as a raw line
+  assert.equal(integrity.verifiedLines, 1);
+});
+
+// === M11 (final-review fix round 1): appendLedgerEvent validates an
+// `opened` event's own shape too, not just the CLI =========================
+
+// L/24
+test('appendLedgerEvent rejects a malformed `opened` event (missing assessment/requiredEvidence) via validateOpenPayload, even from a non-CLI caller (M11)', async () => {
+  const root = _mkTmpProject();
+  const res = await appendLedgerEvent(root, { type: 'opened', id: 'item-1', owner: 'alice', dueDate: '2026-12-01', recommendedControl: 'x' }); // no assessment, no requiredEvidence
+  assert.equal(res.valid, false);
+  assert.ok(res.errors.some((e) => e.field === 'assessment'), JSON.stringify(res.errors));
+  assert.ok(res.errors.some((e) => e.field === 'requiredEvidence'), JSON.stringify(res.errors));
+  assert.equal(readLedgerEvents(root).length, 0, 'a malformed opened event must never be appended');
 });

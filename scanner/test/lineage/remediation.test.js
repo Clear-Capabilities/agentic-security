@@ -124,11 +124,42 @@ test('R2/7: manual_attestation sets verified AND pushes an approval that stays d
     { type: 'manual_attestation', at: 'x', itemId: 'rem-1', approver: 'bob', reason: 'control verified out of band' },
   ]);
   assert.equal(item.state, 'verified');
-  assert.equal(item.verificationSnapshotId, null, 'a manual attestation supplies no scan evidence');
+  // No `snapshotId` on this event -- verificationSnapshotId stays null.
+  // A manual attestation supplies no scan evidence of its own; see R2/7b
+  // for the B3 fix's own real behavior when a snapshotId IS present.
+  assert.equal(item.verificationSnapshotId, null);
   assert.equal(item.approvals.length, 1);
   assert.equal(item.approvals[0].approver, 'bob');
   assert.equal(item.approvals[0].evidenceKind, 'manual',
     'PRD line 984: a manual attestation must remain distinguishable from scan evidence forever');
+});
+
+test('R2/7b (B3, final-review fix round 1): manual_attestation carrying a snapshotId records it as a real baseline', () => {
+  const item = foldRemediationItem([
+    _openEvent({ manualAttestationPermitted: true }),
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'in_progress' },
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'awaiting_verification' },
+    { type: 'manual_attestation', at: 'x', itemId: 'rem-1', approver: 'bob', reason: 'control verified out of band', snapshotId: 'snapshot:ddd' },
+  ]);
+  assert.equal(item.state, 'verified');
+  assert.equal(item.verificationSnapshotId, 'snapshot:ddd',
+    'B3: without a real baseline, reopen-check keeps diffing from a stale anchor and undoes the attestation on its very next run');
+});
+
+test('R2/7c (B3): a LATER manual_attestation carrying a snapshotId overwrites a STALE one from an earlier scan_verification', () => {
+  const item = foldRemediationItem([
+    _openEvent({ manualAttestationPermitted: true }),
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'in_progress' },
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'awaiting_verification' },
+    { type: 'scan_verification', at: 'x', itemId: 'rem-1', outcome: 'verified', snapshotId: 'snapshot:stale' },
+    { type: 'reopened', at: 'x', itemId: 'rem-1', reason: 'regressed' },
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'in_progress' },
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'awaiting_verification' },
+    { type: 'manual_attestation', at: 'x', itemId: 'rem-1', approver: 'bob', reason: 'compensating control', snapshotId: 'snapshot:fresh' },
+  ]);
+  assert.equal(item.state, 'verified');
+  assert.equal(item.verificationSnapshotId, 'snapshot:fresh');
+  assert.notEqual(item.verificationSnapshotId, 'snapshot:stale');
 });
 
 test('R2/8: accepted_risk sets accepted_risk and pushes an exception — never reads as verified', () => {
@@ -152,6 +183,19 @@ test('R2/9: reopened sets reopened and carries its reason into history', () => {
   ]);
   assert.equal(item.state, 'reopened');
   assert.match(item.history[item.history.length - 1].reason, /drift policy/);
+});
+
+test('R2/9b (B3, final-review fix round 1): reopened retires the stale verificationSnapshotId anchor', () => {
+  const item = foldRemediationItem([
+    _openEvent(),
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'in_progress' },
+    { type: 'state_changed', at: 'x', itemId: 'rem-1', state: 'awaiting_verification' },
+    { type: 'scan_verification', at: 'x', itemId: 'rem-1', outcome: 'verified', snapshotId: 'snapshot:ccc' },
+    { type: 'reopened', at: 'x', itemId: 'rem-1', reason: 'drift policy pci-to-log fired on flow:1' },
+  ]);
+  assert.equal(item.state, 'reopened');
+  assert.equal(item.verificationSnapshotId, null,
+    'B3: the old anchor must not outlive the verification it belonged to');
 });
 
 test('R2/10: the fold ignores hash-chain fields the ledger layer adds', () => {

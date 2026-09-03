@@ -4627,16 +4627,26 @@ async function _remediationWrite(targetAbs, verb, auditTool, eventPayload, args,
     return 0;
   }
 
-  // 4. --yes: the real write.
+  // 4. --yes: the real write. `expectedBaseHash` (I5) threads the
+  // --base-event guard through to the authoritative, inside-the-lock
+  // check — the pre-lock check above (#1) remains as a cheap early fail,
+  // but this is the one that cannot be raced by a concurrent writer.
   let result;
   try {
-    result = await appendLedgerEvent(targetAbs, eventPayload);
+    result = await appendLedgerEvent(targetAbs, eventPayload, { expectedBaseHash: baseEventFlag });
   } catch (e) {
     process.stderr.write(`agentic-security remediation ${verb}: unexpected error writing the ledger: ${e && e.message ? e.message : e}\n`);
     return 4;
   }
   if (!result.valid) {
     for (const e of result.errors) process.stderr.write(`agentic-security remediation ${verb}: ${e.field}: ${e.message}\n`);
+    // M10: a state-writes-disabled or unsafe-scanRoot refusal is a
+    // usage/environment condition, not a rejected state transition —
+    // `commands/remediation.md`'s exit-code table reserves 1 for the
+    // latter. Both error fields are environment refusals emitted by
+    // appendLedgerEvent BEFORE any real validation runs; every other
+    // error field is a genuine validation/state-machine rejection.
+    if (result.errors.some((e) => e.field === '(state)' || e.field === '(scanRoot)')) return 2;
     return 1;
   }
   const { auditCall } = await import('../src/mcp/audit.js');
@@ -4865,12 +4875,18 @@ function _remMdCell(value) {
   return _remMdInline(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 }
 
-function _renderRemediationListMarkdown(items) {
-  if (items.length === 0) return '_no remediation items_\n';
-  const lines = [
-    '| id | state | owner | dueDate | recommendedControl |',
-    '| --- | --- | --- | --- | --- |',
-  ];
+function _renderRemediationListMarkdown(items, integrity) {
+  const lines = [];
+  if (integrity && !integrity.ok) {
+    lines.push(`> **WARNING — ledger integrity check failed**: the ledger's real content has ${integrity.totalLines} lines but only ${integrity.verifiedLines} verify; the list below may be missing recent items or reflect a tampered/truncated history. Do not treat it as complete.`);
+    lines.push('');
+  }
+  if (items.length === 0) {
+    lines.push('_no remediation items_');
+    return lines.join('\n') + '\n';
+  }
+  lines.push('| id | state | owner | dueDate | recommendedControl |');
+  lines.push('| --- | --- | --- | --- | --- |');
   for (const item of items) {
     const control = String(item.recommendedControl ?? '');
     const truncated = control.length > 60 ? control.slice(0, 60) + '…' : control;
@@ -4890,12 +4906,23 @@ async function cmdRemediationList(args) {
     return 2;
   }
 
-  const { readLedgerEvents } = await import('../src/posture/remediation-ledger.js');
+  const { readLedgerEvents, ledgerIntegrity } = await import('../src/posture/remediation-ledger.js');
   const { foldRemediationLedger } = await import('../src/lineage/remediation.js');
   const items = Object.values(foldRemediationLedger(readLedgerEvents(targetAbs)))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  const data = format === 'json' ? JSON.stringify(items, null, 2) : _renderRemediationListMarkdown(items);
+  // I7: a tampered/truncated ledger otherwise silently presents a
+  // shorter-than-real history with no signal anywhere. `ledgerIntegrity`
+  // is a read-only diagnostic — it never changes `items` itself (already
+  // computed from the same longest-verifying-prefix `readLedgerEvents`
+  // always returned) — it just surfaces the loud warning this command
+  // previously had no way to give.
+  const integrity = ledgerIntegrity(targetAbs);
+  if (!integrity.ok) {
+    process.stderr.write(`agentic-security remediation list: WARNING — the ledger's real content has ${integrity.totalLines} lines but only ${integrity.verifiedLines} verify; the list below may be missing recent items or reflect a tampered/truncated history. Do not treat it as complete.\n`);
+  }
+
+  const data = format === 'json' ? JSON.stringify({ items, integrity }, null, 2) : _renderRemediationListMarkdown(items, integrity);
   const outputPath = args.flags.output;
   if (outputPath) {
     fs.writeFileSync(path.resolve(outputPath), data);
@@ -4986,12 +5013,28 @@ async function cmdRemediationVerify(args) {
       process.stderr.write(`agentic-security remediation verify: ${sod.reason}\n`);
       return 1;
     }
+    if (args.flags.against !== undefined) {
+      // M15: --against has no effect on this branch — it never computes a
+      // diff — but a caller supplying both should be told, not left to
+      // wonder why it was silently ignored.
+      process.stderr.write('agentic-security remediation verify: --against has no effect with --manual-attestation (no scan comparison is performed for a manual attestation).\n');
+    }
+    // Resolves the newest available snapshot (if any exist yet — a manual
+    // attestation before any lineage scan has ever run is legitimate, so
+    // this is never required) and records it as the item's new baseline
+    // (final-review fix round 1, Blocking-3) — `foldRemediationItem`'s
+    // `manual_attestation` case reads `ev.snapshotId` to set
+    // `verificationSnapshotId`, which is what makes the attestation
+    // survive the very next `reopen-check` instead of being immediately
+    // undone by a stale old anchor.
+    const attestationSnapshots = loadSnapshots(targetAbs);
     const payload = {
       type: 'manual_attestation',
       at: new Date().toISOString(),
       itemId: idFlag,
       approver: approverFlag,
       reason: reasonFlag,
+      ...(attestationSnapshots.length > 0 ? { snapshotId: attestationSnapshots[0].id } : {}),
     };
     return _remediationWrite(targetAbs, 'verify', 'remediation_verify', payload, args);
   }
@@ -5036,16 +5079,33 @@ async function cmdRemediationVerify(args) {
     return 2;
   }
 
-  const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
   let evidenceOutcome;
-  try {
-    const diff = computeGraphDiff(beforeSnapshot, afterSnapshot);
-    evidenceOutcome = evaluateVerificationEvidence(diff, item.requiredEvidence);
-  } catch (e) {
-    // computeGraphDiff THROWS on an incomparable pair — this is NOT an
-    // exit-2 abort: verification was genuinely attempted and genuinely
-    // refused, and the ledger must record why.
-    evidenceOutcome = { outcome: 'unverifiable', reason: 'incomparable_snapshots', detail: e && e.message ? e.message : String(e) };
+  if (afterSnapshot.capturedAt <= beforeSnapshot.capturedAt) {
+    // A real, live-reproduced Blocking bug (final review, B1): a `verified`
+    // outcome must never be granted by comparing backwards. `loadSnapshots`
+    // sorts by file mtime (pre-existing, out of scope to fix here), so
+    // `cp -R`/rsync/a CI cache restore/tar/Docker COPY can silently reorder
+    // "history" — nothing else in this deliverable's own code checks
+    // direction. `capturedAt` is an ISO-8601 string on every real
+    // GraphSnapshot record, so plain string comparison is chronologically
+    // correct here, no `Date` parsing needed.
+    evidenceOutcome = {
+      outcome: 'unverifiable',
+      reason: 'stale_after_snapshot',
+      beforeCapturedAt: beforeSnapshot.capturedAt,
+      afterCapturedAt: afterSnapshot.capturedAt,
+    };
+  } else {
+    const { computeGraphDiff } = await import('../src/lineage/graph-diff.js');
+    try {
+      const diff = computeGraphDiff(beforeSnapshot, afterSnapshot);
+      evidenceOutcome = evaluateVerificationEvidence(diff, item.requiredEvidence);
+    } catch (e) {
+      // computeGraphDiff THROWS on an incomparable pair — this is NOT an
+      // exit-2 abort: verification was genuinely attempted and genuinely
+      // refused, and the ledger must record why.
+      evidenceOutcome = { outcome: 'unverifiable', reason: 'incomparable_snapshots', detail: e && e.message ? e.message : String(e) };
+    }
   }
 
   const at = new Date().toISOString();
@@ -5087,12 +5147,28 @@ async function cmdRemediationVerify(args) {
 //    policy): requires `--drift-policy`; a violation whose own `flowId`
 //    names one of the item's own `affectedFlowIds` is a hit.
 //  - mechanism 'affected-flow-diff' (Mechanism B, control went away, a
-//    direct diff read): any of the item's `affectedFlowIds` appearing in
-//    `diff.removed.flows` or `diff.changed.flows` is a hit. This exists
+//    direct diff read): any of the item's `affectedFlowIds` (or a flow
+//    `reidentifiedFrom` one of them, I6) REAPPEARING in `diff.added.flows`
+//    is a hit — final-review fix round 1's own Blocking-2 correction: a
+//    scan-verified item's flagged flow was, by construction, ABSENT from
+//    its own before-baseline, so a regression can only ever show up in
+//    `diff.added.flows`, never `diff.removed.flows`/`diff.changed.flows`
+//    (the original code read those two buckets instead, which is dead
+//    for the canonical scan-verified case and fires INVERTED — reopening
+//    an item because its flow successfully disappeared — for a manually-
+//    attested item whose baseline still contained the flow). This exists
 //    because `drift-policy.js`'s trigger vocabulary is exactly
 //    `['new_flow', 'changed_flow']` — there is no `removed_flow` trigger,
 //    so a control that goes away (the flow itself disappears from a
 //    later scan) cannot be expressed as a drift policy at ALL.
+//
+//    Disclosed limitation, not attempted in this round: a manually-
+//    attested item whose flagged flow was ALREADY present at attestation
+//    time (the typical manual-attestation scenario — a compensating
+//    control, not flow removal) can never trigger Mechanism B this way,
+//    since the flow never left `diff.added.flows`'s scope (it's already
+//    present in both before/after). Such an item can only be reopened via
+//    Mechanism A (`--drift-policy`).
 //
 // Per item, the BEFORE snapshot is preferentially the item's own
 // `verificationSnapshotId` (the snapshot its verification was granted
@@ -5204,14 +5280,24 @@ async function cmdRemediationReopenCheck(args) {
       }
     }
 
-    // Mechanism B: control went away, a direct diff read.
+    // Mechanism B: the control this item established went away — the
+    // flagged flow REAPPEARED relative to the item's own baseline. This is
+    // the symmetric complement of evaluateVerificationEvidence's own
+    // "gone via diff.removed.flows" check: a regression is the flow coming
+    // BACK, which shows up in diff.added.flows, never diff.removed/changed
+    // (a flow disappearing is a FIX, never a regression — the original
+    // code fired on exactly the wrong signal here, a real Blocking bug
+    // found by the final review, live-reproduced against a successfully
+    // remediated item). Also matches a re-identified reappearance (I6): a
+    // flow whose own discriminator moved on the way back still counts, via
+    // reidentifiedFrom.
     if (!hit) {
-      const removedHit = (diff.removed?.flows ?? []).find((e) => affectedFlowIds.has(e.id));
-      const changedHit = !removedHit ? (diff.changed?.flows ?? []).find((e) => affectedFlowIds.has(e.id)) : null;
-      if (removedHit) {
-        hit = { mechanism: 'affected-flow-diff', reason: `affected flow ${removedHit.id} appeared in diff.removed.flows (causeClassification: ${removedHit.causeClassification})` };
-      } else if (changedHit) {
-        hit = { mechanism: 'affected-flow-diff', reason: `affected flow ${changedHit.id} appeared in diff.changed.flows (${changedHit.changes.map((c) => c.field).join(', ')})` };
+      const addedHit = (diff.added?.flows ?? []).find((e) =>
+        affectedFlowIds.has(e.id) ||
+        (e.causeClassification === 'reidentified' && affectedFlowIds.has(e.reidentifiedFrom))
+      );
+      if (addedHit) {
+        hit = { mechanism: 'affected-flow-diff', reason: `affected flow reappeared as ${addedHit.id} in diff.added.flows (causeClassification: ${addedHit.causeClassification}${addedHit.reidentifiedFrom ? `, reidentified from ${addedHit.reidentifiedFrom}` : ''})` };
       }
     }
 
@@ -5253,7 +5339,7 @@ async function cmdRemediationReopenCheck(args) {
       // force-written.
       const result = await appendLedgerEvent(targetAbs, payload);
       if (result.valid) {
-        reopened.push({ itemId: f.itemId, mechanism: f.mechanism, reason: f.reason, eventHash: result.hash });
+        reopened.push({ itemId: f.itemId, mechanism: f.mechanism, reason: f.reason, beforeSnapshotSource: f.beforeSnapshotSource, eventHash: result.hash });
       } else {
         failedToReopen.push({ itemId: f.itemId, errors: result.errors });
       }

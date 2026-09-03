@@ -48,11 +48,14 @@
 // `computeGraphDiff` (see `graph-diff.js:328`'s own
 // `coverageRegressionReasons`/`flowRemovalCause` — every removed flow in
 // one diff shares the SAME cause once any completeness signal regressed)
-// — which is why a single coverage-regression hit on ANY removed flow
-// refuses the WHOLE verification immediately (PRD line 1975), rather than
-// letting other, seemingly-clean flows in the same diff verify: an
-// incomplete scan cannot be trusted to have honestly seen everything it
-// claims to have not seen.
+// — which is why a coverage-regression hit on any of the item's OWN
+// required-evidence flows refuses the WHOLE verification immediately (PRD
+// line 1975), rather than letting other, seemingly-clean required-
+// evidence flows in the same diff verify: an incomplete scan cannot be
+// trusted to have honestly seen everything it claims to have not seen.
+// (The loop below only ever inspects `diff.removed.flows` entries for
+// flows actually named in `requiredEvidenceFlowIds` — an unrelated
+// removed flow elsewhere in the same diff is never consulted.)
 
 export const REMEDIATION_STATES = Object.freeze([
   'open', 'in_progress', 'awaiting_verification', 'verified', 'accepted_risk', 'reopened',
@@ -122,6 +125,15 @@ export function foldRemediationItem(events) {
         item.approvals.push({
           approver: ev.approver, reason: ev.reason, at: ev.at, evidenceKind: 'manual',
         });
+        // Records a real baseline (final-review fix round 1, Blocking-3):
+        // without this, a manually-attested item keeps whatever STALE
+        // `verificationSnapshotId` it happened to carry (or `null`,
+        // falling back to an even less defensible baseline) forever, and
+        // `reopen-check` keeps diffing from that stale anchor — reopening
+        // a just-permitted attestation on the very next run even though
+        // nothing changed. `ev.snapshotId` is optional (a manual
+        // attestation before any lineage scan has ever run is legitimate).
+        if (ev.snapshotId) item.verificationSnapshotId = ev.snapshotId;
         break;
       case 'accepted_risk':
         item.state = 'accepted_risk';
@@ -131,6 +143,10 @@ export function foldRemediationItem(events) {
         break;
       case 'reopened':
         item.state = 'reopened';
+        // Retires the stale anchor (final-review fix round 1, Blocking-3)
+        // so it cannot outlive the verification it belonged to — the next
+        // verification (scan or manual) must establish its own baseline.
+        item.verificationSnapshotId = null;
         break;
       default:
         // an unrecognized event type is ignored by the fold — validation
@@ -299,7 +315,7 @@ export function validateTransition(item, proposedEvent) {
         break;
       }
       if (!item.manualAttestationPermitted) {
-        err('manualAttestationPermitted', 'manual attestation is not permitted for this item — reopen with --allow-manual-attestation to permit it');
+        err('manualAttestationPermitted', 'manual attestation is not permitted for this item — it must be opened with --allow-manual-attestation to allow one (open a new item if this one predates that need)');
         break;
       }
       if (!_isNonEmptyString(proposedEvent.approver)) err('approver', 'manual_attestation requires a non-empty approver');
