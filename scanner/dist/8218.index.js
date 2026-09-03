@@ -51,7 +51,7 @@ export const modules = {
  *                  file may be corrupted on disk after signing.
  */
 function loadSignedGraph(scanRoot) {
-  const graphPath = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .statePath */ .BQ)(scanRoot, 'lineage-graph.json');
+  const graphPath = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, 'lineage-graph.json');
   const sigPath = graphPath + '.sig';
 
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(graphPath)) {

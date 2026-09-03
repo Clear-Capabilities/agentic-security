@@ -281,7 +281,7 @@ async function _queryOsvForDep({ name, ecosystem }, { fetchImpl = globalThis.fet
 // ─── State persistence ───────────────────────────────────────────────────
 
 function loadState(scanRoot) {
-  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'cve-alerts-state.json');
+  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'cve-alerts-state.json');
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(fp)) return { known: new Set(), lastRun: null };
   try {
     const j = JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8'));
@@ -290,7 +290,7 @@ function loadState(scanRoot) {
 }
 
 function persistState(scanRoot, state) {
-  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'cve-alerts-state.json');
+  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'cve-alerts-state.json');
   if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.stateWritesEnabled)()) return;
   node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(node_path__WEBPACK_IMPORTED_MODULE_1__.dirname(fp), { recursive: true });
   node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(fp, JSON.stringify({
@@ -300,7 +300,7 @@ function persistState(scanRoot, state) {
 }
 
 function loadConfig(scanRoot) {
-  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'cve-alerts.json');
+  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'cve-alerts.json');
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(fp)) return null;
   try { return JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8')); } catch { return null; }
 }

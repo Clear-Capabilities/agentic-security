@@ -65,7 +65,7 @@ const LEGAL_HOLD_FILE = 'legal-holds.json';
 
 function _loadRaw(scanRoot) {
   let fp;
-  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .statePath */ .BQ)(scanRoot, LEGAL_HOLD_FILE); } catch { return []; }
+  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, LEGAL_HOLD_FILE); } catch { return []; }
   let raw;
   try { raw = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8'); } catch { return []; }
   try {
@@ -135,7 +135,7 @@ function addLegalHold(scanRoot, { artifact, owner, reason, expires_at } = {}) {
   const hold = { artifact, owner, reason, expires_at: expires_at || null, created_at: new Date().toISOString() };
   const holds = _loadRaw(scanRoot);
   holds.push(hold);
-  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .statePath */ .BQ)(scanRoot, LEGAL_HOLD_FILE);
+  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, LEGAL_HOLD_FILE);
   if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(fp, JSON.stringify(holds, null, 2) + '\n')) {
     return { ok: false, reason: 'state writes are disabled (--no-state) or this is not a safe state directory' };
   }
@@ -151,7 +151,7 @@ function removeLegalHold(scanRoot, artifact) {
   const remaining = holds.filter(h => !(h && h.artifact === artifact));
   const removedCount = holds.length - remaining.length;
   if (removedCount > 0) {
-    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .statePath */ .BQ)(scanRoot, LEGAL_HOLD_FILE);
+    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, LEGAL_HOLD_FILE);
     (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(fp, JSON.stringify(remaining, null, 2) + '\n');
   }
   return removedCount;
@@ -242,7 +242,7 @@ const RETENTION_DEFAULTS = {
 function loadRetentionPolicy(scanRoot) {
   if (!scanRoot) return null;
   let fp;
-  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, POLICY_FILE); } catch { return null; }
+  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, POLICY_FILE); } catch { return null; }
   let raw;
   try { raw = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8'); } catch { return null; }
   try {

@@ -4,6 +4,7 @@
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 const __require = createRequire(import.meta.url);
 const PKG_VERSION = __require('../package.json').version;
@@ -164,6 +165,10 @@ Commands:
                                Blast-radius impact assessment over the already-scanned lineage
                                graph — read-only, never mutates anything, never re-runs a scan.
                                --target node:*|edge:*|flow:*|data:*  the compromised entity's id
+  governance propose-edit [path] --patch <file.json> [--output <file>] [--yes] [--base-digest <hex>]
+                               Propose a validated, reviewable edit to
+                               recipient-profiles.json. Without --yes,
+                               previews the diff and writes nothing.
 
 Options:
   --profile vibecoder|pro      Override profile for this run
@@ -4337,6 +4342,90 @@ async function cmdDataflowImpactAssess(args) {
   return 0;
 }
 
+// agentic-security governance propose-edit [path] --patch <file>
+// [--output <file>] [--yes] [--base-digest <hex>] — M5 deliverable #5.
+// Proposes a validated, reviewable edit to recipient-profiles.json.
+// Without --yes: computes and previews the diff, writes nothing.
+// With --yes: re-validates, checks the version guard, backs up the
+// current file, writes the new content atomically, and appends a real
+// audit event via auditCall. Exit codes: 0 success (preview or real
+// write), 1 validation failure, 2 argument/version-guard problem.
+//
+// NOT a `dataflow` subcommand — this edits operator config
+// (recipient-profiles.json), never the scanned graph, so it is its own
+// top-level `governance` command (see `case 'governance':` in main()).
+async function cmdGovernancePropose(args) {
+  const target = args._[2] || '.'; // args._ = ['governance', 'propose-edit', <path>?]
+  const targetAbs = path.resolve(target);
+
+  const patchFlag = args.flags.patch;
+  if (!patchFlag || typeof patchFlag !== 'string') {
+    process.stderr.write('agentic-security governance propose-edit: --patch <file> is required.\n');
+    return 2;
+  }
+  let patch;
+  try {
+    patch = JSON.parse(fs.readFileSync(path.resolve(patchFlag), 'utf8'));
+  } catch (e) {
+    process.stderr.write(`agentic-security governance propose-edit: could not read/parse --patch file "${patchFlag}": ${e.message}\n`);
+    return 2;
+  }
+
+  const { RECIPIENT_CONFIG_FILENAME, loadRecipientConfig } = await import('../src/lineage/recipient-registry.js');
+  const { statePath } = await import('../src/posture/state-dir.js');
+  const configPath = statePath(targetAbs, RECIPIENT_CONFIG_FILENAME);
+  const currentRaw = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : JSON.stringify({ recipients: {} });
+  const currentConfig = loadRecipientConfig(fs.existsSync(configPath) ? configPath : null);
+  const currentDigest = crypto.createHash('sha256').update(currentRaw).digest('hex');
+
+  // Version guard runs BEFORE validation and BEFORE any write — a
+  // concurrent-edit rejection must never partially validate or
+  // partially write first.
+  const baseDigestFlag = args.flags['base-digest'];
+  if (baseDigestFlag && baseDigestFlag !== currentDigest) {
+    process.stderr.write(`agentic-security governance propose-edit: the config file changed since --base-digest was computed (a concurrent edit) — refusing to write. Re-read the current file and recompute your patch.\n`);
+    return 2;
+  }
+
+  const { proposeGovernanceEdit } = await import('../src/lineage/governance-edit.js');
+  const { valid, errors, diff } = proposeGovernanceEdit(currentConfig, patch);
+  if (!valid) {
+    process.stderr.write(`agentic-security governance propose-edit: --patch file failed validation:\n${errors.map((e) => `  ${e.key}: ${e.message}`).join('\n')}\n`);
+    return 1;
+  }
+
+  const yes = !!args.flags.yes;
+  let written = false;
+  let backupPath = null;
+  if (yes) {
+    // Backup BEFORE the new content is written — a failed write below
+    // this point leaves the backup intact and the original untouched.
+    backupPath = `${configPath}.bak-${Date.now()}`;
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    if (fs.existsSync(configPath)) fs.copyFileSync(configPath, backupPath);
+    fs.writeFileSync(configPath, JSON.stringify(patch, null, 2));
+    written = true;
+    // Audited ONLY on the real write path — --yes supplied AND
+    // validation passed AND the version guard passed. Never on a
+    // dry-run preview, never on a validation failure.
+    const { auditCall } = await import('../src/mcp/audit.js');
+    auditCall({
+      sessionRoot: targetAbs, tool: 'governance_propose_edit',
+      args: { file: RECIPIENT_CONFIG_FILENAME, added: diff.added, removed: diff.removed, changedKeys: diff.changed.map((c) => c.key) },
+      outcome: 'ok',
+    });
+  }
+
+  const report = { currentDigest, diff, written, backupPath };
+  const outputPath = args.flags.output;
+  if (outputPath) {
+    fs.writeFileSync(path.resolve(outputPath), JSON.stringify(report, null, 2));
+  } else {
+    process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  }
+  return 0;
+}
+
 // Terse [watch-dataflow] status line — mirrors watch-mode.js's own
 // renderStatusLine terse style, adapted to a GraphDiff's own
 // added/removed/changed shape (computeGraphDiff's `changed` bucket is
@@ -4663,6 +4752,19 @@ async function main() {
         }
         process.stderr.write(`agentic-security dataflow: unknown subcommand "${sub}" — only "export", "diff", "watch", "scenario", and "impact" are supported.\n`);
         process.exit(2);
+      }
+      case 'governance': {
+        // NOT a `dataflow` subcommand — this edits operator config
+        // (recipient-profiles.json), never the scanned graph. See
+        // cmdGovernancePropose's own header comment for the full
+        // exit-code/backup/audit contract.
+        const sub = args._[1];
+        if (sub === 'propose-edit') { process.exit(await cmdGovernancePropose(args)); }
+        else {
+          process.stderr.write(`agentic-security governance: unrecognized sub-command "${sub}" — must be "propose-edit".\n`);
+          process.exit(2);
+        }
+        break;
       }
       case 'cve-watch': {
         // Continuous CVE-watch daemon (one-shot). Polls OSV for the project's

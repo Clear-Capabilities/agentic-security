@@ -182,7 +182,7 @@ async function applyScaUpgrade({ scanRoot, finding, runTests = true }) {
   // we can restore on test failure. node_modules / vendor dirs are NOT
   // backed up (too big); they'll be rebuilt by re-running the install on
   // restore.
-  const stateDir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__/* .statePath */ .BQ)(scanRoot, 'sca-upgrade-history');
+  const stateDir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(scanRoot, 'sca-upgrade-history');
   node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(stateDir, { recursive: true });
   const upgradeId = node_crypto__WEBPACK_IMPORTED_MODULE_3__.randomBytes(8).toString('hex');
   const backups = {};

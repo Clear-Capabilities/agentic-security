@@ -32,7 +32,7 @@ export const modules = {
 const DEFAULT_FP_THRESHOLD = 5;
 
 function _readTriage(scanRoot) {
-  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'triage-feedback.json');
+  const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'triage-feedback.json');
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(fp)) return null;
   try { return JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8')); } catch { return null; }
 }
@@ -99,7 +99,7 @@ function synthesizeRules(scanRoot, opts = {}) {
     groups.get(k).push(e);
   }
   const proposals = [];
-  const dir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'rules-proposed');
+  const dir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'rules-proposed');
   if (!opts.dryRun && !(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.isSafeStateDir)(node_path__WEBPACK_IMPORTED_MODULE_1__.dirname(dir))) return [];
   for (const [, group] of groups) {
     if (group.length < threshold) continue;

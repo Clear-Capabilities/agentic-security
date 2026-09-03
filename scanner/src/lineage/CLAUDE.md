@@ -714,6 +714,57 @@ own 4 messages), `2` a CLI argument problem (missing
 prefix — `computeImpactAssessment`'s own thrown error, caught and
 reported at the CLI boundary rather than crashing).
 
+## Milestone 5, Governance Editing Workflow (deliverable #5) — COMPLETE
+
+A CLI-only propose/preview/write workflow for editing
+`recipient-profiles.json` (the FR-506 operator-declared recipient
+governance config `recipient-registry.js`'s `loadRecipientConfig` reads)
+— **the real PRD correction, confirmed before either task in this
+sub-project started**: nothing in the PRD's own acceptance-criterion
+list gates this deliverable at all. The PRD's richer vision — an
+interactive review/approve UI, a diff view, an approver workflow — is
+real but unbuilt; this sub-project ships the narrower, CLI-first slice
+every prior M4/M5 deliverable in this session has shipped first, not a
+partial implementation of the richer vision.
+
+| Module | Responsibility |
+|---|---|
+| `governance-edit.js` (Task 1) | `proposeGovernanceEdit(currentConfig, patch) -> {valid, errors, diff}` — pure, no file I/O, never throws. Validates every patch entry via `isValidRecipientConfigEntry` (below) and computes a key-order-independent diff (`added`/`removed`/`changed`) via a local `_canonicalize` helper — a hand-authored patch file has no reason to preserve the stored config's own key order, so a raw `JSON.stringify` comparison would spuriously flag a semantically-unchanged recipient as "changed" (found and fixed by Task 1's own review). Arrays keep their own order (semantically meaningful, e.g. `subprocessorChain`); only object key order is normalized. `diff` is always computed, even when `valid` is false, so an operator can see what they attempted before fixing a validation error. |
+| `recipient-registry.js` (Task 1, extended) | `isValidRecipientConfigEntry` is now exported (was module-private) — a visibility change to an already-tested private function, not new validation logic. Its byte-identical behavior (same fail-closed, whole-entry-skips-on-any-defect discipline `loadRecipientConfig` already relied on) is what `governance-edit.js`'s own validation reuses, so a patch and the config file it edits are validated by the exact same rule, never a second, potentially-drifting copy. |
+| `bin/agentic-security.js` (Task 2) | `cmdGovernancePropose` — the CLI handler for `agentic-security governance propose-edit [path] --patch <file.json> [--output <file>] [--yes] [--base-digest <hex>]`. `governance` is a NEW **top-level** command, not a `dataflow` subcommand — this edits operator config, never the scanned graph, the same distinction that keeps `dataflow scenario apply`'s hypothetical clone-and-override engine separate from a real write. **The version-guard/backup/audit mechanism, in real execution order** (pinned by the CLI test suite, below): (1) the version guard (`--base-digest` vs. the config file's real current SHA-256) runs BEFORE validation and BEFORE any write — a concurrent-edit rejection can never partially validate or partially write first; (2) `proposeGovernanceEdit` validates the patch — a failure exits 1, still before any write; (3) only on `--yes` AND a valid patch AND a passed version guard: the current file (if any) is backed up to `<file>.bak-<timestamp>` BEFORE the new content is written, so a failed write below that point leaves the backup intact and the original untouched; (4) the new content is written atomically; (5) `auditCall` (`src/mcp/audit.js`) appends a real, hash-chained NDJSON audit event — `tool: 'governance_propose_edit'`, `outcome: 'ok'`, `args: {file, added, removed, changedKeys}` — invoked ONLY on this real write path, never on a dry-run preview, never on a validation failure. Exit codes: `0` success (both the preview path and the real write path), `1` validation failure, `2` a usage/argument error or the version-guard rejection. |
+| `commands/governance.md` (Task 2) | A NEW top-level slash-command dispatcher (`commands/` gained a 12th dispatcher), not a mode of `commands/dataflow.md` — mirrors every other dispatcher's frontmatter/Options-table/Examples/Implementation-block shape. States plainly: CLI-only, no PRD acceptance criterion gates this deliverable, the HTTP interactive write surface is explicitly deferred, and every write backs up the prior file and appends a real audit event. |
+
+**The HTTP-write-surface deferral, explicit.** `scanner/src/server/` (the
+`agentic-security explore` loopback server, `scanner/src/server/CLAUDE.md`)
+is read-only today — serving the already-scanned, already-signed
+`DataFlowGraph v1` artifact, never accepting a write. Wiring an
+interactive review/approve UI onto it would need new routes, CSRF
+protection, and a write-authorization mechanism beyond the existing
+read-only session token — real, separately-scoped future work this
+sub-project does not attempt. Nothing in `src/server/` was touched by
+either task in this sub-project.
+
+**CLI test coverage** (`test/cli/governance-propose-edit.test.js`, wired
+into `test:mcp` — its own real, on-disk `.agentic-security/mcp-audit.log`
+serialized-format assertion matches that script's own stated scope,
+"MCP server tools + audit log," more precisely than `test:lineage`'s):
+the dry-run-preview path leaves the real file untouched; `--yes` writes
+atomically, creates exactly one backup, and appends a real, matching
+audit event; a malformed patch entry exits 1 and creates no backup; a
+stale `--base-digest` exits 2 and writes nothing; a missing `--patch`
+exits 2. **One real defect found in this brief's own worked example,
+fixed, and disclosed here rather than silently patched around**: the
+brief's own "malformed patch entry" test used `{provider: 'x'}` as the
+malformed entry — but `provider`/`serviceType` are code-derived-only
+fields `isValidRecipientConfigEntry` never validates at all, and every
+field it DOES validate is `undefined` on that entry, which its
+`_isStringOrNull`/`!= null` guards all treat as legitimately absent —
+confirmed live: `isValidRecipientConfigEntry({provider: 'x'})` returns
+`true`, not `false`. The shipped test uses
+`{provider: 'x', processorRole: 'not-a-real-role'}` instead — a value
+outside `RECIPIENT_PROCESSOR_ROLES` (`recipient-profile.js`), which
+`isValidRecipientConfigEntry` genuinely rejects.
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

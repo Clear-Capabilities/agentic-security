@@ -58,7 +58,7 @@ const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
 function _readLastScan(scanRoot) {
   if (!scanRoot) return null;
-  const fp = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'last-scan.json');
+  const fp = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'last-scan.json');
   if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(fp)) return null;
   try { return JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8')); }
   catch { return null; }

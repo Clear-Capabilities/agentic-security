@@ -32,7 +32,7 @@ export const modules = {
 
 
 function _read(scanRoot, name) {
-  try { return node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, name), 'utf8'); } catch { return null; }
+  try { return node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, name), 'utf8'); } catch { return null; }
 }
 
 function _readJson(scanRoot, name) {
@@ -113,7 +113,7 @@ function queryFindingsMemory(scanRoot, query) {
 
   // 3. Scan history.
   try {
-    const histDir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, 'scan-history');
+    const histDir = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, 'scan-history');
     if (node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(histDir)) {
       const files = node_fs__WEBPACK_IMPORTED_MODULE_0__.readdirSync(histDir).filter(f => f.endsWith('.json')).slice(-10);
       for (const f of files) {

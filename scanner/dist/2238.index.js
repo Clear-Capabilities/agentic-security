@@ -65,7 +65,7 @@ const RELIABLE_N = 10;
 const FIX_STAGES = Object.freeze(['rescan', 'lint', 'tests', 'honesty', 'poc']);
 
 function _logPath(scanRoot) {
-  return (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .statePath */ .BQ)(scanRoot, LOG_FILE);
+  return (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, LOG_FILE);
 }
 
 /**

@@ -64,7 +64,7 @@ function buildDeletionReport({ mode, dryRun, root, items, preserved }) {
 
 function writeDeletionReport(scanRoot, report) {
   try {
-    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__/* .statePath */ .BQ)(scanRoot, DELETION_REPORT_FILE);
+    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__.statePath)(scanRoot, DELETION_REPORT_FILE);
     return (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__/* .safeWriteState */ .Ep)(fp, JSON.stringify(report, null, 2) + '\n') ? fp : null;
   } catch { return null; }
 }
@@ -86,7 +86,7 @@ function buildExportReport({ root, outDir, items }) {
 
 function writeExportReport(scanRoot, report) {
   try {
-    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__/* .statePath */ .BQ)(scanRoot, EXPORT_REPORT_FILE);
+    const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__.statePath)(scanRoot, EXPORT_REPORT_FILE);
     return (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_0__/* .safeWriteState */ .Ep)(fp, JSON.stringify(report, null, 2) + '\n') ? fp : null;
   } catch { return null; }
 }

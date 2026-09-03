@@ -230,7 +230,7 @@ function loadPolicyBundles(scanRoot) {
   const entries = [];
   for (const scope of SCOPES) {
     let fp;
-    try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .statePath */ .BQ)(scanRoot, 'policy-bundles', `${scope}.json`); } catch { continue; }
+    try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_5__.statePath)(scanRoot, 'policy-bundles', `${scope}.json`); } catch { continue; }
     let raw;
     try { raw = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8'); } catch { continue; }
     try {
@@ -251,7 +251,7 @@ function loadPolicyBundles(scanRoot) {
 function loadPolicyPublicKey(scanRoot) {
   if (!scanRoot) return null;
   let fp;
-  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_5__/* .statePath */ .BQ)(scanRoot, 'policy-bundle-public-key.pem'); } catch { return null; }
+  try { fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_5__.statePath)(scanRoot, 'policy-bundle-public-key.pem'); } catch { return null; }
   try { return node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(fp, 'utf8'); } catch { return null; }
 }
 
