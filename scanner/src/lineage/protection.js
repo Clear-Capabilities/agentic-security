@@ -11,7 +11,7 @@
 
 export const PROTECTION_VERDICTS = Object.freeze(['protected', 'unprotected', 'unknown', 'not_applicable', 'not_assessed']);
 
-export const EVIDENCE_GRADES = Object.freeze(['runtime', 'code_and_config', 'code', 'config', 'declared', 'manual', 'none']);
+export const EVIDENCE_GRADES = Object.freeze(['runtime', 'code_and_config', 'code', 'config', 'declared', 'assumed', 'manual', 'none']);
 
 export const PROTECTION_DIMENSIONS = Object.freeze(['transit', 'atRest', 'handling']);
 

@@ -7,7 +7,7 @@ import {
 
 test('enums match PRD section 14.1', () => {
   assert.deepEqual([...PROTECTION_VERDICTS].sort(), ['not_applicable', 'not_assessed', 'protected', 'unknown', 'unprotected'].sort());
-  assert.deepEqual([...EVIDENCE_GRADES].sort(), ['code', 'code_and_config', 'config', 'declared', 'manual', 'none', 'runtime'].sort());
+  assert.deepEqual([...EVIDENCE_GRADES].sort(), ['assumed', 'code', 'code_and_config', 'config', 'declared', 'manual', 'none', 'runtime'].sort());
   assert.deepEqual([...PROTECTION_DIMENSIONS], ['transit', 'atRest', 'handling']);
 });
 

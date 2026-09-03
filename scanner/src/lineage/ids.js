@@ -239,3 +239,24 @@ export function diffId(
 ) {
   return `diff:${_hash(_canon([beforeSnapshotId, afterSnapshotId, ...discriminatorParts]))}`;
 }
+
+/**
+ * A Scenario record's id (M5 deliverable #3a, FR-502 §10.10) — NOT a
+ * DataFlowGraph v1 entity, mirrors recipientProfileId's own precedent
+ * exactly (a real, stable-ID'd extension record deliberately not a
+ * base-graph entity). Discriminated by (graphId, graphDigest) plus
+ * caller-supplied discriminatorParts — unlike recipientProfileId, a
+ * Scenario has no single natural key of its own (two saved scenarios
+ * over the identical base graph with identical operations are still
+ * two different records, since FR-502 requires author/time as real,
+ * always-present, non-deduplicating fields), so a caller building a
+ * scenario record supplies (author, createdAt) as discriminatorParts to
+ * make repeat calls collide only when they are genuinely the same
+ * scenario.
+ */
+export function scenarioId(
+  { graphId, graphDigest },
+  discriminatorParts = [],
+) {
+  return `scenario:${_hash(_canon([graphId, graphDigest, ...discriminatorParts]))}`;
+}

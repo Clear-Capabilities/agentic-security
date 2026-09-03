@@ -80,7 +80,7 @@
       "required": ["verdict", "evidenceGrade"],
       "properties": {
         "verdict": { "type": "string", "enum": ["protected", "unprotected", "unknown", "not_applicable", "not_assessed"] },
-        "evidenceGrade": { "type": "string", "enum": ["runtime", "code_and_config", "code", "config", "declared", "manual", "none"] }
+        "evidenceGrade": { "type": "string", "enum": ["runtime", "code_and_config", "code", "config", "declared", "assumed", "manual", "none"] }
       }
     },
     "edge": {
