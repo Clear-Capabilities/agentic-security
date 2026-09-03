@@ -320,3 +320,30 @@ export function observationImportId(
 ) {
   return `obsimport:${_hash(_canon([adapter, source, environment, windowStart, windowEnd, importedAt, ...discriminatorParts]))}`;
 }
+
+/**
+ * A CrossRepoLink record's id (M5 deliverable #8, FR-304 "declared"
+ * half, §10.10) — NOT a DataFlowGraph v1 entity, mirrors
+ * `recipientProfileId`'s own precedent exactly: `(graphId, graphDigest,
+ * ...)` doubled for both endpoints. This is the concrete mechanism that
+ * makes "id collision is impossible by construction" real rather than
+ * aspirational: two links between structurally identical node shapes in
+ * two different repo pairs cannot collide, because both graphs' own
+ * `graphId`+`graphDigest` are baked into the id material on both sides —
+ * a bare node id string is never looked up against a merged or ambiguous
+ * set.
+ */
+export function crossRepoLinkId(
+  {
+    localGraphId, localGraphDigest, localNodeId,
+    remoteGraphId, remoteGraphDigest, remoteNodeId,
+    relationship,
+  },
+  discriminatorParts = [],
+) {
+  return `crosslink:${_hash(_canon([
+    localGraphId, localGraphDigest, localNodeId,
+    remoteGraphId, remoteGraphDigest, remoteNodeId,
+    relationship, ...discriminatorParts,
+  ]))}`;
+}
