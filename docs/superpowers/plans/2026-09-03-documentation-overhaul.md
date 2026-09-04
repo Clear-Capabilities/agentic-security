@@ -603,8 +603,16 @@ Tasks 6-13 into the existing task-based sections where they fit.
 **Requirements:** spec's "Confirmed overclaims" list plus the original
 ask's §32 full pattern list. Run, from repo root:
 ```bash
-git grep -niE '\b(compliant|certification|auditor-ready|safe to deploy|fully verified|zero vulnerabilities)\b' -- '*.md' ':!docs/superpowers/**' ':!docs/implementation/**'
+git grep -niP '\b(compliant|certification|auditor-ready|safe to deploy|fully verified|zero vulnerabilities)\b' -- '*.md' ':!docs/superpowers/**' ':!docs/implementation/**'
 ```
+**Use `-P` (PCRE), not `-E` (POSIX ERE) — `git grep -E` does not support
+`\b`, so an `-E` version of this command silently matches nothing and
+reports a false "zero hits" clean sweep.** (Verified: this exact bug shipped
+in this plan's own first run of Task 17 and was only caught by the final
+whole-branch review — `git grep -niE '\bauditor-ready\b'` returns 0 hits
+while `git grep -niP '\bauditor-ready\b'` returns 15 on the same tree. Before
+trusting a zero-hit result from any `\b`-anchored `git grep`, prove the
+pattern can match by first running it against a string you know is present.)
 (exclude the plan/spec docs themselves and the historical implementation
 reports, which legitimately narrate what was built/decided and shouldn't
 be rewritten). For each real hit NOT already fixed by Tasks 1-16, apply the
