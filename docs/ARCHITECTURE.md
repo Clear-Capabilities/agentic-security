@@ -45,6 +45,14 @@
                        └──────────────────┬───────────────┘
                                           │
                        ┌──────────────────▼───────────────┐
+                       │          scan assurance           │
+                       │  coverage-ledger · scan-health    │
+                       │  per-file × per-analyzer roll-up  │
+                       │  egress-policy · allow/deny gate  │
+                       │  on every outbound LLM call       │
+                       └──────────────────┬───────────────┘
+                                          │
+                       ┌──────────────────▼───────────────┐
                        │           reporters               │
                        │  CLI · JSON · SARIF · JUnit · CSV │
                        │  HTML · CycloneDX · SPDX · PBOM   │
@@ -162,5 +170,25 @@ run never assessed gets no finding at all, rather than a fabricated
 verdict; that honesty constraint is deliberate and load-bearing, not an
 accident of the schema. Deterministic, produced from `scan --format
 oscal` or `compliance --format oscal`. Full detail: [OSCAL](OSCAL.md).
+
+**Scan assurance.** `pipeline/coverage-ledger.js` computes a per-file ×
+per-analyzer verdict — `completed`, `failed`, `timed_out`, or
+`skipped_by_policy` — for every one of the 121 wrapped detectors, so
+coverage is a computed fact rather than an assumption; `pipeline/scan-health.js`
+rolls that up, together with annotator errors, deep/lineage status, and
+feed freshness, into one `scan.scanHealth.status` of `complete` or
+`partial`, so a scan that hit trouble never reports the same shape as a
+clean one just because it happened to find nothing. Full walkthrough:
+[Scan health](walkthroughs/scan-health.md).
+
+**Egress policy.** Every outbound call this codebase makes to an LLM
+provider — from `llm-validator/`, `discovery/`, the posture LLM
+annotators, and the SCA function extractor — is evaluated by
+`egress/policy.js` before the prompt is built and before any HTTP client
+dials out. `mode: deny`/`local-only`, provider/model/role/region/path
+allow-deny lists, a max-context-token cap, and a regulated-profile
+approved-provider check can each independently deny a call; a denied
+call produces no network request, only a sanitized decision object.
+Full walkthrough: [Model egress](walkthroughs/model-egress.md).
 
 The whole engine ships as a single ~3.6 MB ESM bundle (`dist/agentic-security.mjs`). Pure Node >= 24. No native deps. No daemon by default — `scan --watch` opts into a long-running incremental-rescan process.
