@@ -71,6 +71,16 @@ function mkGitFixture(initialSource) {
   return dir;
 }
 
+// 30000 (the original budget) had ~20x local headroom (these waits complete
+// in ~1.4s on a normal machine) but still timed out on the v0.147.2 release
+// run's GitHub Actions draw — this repo's watch mode uses Node's native
+// `fs.watch(..., { recursive: true })` (src/posture/watch-mode.js), which is
+// documented as slower/less reliable specifically under Linux CI runners'
+// inotify handling than on a normal dev machine. 90000 gives real headroom
+// against that CI-specific variance without weakening what the test proves
+// (it still fails loudly, with the real buffered output, on an actual hang).
+const WAIT_TIMEOUT_MS = 90000;
+
 // Polls `getBuffer()` until `re` matches or `timeoutMs` elapses. Never a
 // fixed sleep — this repo's own convention (an `until <cond>; do sleep;
 // done` shape) translated to JS. Rejects with the buffered text on
@@ -111,7 +121,7 @@ test('cli/dataflow-watch-1: real subprocess — startup banner, then a real debo
   const { child, getCombined } = spawnWatch([dir], {});
   try {
     // Proves the seed scan completed and the watcher is live.
-    await waitForMatch(getCombined, /Ctrl-C to stop/, 30000, 'startup banner');
+    await waitForMatch(getCombined, /Ctrl-C to stop/, WAIT_TIMEOUT_MS, 'startup banner');
     assert.match(getCombined(), /does NOT refresh .*lineage-graph\.json/, 'startup banner must disclose the no-live-refresh scope boundary');
 
     // A real code change: same PHI -> AI-provider shape dataflow-diff.test.js
@@ -120,13 +130,13 @@ test('cli/dataflow-watch-1: real subprocess — startup banner, then a real debo
 
     // Wait at least DEBOUNCE_MS plus real rescan time, polling — never a
     // fixed sleep guess.
-    const out = await waitForMatch(getCombined, /\[watch-dataflow\] \+\d+\/-\d+ flows/, 30000, 'delta status line');
+    const out = await waitForMatch(getCombined, /\[watch-dataflow\] \+\d+\/-\d+ flows/, WAIT_TIMEOUT_MS, 'delta status line');
     assert.match(out, /\+1\/-0 flows/, 'exactly one new flow must be reported');
   } finally {
     await killAndWait(child);
     await fsp.rm(dir, { recursive: true, force: true });
   }
-}, { timeout: 60000 });
+}, { timeout: WAIT_TIMEOUT_MS * 2 + 30000 });
 
 test('cli/dataflow-watch-2: --drift-policy with a real "new PHI -> AI" rule surfaces the violation in the live stderr stream', async () => {
   const dir = mkGitFixture(AI_SINK_NO_PHI_SOURCE);
@@ -137,18 +147,18 @@ test('cli/dataflow-watch-2: --drift-policy with a real "new PHI -> AI" rule surf
 
   const { child, getCombined } = spawnWatch([dir, '--drift-policy', policyFile, '--fail-on-drift'], {});
   try {
-    await waitForMatch(getCombined, /Ctrl-C to stop/, 30000, 'startup banner');
+    await waitForMatch(getCombined, /Ctrl-C to stop/, WAIT_TIMEOUT_MS, 'startup banner');
 
     await fsp.writeFile(path.join(dir, 'app.js'), PHI_TO_AI_SOURCE);
 
-    const out = await waitForMatch(getCombined, /DRIFT POLICY VIOLATION/, 30000, 'drift violation block');
+    const out = await waitForMatch(getCombined, /DRIFT POLICY VIOLATION/, WAIT_TIMEOUT_MS, 'drift violation block');
     assert.match(out, /new_flow: flow /, 'violation block must name the real triggering flow');
     assert.match(out, /PHI must never reach an AI provider/, 'violation block must carry the rule\'s own reason text');
   } finally {
     await killAndWait(child);
     await fsp.rm(dir, { recursive: true, force: true });
   }
-}, { timeout: 60000 });
+}, { timeout: WAIT_TIMEOUT_MS * 2 + 30000 });
 
 test('cli/dataflow-watch-3: a malformed --drift-policy file is a clear exit-2 error BEFORE the watcher ever starts', () => {
   const dir = mkGitFixture(AI_SINK_NO_PHI_SOURCE);

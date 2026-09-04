@@ -11,6 +11,25 @@
 
 
 
+## 0.147.3 — CI fix: raise dataflow-watch's live-subprocess wait timeout (no functional change from 0.147.2)
+
+Same story as 0.147.2, different test: `v0.147.2`'s hosted release-gate run
+also failed before reaching `npm publish` — `test/cli/dataflow-watch.test.js`'s
+`cli/dataflow-watch-2` polls a real subprocess's live stderr for a
+`DRIFT POLICY VIOLATION` line after triggering a file-watch-driven rescan,
+with a 30000ms budget. That step completes in ~1.4s on a normal machine (a
+~20x margin) but still timed out on this run — this repo's watch mode uses
+Node's native `fs.watch(..., { recursive: true })`
+(`src/posture/watch-mode.js`), documented as slower/less reliable under
+Linux CI runners' inotify handling than on a dev machine. `v0.147.2` was
+never published to any registry (confirmed via `npm view`).
+
+Raises the wait budget from 30000ms to a shared `WAIT_TIMEOUT_MS = 90000`
+across both real-subprocess tests in that file (the ones that depend on the
+file-watch path — an unrelated fast-fail test in the same file was left
+untouched). No product code changed; this carries the identical fixes from
+0.147.1 and 0.147.2 forward.
+
 ## 0.147.2 — CI fix: raise the headless-Chrome render timeout (no functional change from 0.147.1)
 
 `v0.147.1`'s tag was pushed but its hosted release-gate run failed before
