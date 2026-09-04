@@ -75,6 +75,50 @@ each PR *adds*. Pay the existing debt down over time; don't let new debt in.
 
 ---
 
+## Assurance modes: `--assurance advisory|standard|strict`
+
+`--assurance` is a flag on `ci` only — there is no `scan --assurance`. It
+takes three modes: `advisory`, `standard` (the default), or `strict`.
+
+`advisory` and `standard` are mechanically identical: neither ever prints a
+gate line, and neither fails the build over scan health by itself — an
+incomplete scan is still surfaced (see the `scan-health=` line below), just
+not turned into a build failure. Only `strict` gates, and only when the
+analysis itself didn't complete cleanly (an analyzer failed, timed out, was
+skipped, or — with provenance in play — a finding's provenance couldn't be
+resolved). That's independent of `--fail-on`: a `strict` scan with zero
+findings can still fail the build if the scan itself was incomplete.
+
+Real captured output from a repo with stale EPSS cache data:
+
+```text
+$ agentic-security ci examples/demo-app --assurance strict
+[ci] full scan (no baseline ref detected)
+[ci] 45 findings — 3 critical · 6 high · 7 medium · 17 low
+[ci] ⚠ scan-health=partial — EPSS exploit-probability data is stale (20699 day(s) old)
+[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}
+[ci] fail-on=critical  scan-exit=3
+[ci] assurance gate FAILED (mode=strict): strict mode requires a fully complete scan; scanHealth.status is 'partial'
+```
+
+### Security gate failure vs. assurance failure
+
+That one run shows both failure classes at once, and they need different
+fixes:
+
+- **`fail-on=critical  scan-exit=3`** — the severity gate. Real
+  vulnerabilities were found at or above your `--fail-on` threshold. Fix:
+  triage and remediate the findings — see
+  [Fixing vulnerabilities](fixing-vulnerabilities.md).
+- **`assurance gate FAILED (mode=strict)`** — the assurance gate. The
+  analysis itself didn't finish, so the scan can't vouch for its own
+  completeness — independent of how many (or how few) findings it turned
+  up. Fix: investigate why an analyzer failed, timed out, or was skipped,
+  rather than triaging findings — see
+  [Scan health troubleshooting](../troubleshooting/scan-health.md).
+
+---
+
 ## Block risky deploys locally
 
 CI catches things at merge time. The pre-deploy gate catches them at deploy
@@ -101,5 +145,10 @@ workflow; `/agentic-security:supply --cve-alerts` will also help you wire it in.
 ## Related
 
 - [Scanning](scanning.md) — modes and exit codes the gate relies on
+- [Fixing vulnerabilities](fixing-vulnerabilities.md) — what to do with a
+  severity-gate failure
+- [Finding provenance](finding-provenance.md) — `ci` resolves provenance by
+  default (unlike plain `scan`), which feeds `--assurance strict`'s
+  completeness check
 - [SBOM & AI-BOM](sbom-and-ai-bom.md) · [Compliance](compliance.md)
 - [Configuration & env vars](../reference/configuration.md)

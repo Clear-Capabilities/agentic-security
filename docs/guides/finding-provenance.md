@@ -5,16 +5,27 @@ confident that answer is — resolved from real git history, not guessed from
 `git blame` (which answers "who last touched this line," a different and
 usually wrong question).
 
-**Prerequisites:** a git repository, and the `--provenance` flag.
+**Prerequisites:** a git repository. For plain `scan`, also the
+`--provenance` flag (see the default split below). For a worked example of
+reading a finding's evidence end to end, see
+[Finding evidence walkthrough](../walkthroughs/finding-evidence.md).
 
-Provenance is **opt-in**. It resolves commit history for every finding, which
-takes real time — measured on a 207-file tree, it moved time-to-first-finding
-from ~5s to ~45s. That is the right trade when you are producing compliance
-evidence or triaging ownership, and the wrong one when you are waiting on a
-first scan, so you ask for it rather than pay for it unasked. Any provenance
-flag turns it on (`--provenance`, `--provenance-since`, `--provenance-timeout`,
-`--require-provenance`, `--include-author-email`, `--pseudonymize-authors`).
-Outside a git repository it costs nothing regardless.
+Provenance defaults differently depending on the command:
+
+- **`scan` defaults it OFF.** It resolves commit history for every finding,
+  which takes real time — measured on a 207-file tree, it moved
+  time-to-first-finding from ~5s to ~45s. That is the wrong cost to impose
+  on a first scan, so `scan` asks you to opt in rather than paying for it
+  unasked. Any provenance-shaped flag turns it on (`--provenance`,
+  `--provenance-since`, `--provenance-timeout`, `--require-provenance`,
+  `--include-author-email`, `--pseudonymize-authors`).
+- **`ci` defaults it ON.** A CI run is exactly the case where the extra
+  time is the right trade — you're producing the evidence a gate or an
+  auditor will read, not waiting interactively on a first result. This is
+  what `--assurance strict` (see [CI setup](ci-setup.md)) checks
+  completeness of.
+
+Outside a git repository, provenance costs nothing regardless of command.
 
 ---
 
@@ -149,6 +160,8 @@ agentic-security scan . --pseudonymize-authors
 
 # Policy
 agentic-security scan . --require-provenance
+
+# ci resolves provenance by default — no --provenance flag needed here
 agentic-security ci . --assurance strict
 ```
 
