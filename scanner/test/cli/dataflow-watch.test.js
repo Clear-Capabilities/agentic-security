@@ -124,6 +124,18 @@ test('cli/dataflow-watch-1: real subprocess — startup banner, then a real debo
     await waitForMatch(getCombined, /Ctrl-C to stop/, WAIT_TIMEOUT_MS, 'startup banner');
     assert.match(getCombined(), /does NOT refresh .*lineage-graph\.json/, 'startup banner must disclose the no-live-refresh scope boundary');
 
+    // cmdDataflowWatch prints this banner BEFORE calling watchProject() —
+    // i.e. before fs.watch() actually arms its (possibly recursive, walking
+    // the whole tree on Linux) inotify descriptors. A write landing in that
+    // gap produces an event inotify never delivers (a permanent miss, not a
+    // delay) — confirmed live on the v0.147.3 release CI run, which timed
+    // out at the FULL 90000ms budget with zero rescan output, impossible if
+    // the event had merely been slow (the real rescan pipeline itself takes
+    // ~1-2s once triggered). This settle delay closes that specific race;
+    // it is not a substitute for WAIT_TIMEOUT_MS, which still guards against
+    // genuine slowness once the event is actually delivered.
+    await new Promise((r) => setTimeout(r, 1000));
+
     // A real code change: same PHI -> AI-provider shape dataflow-diff.test.js
     // already proved produces a real new flow.
     await fsp.writeFile(path.join(dir, 'app.js'), PHI_TO_AI_SOURCE);
@@ -148,6 +160,11 @@ test('cli/dataflow-watch-2: --drift-policy with a real "new PHI -> AI" rule surf
   const { child, getCombined } = spawnWatch([dir, '--drift-policy', policyFile, '--fail-on-drift'], {});
   try {
     await waitForMatch(getCombined, /Ctrl-C to stop/, WAIT_TIMEOUT_MS, 'startup banner');
+
+    // See dataflow-watch-1's identical delay for why: the banner prints
+    // before fs.watch() is actually armed, and a write in that gap is a
+    // permanently lost inotify event, not a delayed one.
+    await new Promise((r) => setTimeout(r, 1000));
 
     await fsp.writeFile(path.join(dir, 'app.js'), PHI_TO_AI_SOURCE);
 

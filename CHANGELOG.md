@@ -11,6 +11,31 @@
 
 
 
+## 0.147.4 — Fix: close a real fs.watch startup race in `dataflow watch` (test-only; no product behavior change)
+
+`v0.147.3`'s tag was pushed but its hosted release-gate run failed before
+reaching `npm publish` — again `cli/dataflow-watch-2`, but this time raising
+the wait timeout (0.147.3's own fix) did NOT help: it timed out at the
+*full* 90000ms budget with zero rescan output, which the real rescan
+pipeline (~1-2s once triggered) rules out as "merely slow." Root cause: `bin/
+agentic-security.js`'s `cmdDataflowWatch` prints its "watching ... Ctrl-C to
+stop" banner — the exact string these tests poll for as the "watcher is
+live" signal — *before* calling `watchProject()`, which is where
+`fs.watch()` actually arms its (possibly recursive, whole-tree-walking on
+Linux) inotify descriptors. A test file-write landing in that gap produces
+an event inotify never delivers at all — a permanent miss, not a delay —
+which a longer timeout cannot fix by construction.
+
+Fixed with a 1000ms settle delay in the test, inserted between seeing the
+startup banner and writing the trigger file, in both `dataflow-watch-1` and
+`dataflow-watch-2` (`test/cli/dataflow-watch.test.js`). No product code
+changed — `cmdDataflowWatch`'s banner-before-watchProject ordering is real,
+pre-existing behavior, unrelated to anything in 0.147.1-0.147.3, and left
+alone here rather than reordered under release time pressure without full
+confidence in every caller depending on today's ordering. `v0.147.3` was
+never published to any registry (confirmed via `npm view`). Carries the
+identical fixes from 0.147.1-0.147.3 forward.
+
 ## 0.147.3 — CI fix: raise dataflow-watch's live-subprocess wait timeout (no functional change from 0.147.2)
 
 Same story as 0.147.2, different test: `v0.147.2`'s hosted release-gate run
