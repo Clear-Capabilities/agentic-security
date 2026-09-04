@@ -11,6 +11,54 @@
 
 
 
+## 0.147.0 — Documentation overhaul: a cohesive assurance-platform story, verified against the shipped code
+
+The 0.144.0 Assurance Hardening release shipped a real 3-state ship verdict,
+a model-egress policy gate, risk-dollar scenario disclosure, and per-artifact
+retention/encryption — but the docs describing it, and the README's whole
+front-door story, hadn't caught up. This release rewrites both, built
+exclusively from real, re-verified source rather than the original
+documentation brief's assumptions (which turned out to contain several
+fabricated CLI flags and vocabularies — a `scan --assurance` flag that
+doesn't exist, `--assurance` is `ci`-only; a fictional `--explain-health`
+flag; nine invented verify-verdict strings; a fictional unified compliance
+state model where three separate, differently-cased vocabularies actually
+exist).
+
+**README** rewritten around a 5-capability story (Find It / Prove It / Fix
+It Safely / Govern It / Explain It), a corrected 5-minute quickstart, the
+real 3-state ship verdict as a running example, and persona-based
+navigation (Developer / AppSec / Privacy / Compliance / Platform
+Engineering).
+
+**16 new docs**: `docs/walkthroughs/{assurance-modes,scan-health,
+finding-evidence,verified-remediation,privacy-data-flow,model-egress}.md`;
+`docs/architecture/finding-lifecycle.md`; `docs/concepts.md`
+(evidence-before-severity, deterministic-vs-model-assisted);
+`docs/governance/state-and-retention.md`; `docs/guides/risk-dollars.md`;
+`docs/examples/README.md` (a 13-entry gallery); `docs/reference/
+{output-schema,glossary}.md`; `docs/troubleshooting/scan-health.md`; and two
+real, captured Data Flow Explorer browser screenshots at `docs/assets/`.
+
+**A new doc-testing tool**, `scripts/verify-doc-examples.mjs`: parses the
+real CLI dispatch table out of `bin/agentic-security.js` at runtime (so it
+can't drift out of sync with the CLI the way a hand-maintained list would)
+to catch fabricated commands and the specific `<subcommand> --help`
+landmine (passing `--help` to a subcommand silently runs the real command
+instead of printing help — only bare `agentic-security help` is valid),
+plus JSON-block and Mermaid-syntax sanity checks. Deliberately not wired
+into any gate — a standalone `npm run docs:verify-examples`.
+
+**Existing docs corrected**, not just extended: `docs/guides/
+{quickstart,scanning,compliance,ci-setup,finding-provenance}.md`,
+`docs/reference/{cli,configuration}.md`, `docs/ARCHITECTURE.md`,
+`docs/README.md`, and several `commands/`/`skills/` files carried stale
+claims — the most consequential being that `scan` was documented as
+defaulting finding-provenance ON, when it actually defaults OFF (`ci`
+defaults it ON; this asymmetry exists because plain provenance resolution
+cost a measured 4.5s→45s regression on a 207-file tree, the same
+measurement behind this project's own TTFF benchmark).
+
 ## 0.146.0 — Data Flow Explorer: trace sensitive data through your architecture, not just through one finding
 
 Every prior release answers "is this line of code dangerous?" This one adds a
