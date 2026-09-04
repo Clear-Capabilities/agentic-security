@@ -10,8 +10,8 @@
 <h3>
 Build faster with an<br>
 Agentic Workforce.<br>
-Safe, secure, and compliant<br>
-is now the default.
+Find what's exploitable.<br>
+Prove what's fixed.
 </h3>
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**.
@@ -20,11 +20,81 @@ is now the default.
 
 ![agentic-security demo](docs/brand/demo.gif)
 
-**Contents:** [What you get](#what-you-get) · [Install](#install) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Trace where your sensitive data actually goes](#trace-where-your-sensitive-data-actually-goes) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
+**Contents:** [What it does](#what-agentic-security-does) · [5-minute quickstart](#5-minute-quickstart) · [Findings vs. assurance](#findings-vs-assurance) · [See it in action](#see-it-in-action) · [Install](#install) · [Documentation](#documentation) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Trace where your sensitive data actually goes](#trace-where-your-sensitive-data-actually-goes) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
 
 ---
 
-## What you get
+## What agentic-security does
+
+Five capabilities, each answering a question a plain vulnerability scanner doesn't:
+
+**Find It.** A 12-pillar deterministic scan — SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ — across 8 first-class languages. Every finding carries `chain[]`, a real hop-by-hop path from where tainted data entered to where it reached the sink — not just a line number.
+
+**Prove It.** A scan reports on itself, not just on your code. The `scanHealth` object tracks whether every analyzer actually finished — files scanned, analyzers completed vs. failed vs. timed out, feed freshness (KEV/EPSS/calibration) — and `toShipVerdict()` folds that into the one-screen answer everyone actually reads: `✅ Safe to deploy` only when there are zero actionable findings **and** the scan itself completed cleanly. Zero findings from an incomplete scan is `⚠️ Scan incomplete — cannot confirm safe to deploy`, never a false green light. See [Findings vs. assurance](#findings-vs-assurance) below.
+
+**Fix It Safely.** Every patch — a rule's stored fix, a zero-LLM deterministic swap, or one an agent composed for a finding with no stored fix — goes through the same gate before it's written: rescan-clean, no new finding of medium severity or higher, lint-clean. A completeness tier (`FULL` / `MITIGATION` / `WORKAROUND`) tells you honestly how much of the fix actually landed, and a residual-risk guard rejects a hand-wavy "adequately handled" claim that the mechanical evidence contradicts.
+
+**Govern It.** Automated technical-control evidence for 9 bundled compliance frameworks, an egress policy that decides `allow` / `deny` / `local-only` on every outbound model call *before* a prompt is even built, and state governance — TTL-bound retention, opt-in encryption, `export`, `legal-hold` — for everything the scanner writes to disk.
+
+**Explain It.** No CVE jargon. Every finding explains the stakes, an estimated dollar cost (`riskDollars`, honestly labeled `scenario_default` until you configure your own organization's numbers), and the fix — in language a non-security teammate can act on.
+
+| Capability | What Agentic Security Answers |
+|---|---|
+| **Find It** | Where is the code actually exploitable — not just where a pattern happened to match? |
+| **Prove It** | Did the scan itself finish, or is "0 findings" secretly an incomplete analysis? |
+| **Fix It Safely** | Did this patch actually work, or did it just make the detector stop firing? |
+| **Govern It** | What evidence do I have for an auditor, a privacy reviewer, or a security lead — and what does the tool honestly admit it couldn't check? |
+| **Explain It** | What's the real-world stakes of this finding, in language the whole team understands? |
+
+---
+
+## 5-minute quickstart
+
+```bash
+npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assurance strict
+```
+
+`ci` is the CI-shaped entry point — the same command your pipeline runs — and `--assurance strict` is the flag that makes it gate on whether the scan *itself* finished cleanly, not just on what it found. (`--assurance` only exists on `ci`; there is no `scan --assurance`.) Real captured output, from a repo with stale EPSS cache data:
+
+```text
+$ agentic-security ci examples/demo-app --assurance strict
+[ci] full scan (no baseline ref detected)
+[ci] 45 findings — 3 critical · 6 high · 7 medium · 17 low
+[ci] ⚠ scan-health=partial — EPSS exploit-probability data is stale (20699 day(s) old)
+[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}
+[ci] fail-on=critical  scan-exit=3
+[ci] assurance gate FAILED (mode=strict): strict mode requires a fully complete scan; scanHealth.status is 'partial'
+```
+
+That one run shows two different failure classes at once:
+
+- **`fail-on=critical  scan-exit=3`** — the severity gate. Real vulnerabilities were found at or above your threshold. Fix: triage and remediate — see [Fixing vulnerabilities](docs/guides/fixing-vulnerabilities.md).
+- **`assurance gate FAILED (mode=strict)`** — the assurance gate. The analysis itself didn't finish cleanly (here, a stale EPSS cache), independent of how many findings turned up. Fix: investigate the scan, not the findings — see [Scan health troubleshooting](docs/troubleshooting/scan-health.md).
+
+`advisory` and `standard` (the default) are mechanically identical — neither ever fails the build over scan health. Only `strict` gates. Full walkthrough with more captured output: [Assurance modes](docs/walkthroughs/assurance-modes.md). For the guided, 15-minute version of this (install → scan → read the verdict → fix a finding → export a report → run it on your own project), see the **[full quickstart](docs/guides/quickstart.md)**.
+
+---
+
+## Findings vs. assurance
+
+The quickstart run above shows why "0 findings" was never actually the same claim as "safe to deploy." A scan answers two different questions — *what did we find*, and *did the analysis that looked for it actually finish* — and `toShipVerdict()` (`scanner/src/report/index.js`) is the one place both get folded into a single, three-state answer:
+
+```js
+const scanIncomplete = scan.scanHealth?.status && scan.scanHealth.status !== 'complete';
+const clean = actionable.length === 0 && !scanIncomplete;
+```
+
+- **`clean` → `✅ Safe to deploy`** — zero actionable findings, and the scan itself completed. The only state that means what "0 findings" used to be assumed to mean.
+- **`scanIncomplete`, zero actionable findings → `⚠️ Scan incomplete — cannot confirm safe to deploy`** — nothing actionable turned up, but the analysis didn't finish cleanly (the same EPSS-staleness condition from the quickstart above, on a run that happened to have zero findings instead of 45). "Nothing found" can't be read as "nothing's there."
+- **otherwise → `❌ Not safe to deploy`** — actionable findings exist, regardless of scan health.
+
+A scan that finds nothing is no longer automatically "safe" — it's only safe if it also finished cleanly. That's what `scanHealth` exists to make visible, and it's structurally protected: one analyzer throwing an exception is isolated (`runDetector()` in `pipeline/detector-runner.js`) so it can't silently drop every *other* analyzer's findings for that file — a real gap the project found and fixed during its own assurance-hardening work (two detectors, `scanWeb3Advanced` and `scanK8sAdmission`, were bypassing the isolating wrapper).
+
+Full walkthrough with the real `scanHealth` JSON shape, field by field, and the fault-isolation story in detail: **[Scan health](docs/walkthroughs/scan-health.md)**.
+
+---
+
+## See it in action
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-alert.svg" align="right" width="120" alt="Patch · ALERT — finding detected">
 
@@ -58,7 +128,7 @@ is now the default.
 ─────────────────────────────────────────────────────────────────
 ```
 
-No CVE jargon. The stakes, the cost, the fix.
+No CVE jargon. The stakes, the cost, the fix. Every dollar estimate above is honestly scoped — see [Risk in dollars](docs/guides/risk-dollars.md) for the disclosure mechanism behind it, and [Reading a finding's evidence](docs/walkthroughs/finding-evidence.md) for what backs a real finding field by field.
 
 ---
 
@@ -94,26 +164,41 @@ Also works with Codex, Cursor, and Gemini CLI — [harness setup](docs/HARNESS_C
 
 ---
 
-## Quickstart
-
-New here? This repo ships a deliberately vulnerable [demo app](examples/demo-app/) so your first scan always finds something:
-
-```bash
-npx @clear-capabilities/agentic-security-scanner scan examples/demo-app
-```
-
-You'll get a plain-English verdict, per-finding fixes, and an exit code you can gate CI on. The full walkthrough — scan, read the verdict, fix a finding (verified before it's written), export a report, then run it on your own project — is the **[15-minute quickstart](docs/guides/quickstart.md)**.
-
----
-
 ## Documentation
 
-| I'm here to… | Start with |
-|---|---|
-| **Try it** — get a win in 15 minutes | [Quickstart](docs/guides/quickstart.md) |
-| **Do a specific task** | [How-to guides](docs/guides/) — [scanning](docs/guides/scanning.md) · [fixing vulns](docs/guides/fixing-vulnerabilities.md) · [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) · [compliance](docs/guides/compliance.md) · [CI setup](docs/guides/ci-setup.md) · [leaked secrets](docs/guides/leaked-secrets.md) · [finding provenance](docs/guides/finding-provenance.md) · [Data Flow Explorer](docs/guides/data-flow-explorer.md) |
-| **Evaluate it for my company** | [Architecture](docs/ARCHITECTURE.md) · [Metrics](docs/METRICS.md) · [Scorecard](docs/SCORECARD.md) · [Compliance coverage](docs/compliance/) · [Threat model](docs/AGENT_THREAT_MODEL.md) |
-| **Reference** | [CLI](docs/reference/cli.md) · [Configuration & env vars](docs/reference/configuration.md) · [Cost optimization](docs/MODEL_COST_OPTIMIZATION.md) |
+New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, or browse the **[full doc index](docs/README.md)**. Otherwise, find your lane:
+
+**Developer** — write code, get findings fixed
+- [Quickstart](docs/guides/quickstart.md) — install, scan, fix, verify, export
+- [Fixing vulnerabilities](docs/guides/fixing-vulnerabilities.md) — the triage → fix → verify loop
+- [Reading a finding's evidence](docs/walkthroughs/finding-evidence.md) — every real field, explained one at a time
+
+**AppSec** — set the gate, read the evidence
+- [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
+- [Assurance modes](docs/walkthroughs/assurance-modes.md) — `advisory` / `standard` / `strict`, real captured output
+- [Architecture: the finding lifecycle](docs/architecture/finding-lifecycle.md) — the real module pipeline, detector to report
+
+**Privacy** — trace where sensitive data actually goes
+- [Data Flow Explorer](docs/guides/data-flow-explorer.md) — the field-level graph, browsable locally in your own terminal
+- [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md) — the same fixture, hop by hop
+- [Model egress policy](docs/walkthroughs/model-egress.md) — what leaves your machine, and what's redacted first
+
+**Compliance** — evidence for a framework, honestly scoped
+- [Compliance](docs/guides/compliance.md) — the honesty model, and why the satisfied rate is never reported over all of a framework's controls
+- [Coverage maps](docs/compliance/) — what each bundled framework's controls map to
+- [Risk in dollars](docs/guides/risk-dollars.md) — the scenario-disclosure mechanism behind every `riskDollars` estimate
+
+**Platform Engineering** — wire it into CI/CD, manage what it writes to disk
+- [CI setup](docs/guides/ci-setup.md) — gate every pull request; severity gate vs. assurance gate
+- [Configuration & env vars](docs/reference/configuration.md) — every toggle and `.agentic-security/` file
+- [State & retention](docs/governance/state-and-retention.md) — TTLs, encryption, `export`, `legal-hold`
+
+**Reference**
+- [CLI](docs/reference/cli.md) · [Output schema](docs/reference/output-schema.md) · [Glossary](docs/reference/glossary.md)
+- [Examples gallery](docs/examples/README.md) — thirteen real findings, one screen each
+- [Concepts](docs/concepts.md) — evidence before severity; deterministic vs. model-assisted
+- [Troubleshooting: scan health](docs/troubleshooting/scan-health.md) — why a scan reported `partial`, and how to fix it
+- [Architecture](docs/ARCHITECTURE.md) · [Metrics](docs/METRICS.md) · [Scorecard](docs/SCORECARD.md) · [Agent threat model](docs/AGENT_THREAT_MODEL.md)
 
 ---
 
@@ -139,28 +224,28 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 - **`hunt`** *(CLI-only — no slash command)* — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
 
-Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically.
+Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically. There is no per-subcommand `--help` — only bare `agentic-security help` prints usage; `agentic-security scan --help` silently runs a real scan.
 
 ---
 
 ## What makes it different
 
-- **Plain-English findings with dollar-cost estimates.** Best/likely/worst-case exposure, grounded in IBM Cost of a Data Breach 2024 and 25+ public settlement records. Not CVE numbers.
+- **Plain-English findings with dollar-cost estimates.** Best/likely/worst-case exposure, grounded in IBM Cost of a Data Breach 2024 and 25+ public settlement records, honestly labeled `scenario_default` until you configure your own organization's inputs — see [Risk in dollars](docs/guides/risk-dollars.md). Not CVE numbers.
 - **Intercepts insecure AI-generated code before it hits disk.** The `/setup --bodyguard` hook blocks SQLi via concat, hardcoded API keys, `eval` on user input, and more — in real time, as your AI writes.
 - **12-pillar scan in one command.** SAST, SCA, secrets, IaC, LLM safety, MCP agent-tool audit, auth/authZ, pipeline integrity, container **build files**, deploy config, supply chain, and trend tracking.
   <br>_Container scope: Dockerfiles and compose files are analysed as source. **Built images are NOT scanned** — no base-image CVE lookup, no layer secret extraction, no digest-pinning verification of a pulled image. If you need image scanning, run a dedicated image scanner alongside this one._
 - **Function-level reachability across every dependency.** OSV ecosystem_specific parsing, GHSA fix-commit analysis, vendored code fingerprinting, Java IR call-graph matching, and LLM-assisted function extraction — not just a hardcoded hints list.
 - **SCA reachability tiers.** Every dependency classified as `function-reachable`, `import-reachable`, `build-only`, `manifest-only`, or `transitive-only` — so you fix what matters.
 - **CISA KEV + EPSS prioritization.** Separates "this could theoretically be bad" from "people are running scripts that exploit this today."
-- **SARIF codeFlows for taint traces.** Multi-step source-to-sink paths rendered natively in GitHub Code Scanning, DefectDojo, and VS Code SARIF Viewer.
+- **SARIF codeFlows for taint traces.** Multi-step source-to-sink paths (the same `chain[]` evidence covered in [Reading a finding's evidence](docs/walkthroughs/finding-evidence.md)) rendered natively in GitHub Code Scanning, DefectDojo, and VS Code SARIF Viewer.
 - **One-command fix, always verified.** Every patch is previewed, backed up, and revertible — see [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) below.
 - **Auto-baseline for legacy codebases.** `--set-baseline` snapshots existing findings; `--since-baseline` shows only what's new. Day-one usable on any project.
-- **Refutes its own findings.** A default falsification pass takes each candidate and tries to *disprove* it — looking for the control that would actually block it (a context-matched sanitizer, a dominating guard) and demoting the ones it can. What surfaces is what survived scrutiny. Recall-preserving: nothing is silently dropped.
+- **Refutes its own findings.** A default falsification pass (`posture/falsification.js`) takes each candidate and tries to *disprove* it — looking for the control that would actually block it (a context-matched sanitizer, a dominating guard) and demoting confidence on the ones it can. Recall-preserving: nothing is silently dropped, and `severity` is never touched by this pass. See [Concepts: evidence before severity](docs/concepts.md#evidence-before-severity).
 - **Coverage you can audit.** Enumerates every attacker-reachable entry point — HTTP handlers, queue consumers, cron jobs, CLI args, uploads — and reports the disposition of each, so you can see it looked at your whole attack surface, not just where a finding happened to fire. A confirmed finding then triggers a repo-wide sweep for sibling instances the detectors missed, with honest "N found / M candidate / K mitigated" accounting.
-- **An LLM discovery layer the deterministic engine keeps honest.** `hunt` partitions your call graph into disjoint focus areas and sends each through seven independent lenses — injection, authorization, crypto, business logic, feature abuse, chained, wildcard — to propose the flaws no rule can encode. Nothing it proposes is taken on faith: every candidate is routed back through the taint engine for corroboration, then faces a three-angle panel prompted to *refute* it, and only a majority refutation drops it. Severity comes from the evidence tier, never from the model, so this layer cannot emit `critical`. If the endpoint is missing or the panel goes silent, the report says so in plain words rather than reporting a clean run it did not earn.
-- **Hardens itself against the code it scans.** A tested threat model treats attacker-authored finding text as untrusted input everywhere it reaches an LLM prompt or a rendered PR/issue report — so the tool can't be turned against you by the repo it's auditing.
+- **An LLM discovery layer the deterministic engine keeps honest.** `hunt` partitions your call graph into disjoint focus areas and sends each through seven independent lenses — injection, authorization, crypto, business logic, feature abuse, chained, wildcard — to propose the flaws no rule can encode. Nothing it proposes is taken on faith: every candidate is routed back through the taint engine for corroboration, then faces a three-angle panel prompted to *refute* it, and only a majority refutation drops it. Severity comes from the evidence tier, never from the model, so this layer cannot emit `critical`. If the endpoint is missing or the panel goes silent, the report says so in plain words rather than reporting a clean run it did not earn. See [Deterministic vs. model-assisted](docs/concepts.md#deterministic-vs-model-assisted).
+- **Hardens itself against the code it scans.** A tested threat model treats attacker-authored finding text as untrusted input everywhere it reaches an LLM prompt or a rendered PR/issue report — so the tool can't be turned against you by the repo it's auditing. See [Agent threat model](docs/AGENT_THREAT_MODEL.md).
 
-Deep engine details — [architecture](docs/ARCHITECTURE.md).
+Deep engine details — [architecture](docs/ARCHITECTURE.md) · [finding lifecycle](docs/architecture/finding-lifecycle.md).
 
 ---
 
@@ -173,7 +258,9 @@ Every patch — whether it's a rule's stored fix, a zero-LLM deterministic swap,
 - **Regression tests ship with the fix.** When the scan built a PoC for a finding, the generated test comes along — it fails before the patch and passes after.
 - **Parallel, and it doesn't stop at the first flake.** Independent findings fix concurrently; a single failing test doesn't halt the batch — every finding gets a fixed/skipped/refused verdict, and the loop reports its own **acceptance rate**.
 - **You can see your security debt aging.** Every scan stamps each finding's age and flags anything past its remediation SLA (critical: 7 days, high: 30, …).
-- **Every fix carries an honest completeness tier.** FULL / MITIGATION / WORKAROUND, computed from mechanical signals (did the sink change? are all callers routed through the fix? does a test flip from fail to pass?) — and a residual-risk guard rejects hand-wavy "adequately handled" claims, so a partial fix can never masquerade as a complete one.
+- **Every fix carries an honest completeness tier.** `FULL` / `MITIGATION` / `WORKAROUND`, computed from mechanical signals (did the sink change? are all callers routed through the fix? does a test flip from fail to pass?) — and a residual-risk guard rejects hand-wavy "adequately handled" claims, so a partial fix can never masquerade as a complete one.
+
+Real captured verification legs, real rejection messages, and the three separate verify-loop vocabularies this project uses (never blended into one): **[Verified remediation](docs/walkthroughs/verified-remediation.md)**.
 
 ---
 
@@ -233,7 +320,9 @@ views: the architecture graph itself (colored by protection status),
 a privacy lifecycle view (where PII/PHI/PCI/financial data goes), a
 trace/evidence view (click any flow for the exact hops and evidence),
 and an inventory of every source and sink, including ones nothing
-currently reaches.
+currently reaches. Every model call this feature can optionally make is
+gated by the same egress policy covered in [Model egress](docs/walkthroughs/model-egress.md)
+— nothing about a scan's data leaves your machine without that check.
 
 Everything the browser shows also exports — `png`/`svg` for a doc, a
 self-contained `html` report, a DPIA or RoPA for compliance, an executive
@@ -244,7 +333,7 @@ honestly labeled `HYPOTHETICAL`, never mistaken for a real one), assess
 blast radius from a compromised node, or link data flow across two
 separately-scanned repositories (`federate declare`).
 
-Full walkthrough — [Data Flow Explorer guide](docs/guides/data-flow-explorer.md).
+Full walkthrough — [Data Flow Explorer guide](docs/guides/data-flow-explorer.md). Narrative, hop-by-hop companion using this exact `card_number` example — [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
 
 ---
 
@@ -271,17 +360,23 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 ## Compliance frameworks
 
-`/compliance --report <framework>` generates an auditor-ready attestation that scans your project against:
+`/compliance --report <framework>` generates automated technical-control evidence, mapped against:
 
-| Framework | `<framework>` | Coverage map |
+| Framework | `<framework>` id | Coverage map |
 |---|---|---|
-| NIST AI 600-1 (2024) — Generative AI Profile | `nist` | [coverage](docs/compliance/nist-ai-600-1-coverage.md) |
-| OWASP ASVS 4.0.3 — Application Security Verification Standard | `asvs` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
-| OWASP LLM Top 10 (2025) | `llm` | [coverage](docs/compliance/owasp-llm-top10-coverage.md) |
+| NIST AI 600-1 (2024) — Generative AI Profile | `nist-ai-600-1` | [coverage](docs/compliance/nist-ai-600-1-coverage.md) |
+| NIST Cybersecurity Framework 2.0 | `nist-csf-2` | — |
+| NIST Privacy Framework 1.1 | `nist-privacy-1-1` | [coverage](docs/compliance/nist-privacy-1-1-coverage.md) |
+| OWASP ASVS 5.0 | `owasp-asvs-5` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
+| OWASP Top 10 for LLM Applications 2025 | `owasp-llm-top-10` | [coverage](docs/compliance/owasp-llm-top10-coverage.md) |
 | EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](scripts/eu-ai-act/) |
-| NIST Privacy Framework 1.1 | `--privacy` | all 104 controls, bucketed (below) |
+| GDPR · HIPAA Security Rule · CCPA | `gdpr` · `hipaa-security-rule` · `ccpa` | — |
 
-`/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping for `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, and `ccpa` — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
+Real `compliance --list` returns all 9 of these; 4 have a dedicated per-control coverage map today, tracked as a known gap rather than papered over — see [Compliance](docs/guides/compliance.md).
+
+`/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
+
+This is one of **three separate compliance-state vocabularies** this codebase uses — the framework-report flow above, the Data Flow Explorer's obligation overlay, and the custom compliance-policy gate are three distinct, differently-named systems that are never unified into one. See [Compliance](docs/guides/compliance.md#three-separate-compliance-state-vocabularies--not-one-unified-model) and the [glossary](docs/reference/glossary.md#the-three-compliance-vocabularies) for all three, named distinctly.
 
 ### NIST Privacy Framework 1.1 — and what it refuses to claim
 
@@ -316,6 +411,9 @@ check.
 - **Not a replacement for a pentester.** Static analysis catches patterns; humans catch business-logic flaws. The `security-logic-reviewer` subagent and `/triage --validate` close part of the gap, not all of it.
 - **Not magic.** It can miss novel vulnerabilities, especially anything that requires understanding intent.
 - **Not free for resale.** PolyForm Internal Use license. Use it to make your own code safe and secure. Don't repackage it as a competing scanner.
+- **Not an auditor-issued certification.** Compliance output is automated technical-control evidence mapped to a framework's controls — never "compliant," "certified," or "audit-passed." See [Compliance: the honesty model](docs/guides/compliance.md#the-honesty-model--why-this-wont-inflate-your-score).
+- **Not proof of absence.** A clean scan (`scanHealth.status: 'complete'`, zero actionable findings) means nothing exploitable was found by what did run — not that nothing is wrong. Every evidence field on a finding exists to say how much to trust it, never to promise there isn't another one the scan missed. See [Concepts: evidence before severity](docs/concepts.md#evidence-before-severity).
+- **Not a bare "verified" claim.** A fix report always carries a named completeness tier — `FULL`, `MITIGATION`, or `WORKAROUND` — never an unqualified "verified." See [Verified remediation](docs/walkthroughs/verified-remediation.md).
 
 ---
 
