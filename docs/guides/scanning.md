@@ -59,8 +59,11 @@ npx @clear-capabilities/agentic-security-scanner scan . --since-baseline
   Coverage: 6 files · flow=[js,py]
 ```
 
-- **Verdict** — `❌ Not safe to deploy` whenever a critical finding is open;
-  `✅ Safe to deploy` when none is.
+- **Verdict** — `❌ Not safe to deploy` when a critical or high finding is open;
+  `✅ Safe to deploy` when none remains and the scan completed cleanly. If zero
+  findings remain but the scan finished incompletely (e.g., file timeout or
+  analyzer error), the verdict is `⚠️  Scan incomplete — cannot confirm safe to
+  deploy`, which fires when `scanHealth.status !== 'complete'`.
 - **Severity tiers** — `critical` and `high` first; `advisory` folds
   medium/low/info.
 - **Coverage** — the files examined and the languages the flow engine ran, so

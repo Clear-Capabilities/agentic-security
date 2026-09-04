@@ -67,8 +67,11 @@ You'll see something like this:
 
 What each part means:
 
-- **The verdict line** — `❌ Not safe to deploy` because at least one *critical*
-  finding is open. A clean project shows `✅ Safe to deploy`.
+- **The verdict line** — `❌ Not safe to deploy` when at least one *critical*
+  or *high* finding is open. A clean project shows `✅ Safe to deploy`. If zero
+  findings remain but the scan finished incompletely (e.g., a file timeout), the
+  verdict is `⚠️  Scan incomplete — cannot confirm safe to deploy`, which fires
+  when `scanHealth.status !== 'complete'` even with no findings.
 - **Severity counts** — `critical` and `high` are what you act on first;
   `advisory` (medium/low/info) is everything else, folded into one number so the
   headline stays readable.
@@ -180,6 +183,6 @@ npx @clear-capabilities/agentic-security-scanner scan . --since-baseline
 - [Scanning in depth](scanning.md) — every scan mode, output format, and how to read findings
 - [Fixing vulnerabilities](fixing-vulnerabilities.md) — the triage → fix → verify loop in full
 - [SBOM & AI-BOM](sbom-and-ai-bom.md) — inventory your dependencies and AI components
-- [Compliance reports](compliance.md) — auditor-ready attestations
+- [Compliance reports](compliance.md) — technical-control evidence for compliance frameworks
 - [CI setup](ci-setup.md) — gate every pull request
 - [Responding to a leaked secret](leaked-secrets.md) — the rotation playbook
