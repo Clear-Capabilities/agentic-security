@@ -150,14 +150,14 @@ different failure classes, different fixes (triage findings vs.
 investigate why an analyzer failed/timed out — link to the new
 `docs/troubleshooting/scan-health.md`, created in Task 13, once it exists —
 if this task runs before Task 13, add the link text now and it will resolve
-once Task 13 lands, since the doc-link gate runs at the very end in Task 19
+once Task 13 lands, since the doc-link gate runs at the very end in Task 18
 too).
 
 `finding-provenance.md`: check whether it claims provenance is on by
 default for plain `scan` (the CLAUDE.md-level claim the spec found is
 stale) — if so, correct it: `scan` defaults OFF, `--provenance` enables it;
 `ci` defaults ON. Add a cross-link to `docs/walkthroughs/finding-evidence.md`
-(created in Task 6) near the top.
+(created in Task 7) near the top.
 
 - [ ] **Step 1:** Read both files in full.
 - [ ] **Step 2:** Add the `--assurance` section + gate-failure distinction to `ci-setup.md`.
@@ -216,7 +216,7 @@ existing "reporters" or engine-pipeline boxes).
 - [ ] **Step 2:** Write a small Python one-liner (via Bash) to measure the exact character width of the box(es) being extended.
 - [ ] **Step 3:** Construct and insert the new box(es)/row(s) with programmatically-verified padding.
 - [ ] **Step 4:** Read the edited region back to visually confirm alignment.
-- [ ] **Step 5:** Add 1-2 short paragraphs (matching the style of the existing "Methodology layer"/"OSCAL" paragraphs) explaining scan-health/coverage-ledger/egress in one sentence each, with links to the relevant new walkthroughs (Task 7, Task 9) — link text is fine even before those files exist; Task 19 verifies all links resolve at the end.
+- [ ] **Step 5:** Add 1-2 short paragraphs (matching the style of the existing "Methodology layer"/"OSCAL" paragraphs) explaining scan-health/coverage-ledger/egress in one sentence each, with links to the relevant new walkthroughs (Task 6's scan-health.md, Task 8's model-egress.md) — link text is fine even before those files exist; Task 18 verifies all links resolve at the end.
 - [ ] **Step 6:** Run `node scripts/check-doc-drift.mjs --gate`.
 - [ ] **Step 7:** Commit: `git add docs/ARCHITECTURE.md && git commit -m "docs: add scan-health, coverage-ledger, and egress-policy to the architecture diagram"`
 
@@ -232,8 +232,8 @@ existing "reporters" or engine-pipeline boxes).
 already has 3 states," "Real `scanHealth` shape."
 
 `assurance-modes.md` — structure: Goal / Run It / What You'll See / What It
-Means / Try It Yourself / Go Deeper (the standard template — see spec's
-Task 19 note on consistency). Use the real captured `ci --assurance strict`
+Means / Try It Yourself / Go Deeper (the standard walkthrough template —
+use this same structure for every walkthrough in Tasks 6-8). Use the real captured `ci --assurance strict`
 output from Task 3 verbatim. Explain the `advisory`/`standard`/`strict`
 three-value contract, that advisory≈standard, and that `strict` alone gates
 on `scanHealth.status !== 'complete'` independent of `--fail-on`.
@@ -320,7 +320,7 @@ add narrative connective prose walking through source→transform→sink and
 where the real screenshot from Task 11 will illustrate the fuller graph
 (reference `docs/assets/` images by their planned filenames — Task 11 will
 produce them; if Task 11 hasn't run yet when this task executes, note the
-image reference and it will resolve once Task 11 lands, verified at Task 19).
+image reference and it will resolve once Task 11 lands, verified at Task 18).
 
 `model-egress.md` — use the real `evaluateEgress`/`redactPayload` behavior
 and the real example policy config from the spec verbatim. Show the real
