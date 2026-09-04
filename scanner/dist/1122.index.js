@@ -232,7 +232,12 @@ function export_image_validTimeoutMs(raw, fallback) {
   if (!Number.isSafeInteger(n) || n < 0 || Object.is(n, -0)) return fallback;
   return n;
 }
-const RENDER_TIMEOUT_MS = export_image_validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS, 15000);
+// 15000 (the original default) left no headroom: the v0.147.0 release run
+// took 7983ms for this same render on a good draw of the CI runner, and the
+// v0.147.1 run timed out at ~15000ms on a slower draw — a 2x runner-speed
+// swing entirely within normal GitHub Actions variance, not a regression.
+// 30000 gives ~4x headroom over the observed good-case time.
+const RENDER_TIMEOUT_MS = export_image_validTimeoutMs(process.env.AGENTIC_SECURITY_CHROME_RENDER_TIMEOUT_MS, 30000);
 
 function _writeTempHtml(graph, opts) {
   const html = (0,generate_html_report.generateHtmlReport)(graph, opts);

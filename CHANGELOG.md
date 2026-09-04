@@ -11,6 +11,20 @@
 
 
 
+## 0.147.2 — CI fix: raise the headless-Chrome render timeout (no functional change from 0.147.1)
+
+`v0.147.1`'s tag was pushed but its hosted release-gate run failed before
+ever reaching `npm publish` — `scripts/export-image.mjs`'s `exportPng` test
+hit its own hardcoded 15000ms Chrome render timeout on a slower draw of the
+GitHub Actions runner (the same render took 7983ms on the immediately
+preceding v0.147.0 release run — a ~2x runner-speed swing well within
+normal CI variance, not a regression). `v0.147.1` was never published to
+any registry; this release carries the identical `explore`/`dataflow
+export --format html` fix described below under 0.147.1, plus this one
+timeout change: `RENDER_TIMEOUT_MS` default raised from 15000ms to 30000ms
+in `scripts/export-image.mjs`, giving roughly 4x headroom over the observed
+good-case render time. No other code changed.
+
 ## 0.147.1 — Fix: `explore` and `dataflow export --format html` were broken for every real npm/npx install
 
 Both commands located the Data Flow Explorer frontend (`frontend/`, a
