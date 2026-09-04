@@ -11,7 +11,7 @@ Compliance + auditor flows dispatcher.
 
 | Flag | Behaviour |
 |---|---|
-| `--report <framework>` | Generate auditor-ready compliance attestation. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` |
+| `--report <framework>` | Generate automated technical-control evidence for a framework. Frameworks: `nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act` |
 | `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
 | `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
 | `--audit <target>` | Filters `last-scan.json`'s findings by keyword per target: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `llm-cost`, `prompt`. `deploy` and `launch` instead run `/secure`'s real readiness check for that intent, not a findings filter. |
@@ -86,7 +86,7 @@ The one thing to know before consuming it: **a control the engine could not deci
 ## Examples
 
 ```bash
-/compliance --report nist                       # NIST AI 600-1 attestation
+/compliance --report nist-ai-600-1              # NIST AI 600-1 attestation
 /compliance --walkthrough owasp-asvs-5          # OWASP ASVS auditor walkthrough
 /compliance --attestation --format onepager     # buyer-facing one-pager
 /compliance --audit db                          # database posture audit
@@ -100,19 +100,9 @@ Every mode below runs a real, verified command. `--privacy`/`--walkthrough`(no `
 ```bash
 FLAG="${1:-}"
 
-fw_alias() {
-  case "$1" in
-    nist)       echo "nist-ai-600-1" ;;
-    asvs)       echo "owasp-asvs-5" ;;
-    llm)        echo "owasp-llm-top-10" ;;
-    eu-ai-act)  echo "eu-ai-act" ;;
-    *)          echo "$1" ;;
-  esac
-}
-
 case "$FLAG" in
   --report)
-    FW=$(fw_alias "$2")
+    FW="$2"
     FMT="cli"
     if [ "$3" = "--format" ] && [ -n "$4" ]; then FMT="$4"; fi
     node -e "
@@ -205,7 +195,7 @@ case "$FLAG" in
     fi ;;
   --gap)
     if [ -n "$2" ] && [ "$2" != "--format" ]; then
-      FW=$(fw_alias "$2")
+      FW="$2"
       node -e "
         const fs = require('fs');
         import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/auditor-walkthrough.js').then(aw => {
@@ -230,7 +220,7 @@ case "$FLAG" in
 esac
 ```
 
-`--report <framework>` and `--gap <framework>` both call `auditor-walkthrough.js#loadFramework`/`evaluateFramework` directly — the same functions the real `compliance --walkthrough` CLI path uses internally, just exposed for the alias-shorthand ids (`nist`/`asvs`/`llm`/`eu-ai-act`) and for raw JSON. `--report`'s default (non-JSON) rendering calls the same `renderWalkthrough` narrative as `--walkthrough` — there is no separate "attestation" renderer in the code, so the two converge outside `--format json`.
+`--report <framework>` and `--gap <framework>` both call `auditor-walkthrough.js#loadFramework`/`evaluateFramework` directly — the same functions the real `compliance --walkthrough` CLI path uses internally, exposed here for raw JSON. There is no alias mechanism: `loadFramework()` does a plain `fw.id === id` match, so the framework argument must be a bundled id exactly (`nist-ai-600-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, …) or a BYO id under `.agentic-security/compliance/<id>/controls.json`. `--report`'s default (non-JSON) rendering calls the same `renderWalkthrough` narrative as `--walkthrough` — there is no separate "attestation" renderer in the code, so the two converge outside `--format json`.
 
 `--walkthrough <framework>` and `--privacy`/bare `--gap` pass straight through to the real `agentic-security compliance` CLI subcommand (unchanged from the `--privacy` section above).
 

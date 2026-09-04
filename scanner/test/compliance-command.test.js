@@ -71,17 +71,17 @@ test('S7: compliance.md --report with no prior scan exits 2 honestly', async () 
   const script = extractImplementationBlock();
   const p = await mkProject();
   try {
-    const r = runMode(script, ['--report', 'nist'], p.dir);
+    const r = runMode(script, ['--report', 'nist-ai-600-1'], p.dir);
     assert.equal(r.status, 2);
     assert.match(r.stderr, /run a scan first/);
   } finally { await p.cleanup(); }
 });
 
-test('S7: compliance.md --report nist --format json returns a real evaluation with alias resolved', async () => {
+test('S7: compliance.md --report nist-ai-600-1 --format json returns a real evaluation', async () => {
   const script = extractImplementationBlock();
   const p = await scannedProject();
   try {
-    const r = runMode(script, ['--report', 'nist', '--format', 'json'], p.dir);
+    const r = runMode(script, ['--report', 'nist-ai-600-1', '--format', 'json'], p.dir);
     assert.equal(r.status, 0, `stderr: ${r.stderr}`);
     const parsed = JSON.parse(r.stdout);
     assert.equal(parsed.framework.id, 'nist-ai-600-1');
@@ -98,7 +98,7 @@ test('S7: compliance.md --report --format oscal emits a real OSCAL assessment-re
   const script = extractImplementationBlock();
   const p = await scannedProject();
   try {
-    const r = runMode(script, ['--report', 'nist', '--format', 'oscal'], p.dir);
+    const r = runMode(script, ['--report', 'nist-ai-600-1', '--format', 'oscal'], p.dir);
     assert.equal(r.status, 0, r.stderr);
     const doc = JSON.parse(r.stdout);
     // Enough to prove the command reached the exporter and produced the right
@@ -233,11 +233,11 @@ test('S7: compliance.md --gap with no framework runs the real privacy-framework 
   } finally { await p.cleanup(); }
 });
 
-test('S7: compliance.md --gap nist filters a real framework evaluation to non-present controls', async () => {
+test('S7: compliance.md --gap nist-ai-600-1 filters a real framework evaluation to non-present controls', async () => {
   const script = extractImplementationBlock();
   const p = await scannedProject();
   try {
-    const r = runMode(script, ['--gap', 'nist'], p.dir);
+    const r = runMode(script, ['--gap', 'nist-ai-600-1'], p.dir);
     assert.equal(r.status, 0, `stderr: ${r.stderr}`);
     const parsed = JSON.parse(r.stdout);
     assert.equal(parsed.framework, 'nist-ai-600-1');

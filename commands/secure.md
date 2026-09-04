@@ -57,7 +57,7 @@ command, then offer to run stop 1 for them:
 4. **Guard** — `/setup --hooks` installs the write-time bodyguard;
    `/setup --ci` generates a CI gate so regressions can't merge.
 5. **Prove** — `/posture --report-card` grades the project;
-   `/compliance --report <framework>` produces an auditor-ready attestation.
+   `/compliance --report <framework>` produces automated technical-control evidence.
 
 If the project has never been scanned, end by offering to run `/scan` now.
 

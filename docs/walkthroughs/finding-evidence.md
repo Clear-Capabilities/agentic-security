@@ -131,9 +131,8 @@ Real captured finding — a SQL injection detected in `report.py`:
   those inputs moves `scenarioStatus` toward
   `"scenario_organization_specific"` and turns this from an industry
   scenario into an estimate that actually reflects your organization — see
-  [Risk in dollars](../guides/risk-dollars.md) *(not yet published — forward
-  reference)* for the full scenario-disclosure mechanics and the worked
-  before/after example.
+  [Risk in dollars](../guides/risk-dollars.md) for the full
+  scenario-disclosure mechanics and the worked before/after example.
 
 - **Two separate provenance surfaces — don't confuse them.**
   `introducedBy` / `introducedIn` / `introducedAt` (`"T"`, `bb6582167a71`,

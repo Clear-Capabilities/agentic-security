@@ -15,8 +15,8 @@ Unlike NIST AI 600-1, there is no separate full-spreadsheet ASVS scanner in this
 
 ```bash
 /compliance --walkthrough owasp-asvs-5      # narrative, per-control evidence
-/compliance --report asvs                   # same evaluation, auditor-attestation framing
-/compliance --report asvs --format json      # structured {control, status, observations}[]
+/compliance --report owasp-asvs-5           # same evaluation, attestation framing
+/compliance --report owasp-asvs-5 --format json      # structured {control, status, observations}[]
 ```
 
 Each control's `status` is `present` (every mapped signal is clean), `partial` (some signal

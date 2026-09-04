@@ -25,7 +25,13 @@ modes](assurance-modes.md)).
 
 Real captured `scanHealth`, from a scan where every one of 120 analyzers
 completed with zero failures and zero timeouts — the only thing wrong was
-that the local EPSS exploit-probability cache was stale:
+that the local EPSS exploit-probability cache was stale. (121 analyzers are
+registered in total; `analyzers.expected` counts only the analyzers
+applicable to this particular file set — an extension-gated analyzer such
+as `scanRegexReDoS` or `scanGraphQL` with no matching-extension file among
+the scanned files doesn't count toward it. A policy-gated analyzer still
+counts toward `expected`; it just lands under `skippedByPolicy` instead of
+`completed`. See `pipeline/coverage-ledger.js`.)
 
 ```json
 {

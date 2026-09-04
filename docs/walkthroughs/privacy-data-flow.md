@@ -121,10 +121,14 @@ clickable) plus a **privacy lifecycle** view that regroups the exact same
 nodes by data class instead of by system, so you can ask "everywhere PCI
 data goes" as directly as "everywhere the Payments Service talks to."
 
-A captured screenshot of that fuller architecture view lives at
-`docs/assets/dataflow-architecture-view.png`, and the click-through
-trace/evidence view — the screen that shows you exactly what backed the
-✅ on the masked edge above — lives at `docs/assets/dataflow-trace-view.png`.
+A captured screenshot of that fuller architecture view:
+
+![Data Flow Explorer architecture view](../assets/dataflow-architecture-view.png)
+
+And the click-through trace/evidence view — the screen that shows you
+exactly what backed the ✅ on the masked edge above:
+
+![Data Flow Explorer trace/evidence view](../assets/dataflow-trace-view.png)
 
 ---
 

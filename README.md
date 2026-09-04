@@ -172,8 +172,12 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 
 **Developer** — write code, get findings fixed
 - [Quickstart](docs/guides/quickstart.md) — install, scan, fix, verify, export
+- [Scanning](docs/guides/scanning.md) — modes, output formats, exit codes, reading findings, suppression
 - [Fixing vulnerabilities](docs/guides/fixing-vulnerabilities.md) — the triage → fix → verify loop
 - [Reading a finding's evidence](docs/walkthroughs/finding-evidence.md) — every real field, explained one at a time
+- [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) — inventory dependencies and AI components
+- [Responding to a leaked secret](docs/guides/leaked-secrets.md) — the rotation playbook
+- [Finding provenance](docs/guides/finding-provenance.md) — which commit introduced a finding
 
 **AppSec** — set the gate, read the evidence
 - [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings

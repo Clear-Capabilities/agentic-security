@@ -169,7 +169,7 @@ CCPA:         Sensitive personal info; opt-out flow at /privacy/opt-out.
 ## Canonical commands
 
 - `/compliance --report` — generate PRIVACY.md + cookie banner from the stack
-- `/compliance --report nist|asvs|llm` — generate auditor-ready attestation
+- `/compliance --report nist-ai-600-1|owasp-asvs-5|owasp-llm-top-10` — generate automated technical-control evidence
 - `/scan --all` followed by `/triage --show --threat-model` — surface
   data-class findings the scanner already detected
 

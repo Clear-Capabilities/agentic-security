@@ -87,6 +87,15 @@ same party who clears it. `verification.verdicts[]` and `.consensus` follow
 the same narrow scope. See
 [Finding evidence](../walkthroughs/finding-evidence.md#what-it-means-field-by-field).
 
+### actionable
+
+The subset of findings that drive the ship verdict: every finding with
+`severity` `critical` or `high` (`criticalOrHighAll` in
+`scanner/src/report/index.js`). Everything else (`medium`/`low`/`info`) is
+still reported but counted separately as advisory — `clean` (and ✅ `Safe to
+deploy`) requires zero actionable findings, not zero findings overall. See
+[Scan health](../walkthroughs/scan-health.md#the-payoff-a-3-state-ship-verdict-not-2).
+
 ### scanHealth
 
 A scan-level object separating "no findings" from "analysis complete" —

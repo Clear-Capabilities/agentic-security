@@ -17,8 +17,8 @@ MCP surface actually evaluate against a scan. Get the current, correct answer wi
 
 ```bash
 /compliance --walkthrough nist-ai-600-1     # narrative, per-control evidence
-/compliance --report nist                   # same evaluation, auditor-attestation framing
-/compliance --report nist --format json      # structured {control, status, observations}[]
+/compliance --report nist-ai-600-1          # same evaluation, attestation framing
+/compliance --report nist-ai-600-1 --format json      # structured {control, status, observations}[]
 ```
 
 Each control's `status` is `present` (every mapped signal is clean), `partial` (some signal
