@@ -206,21 +206,26 @@ required: true
 `confidential` artifact is written as an encrypted envelope (reads are
 transparently decrypted) whenever the provider is configured and working,
 **regardless of `required`**. `required` does not gate whether encryption
-happens; it only decides what happens in the one case where the provider is
-*absent or broken*:
+happens; it only decides what happens in the *other* branch, where no usable
+provider is available at write time. The three cases below are mutually
+exclusive and cover every combination of {no file / file with no provider /
+file with a working provider} × {`required` true / false / unset}:
 
-- No `encryption-policy.yml` file at all, or a file with no `provider` set —
-  every `confidential` artifact writes exactly as it always has (plaintext),
-  whatever `required` says, since there's no provider to use.
-- `provider: local-key` present and working, `required` `true`, `false`, or
-  omitted — every `confidential` artifact is encrypted. `required` is inert
-  here; it only matters if the provider later becomes unavailable.
-- **Fail-closed:** `provider` missing/unset (or key generation fails) *and*
-  `required: true` — the write is refused outright (`{ok:false}`), checked
-  *before* any bytes touch disk, so a misconfigured required-encryption setup
-  can never fall back to writing a confidential artifact in plaintext.
-- **Fail-open:** the same missing-provider/broken-key case with `required:
-  false` (or omitted) — the write degrades to plaintext instead of failing.
+- **`provider: local-key` configured and working** (key readable or
+  generatable) — every `confidential` artifact is encrypted, regardless of
+  what `required` says (`true`, `false`, or omitted). `required` is inert in
+  this branch; it only matters if the provider later becomes unavailable.
+- **No usable provider, and `required` is not `true`** — this covers *both*
+  no `encryption-policy.yml` file at all (there's no `required` to even set)
+  *and* a file that's present but has no `provider: local-key` (or the
+  provider throws) with `required: false` or omitted — every `confidential`
+  artifact writes exactly as it always has (plaintext).
+- **No usable provider, and `required: true`** — **fail-closed**: the write
+  is refused outright (`{ok:false}`), checked *before* any bytes touch disk,
+  so a misconfigured required-encryption setup can never fall back to
+  writing a confidential artifact in plaintext. This needs a file present
+  (an absent file has no `required` to be `true`), with `provider` missing,
+  unset, or the provider itself failing.
 
 **Scope exclusions (Phase 1, deliberate).** Only `compliance-evidence.json`,
 `compliance-evidence.md`, and `runtime-observations/` are currently marked
