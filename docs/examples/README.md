@@ -54,8 +54,11 @@ by dropping a request parameter straight into an f-string:
 **What evidence proves it?** A one-hop `chain[]`: `region = request.args.get(...)`
 at line 13 (provenance `url-param`) reaches the `cursor.execute` sink at
 line 16. Two independent signals corroborate it (`IR-TAINT` and `PYTHON`);
-the falsification pass found no parameterized-query control on this
-particular path, so nothing demoted it.
+the falsification pass *did* find a control on this path — a
+parameterized-query call — and demoted the finding's confidence to `0.255`
+(`low`) accordingly. That demotion never touches `severity`: this finding
+still reports `high`, because a blocked finding is a triage signal, not a
+false-positive verdict — the code is still worth a human glance.
 
 **What should the developer do?** Parameterize the query
 (`cur.execute("... WHERE region = ?", (region,))`) instead of interpolating
@@ -70,27 +73,39 @@ exact finding, read field by field, including `confidence`, `proof`,
 ## 2. Authz vulnerability
 
 **What happened?** [`server.js`](../../examples/demo-app/server.js) has four
-order routes; three call `requireAuth` and check ownership or scope the
-query to `req.user.id`. The fourth, `DELETE /orders/:id` (line 30), checks
-neither — anyone who can reach the API can delete any order by id.
+order routes. Only two — `GET /orders` and `POST /orders` — actually check
+ownership, by scoping the query to `req.user.id`. The other two are broken
+in different ways: `DELETE /orders/:id` (line 30) skips `requireAuth`
+entirely, so an unauthenticated caller can delete any order by id; `GET
+/orders/:id` (line 11) does call `requireAuth`, but never checks that the
+requested order belongs to the caller, so any *authenticated* user can read
+any other user's order by id.
 
 **What did the tool find?** Three independent detectors converge on the
-same line: `authz-matrix-idor:server.js:30:DELETE-/orders/:id`
+`DELETE` route: `authz-matrix-idor:server.js:30:DELETE-/orders/:id`
 ("Potential IDOR (AuthZ matrix): DELETE /orders/:id mutates by id without
 ownership/role check in the same handler," CWE-639, `high`),
 `api-authz:BOLA:server.js:30` (Broken Object Level Authorization / API1),
-and `ownership-authz:ownership-missing:server.js:31`.
+and `ownership-authz:ownership-missing:server.js:31`. The `GET
+/orders/:id` route is independently flagged too, in the same scan:
+`ownership-authz:ownership-missing:server.js:11` ("get() looks up or
+mutates by request-supplied 'id' with no ownership check," CWE-639,
+`high`) — the same defect class, on a route that *does* authenticate but
+still doesn't check ownership.
 
-**What evidence proves it?** The AuthZ-matrix detector compares this route
-against its siblings in the same file — the other three all gate the
-mutation on `req.user`, this one doesn't, which is exactly the asymmetry
-the detector is built to catch rather than a guess from the route shape
-alone.
+**What evidence proves it?** The ownership-check detector compares each
+route against the ones that get it right — `GET /orders` and `POST
+/orders` both scope by `req.user.id`, so a route that looks up or mutates
+by a bare `req.params.id` with no such scoping is exactly the asymmetry the
+detector is built to catch, whether or not the route also has an auth
+check at all.
 
 **What should the developer do?** Verify the authenticated user owns the
-resource before mutating it, e.g. `Item.findOne({ _id: req.params.id, owner:
-req.user.id })`, and reject with 403 when the check fails — the same
-`requireAuth` + ownership pattern the other three routes already use.
+resource before reading or mutating it, e.g. `Item.findOne({ _id:
+req.params.id, owner: req.user.id })`, and reject with 403 when the check
+fails — on **both** broken routes, not just the more obviously missing
+`DELETE` one, using the same `req.user.id`-scoping pattern the two correct
+routes already show.
 
 **See:** [`examples/demo-app/README.md`](../../examples/demo-app/README.md)
 — the full list of vulnerability classes this fixture demonstrates.
@@ -135,9 +150,9 @@ Injection in lodash, fixed in `4.17.21`.
 
 **What evidence proves it?** The advisory's own severity is `low`, but this
 finding carries `exploitedNow: true` and `tags: ["exploited-now"]` — CISA
-KEV / EPSS data (`epssPercentile: 0.97`) says this specific CVE is being
-exploited in the wild right now, which is a real signal the base advisory
-severity alone wouldn't tell you.
+KEV / EPSS data (`epssPercentile: 0.9743`, roughly the 97th percentile)
+says this specific CVE is being exploited in the wild right now, which is
+a real signal the base advisory severity alone wouldn't tell you.
 
 **What should the developer do?** Upgrade `lodash` to `>= 4.17.21`.
 
