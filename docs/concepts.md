@@ -7,10 +7,11 @@ earns its severity, and which parts of a scan ever talk to a model.
 
 ## Evidence before severity
 
-A finding's `severity` is set early and never moved by anything downstream
-of it — every stage after that only adds *evidence about how much to trust
-it*, never edits the verdict itself. Reading a finding means reading that
-evidence in order, not just the headline severity:
+A finding's `severity` is set early, and only one stage in the pipeline
+below is allowed to move it afterward (reachability, on positive evidence
+only) — every other stage adds *evidence about how much to trust the
+finding*, never edits the verdict itself. Reading a finding means reading
+that evidence in order, not just the headline severity:
 
 **Observation → Evidence → Reachability → Proof/Falsification →
 Confidence → Severity/Risk.**
@@ -20,14 +21,27 @@ Confidence → Severity/Risk.**
   reach, prove, or disprove it.
 - **Evidence** — `chain[]`, the real path evidence: one hop per
   `{file, line, label, provenance}` from where tainted data entered to
-  where it reached the sink. There is no top-level `source`/`sink`/`path`
-  on a finding — those are Data Flow Explorer *graph* concepts, a
-  different subsystem (see the [Data Flow
-  Explorer](guides/data-flow-explorer.md) guide).
+  where it reached the sink. The Layer-2 taint engine
+  (`dataflow/engine.js`) also sets `source`/`sink` — each
+  `{file, line, label}` — on the same finding, in the same code block that
+  builds `chain[]`; they're real, load-bearing internal fields (e.g.
+  `posture/falsification.js` only considers a finding "taint-style" when
+  both are present). `normalizeFindings()` doesn't include them on its
+  output allowlist, though, so `scan --format json` never ships them —
+  `chain[]` is what actually reaches a report. (This is unrelated to the
+  Data Flow Explorer's own, separately-modeled source/sink graph-node
+  concept — see the [Data Flow Explorer](guides/data-flow-explorer.md)
+  guide for that different subsystem.)
 - **Reachability** — whether the flow this finding describes is actually
-  reachable from an entry point. A finding demoted here carries
-  `unreachable: true`; nothing is silently dropped, and severity does not
-  move.
+  reachable from an entry point (`f.reachable`, set by `annotateReachability`
+  in `engine.js`). This is the one stage in this pipeline that legitimately
+  moves `severity`: `posture/reachability-filter.js`'s `demoteUnreachable`
+  demotes a provably-unreachable finding (critical→medium, high→low,
+  medium→low, low→info) and sets `unreachable: true`, rather than dropping
+  it outright. Every downstream evidence pass below (proof, falsification,
+  confidence) is explicitly recall- *and* severity-preserving; this
+  reachability demotion, made only on positive evidence, is the deliberate
+  exception.
 - **Proof/Falsification** — two separate, deliberately adversarial passes:
   `proof` (`dataflow/proof-gate.js`) asks whether the flow can be
   discharged as clean or infeasible; `falsification`
@@ -41,10 +55,11 @@ Confidence → Severity/Risk.**
   `"blocked"` falsification verdict means the demotion happened
   *because* of that adversarial pass, not because the detector was unsure
   from the start.
-- **Severity/Risk** — `severity` itself, set once and never touched by any
-  of the above, alongside the two numbers that *do* move with the
-  evidence: `exploitability`/`exploitabilityTier` (how bad it is if real)
-  and `riskDollars` (a modeled expected-loss estimate, honestly labeled
+- **Severity/Risk** — `severity` itself, moved only by the reachability
+  demotion above (proof/falsification/confidence never touch it), alongside
+  the two numbers that *do* always move with the evidence:
+  `exploitability`/`exploitabilityTier` (how bad it is if real) and
+  `riskDollars` (a modeled expected-loss estimate, honestly labeled
   `scenario_default` when it's industry base-rates rather than your own
   organization's numbers).
 

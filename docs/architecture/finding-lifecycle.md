@@ -49,13 +49,16 @@ list, each adding one evidence field without touching `severity`:
 `annotateProofGate` (`dataflow/proof-gate.js`) sets `proof` — whether the
 flow-proof gate could discharge the finding as clean or infeasible;
 `annotateFalsification` (`posture/falsification.js`) actively tries to
-*disprove* the finding and sets `falsification`, demoting confidence when it
-finds a context-matched control on the path; `annotateVerifierVerdicts`
-(`posture/verifier.js`) records each verdict through
-`posture/verification-separation.js`'s producer/verdict API, which is what
-populates `verification.producer`, `.verdicts[]`, and `.consensus` — the
-structural guarantee that the party who found a finding cannot be the same
-party who clears it. `chain[]` — the actual path evidence, one hop per
+*disprove* the finding, sets `falsification`, demotes confidence when it
+finds a context-matched control on the path, and — in the same pass —
+records its verdict through `posture/verification-separation.js`'s
+producer/verdict API, which is what populates `verification.producer`,
+`.verdicts[]`, and `.consensus`: the structural guarantee that the party
+who found a finding cannot be the same party who clears it.
+(`posture/verifier.js`'s `annotateVerifierVerdicts` is a separate,
+unrelated pass — the optional live/sandboxed PoC-execution check; it sets
+`verifier_verdict`/`verifier_reason`/`verifier_runner` and never touches
+`verification.*`.) `chain[]` — the actual path evidence, one hop per
 `{file, line, label, provenance}` — is set earlier, by the detector that
 found the flow, not by an annotator in this stage. The full field-by-field
 read of these is [Reading a finding's evidence](../walkthroughs/finding-evidence.md).
