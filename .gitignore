@@ -38,6 +38,16 @@ scanner/dist/*
 # machine that has ever run `npm run build` locally, since the chunks exist
 # on disk there regardless of git tracking.
 !scanner/dist/*.index.js
+# Fourth instance of the same bug class: `explore` and `dataflow export
+# --format html` both locate the Data Flow Explorer frontend at runtime via
+# scanner/dist/frontend/ (copied there at build time by
+# scanner/scripts/copy-frontend.mjs — see src/shared/frontend-root.js for
+# why). Without this negation the copy exists on disk after `npm run build`
+# but is invisible to a fresh clone/npm-published-package, reproducing the
+# exact "works locally, 404s for every real user" bug this file's own two
+# comments above already describe for other dist/ subtrees.
+!scanner/dist/frontend/
+!scanner/dist/frontend/**
 # Ignore all .agentic-security/ dirs at any depth. For the root one,
 # ignore all contents but un-ignore the config files that belong in VCS.
 **/.agentic-security/

@@ -178,6 +178,34 @@ npx @clear-capabilities/agentic-security-scanner scan . --since-baseline
 
 ---
 
+## Troubleshooting
+
+**`sh: agentic-security-scanner: command not found` (from `npx`)** — usually a
+stale `npx` cache from an earlier interrupted install. Clear it and pin the
+version so `npx` can't silently reuse a broken cached copy:
+
+```bash
+npx clear-npx-cache   # or: rm -rf ~/.npm/_npx
+npx -y @clear-capabilities/agentic-security-scanner@latest scan .
+```
+
+If it still fails, install globally instead — this sidesteps `npx`'s
+package-to-command resolution entirely:
+
+```bash
+npm install -g @clear-capabilities/agentic-security-scanner
+agentic-security scan .
+```
+
+**`node @clear-capabilities/agentic-security-scanner ...` →
+`Cannot find module '.../@clear-capabilities/agentic-security-scanner'`** —
+`node` takes a file path, not a package name; that's what `npx` (or the
+`agentic-security` bin, once installed) is for. Use one of the two commands
+above, not `node` directly, unless you're running from a local clone of this
+repo — see [`scanner/CLAUDE.md`](../../scanner/CLAUDE.md) for that case.
+
+---
+
 ## Where to next
 
 - [Scanning in depth](scanning.md) — every scan mode, output format, and how to read findings

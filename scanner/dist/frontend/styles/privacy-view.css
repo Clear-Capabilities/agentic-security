@@ -1,0 +1,86 @@
+.privacy-view {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.privacy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-body);
+}
+
+.privacy-table th {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-panel-title);
+  text-transform: uppercase;
+  border-bottom: var(--border-width) solid var(--border-default);
+  background: var(--surface-panel);
+  position: sticky;
+  top: 0;
+}
+
+.privacy-row {
+  cursor: pointer;
+  border-bottom: var(--border-width) solid var(--border-default);
+}
+
+.privacy-row:hover {
+  background: var(--surface-elevated);
+}
+
+.privacy-row[data-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--accent-selection);
+  background: var(--surface-elevated);
+}
+
+.privacy-row[data-visible="false"] {
+  display: none;
+}
+
+.privacy-field-cell {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.privacy-stage-cell {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.privacy-stage-cell-empty {
+  color: var(--border-default);
+}
+
+.privacy-stage-cell-empty-label {
+  color: inherit;
+}
+
+.privacy-protection-cell {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.privacy-governance-badge {
+  display: inline-block;
+  border: 1px solid var(--status-unknown);
+  color: var(--status-unknown);
+  border-radius: var(--radius-default);
+  padding: 1px 6px;
+  font-size: var(--font-size-code);
+  margin-top: 4px;
+}
+
+.privacy-class-badge {
+  display: inline-block;
+  border-radius: var(--radius-default);
+  padding: 1px 6px;
+  font-size: var(--font-size-code);
+  margin-right: 4px;
+  border: 1px solid var(--border-default);
+}

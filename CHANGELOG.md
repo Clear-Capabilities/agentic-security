@@ -11,6 +11,40 @@
 
 
 
+## 0.147.1 — Fix: `explore` and `dataflow export --format html` were broken for every real npm/npx install
+
+Both commands located the Data Flow Explorer frontend (`frontend/`, a
+repo-root sibling of `scanner/` in this monorepo) via a fixed relative path
+computed from each module's own `import.meta.url`
+(`path.resolve(HERE, '../../../frontend')` in `static-assets.js`,
+`'../../frontend'` in `generate-html-report.mjs`). That math was correct
+only for the unbundled dev checkout. Once `npm run build` (ncc) split those
+modules into their own `dist/*.index.js` chunks, `import.meta.url` inside
+them reflected `dist/`'s own, shallower location, and the same fixed
+relative math resolved *outside the installed package entirely* — and
+`frontend/` was never part of the published npm tarball to begin with. The
+practical effect: `agentic-security explore .` 404'd on `GET /` for every
+real `npx`/`npm install` user (`{"error":"not found"}`, never an
+index.html), and `dataflow export . --format html` failed outright
+(`ENOENT: no such file or directory, scandir '.../frontend/styles'`). Both
+only ever worked when run from a full monorepo clone.
+
+Fixed by shipping the frontend's servable files inside the published
+package: `scanner/scripts/copy-frontend.mjs` (new) copies `frontend/`'s
+allowlisted files (`index.html`, `src/**/*.js`, top-level `styles/*.css` —
+the exact same allowlist `static-assets.js` already enforced for serving)
+into `scanner/dist/frontend/` as part of `npm run build`; a new shared
+resolver, `scanner/src/shared/frontend-root.js`, replaces both hardcoded
+relative paths with a search-upward strategy that finds the frontend
+correctly regardless of bundling depth. Verified by packing a real tarball
+(`npm pack`) and installing it into an isolated directory with no monorepo
+present: `explore`'s `GET /` now returns 200 with the real `index.html`
+(previously 404), static JS/CSS assets and the token-authenticated
+`/api/v1/graph` endpoint both 200, and `dataflow export --format html`
+exits 0 and writes a real self-contained report (previously exited 2).
+`dpia`/`ropa` export formats were already unaffected (a separate,
+already-self-contained code path) and are unchanged.
+
 ## 0.147.0 — Documentation overhaul: a cohesive assurance-platform story, verified against the shipped code
 
 The 0.144.0 Assurance Hardening release shipped a real 3-state ship verdict,

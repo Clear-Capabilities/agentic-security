@@ -1,0 +1,128 @@
+/*
+ * Data Flow Explorer design tokens (PRD §8.1). Dark is the reference theme.
+ * Values are copied verbatim from the PRD — do not adjust without a
+ * deliberate, separately-reviewed change.
+ */
+
+:root {
+  /* Surfaces */
+  --surface-canvas: #061625;
+  --surface-panel: #0B1E2F;
+  --surface-elevated: #102A40;
+  --border-default: #28445A;
+
+  /* Text */
+  --text-primary: #F3F7FA;
+  --text-secondary: #9FB3C5;
+
+  /* Selection / focus */
+  --accent-selection: #3DA9FF;
+
+  /* Protection verdict status */
+  --status-protected: #59D17D;
+  --status-unprotected: #FF625C;
+  --status-unknown: #F5B83D;
+
+  /* Text color for content painted directly on a status token background
+     (e.g. the coverage banner). NOT the same as --text-primary, which is
+     sized against --surface-canvas/--surface-panel, not against a status
+     color. Verified with lib/contrast.js's contrastRatio(): #061625 on
+     dark --status-unknown (#F5B83D) is 10.27:1. See the light-theme block
+     below for the light-theme value and its own verified ratio. */
+  --status-banner-text: #061625;
+
+  /* AI processing context */
+  --context-ai: #B47AFF;
+
+  /* Data class overlays */
+  --class-pii: #28D1C5;
+  --class-phi: #A97BFF;
+  --class-pci: #4CA7FF;
+
+  /* Spacing (8px grid, PRD §7.7) */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+
+  /* Radius / border (PRD §8.2) */
+  --radius-default: 8px;
+  --border-width: 1px;
+
+  /* Typography (PRD §8.2) — bundled system stack; never a remote/CDN font */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-view-title: 23px;
+  --font-size-panel-title: 15px;
+  --font-size-node-title: 14px;
+  --font-size-body: 13px;
+  --font-size-code: 12.5px;
+
+  /* Motion (PRD §8.2 — focus/topology change only, no ambient animation) */
+  --motion-duration: 200ms;
+  --motion-duration-reduced: 0ms;
+
+  /* Shell region sizing (PRD §7.7) */
+  --header-height: 56px;
+  --view-tabs-height: 44px;
+  --left-rail-width: 248px;
+  --left-rail-collapsed-width: 56px;
+  --right-inspector-width: 360px;
+  --context-rail-height: 72px;
+}
+
+/* Light theme — same semantic tokens, WCAG-AA-equivalent contrast (PRD §8.1/§23) */
+:root[data-theme="light"] {
+  --surface-canvas: #FFFFFF;
+  --surface-panel: #F4F7FA;
+  --surface-elevated: #E7EEF3;
+  --border-default: #C7D3DC;
+
+  --text-primary: #0B1E2F;
+  --text-secondary: #3E5568;
+
+  --accent-selection: #1B6FC2;
+
+  /* status-protected and status-unknown darkened slightly from their
+     original values (#1E8A4C, #9A6B00) — Milestone 3, sub-project A11y,
+     found via test/tokens-contrast.test.js that both originals failed
+     WCAG AA (4.5:1) against --surface-panel (#F4F7FA): 4.07:1 and 4.36:1
+     respectively. Verified with lib/contrast.js's contrastRatio() against
+     BOTH backgrounds a status color plausibly renders on: --status-
+     protected (#1C8047) is 4.97:1 on --surface-canvas / 4.62:1 on
+     --surface-panel; --status-unknown (#956700) is 4.98:1 / 4.63:1. Both
+     now clear AA with margin (>=4.6) rather than sitting at the exact
+     4.50 boundary, which is fragile against hex-rounding. --status-
+     unprotected was already compliant (5.26:1 / 4.89:1), unchanged. */
+  --status-protected: #1C8047;
+  --status-unprotected: #C7362D;
+  --status-unknown: #956700;
+
+  /* Verified with lib/contrast.js's contrastRatio(): #FFFFFF on light
+     --status-unknown (#956700) is 4.98:1 (>= 4.5:1 AA). The dark-block
+     value (#061625, --surface-canvas's own dark value) is 3.90:1 here --
+     below AA -- which is the bug this token pair fixes: shell.css must
+     never hardcode dark theme's value and expect it to also work in
+     light theme. */
+  --status-banner-text: #FFFFFF;
+
+  --context-ai: #6E38B8;
+
+  --class-pii: #0E7C73;
+  --class-phi: #6E44B8;
+  --class-pci: #1C63A8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: var(--motion-duration-reduced);
+  }
+}
+
+body {
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  margin: 0;
+}

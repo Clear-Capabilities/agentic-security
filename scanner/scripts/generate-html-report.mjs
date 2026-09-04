@@ -9,9 +9,15 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bundleFrontendModules } from './bundle-frontend.mjs';
 import { exportGraphJSON } from '../src/lineage/export-json.js';
+import { resolveFrontendRoot } from '../src/shared/frontend-root.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FRONTEND_ROOT = path.resolve(HERE, '../../frontend');
+// See src/shared/frontend-root.js: a hardcoded `../../frontend` resolved
+// correctly for this file's unbundled dev location (scanner/scripts/) but
+// broke for the published package, whose build now copies frontend/ into
+// scanner/dist/frontend/ — a different relative depth from this same
+// module once ncc bundles it into a dist/ chunk.
+const FRONTEND_ROOT = resolveFrontendRoot(HERE);
 const STYLES_DIR = path.join(FRONTEND_ROOT, 'styles');
 const ENTRY_PATH = path.join(FRONTEND_ROOT, 'src', 'export-entry.js');
 

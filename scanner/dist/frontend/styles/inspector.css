@@ -1,0 +1,69 @@
+.inspector {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+}
+
+.inspector-title {
+  font-size: var(--font-size-panel-title);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.inspector-claim {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+}
+
+.inspector-section-title {
+  font-size: var(--font-size-body);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: var(--space-2) 0 var(--space-1) 0;
+}
+
+.inspector-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.inspector-evidence-list,
+.inspector-limitations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.inspector-evidence-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width) solid var(--border-default);
+}
+
+.inspector-evidence-location {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-code);
+}
+
+.inspector-limitations-list li {
+  padding: 4px 0;
+  color: var(--status-unknown);
+}
+
+.inspector-verdicts {
+  margin-top: var(--space-2);
+}
+
+.inspector-verdict-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 0;
+}
+
+.inspector-verdict-badge {
+  border: 1.5px solid;
+  border-radius: var(--radius-default);
+  padding: 2px 8px;
+}

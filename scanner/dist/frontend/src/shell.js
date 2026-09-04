@@ -1,0 +1,184 @@
+import { el, clear } from './lib/dom.js';
+import { parseStateFromHash, serializeStateToHash } from './lib/state.js';
+
+const VIEWS = [
+  { id: 'architecture', label: 'Architecture' },
+  { id: 'privacy', label: 'Privacy' },
+  { id: 'trace', label: 'Trace' },
+  { id: 'inventory', label: 'Inventory' },
+];
+
+/**
+ * @param {HTMLElement} rootEl
+ * @param {object} graph - a DataFlowGraph v1 envelope (already validated at build time)
+ * @returns {{
+ *   setActiveView: (viewName: string) => void,
+ *   getState: () => {view: string, selectedId: string|null, filters: object},
+ *   setSelection: (selectedId: string|null) => void,
+ *   setFilters: (filters: object) => void,
+ *   setTable: (tableId: string) => void,
+ *   onStateChange: (listener: (state: object) => void) => (() => void),
+ *   getCanvasEl: () => HTMLElement,
+ *   getInspectorEl: () => HTMLElement,
+ *   getContextRailEl: () => HTMLElement,
+ *   getLeftRailEl: () => HTMLElement,
+ *   getQueryBarEl: () => HTMLElement,
+ *   destroy: () => void,
+ * }}
+ */
+export function mountShell(rootEl, graph) {
+  let state = parseStateFromHash(window.location.hash);
+  let stateChangeListeners = [];
+  let inspectorOverlayOpen = false;
+
+  const shell = el('div', { class: 'shell' });
+  const header = buildHeader(graph);
+  const coverageBanner = buildCoverageBanner(graph);
+  const tabs = buildViewTabs(state.view, (nextView) => {
+    updateState({ ...state, view: nextView });
+  });
+  const leftRail = el('div', { class: 'shell__left-rail' }, 'Filters (wired by the next plan)');
+  const canvas = el('div', { class: 'shell__canvas' });
+  const inspector = el('div', { class: 'shell__inspector', id: 'shell-inspector' }, 'Evidence inspector (wired by the next plan)');
+  const contextRail = el('div', { class: 'shell__context-rail' }, buildContextRailText(graph));
+
+  const inspectorToggle = el(
+    'button',
+    {
+      class: 'shell__inspector-toggle',
+      'aria-expanded': 'false',
+      'aria-controls': 'shell-inspector',
+      onClick: () => {
+        inspectorOverlayOpen = !inspectorOverlayOpen;
+        inspector.setAttribute('data-overlay-open', String(inspectorOverlayOpen));
+        inspectorToggle.setAttribute('aria-expanded', String(inspectorOverlayOpen));
+      },
+    },
+    'Inspector',
+  );
+  tabs.appendChild(inspectorToggle);
+
+  // Milestone 3, sub-project M3-UX-Query, Task 4: the query bar's own real
+  // slot. Placed into the existing view-tabs row (shell__view-tabs) rather
+  // than a new grid region, matching this session's own A11y precedent of
+  // adding a new control into an existing shell row (inspectorToggle,
+  // directly above) instead of widening shell.css's grid-template-areas.
+  const queryBar = el('div', { class: 'shell__query-bar-slot' });
+  tabs.appendChild(queryBar);
+
+  shell.appendChild(header);
+  shell.appendChild(coverageBanner);
+  shell.appendChild(tabs);
+  shell.appendChild(leftRail);
+  shell.appendChild(canvas);
+  shell.appendChild(inspector);
+  shell.appendChild(contextRail);
+
+  clear(rootEl);
+  rootEl.appendChild(shell);
+
+  function notifyStateChange() {
+    const snapshot = { ...state };
+    for (const listener of stateChangeListeners) listener(snapshot);
+  }
+
+  // Shared by setActiveView/setSelection/setFilters/the tab-click handler:
+  // update the closure state, sync the URL hash, refresh the tab UI, notify.
+  function updateState(nextState) {
+    state = nextState;
+    window.location.hash = serializeStateToHash(state);
+    applyActiveTab(tabs, state.view);
+    notifyStateChange();
+  }
+
+  function handleHashChange() {
+    state = parseStateFromHash(window.location.hash);
+    applyActiveTab(tabs, state.view);
+    notifyStateChange();
+  }
+
+  window.addEventListener('hashchange', handleHashChange);
+
+  return {
+    setActiveView(viewName) {
+      updateState({ ...state, view: viewName });
+    },
+    getState() {
+      return { ...state };
+    },
+    setSelection(selectedId) {
+      updateState({ ...state, selectedId });
+    },
+    setFilters(filters) {
+      updateState({ ...state, filters });
+    },
+    setTable(tableId) {
+      updateState({ ...state, table: tableId });
+    },
+    onStateChange(listener) {
+      stateChangeListeners.push(listener);
+      return () => {
+        stateChangeListeners = stateChangeListeners.filter((l) => l !== listener);
+      };
+    },
+    getCanvasEl: () => canvas,
+    getInspectorEl: () => inspector,
+    getContextRailEl: () => contextRail,
+    getLeftRailEl: () => leftRail,
+    getQueryBarEl: () => queryBar,
+    destroy() {
+      window.removeEventListener('hashchange', handleHashChange);
+      stateChangeListeners = [];
+    },
+  };
+}
+
+function buildHeader(graph) {
+  const repo = graph.scope?.repository ?? 'unknown repository';
+  const env = graph.scope?.environment ?? 'unknown environment';
+  const scanStatus = graph.scanHealth?.status ?? 'unknown';
+  const isFixture = graph.scope?.source === 'fixture';
+  return el('div', { class: 'shell__header' }, [
+    el('div', { class: 'shell__header-title' }, 'Data Flow Explorer'),
+    el('div', { class: 'shell__header-meta' }, `${repo} · ${env} · Scan ${scanStatus}`),
+    isFixture ? el('div', { class: 'shell__header-meta', 'data-illustrative': 'true' }, 'Illustrative demo data') : null,
+  ]);
+}
+
+function buildCoverageBanner(graph) {
+  const status = graph.coverage?.status ?? graph.scanHealth?.status;
+  const banner = el('div', { class: 'shell__coverage-banner' }, `Coverage: ${status ?? 'unknown'} — not a complete assessment`);
+  if (status && status !== 'complete') banner.setAttribute('data-visible', 'true');
+  return banner;
+}
+
+function buildViewTabs(activeView, onSelect) {
+  const tabs = el(
+    'div',
+    { class: 'shell__view-tabs', role: 'tablist' },
+    VIEWS.map((v) =>
+      el(
+        'button',
+        {
+          class: 'shell__view-tab',
+          role: 'tab',
+          'aria-selected': String(v.id === activeView),
+          'data-view-id': v.id,
+          onClick: () => onSelect(v.id),
+        },
+        v.label,
+      ),
+    ),
+  );
+  return tabs;
+}
+
+function applyActiveTab(tabsEl, activeView) {
+  for (const btn of tabsEl.querySelectorAll('[data-view-id]')) {
+    btn.setAttribute('aria-selected', String(btn.getAttribute('data-view-id') === activeView));
+  }
+}
+
+export function buildContextRailText(graph) {
+  return `${graph.nodes.length} nodes · ${graph.edges.length} edges · ${graph.flows.length} flows`;
+}

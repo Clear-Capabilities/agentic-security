@@ -14,14 +14,19 @@
 
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveFrontendRoot } from '../shared/frontend-root.js';
 
-// Located the SAME way scanner/src/mcp/server.js locates files relative to
-// its own module (path.dirname(fileURLToPath(import.meta.url))) — the real,
-// existing precedent for this pattern in this codebase, not a new one.
-// scanner/src/server/ -> ../../../frontend, computed (not guessed) and
-// confirmed to resolve to the real frontend/ directory.
+// Located relative to this module's own directory (path.dirname(
+// fileURLToPath(import.meta.url)), the same pattern scanner/src/mcp/server.js
+// uses), but via resolveFrontendRoot's search-upward strategy rather than a
+// single hardcoded relative depth — a fixed `../../../frontend` resolved
+// correctly for this file's unbundled dev location but broke (silently, at
+// runtime, for every real npx/npm user) once `npm run build` split this
+// module into its own dist/ chunk, whose import.meta.url reflects dist/'s
+// own shallower location. See src/shared/frontend-root.js for the full story
+// and scripts/copy-frontend.mjs for the build-time copy this now finds.
 const _here = path.dirname(fileURLToPath(import.meta.url));
-export const FRONTEND_ROOT = path.resolve(_here, '..', '..', '..', 'frontend');
+export const FRONTEND_ROOT = resolveFrontendRoot(_here);
 
 export const CONTENT_TYPE_MAP = Object.freeze({
   '.html': 'text/html; charset=utf-8',

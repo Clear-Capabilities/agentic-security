@@ -1,0 +1,95 @@
+.trace-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 640px;
+}
+
+.trace-step {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-default);
+}
+
+.trace-step-number {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-code);
+  font-weight: 600;
+}
+
+.trace-step-body {
+  flex: 1 1 auto;
+}
+
+.trace-step-kind {
+  color: var(--text-secondary);
+  font-size: var(--font-size-code);
+  text-transform: uppercase;
+}
+
+.trace-step-mapping {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-code);
+  color: var(--text-primary);
+  margin: 4px 0;
+}
+
+.trace-step-node {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.trace-step-boundary {
+  display: inline-block;
+  border: 1px solid var(--status-unprotected);
+  color: var(--status-unprotected);
+  border-radius: var(--radius-default);
+  padding: 1px 6px;
+  font-size: var(--font-size-code);
+  margin-top: 4px;
+}
+
+.trace-branch-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--accent-selection);
+}
+
+.trace-branch-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-code);
+  text-transform: uppercase;
+}
+
+.trace-alternates {
+  margin-top: var(--space-2);
+}
+
+.trace-alternate-item {
+  padding: var(--space-1) 0;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.trace-alternate-item:hover {
+  color: var(--text-primary);
+}
+
+.trace-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: var(--space-2);
+}

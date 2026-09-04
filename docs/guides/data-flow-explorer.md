@@ -10,7 +10,8 @@ want image exports (`png`/`pdf`/`svg`). Commands are shown as bare CLI
 (`npx @clear-capabilities/agentic-security-scanner …`); in Claude Code the
 same thing is `/agentic-security:dataflow …` (there is no `/explore` slash
 command — see [Browse it in your browser](#browse-it-in-your-browser)
-below for why).
+below for why). If `npx` reports `command not found` or you're tempted to
+run this with plain `node`, see [Quickstart: Troubleshooting](quickstart.md#troubleshooting).
 
 ---
 

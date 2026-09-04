@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.147.0",
+    "engineVersion": "0.147.1",
     "bundleSha256": "0cfc21d9bdecf4422a0934216444b948dccc8c4c978b0f7eca92d318d8b61e9c",
-    "commit": "4ac10c38b97dbfbf504e4c6c87ec6b7ad1677c3f",
+    "commit": "4b2c783a95db4c0be77ca54918725b3aa12c7291",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-09-04T04:07:54.263Z",
+    "generatedAt": "2026-09-04T18:27:16.572Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -576,7 +576,7 @@
         }
       },
       "scanner/src": {
-        "total": 485,
+        "total": 486,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -774,6 +774,7 @@
           "server/CLAUDE.md": 3,
           "server/graph-loader.js": 2,
           "server/http-server.js": 1,
+          "shared/frontend-root.js": 1,
           "util/untrusted.js": 1
         }
       },
@@ -804,7 +805,7 @@
   "provenanceCoverage": {
     "measuredThisRun": true,
     "n": 326,
-    "d": 368
+    "d": 369
   },
   "taintRecall": {
     "measuredThisRun": true,

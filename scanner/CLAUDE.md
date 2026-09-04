@@ -7,6 +7,9 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 - After **any** change to `src/` or `bin/`, run `npm run build` before relying on the bundle. `bin/` is the test entry point and re-imports `src/` directly, so unit tests don't require a rebuild — but anything calling the bundle (the CI gate, hooks, the published `npx` command) will be stale until you rebuild.
 - The build is `ncc build … --minify`. Output is a single ESM file plus a SHA-256 sidecar. The hashing step is part of `npm run build`; do not commit the bundle without it.
 - `chmod +x` is part of the build. If a `permission denied` shows up on `node dist/agentic-security.mjs`, rerun the build — somebody copied the file and lost the bit.
+- **Running the CLI locally (not via `npx`).** `node @clear-capabilities/agentic-security-scanner ...` does not work — `node` resolves a literal file/directory path, not an npm package name; that resolution is what `npx` (and the installed `agentic-security`/`as` bin aliases) does. From `scanner/`, either:
+  - `node dist/agentic-security.mjs <command> …` — runs the built bundle directly (rebuild first if you've touched `src/` or `bin/`, per above), or
+  - `npm link` once, then use the bare `agentic-security` / `as` commands, which resolve to this checkout.
 
 ## Test commands (scoped, premortem-derived)
 
