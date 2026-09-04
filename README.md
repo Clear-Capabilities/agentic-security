@@ -28,13 +28,13 @@ Prove what's fixed.
 
 Five capabilities, each answering a question a plain vulnerability scanner doesn't:
 
-**Find It.** A 12-pillar deterministic scan — SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ — across 8 first-class languages. Every finding carries `chain[]`, a real hop-by-hop path from where tainted data entered to where it reached the sink — not just a line number.
+**Find It.** A 12-pillar deterministic scan — SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ — across 8 first-class languages. Where a data flow is involved, the finding carries `chain[]`, a real hop-by-hop path from where tainted data entered to where it reached the sink — not just a line number.
 
 **Prove It.** A scan reports on itself, not just on your code. The `scanHealth` object tracks whether every analyzer actually finished — files scanned, analyzers completed vs. failed vs. timed out, feed freshness (KEV/EPSS/calibration) — and `toShipVerdict()` folds that into the one-screen answer everyone actually reads: `✅ Safe to deploy` only when there are zero actionable findings **and** the scan itself completed cleanly. Zero findings from an incomplete scan is `⚠️ Scan incomplete — cannot confirm safe to deploy`, never a false green light. See [Findings vs. assurance](#findings-vs-assurance) below.
 
 **Fix It Safely.** Every patch — a rule's stored fix, a zero-LLM deterministic swap, or one an agent composed for a finding with no stored fix — goes through the same gate before it's written: rescan-clean, no new finding of medium severity or higher, lint-clean. A completeness tier (`FULL` / `MITIGATION` / `WORKAROUND`) tells you honestly how much of the fix actually landed, and a residual-risk guard rejects a hand-wavy "adequately handled" claim that the mechanical evidence contradicts.
 
-**Govern It.** Automated technical-control evidence for 9 bundled compliance frameworks, an egress policy that decides `allow` / `deny` / `local-only` on every outbound model call *before* a prompt is even built, and state governance — TTL-bound retention, opt-in encryption, `export`, `legal-hold` — for everything the scanner writes to disk.
+**Govern It.** Automated technical-control evidence for 9 bundled compliance frameworks, an egress policy — configured via `mode: allow`/`deny`/`local-only` — that returns an `allow`/`deny` decision on every outbound model call *before* a prompt is even built, and state governance — TTL-bound retention, opt-in encryption, `export`, `legal-hold` — for everything the scanner writes to disk.
 
 **Explain It.** No CVE jargon. Every finding explains the stakes, an estimated dollar cost (`riskDollars`, honestly labeled `scenario_default` until you configure your own organization's numbers), and the fix — in language a non-security teammate can act on.
 
@@ -49,6 +49,8 @@ Five capabilities, each answering a question a plain vulnerability scanner doesn
 ---
 
 ## 5-minute quickstart
+
+This repo ships a small, deliberately vulnerable [demo app](examples/demo-app/) so a first run always finds something — clone this repo (or point the scanner at your own project instead once you've tried it) and run:
 
 ```bash
 npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assurance strict
@@ -185,7 +187,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 
 **Compliance** — evidence for a framework, honestly scoped
 - [Compliance](docs/guides/compliance.md) — the honesty model, and why the satisfied rate is never reported over all of a framework's controls
-- [Coverage maps](docs/compliance/) — what each bundled framework's controls map to
+- [Coverage maps](docs/compliance/) — per-control coverage for 4 of the 9 bundled frameworks, where one exists
 - [Risk in dollars](docs/guides/risk-dollars.md) — the scenario-disclosure mechanism behind every `riskDollars` estimate
 
 **Platform Engineering** — wire it into CI/CD, manage what it writes to disk
@@ -224,7 +226,7 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 - **`hunt`** *(CLI-only — no slash command)* — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
 
-Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically. There is no per-subcommand `--help` — only bare `agentic-security help` prints usage; `agentic-security scan --help` silently runs a real scan.
+Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically. There is no per-subcommand `--help` — only bare `agentic-security help` prints usage; passing `--help` after any subcommand is silently ignored as an unset flag and the command runs for real instead.
 
 ---
 
@@ -320,9 +322,10 @@ views: the architecture graph itself (colored by protection status),
 a privacy lifecycle view (where PII/PHI/PCI/financial data goes), a
 trace/evidence view (click any flow for the exact hops and evidence),
 and an inventory of every source and sink, including ones nothing
-currently reaches. Every model call this feature can optionally make is
-gated by the same egress policy covered in [Model egress](docs/walkthroughs/model-egress.md)
-— nothing about a scan's data leaves your machine without that check.
+currently reaches. (`explore` itself makes no model calls at all — it just
+loads the already-scanned, already-signed graph and serves it locally. The
+*scan* step that builds that graph is the one covered by the same egress
+policy documented in [Model egress](docs/walkthroughs/model-egress.md).)
 
 Everything the browser shows also exports — `png`/`svg` for a doc, a
 self-contained `html` report, a DPIA or RoPA for compliance, an executive
