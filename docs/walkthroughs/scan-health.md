@@ -28,21 +28,23 @@ completed with zero failures and zero timeouts — the only thing wrong was
 that the local EPSS exploit-probability cache was stale:
 
 ```json
-"scanHealth": {
-  "schemaVersion": 1,
-  "status": "partial",
-  "files": { "expected": 6, "scanned": 6, "skipped": 0, "timedOut": 0 },
-  "analyzers": { "expected": 120, "completed": 120, "failed": 0, "timedOut": 0, "skippedByPolicy": 0 },
-  "deepAnalysis": { "requested": true, "enabled": true, "inCi": false, "ciOverrideAllowed": false, "reason": null, "failure": null },
-  "lineageAnalysis": { "requested": false, "enabled": false, "reason": "not requested", "failure": null },
-  "annotatorErrorCount": 0,
-  "freshness": {
-    "kev": { "source": "cache-fresh", "ageDays": 0, "stale": false, "entries": 1694 },
-    "epss": { "source": "cache/live", "ageDays": 20699, "stale": true, "cvesChecked": 8 },
-    "calibration": { "ageDays": 107, "stale": false },
-    "customRules": { "checked": 0, "stale": false, "staleFiles": [] }
-  },
-  "conditions": ["EPSS exploit-probability data is stale (20699 day(s) old)"]
+{
+  "scanHealth": {
+    "schemaVersion": 1,
+    "status": "partial",
+    "files": { "expected": 6, "scanned": 6, "skipped": 0, "timedOut": 0 },
+    "analyzers": { "expected": 120, "completed": 120, "failed": 0, "timedOut": 0, "skippedByPolicy": 0 },
+    "deepAnalysis": { "requested": true, "enabled": true, "inCi": false, "ciOverrideAllowed": false, "reason": null, "failure": null },
+    "lineageAnalysis": { "requested": false, "enabled": false, "reason": "not requested", "failure": null },
+    "annotatorErrorCount": 0,
+    "freshness": {
+      "kev": { "source": "cache-fresh", "ageDays": 0, "stale": false, "entries": 1694 },
+      "epss": { "source": "cache/live", "ageDays": 20699, "stale": true, "cvesChecked": 8 },
+      "calibration": { "ageDays": 107, "stale": false },
+      "customRules": { "checked": 0, "stale": false, "staleFiles": [] }
+    },
+    "conditions": ["EPSS exploit-probability data is stale (20699 day(s) old)"]
+  }
 }
 ```
 

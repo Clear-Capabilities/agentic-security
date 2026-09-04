@@ -51,19 +51,21 @@ real-world spread.
 ## What ships on every finding
 
 ```json
-"riskDollars": {
-  "ev": 2066, "prob": 0.18, "impact": 50000, "discount": 0.9, "confidenceWeight": 0.26,
-  "scenarioStatus": "scenario_default",
-  "range": { "low": 620, "base": 2066, "high": 5422 },
-  "scenarios": { "conservative": 620, "base": 2066, "severe": 5422 },
-  "assumptions": [
-    "probability of exploit: 0.18 (source: built-in industry base-rate table)",
-    "impact estimate: $50k (tier: default, built-in default)",
-    "reachability discount: 0.9 (tier: route-reachable)",
-    "confidence weight: 0.26 (measured from this scan)"
-  ],
-  "modelVersion": "1.0.0",
-  "confidence": "low"
+{
+  "riskDollars": {
+    "ev": 2066, "prob": 0.18, "impact": 50000, "discount": 0.9, "confidenceWeight": 0.26,
+    "scenarioStatus": "scenario_default",
+    "range": { "low": 620, "base": 2066, "high": 5422 },
+    "scenarios": { "conservative": 620, "base": 2066, "severe": 5422 },
+    "assumptions": [
+      "probability of exploit: 0.18 (source: built-in industry base-rate table)",
+      "impact estimate: $50k (tier: default, built-in default)",
+      "reachability discount: 0.9 (tier: route-reachable)",
+      "confidence weight: 0.26 (measured from this scan)"
+    ],
+    "modelVersion": "1.0.0",
+    "confidence": "low"
+  }
 }
 ```
 
@@ -155,9 +157,11 @@ rather than duplicated a second time here.
 **Before** (`.agentic-security/risk-config.yml` absent):
 
 ```json
-"scenarioStatus": "scenario_default",
-"ev": 2066,
-"range": { "low": 620, "base": 2066, "high": 5422 }
+{
+  "scenarioStatus": "scenario_default",
+  "ev": 2066,
+  "range": { "low": 620, "base": 2066, "high": 5422 }
+}
 ```
 
 Same finding, same reachability (`route-reachable`) and confidence (`0.255`)
@@ -166,15 +170,17 @@ raised to $500k, plus `organizationScale`/`industry`/`recordCount`/
 `controlStrength`):
 
 ```json
-"scenarioStatus": "scenario_organization_specific",
-"ev": 20655,
-"range": { "low": 6197, "base": 20655, "high": 54219 },
-"assumptions": [
-  "probability of exploit: 0.18 (source: built-in industry base-rate table)",
-  "impact estimate: $500k (tier: default, operator-configured)",
-  "reachability discount: 0.9 (tier: route-reachable)",
-  "confidence weight: 0.26 (measured from this scan)"
-]
+{
+  "scenarioStatus": "scenario_organization_specific",
+  "ev": 20655,
+  "range": { "low": 6197, "base": 20655, "high": 54219 },
+  "assumptions": [
+    "probability of exploit: 0.18 (source: built-in industry base-rate table)",
+    "impact estimate: $500k (tier: default, operator-configured)",
+    "reachability discount: 0.9 (tier: route-reachable)",
+    "confidence weight: 0.26 (measured from this scan)"
+  ]
+}
 ```
 
 Probability, discount, and confidence weight are unchanged — only `impact`

@@ -193,8 +193,9 @@ thing as the claim being true.
 **Cross-repository lineage** (a root-commit origin — one with no parent in
 the current repo — can be linked back across a prior fork/split):
 
+`.agentic-security/repo-lineage.json`:
+
 ```json
-// .agentic-security/repo-lineage.json
 { "linkedFrom": { "path": "../old-repo-clone", "atCommit": "abc1234" } }
 ```
 

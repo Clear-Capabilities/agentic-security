@@ -137,6 +137,7 @@
     "bench:engine-recall": "node ../bench/engine-recall/measure.mjs",
     "scorecard": "node ../scripts/scorecard.mjs",
     "check-doc-drift": "node ../scripts/check-doc-drift.mjs",
+    "docs:verify-examples": "node ../scripts/verify-doc-examples.mjs",
     "harness-score": "node ../scripts/harness-score.cjs",
     "corpus:enroll": "node ../scripts/enroll-proven-finding.mjs",
     "corpus:provenance": "node ../scripts/corpus-provenance-check.mjs",

@@ -74,14 +74,16 @@ The real captured example from [Scan health](../walkthroughs/scan-health.md)
 stale:
 
 ```json
-"scanHealth": {
-  "schemaVersion": 1,
-  "status": "partial",
-  "analyzers": { "expected": 120, "completed": 120, "failed": 0, "timedOut": 0, "skippedByPolicy": 0 },
-  "freshness": {
-    "epss": { "source": "cache/live", "ageDays": 20699, "stale": true, "cvesChecked": 8 }
-  },
-  "conditions": ["EPSS exploit-probability data is stale (20699 day(s) old)"]
+{
+  "scanHealth": {
+    "schemaVersion": 1,
+    "status": "partial",
+    "analyzers": { "expected": 120, "completed": 120, "failed": 0, "timedOut": 0, "skippedByPolicy": 0 },
+    "freshness": {
+      "epss": { "source": "cache/live", "ageDays": 20699, "stale": true, "cvesChecked": 8 }
+    },
+    "conditions": ["EPSS exploit-probability data is stale (20699 day(s) old)"]
+  }
 }
 ```
 
