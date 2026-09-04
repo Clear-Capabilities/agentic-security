@@ -109,6 +109,12 @@ files you author.
 `last-scan.json` is signed with the per-install HMAC key; tampering with it
 outside the scanner makes the next read warn and re-scan.
 
+For how long each of these artifacts is retained, whether it's encrypted at
+rest, and how to export or legal-hold one (`export`, `legal-hold add|remove|list`
+— see the [CLI reference](cli.md)), see
+[State & retention](../governance/state-and-retention.md) rather than this
+page — this page's scope stays env vars and the artifact listing above.
+
 ### Policy (author these yourself — they change behavior)
 
 | File | Purpose |

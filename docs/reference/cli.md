@@ -5,7 +5,7 @@ Every command runs as `npx @clear-capabilities/agentic-security-scanner <command
 have slash-command equivalents (`/agentic-security:<name>`).
 
 This page is a map; the task guides in [`../guides/`](../guides/) show each in
-context. Run any command with `--help` for its live flags.
+context. Run `agentic-security help` for the live, in-CLI flag listing.
 
 ---
 
@@ -15,7 +15,7 @@ context. Run any command with `--help` for its live flags.
 |---|---|
 | `secure [path]` | Smart router — inspects project state and names the single best next action. `--launch` for pre-deploy intent, `--run` to auto-execute, `--json` to pipe. |
 | `scan [path]` | The full SAST + SCA + secrets + IaC + LLM sweep. The workhorse — see options below. |
-| `ci [path]` | Baseline-aware CI scan: auto-detects the PR base ref, writes SARIF + JUnit + JSON, applies the `--fail-on` policy. |
+| `ci [path]` | Baseline-aware CI scan: auto-detects the PR base ref, writes SARIF + JUnit + JSON, applies the `--fail-on` policy. Provenance resolution is **on** by default here (unlike `scan` — see Provenance below). `--assurance advisory\|standard\|strict` (default `standard`) is this command's own incomplete-analysis gate: `strict` fails the build when any analyzer failed, timed out, or was silently skipped, independent of `--fail-on`. |
 | `fix --finding <id>` | Show (`--preview`) or apply (`--apply`) a fix for one finding. |
 | `undo` | Revert the most recent applied fix. `--list` shows history; `--all` reverts everything; `--compact` archives terminal entries. |
 | `accept --finding <id>` | Soft-suppress a finding for 30 days. |
@@ -30,11 +30,15 @@ context. Run any command with `--help` for its live flags.
 | `verify-attestation <bundle.json> --public-key <path>` | Verify a signed bundle (finding evidence, a run attestation, or a provenance record — auto-detected) with only the public key. Exits `0` valid, `1` invalid. |
 | `scan-baseline --current <f> --previous <f>` | Finding-level diff between two scan JSON outputs. |
 | `explore [path] [--port <n>] [--keep-open]` | Serve the already-scanned Data Flow Explorer graph as a local, read-only, loopback-only web UI. Needs a scan with `AGENTIC_SECURITY_LINEAGE_DEEP=1` first — see the [Data Flow Explorer guide](../guides/data-flow-explorer.md). CLI-only, no slash-command equivalent. |
-| `dataflow export\|diff\|scenario apply\|impact assess\|observations import\|observations list\|twin` | Export the Data Flow Explorer graph (png/pdf/svg/json/csv/html/dpia/ropa/briefing/recipients/coverage), diff two scans, simulate a hypothetical change, assess blast radius, or layer in runtime observations. See the [Data Flow Explorer guide](../guides/data-flow-explorer.md) and `/dataflow --help`. |
+| `dataflow export\|diff\|scenario apply\|impact assess\|observations import\|observations list\|twin` | Export the Data Flow Explorer graph (png/pdf/svg/json/csv/html/dpia/ropa/briefing/recipients/coverage), diff two scans, simulate a hypothetical change, assess blast radius, or layer in runtime observations. See the [Data Flow Explorer guide](../guides/data-flow-explorer.md). |
 | `governance propose-edit --patch <file.json> [--yes]` | Propose a validated, reviewable edit to `recipient-profiles.json` (preview → confirm → audit-logged write). |
 | `remediation open\|update\|verify\|accept-risk\|reopen-check\|list` | Track a remediation item against a blast-radius assessment. Closing it requires a clean rescan or an explicitly permitted manual attestation; a later regression reopens it automatically. |
 | `federate declare\|list` | Declare (or list) a link between a node in this repo's scanned graph and a node in a separately-scanned remote repo's graph — each repo's graph stays its own separate, unmodified artifact. |
 | `reset` | Wipe accumulated learned state under `.agentic-security/` (preserves operator-authored config). `--yes`, `--keep <...>`. |
+| `export [--root <dir>] --out <dir>` | Copy every present state artifact (regardless of classification) to `<dir>`, plus an `export-manifest.json` with per-item `{name, classification, retentionClass, status, sha256}`. |
+| `legal-hold add --artifact <name> --owner <id> --reason <text> [--expires <date>]` | Place a legal hold on a state artifact, blocking its deletion by `reset`. `expires` is optional — omit for an indefinite hold. |
+| `legal-hold remove --artifact <name>` | Lift a hold. |
+| `legal-hold list [--all]` | List active holds (`--all` includes expired/removed ones). |
 | `mcp` | Start the MCP stdio server. See [MCP tools](../../scanner/src/mcp/CLAUDE.md). |
 | `version` / `banner` | Print the version / the mascot lockup. |
 
@@ -89,14 +93,16 @@ Pro/advanced: `org-scan`, `triage list\|assign\|trend`, `rules validate`,
 `--no-network` / offline, `--deterministic` (stable sort, no network,
 lockfile-checked), `--incremental` (reuse taint summaries).
 
-**Provenance** (which commit introduced each finding — on by default in a
-git repo; see the [finding provenance guide](../guides/finding-provenance.md))
+**Provenance** (which commit introduced each finding; see the
+[finding provenance guide](../guides/finding-provenance.md)). `scan` defaults
+provenance **off** — pass `--provenance` (or any other provenance-shaped flag
+below) to turn it on. `ci` defaults provenance **on**, no flag needed.
 
 `--provenance <standard|deep>`, `--no-provenance`, `--provenance-since <ref>`,
 `--provenance-timeout <ms>`, `--include-author-email`,
 `--pseudonymize-authors`, `--require-provenance` (flags unresolved provenance
-as a scan-health condition; `ci`'s own `--assurance strict` is what can
-actually fail the build on it).
+as a scan-health condition; `ci`'s own `--assurance strict` — see the
+`ci` row above — is what can actually fail the build on it).
 
 ---
 
