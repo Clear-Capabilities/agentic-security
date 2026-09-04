@@ -195,21 +195,32 @@ never the same key reused for two cryptographic purposes). Override the key
 via `AGENTIC_SECURITY_ENCRYPTION_KEY` (64 hex chars).
 
 Encryption is opt-in and off by default. Nothing is encrypted until an
-operator writes `.agentic-security/encryption-policy.yml`:
+operator writes `.agentic-security/encryption-policy.yml` with a `provider`:
 
 ```yaml
 provider: local-key
 required: true
 ```
 
-- No file, or `required: false` with no provider configured — every
-  `confidential` artifact writes exactly as it always has (plaintext).
-- `required: true` with a working provider — every `confidential` artifact is
-  written as an encrypted envelope; reads are transparently decrypted.
-- **Fail-closed:** `required: true` with no working provider available means
-  the write is refused outright (`{ok:false}`) — checked *before* any bytes
-  touch disk, so a misconfigured required-encryption setup can never fall back
-  to writing a confidential artifact in plaintext.
+**`provider: local-key` alone is what turns encryption on** — every
+`confidential` artifact is written as an encrypted envelope (reads are
+transparently decrypted) whenever the provider is configured and working,
+**regardless of `required`**. `required` does not gate whether encryption
+happens; it only decides what happens in the one case where the provider is
+*absent or broken*:
+
+- No `encryption-policy.yml` file at all, or a file with no `provider` set —
+  every `confidential` artifact writes exactly as it always has (plaintext),
+  whatever `required` says, since there's no provider to use.
+- `provider: local-key` present and working, `required` `true`, `false`, or
+  omitted — every `confidential` artifact is encrypted. `required` is inert
+  here; it only matters if the provider later becomes unavailable.
+- **Fail-closed:** `provider` missing/unset (or key generation fails) *and*
+  `required: true` — the write is refused outright (`{ok:false}`), checked
+  *before* any bytes touch disk, so a misconfigured required-encryption setup
+  can never fall back to writing a confidential artifact in plaintext.
+- **Fail-open:** the same missing-provider/broken-key case with `required:
+  false` (or omitted) — the write degrades to plaintext instead of failing.
 
 **Scope exclusions (Phase 1, deliberate).** Only `compliance-evidence.json`,
 `compliance-evidence.md`, and `runtime-observations/` are currently marked
