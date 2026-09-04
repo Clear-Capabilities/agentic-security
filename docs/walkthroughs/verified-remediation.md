@@ -11,10 +11,17 @@ claim that was never made.
 
 The three vocabularies below come from **fix verification**
 (`posture/fix-verify.js` and friends), which runs as part of
-`agentic-security fix --apply`, the MCP `apply_fix`/`verify_fix` tools, and
-`autopilot` — not from `agentic-security verify`, which is a different
-feature entirely (the agentic verifier's `verifier_verdict` on findings
-themselves, unrelated to fix output).
+`agentic-security fix --apply` and the MCP `apply_fix`/`verify_fix` tools —
+not from `agentic-security verify`, which is a different feature entirely
+(the agentic verifier's `verifier_verdict` on findings themselves,
+unrelated to fix output). `scripts/autopilot.mjs` does its own, separate
+fix-verification (`posture/autopilot.js`'s `verifyFix` stage) — a
+differently-shaped two-leg check (`{ok, pocStillFires, testsPass, testsRan,
+reason}`) that borrows only `runProjectTests` from `fix-verify-loop.js`, not
+`fix-verify.js` itself. It is a **fourth** surface, not a producer of the
+three vocabularies below — named here only so you don't go looking for
+`verified-clean` or a `FULL`/`MITIGATION`/`WORKAROUND` tier in its output
+and wonder why they're missing.
 
 ```bash
 agentic-security fix --finding <finding-id> --apply
@@ -22,9 +29,14 @@ agentic-security fix --finding <finding-id> --apply
 
 The plain CLI condenses the result to one line (see below). The full
 leg-by-leg detail — the multi-line `summary` this walkthrough is mostly
-about — is always computed internally, and is what the MCP `verify_fix`
-tool returns verbatim to an agent caller (`{ ok, rescan, lint, tests,
-honesty, poc, summary }`).
+about — is always computed internally, and the MCP `verify_fix` tool
+returns most of it to an agent caller, but **reshaped, not verbatim**:
+`{ ok, rescan, lint, tests, honesty, poc, summary }`, with `lint.output`
+and `poc.reason` redacted and `rescan`/`lint` flattened. It notably
+**omits `verifiedFull`, `degradedLegs[]`, `testedPrePatch`, and
+`durations`** — real fields on `fix-verify.js`'s own return object (see
+"`ok` vs. `verifiedFull`" below) that simply aren't exposed on the MCP
+surface.
 
 ---
 
@@ -243,7 +255,10 @@ Read the `verified:` line: `yes — fully verified` means every leg that
 applies to your project ran and passed; `yes, but NOT fully verified` names
 what was skipped. For the full leg-by-leg detail (`re-scan`, `linter`,
 `tests`, `honesty`, `poc`), call the MCP `verify_fix` tool — it returns the
-same object `fix-verify.js` computes internally, `summary` included.
+leg detail and `summary`, but **not** `verifiedFull`/`degradedLegs[]`; if
+you need the "was anything silently skipped" signal specifically, read it
+out of `summary`'s `NOTE:` line instead, since the MCP surface doesn't
+carry those two fields directly.
 
 ---
 

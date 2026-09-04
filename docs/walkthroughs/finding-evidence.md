@@ -149,8 +149,10 @@ Real captured finding — a SQL injection detected in `report.py`:
 
 - **`whyFired`** — `{detector, ruleId, parser}`, the customer-facing "what
   actually caused this to fire" — here, the `dataflow/ir-taint` detector,
-  rule `CWE-89`, via the `IR-TAINT` parser. Runs last in the annotation
-  pipeline, after everything else has had a chance to touch the finding.
+  rule `CWE-89`, via the `IR-TAINT` parser. Runs late in the annotation
+  pipeline, after the scoring and verification passes — but not last:
+  `annotateGitProvenance` and `annotateRelevance` both run after it in the
+  same `runFullScan` body.
 
 - **`poc`** — `{lang, kind, runHint, code}`: a generated, runnable
   proof-of-concept for CWE families that have a template. `code` here is
