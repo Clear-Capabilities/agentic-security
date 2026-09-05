@@ -214,6 +214,97 @@ the part of the graph you care about. Full flag reference, every format's
 exact support matrix, and worked examples: `/agentic-security:dataflow` →
 [`commands/dataflow.md`](../../commands/dataflow.md).
 
+### See every format, illustrated
+
+Every image and excerpt below is real output — same shipped reference
+topology as [A worked example](#a-worked-example) above (14 nodes, 15
+edges, 8 flows), exported with the commands shown, nothing hand-edited.
+
+**`html`** — a real, offline-viewable report opened directly in a browser
+(no `explore` server running):
+
+```bash
+npx @clear-capabilities/agentic-security-scanner dataflow export . --format html --output report.html
+```
+
+![Data Flow Explorer HTML export, opened standalone in a browser](../assets/dataflow-html-export.png)
+
+**`png`** — the same Architecture view, rasterized. `--size standard`
+(default) is 1680×945 (102 KB here); `--size 2x` is exactly double,
+3360×1890 (220 KB here) — for a hi-res slide:
+
+![Data Flow Explorer PNG export](../assets/dataflow-png-export.png)
+
+**`svg`** — a real vector `<svg>` (`viewBox="0 0 1100 480"`, 12 KB here),
+Architecture view only — `--view` on any other value is a no-op with a
+printed warning for this format:
+
+<img src="../assets/dataflow-svg-export.svg" alt="Data Flow Explorer SVG export" width="700">
+
+**`json`** — the raw graph, opened in a browser's native JSON viewer.
+Every export carries `digest`/`bodyDigest` (a hash over the graph body) so
+a consumer can detect tampering without re-deriving the graph itself:
+
+![Data Flow Explorer JSON export](../assets/dataflow-json-export.png)
+
+**`csv`** — one row per flow, source/sink/verdict columns only (no
+per-data-class governance columns — that's what `ropa` adds below).
+`--no-redact`/`--filter` are both no-ops for this format, by design: a
+flat flow table has no node/edge-id-scoped subset to narrow by:
+
+![Data Flow Explorer CSV export, rendered as a table](../assets/dataflow-csv-export.png)
+
+**`dpia`** — a real DPIA scaffold, one section per data class actually
+found (PCI/PHI/PII here) with the real flows and protection verdicts
+listed under each. Every governance field this fixture didn't supply
+prints honestly as `manual_required` (or `undefined` where the fixture
+never set the key at all) — never guessed, never silently dropped:
+
+![Data Flow Explorer DPIA export](../assets/dataflow-dpia-export.png)
+
+**`ropa`** — one row per (flow × data class); this fixture's 8 flows
+produce 8 rows × 10 governance columns, and the real footer states the
+count plainly: *"80 field(s) across 8 row(s) (8 flow(s)) require manual
+input."* The table is wider than any one screenshot — governance columns
+past `transfer` (`minimization`/`consent`/`access`/`deletion`) continue
+off to the right, same as they would in a spreadsheet:
+
+![Data Flow Explorer RoPA export](../assets/dataflow-ropa-export.png)
+
+**`briefing`** — a 5-chapter narrative; `--audience board` caps Chapter 2
+to its 7 most important observations and writes for a non-technical
+reader, without changing any underlying fact. Notice it also discloses
+what it *can't* score yet, by name, rather than silently omitting it —
+this fixture's Chapter 1 states outright that `recipientJurisdiction` and
+`changeRecency` are two ranking factors honestly unavailable in this
+milestone:
+
+![Data Flow Explorer executive briefing export](../assets/dataflow-briefing-export.png)
+
+**`recipients`** — third-party/cross-border recipient facts, labeled
+`code_inferred` vs. `declared` vs. absent. This particular fixture graph
+declares no recipient profiles, so the real output says exactly that
+instead of fabricating a row:
+
+![Data Flow Explorer recipients export](../assets/dataflow-recipients-export.png)
+
+A populated graph's table adds one row per real `graph.recipientProfiles[]`
+entry — provider, service type, legal entity, processor role,
+jurisdiction(s), DPA status, and confidence — sourced either from a real
+technical-provider catalog match (a recognized SDK call or hostname, e.g.
+`anthropic.com`/`openai.com`) or from an operator-declared
+`.agentic-security/recipient-profiles.json` entry via `governance
+propose-edit`, each labeled by which of the two it was.
+
+**`coverage`** — real per-language file counts from *this* scan, alongside
+a curated recall estimate that is never presented as the same kind of
+number. This fixture graph didn't set a curated `tier` for its one
+language, so the real table prints `undefined` there rather than
+inventing one — a real scan's `tier` column reads `full`/`partial`/
+`pattern-only`/`unknown`:
+
+![Data Flow Explorer coverage export](../assets/dataflow-coverage-export.png)
+
 ---
 
 ## Beyond a snapshot: comparison, simulation, and blast radius
