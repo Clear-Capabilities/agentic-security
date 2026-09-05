@@ -11,6 +11,41 @@
 
 
 
+## 0.147.5 — Fix: `bench:provenance:check`'s cold-memory sample size was unreliable on GitHub Actions
+
+`v0.147.4`'s tag was pushed but its hosted release-gate run failed before
+reaching `npm publish` — the `dataflow-watch` fix held (the full test suite
+passed cleanly), but `bench/provenance/runner.mjs`'s `bench:provenance:check`
+failed: "only 8/20 iterations produced a usable sample (need >= 10)" for
+`cold.memOverheadRatio`. This is the SAME failure `v0.147.3`'s release run
+also hit (7/20 that time) — two consecutive, reproducible failures on
+GitHub's runners specifically, while this bench passes cleanly (~20/20)
+every time locally, so this is a real platform gap, not one-off noise.
+
+Root cause: `cold.memOverheadRatio` is a per-iteration ratio against the
+without-provenance arm's own peak-RSS delta, and `measure()` skips the
+ratio entirely for an iteration where that delta is `0`
+(`if (without.rssDeltaBytes > 0) { ... }`) — the without-provenance scan is
+only ~40-60ms, short enough that the 10ms-interval peak-RSS poller can
+genuinely observe no net growth for it, especially under a shared runner's
+different GC pacing. `BASELINE.json` itself already records this as
+expected (`memOverheadRatio.n: 19`, one dropped iteration out of 20 even on
+the machine that captured it) — GitHub Actions just drops far more of them
+(a ~35-40% survival rate against RELIABLE_N=10 at N=20 leaves no margin).
+
+Raises `N` from 20 to 60 in `bench/provenance/runner.mjs` — the same
+already-established remedy this exact file used once before for a related
+small-sample fragility (doubling 10→20), extended further given the new,
+worse-than-expected survival rate. `RELIABLE_N` (10) and the regression
+thresholds are unchanged; `BASELINE.json`'s reference values were not
+touched (the measured overhead is well within budget — this was purely a
+sample-count reliability failure, not a regression). Verified locally:
+passes with real margin (cold memory p95 11.42x vs a 24.38x limit), at a
+real but bounded cost — this one bench step now takes ~2:23 instead of
+~40-60s, a release-time-only cost. `v0.147.4` was never published to any
+registry (confirmed via `npm view`). Carries the identical fixes from
+0.147.1-0.147.4 forward.
+
 ## 0.147.4 — Fix: close a real fs.watch startup race in `dataflow watch` (test-only; no product behavior change)
 
 `v0.147.3`'s tag was pushed but its hosted release-gate run failed before

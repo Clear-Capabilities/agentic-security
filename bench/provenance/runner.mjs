@@ -113,7 +113,22 @@ const REGRESSION_FACTOR = 1.6;
 // makes p95 the 19th-of-20 value instead of the top one, giving the
 // percentile actual room to differ from the single worst sample, at the
 // cost of roughly 2x this bench's own wall time (still tens of seconds).
-const N = 20;
+//
+// N=20 -> 60 (v0.147.4): cold.memOverheadRatio's denominator is the
+// without-provenance arm's own RSS delta (measure()'s `if
+// (without.rssDeltaBytes > 0)` guard skips the ratio entirely when it
+// isn't), and that arm is ~40-60ms — short enough that the SAMPLE_INTERVAL_MS
+// peak-RSS poller can genuinely observe zero net growth for it, especially
+// on a host with different GC pacing. BASELINE.json's own recorded
+// memOverheadRatio.n is 19/20 (one dropped iteration) on whatever machine
+// captured it — expected and already within RELIABLE_N's margin. GitHub
+// Actions' shared runners drop far more: two consecutive real hosted release
+// runs (v0.147.3, v0.147.4) measured only 7/20 and 8/20 usable — a ~35-40%
+// survival rate, nowhere near enough headroom over RELIABLE_N=10 at N=20.
+// 60 gives an expected ~21-24 usable samples at that same survival rate,
+// comfortably clearing 10 with real margin even on a bad draw, at the cost
+// of roughly another 2x this bench's wall time on top of the first doubling.
+const N = 60;
 const RELIABLE_N = 10;
 // Finer than bench/memory/runner.mjs's 50ms (same technique, same
 // rationale) because the warm arm's own scans are themselves only tens of
