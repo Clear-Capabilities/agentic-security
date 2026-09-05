@@ -20,7 +20,7 @@ Prove what's fixed.
 
 ![agentic-security demo](docs/brand/demo.gif)
 
-**Contents:** [What it does](#what-agentic-security-does) · [5-minute quickstart](#5-minute-quickstart) · [Findings vs. assurance](#findings-vs-assurance) · [See it in action](#see-it-in-action) · [Install](#install) · [Documentation](#documentation) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Trace where your sensitive data actually goes](#trace-where-your-sensitive-data-actually-goes) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
+**Contents:** [What it does](#what-agentic-security-does) · [5-minute quickstart](#5-minute-quickstart) · [Findings vs. assurance](#findings-vs-assurance) · [See it in action](#see-it-in-action) · [Install](#install) · [Documentation](#documentation) · [Commands](#commands) · [What makes it different](#what-makes-it-different) · [Fixes are verified, not trusted](#fixes-are-verified-not-trusted) · [Stop overpaying for tokens](#stop-overpaying-for-tokens) · [Code Boundaries](#code-boundaries) · [Language coverage](#language-coverage) · [Compliance frameworks](#compliance-frameworks) · [What this is not](#what-this-is-not)
 
 ---
 
@@ -297,7 +297,7 @@ On by default (advisory only — a hook can't switch your model for you); disabl
 
 ---
 
-## Trace where your sensitive data actually goes
+## Code Boundaries
 
 A finding tells you one line is dangerous. The **Data Flow Explorer** tells
 you where a piece of data — a credit card number, a patient record, a
