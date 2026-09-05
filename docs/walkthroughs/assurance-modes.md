@@ -12,15 +12,21 @@ configure `strict` deliberately rather than being surprised by it.
 `--assurance` is a flag on `ci` only — there is no `scan --assurance`:
 
 ```bash
-agentic-security ci examples/demo-app --assurance strict
+npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assurance strict
 ```
+
+(or the shorter `agentic-security ci examples/demo-app --assurance strict`, if
+you've run `npm install -g @clear-capabilities/agentic-security-scanner` — see
+the root [README's Install section](../../README.md#install))
 
 ---
 
 ## What You'll See
 
 Real captured output, from a repo where every detector completed cleanly but
-the local EPSS exploit-probability cache was stale:
+the local EPSS exploit-probability cache was stale (captured with
+`agentic-security` on `PATH` after a global install — the `npx` form above
+produces identical output):
 
 ```text
 $ agentic-security ci examples/demo-app --assurance strict

@@ -89,7 +89,11 @@ skipped, or — with provenance in play — a finding's provenance couldn't be
 resolved). That's independent of `--fail-on`: a `strict` scan with zero
 findings can still fail the build if the scan itself was incomplete.
 
-Real captured output from a repo with stale EPSS cache data:
+Real captured output from a repo with stale EPSS cache data (captured with
+`agentic-security` on `PATH` after `npm install -g
+@clear-capabilities/agentic-security-scanner`; `npx
+@clear-capabilities/agentic-security-scanner ci examples/demo-app --assurance
+strict` produces the identical output without installing anything):
 
 ```text
 $ agentic-security ci examples/demo-app --assurance strict

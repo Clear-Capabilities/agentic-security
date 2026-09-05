@@ -56,7 +56,7 @@ This repo ships a small, deliberately vulnerable [demo app](examples/demo-app/) 
 npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assurance strict
 ```
 
-`ci` is the CI-shaped entry point — the same command your pipeline runs — and `--assurance strict` is the flag that makes it gate on whether the scan *itself* finished cleanly, not just on what it found. (`--assurance` only exists on `ci`; there is no `scan --assurance`.) Real captured output, from a repo with stale EPSS cache data:
+`ci` is the CI-shaped entry point — the same command your pipeline runs — and `--assurance strict` is the flag that makes it gate on whether the scan *itself* finished cleanly, not just on what it found. (`--assurance` only exists on `ci`; there is no `scan --assurance`.) Real captured output, from a repo with stale EPSS cache data (captured with `agentic-security` on `PATH` after a global install — see [Install](#install) below; the `npx` form above produces the identical output):
 
 ```text
 $ agentic-security ci examples/demo-app --assurance strict
@@ -147,10 +147,17 @@ In **Claude Code** (recommended) — two steps:
 
 The first command registers the marketplace as a source; the second actually installs the plugin. Then restart Claude Code (or `/reload-plugins`). To update later: `/plugin marketplace update clearcapabilities` followed by `/plugin install agentic-security@clearcapabilities`.
 
-In your **terminal** (no Claude Code required):
+In your **terminal** (no Claude Code required) — every command in this README and the docs also works prefixed with `npx @clear-capabilities/agentic-security-scanner` instead of the bare `agentic-security`; the two are interchangeable, they just differ in whether npm re-resolves the package on every invocation:
 
 ```bash
 npx @clear-capabilities/agentic-security-scanner secure .
+```
+
+Or install once and use the shorter form (`agentic-security`, or its alias `as`) everywhere:
+
+```bash
+npm install -g @clear-capabilities/agentic-security-scanner
+agentic-security secure .
 ```
 
 **Want a shareable report?** Any scan can export a self-contained, browser-viewable HTML page (severity charts, STRIDE breakdown, filterable findings) — or JSON / Markdown / SARIF / OSCAL:
