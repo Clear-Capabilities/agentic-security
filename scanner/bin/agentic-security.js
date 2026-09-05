@@ -6302,7 +6302,27 @@ async function cmdDataflowWatch(args) {
   // change that makes `scan --watch` exit before it ever watches anything.
 }
 
+// A version below the declared `engines.node` floor is still let through by
+// npm (EBADENGINE is a warning, not an install failure), so on an old Node
+// this file used to either crash deep inside a dependency with a confusing
+// stack, or — on the specific versions handled by the guard below — do
+// nothing at all. Fail fast, once, with a message that names the actual
+// requirement instead.
+function checkNodeVersionOrExit() {
+  const required = __require('../package.json').engines?.node;
+  const requiredMajor = Number(/(\d+)/.exec(required || '')?.[1]);
+  const actualMajor = Number(process.versions.node.split('.')[0]);
+  if (Number.isFinite(requiredMajor) && actualMajor < requiredMajor) {
+    console.error(
+      `agentic-security: requires Node.js ${required} — you're running Node ${process.versions.node}.\n` +
+      `Upgrade Node (e.g. 'nvm install ${requiredMajor}' or https://nodejs.org/) and try again.`
+    );
+    process.exit(1);
+  }
+}
+
 async function main() {
+  checkNodeVersionOrExit();
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   try {
@@ -6663,18 +6683,30 @@ async function main() {
 // @clear-capabilities/agentic-security-scanner` install path), Node
 // resolves `import.meta.url` to the symlink's realpath while
 // `process.argv[1]` stays the symlink path as invoked, so the two never
-// match, the guard is always false, and the CLI silently exits with no
-// output. `import.meta.main` is resolved correctly through a symlink —
-// verified live through an actual symlink, not just read about — see the
-// Task 17 fix report. It was added in Node v24.2.0 (backported to
-// v22.18.0) and is currently Stability 1.0 (early development) per Node's
-// own docs — NOT stable, and NOT available on v20.11 as an earlier
-// version of this comment incorrectly claimed. Concretely: it is
-// `undefined` on Node 24.0.0/24.1.x, which satisfy this repo's declared
-// `engines.node: ">=24.0.0"` floor, so `import.meta.main` alone would
-// reproduce this exact bug (main() silently never runs) on a plain
-// non-symlinked invocation under those two point releases. The `??`
-// fallback below covers that gap without bumping the engines floor.
-if (import.meta.main ?? (import.meta.url === `file://${process.argv[1]}`)) {
+// match under a naive comparison. `import.meta.main` is resolved correctly
+// through a symlink — verified live through an actual symlink, not just
+// read about — see the Task 17 fix report. It was added in Node v24.2.0
+// (backported to v22.18.0) and is currently Stability 1.0 (early
+// development) per Node's own docs — NOT stable, and NOT available on
+// v20.11 as an earlier version of this comment incorrectly claimed.
+// Concretely: it is `undefined` on Node 24.0.0/24.1.x, which satisfy this
+// repo's declared `engines.node: ">=24.0.0"` floor, so `import.meta.main`
+// alone would reproduce this exact bug (main() silently never runs) on
+// those two point releases when invoked through the symlinked bin (npx/
+// global install) — the common case, not the exception. The fallback
+// below resolves `process.argv[1]`'s realpath before comparing, so it
+// gives the right answer through a symlink too — verified live against a
+// real symlink, same as the `import.meta.main` claim above — instead of
+// silently exiting with no output on every Node version where
+// `import.meta.main` is undefined (also: <22.18.0, and 23.x).
+function isDirectCliInvocation() {
+  if (import.meta.main !== undefined) return import.meta.main;
+  try {
+    return import.meta.url === `file://${fs.realpathSync(process.argv[1])}`;
+  } catch {
+    return false;
+  }
+}
+if (isDirectCliInvocation()) {
   main();
 }
