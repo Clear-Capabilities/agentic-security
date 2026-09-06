@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-03T19:16:44.920Z",
-  "commit": "66512928423efdae04717f1e0303b734edae0c35",
+  "generatedAt": "2026-09-06T13:28:51.647Z",
+  "commit": "7761865233e82f1baf860f0ab3d9543ae24f860c",
   "targets": {
     "hooks": {
       "total": 21,
@@ -26,9 +26,8 @@
         "calibration-holdout-check.mjs": 1,
         "detector-fuzz-runner.mjs": 3,
         "llm-cost-ceiling.py": 1,
-        "nist-compliance/scan.py": 7,
+        "nist-compliance/scan.py": 8,
         "owasp-llm-top10/scan.py": 1,
-        "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
         "self-test-runner.mjs": 2,
         "synthesize-detector.mjs": 7,
