@@ -47,6 +47,32 @@ test('Hardcoded Secret: a real credential is STILL reported', async () => {
   assert.ok(f.some(x => /Hardcoded Secret/.test(String(x.vuln || ''))), 'the precision fix must not silence real secrets');
 });
 
+// Real customer false positive: `getpass()` collects a credential
+// INTERACTIVELY at runtime — the only string literal in the source is the
+// human-readable prompt. The rule's captured-value class matched newlines,
+// so once the trigger word "token" (inside the prompt text) happened to be
+// followed by ": " and then that string's own closing quote, the "value"
+// swallowed everything up to the next unrelated quote anywhere below,
+// fabricating a fake secret spanning subsequent function definitions.
+test('Hardcoded Secret: getpass() prompt text is not a hardcoded credential', async () => {
+  const f = await findings('auth.py', [
+    'import getpass',
+    '',
+    'HUGGINGFACE_TOKEN = getpass.getpass("Enter your Hugging Face token: ")',
+    '',
+    'def main():',
+    '    print("done")',
+  ].join('\n'));
+  const hs = f.filter(x => /Hardcoded Secret/.test(String(x.vuln || '')));
+  assert.deepEqual(hs, [], `getpass() prompt text is not a credential: ${JSON.stringify(hs.map(x => x.snippet))}`);
+});
+
+test('Hardcoded Secret: a real inline Python credential is STILL reported', async () => {
+  const f = await findings('auth2.py', 'API_TOKEN = "sk_live_' + '4eC39HqLyjWDarjtT1zdp7dc"\n');
+  assert.ok(f.some(x => /Hardcoded Secret/.test(String(x.vuln || ''))),
+    'the getpass() fix must not silence a real inline literal credential');
+});
+
 test('Missing Timeout: a function whose NAME merely ends in "fetch" is not an HTTP call', () => {
   // The rule's alternation had no leading word boundary, so `resetPageAndFetch(`
   // matched on its `Fetch(` substring.
@@ -59,6 +85,37 @@ test('Missing Timeout: a function whose NAME merely ends in "fetch" is not an HT
     re.lastIndex = 0;
     assert.equal(re.test(isACall), true, `${isACall} is an outbound HTTP request`);
   }
+});
+
+// Real customer false positive: a Python method literally named `fetch`
+// (`def fetch(self, ...): ...`, then a wrapper declaration, then the call
+// site `self.fetcher.fetch(...)`) fired this rule at all three locations —
+// none of which perform outbound HTTP in Python — because the rule carried
+// no langScope and matched the raw text "fetch(" regardless of language,
+// with a hardcoded JS-only remediation to match. The real network sink
+// (`self.session.get(..., timeout=(...))`, with an explicit timeout) never
+// appeared in any of the three findings.
+test('Missing Timeout: a Python method named fetch() is not a JS HTTP call', async () => {
+  const f = await findings('fetcher.py', [
+    'class PageFetcher(Protocol):',
+    '    def fetch(self, candidate_id: str, source: dict) -> RetrievedPage: ...',
+    '',
+    'class PublicArticleFetcher:',
+    '    def fetch(self, candidate_id: str, source: dict) -> RetrievedPage:',
+    '        return self.session.get(source["url"], timeout=(5.0, 30.0))',
+    '',
+    'def process(fetcher, bundle):',
+    '    page = fetcher.fetch(bundle.evidence_candidate_id, bundle.source)',
+    '    return page',
+  ].join('\n'));
+  const mt = f.filter(x => /Missing Timeout on Outbound HTTP Request/.test(String(x.vuln || '')));
+  assert.deepEqual(mt, [], `a Python method named fetch() is not a JS/Node HTTP call: ${JSON.stringify(mt.map(x => x.snippet))}`);
+});
+
+test('Missing Timeout: a real unguarded fetch() in JS is STILL reported', async () => {
+  const f = await findings('client.js', 'async function load(url) {\n  return await fetch(url);\n}\n');
+  assert.ok(f.some(x => /Missing Timeout on Outbound HTTP Request/.test(String(x.vuln || ''))),
+    'the precision fix must not silence a real unguarded fetch() in JS');
 });
 
 test('PHP: backticks inside a comment are prose, not shell execution', () => {

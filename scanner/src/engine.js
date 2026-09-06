@@ -1862,7 +1862,22 @@ function scanRoutes(fp,raw){const cleaned=stripNoise(raw,fp);const lines=raw.spl
 
 const LOGIC_PATTERNS=[
   {regex:/Math\.random\s*\(\s*\)/g,vuln:"Weak Randomness",severity:"medium",cwe:"CWE-330",stride:"Spoofing",fix:"Use crypto.randomBytes or crypto.randomUUID for security-sensitive values.",code:"// BEFORE\nconst token = Math.random().toString(36);\n\n// AFTER\nconst token = crypto.randomBytes(32).toString('hex');"},
-  {regex:/(?:password|secret|api_?key|token|auth)\s*[:=]\s*['"][^'"]{3,}['"]/gi,vuln:"Hardcoded Secret",severity:"critical",cwe:"CWE-798",stride:"Information Disclosure",kind:"secret",fix:"Use environment variables or a secrets manager.",code:"// BEFORE\nconst apiKey = 'sk-abc123';\n\n// AFTER\nconst apiKey = process.env.API_KEY;"},
+  // Real false positive (customer report): `[^'"]` matches newlines, so the
+  // "value" capture could pair the CLOSING quote of an unrelated string with
+  // some OTHER quote found anywhere later in the file, fabricating a fake
+  // "secret" spanning arbitrary source text in between. Confirmed
+  // reproduction: `HUGGINGFACE_TOKEN = getpass.getpass("Enter your Hugging
+  // Face token: ")` — the trigger word "token" occurs inside the human-
+  // readable PROMPT text, immediately followed by ": " (satisfying the
+  // `[:=]` requirement) and then that string's own closing quote (accepted
+  // as the regex's opening quote); `[^'"]{3,}` then consumed everything up
+  // to the next unrelated quote anywhere below, including subsequent
+  // function definitions. getpass() collects a credential interactively at
+  // runtime — the only literal in the source is the prompt, not a secret.
+  // Excluding `\n` from the captured-value class confines a match to a
+  // single physical line, which is what "hardcoded" is supposed to mean:
+  // a real inline literal, not two coincidental quote characters far apart.
+  {regex:/(?:password|secret|api_?key|token|auth)\s*[:=]\s*['"][^'"\n]{3,}['"]/gi,vuln:"Hardcoded Secret",severity:"critical",cwe:"CWE-798",stride:"Information Disclosure",kind:"secret",fix:"Use environment variables or a secrets manager.",code:"// BEFORE\nconst apiKey = 'sk-abc123';\n\n// AFTER\nconst apiKey = process.env.API_KEY;"},
   {regex:/===?\s*['"](?:admin|root|password|123456|test|default)['"]/gi,vuln:"Hardcoded Credential Check",severity:"high",cwe:"CWE-798",stride:"Spoofing",kind:"secret",fix:"Use hashed password verification, never hardcoded strings.",code:"// BEFORE\nif (password === 'admin') grant();\n\n// AFTER\nconst valid = await bcrypt.compare(password, user.hashedPassword);"},
   {regex:/if\s*\(\s*(?:fs\.existsSync|fs\.access|stat)\s*\([^)]+\)\s*\)[^{]*(?:readFile|writeFile|unlink|rename)/g,vuln:"Race Condition (TOCTOU)",severity:"medium",cwe:"CWE-367",stride:"Tampering",fix:"Use atomic operations instead of check-then-act patterns.",code:"// BEFORE\nif (fs.existsSync(p)) fs.unlinkSync(p);\n\n// AFTER\ntry { fs.unlinkSync(p); } catch(e) { if(e.code!=='ENOENT') throw e; }"},
   {regex:/\.(?:isAdmin|isRole|role)\s*(?:===?\s*(?:true|['"]admin['"])|\)\s*\{)/g,vuln:"Inline Privilege Check",severity:"medium",cwe:"CWE-863",stride:"Elevation of Privilege",fix:"Use middleware-based RBAC instead of inline role checks.",code:"// BEFORE\nif (user.isAdmin) deleteAll();\n\n// AFTER\nrouter.delete('/all', requireRole('admin'), handler);"},
@@ -1889,7 +1904,19 @@ const LOGIC_PATTERNS=[
   // ── Missing Bounds on Financial/Quantity Fields ──────────────────────────────
   {regex:/(?:req|request|ctx)\s*(?:\.\s*body|\[\s*['"]body['"]\s*\])\s*[.[\s]*(?:quantity|amount|price|units|count|qty)\b(?![^;]{0,200}(?:Number\.isInteger|isNaN|Math\.abs|>=\s*1|>\s*0|>0|>=1|max\s*:))/g,vuln:"Missing Positive-Integer Validation on Financial Field",severity:"medium",cwe:"CWE-20",stride:"Tampering",fix:"Validate that financial/quantity fields are positive integers before processing. Negative values can create credit or reverse transactions.",code:"// BEFORE\nawait Order.create({ quantity: req.body.quantity, price: product.price });\n\n// AFTER\nconst qty = req.body.quantity;\nif (!Number.isInteger(qty) || qty < 1 || qty > 10000)\n  return res.status(400).json({ error: 'quantity must be 1-10000' });\nawait Order.create({ quantity: qty, price: product.price });"},
   // ── #22: Missing timeout on outbound HTTP requests (DoS) ─────────────────────
-  {regex:/(?:await\s+)?\b(?:fetch|axios\.(?:get|post|put|patch|delete|request)|http\.(?:get|request)|https\.(?:get|request)|got)\s*\(/gi,vuln:"Missing Timeout on Outbound HTTP Request (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],fix:"Set a timeout on all outbound requests to prevent event-loop starvation from stalled upstreams.",code:"// fetch (Node 18+)\nconst resp = await fetch(url, { signal: AbortSignal.timeout(5000) });\n\n// axios\nawait axios.get(url, { timeout: 5000 });\n\n// node http\nconst req = http.get(url, cb);\nreq.setTimeout(5000, () => req.destroy());"},
+  // Real false positive (customer report): this rule names JS/Node APIs
+  // (fetch/axios/http.get) but carried no langScope, so it ran on every
+  // language and matched the literal text "fetch(" wherever it occurred —
+  // including a Python method DEFINITION (`def fetch(self, ...)`) and its
+  // interface declaration and every call site, none of which perform an
+  // outbound HTTP request in that language at all. The remediation shown was
+  // also unconditionally JS (fetch/axios/node http), which made no sense on
+  // a Python finding. Two fixes: scope to the languages these API names
+  // actually mean something in, and exclude a `function fetch(...)`
+  // declaration from matching a call-shaped rule — the same declaration-vs-
+  // call confusion that made the Python case fire, reproduced once more
+  // inside JS/TS itself (a local polyfill/wrapper named `fetch`).
+  {regex:/(?<!\bfunction\s)(?:await\s+)?\b(?:fetch|axios\.(?:get|post|put|patch|delete|request)|http\.(?:get|request)|https\.(?:get|request)|got)\s*\(/gi,vuln:"Missing Timeout on Outbound HTTP Request (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],langScope:/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i,fix:"Set a timeout on all outbound requests to prevent event-loop starvation from stalled upstreams.",code:"// fetch (Node 18+)\nconst resp = await fetch(url, { signal: AbortSignal.timeout(5000) });\n\n// axios\nawait axios.get(url, { timeout: 5000 });\n\n// node http\nconst req = http.get(url, cb);\nreq.setTimeout(5000, () => req.destroy());"},
   // ── #24: ORM collection queries without pagination limit (DoS) ───────────────
   {regex:/\.\s*(?:findAll|findMany|findAndCountAll)\s*\(\s*\{[^}]{0,500}\}/g,vuln:"ORM Collection Query Without Pagination Limit (DoS)",severity:"medium",cwe:"CWE-400",stride:"Denial of Service",appliesTo:["server"],fix:"Always set limit/take on collection queries to bound memory and DB load.",code:"const items = await Model.findAll({\n  where: { userId: req.user.id },\n  limit: Math.min(Number(req.query.limit) || 50, 100),\n  offset: Number(req.query.offset) || 0,\n});"},
   // ── #27: Missing audit log on sensitive mutations (Repudiation) ──────────────
@@ -10153,7 +10180,13 @@ function _deterministicFileTimings(timings) {
   await _runAnnotator("_v3.calibrationDrift", () => { _v3.calibrationDrift = computeCalibrationDrift(scanRoot); });
   // v3 next-gen: why-fired provenance is captured LAST so it reflects the
   // final state of each finding after every other annotator has run.
-  await _runAnnotator("annotateWhyFired", () => { annotateWhyFired(finalFindings, {}); });
+  // Real customer-reported inconsistency: this call passed a hardcoded `{}`
+  // context, so `ctx.rulesetVersion` inside why-fired.js was always
+  // undefined and every finding's `whyFired.scanner.rulesetVersion` read
+  // `null` — even though the top-level attestation, computed from the same
+  // `_effectiveRulesetVersion(scanRoot)` this file already calls at two
+  // other sites, correctly named the real ruleset version. Thread it through.
+  await _runAnnotator("annotateWhyFired", () => { annotateWhyFired(finalFindings, { rulesetVersion: (_effectiveRulesetVersion(scanRoot) || {}).version || null }); });
   // SCA-SAST correlation: link SAST findings to SCA vulnerable packages
   try{for(const f of finalFindings){if(!f.chain||!f.chain.length)continue;const src=f.chain[0]?.label||'';for(const sc of supplyChain){if(sc.type!=='vulnerable_dep')continue;if(src.includes(sc.name)||f.vuln?.toLowerCase().includes(sc.name)){f.scaCorrelation={osvId:sc.osvId,package:sc.name,version:sc.version,confirmed:true};sc.sastConfirmed=true;break;}}}}catch(_){}
   // Multi-sink chain detection: group findings by source variable
@@ -10691,7 +10724,7 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

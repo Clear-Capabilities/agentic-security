@@ -53,6 +53,47 @@ test('scanPythonSinks f-string SQL assignment is flagged', () => {
   assert.ok(findings.some(f => f.family === 'sql-injection'));
 });
 
+// Real customer false positives (both reproduced independently): the old
+// regex required only a SQL-keyword-shaped substring (case-insensitive, no
+// word boundary) co-occurring with a `{...}` interpolation ANYWHERE in an
+// f-string — so it matched "Select" inside "Selected" and "select" inside
+// the ordinary variable name "selected", regardless of whether the f-string
+// was ever assigned to a variable or reached a SQL sink.
+test('scanPythonSinks: "Selected" in an exception message is not SQL', () => {
+  const raw = 'raise RuntimeError(\n    f"Selected TAR members exceed {MAX_ARCHIVE_TOTAL_BYTES:,} expanded bytes"\n)';
+  const findings = scanPythonSinks('a.py', raw);
+  assert.equal(findings.filter(f => f.family === 'sql-injection').length, 0,
+    'an exception message is not a SQL statement');
+});
+
+test('scanPythonSinks: "selected" as an ordinary variable name in a console print is not SQL', () => {
+  const raw = [
+    'selected = bundles[:MAX_CANDIDATES]',
+    'print(',
+    '    f"  [{position}/{len(selected)}] {bundle.title[:72]} -- "',
+    '    f"{len(successful_pages)} readable page(s)"',
+    ')',
+  ].join('\n');
+  const findings = scanPythonSinks('a.py', raw);
+  assert.equal(findings.filter(f => f.family === 'sql-injection').length, 0,
+    'a list slice printed to the console is not a SQL statement, and the value is never assigned');
+});
+
+test('scanPythonSinks: the reported regression corpus negative/positive pair', () => {
+  // From the customer's own suggested minimal regression.
+  const negatives = [
+    'selected = items[:10]\nprint(f"{len(selected)} items")',
+    'raise RuntimeError("Selected items exceed the limit")',
+  ];
+  for (const raw of negatives) {
+    assert.equal(scanPythonSinks('a.py', raw).filter(f => f.family === 'sql-injection').length, 0,
+      `must not fire: ${raw}`);
+  }
+  const positive = 'cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")';
+  assert.ok(scanPythonSinks('a.py', positive).some(f => f.family === 'sql-injection'),
+    'a real inline f-string passed straight to cursor.execute must still fire');
+});
+
 test('scanPythonSinks os.system + var is flagged; os.system + literal is not', () => {
   const bad  = 'os.system("ls " + user_input)';
   const good = 'os.system("ls /tmp")';

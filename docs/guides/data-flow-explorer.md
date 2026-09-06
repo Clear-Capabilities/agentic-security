@@ -1,4 +1,4 @@
-# Data Flow Explorer
+# Code Boundaries
 
 **Goal:** see where sensitive data actually goes in your codebase — not just
 "this line looks dangerous," but the real path from where a piece of data
@@ -18,7 +18,7 @@ run this with plain `node`, see [Quickstart: Troubleshooting](quickstart.md#trou
 ## What this answers that a regular scan doesn't
 
 A normal `scan` tells you "this line has a SQL injection" or "this function
-logs a secret." The Data Flow Explorer answers a different, architectural
+logs a secret." Code Boundaries answers a different, architectural
 question: **for a given piece of sensitive data — a credit card number, a
 patient record, a password — where does it come from, everywhere it flows
 to, and what protects it along the way?** That includes places a single-line
@@ -54,7 +54,7 @@ function handleCheckout(req, logger) {
 (the same shape as this package's own AC-02 regression fixture pair,
 `bench/data-lineage/fixtures/js-api-to-log-{masked,raw}/`.) A line-by-line
 scanner sees one call, `logger.info(...)`, and has no way to say "this
-field is safe on this path and unsafe on that one." The Data Flow Explorer
+field is safe on this path and unsafe on that one." Code Boundaries
 tracks the *field*, not the line, so both paths land on the same sink
 node (the graph's nodes are categories like "Application Logs," not
 individual call sites), but each path keeps its own edge and its own
@@ -227,32 +227,32 @@ edges, 8 flows), exported with the commands shown, nothing hand-edited.
 npx @clear-capabilities/agentic-security-scanner dataflow export . --format html --output report.html
 ```
 
-![Data Flow Explorer HTML export, opened standalone in a browser](../assets/dataflow-html-export.png)
+![Code Boundaries HTML export, opened standalone in a browser](../assets/dataflow-html-export.png)
 
 **`png`** — the same Architecture view, rasterized. `--size standard`
 (default) is 1680×945 (102 KB here); `--size 2x` is exactly double,
 3360×1890 (220 KB here) — for a hi-res slide:
 
-![Data Flow Explorer PNG export](../assets/dataflow-png-export.png)
+![Code Boundaries PNG export](../assets/dataflow-png-export.png)
 
 **`svg`** — a real vector `<svg>` (`viewBox="0 0 1100 480"`, 12 KB here),
 Architecture view only — `--view` on any other value is a no-op with a
 printed warning for this format:
 
-<img src="../assets/dataflow-svg-export.svg" alt="Data Flow Explorer SVG export" width="700">
+<img src="../assets/dataflow-svg-export.svg" alt="Code Boundaries SVG export" width="700">
 
 **`json`** — the raw graph, opened in a browser's native JSON viewer.
 Every export carries `digest`/`bodyDigest` (a hash over the graph body) so
 a consumer can detect tampering without re-deriving the graph itself:
 
-![Data Flow Explorer JSON export](../assets/dataflow-json-export.png)
+![Code Boundaries JSON export](../assets/dataflow-json-export.png)
 
 **`csv`** — one row per flow, source/sink/verdict columns only (no
 per-data-class governance columns — that's what `ropa` adds below).
 `--no-redact`/`--filter` are both no-ops for this format, by design: a
 flat flow table has no node/edge-id-scoped subset to narrow by:
 
-![Data Flow Explorer CSV export, rendered as a table](../assets/dataflow-csv-export.png)
+![Code Boundaries CSV export, rendered as a table](../assets/dataflow-csv-export.png)
 
 **`dpia`** — a real DPIA scaffold, one section per data class actually
 found (PCI/PHI/PII here) with the real flows and protection verdicts
@@ -260,7 +260,7 @@ listed under each. Every governance field this fixture didn't supply
 prints honestly as `manual_required` (or `undefined` where the fixture
 never set the key at all) — never guessed, never silently dropped:
 
-![Data Flow Explorer DPIA export](../assets/dataflow-dpia-export.png)
+![Code Boundaries DPIA export](../assets/dataflow-dpia-export.png)
 
 **`ropa`** — one row per (flow × data class); this fixture's 8 flows
 produce 8 rows × 10 governance columns, and the real footer states the
@@ -269,7 +269,7 @@ input."* The table is wider than any one screenshot — governance columns
 past `transfer` (`minimization`/`consent`/`access`/`deletion`) continue
 off to the right, same as they would in a spreadsheet:
 
-![Data Flow Explorer RoPA export](../assets/dataflow-ropa-export.png)
+![Code Boundaries RoPA export](../assets/dataflow-ropa-export.png)
 
 **`briefing`** — a 5-chapter narrative; `--audience board` caps Chapter 2
 to its 7 most important observations and writes for a non-technical
@@ -279,14 +279,14 @@ this fixture's Chapter 1 states outright that `recipientJurisdiction` and
 `changeRecency` are two ranking factors honestly unavailable in this
 milestone:
 
-![Data Flow Explorer executive briefing export](../assets/dataflow-briefing-export.png)
+![Code Boundaries executive briefing export](../assets/dataflow-briefing-export.png)
 
 **`recipients`** — third-party/cross-border recipient facts, labeled
 `code_inferred` vs. `declared` vs. absent. This particular fixture graph
 declares no recipient profiles, so the real output says exactly that
 instead of fabricating a row:
 
-![Data Flow Explorer recipients export](../assets/dataflow-recipients-export.png)
+![Code Boundaries recipients export](../assets/dataflow-recipients-export.png)
 
 A populated graph's table adds one row per real `graph.recipientProfiles[]`
 entry — provider, service type, legal entity, processor role,
@@ -303,7 +303,7 @@ language, so the real table prints `undefined` there rather than
 inventing one — a real scan's `tier` column reads `full`/`partial`/
 `pattern-only`/`unknown`:
 
-![Data Flow Explorer coverage export](../assets/dataflow-coverage-export.png)
+![Code Boundaries coverage export](../assets/dataflow-coverage-export.png)
 
 ---
 

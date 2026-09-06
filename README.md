@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.148.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.148.1-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -192,7 +192,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 - [Architecture: the finding lifecycle](docs/architecture/finding-lifecycle.md) — the real module pipeline, detector to report
 
 **Privacy** — trace where sensitive data actually goes
-- [Data Flow Explorer](docs/guides/data-flow-explorer.md) — the field-level graph, browsable locally in your own terminal
+- [Code Boundaries](docs/guides/data-flow-explorer.md) — the field-level graph, browsable locally in your own terminal
 - [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md) — the same fixture, hop by hop
 - [Model egress policy](docs/walkthroughs/model-egress.md) — what leaves your machine, and what's redacted first
 
@@ -347,7 +347,7 @@ honestly labeled `HYPOTHETICAL`, never mistaken for a real one), assess
 blast radius from a compromised node, or link data flow across two
 separately-scanned repositories (`federate declare`).
 
-Full walkthrough — [Data Flow Explorer guide](docs/guides/data-flow-explorer.md). Narrative, hop-by-hop companion using this exact `card_number` example — [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
+Full walkthrough — [Code Boundaries guide](docs/guides/data-flow-explorer.md). Narrative, hop-by-hop companion using this exact `card_number` example — [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
 
 ---
 

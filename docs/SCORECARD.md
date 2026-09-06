@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.148.0 |
-| Bundle SHA-256 | `7712a1e7ab1ddce297ca1a75a0342a8ac8d61ef4273723c902076a89cf9c6b99` |
-| Commit | `a139aabd59e84fd66f25f6f0cb5145aee376b78f` |
+| Engine version | 0.148.1 |
+| Bundle SHA-256 | `f6631e892fc735bf6cc220770f8fae86bb9df9a4f7fea0df1e9cb644e3332b3c` |
+| Commit | `629dc6e7175ce146e5d0f8da83effe9dd6b01a67` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
 | Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-06T13:03:14.165Z |
+| Generated (UTC) | 2026-09-06T15:34:29.437Z |
 
 ## What these numbers are, and what they are not
 
@@ -202,14 +202,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 31 |
+| `scripts` | 30 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 485 |
+| `scanner/src` | 481 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -226,7 +226,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 326/369 (88.3%) |
+| 321/368 (87.2%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone

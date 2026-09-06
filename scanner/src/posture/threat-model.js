@@ -32,7 +32,13 @@ const ASSET_PATTERNS = [
   // [regex, category, exposure]
   [/(?:stripe|paddle|braintree)\.\w+\.create/g, 'payment-method', 'public-api'],
   [/(?:User|users?)\.create\(|prisma\.user\.create/g, 'identity', 'public-api'],
-  [/(?:session|token|jwt)\s*=\s*/g, 'session', 'internal'],
+  // Real customer false positive: `session = requests.Session()` matched —
+  // the pattern only checked the LHS identifier, so an HTTP CLIENT object
+  // (requests.Session / aiohttp.ClientSession / httpx.Client) got reported
+  // as an "authenticated user session" asset. The negative lookahead
+  // excludes the specific RHS constructor shapes that mean "this is an
+  // outbound HTTP client", not "this holds a logged-in user's session".
+  [/(?:session|token|jwt)\s*=\s*(?!\s*(?:requests\.Session|aiohttp\.ClientSession|httpx\.(?:Client|AsyncClient))\s*\()/g, 'session', 'internal'],
   [/process\.env\.([A-Z_]+(?:KEY|SECRET|TOKEN))/g, 'secret', 'internal'],
   [/(?:aws-sdk|@aws-sdk).*\.upload|s3\.put/g, 'object-storage', 'public-api'],
   [/(?:openai|anthropic|together|groq)\.(?:chat|messages|completions)/g, 'llm-egress', 'external-api'],
@@ -43,8 +49,19 @@ const TRUST_BOUNDARY_PATTERNS = [
   [/router\.(?:get|post|put|patch|delete)\s*\(\s*['"`]([^'"`]+)['"`]/g, 'http-route'],
   [/@(?:Get|Post|Put|Patch|Delete)Mapping\s*\(/g, 'http-route-java'],
   [/@(?:app|router)\.(?:get|post|put|patch|delete)\s*\(\s*['"`]([^'"`]+)['"`]/g, 'http-route-py'],
-  [/(?:kafka|pubsub|sqs|sns)\.consume|\.subscribe|\.receiveMessage/gi, 'queue-consumer'],
-  [/(?:kafka|pubsub|sqs|sns)\.produce|\.publish|\.sendMessage/gi, 'queue-producer'],
+  // Real customer false positive: alternation without a shared group scopes
+  // ONLY the first branch to a queue library — `(?:kafka|pubsub|sqs|sns)\.produce
+  // |\.publish|\.sendMessage` is three TOP-LEVEL alternatives, and the last
+  // two are bare, unscoped substrings. `bundle.publisher_domain` and
+  // `bundle.published_at` both contain the literal substring ".publish" (the
+  // first 8 characters of "publisher"/"published"), so plain field access
+  // with no queue library, and no method call at all, was read as a
+  // queue-producer trust boundary. Moving the method-name alternation
+  // INSIDE the shared `(?:kafka|pubsub|sqs|sns)\.` prefix scopes every
+  // branch to an actual queue client, and requiring a trailing `(` excludes
+  // attribute access from matching a call-shaped rule.
+  [/(?:kafka|pubsub|sqs|sns)\.(?:consume|subscribe|receiveMessage)\s*\(/gi, 'queue-consumer'],
+  [/(?:kafka|pubsub|sqs|sns)\.(?:produce|publish|sendMessage)\s*\(/gi, 'queue-producer'],
   [/grpc\.Server|new\s+Server\s*\(\s*\)/g, 'grpc-server'],
   [/(?:db|pool|client)\.(?:query|execute|raw)\s*\(/g, 'db-edge'],
 ];

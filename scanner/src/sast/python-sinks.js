@@ -41,7 +41,30 @@ const SQLA_RAW_EXEC_CONCAT_RE = /\b(?:cursor|conn|connection|session)\s*\.\s*exe
 // quotes (single quotes inside double-quoted f-string and vice versa) so we
 // use two parallel patterns rather than a single character class that excludes
 // both quote kinds.
-const SQLA_FSTRING_SQL_ASSIGN_RE = /(?:f"[^"]*(?:SELECT|INSERT|UPDATE|DELETE)[^"]*\{[^}]*\}|f'[^']*(?:SELECT|INSERT|UPDATE|DELETE)[^']*\{[^}]*\})/gi;
+//
+// Two real-world false positives, both from the same underlying defect —
+// this regex checked for a co-occurring keyword-shaped substring and a `{}`
+// interpolation, not an actual SQL statement being assigned:
+//
+//   query = f"SELECT * FROM users WHERE id = {user_id}"   -> should fire
+//   print(f"[{position}] {len(selected)} readable pages")  -> was firing
+//   raise RuntimeError(f"Selected TAR members exceed {N} bytes")  -> was firing
+//
+// Case-insensitive matching with no word boundary let the SQL keyword
+// alternation match inside ordinary English/identifier text — "Select" is
+// the first six letters of "Selected", and "select" is the first six of the
+// variable name "selected". `\b...\b` fixes that: a word boundary requires a
+// non-word/word transition, which does not exist between "Select" and the
+// trailing "ed" (both are word characters), so "Selected"/"selected" no
+// longer match while "SELECT"/"select" as complete tokens still do.
+//
+// The vuln title claims "f-string SQL ASSIGNED TO VARIABLE", but the regex
+// never actually checked for an assignment — it fired on any f-string
+// anywhere, including a bare argument to print()/raise. Requiring
+// `IDENT = ` (optionally through an opening paren, for a wrapped assignment)
+// immediately before the f-string makes the check match what its own name
+// promises, and excludes the print()/raise-message shape entirely.
+const SQLA_FSTRING_SQL_ASSIGN_RE = /\b[A-Za-z_]\w*\s*=\s*\(?\s*(?:f"[^"]*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^"]*\{[^}]*\}|f'[^']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^']*\{[^}]*\})/gi;
 
 // ─── Command injection ────────────────────────────────────────────────────
 //

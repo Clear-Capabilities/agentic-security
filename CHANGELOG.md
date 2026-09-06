@@ -11,6 +11,73 @@
 
 
 
+## 0.148.1 - Six real false-positive fixes from a customer bug report, two report-consistency fixes
+
+A developer ran the scanner on two of their own applications and sent back a detailed,
+reproducible bug report. All six false positives traced back to the same defect class:
+a loosely-bounded regex matching an identifier or text substring without real syntax
+awareness. None were caught by unit tests, because a fixture an author writes by hand is
+shaped the way the author expects the code to look; these were found by a real user reading
+the lines a real scan cited.
+
+1. SQL injection fired on "Selected"/"selected". Case-insensitive `SELECT` had no word
+   boundary, so it matched the first six letters of "Selected" (an exception message) and
+   "selected" (an ordinary list variable). The rule's own name claimed "assigned to variable"
+   but never checked for an assignment; both fixed (`scanner/src/sast/python-sinks.js`).
+
+2. A Python method literally named `fetch(self, ...)` was reported as a missing-timeout
+   HTTP-DoS finding, at its interface declaration, its implementation, and its call site, with
+   a hardcoded JavaScript remediation. The rule named JS-only APIs (fetch/axios/http.get) but
+   carried no `langScope`, so it matched the raw text "fetch(" in any language. Fixed with a
+   language scope and a declaration-vs-call exclusion (`scanner/src/engine.js`).
+
+3. `HUGGINGFACE_TOKEN = getpass.getpass("Enter your Hugging Face token: ")` was flagged
+   Critical, Hardcoded Secret. The captured-value character class matched newlines, so once
+   the word "token" inside the human-readable PROMPT happened to be followed by `: "`, the
+   "secret" spanned past that string's own closing quote into the next function definition.
+   Excluding newlines from the class confines a match to one physical line
+   (`scanner/src/engine.js`).
+
+4. `bundle.publisher_domain` and `bundle.published_at` were read as a message-queue producer
+   boundary. `(?:kafka|pubsub|sqs|sns)\.produce|\.publish|\.sendMessage` parses as three
+   TOP-LEVEL alternatives; only the first is scoped to a queue library, so `.publish` alone
+   matched the first 8 characters of "publisher"/"published" with no queue library and no
+   method call in sight. The identical defect existed one line above for `queue-consumer`
+   (`.subscribe`/`.receiveMessage`, e.g. an RxJS Observable) and is fixed the same way:
+   the method names moved inside the shared prefix group, and a trailing `(` is now required
+   (`scanner/src/posture/threat-model.js`).
+
+5. `self.session = requests.Session()` was classified as an authenticated user-session asset.
+   The pattern checked only the LHS variable name, never the RHS constructor. A negative
+   lookahead now excludes `requests.Session`/`aiohttp.ClientSession`/`httpx.Client`/
+   `httpx.AsyncClient` (`scanner/src/posture/threat-model.js`).
+
+6. `scanned.lines` was always 0 and a finding's `whyFired.scanner.rulesetVersion` was always
+   `null`, in both cases despite the top-level scan doing the right thing elsewhere. Two dead-
+   wiring bugs, not detector defects: `linesScanned` was read in `report/index.js` but never
+   assigned anywhere in the engine, and `annotateWhyFired(finalFindings, {})` was called with a
+   hardcoded empty context even though the engine already computes the real ruleset version two
+   other places in the same function (`scanner/src/engine.js`).
+
+`scanner/src/posture/threat-model.js` had zero test coverage before this release
+(`scanner/test/threat-model.test.js` is new). Each fix also carries a negative case proving the
+real, intended finding is still reported — a precision fix that silences a genuine positive is
+worse than the false positive it replaced.
+
+Confirmed, by reading the code, NOT a bug: the duplicate `stableId` the report also flagged
+(same id on the interface declaration and the implementation) is documented, intended
+behavior — `stable-id.js` deliberately hashes on normalized code shape rather than file/line,
+specifically so near-identical code keeps one id across refactors. Moot here regardless, since
+fix 2 above means neither finding fires again.
+
+Not fixed, flagged rather than guessed at: the report's "uncertainty inversion" observation,
+where an unproven, low-confidence finding still produced a confident PoC, ATT&CK mapping and
+dollar-impact narrative downstream. `mitigation-composite.js`'s `exposed-in-prod` verdict is
+confirmed to be answering an orthogonal question by design (would a known production control
+block this, defaulting to exposed absent one) and never reads `proof.verdict` or confidence at
+all — so the actual gap, if real, is in a PoC or dollar-estimate consumer not gating on proof
+state, which needs its own dedicated investigation rather than a fix rushed into this release.
+
 ## 0.148.0 - NIST SP 800-171 Rev. 3 (CUI / CMMC basis) as the 10th bundled framework
 
 Adds NIST SP 800-171 Rev. 3 to `/compliance --report <framework>` (aliases
