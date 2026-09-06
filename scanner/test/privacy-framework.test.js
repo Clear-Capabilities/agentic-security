@@ -247,7 +247,13 @@ test('mapsTo only references signals the engine actually produces', () => {
   // readers to ignore the report.
   const fw = JSON.parse(fs.readFileSync(FW_FILE, 'utf8'));
   const src = fs.readFileSync(path.join(HERE, '..', 'src', 'posture', 'auditor-walkthrough.js'), 'utf8');
-  const known = new Set([...src.matchAll(/^\s*'([a-z0-9-]+)':\s+'/gim)].map(m => m[1]));
+  // An ARTIFACT entry's value is either one path ('x.json') or an array of
+  // acceptable ones (['x.json', 'x/']) — `scan-history` has two real spellings
+  // in this codebase. Match both openers: this scrape is a proxy for "the key
+  // is present in the table", and the assertion below is unchanged. Matching
+  // only a leading quote silently dropped every array-valued key, which made
+  // this test report the resolvable `scan-history` as unresolvable.
+  const known = new Set([...src.matchAll(/^\s*'([a-z0-9-]+)':\s+['[]/gim)].map(m => m[1]));
   const unknown = [];
   for (const c of fw.controls) {
     for (const m of c.mapsTo || []) {

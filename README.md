@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.147.5-blue)]()
+[![Version](https://img.shields.io/badge/version-0.148.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -34,7 +34,7 @@ Five capabilities, each answering a question a plain vulnerability scanner doesn
 
 **Fix It Safely.** Every patch — a rule's stored fix, a zero-LLM deterministic swap, or one an agent composed for a finding with no stored fix — goes through the same gate before it's written: rescan-clean, no new finding of medium severity or higher, lint-clean. A completeness tier (`FULL` / `MITIGATION` / `WORKAROUND`) tells you honestly how much of the fix actually landed, and a residual-risk guard rejects a hand-wavy "adequately handled" claim that the mechanical evidence contradicts.
 
-**Govern It.** Automated technical-control evidence for 9 bundled compliance frameworks, an egress policy — configured via `mode: allow`/`deny`/`local-only` — that returns an `allow`/`deny` decision on every outbound model call *before* a prompt is even built, and state governance — TTL-bound retention, opt-in encryption, `export`, `legal-hold` — for everything the scanner writes to disk.
+**Govern It.** Automated technical-control evidence for 10 bundled compliance frameworks, an egress policy — configured via `mode: allow`/`deny`/`local-only` — that returns an `allow`/`deny` decision on every outbound model call *before* a prompt is even built, and state governance — TTL-bound retention, opt-in encryption, `export`, `legal-hold` — for everything the scanner writes to disk.
 
 **Explain It.** No CVE jargon. Every finding explains the stakes, an estimated dollar cost (`riskDollars`, honestly labeled `scenario_default` until you configure your own organization's numbers), and the fix — in language a non-security teammate can act on.
 
@@ -198,7 +198,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 
 **Compliance** — evidence for a framework, honestly scoped
 - [Compliance](docs/guides/compliance.md) — the honesty model, and why the satisfied rate is never reported over all of a framework's controls
-- [Coverage maps](docs/compliance/) — per-control coverage for 4 of the 9 bundled frameworks, where one exists
+- [Coverage maps](docs/compliance/) — per-control coverage for 5 of the 10 bundled frameworks, where one exists
 - [Risk in dollars](docs/guides/risk-dollars.md) — the scenario-disclosure mechanism behind every `riskDollars` estimate
 
 **Platform Engineering** — wire it into CI/CD, manage what it writes to disk
@@ -379,6 +379,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 | Framework | `<framework>` id | Coverage map |
 |---|---|---|
 | NIST AI 600-1 (2024) — Generative AI Profile | `nist-ai-600-1` | [coverage](docs/compliance/nist-ai-600-1-coverage.md) |
+| NIST SP 800-171 Rev. 3 — Protecting CUI (CMMC basis) | `nist-800-171-r3` | [coverage](docs/compliance/nist-800-171-r3-coverage.md) · [demo](docs/brand/nist-800-171-demo.gif) |
 | NIST Cybersecurity Framework 2.0 | `nist-csf-2` | — |
 | NIST Privacy Framework 1.1 | `nist-privacy-1-1` | [coverage](docs/compliance/nist-privacy-1-1-coverage.md) |
 | OWASP ASVS 5.0 | `owasp-asvs-5` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
@@ -386,7 +387,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 | EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](scripts/eu-ai-act/) |
 | GDPR · HIPAA Security Rule · CCPA | `gdpr` · `hipaa-security-rule` · `ccpa` | — |
 
-Real `compliance --list` returns all 9 of these; 4 have a dedicated per-control coverage map today, tracked as a known gap rather than papered over — see [Compliance](docs/guides/compliance.md).
+Real `compliance --list` returns all 10 of these; 5 have a dedicated per-control coverage map today, tracked as a known gap rather than papered over — see [Compliance](docs/guides/compliance.md).
 
 `/compliance --walkthrough <framework>` adds step-by-step auditor narratives with per-control evidence mapping — or bring your own controls at `.agentic-security/compliance/<id>/controls.json`.
 

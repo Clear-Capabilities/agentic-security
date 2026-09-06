@@ -1,8 +1,8 @@
 # agentic-security
 
-Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
+Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.147.5  
+**Version:** 0.148.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -37,7 +37,8 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `.githooks/` | Committed **git** hooks (distinct from `hooks/` above, which is editor integration). Currently `pre-push`, a shim over `scripts/pre-push-gate.mjs`. Activated per clone via `core.hooksPath` — see "Pre-push gate". |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
-| `docs/standards/` | Upstream standards source material. A document lives here **only if a generator reads it** — currently just `NIST AI 600-1.xlsx`, consumed by `scripts/nist-compliance/build-catalog.py`. Never read at runtime. | `docs/standards/README.md` |
+| `scripts/nist-800-171/` | NIST SP 800-171 Rev. 3 catalog generator + deep-attestation scanner. Second generated control catalog. Its `code_testable` rating is **ours, not NIST's** (that export rates nothing) and lives in `code-testability.json`, joined in by `build-catalog.py`; a control with no rating fails the build rather than defaulting. |  |
+| `docs/standards/` | Upstream standards source material. A document lives here **only if a generator reads it** — currently `NIST AI 600-1.xlsx` (read by `scripts/nist-compliance/build-catalog.py`) and `NIST_SP_800_171r3_Controls.csv` (read by `scripts/nist-800-171/build-catalog.py`). Never read at runtime. | `docs/standards/README.md` |
 | `docs/compliance/` | Per-framework coverage maps, derived from the framework JSON. One per framework linked in the README table. |  |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
 | `docs/OSCAL.md` | NIST OSCAL output: which model and why, and what an OSCAL document must REFUSE to claim (an unassessed control gets no finding). Read before changing `src/report/oscal.js`. |  |

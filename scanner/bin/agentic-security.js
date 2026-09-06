@@ -2447,7 +2447,7 @@ async function cmdCompliance(args) {
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
       writeStdout(JSON.stringify(
-        toOSCALCompliance(fw, complianceRowsFromEvaluation(evaluation), { startedAt: scan._scanMeta?.startedAt }),
+        toOSCALCompliance(fw, complianceRowsFromEvaluation(evaluation), { startedAt: scan.startedAt || scan._scanMeta?.startedAt }),
         null, 2) + '\n');
       return 0;
     }
@@ -2478,7 +2478,7 @@ async function cmdCompliance(args) {
     const { toOSCALCompliance, complianceRowsFromPrivacy } = await import('../src/report/oscal.js');
     const fwMeta = loadFramework(scanRoot, PRIVACY_FRAMEWORK_ID) || { id: PRIVACY_FRAMEWORK_ID, name: r.frameworkName };
     writeStdout(JSON.stringify(
-      toOSCALCompliance(fwMeta, complianceRowsFromPrivacy(r), { startedAt: scan._scanMeta?.startedAt }),
+      toOSCALCompliance(fwMeta, complianceRowsFromPrivacy(r), { startedAt: scan.startedAt || scan._scanMeta?.startedAt }),
       null, 2) + '\n');
     return args.flags['fail-on'] === 'gap' && r.summary.gap > 0 ? 1 : 0;
   }

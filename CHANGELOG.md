@@ -11,6 +11,83 @@
 
 
 
+## 0.148.0 - NIST SP 800-171 Rev. 3 (CUI / CMMC basis) as the 10th bundled framework
+
+Adds NIST SP 800-171 Rev. 3 to `/compliance --report <framework>` (aliases
+`800-171` and `cui`), `--walkthrough`, `--gap` and `--format oscal`, plus a
+standalone deep-attestation scanner at `scripts/nist-800-171/scan.py`.
+
+**All 97 requirements are carried, including the 43 this engine cannot assess.**
+Shipping only the code-observable subset would have been a smaller, better-looking
+artifact and a dishonest one, omission reads as coverage. Whole families
+(Awareness and Training, Personnel Security, Physical Protection) and most of
+Incident Response, Maintenance and Media Protection report as requiring manual
+evidence. Ratings: 16 `yes`, 38 `partial`, 43 `no`.
+
+**The `code_testable` rating is ours, not NIST's.** Unlike the AI 600-1 workbook,
+the 800-171 export rates no control for testability. That judgment lives in
+`scripts/nist-800-171/code-testability.json` with a per-requirement rationale, and
+is joined into the generated catalog by `build-catalog.py`. A control with no
+rating is a hard build failure, never a default, defaulting would either invent
+coverage or silently suppress a requirement. The generator is stdlib-only, so
+unlike the openpyxl-based AI 600-1 gate its drift check can never be unrunnable
+for a missing dependency.
+
+**Fixes a real pre-existing bug in the shared evaluator.** `evaluateFramework`,
+behind `--report`/`--walkthrough`/`--gap`/`--format oscal` for *all ten* frameworks
+had no vacuous-satisfaction guard: a scan that read zero files produced empty
+finding buckets, and an empty bucket rendered as `✓ no open findings`. Measured on
+800-171, **32 of 97 controls read `present` off a scan that examined nothing**. The
+guard existed only inside `privacy-framework.js`, whose own comment already named
+`evaluateFramework` as where the hazard originates. The fix reads three count
+fields (a real scan persists `scanned.files` and `_scanMeta.filesScanned` but *not*
+top-level `filesScanned`, which exists only on the in-memory object) and treats
+**absent as unknown, not zero**, degrading requires positive evidence that nothing
+was examined, so a genuinely clean project is unaffected. 2419/2419 posture tests
+pass with no test file modified.
+
+**One scanning engine, not two.** `scripts/nist-compliance/scan.py` now reads its
+framework identity from the catalog it is given rather than from hardcoded strings,
+and the 800-171 scanner is a thin wrapper supplying defaults. This keeps exactly one
+copy of the ReDoS-hardened matcher, two copies would mean a fix to one silently
+missing the other. The AI 600-1 scanner's md/csv/json output was pinned before and
+after and is byte-identical.
+
+**Fixes OSCAL documents that could not be attested.** Every compliance OSCAL export
+read its timestamp from `scan._scanMeta.startedAt`, a key scans do not have, they
+carry `startedAt` at the top level. So `_when()` fell through to `new Date()` at emit
+time, which that function's own comment says must never happen, because "two emits of
+one scan then differ and the artifact cannot be attested." Two emits of the same scan
+genuinely differed. Fixed at all three call sites (both in `bin/agentic-security.js`,
+one in `commands/compliance.md`); `last-modified` is now the scan's own clock, and with
+`AGENTIC_SECURITY_DETERMINISTIC=1` the document is byte-identical across runs. This
+affected every framework, not just the new one.
+
+Also: the `nist-catalog-freshness` release gate now iterates every generated catalog
+instead of naming one script path, `docs/compliance/nist-800-171-r3-coverage.md` is
+pointer-based rather than restating counts that would drift, and that page carries a
+recorded walkthrough (`docs/brand/nist-800-171-demo.tape`, regenerable with `vhs`)
+showing assess → remediate → re-assess against `examples/demo-app`.
+
+**Fixes `module:scan-history`, which could never resolve.** The evaluator's artifact table
+listed only `scan-history/` (a directory) while an ordinary scan writes `scan-history.json`
+(a file), both spellings are real in this codebase (`findings-memory.js` uses the
+directory; `security-trend.js` and `router.js` use the file), but only one was listed. Every
+control mapped to it reported the artifact missing even when the history existed, across
+five bundled frameworks. Table entries may now be an array of acceptable paths, and any one
+of them evidences the control.
+
+Measured effect, because a change that moves compliance verdicts should be quantified rather
+than asserted: **no control anywhere became `satisfied`**, `present` held at 43 across all
+five frameworks. Eight controls moved `manual` → `partial` (2 eu-ai-act, 1 hipaa, 4
+nist-800-171-r3, 1 nist-ai-600-1, 1 nist-privacy-1-1). Those are artifact-existence controls,
+which the honesty model already caps at `partial`, so finding the artifact can only move them
+out of "not assessed", never to satisfied. In OSCAL terms the reports get *stricter*, not
+more flattering: for 800-171 against the demo app, findings went 42 → 46 with satisfied
+unchanged at 28, i.e. four controls moved from unassessed into assessed-and-not-satisfied.
+
+No CMMC assessment and no SPRS score is produced or implied.
+
 ## 0.147.5 — Fix: `bench:provenance:check`'s cold-memory sample size was unreliable on GitHub Actions
 
 `v0.147.4`'s tag was pushed but its hosted release-gate run failed before

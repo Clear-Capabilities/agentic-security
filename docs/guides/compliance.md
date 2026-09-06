@@ -23,6 +23,7 @@ Bundled frameworks include:
 |---|---|
 | NIST AI 600-1 — Generative AI Profile | `nist-ai-600-1` |
 | NIST Cybersecurity Framework 2.0 | `nist-csf-2` |
+| NIST SP 800-171 Rev. 3 — Protecting CUI | `nist-800-171-r3` |
 | NIST Privacy Framework 1.1 | `nist-privacy-1-1` |
 | OWASP ASVS 5.0 | `owasp-asvs-5` |
 | OWASP Top 10 for LLM Applications 2025 | `owasp-llm-top-10` |
@@ -119,7 +120,7 @@ into one — treat each as its own contract:
    engine has no check for) are collapsed down to that binary pair before
    export, exactly as `docs/OSCAL.md` describes.
 
-Known gap, not fixed here: `compliance --list` surfaces 9 bundled
+Known gap, not fixed here: `compliance --list` surfaces 10 bundled
 frameworks, but [`docs/compliance/`](../compliance/) currently only has
 coverage maps for 4 of them.
 

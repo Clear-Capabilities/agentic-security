@@ -10,6 +10,14 @@
 //   nist-ai-600-1       NIST AI Risk Management Framework, GenAI profile
 //   nist-privacy-1-1    NIST Privacy Framework 1.1 (see posture/privacy-framework.js
 //                       for the assessment + remediation layer over it)
+//   nist-800-171-r3     NIST SP 800-171 Rev. 3 — Protecting CUI in Nonfederal
+//                       Systems. FULL 97-requirement catalogue; 43 of those are
+//                       organisational/physical and carry no automated signal at
+//                       all, deliberately carried so the negative space is visible.
+//                       Control text is generated from the CSV export by
+//                       scripts/nist-800-171/build-catalog.py; the codeTestable
+//                       rating is OURS, not NIST's (that export rates nothing for
+//                       testability) and lives in nist-800-171/code-testability.json.
 //   owasp-asvs-5        OWASP Application Security Verification Standard 5.0
 //   owasp-llm-top-10    OWASP Top 10 for LLM Applications 2025
 //   eu-ai-act           EU AI Act (Regulation 2024/1689)
@@ -345,6 +353,60 @@ export function evaluateFramework(scanRoot, fw, scan) {
     families.get(k).push(f);
   }
 
+  // VACUOUS SATISFACTION GUARD (shared-evaluator half).
+  //
+  // The `family:` branch below clears a mapping when no findings of that family
+  // are open — which is ALSO true of a scan that examined nothing at all. So
+  // pointing `--report <framework>` at an empty directory, a wrong path, or a
+  // scan that failed to read anything reported mapped controls as fully
+  // evidenced, on the strength of having looked at zero files.
+  //
+  // privacy-framework.js's `bucketOf` has carried this guard for its own module
+  // since it was found by that module's test, and its comment already named
+  // `evaluateFramework` as the place the hazard originates — but the guard was
+  // never applied HERE, so every framework reached through `--report` /
+  // `--walkthrough` / `--gap` / `--format oscal` still had it. Found while
+  // adding NIST SP 800-171 Rev. 3, whose 50 mapped controls made a
+  // zero-file scan report 32 controls `present`.
+  //
+  // Reads THREE count fields, not the two privacy-framework.js reads. Measured,
+  // not assumed: a real scan of a clean one-file project persists
+  // `scanned.files: 1` and `_scanMeta.filesScanned: 1` but NO top-level
+  // `filesScanned` — that key exists only on the in-memory object engine.js
+  // returns. privacy-framework.js reads `filesScanned ?? _scanMeta.filesScanned`
+  // and gets away with it because engine.js hands it the live in-memory object;
+  // this evaluator is reached from the CLI with the PERSISTED artifact, where
+  // that first key is absent. Mirroring privacy's exact field list here would
+  // therefore have read 0 for every real scan and degraded a genuinely clean
+  // project to "not assessed" — the opposite failure, and worse, because it
+  // punishes the operator who did everything right.
+  //
+  // ABSENT IS UNKNOWN, NOT ZERO. Degrading requires POSITIVE evidence that
+  // nothing was examined: at least one count field actually present AND every
+  // present one reading 0. A scan object carrying no count fields at all
+  // (synthetic fixtures, older artifacts, third-party callers) is treated as
+  // assessable and behaves exactly as before. Same precedent as relevance.js —
+  // never assert the negative without evidence, and `unknown` is not `false`.
+  // The findings/components/... fallbacks then rescue the remaining case: an
+  // artifact that records 0 files but plainly holds real results.
+  //
+  // An unassessable scan does not remove or fail a control: the mapping is
+  // disclosed as unverifiable, which caps the control at 'partial' via the same
+  // path a `rule:` mapping already uses. Recall-preserving, same precedent as
+  // falsification.js / proof-gate.js.
+  const _counts = [
+    scan && scan.filesScanned,
+    scan && scan._scanMeta && scan._scanMeta.filesScanned,
+    scan && scan.scanned && scan.scanned.files,
+  ].filter((v) => typeof v === 'number' && Number.isFinite(v));
+  const _examinedNothing = _counts.length > 0 && _counts.every((v) => v === 0);
+  const assessable = !_examinedNothing
+    || findings.length > 0
+    || components.length > 0
+    || secrets.length > 0
+    || logicVulns.length > 0
+    || supplyChain.length > 0;
+
   const results = [];
   for (const c of fw.controls || []) {
     const obs = [];
@@ -447,6 +509,11 @@ export function evaluateFramework(scanRoot, fw, scan) {
           allCleared = false;
           contributingFindings.push(...open);
           obs.push(`${open.length} open ${fam} finding(s) at ${minSeverity}+.`);
+        } else if (!assessable) {
+          // Empty bucket, but the scan examined nothing — see the guard above.
+          // Not evidence, and deliberately not a failure either.
+          obs.push(`⚠ ${fam}: the scan examined no files, so an empty finding bucket is not evidence (not assessed).`);
+          hasUnverifiableMapping = true;
         } else {
           obs.push(`✓ ${fam}: no open ${minSeverity}+ findings.`);
           anyCleared = true;
@@ -465,7 +532,15 @@ export function evaluateFramework(scanRoot, fw, scan) {
           'aibom':                'aibom.json',
           'attack-taxonomy':      'last-scan.json',
           'why-fired':            'last-scan.json',
-          'scan-history':         'scan-history/',
+          // Two real spellings, both live in this codebase: security-trend.js and
+          // router.js read `scan-history.json` (a FILE), findings-memory.js uses
+          // `scan-history` (a DIRECTORY). Only the directory was listed here, so
+          // on a normal scan — which writes the .json — every control mapped to
+          // module:scan-history reported the artifact missing and could never
+          // clear. Five bundled frameworks were affected. An array means "any of
+          // these satisfies it", which is the honest reading: the control asks
+          // whether a scan history exists, not which shape it took.
+          'scan-history':         ['scan-history.json', 'scan-history/'],
           'integrity':            'last-scan.json.sig',
           'watch-mode':           'watch-status.json',
           'cve-alert-daemon':     'cve-alerts/',
@@ -480,17 +555,25 @@ export function evaluateFramework(scanRoot, fw, scan) {
           'security-fixer':       '.../agents/security-fixer.md',
           'mcp-tools':            '.../scanner/src/mcp/tools.js',
         };
+        // A table entry is either one path or an array of acceptable ones. An
+        // array means the artifact has more than one real spelling in this
+        // codebase and any of them evidences the control; the FIRST is the
+        // canonical name used in the observation text when none is found, so
+        // the message still names something a reader can go create.
         const target = ARTIFACT[mod];
+        const candidates = target == null ? [] : (Array.isArray(target) ? target : [target]);
         // A '.../' sentinel marks a source-relative artifact (project source,
         // e.g. a hook or agent file) — resolve it against the scan root itself.
         // Everything else is a runtime artifact under the STATE dir. Without
         // this, `statePath(scanRoot, '.../x')` never resolves and the
         // control falsely reads "not present" for every project.
-        const resolved = !target ? null
-          : target.startsWith('.../') ? path.join(scanRoot, target.slice(4))
-          : statePath(scanRoot, target);
-        const label = target ? target.replace(/^\.\.\.\//, '') : '(unmapped)';
-        if (resolved && fs.existsSync(resolved)) {
+        const _resolve = (t) => t.startsWith('.../')
+          ? path.join(scanRoot, t.slice(4))
+          : statePath(scanRoot, t);
+        const found = candidates.find((t) => { try { return fs.existsSync(_resolve(t)); } catch { return false; } });
+        const resolved = found ? _resolve(found) : null;
+        const label = (found || candidates[0] || '(unmapped)').replace(/^\.\.\.\//, '');
+        if (resolved) {
           obs.push(`✓ ${mod}: ${label} present.`);
           anySignal = true;
           anyCleared = true;

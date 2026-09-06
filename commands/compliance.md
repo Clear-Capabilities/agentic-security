@@ -11,8 +11,8 @@ Compliance + auditor flows dispatcher.
 
 | Flag | Behaviour |
 |---|---|
-| `--report <framework>` | Generate automated technical-control evidence for a framework. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act` |
-| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
+| `--report <framework>` | Generate automated technical-control evidence for a framework. Frameworks: `nist`, `asvs`, `llm`, `eu-ai-act`, `800-171` (alias `cui`) |
+| `--walkthrough <framework>` | Step-by-step auditor narrative with evidence mapping per control. Frameworks: `nist-csf-2`, `nist-ai-600-1`, `nist-privacy-1-1`, `nist-800-171-r3`, `owasp-asvs-5`, `owasp-llm-top-10`, `eu-ai-act`, `gdpr`, `hipaa-security-rule`, `ccpa` (or BYO at `.agentic-security/compliance/<id>/controls.json`) |
 | `--attestation` | Render buyer-facing security posture artifact. `--format badge|onepager|page` |
 | `--audit <target>` | Filters `last-scan.json`'s findings by keyword per target: `db`, `auth`, `rate-limit`, `webhook`, `env`, `csp-cors`, `llm-cost`, `prompt`. `deploy` and `launch` instead run `/secure`'s real readiness check for that intent, not a findings filter. |
 | `--pr` | Generate a PR-description block: findings delta vs a persisted baseline + MITRE ATT&CK techniques on new findings + suggested reviewers by family + links to posture artifacts |
@@ -106,6 +106,8 @@ fw_alias() {
     asvs)       echo "owasp-asvs-5" ;;
     llm)        echo "owasp-llm-top-10" ;;
     eu-ai-act)  echo "eu-ai-act" ;;
+    800-171)    echo "nist-800-171-r3" ;;
+    cui)        echo "nist-800-171-r3" ;;
     *)          echo "$1" ;;
   esac
 }
@@ -123,12 +125,12 @@ case "$FLAG" in
         if (!scan) { console.error('No .agentic-security/last-scan.json — run a scan first.'); process.exit(2); }
         const fwId = process.argv[1];
         const fw = aw.loadFramework('.', fwId);
-        if (!fw) { console.error('Unknown framework \"' + fwId + '\". Try /compliance --walkthrough with --list, or a bundled id: nist-ai-600-1, owasp-asvs-5, owasp-llm-top-10, eu-ai-act, nist-csf-2, nist-privacy-1-1, gdpr, hipaa-security-rule, ccpa.'); process.exit(2); }
+        if (!fw) { console.error('Unknown framework \"' + fwId + '\". Try /compliance --walkthrough with --list, or a bundled id: nist-ai-600-1, nist-800-171-r3, owasp-asvs-5, owasp-llm-top-10, eu-ai-act, nist-csf-2, nist-privacy-1-1, gdpr, hipaa-security-rule, ccpa.'); process.exit(2); }
         const evaluation = aw.evaluateFramework('.', fw, scan);
         const format = process.argv[2];
         if (format === 'oscal') {
           import('${CLAUDE_PLUGIN_ROOT}/scanner/src/report/oscal.js').then(o => {
-            console.log(JSON.stringify(o.toOSCALCompliance(fw, o.complianceRowsFromEvaluation(evaluation), { startedAt: scan._scanMeta && scan._scanMeta.startedAt }), null, 2));
+            console.log(JSON.stringify(o.toOSCALCompliance(fw, o.complianceRowsFromEvaluation(evaluation), { startedAt: scan.startedAt || (scan._scanMeta && scan._scanMeta.startedAt) }), null, 2));
           });
         } else if (format === 'json') {
           console.log(JSON.stringify({ framework: { id: fw.id, name: fw.name }, evaluation }, null, 2));

@@ -8,6 +8,25 @@ loaded at runtime.
 | File | Publisher | License | Read by | Derived artefacts |
 |---|---|---|---|---|
 | `NIST AI 600-1.xlsx` | NIST | public domain (US Federal publication) | [`scripts/nist-compliance/build-catalog.py`](../../scripts/nist-compliance/build-catalog.py) | [`scripts/nist-compliance/controls.json`](../../scripts/nist-compliance/controls.json) (212 controls, generated) · [`scanner/src/posture/compliance-frameworks/nist-ai-600-1.json`](../../scanner/src/posture/compliance-frameworks/nist-ai-600-1.json) → [`docs/compliance/nist-ai-600-1-coverage.md`](../compliance/nist-ai-600-1-coverage.md) |
+| `NIST_SP_800_171r3_Controls.csv` | NIST | public domain (US Federal publication) | [`scripts/nist-800-171/build-catalog.py`](../../scripts/nist-800-171/build-catalog.py) | [`scripts/nist-800-171/controls.json`](../../scripts/nist-800-171/controls.json) (97 controls, generated) · [`scanner/src/posture/compliance-frameworks/nist-800-171-r3.json`](../../scanner/src/posture/compliance-frameworks/nist-800-171-r3.json) → [`docs/compliance/nist-800-171-r3-coverage.md`](../compliance/nist-800-171-r3-coverage.md) |
+
+The 800-171 row differs from the AI 600-1 row above in two ways worth knowing before you
+touch either generator:
+
+- **It needs no third-party parser.** The source is CSV, read with the standard library, so
+  `build-catalog.py --check` can never exit 2 for a missing dependency the way the openpyxl-based
+  AI 600-1 gate can. An unverifiable check is a failure, not a skip; this one simply cannot
+  become unverifiable for that reason.
+- **NIST does not rate 800-171 for code-testability.** The AI 600-1 workbook ships a
+  `code_testable` column NIST authored; the 800-171 export has four columns and none of them is a
+  testability judgment. That rating is therefore OURS, and it lives in a third input,
+  [`scripts/nist-800-171/code-testability.json`](../../scripts/nist-800-171/code-testability.json),
+  which the generator joins in by control id. It is kept out of both the CSV and the framework
+  mapping file for the same reason `evidence-rules.json` is kept out of `controls.json`: a diff
+  must say unambiguously whether what changed was the standard's text, our claim about what is
+  observable, or our detection logic. A control present in the CSV with no rating is a hard
+  build failure, never a silent default. Defaulting would either invent coverage or silently
+  suppress a requirement.
 
 The **Read by** column is the admission test. NIST Privacy Framework 1.1 has no row because its
 workbook has no reader: its controls were transcribed once into

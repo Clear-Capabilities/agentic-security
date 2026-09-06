@@ -144,5 +144,11 @@ ide/jetbrains/build/
 # Source PRD working documents kept in the repo root. Untracked deliberately:
 # this is a PUBLIC repository, and these are internal requirement documents
 # nobody has asked to publish. Track one explicitly if that ever changes.
+#
+# The .md forms matter as much as the .docx ones: a Markdown PRD at the root is
+# otherwise picked up by a plain `git add`, and `release-check`'s
+# working-tree-clean gate flags it as a stray file. Same rule, same reason.
 /*-PRD.docx
 /*_PRD.docx
+/*-PRD.md
+/*_PRD.md

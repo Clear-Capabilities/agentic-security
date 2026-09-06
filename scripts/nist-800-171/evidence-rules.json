@@ -1,0 +1,1483 @@
+{
+  "03.01.01": {
+    "summary": "Account lifecycle management: creation, modification, disabling and removal of system accounts",
+    "paths": [
+      "**/accounts*",
+      "**/users*",
+      "**/*provision*",
+      "**/iam/*",
+      "**/identity/*"
+    ],
+    "code_terms": [
+      "create_user",
+      "disable_account",
+      "deactivate_user",
+      "deprovision",
+      "account_status",
+      "revoke_access",
+      "user_lifecycle",
+      "offboard"
+    ],
+    "doc_terms": [
+      "account management",
+      "account provisioning",
+      "deprovisioning",
+      "joiner mover leaver"
+    ],
+    "libraries": [
+      "passport",
+      "django.contrib.auth",
+      "devise",
+      "spring-security"
+    ],
+    "imports": [
+      "passport",
+      "devise"
+    ]
+  },
+  "03.01.02": {
+    "summary": "Access enforcement: authorization checks on protected resources",
+    "paths": [
+      "**/auth*",
+      "**/policy/*",
+      "**/permissions*",
+      "**/middleware/*",
+      "**/guards/*"
+    ],
+    "code_terms": [
+      "authorize",
+      "require_permission",
+      "check_access",
+      "can_access",
+      "enforce_policy",
+      "access_control",
+      "@PreAuthorize",
+      "has_permission",
+      "abac",
+      "rbac"
+    ],
+    "doc_terms": [
+      "access enforcement",
+      "authorization policy",
+      "least privilege"
+    ],
+    "libraries": [
+      "casbin",
+      "oso",
+      "opa",
+      "cancancan",
+      "pundit",
+      "spring-security"
+    ],
+    "imports": [
+      "casbin",
+      "oso",
+      "pundit"
+    ],
+    "test_paths": [
+      "**/test*/**/*auth*",
+      "**/test*/**/*permission*"
+    ]
+  },
+  "03.01.03": {
+    "summary": "Information flow enforcement between components and connected systems",
+    "paths": [
+      "**/egress*",
+      "**/allowlist*",
+      "**/network-policy*",
+      "**/*firewall*"
+    ],
+    "code_terms": [
+      "allowed_hosts",
+      "egress_policy",
+      "allowlist",
+      "denylist",
+      "cors_origin",
+      "flow_control",
+      "outbound_allow"
+    ],
+    "doc_terms": [
+      "information flow",
+      "egress control",
+      "data flow enforcement"
+    ],
+    "libraries": [
+      "helmet",
+      "django-cors-headers"
+    ],
+    "imports": [
+      "helmet"
+    ]
+  },
+  "03.01.05": {
+    "summary": "Least privilege in role, IAM and RBAC definitions",
+    "paths": [
+      "**/rbac*",
+      "**/iam/*",
+      "**/roles*",
+      "**/*policy.json",
+      "**/*.tf"
+    ],
+    "code_terms": [
+      "least_privilege",
+      "role_binding",
+      "ClusterRole",
+      "iam_policy",
+      "permission_boundary",
+      "scoped_role",
+      "readonly_role"
+    ],
+    "doc_terms": [
+      "least privilege",
+      "role definition",
+      "privilege review"
+    ],
+    "libraries": [
+      "aws-sdk",
+      "boto3",
+      "kubernetes"
+    ],
+    "imports": [
+      "boto3",
+      "kubernetes"
+    ]
+  },
+  "03.01.06": {
+    "summary": "Privileged accounts restricted and separated from routine use",
+    "paths": [
+      "**/admin*",
+      "**/rbac*",
+      "**/iam/*"
+    ],
+    "code_terms": [
+      "is_admin",
+      "require_admin",
+      "privileged_role",
+      "break_glass",
+      "sudo_policy",
+      "admin_only",
+      "elevated_access"
+    ],
+    "doc_terms": [
+      "privileged account",
+      "administrative access",
+      "break glass"
+    ]
+  },
+  "03.01.07": {
+    "summary": "Non-privileged users prevented from executing privileged functions, with logging",
+    "paths": [
+      "**/admin*",
+      "**/audit*",
+      "**/middleware/*"
+    ],
+    "code_terms": [
+      "require_privilege",
+      "privileged_function",
+      "audit_log",
+      "log_privileged",
+      "deny_non_admin",
+      "escalation_check"
+    ],
+    "doc_terms": [
+      "privileged function",
+      "privilege escalation control"
+    ]
+  },
+  "03.01.08": {
+    "summary": "Limit on consecutive invalid logon attempts (lockout / throttling)",
+    "paths": [
+      "**/auth*",
+      "**/login*",
+      "**/*ratelimit*",
+      "**/*throttle*"
+    ],
+    "code_terms": [
+      "max_attempts",
+      "failed_login",
+      "lockout",
+      "account_locked",
+      "rate_limit",
+      "throttle",
+      "login_attempts",
+      "backoff"
+    ],
+    "doc_terms": [
+      "lockout policy",
+      "failed login",
+      "brute force protection"
+    ],
+    "libraries": [
+      "express-rate-limit",
+      "django-axes",
+      "rack-attack",
+      "bucket4j",
+      "slowapi"
+    ],
+    "imports": [
+      "express-rate-limit",
+      "rack-attack",
+      "slowapi"
+    ],
+    "test_paths": [
+      "**/test*/**/*lockout*",
+      "**/test*/**/*ratelimit*"
+    ]
+  },
+  "03.01.11": {
+    "summary": "Automatic session termination after defined conditions",
+    "paths": [
+      "**/session*",
+      "**/auth*"
+    ],
+    "code_terms": [
+      "session_timeout",
+      "idle_timeout",
+      "expires_in",
+      "max_age",
+      "session_expiry",
+      "logout_after",
+      "token_ttl"
+    ],
+    "doc_terms": [
+      "session termination",
+      "session timeout",
+      "idle timeout"
+    ]
+  },
+  "03.01.12": {
+    "summary": "Remote access routed through managed, authenticated, encrypted channels",
+    "paths": [
+      "**/vpn*",
+      "**/remote*",
+      "**/bastion*",
+      "**/*tls*"
+    ],
+    "code_terms": [
+      "tls_version",
+      "verify_ssl",
+      "ssh_config",
+      "vpn_gateway",
+      "mutual_tls",
+      "mtls",
+      "bastion"
+    ],
+    "doc_terms": [
+      "remote access",
+      "vpn",
+      "jump host",
+      "bastion host"
+    ]
+  },
+  "03.01.18": {
+    "summary": "Mobile device access control and container/device encryption",
+    "paths": [
+      "**/ios/*",
+      "**/android/*",
+      "**/mobile/*",
+      "**/*.swift",
+      "**/*.kt"
+    ],
+    "code_terms": [
+      "Keychain",
+      "EncryptedSharedPreferences",
+      "FileProtection",
+      "keystore",
+      "device_encryption",
+      "secure_enclave"
+    ],
+    "doc_terms": [
+      "mobile device",
+      "device encryption",
+      "mdm"
+    ],
+    "libraries": [
+      "react-native-keychain",
+      "flutter_secure_storage"
+    ],
+    "imports": [
+      "react-native-keychain",
+      "flutter_secure_storage"
+    ]
+  },
+  "03.01.22": {
+    "summary": "Review and control of publicly accessible content and storage",
+    "paths": [
+      "**/*.tf",
+      "**/public/*",
+      "**/static/*",
+      "**/buckets*"
+    ],
+    "code_terms": [
+      "public_read",
+      "public_access_block",
+      "acl_public",
+      "block_public_acls",
+      "bucket_policy",
+      "publicly_accessible"
+    ],
+    "doc_terms": [
+      "publicly accessible",
+      "public content review"
+    ]
+  },
+  "03.03.01": {
+    "summary": "Event logging: defined event types emitted by the system",
+    "paths": [
+      "**/log*",
+      "**/audit*",
+      "**/telemetry*",
+      "**/observability/*"
+    ],
+    "code_terms": [
+      "logger",
+      "log_event",
+      "audit_event",
+      "structured_log",
+      "event_type",
+      "emit_event",
+      "log.info",
+      "logging.getLogger"
+    ],
+    "doc_terms": [
+      "event logging",
+      "audit events",
+      "logging policy"
+    ],
+    "libraries": [
+      "winston",
+      "pino",
+      "bunyan",
+      "structlog",
+      "log4j",
+      "logback",
+      "serilog",
+      "zap",
+      "zerolog"
+    ],
+    "imports": [
+      "winston",
+      "pino",
+      "structlog",
+      "zap"
+    ]
+  },
+  "03.03.03": {
+    "summary": "Audit record generation and retention",
+    "paths": [
+      "**/audit*",
+      "**/log*",
+      "**/retention*"
+    ],
+    "code_terms": [
+      "audit_trail",
+      "retention_days",
+      "log_retention",
+      "append_only",
+      "audit_record",
+      "immutable_log"
+    ],
+    "doc_terms": [
+      "audit record",
+      "log retention",
+      "retention period"
+    ]
+  },
+  "03.03.08": {
+    "summary": "Protection of audit information from unauthorized access, modification and deletion",
+    "paths": [
+      "**/audit*",
+      "**/log*"
+    ],
+    "code_terms": [
+      "log_integrity",
+      "hmac",
+      "signed_log",
+      "tamper_evident",
+      "write_once",
+      "append_only",
+      "checksum",
+      "hash_chain"
+    ],
+    "doc_terms": [
+      "audit protection",
+      "log integrity",
+      "tamper evident"
+    ]
+  },
+  "03.04.01": {
+    "summary": "Baseline configuration maintained under configuration control",
+    "paths": [
+      "**/*.tf",
+      "**/ansible/*",
+      "**/helm/*",
+      "**/k8s/*",
+      "**/terraform/*",
+      "**/*.yaml"
+    ],
+    "code_terms": [
+      "baseline",
+      "desired_state",
+      "infrastructure_as_code",
+      "terraform",
+      "ansible_playbook",
+      "helm_values"
+    ],
+    "doc_terms": [
+      "baseline configuration",
+      "infrastructure as code",
+      "golden image"
+    ],
+    "libraries": [
+      "terraform",
+      "pulumi",
+      "ansible"
+    ],
+    "imports": [
+      "pulumi"
+    ]
+  },
+  "03.04.02": {
+    "summary": "Restrictive configuration settings applied and enforced",
+    "paths": [
+      "**/*.tf",
+      "**/k8s/*",
+      "**/helm/*",
+      "**/Dockerfile*",
+      "**/*.yaml"
+    ],
+    "code_terms": [
+      "securityContext",
+      "runAsNonRoot",
+      "readOnlyRootFilesystem",
+      "allowPrivilegeEscalation",
+      "hardening",
+      "cis_benchmark",
+      "seccomp"
+    ],
+    "doc_terms": [
+      "configuration settings",
+      "hardening",
+      "cis benchmark",
+      "security baseline"
+    ]
+  },
+  "03.04.03": {
+    "summary": "Configuration change control with review and approval",
+    "paths": [
+      ".github/workflows/*",
+      "**/CODEOWNERS",
+      "**/.gitlab-ci.yml",
+      "**/ci/*"
+    ],
+    "code_terms": [
+      "required_reviewers",
+      "pull_request_review",
+      "branch_protection",
+      "approval_required",
+      "change_control",
+      "codeowners"
+    ],
+    "doc_terms": [
+      "change control",
+      "change approval",
+      "pull request review"
+    ]
+  },
+  "03.04.04": {
+    "summary": "Security impact analysis performed before and verified after changes",
+    "paths": [
+      ".github/workflows/*",
+      "**/ci/*",
+      "**/security/*"
+    ],
+    "code_terms": [
+      "security_scan",
+      "impact_analysis",
+      "sast",
+      "regression_test",
+      "pre_merge_check",
+      "security_review"
+    ],
+    "doc_terms": [
+      "impact analysis",
+      "security impact",
+      "change risk assessment"
+    ]
+  },
+  "03.04.05": {
+    "summary": "Access restrictions enforced for system changes",
+    "paths": [
+      ".github/workflows/*",
+      "**/CODEOWNERS",
+      "**/ci/*"
+    ],
+    "code_terms": [
+      "permissions",
+      "id_token",
+      "environment_protection",
+      "deploy_key",
+      "protected_branch",
+      "restrict_pushes"
+    ],
+    "doc_terms": [
+      "access restriction for change",
+      "deployment approval",
+      "protected branch"
+    ]
+  },
+  "03.04.06": {
+    "summary": "Least functionality: only mission-essential capabilities and services enabled",
+    "paths": [
+      "**/Dockerfile*",
+      "**/k8s/*",
+      "**/*.tf",
+      "**/systemd/*"
+    ],
+    "code_terms": [
+      "capabilities",
+      "drop_all",
+      "disable_service",
+      "minimal_base",
+      "distroless",
+      "hostNetwork",
+      "hostPID",
+      "privileged"
+    ],
+    "doc_terms": [
+      "least functionality",
+      "attack surface reduction",
+      "disable unused"
+    ]
+  },
+  "03.04.08": {
+    "summary": "Authorized software allow-list / deny-by-exception execution policy",
+    "paths": [
+      "**/allowlist*",
+      "**/policy/*",
+      "**/*.lock",
+      "**/package-lock.json"
+    ],
+    "code_terms": [
+      "allowed_packages",
+      "package_allowlist",
+      "signature_required",
+      "verify_signature",
+      "install_policy",
+      "ignore-scripts"
+    ],
+    "doc_terms": [
+      "authorized software",
+      "application allowlist",
+      "software approval"
+    ]
+  },
+  "03.04.10": {
+    "summary": "System component inventory maintained and updated",
+    "paths": [
+      "**/sbom*",
+      "**/inventory*",
+      "**/*.spdx.json",
+      "**/*cyclonedx*"
+    ],
+    "code_terms": [
+      "sbom",
+      "cyclonedx",
+      "spdx",
+      "component_inventory",
+      "dependency_manifest",
+      "bill_of_materials"
+    ],
+    "doc_terms": [
+      "component inventory",
+      "software bill of materials",
+      "asset inventory"
+    ],
+    "libraries": [
+      "cyclonedx-bom",
+      "syft"
+    ],
+    "imports": [
+      "cyclonedx"
+    ]
+  },
+  "03.04.11": {
+    "summary": "Location of CUI and the components processing it identified and documented",
+    "paths": [
+      "**/data-map*",
+      "**/dpia*",
+      "**/privacy/*",
+      "**/DATA_FLOW*"
+    ],
+    "code_terms": [
+      "data_classification",
+      "data_map",
+      "pii_location",
+      "cui_location",
+      "data_inventory",
+      "sensitivity_label"
+    ],
+    "doc_terms": [
+      "data flow",
+      "data location",
+      "information location",
+      "data map"
+    ]
+  },
+  "03.05.01": {
+    "summary": "Unique user identification and authentication",
+    "paths": [
+      "**/auth*",
+      "**/login*",
+      "**/identity/*"
+    ],
+    "code_terms": [
+      "authenticate",
+      "verify_token",
+      "jwt_verify",
+      "user_id",
+      "principal",
+      "oidc",
+      "saml",
+      "session_user"
+    ],
+    "doc_terms": [
+      "user authentication",
+      "unique identification",
+      "identity provider"
+    ],
+    "libraries": [
+      "passport",
+      "authlib",
+      "python-jose",
+      "pyjwt",
+      "jsonwebtoken",
+      "devise",
+      "spring-security"
+    ],
+    "imports": [
+      "passport",
+      "jsonwebtoken",
+      "pyjwt",
+      "authlib"
+    ],
+    "test_paths": [
+      "**/test*/**/*auth*"
+    ]
+  },
+  "03.05.04": {
+    "summary": "Replay-resistant authentication mechanisms",
+    "paths": [
+      "**/auth*",
+      "**/session*"
+    ],
+    "code_terms": [
+      "nonce",
+      "jti",
+      "replay_protection",
+      "challenge_response",
+      "timestamp_validation",
+      "exp_claim",
+      "one_time_token"
+    ],
+    "doc_terms": [
+      "replay resistance",
+      "nonce",
+      "anti-replay"
+    ]
+  },
+  "03.05.07": {
+    "summary": "Password management: strength, compromised-password checks and secure storage",
+    "paths": [
+      "**/auth*",
+      "**/password*",
+      "**/users*"
+    ],
+    "code_terms": [
+      "bcrypt",
+      "argon2",
+      "scrypt",
+      "pbkdf2",
+      "password_hash",
+      "min_length",
+      "haveibeenpwned",
+      "breached_password",
+      "zxcvbn"
+    ],
+    "doc_terms": [
+      "password policy",
+      "password strength",
+      "compromised password"
+    ],
+    "libraries": [
+      "bcrypt",
+      "argon2",
+      "argon2-cffi",
+      "passlib",
+      "zxcvbn",
+      "werkzeug.security"
+    ],
+    "imports": [
+      "bcrypt",
+      "argon2",
+      "passlib",
+      "zxcvbn"
+    ],
+    "test_paths": [
+      "**/test*/**/*password*"
+    ]
+  },
+  "03.05.12": {
+    "summary": "Authenticator management: secrets not embedded, rotated, and stored in a manager",
+    "paths": [
+      "**/secrets*",
+      "**/vault*",
+      "**/kms*",
+      "**/.env.example"
+    ],
+    "code_terms": [
+      "secret_manager",
+      "vault",
+      "kms",
+      "rotate_secret",
+      "get_secret",
+      "SecretsManager",
+      "sealed_secret",
+      "external_secrets"
+    ],
+    "doc_terms": [
+      "secret management",
+      "credential rotation",
+      "key custody"
+    ],
+    "libraries": [
+      "hvac",
+      "boto3",
+      "@aws-sdk/client-secrets-manager",
+      "azure-keyvault-secrets",
+      "google-cloud-secret-manager"
+    ],
+    "imports": [
+      "hvac",
+      "azure.keyvault",
+      "google.cloud.secretmanager"
+    ]
+  },
+  "03.08.09": {
+    "summary": "Backup confidentiality via cryptographic protection at backup storage locations",
+    "paths": [
+      "**/backup*",
+      "**/*.tf",
+      "**/restore*"
+    ],
+    "code_terms": [
+      "backup_encryption",
+      "encrypted_backup",
+      "snapshot_encrypted",
+      "kms_key_id",
+      "server_side_encryption",
+      "sse_kms"
+    ],
+    "doc_terms": [
+      "backup encryption",
+      "encrypted backup",
+      "backup confidentiality"
+    ]
+  },
+  "03.11.01": {
+    "summary": "Risk assessment covering unauthorized disclosure and supply chain risk",
+    "paths": [
+      "**/threat-model*",
+      "**/risk*",
+      "**/THREAT*",
+      "**/security/*"
+    ],
+    "code_terms": [
+      "threat_model",
+      "risk_register",
+      "risk_score",
+      "stride",
+      "attack_tree",
+      "risk_assessment"
+    ],
+    "doc_terms": [
+      "risk assessment",
+      "threat model",
+      "risk register"
+    ]
+  },
+  "03.11.02": {
+    "summary": "Vulnerability monitoring and scanning with defined remediation timelines",
+    "paths": [
+      ".github/workflows/*",
+      "**/security/*",
+      "**/*audit*"
+    ],
+    "code_terms": [
+      "npm_audit",
+      "pip_audit",
+      "trivy",
+      "grype",
+      "dependabot",
+      "vulnerability_scan",
+      "cve",
+      "osv",
+      "sca"
+    ],
+    "doc_terms": [
+      "vulnerability scanning",
+      "vulnerability management",
+      "remediation sla"
+    ],
+    "libraries": [
+      "pip-audit",
+      "safety",
+      "bandit",
+      "semgrep"
+    ],
+    "imports": [
+      "safety"
+    ],
+    "test_paths": [
+      "**/test*/**/*security*"
+    ]
+  },
+  "03.11.04": {
+    "summary": "Response to findings from assessments, monitoring and audits",
+    "paths": [
+      "**/triage*",
+      "**/findings*",
+      "**/security/*"
+    ],
+    "code_terms": [
+      "triage",
+      "remediation",
+      "false_positive",
+      "accepted_risk",
+      "finding_status",
+      "suppress_finding"
+    ],
+    "doc_terms": [
+      "risk response",
+      "remediation plan",
+      "finding triage"
+    ]
+  },
+  "03.12.01": {
+    "summary": "Security assessment of requirements and environment of operation",
+    "paths": [
+      "**/security/*",
+      "**/assessment*",
+      "**/pentest*"
+    ],
+    "code_terms": [
+      "security_assessment",
+      "control_test",
+      "assessment_result",
+      "verification_run",
+      "compliance_check"
+    ],
+    "doc_terms": [
+      "security assessment",
+      "control assessment",
+      "penetration test"
+    ]
+  },
+  "03.12.02": {
+    "summary": "Plan of action and milestones tracking planned remediation",
+    "paths": [
+      "**/poam*",
+      "**/plan*",
+      "**/roadmap*",
+      "**/security/*"
+    ],
+    "code_terms": [
+      "poam",
+      "plan_of_action",
+      "milestone",
+      "remediation_date",
+      "target_date",
+      "open_finding"
+    ],
+    "doc_terms": [
+      "plan of action",
+      "milestones",
+      "poa&m",
+      "remediation plan"
+    ]
+  },
+  "03.12.03": {
+    "summary": "System-level continuous monitoring strategy and ongoing assessment",
+    "paths": [
+      ".github/workflows/*",
+      "**/monitoring/*",
+      "**/ci/*"
+    ],
+    "code_terms": [
+      "continuous_monitoring",
+      "scheduled_scan",
+      "cron",
+      "watch_mode",
+      "drift_detection",
+      "nightly_scan"
+    ],
+    "doc_terms": [
+      "continuous monitoring",
+      "ongoing assessment",
+      "scheduled scanning"
+    ]
+  },
+  "03.13.01": {
+    "summary": "Boundary protection at external and key internal managed interfaces",
+    "paths": [
+      "**/*.tf",
+      "**/k8s/*",
+      "**/network*",
+      "**/ingress*"
+    ],
+    "code_terms": [
+      "security_group",
+      "network_policy",
+      "ingress",
+      "egress",
+      "waf",
+      "dmz",
+      "subnet",
+      "firewall_rule"
+    ],
+    "doc_terms": [
+      "boundary protection",
+      "network segmentation",
+      "dmz",
+      "perimeter"
+    ]
+  },
+  "03.13.04": {
+    "summary": "Prevention of unauthorized information transfer via shared system resources",
+    "paths": [
+      "**/cache*",
+      "**/session*",
+      "**/tenant*"
+    ],
+    "code_terms": [
+      "tenant_id",
+      "isolation",
+      "scrub_buffer",
+      "zeroize",
+      "clear_memory",
+      "cache_key",
+      "per_tenant"
+    ],
+    "doc_terms": [
+      "shared resources",
+      "tenant isolation",
+      "residual information"
+    ]
+  },
+  "03.13.06": {
+    "summary": "Network communications denied by default and allowed by exception",
+    "paths": [
+      "**/*.tf",
+      "**/k8s/*",
+      "**/network-policy*"
+    ],
+    "code_terms": [
+      "default_deny",
+      "deny_all",
+      "NetworkPolicy",
+      "allow_list",
+      "egress_deny",
+      "ingress_deny"
+    ],
+    "doc_terms": [
+      "deny by default",
+      "default deny",
+      "allow by exception"
+    ]
+  },
+  "03.13.08": {
+    "summary": "Cryptographic protection of CUI in transit and at rest",
+    "paths": [
+      "**/*.tf",
+      "**/crypto*",
+      "**/tls*",
+      "**/config/*"
+    ],
+    "code_terms": [
+      "TLSv1_2",
+      "TLSv1_3",
+      "https",
+      "encrypt_at_rest",
+      "server_side_encryption",
+      "ssl_context",
+      "verify=True",
+      "encryption_enabled"
+    ],
+    "doc_terms": [
+      "encryption in transit",
+      "encryption at rest",
+      "transmission confidentiality"
+    ],
+    "libraries": [
+      "cryptography",
+      "pyopenssl",
+      "openssl",
+      "bouncycastle"
+    ],
+    "imports": [
+      "cryptography",
+      "ssl"
+    ]
+  },
+  "03.13.09": {
+    "summary": "Network connection terminated at session end or after inactivity",
+    "paths": [
+      "**/session*",
+      "**/server*",
+      "**/config/*"
+    ],
+    "code_terms": [
+      "idle_timeout",
+      "keepalive_timeout",
+      "connection_timeout",
+      "read_timeout",
+      "close_connection",
+      "socket_timeout"
+    ],
+    "doc_terms": [
+      "network disconnect",
+      "connection timeout",
+      "idle disconnect"
+    ]
+  },
+  "03.13.10": {
+    "summary": "Cryptographic key establishment and management",
+    "paths": [
+      "**/kms*",
+      "**/keys*",
+      "**/vault*",
+      "**/crypto*"
+    ],
+    "code_terms": [
+      "key_rotation",
+      "kms_key",
+      "generate_key",
+      "key_id",
+      "hsm",
+      "key_derivation",
+      "envelope_encryption",
+      "rotate_key"
+    ],
+    "doc_terms": [
+      "key management",
+      "key rotation",
+      "key establishment",
+      "hsm"
+    ],
+    "libraries": [
+      "cryptography",
+      "boto3",
+      "azure-keyvault-keys",
+      "google-cloud-kms"
+    ],
+    "imports": [
+      "cryptography",
+      "azure.keyvault"
+    ]
+  },
+  "03.13.11": {
+    "summary": "Approved cryptography used to protect CUI confidentiality",
+    "paths": [
+      "**/crypto*",
+      "**/security/*"
+    ],
+    "code_terms": [
+      "AES",
+      "aes_256",
+      "GCM",
+      "sha256",
+      "sha512",
+      "fips",
+      "cipher_suite",
+      "AESGCM",
+      "ChaCha20"
+    ],
+    "doc_terms": [
+      "fips 140",
+      "approved cryptography",
+      "cryptographic module",
+      "cipher suite"
+    ],
+    "libraries": [
+      "cryptography",
+      "pycryptodome",
+      "libsodium",
+      "pynacl",
+      "bouncycastle"
+    ],
+    "imports": [
+      "cryptography",
+      "nacl",
+      "Crypto"
+    ],
+    "test_paths": [
+      "**/test*/**/*crypto*"
+    ]
+  },
+  "03.13.13": {
+    "summary": "Mobile code authorized, monitored and controlled",
+    "paths": [
+      "**/public/*",
+      "**/static/*",
+      "**/templates/*",
+      "**/*.html"
+    ],
+    "code_terms": [
+      "Content-Security-Policy",
+      "csp",
+      "script_src",
+      "sanitize",
+      "dangerouslySetInnerHTML",
+      "nonce",
+      "subresource_integrity",
+      "integrity="
+    ],
+    "doc_terms": [
+      "mobile code",
+      "content security policy",
+      "script policy"
+    ],
+    "libraries": [
+      "helmet",
+      "dompurify",
+      "bleach",
+      "sanitize-html"
+    ],
+    "imports": [
+      "dompurify",
+      "bleach",
+      "helmet"
+    ]
+  },
+  "03.13.15": {
+    "summary": "Session authenticity: protected session tokens and request integrity",
+    "paths": [
+      "**/session*",
+      "**/auth*",
+      "**/middleware/*"
+    ],
+    "code_terms": [
+      "httponly",
+      "samesite",
+      "secure_cookie",
+      "csrf_token",
+      "session_signature",
+      "signed_cookie",
+      "regenerate_session"
+    ],
+    "doc_terms": [
+      "session authenticity",
+      "csrf protection",
+      "session fixation"
+    ],
+    "libraries": [
+      "csurf",
+      "django.middleware.csrf",
+      "flask-wtf",
+      "rack-protection"
+    ],
+    "imports": [
+      "csurf",
+      "flask_wtf"
+    ],
+    "test_paths": [
+      "**/test*/**/*csrf*",
+      "**/test*/**/*session*"
+    ]
+  },
+  "03.14.01": {
+    "summary": "Flaw remediation: identify, report and correct system flaws within defined periods",
+    "paths": [
+      ".github/workflows/*",
+      "**/security/*",
+      "**/patch*"
+    ],
+    "code_terms": [
+      "dependabot",
+      "renovate",
+      "patch_version",
+      "security_update",
+      "fix_applied",
+      "remediate",
+      "upgrade_dependency"
+    ],
+    "doc_terms": [
+      "flaw remediation",
+      "patch management",
+      "security updates"
+    ],
+    "libraries": [
+      "renovate",
+      "dependabot"
+    ]
+  },
+  "03.14.02": {
+    "summary": "Malicious code protection at system entry and exit points",
+    "paths": [
+      ".github/workflows/*",
+      "**/security/*",
+      "**/upload*"
+    ],
+    "code_terms": [
+      "clamav",
+      "malware_scan",
+      "virus_scan",
+      "quarantine",
+      "file_scan",
+      "signature_update",
+      "yara"
+    ],
+    "doc_terms": [
+      "malicious code",
+      "antimalware",
+      "malware protection",
+      "virus scanning"
+    ],
+    "libraries": [
+      "clamd",
+      "pyclamd",
+      "yara-python"
+    ],
+    "imports": [
+      "clamd",
+      "yara"
+    ]
+  },
+  "03.14.03": {
+    "summary": "Receipt and dissemination of security alerts, advisories and directives",
+    "paths": [
+      ".github/workflows/*",
+      "**/security/*",
+      "**/alerts*"
+    ],
+    "code_terms": [
+      "cve_alert",
+      "advisory",
+      "security_alert",
+      "ghsa",
+      "nvd",
+      "osv_feed",
+      "notify_security"
+    ],
+    "doc_terms": [
+      "security advisories",
+      "security alerts",
+      "vulnerability notification"
+    ]
+  },
+  "03.14.06": {
+    "summary": "System monitoring for attacks, indicators and unauthorized connections",
+    "paths": [
+      "**/monitoring/*",
+      "**/observability/*",
+      "**/siem*",
+      "**/alerts*"
+    ],
+    "code_terms": [
+      "intrusion_detection",
+      "anomaly",
+      "alert_rule",
+      "metrics",
+      "trace",
+      "siem",
+      "detection_rule",
+      "suricata",
+      "falco"
+    ],
+    "doc_terms": [
+      "system monitoring",
+      "intrusion detection",
+      "security monitoring"
+    ],
+    "libraries": [
+      "opentelemetry",
+      "prometheus_client",
+      "datadog",
+      "sentry-sdk"
+    ],
+    "imports": [
+      "opentelemetry",
+      "prometheus_client",
+      "sentry_sdk"
+    ]
+  },
+  "03.14.08": {
+    "summary": "Information management and retention for CUI within and output from the system",
+    "paths": [
+      "**/retention*",
+      "**/privacy/*",
+      "**/data*"
+    ],
+    "code_terms": [
+      "retention_policy",
+      "ttl",
+      "purge",
+      "expire_after",
+      "data_lifecycle",
+      "delete_after",
+      "archival"
+    ],
+    "doc_terms": [
+      "information retention",
+      "data retention",
+      "records retention"
+    ]
+  },
+  "03.15.01": {
+    "summary": "Documented and disseminated security policies and procedures",
+    "paths": [
+      "**/SECURITY.md",
+      "**/POLICY*",
+      "**/policies/*",
+      "**/CONTRIBUTING.md",
+      "**/docs/*"
+    ],
+    "code_terms": [
+      "policy_version",
+      "policy_document",
+      "compliance_policy"
+    ],
+    "doc_terms": [
+      "security policy",
+      "policies and procedures",
+      "policy review",
+      "acceptable use"
+    ]
+  },
+  "03.16.01": {
+    "summary": "Systems security engineering principles applied to development",
+    "paths": [
+      "**/docs/*",
+      "**/architecture*",
+      "**/design*",
+      "**/adr/*"
+    ],
+    "code_terms": [
+      "threat_model",
+      "secure_by_default",
+      "defense_in_depth",
+      "fail_closed",
+      "design_review",
+      "security_requirement"
+    ],
+    "doc_terms": [
+      "security engineering",
+      "secure design",
+      "defense in depth",
+      "architecture decision"
+    ]
+  },
+  "03.16.02": {
+    "summary": "Unsupported or end-of-life system components replaced",
+    "paths": [
+      "**/Dockerfile*",
+      "**/*.lock",
+      "**/package.json",
+      "**/requirements*.txt",
+      "**/go.mod"
+    ],
+    "code_terms": [
+      "end_of_life",
+      "eol",
+      "deprecated",
+      "unsupported_version",
+      "lts",
+      "upgrade_path",
+      "sunset"
+    ],
+    "doc_terms": [
+      "end of life",
+      "unsupported components",
+      "deprecation",
+      "upgrade plan"
+    ]
+  },
+  "03.17.01": {
+    "summary": "Supply chain risk management plan covering the component lifecycle",
+    "paths": [
+      "**/sbom*",
+      "**/supply*",
+      "**/security/*",
+      "**/docs/*"
+    ],
+    "code_terms": [
+      "supply_chain",
+      "sbom",
+      "provenance",
+      "slsa",
+      "attestation",
+      "vendor_risk"
+    ],
+    "doc_terms": [
+      "supply chain risk",
+      "scrm",
+      "vendor management",
+      "third party risk"
+    ]
+  },
+  "03.17.02": {
+    "summary": "Acquisition strategies, tools and methods that mitigate supply chain risk",
+    "paths": [
+      "**/*.lock",
+      "**/package-lock.json",
+      "**/go.sum",
+      "**/ATTRIBUTIONS*",
+      "**/LICENSE*"
+    ],
+    "code_terms": [
+      "lockfile",
+      "pinned_version",
+      "integrity_hash",
+      "checksum",
+      "license_policy",
+      "approved_registry",
+      "private_registry"
+    ],
+    "doc_terms": [
+      "acquisition",
+      "procurement",
+      "license policy",
+      "approved vendors"
+    ]
+  },
+  "03.17.03": {
+    "summary": "Supply chain weaknesses identified and security requirements enforced on components",
+    "paths": [
+      ".github/workflows/*",
+      "**/sbom*",
+      "**/supply*"
+    ],
+    "code_terms": [
+      "sigstore",
+      "cosign",
+      "verify_provenance",
+      "slsa_level",
+      "signature_verification",
+      "in_toto",
+      "dependency_review"
+    ],
+    "doc_terms": [
+      "supply chain requirements",
+      "provenance verification",
+      "artifact signing"
+    ],
+    "libraries": [
+      "sigstore",
+      "in-toto"
+    ],
+    "imports": [
+      "sigstore",
+      "in_toto"
+    ]
+  }
+}

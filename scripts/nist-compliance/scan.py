@@ -88,11 +88,25 @@ SKIP_FILE_SUFFIXES = (
     # repo on the questions rather than the answers.
     "scripts/nist-compliance/controls.json",
     "scripts/nist-compliance/build-catalog.py",
+    # The same reasoning applies to EVERY generated catalog, not just this
+    # scanner's own: a second one (NIST SP 800-171 Rev. 3) also carries verbatim
+    # control text, and it is questions-not-answers for whichever framework is
+    # being scanned. code-testability.json is skipped for the same reason — it is
+    # a rationale file full of security vocabulary describing what we cannot
+    # observe, which is precisely the sort of prose that inflates a term score.
+    "scripts/nist-800-171/scan.py",
+    "scripts/nist-800-171/evidence-rules.json",
+    "scripts/nist-800-171/controls.json",
+    "scripts/nist-800-171/code-testability.json",
+    "scripts/nist-800-171/build-catalog.py",
     "skills/nist-ai-600-1/SKILL.md",
     "commands/nist-ai-600-1.md",
     "nist-ai-600-1-attestation.md",
     "nist-ai-600-1-attestation.csv",
     "nist-ai-600-1-attestation.json",
+    "nist-800-171-r3-attestation.md",
+    "nist-800-171-r3-attestation.csv",
+    "nist-800-171-r3-attestation.json",
 )
 
 MAX_FILE_SIZE = 1_000_000  # 1 MB
@@ -799,7 +813,7 @@ def print_summary(statuses, evidence, manifest_deps):
     needs_ext = sum(1 for _, ne in statuses.values() if ne)
 
     print()
-    print(f"{BOLD}NIST AI 600-1 Compliance Scan{RESET}")
+    print(f"{BOLD}{FW['name']} Compliance Scan{RESET}")
     print(f"  {total} testable controls scanned "
           f"({needs_ext} also need external attestation)")
     print(f"  {len(manifest_deps)} unique dependencies found in manifests")
@@ -833,14 +847,14 @@ def print_summary(statuses, evidence, manifest_deps):
 def write_md(controls, rules, evidence, statuses, out_path, root,
              control_count=None, testable_count=None):
     lines = []
-    lines.append("# NIST AI 600-1 Compliance Attestation")
+    lines.append(f"# {FW['name']} Compliance Attestation")
     lines.append("")
     lines.append(f"- **Repository:** `{root}`")
     lines.append(f"- **Scan time:** {datetime.now(timezone.utc).isoformat()}")
-    lines.append(f"- **Scanner:** agentic-security/nist-ai-600-1 v0.2 (multi-signal)")
+    lines.append(f"- **Scanner:** agentic-security/{FW['slug']} v0.2 (multi-signal)")
     # Counts come from the catalog, never a literal — an upstream revision that
     # adds or drops controls must not leave a stale number in an attestation.
-    lines.append(f"- **Catalog:** `NIST AI 600-1.xlsx` "
+    lines.append(f"- **Catalog:** `{FW['source']}` "
                  f"({control_count} controls; {testable_count} code-testable)")
     lines.append("")
     lines.append("> This attestation reports only evidence detectable from "
@@ -1107,7 +1121,7 @@ def write_csv(controls, rules, evidence, statuses, out_path):
 def write_json(controls, rules, evidence, statuses, manifest_deps,
                out_path, root):
     data = {
-        "scanner": "agentic-security/nist-ai-600-1",
+        "scanner": f"agentic-security/{FW['slug']}",
         "scanner_version": "0.2.0",
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "repo": root,
@@ -1139,6 +1153,41 @@ def write_json(controls, rules, evidence, statuses, manifest_deps,
         json.dump(data, f, indent=2)
 
 
+# Identity of the framework currently being scanned. Populated from the catalog
+# in main(); the defaults reproduce this scanner's original hardcoded strings so
+# a run with no catalog metadata behaves exactly as it always did.
+FW = {
+    "name": "NIST AI 600-1",
+    "slug": "nist-ai-600-1",
+    "source": "NIST AI 600-1.xlsx",
+}
+
+
+def _slugify(name: str) -> str:
+    """'NIST AI 600-1' -> 'nist-ai-600-1'. Used only when a catalog omits `slug`."""
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", (name or "").lower())).strip("-")
+
+
+def _set_framework_identity(catalog_path: str) -> None:
+    """Read framework name/slug/source from the catalog. Never fatal: a catalog
+    without this metadata leaves the defaults above in place, so an older
+    controls.json keeps working."""
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as fh:
+            blob = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(blob, dict):
+        return
+    name = blob.get("framework")
+    if name:
+        FW["name"] = name
+        FW["slug"] = blob.get("slug") or _slugify(name)
+    src = blob.get("source")
+    if src:
+        FW["source"] = os.path.basename(src)
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -1149,12 +1198,28 @@ def main():
                     help="Path to controls.json (built by build-catalog.py)")
     ap.add_argument("--rules", default=str(DEFAULT_RULES),
                     help="Path to evidence-rules.json")
-    ap.add_argument("--md-out", default="nist-ai-600-1-attestation.md")
-    ap.add_argument("--csv-out", default="nist-ai-600-1-attestation.csv")
-    ap.add_argument("--json-out", default="nist-ai-600-1-attestation.json")
+    # Output paths default to None and are resolved from the catalog's own slug
+    # AFTER it is loaded, so a second framework's run does not overwrite this
+    # one's attestation. Passing any of them explicitly still wins.
+    ap.add_argument("--md-out", default=None)
+    ap.add_argument("--csv-out", default=None)
+    ap.add_argument("--json-out", default=None)
     ap.add_argument("--quiet", action="store_true",
                     help="Suppress console summary")
     args = ap.parse_args()
+
+    # Framework identity comes from the catalog being scanned, never from a
+    # literal in this file — that is what lets one engine serve more than one
+    # standard. A catalog with no explicit `slug` derives one from its name,
+    # which reproduces "nist-ai-600-1" from "NIST AI 600-1" exactly, so this
+    # scanner's own defaults are unchanged.
+    _set_framework_identity(args.catalog)
+    if args.md_out is None:
+        args.md_out = f"{FW['slug']}-attestation.md"
+    if args.csv_out is None:
+        args.csv_out = f"{FW['slug']}-attestation.csv"
+    if args.json_out is None:
+        args.json_out = f"{FW['slug']}-attestation.json"
 
     root = os.path.abspath(args.path)
     quiet = args.quiet

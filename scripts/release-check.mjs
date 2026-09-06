@@ -136,11 +136,15 @@ export const CHECKS = [
     // spreadsheet, and it works (verified by running it), but nothing
     // automated ever called it — a spreadsheet edit with no matching
     // controls.json regeneration could ship silently.
+    // Generalized from a single hardcoded script to every generated catalog:
+    // a second one (NIST SP 800-171 Rev. 3) landed, and a gate that names one
+    // script by path silently stops covering the rest.
     id: 'nist-catalog-freshness',
-    title: 'NIST AI 600-1 controls.json matches its source spreadsheet',
+    title: 'Generated NIST control catalogs match their sources',
     slow: false,
-    remedy: 'Run `python3 scripts/nist-compliance/build-catalog.py` to regenerate ' +
-      'controls.json and evidence-rules.json from the updated spreadsheet, then commit both.',
+    remedy: 'Run the named build-catalog.py to regenerate its controls.json from the ' +
+      'updated source, then commit the result. For 800-171 the source is both the CSV ' +
+      'export and code-testability.json — a control with no rating fails the build.',
   },
   {
     id: 'package-contents',
@@ -822,8 +826,20 @@ function main(argv) {
   evaluate('attestation-self-check', () => evaluateAttestationSelfCheck());
 
   evaluate('nist-catalog-freshness', () => {
-    const r = run('python3', [path.join(REPO, 'scripts', 'nist-compliance', 'build-catalog.py'), '--check'], { cwd: REPO });
-    return evaluateCommandGate({ label: 'python3 scripts/nist-compliance/build-catalog.py --check', exitCode: r.status });
+    // Every generated control catalog, not just the first one. Each exits 0 when
+    // the committed catalog matches its source, 1 when stale, and 2 when the
+    // check could not run at all — an unverifiable check is a failure, not a
+    // skip, so evaluateCommandGate treats any non-zero as failing.
+    const catalogs = [
+      'scripts/nist-compliance/build-catalog.py',
+      'scripts/nist-800-171/build-catalog.py',
+    ];
+    for (const rel of catalogs) {
+      const r = run('python3', [path.join(REPO, rel), '--check'], { cwd: REPO });
+      const verdict = evaluateCommandGate({ label: `python3 ${rel} --check`, exitCode: r.status });
+      if (!verdict.ok) return verdict;
+    }
+    return evaluateCommandGate({ label: `${catalogs.length} catalogs checked`, exitCode: 0 });
   });
 
   evaluate('package-contents', () => runPackageContentsCheck(REPO));

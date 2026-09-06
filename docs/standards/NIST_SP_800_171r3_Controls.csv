@@ -1,0 +1,712 @@
+Control #,Control Family,Control Description,Control Text
+03.01.01,Access Control,"Account Management
+a. Define the types of system accounts allowed and prohibited.
+b. Create, enable, modify, disable, and remove system accounts in accordance with policy, procedures, prerequisites, and criteria.
+c. Specify: 1. Authorized users of the system, 2. Group and role membership, and 3. Access authorizations (i.e., privileges) for each account.
+d. Authorize access to the system based on: 1. A valid access authorization and 2. Intended system usage.
+e. Monitor the use of system accounts.
+f. Disable system accounts when: 1. The accounts have expired, 2. The accounts have been inactive for [Assignment: organization-defined time period], 3. The accounts are no longer associated with a user or individual, 4. The accounts are in violation of organizational policy, or 5. Significant risks associated with individuals are discovered.
+g. Notify account managers and designated personnel or roles within: 1. [Assignment: organization-defined time period] when accounts are no longer required. 2. [Assignment: organization-defined time period] when users are terminated or transferred. 3. [Assignment: organization-defined time period] when system usage or the need-to-know changes for an individual.
+h. Require that users log out of the system after [Assignment: organization-defined time period] of expected inactivity or when [Assignment: organization-defined circumstances].","DISCUSSION
+This requirement focuses on account management for systems and applications. The definition and enforcement of access authorizations other than those determined by account type (e.g., privileged access, non-privileged access) are addressed in <a href=""#/cprt/framework/version/SP_800_171_3_0_0/home?element=03.01.02"">03.01.02</a>. System account types include individual, group, temporary, system, guest, anonymous, emergency, developer, and service. Users who require administrative privileges on system accounts receive additional scrutiny by personnel responsible for approving such accounts and privileged access. Types of accounts that organizations may prohibit due to increased risk include group, emergency, guest, anonymous, and temporary. Organizations may choose to define access privileges or other attributes by account, type of account, or a combination of both. Other attributes required for authorizing access include restrictions on the time of day, day of the week, and point of origin. When defining other system account attributes, organizations consider system requirements (e.g., system upgrades, scheduled maintenance) and mission and business requirements (e.g., time zone differences, remote access to facilitate travel requirements). Users who pose a significant security risk include individuals for whom reliable evidence indicates either the intention to use authorized access to the system to cause harm or that adversaries will cause harm through them. Close coordination among mission and business owners, system administrators, human resource managers, and legal staff is essential when disabling system accounts for high-risk individuals. Time periods for the notification of organizational personnel or roles may vary. Inactivity logout is behavior- or policy-based and requires users to take physical action to log out when they are expecting inactivity longer than the defined period. Automatic enforcement of inactivity logout is addressed by 03.01.10.
+
+REFERENCES
+Source Controls: AC-02, AC-02(03), AC-02(05), AC-02(13)
+Supporting Publications: SP 800-46 [14], SP 800-57-1 [15], SP 800-57-2 [16], SP 800-57-3 [17], SP 800-77 [18], SP 800-113 [19], SP 800-114 [20], SP 800-121 [21], SP 800-162 [22], SP 800-178 [23], SP 800-192 [24], IR 7874 [25], IR 7966 [26]"
+03.01.02,Access Control,"Access Enforcement
+Enforce approved authorizations for logical access to CUI and system resources in accordance with applicable access control policies.","DISCUSSION
+Access control policies control access between active entities or subjects (i.e., users or system processes acting on behalf of users) and passive entities or objects (i.e., devices, files, records, domains) in organizational systems. Types of system access include remote access and access to systems that communicate through external networks, such as the internet. Access enforcement mechanisms can also be employed at the application and service levels to provide increased protection for CUI. This recognizes that the system can host many applications and services in support of mission and business functions. Access control policies are defined in 03.15.01.
+REFERENCES
+Source Control: AC-03
+Supporting Publications: SP 800-46 [14], SP 800-57-1 [15], SP 800-57-2 [16], SP 800- 57-3 [17], SP 800-77 [18], SP 800-113 [19], SP 800-114 [20], SP 800-121 [21], SP 800-162 [22], SP 800-178 [23], SP 800-192 [24], IR 7874 [25], IR 7966 [26]"
+03.01.03,Access Control,"Information Flow Enforcement
+Enforce approved authorizations for controlling the flow of CUI within the system and between connected systems.","DISCUSSION
+Information flow control regulates where CUI can transit within a system and between systems (in contrast to who is allowed to access the information) and without regard to subsequent accesses to that information. Flow control restrictions include keeping CUI from being transmitted in the clear to the internet, blocking external communications traffic that claims to be sourced from within the organization, restricting requests to the internet that are not from the internal web proxy server, and limiting CUI transfers between organizations based on data structures and content.
+Transferring CUI between organizations may require an agreement that specifies how the information flow is enforced (see 03.12.05). Transferring CUI between systems that represent different security domains with different security policies introduces the risk that such transfers violate one or more domain security policies. In such situations, information owners or stewards provide guidance at designated policy enforcement points between interconnected systems. Organizations consider mandating specific architectural solutions when required to enforce specific security policies. Enforcement includes prohibiting CUI transfers between interconnected systems (i.e., allowing information access only), employing hardware mechanisms to enforce one-way information flows, and implementing trustworthy regrading mechanisms to reassign security attributes and security labels.
+Organizations commonly use information flow control policies and enforcement mechanisms to control the flow of CUI between designated sources and destinations (e.g., networks, individuals, and devices) within systems and between interconnected systems. Flow control is based on characteristics of the information or the information path. Enforcement occurs in boundary protection devices (e.g., encrypted tunnels, routers, gateways, and firewalls) that use rule sets or establish configuration settings that restrict system services, provide a packet-filtering capability based on header information, or provide a message-filtering capability based on message content (e.g., implementing key word searches or using document characteristics). Organizations also consider the trustworthiness of filtering and inspection mechanisms (i.e., hardware, firmware, and software components) that are critical to information flow enforcement.
+REFERENCES
+Source Control: AC-04
+Supporting Publications: SP 800-160-1 [11], SP 800-162 [22], SP 800-178 [23]"
+03.01.04,Access Control,"Separation of Duties
+a. Identify the duties of individuals requiring separation.
+b. Define system access authorizations to support separation of duties.","DISCUSSION
+Separation of duties addresses the potential for abuse of authorized privileges and reduces the risk of malevolent activity without collusion. Separation of duties includes dividing mission functions and support functions among different individuals or roles, conducting system support functions with different individuals or roles (e.g., quality assurance, configuration management, network security, system management, assessments, and programming), and ensuring that personnel who administer access control functions do not also administer audit functions. Because separation of duty violations can span systems and application domains, organizations consider the entirety of their systems and system components when developing policies on separation of duties. This requirement is enforced by 03.01.02
+REFERENCES
+Source Control: AC-05
+Supporting Publications: SP 800-162 [22], SP 800-178 [23]"
+03.01.05,Access Control,"Least Privilege
+a. Allow only authorized system access for users (or processes acting on behalf of users) that is necessary to accomplish assigned organizational tasks.
+b. Authorize access to [Assignment: organization-defined security functions] and [Assignment: organization-defined security-relevant information].
+c. Review the privileges assigned to roles or classes of users [Assignment: organization-defined frequency] to validate the need for such privileges.
+d. Reassign or remove privileges, as necessary.","DISCUSSION
+Organizations employ the principle of least privilege for specific duties and authorized access for users and system processes. Least privilege is applied to the development, implementation, and operation of the system. Organizations consider creating additional processes, roles, and system accounts to achieve least privilege. Security functions include establishing system accounts and assigning privileges, installing software, configuring access authorizations, configuring settings for events to be audited, establishing vulnerability scanning parameters, establishing intrusion detection parameters, and managing audit information. Security-relevant information includes threat and vulnerability information, filtering rules for routers or firewalls, configuration parameters for security services, security architecture, cryptographic key management information, access control lists, and audit information.
+REFERENCES
+Source Controls: AC-06, AC-06(01), AC-06(07), AU-09(04)
+Supporting Publications: None"
+03.01.06,Access Control,"Least Privilege - Privileged Accounts
+a. Restrict privileged accounts on the system to [Assignment: organization-defined personnel or roles].
+b. Require that users (or roles) with privileged accounts use non-privileged accounts when accessing non-security functions or non-security information.","DISCUSSION
+Privileged accounts refer to accounts that are granted elevated privileges to access resources (including security functions or security-relevant information) that are otherwise restricted for non-privileged accounts. These accounts are typically described as system administrator or super user accounts. For example, a privileged account is often required in order to perform privileged functions such as executing commands that could modify system behavior. Restricting privileged accounts to specific personnel or roles ensures that only those authorized users can access and manipulate security functions or security-relevant information. Requiring the use of non-privileged accounts when such access is not needed can limit unauthorized access to and manipulation of security functions or security-relevant information.
+REFERENCES
+Source Controls: AC-06(02), AC-06(05)
+Supporting Publications: None"
+03.01.07,Access Control,"Least Privilege - Privileged Functions
+a. Prevent non-privileged users from executing privileged functions.
+b. Log the execution of privileged functions.","DISCUSSION
+Privileged functions include establishing system accounts, performing system integrity checks, conducting patching operations, changing system configuration settings, or administering cryptographic key management activities. Non-privileged users do not possess the authorizations to execute privileged functions. Bypassing intrusion detection and prevention mechanisms or malicious code protection mechanisms are examples of privileged functions that require protection from non-privileged users. This requirement represents a condition achieved by the definition of authorized privileges in 03.01.01 and privilege enforcement in 03.01.02. The misuse of privileged functions — whether intentionally or unintentionally by authorized users or by unauthorized external entities that have compromised system accounts — is a serious and ongoing concern that can have significant adverse impacts on organizations. Logging the use of privileged functions is one way to detect such misuse and mitigate risks from advanced persistent threats and insider threats.
+REFERENCES
+Source Controls: AC-06(09), AC-06(10)
+Supporting Publications: None"
+03.01.08,Access Control,"Unsuccessful Logon Attempts
+a. Enforce a limit of [Assignment: organization-defined number] consecutive invalid logon attempts by a user during a [Assignment: organization-defined time period].
+b. Automatically [Selection: lock the account/node; delay prompt; notify admin; etc.] when the maximum number of unsuccessful attempts is exceeded.","DISCUSSION
+Due to the potential for denial of service, automatic system lockouts are in most cases, temporary and automatically release after a predetermined time period established by the organization (i.e., using a delay algorithm). Organizations may employ different delay algorithms for different system components based on the capabilities of the respective components. Responses to unsuccessful system logon attempts may be implemented at the system and application levels. Organization-defined actions that may be taken include prompting the user to answer a secret question in addition to the username and password, invoking a lockdown mode with limited user capabilities (instead of a full lockout), allowing users to only logon from specified Internet Protocol (IP) addresses, requiring a CAPTCHA to prevent automated attacks, or applying user profiles, such as location, time of day, IP address, device, or Media Access Control (MAC) address.
+REFERENCES
+Source Control: AC-07
+Supporting Publications: SP 800-63-3 [27], SP 800-124 [28]"
+03.01.09,Access Control,"System Use Notification
+Display a system use notification message with privacy and security notices consistent with applicable CUI rules before granting access to the system.","DISCUSSION
+System use notifications can be implemented using messages or warning banners. The messages or warning banners are displayed before individuals log in to a system that processes, stores, or transmits CUI. System use notifications are used for access via logon interfaces with human users and are not required when human interfaces do not exist. Organizations consider whether a secondary use notification is needed to access applications or other system resources after the initial network logon. Posters or other printed materials may be used in lieu of an automated system message. This requirement is related to <a 03.15.03.
+REFERENCES
+Source Control: AC-08
+Supporting Publications: None"
+03.01.10,Access Control,"Device Lock
+a. Prevent access to the system by [Selection: initiating a device lock after [Assignment: organization-defined time period] of inactivity; requiring the user to initiate a device lock before leaving the system unattended].
+b. Retain the device lock until the user reestablishes access using established identification and authentication procedures.
+c. Conceal, via the device lock, information previously visible on the display with a publicly viewable image.","DISCUSSION
+Device locks are temporary actions taken to prevent access to the system when users depart from the immediate vicinity of the system but do not want to log out due to the temporary nature of their absences. Device locks can be implemented at the operating system level or application level. User-initiated device locking is behavior- or policy-based and requires users to take physical action to initiate the device lock. Device locks are not an acceptable substitute for logging out of the system (e.g., when organizations require users to log out at the end of workdays). Publicly viewable images can include static or dynamic images, such as patterns used with screen savers, solid colors, photographic images, a clock, a battery life indicator, or a blank screen with the caveat that controlled unclassified information is not displayed.
+REFERENCES
+Source Controls: AC-11, AC-11(01)
+Supporting Publications: None"
+03.01.11,Access Control,"Session Termination
+Terminate a user session automatically after [Assignment: organization-defined conditions or trigger events requiring session disconnect].","DISCUSSION
+This requirement addresses the termination of user-initiated logical sessions in contrast to the termination of network connections that are associated with communications sessions (i.e., disconnecting from the network) in 03.13.09. A logical session is initiated whenever a user (or processes acting on behalf of a user) accesses a system. Logical sessions can be terminated (and thus terminate user access) without terminating network sessions. Session termination ends all system processes associated with a user’s logical session except those processes that are created by the user (i.e., session owner) to continue after the session is terminated. Conditions or trigger events that require automatic session termination can include organization-defined periods of user inactivity, time-of-day restrictions on system use, and targeted responses to certain types of incidents.
+REFERENCES
+Source Control: AC-12
+Supporting Publications: None"
+03.01.12,Access Control,"Remote Access
+a. Establish usage restrictions, configuration requirements, and connection requirements for each type of allowable remote system access.
+b. Authorize each type of remote system access prior to establishing such connections.
+c. Route remote access to the system through authorized and managed access control points.
+d. Authorize the remote execution of privileged commands and remote access to security-relevant information.","DISCUSSION
+Remote access is access to systems (or processes acting on behalf of users) that communicate through external networks, such as the internet. Monitoring and controlling remote access methods allows organizations to detect attacks and ensure compliance with remote access policies. Routing remote access through managed access control points enhances explicit control over such connections and reduces susceptibility to unauthorized access to the system, which could result in the unauthorized disclosure of CUI. Remote access to the system represents a significant potential vulnerability that can be exploited by adversaries. Restricting the execution of privileged commands and access to security-relevant information via remote access reduces the exposure of the organization and its susceptibility to threats by adversaries. A privileged command is a human-initiated command executed on a system that involves the control, monitoring, or administration of the system, including security functions and security-relevant information. Security-relevant information is information that can potentially impact the operation of security functions or the provision of security services in a manner that could result in failure to enforce the system security policy or maintain isolation of code and data. Privileged commands give individuals the ability to execute sensitive, security-critical, or security-relevant system functions.
+REFERENCES
+Source Controls: AC-17, AC-17(03), AC-17(04)
+Supporting Publications: SP 800-46 [14], SP 800-77 [18], SP 800-113 [19], SP 800-114 [20], SP 800-121 [21], IR 7966 [26]"
+03.01.16,Access Control,"Wireless Access
+a. Establish usage restrictions, configuration requirements, and connection requirements for each type of wireless access to the system.
+b. Authorize each type of wireless access to the system prior to establishing such connections.
+c. Disable, when not intended for use, wireless networking capabilities prior to issuance and deployment.
+d. Protect wireless access to the system using authentication and encryption.","DISCUSSION
+Wireless networking capabilities represent a significant potential vulnerability that can be exploited by adversaries. Establishing usage restrictions, configuration requirements, and connection requirements for wireless access to the system provides criteria to support access authorization decisions. These restrictions and requirements reduce susceptibility to unauthorized system access through wireless technologies. Wireless networks use authentication protocols that provide credential protection and mutual authentication. Organizations authenticate individuals and devices to protect wireless access to the system. Special attention is given to the variety of devices with potential wireless access to the system, including small form factor mobile devices (e.g., smart phones, tablets, smart watches). Wireless networking capabilities that are embedded within system components represent a potential vulnerability that can be exploited by adversaries. Strong authentication of users and devices, strong encryption, and disabling wireless capabilities that are not needed for essential mission or business functions can reduce susceptibility to threats by adversaries involving wireless technologies.
+REFERENCES
+Source Controls: AC-18, AC-18(01), AC-18(03)
+Supporting Publications: SP 800-94 [29], SP 800-97 [30], SP 800-124 [28]"
+03.01.18,Access Control,"Access Control for Mobile Devices
+a. Establish usage restrictions, configuration requirements, and connection requirements for mobile devices.
+b. Authorize the connection of mobile devices to the system.
+c. Implement full-device or container-based encryption to protect the confidentiality of CUI on mobile devices.","DISCUSSION
+A mobile device is a computing device with a small form factor such that it can be carried by a single individual; is designed to operate without a physical connection; possesses local, non-removable, or removable data storage; and includes a self-contained power source. Mobile device functionality may include on-board sensors that allow the device to capture information, voice communication capabilities, and/or built-in features for synchronizing local data with remote locations. Examples include smart phones, smart watches, and tablets. Mobile devices are typically associated with a single individual. The processing, storage, and transmission capabilities of mobile devices may be comparable to or a subset of notebook or desktop systems, depending on the nature and intended purpose of the device. Some organizations may consider notebook computers to be mobile devices. The protection and control of mobile devices are behavior- or policy-based and require users to take physical action to protect and control such devices when outside of controlled areas. Controlled areas are spaces for which the organization provides physical or procedural controls to meet the requirements established for protecting CUI. Due to the large variety of mobile devices with different characteristics and capabilities, organizational restrictions may vary for the different classes or types of such devices. Usage restrictions, configuration requirements, and connection requirements for mobile devices include configuration management, device identification and authentication, implementing mandatory protective software, scanning devices for malicious code, updating virus protection software, scanning for critical software updates and patches, conducting operating system and possibly other software integrity checks, and disabling unnecessary hardware. On mobile devices, secure containers provide software-based data isolation designed to segment enterprise applications and information from personal apps and data. Containers may present multiple user interfaces, one of the most common being a mobile application that acts as a portal to a suite of business productivity apps, such as email, contacts, and calendar. Organizations can employ full-device encryption or container-based encryption to protect the confidentiality of CUI on mobile devices.
+REFERENCES
+Source Controls: AC-19, AC-19(05)
+Supporting Publications: SP 800-46 [14], SP 800-114 [31], SP 800-124 [28]"
+03.01.20,Access Control,"Use of External Systems
+a. Prohibit the use of external systems unless the systems are specifically authorized.
+b. Establish the following security requirements to be satisfied on external systems prior to allowing use of or access to those systems by authorized individuals: [Assignment: organization-defined security requirements].
+c. Permit authorized individuals to use external systems to access the organizational system or to process, store, or transmit CUI only after: 1. Verifying that the security requirements on the external systems as specified in the organization’s system security plans have been satisfied and 2. Retaining approved system connection or processing agreements with the organizational entities hosting the external systems.
+d. Restrict the use of organization-controlled portable storage devices by authorized individuals on external systems.","DISCUSSION
+External systems are systems that are used by but are not part of the organization. These systems include personally owned systems, system components, or devices; privately owned computing and communication devices in commercial or public facilities; systems owned or controlled by nonfederal organizations; and systems managed by contractors. Organizations have the option to prohibit the use of any type of external system or specified types of external systems (e.g., prohibit the use of external systems that are not organizationally owned). Terms and conditions are consistent with the trust relationships established with the entities that own, operate, or maintain external systems and include descriptions of shared responsibilities. Authorized individuals include organizational personnel, contractors, or other individuals with authorized access to the organizational system and over whom organizations have the authority to impose specific rules of behavior regarding system access. Restrictions that organizations impose on authorized individuals may vary depending on the trust relationships between organizations. Organizations need assurance that external systems satisfy the necessary security requirements so as not to compromise, damage, or harm the system. This requirement is related to 03.16.03.
+REFERENCES
+Source Controls: AC-20, AC-20(01), AC-20(02)
+Supporting Publications: None"
+03.01.22,Access Control,"Publicly Accessible Content
+a. Train authorized individuals to ensure that publicly accessible information does not contain CUI.
+b. Review the content on publicly accessible systems for CUI and remove such information, if discovered.","DISCUSSION
+In accordance with applicable laws, Executive Orders, directives, policies, regulations, standards, and guidelines, the public is not authorized to have access to nonpublic information, including CUI.
+REFERENCES
+Source Control: AC-22
+Supporting Publications: None"
+03.02.01,Awareness and Training,"Literacy Training and Awareness
+a. Provide security literacy training to system users: 1. As part of initial training for new users and [Assignment: organization-defined frequency] thereafter, 2. When required by system changes or following [Assignment: organization-defined events], and 3. On recognizing and reporting indicators of insider threat, social engineering, and social mining.
+b. Update security literacy training content [Assignment: organization-defined frequency] and following [Assignment: organization-defined events].","DISCUSSION
+Organizations provide basic and advanced levels of security literacy training to system users (including managers, senior executives, system administrators, and contractors) and measures to test the knowledge level of users. Organizations determine the content of literacy training based on specific organizational requirements, the systems to which personnel have authorized access, and work environments (e.g., telework). The content includes an understanding of the need for security and the actions required of users to maintain security and respond to incidents. The content also addresses the need for operations security and the handling of CUI. Security awareness techniques include displaying posters, offering supplies inscribed with security reminders, generating email advisories or notices from organizational officials, displaying logon screen messages, and conducting awareness events using podcasts, videos, and webinars. Security literacy training is conducted at a frequency consistent with applicable laws, directives, regulations, and policies. Updating literacy training content on a regular basis ensures that the content remains relevant. Events that may precipitate an update to literacy training content include assessment or audit findings, security incidents or breaches, or changes in applicable laws, Executive Orders, directives, regulations, policies, standards, and guidelines. Potential indicators and possible precursors of insider threats include behaviors such as inordinate, long-term job dissatisfaction; attempts to gain access to information that is not required for job performance; unexplained access to financial resources; sexual harassment or bullying of fellow employees; workplace violence; and other serious violations of the policies, procedures, rules, directives, or practices of organizations. Organizations may consider tailoring insider threat awareness topics to roles (e.g., training for managers may be focused on specific changes in the behavior of team members, while training for employees may be focused on more general observations). Social engineering is an attempt to deceive an individual into revealing information or taking an action that can be used to breach, compromise, or otherwise adversely impact a system. Social engineering includes phishing, pretexting, impersonation, baiting, quid pro quo, threadjacking, social media exploitation, and tailgating. Social mining is an attempt to gather information about the organization that may be used to support future attacks. Security literacy training includes how to communicate employee and management concerns regarding potential indicators of insider threat and potential and actual instances of social engineering and data mining through appropriate organizational channels in accordance with established policies and procedures.
+REFERENCES
+Source Controls: AT-02, AT-02(02), AT-02(03)
+Supporting Publications: SP 800-50 [32], SP 800-160-2 [10]"
+03.02.02,Awareness and Training,"Role-Based Training
+a. Provide role-based security training to organizational personnel: 1. Before authorizing access to the system or CUI, before performing assigned duties, and [Assignment: organization-defined frequency] thereafter. 2. When required by system changes or following [Assignment: organization-defined events].
+b. Update role-based training content [Assignment: organization-defined frequency] and following [Assignment: organization-defined events].","DISCUSSION
+Organizations determine the content and frequency of security training based on the assigned duties, roles, and responsibilities of individuals and the security requirements of the systems to which personnel have authorized access. In addition, organizations provide system developers, enterprise architects, security architects, software developers, systems integrators, acquisition/procurement officials, system and network administrators, personnel conducting configuration management and auditing activities, personnel performing independent verification and validation, security assessors, and personnel with access to system-level software with security-related technical training specifically tailored for their assigned duties. Comprehensive role-based training addresses management, operational, and technical roles and responsibilities that cover physical, personnel, and technical controls. Such training can include policies, procedures, tools, and artifacts for the security roles defined. Organizations also provide the training necessary for individuals to carry out their responsibilities related to operations and supply chain security within the context of organizational information security programs.
+REFERENCES
+Source Control: AT-03
+Supporting Publications: SP 800-161 [33], SP 800-181 [34]"
+03.03.01,Audit and Accountability,"Event Logging
+a. Specify the following event types selected for logging within the system: [Assignment: organization-defined event types].
+b. Review and update the event types selected for logging [Assignment: organization-defined frequency].","DISCUSSION
+An event is any observable occurrence in a system, including unlawful or unauthorized system activity. Organizations identify event types for which a logging functionality is needed. This includes events that are relevant to the security of systems and the environments in which those systems operate to meet specific and ongoing auditing needs. Event types can include password changes, the execution of privileged functions, failed logons or accesses related to systems, administrative privilege usage, or third-party credential usage. In determining event types that require logging, organizations consider the system monitoring and auditing that are appropriate for each of the security requirements. When defining event types, organizations consider the logging necessary to cover related events, such as the steps in distributed, transaction-based processes (e.g., processes that are distributed across multiple organizations) and actions that occur in service-oriented or cloud-based architectures. Monitoring and auditing requirements can be balanced with other system needs. For example, organizations may determine that systems must have the capability to log every file access — both successful and unsuccessful — but only activate that capability under specific circumstances due to the potential burden on system performance. The event types that are logged by organizations may change over time. Reviewing and updating the set of logged event types are necessary to ensure that the current set of event types remains relevant.
+REFERENCES
+Source Control: AU-02
+Supporting Publications: SP 800-92 [35]"
+03.03.02,Audit and Accountability,"Audit Record Content
+a. Include the following content in audit records: 1. What type of event occurred, 2. When the event occurred, 3. Where the event occurred, 4. Source of the event, 5. Outcome of the event, 6. Identity of the individuals/subjects associated.
+b. Provide additional information for audit records as needed.","DISCUSSION
+Audit record content that may be necessary to support the auditing function includes time stamps, source and destination addresses, user or process identifiers, event descriptions, file names, and the access control or flow control rules that are invoked. Event outcomes can include indicators of event success or failure and event-specific results (e.g., the security state of the system after the event occurred). Detailed information that organizations consider in audit records may include a full text recording of privileged commands or the individual identities of group account users.
+REFERENCES
+Source Controls: AU-03, AU-03(01)
+Supporting Publications: None"
+03.03.03,Audit and Accountability,"Audit Record Generation
+a. Generate audit records for the selected event types and audit record content specified in 03.03.01 and 03.03.02.
+b. Retain audit records for a time period consistent with the records retention policy.","DISCUSSION
+Audit records can be generated at various levels of abstraction, including at the packet level as information traverses the network. Selecting the appropriate level of abstraction is a critical aspect of an audit logging capability and can facilitate the identification of root causes to problems. The ability to add information generated in audit records is dependent on system functionality to configure the audit record content. Organizations may consider additional information in audit records, including the access control or flow control rules invoked and the individual identities of group account users. Organizations may also consider limiting additional audit record information to only information that is explicitly needed for audit requirements.
+REFERENCES
+Source Controls: AU-11, AU-12
+Supporting Publications: SP 800-92 [35]"
+03.03.04,Audit and Accountability,"Response to Audit Logging Process Failures
+a. Alert organizational personnel or roles within [Assignment: organization-defined time period] in the event of an audit logging process failure.
+b. Take the following additional actions: [Assignment: organization-defined additional actions].","DISCUSSION
+Audit logging process failures include software and hardware errors, failures in audit log capturing mechanisms, and reaching or exceeding audit log storage capacity. Response actions include overwriting the oldest audit records, shutting down the system, and stopping the generation of audit records. Organizations may choose to define additional actions for audit logging process failures based on the type of failure, the location of the failure, the severity of the failure, or a combination of such factors. When the audit logging process failure is related to storage, the response is carried out for the audit log storage repository (i.e., the distinct system component where the audit logs are stored), the system on which the audit logs reside, the total audit log storage capacity of the organization (i.e., all audit log storage repositories combined), or all three. Organizations may decide to take no additional actions after alerting designated roles or personnel.
+REFERENCES
+Source Control: AU-05
+Supporting Publications: None"
+03.03.05,Audit and Accountability,"Audit Record Review, Analysis, and Reporting
+a. Review and analyze system audit records [Assignment: organization-defined frequency] for indications and the potential impact of inappropriate or unusual activity.
+b. Report findings to organizational personnel or roles.
+c. Analyze and correlate audit records across different repositories to gain organization-wide situational awareness.","DISCUSSION
+Audit record review, analysis, and reporting cover information security logging performed by organizations and can include logging that results from the monitoring of account usage, remote access, wireless connectivity, configuration settings, the use of maintenance tools and nonlocal maintenance, system component inventory, mobile device connection, equipment delivery and removal, physical access, temperature and humidity, communications at system interfaces, and the use of mobile code. Findings can be reported to organizational entities, such as the incident response team, help desk, and security or privacy offices. If organizations are prohibited from reviewing and analyzing audit records or unable to conduct such activities, the review or analysis may be carried out by other organizations granted such authority. The scope, frequency, and/or depth of the audit record review, analysis, and reporting may be adjusted to meet organizational needs based on new information received. Correlating audit record review, analysis, and reporting processes helps to ensure that audit records collectively create a more complete view of events.
+REFERENCES
+Source Controls: AU-06, AU-06(03)
+Supporting Publications: SP 800-86 [36], SP 800-101 [37]"
+03.03.06,Audit and Accountability,"Audit Record Reduction and Report Generation
+a. Implement an audit record reduction and report generation capability that supports audit record review, analysis, reporting requirements, and after-the-fact investigations of incidents.
+b. Preserve the original content and time ordering of audit records.","DISCUSSION
+Audit records are generated in 03.03.03. Audit record reduction and report generation occur after audit record generation. Audit record reduction is a process that manipulates collected audit information and organizes it in a summary format that is more meaningful to analysts. Audit record reduction and report generation capabilities do not always come from the same system or organizational entities that conduct auditing activities. An audit record reduction capability can include, for example, modern data mining techniques with advanced data filters to identify anomalous behavior in audit records. The report generation capability provided by the system can help generate customizable reports. The time ordering of audit records can be a significant issue if the granularity of the time stamp in the record is insufficient.
+REFERENCES
+Source Control: AU-07
+Supporting Publications: None"
+03.03.07,Audit and Accountability,"Time Stamps
+a. Use internal system clocks to generate time stamps for audit records.
+b. Record time stamps for audit records that meet [Assignment: organization-defined granularity of time measurement] and that use Coordinated Universal Time (UTC), have a fixed local time offset from UTC, or include the local time offset.","DISCUSSION
+Time stamps generated by the system include the date and time. Time is often expressed in Coordinated Universal Time (UTC) — a modern continuation of Greenwich Mean Time (GMT) — or local time with an offset from UTC. The granularity of time measurements refers to the degree of synchronization between system clocks and reference clocks (e.g., clocks synchronizing within hundreds or tens of milliseconds). Organizations may define different time granularities for system components. Time service can be critical to other security capabilities (e.g., access control and identification and authentication), depending on the nature of the mechanisms used to support those capabilities.
+REFERENCES
+Source Control: AU-08
+Supporting Publications: None"
+03.03.08,Audit and Accountability,"Protection of Audit Information
+a. Protect audit information and audit logging tools from unauthorized access, modification, and deletion.
+b. Authorize access to management of audit logging functionality to only a subset of privileged users or roles.","DISCUSSION
+Audit information includes the information needed to successfully audit system activity, such as audit records, audit log settings, audit reports, and personally identifiable information. Audit logging tools are programs and devices used to conduct audit and logging activities. The protection of audit information focuses on technical protection and limits the ability to access and execute audit logging tools to authorized individuals. The physical protection of audit information is addressed by media and physical protection requirements. Individuals or roles with privileged access to a system and who are also the subject of an audit by that system may affect the reliability of the audit information by inhibiting audit activities or modifying audit records. Requiring privileged access to be further defined between audit-related privileges and other privileges limits the number of users or roles with audit-related privileges.
+REFERENCES
+Source Controls: AU-09, AU-09(04)
+Supporting Publications: None"
+03.04.01,Configuration Management,"Baseline Configuration
+a. Develop and maintain under configuration control, a current baseline configuration of the system.
+b. Review and update the baseline configuration of the system [Assignment: organization-defined frequency] and when system components are installed or modified.","DISCUSSION
+Baseline configurations for the system and system components include aspects of connectivity, operation, and communications. Baseline configurations are documented, formally reviewed, and agreed-upon specifications for the system or configuration items within the system. Baseline configurations serve as a basis for future builds, releases, or changes to the system and include information about system components, operational procedures, network topology, and the placement of components in the system architecture. Maintaining baseline configurations requires creating new baselines as the system changes over time. Baseline configurations of the system reflect the current enterprise architecture.
+REFERENCES
+Source Control: CM-02
+Supporting Publications: SP 800-124 [28], SP 800-128 [41], IR 8011-2 [42], IR 8011-3 [43]"
+03.04.02,Configuration Management,"Configuration Settings
+a. Establish, document, and implement the following configuration settings for the system that reflect the most restrictive mode consistent with operational requirements: [Assignment: organization-defined configuration settings].
+b. Identify, document, and approve any deviations from established configuration settings.","DISCUSSION
+Configuration settings are the set of parameters that can be changed in hardware, software, or firmware components of the system and that affect the security posture or functionality of the system. Security-related configuration settings can be defined for systems (e.g., servers, workstations), input and output devices (e.g., scanners, copiers, printers), network components (e.g., firewalls, routers, gateways, voice and data switches, wireless access points, network appliances, sensors), operating systems, middleware, and applications. Security parameters are those parameters that impact the security state of the system, including the parameters required to satisfy other security requirements. Security parameters include registry settings; account, file, and directory permission settings (i.e., privileges); and settings for functions, ports, protocols, and remote connections. Organizations establish organization-wide configuration settings and subsequently derive specific configuration settings for the system. The established settings become part of the system’s configuration baseline. Common secure configurations (also referred to as security configuration checklists, lockdown and hardening guides, security reference guides, and security technical implementation guides) provide recognized, standardized, and established benchmarks that stipulate secure configuration settings for specific information technology platforms/products and instructions for configuring those system components to meet operational requirements. Common secure configurations can be developed by a variety of organizations, including information technology product developers, manufacturers, vendors, consortia, academia, industry, federal agencies, and other organizations in the public and private sectors.
+REFERENCES
+Source Control: CM-06
+Supporting Publications: SP 800-70 [44], SP 800-126 [45], SP 800-128 [41]"
+03.04.03,Configuration Management,"Configuration Change Control
+a. Define the types of changes to the system that are configuration-controlled.
+b. Review proposed configuration-controlled changes to the system, and approve or disapprove such changes with explicit consideration for security impacts.
+c. Implement and document approved configuration-controlled changes to the system.
+d. Monitor and review activities associated with configuration-controlled changes to the system.","DISCUSSION
+Configuration change control refers to tracking, reviewing, approving or disapproving, and logging changes to the system. Specifically, it involves the systematic proposal, justification, implementation, testing, review, and disposition of changes to the system, including system upgrades and modifications. Configuration change control includes changes to baseline configurations for system components (e.g., operating systems, applications, firewalls, routers, mobile devices) and configuration items of the system, changes to configuration settings, unscheduled and unauthorized changes, and changes to remediate vulnerabilities. This requirement is related to 03.04.04.
+REFERENCES
+Source Control: CM-03
+Supporting Publications: SP 800-124 [28], SP 800-128 [41]"
+03.04.04,Configuration Management,"Impact Analyses
+a. Analyze changes to the system to determine potential security impacts prior to change implementation.
+b. Verify that the security requirements for the system continue to be satisfied after the system changes have been implemented.","DISCUSSION
+Organizational personnel with security responsibilities conduct impact analyses that include reviewing system security plans, policies, and procedures to understand security requirements; reviewing system design documentation and operational procedures to understand how system changes might affect the security state of the system; reviewing the impacts of system changes on supply chain partners with stakeholders; and determining how potential changes to a system create new risks and the ability to mitigate those risks. Impact analyses also include risk assessments to understand the impacts of changes and determine whether additional security requirements are needed. Changes to the system may affect the safeguards and countermeasures previously implemented. This requirement is related to 03.04.03. Not all changes to the system are configuration controlled.
+REFERENCES
+Source Controls: CM-04, CM-04(02)
+Supporting Publications: SP 800-128 [41]"
+03.04.05,Configuration Management,"Access Restrictions for Change
+Define, document, approve, and enforce physical and logical access restrictions associated with changes to the system.","DISCUSSION
+Changes to the hardware, software, or firmware components of the system or the operational procedures related to the system can have potentially significant effects on the security of the system. Therefore, organizations permit only qualified and authorized individuals to access the system for the purpose of initiating changes. Access restrictions include physical and logical access controls, software libraries, workflow automation, media libraries, abstract layers (i.e., changes implemented into external interfaces rather than directly into the system), and change windows (i.e., changes occur only during specified times).
+REFERENCES
+Source Control: CM-05
+Supporting Publications: FIPS 140-3 [38], FIPS 180-4 [39], SP 800-128 [41]"
+03.04.06,Configuration Management,"Least Functionality
+a. Configure the system to provide only mission-essential capabilities.
+b. Prohibit or restrict use of the following functions, ports, protocols, connections, and services: [Assignment: organization-defined functions, ports, protocols, connections, and services].
+c. Review the system [Assignment: organization-defined frequency] to identify unnecessary or nonsecure functions, ports, protocols, connections, and services.
+d. Disable or remove functions, ports, protocols, connections, and services that are unnecessary or nonsecure.","DISCUSSION
+Systems can provide a variety of functions and services. Some functions and services that are routinely provided by default may not be necessary to support essential organizational missions, functions, or operations. It may be convenient to provide multiple services from single system components. However, doing so increases risk over limiting the services provided by any one component. Where feasible, organizations limit functionality to a single function per component. Organizations review the functions and services provided by the system or system components to determine which functions and services are candidates for elimination. Organizations disable unused or unnecessary physical and logical ports and protocols to prevent the unauthorized connection of devices, the transfer of information, and tunneling. Organizations can employ network scanning tools, intrusion detection and prevention systems, and endpoint protection systems (e.g., firewalls and host-based intrusion detection systems) to identify and prevent the use of prohibited functions, ports, protocols, system connections, and services. Bluetooth, File Transfer Protocol (FTP), and peer-to-peer networking are examples of the types of protocols that organizations consider eliminating, restricting, or disabling.
+REFERENCES
+Source Controls: CM-07, CM-07(01)
+Supporting Publications: SP 800-160-1 [11], SP 800-167 [46]"
+03.04.08,Configuration Management,"Authorized Software - Allow by Exception
+a. Identify software programs authorized to execute on the system.
+b. Implement a deny-all, allow-by-exception policy for the execution of authorized software programs on the system.
+c. Review and update the list of authorized software programs [Assignment: organization-defined frequency].","DISCUSSION
+If provided with the necessary privileges, users can install software in organizational systems. To maintain control over the software installed, organizations identify permitted and prohibited actions regarding software installation. Permitted software installations include updates and security patches to existing software and downloading new applications from organization-approved “app stores.” The policies selected for governing user-installed software are organization-developed or provided by some external entity. Policy enforcement methods can include procedural methods and automated methods. Authorized software programs can be limited to specific versions or come from specific sources. To facilitate a comprehensive authorized software process and increase the strength of protection against attacks that bypass application-level authorized software, software programs may be decomposed into and monitored at different levels of detail. These levels include applications, application programming interfaces, application modules, scripts, system processes, system services, kernel functions, registries, drivers, and dynamic link libraries.
+REFERENCES
+Source Control: CM-07(05)
+Supporting Publications: SP 800-160-1 [11], SP 800-167 [46]"
+03.04.10,Configuration Management,"System Component Inventory
+a. Develop and document an inventory of system components.
+b. Review and update the system component inventory [Assignment: organization-defined frequency].
+c. Update the system component inventory as part of installations, removals, and system updates.","DISCUSSION
+System components are discrete, identifiable assets (i.e., hardware, software, and firmware elements) that compose a system. Organizations may implement centralized system component inventories that include components from all systems. In such situations, organizations ensure that the inventories include the system-specific information required for component accountability. The information necessary for effective accountability of system components includes the system name, software owners, software version numbers, software license information, hardware inventory specifications, and — for networked components — the machine names and network addresses for all implemented protocols (e.g., IPv4, IPv6). Inventory specifications include component type, physical location, date of receipt, manufacturer, cost, model, serial number, and supplier information.
+REFERENCES
+Source Controls: CM-08, CM-08(01)
+Supporting Publications: SP 800-124 [28], SP 800-128 [41], IR 8011-2 [42], IR 8011-3 [43]"
+03.04.11,Configuration Management,"Information Location
+a. Identify and document the location of CUI and the system components on which the information is processed and stored.
+b. Document changes to the system or system component location where CUI is processed and stored.","DISCUSSION
+Information location addresses the need to understand the specific system components where CUI is being processed and stored and the users who have access to CUI so that appropriate protection mechanisms can be provided, including information flow controls, access controls, and information management.
+REFERENCES
+Source Control: CM-12
+Supporting Publications: None"
+03.04.12,Configuration Management,"System and Component Configuration for High-Risk Areas
+a. Issue systems or system components with the following configurations to individuals traveling to high-risk locations: [Assignment: organization-defined system configurations].
+b. Apply the following security requirements to the systems or components when the individuals return from travel: [Assignment: organization-defined security requirements].","DISCUSSION
+When it is known that a system or a system component will be in a high-risk area, additional security requirements may be needed to counter the increased threat. Organizations can implement protective measures on the systems or system components used by individuals departing on and returning from travel. Actions include determining whether the locations are of concern, defining the required configurations for the components, ensuring that the components are configured as intended before travel is initiated, and taking additional actions after travel is completed. For example, systems going into high-risk areas can be configured with sanitized hard drives, limited applications, and more stringent configuration settings. Actions applied to mobile devices upon return from travel include examining the device for signs of physical tampering and purging and reimaging the device storage.
+REFERENCES
+Source Control: CM-02(07)
+Supporting Publications: SP 800-124 [28], SP 800-128 [41]"
+03.05.01,Identification and Authentication,"User Identification and Authentication
+a. Uniquely identify and authenticate system users, and associate that unique identification with processes acting on behalf of those users.
+b. Re-authenticate users when [Assignment: organization-defined circumstances or situations requiring re-authentication].","DISCUSSION
+System users include individuals (or system processes acting on behalf of individuals) who are authorized to access a system. Typically, individual identifiers are the usernames associated with the system accounts assigned to those individuals. Since system processes execute on behalf of groups and roles, organizations may require the unique identification of individuals in group accounts or the accountability of individual activity. The unique identification and authentication of users apply to all system accesses. Organizations use passwords, physical authenticators, biometrics, or some combination thereof to authenticate user identities. Organizations may re-authenticate individuals in certain situations, including when roles, authenticators, or credentials change; when the execution of privileged functions occurs; after a fixed time period; or periodically.
+REFERENCES
+Source Controls: IA-02, IA-11
+Supporting Publications: SP 800-63-3 [27]"
+03.05.02,Identification and Authentication,"Device Identification and Authentication
+Uniquely identify and authenticate [Assignment: organization-defined devices or types of devices] before establishing a system connection.","DISCUSSION
+Devices that require unique device-to-device identification and authentication are defined by type, device, or a combination of type and device. Organization-defined device types include devices that are not owned by the organization. Systems use shared known information (e.g., Media Access Control [MAC], Transmission Control Protocol/Internet Protocol [TCP/IP] addresses) for device identification or organizational authentication solutions (e.g., Institute of Electrical and Electronics Engineers [IEEE] 802.1x and Extensible Authentication Protocol [EAP], RADIUS server with EAP-Transport Layer Security [TLS] authentication, Kerberos) to identify and authenticate devices on local and wide area networks. Public Key Infrastructure (PKI) and certificate revocation checking for the certificates exchanged can be included as part of device authentication.
+REFERENCES
+Source Control: IA-03
+Supporting Publications: SP 800-63-3 [27]"
+03.05.03,Identification and Authentication,"Multi-Factor Authentication
+Implement multi-factor authentication for access to privileged and non-privileged accounts.","DISCUSSION
+This requirement applies to user accounts. Multi-factor authentication requires the use of two or more different factors to achieve authentication. The authentication factors are defined as follows: something you know (e.g., a personal identification number [PIN]), something you have (e.g., a physical authenticator, such as a cryptographic private key), or something you are (e.g., a biometric). Multi-factor authentication solutions that feature physical authenticators include hardware authenticators that provide time-based or challenge-response outputs and smart cards. In addition to authenticating users at the system level, organizations may also employ authentication mechanisms at the application level to provide increased information security.
+REFERENCES
+Source Controls: IA-02(01), IA-02(02)
+Supporting Publications: SP 800-63-3 [27]"
+03.05.04,Identification and Authentication,"Replay-Resistant Authentication
+Implement replay-resistant authentication mechanisms for access to privileged and non-privileged accounts.","DISCUSSION
+Authentication processes resist replay attacks if it is impractical to successfully authenticate by recording or replaying previous authentication messages. Replay-resistant techniques include protocols that use nonces or challenges, such as time synchronous or challenge-response one-time authenticators.
+REFERENCES
+Source Control: IA-02(08)
+Supporting Publications: SP 800-63-3 [27]"
+03.05.05,Identification and Authentication,"Identifier Management
+a. Receive authorization from organizational personnel or roles to assign an individual, group, role, service, or device identifier.
+b. Select and assign an identifier that identifies an individual, group, role, service, or device.
+c. Prevent the reuse of identifiers for [Assignment: organization-defined time period].
+d. Manage individual identifiers by uniquely identifying each individual as [Assignment: organization-defined characteristic identifying individual status].","DISCUSSION
+Identifiers are provided for users, processes acting on behalf of users, and devices. Prohibiting the reuse of identifiers prevents the assignment of previously used individual, group, role, service, or device identifiers to different individuals, groups, roles, services, or devices. Characteristics that identify the status of individuals include contractors, foreign nationals, and non-organizational users. Identifying the status of individuals by these characteristics provides information about the people with whom organizational personnel are communicating. For example, it is useful for an employee to know that one of the individuals on an email message is a contractor.
+REFERENCES
+Source Controls: IA-04, IA-04(04)
+Supporting Publications: SP 800-63-3 [27]"
+03.05.07,Identification and Authentication,"Password Management
+a. Maintain a list of commonly-used, expected, or compromised passwords, and update the list [Assignment: organization-defined frequency] and when organizational passwords are suspected to have been compromised.
+b. Verify that passwords are not found on the list of commonly used, expected, or compromised passwords when users create or update passwords.
+c. Transmit passwords only over cryptographically protected channels.
+d. Store passwords in a cryptographically protected form.
+e. Select a new password upon first use after account recovery.
+f. Enforce the following composition and complexity rules for passwords: [Assignment: organization-defined composition and complexity rules].","DISCUSSION
+Password-based authentication applies to passwords used in single-factor or multi-factor authentication. Long passwords or passphrases are preferable to shorter passwords. Enforced composition rules provide marginal security benefits while decreasing usability. However, organizations may choose to establish and enforce certain rules for password generation (e.g., minimum character length) under certain circumstances. For example, account recovery can occur when a password is forgotten. Cryptographically protected passwords include salted one-way cryptographic hashes of passwords. The list of commonly used, compromised, or expected passwords includes passwords obtained from previous breach corpuses, dictionary words, and repetitive or sequential characters. The list includes context-specific words, such as the name of the service, username, and derivatives thereof. Changing temporary passwords to permanent passwords immediately after system logon ensures that the necessary strength of the authentication mechanism is implemented at the earliest opportunity and reduces susceptibility to authenticator compromises. Long passwords and passphrases can be used to increase the complexity of passwords.
+REFERENCES
+Source Control: IA-05(01)
+Supporting Publications: SP 800-63-3 [27]"
+03.05.11,Identification and Authentication,"Authentication Feedback
+Obscure feedback of authentication information during the authentication process.","DISCUSSION
+Authentication feedback does not provide information that would allow unauthorized individuals to compromise authentication mechanisms. For example, for desktop or notebook systems with relatively large monitors, the threat may be significant (commonly referred to as shoulder surfing). For mobile devices with small displays, this threat may be less significant and is balanced against the increased likelihood of input errors due to small keyboards. Therefore, the means of obscuring authenticator feedback is selected accordingly. Obscuring feedback includes displaying asterisks when users type passwords into input devices or displaying feedback for a limited time before fully obscuring it.
+REFERENCES
+Source Control: IA-06
+Supporting Publications: None"
+03.05.12,Identification and Authentication,"Authenticator Management
+a. Verify the identity of the individual, group, role, service, or device receiving the authenticator as part of the initial authenticator distribution.
+b. Establish initial authenticator content for any authenticators issued by the organization.
+c. Establish and implement administrative procedures for initial authenticator distribution; for lost, compromised, or damaged authenticators; and for revoking authenticators.
+d. Change default authenticators at first use.
+e. Change or refresh authenticators [Assignment: organization-defined frequency] or when the following events occur: [Assignment: organization-defined events].
+f. Protect authenticator content from unauthorized disclosure and modification.","DISCUSSION
+Authenticators include passwords, cryptographic devices, biometrics, certificates, one-time password devices, and ID badges. The initial authenticator content is the actual content of the authenticator (e.g., the initial password). In contrast, requirements for authenticator content contain specific characteristics. Authenticator management is supported by organization-defined settings and restrictions for various authenticator characteristics (e.g., password complexity and composition rules, validation time window for time synchronous one-time tokens, and the number of allowed rejections during the verification stage of biometric authentication). The requirement to protect individual authenticators may be implemented by 03.15.03 for authenticators in the possession of individuals and by 03.01.01, 03.01.02, 03.01.05, and 03.13.08 for authenticators stored in organizational systems. This includes passwords stored in hashed or encrypted formats or files that contain hashed or encrypted passwords that are accessible with administrator privileges. Actions can be taken to protect authenticators, including maintaining possession of authenticators, not sharing authenticators with others, and immediately reporting lost, stolen, or compromised authenticators.  Developers may deliver system components with factory default authentication credentials to allow for initial installation and configuration. Default authentication credentials are often well-known, easily discoverable, and present a significant risk. Authenticator management includes issuing and revoking authenticators for temporary access when they are no longer needed. The use of long passwords or passphrases may obviate the need to periodically change authenticators.
+REFERENCES
+Source Control: IA-05
+Supporting Publications: SP 800-63-3 [27]"
+03.06.01,Incident Response,"Incident Handling
+Implement an incident-handling capability that is consistent with the incident response plan and includes preparation, detection and analysis, containment, eradication, and recovery.","DISCUSSION
+Incident-related information can be obtained from a variety of sources, including audit monitoring, network monitoring, physical access monitoring, user and administrator reports, and reported supply chain events. An effective incident handling capability involves coordination among many organizational entities, including mission and business owners, system owners, human resources offices, physical and personnel security offices, legal departments, operations personnel, and procurement offices.
+REFERENCES
+Source Controls: IR-04
+Supporting Publications: SP 800-50 [32], SP 800-61 [47], SP 800-161 [33]"
+03.06.02,Incident Response,"Incident Monitoring, Reporting, and Response Assistance
+a. Track and document system security incidents.
+b. Report suspected incidents to the organizational incident response capability within [Assignment: organization-defined time period].
+c. Report incident information to [Assignment: organization-defined authorities].
+d. Provide an incident response support resource that offers advice and assistance to system users on handling and reporting incidents.","DISCUSSION
+Documenting incidents includes maintaining records about each incident, the status of the incident, and other pertinent information necessary for forensics as well as evaluating incident details, trends, and handling. Incident information can be obtained from many sources, including network monitoring, incident reports, incident response teams, user complaints, supply chain partners, audit monitoring, physical access monitoring, and user and administrator reports. 03.06.01 provides information on the types of incidents that are appropriate for monitoring. The types of incidents reported, the content and timeliness of the reports, and the reporting authorities reflect applicable laws, Executive Orders, directives, regulations, policies, standards, and guidelines. Incident information informs risk assessments, the effectiveness of security assessments, the security requirements for acquisitions, and the selection criteria for technology products. Incident response support resources provided by organizations include help desks, assistance groups, automated ticketing systems to open and track incident response tickets, and access to forensic services or consumer redress services, when required.
+REFERENCES
+Source Controls: IR-05, IR-06, IR-07
+Supporting Publications: SP 800-61 [47], SP 800-86 [36]"
+03.06.03,Incident Response,"Incident Response Testing
+Test the effectiveness of the incident response capability [Assignment: organization-defined frequency].","DISCUSSION
+Organizations test incident response capabilities to determine their effectiveness and identify potential weaknesses or deficiencies. Incident response testing includes the use of checklists, walk-through or tabletop exercises, and simulations. Incident response testing can include a determination of the effects of incident response on organizational operations, organizational assets, and individuals. Qualitative and quantitative data can help determine the effectiveness of incident response processes.
+REFERENCES
+Source Control: IR-03
+Supporting Publications: SP 800-84 [48]"
+03.06.04,Incident Response,"Incident Response Training
+a. Provide incident response training to system users consistent with assigned roles and responsibilities: 1. Within [Assignment: organization-defined time period] of assuming an incident response role or responsibility or acquiring system access, 2. When required by system changes, and 3. [Assignment: organization-defined frequency] thereafter.
+b. Review and update incident response training content [Assignment: organization-defined frequency] and following [Assignment: organization-defined events].","DISCUSSION
+Incident response training is associated with the assigned roles and responsibilities of organizational personnel to ensure that the appropriate content and level of detail are included in such training. For example, users may only need to know how to recognize an incident or whom to call; system administrators may require additional training on how to handle incidents; and incident responders may receive specific training on data collection techniques, forensics, reporting, system recovery, and system restoration. Incident response training includes user training in identifying and reporting suspicious activities from external and internal sources. Incident response training for users may be provided as part of 03.02.02. Events that may cause an update to incident response training content include incident response plan testing, response to an actual incident, audit or assessment findings, or changes in applicable laws, Executive Orders, policies, directives, regulations, standards, and guidelines.
+REFERENCES
+Source Control: IR-02
+Supporting Publications: SP 800-86 [36], SP 800-137 [49]"
+03.06.05,Incident Response,"Incident Response Plan
+a. Develop an incident response plan that: 1. Provides the organization with a roadmap, 2. Describes the structure and organization, 3. Provides a high-level approach, 4. Defines reportable incidents, 5. Addresses the sharing of incident information, and 6. Designates responsibilities.
+b. Distribute copies of the incident response plan to designated incident response personnel.
+c. Update the incident response plan to address system and organizational changes or problems encountered during plan implementation, execution, or testing.
+d. Protect the incident response plan from unauthorized disclosure.","DISCUSSION
+It is important that organizations develop and implement a coordinated approach to incident response. Organizational mission and business functions determine the structure of incident response capabilities. As part of the incident response capabilities, organizations consider the coordination and sharing of information with external organizations, including external service providers and other organizations involved in the supply chain.
+REFERENCES
+Source Control: IR-08
+Supporting Publications: SP 800-86 [36], SP 800-137 [49]"
+03.07.04,Maintenance,"Maintenance Tools
+a. Approve, control, and monitor the use of system maintenance tools.
+b. Check media with diagnostic and test programs for malicious code before it is used in the system.
+c. Prevent the removal of system maintenance equipment containing CUI by verifying that there is no CUI on the equipment, sanitizing or destroying the equipment, or retaining the equipment within the facility.","DISCUSSION
+Approving, controlling, monitoring, and reviewing maintenance tools address security-related issues associated with the tools that are used for diagnostic and repair actions on the system. Maintenance tools can include hardware and software diagnostic and test equipment as well as packet sniffers. The tools may be pre-installed, brought in with maintenance personnel on media, cloud-based, or downloaded from a website. Diagnostic and test programs are potential vehicles for transporting malicious code into the system, either intentionally or unintentionally. Examples of media inspection include checking the cryptographic hash or digital signatures of diagnostic and test programs and media. If organizations inspect media that contain diagnostic and test programs and determine that the media also contain malicious code, the incident is handled consistent with incident handling policies and procedures. A periodic review of system maintenance tools can result in the withdrawal of approval for outdated, unsupported, irrelevant, or no-longer-used tools. Maintenance tools do not address the hardware and software components that support maintenance and are considered a part of the system.
+REFERENCES
+Source Controls: MA-03, MA-03(01), MA-03(02), MA-03(03)
+Supporting Publications: SP 800-88 [50]"
+03.07.05,Maintenance,"Nonlocal Maintenance
+a. Approve and monitor nonlocal maintenance and diagnostic activities.
+b. Implement multi-factor authentication and replay resistance in the establishment of nonlocal maintenance and diagnostic sessions.
+c. Terminate session and network connections when nonlocal maintenance is completed.","DISCUSSION
+Nonlocal maintenance and diagnostic activities are conducted by individuals who communicate through an external or internal network. Local maintenance and diagnostic activities are carried out by individuals who are physically present at the location of the system and not communicating across a network connection. Authentication techniques used to establish nonlocal maintenance and diagnostic sessions reflect the requirements in 03.05.01.
+REFERENCES
+Source Control: MA-04
+Supporting Publications: SP 800-63-3 [27], SP 800-88 [50]"
+03.07.06,Maintenance,"Maintenance Personnel
+a. Establish a process for maintenance personnel authorization.
+b. Maintain a list of authorized maintenance organizations or personnel.
+c. Verify that non-escorted personnel who perform maintenance on the system possess the required access authorizations.
+d. Designate organizational personnel with required access authorizations and technical competence to supervise the maintenance activities of personnel who do not possess the required access authorizations.","DISCUSSION
+Maintenance personnel refers to individuals who perform hardware or software maintenance on the system, while 03.10.01 addresses physical access for individuals whose maintenance duties place them within the physical protection perimeter of the system. The technical competence of supervising individuals relates to the maintenance performed on the system, while having required access authorizations refers to maintenance on and near the system. Individuals who have not been previously identified as authorized maintenance personnel (e.g., manufacturers, consultants, systems integrators, and vendors) may require privileged access to the system, such as when they are required to conduct maintenance with little or no notice. Organizations may choose to issue temporary credentials to these individuals based on their risk assessments. Temporary credentials may be for one-time use or for very limited time periods.
+REFERENCES
+Source Control: MA-05
+Supporting Publications: None"
+03.08.01,Media Protection,"Media Storage
+Physically control and securely store system media that contain CUI.","DISCUSSION
+System media include digital and non-digital media. Digital media include diskettes, flash drives, magnetic tapes, external or removable solid state or magnetic drives, compact discs, and digital versatile discs. Non-digital media include paper and microfilm. Physically controlling stored media includes conducting inventories, establishing procedures to allow individuals to check out and return media to libraries, and maintaining accountability for stored media. Secure storage includes a locked drawer, desk, or cabinet or a controlled media library. Controlled areas provide physical and procedural controls to meet the requirements established for protecting information and systems. Sanitization techniques (e.g., destroying, cryptographically erasing, clearing, and purging) prevent the disclosure of CUI to unauthorized individuals. The sanitization process removes CUI from media such that the information cannot be retrieved or reconstructed.
+REFERENCES
+Source Control: MP-04
+Supporting Publications: SP 800-88 [50], SP 800-111 [51]"
+03.08.02,Media Protection,"Media Access
+Restrict access to CUI on system media to authorized personnel or roles.","DISCUSSION
+System media include digital and non-digital media. Access to CUI on system media can be restricted by physically controlling such media. This includes conducting inventories, ensuring that procedures are in place to allow individuals to check out and return media to the media library, and maintaining accountability for stored media. For digital media, access to CUI can be restricted by using cryptographic means. Encrypting data in storage or at rest is addressed in 03.13.08.
+REFERENCES
+Source Control: MP-02
+Supporting Publications: SP 800-111 [51]"
+03.08.03,Media Protection,"Media Sanitization
+Sanitize system media that contain CUI prior to disposal, release out of organizational control, or release for reuse.","DISCUSSION
+Media sanitization applies to digital and non-digital media that are subject to disposal or reuse, whether or not the media are considered removable. Examples include digital media in scanners, copiers, printers, notebook computers, mobile devices, workstations, network components, and non-digital media. The sanitization process removes CUI from media such that the information cannot be retrieved or reconstructed. Sanitization techniques (e.g., cryptographically erasing, clearing, purging, and destroying) prevent the disclosure of CUI to unauthorized individuals when such media are reused or released for disposal. NARA policies control the sanitization process for media that contain CUI and may require destruction when other methods cannot be applied to the media.
+REFERENCES
+Source Control: MP-06
+Supporting Publications: SP 800-88 [50]"
+03.08.04,Media Protection,"Media Marking
+Mark system media that contain CUI to indicate distribution limitations, handling caveats, and applicable CUI markings.","DISCUSSION
+System media include digital and non-digital media. Marking refers to the use or application of human-readable security attributes. Labeling refers to the use of security attributes for internal system data structures. Digital media include diskettes, magnetic tapes, external or removable solid state or magnetic drives, flash drives, compact discs, and digital versatile discs. Non-digital media include paper and microfilm. CUI is defined by NARA along with marking, safeguarding, and dissemination requirements for such information.
+REFERENCES
+Source Control: MP-03
+Supporting Publications: None"
+03.08.05,Media Protection,"Media Transport
+a. Protect and control system media that contain CUI during transport outside of controlled areas.
+b. Maintain accountability of system media that contain CUI during transport outside of controlled areas.
+c. Document activities associated with the transport of system media that contain CUI.","DISCUSSION
+System media include digital and non-digital media. Digital media include flash drives, diskettes, magnetic tapes, external or removable solid state or magnetic drives, compact discs, and digital versatile discs. Non-digital media include microfilm and paper. Controlled areas are spaces for which organizations provide physical or procedural measures to meet the requirements established for protecting CUI and systems. Media protection during transport can include cryptography and/or locked containers. Activities associated with media transport include releasing media for transport, ensuring that media enter the appropriate transport processes, and the actual transport. Authorized transport and courier personnel may include individuals external to the organization. Maintaining accountability of media during transport includes restricting transport activities to authorized personnel and tracking or obtaining the records of transport activities as the media move through the transportation system to prevent and detect loss, destruction, or tampering. This requirement is related to 03.13.08 and 03.13.11.
+REFERENCES
+Source Controls: MP-05, SC-28
+Supporting Publications: SP 800-111 [51]"
+03.08.07,Media Protection,"Media Use
+a. Restrict or prohibit the use of [Assignment: organization-defined types of system media].
+b. Prohibit the use of removable system media without an identifiable owner.","DISCUSSION
+In contrast to requirement 03.08.01, which restricts user access to media, this requirement restricts or prohibits the use of certain types of media, such as external hard drives, flash drives, or smart displays. Organizations can use technical and non-technical measures (e.g., policies, procedures, and rules of behavior) to control the use of system media. For example, organizations may control the use of portable storage devices by using physical cages on workstations to prohibit access to external ports or disabling or removing the ability to insert, read, or write to devices. Organizations may limit the use of portable storage devices to only approved devices, including devices provided by the organization, devices provided by other approved organizations, and devices that are not personally owned. Organizations may also control the use of portable storage devices based on the type of device — prohibiting the use of writeable, portable devices — and implement this restriction by disabling or removing the capability to write to such devices. Limits on the use of organization-controlled system media in external systems include restrictions on how the media may be used and under what conditions. Requiring identifiable owners (e.g., individuals, organizations, or projects) for removable system media reduces the risk of using such technologies by allowing organizations to assign responsibility and accountability for addressing known vulnerabilities in the media (e.g., insertion of malicious code).
+REFERENCES
+Source Control: MP-07
+Supporting Publications: SP 800-111 [51]"
+03.08.09,Media Protection,"System Backup - Cryptographic Protection
+a. Protect the confidentiality of backup information.
+b. Implement cryptographic mechanisms to prevent the unauthorized disclosure of CUI at backup storage locations.","DISCUSSION
+The selection of cryptographic mechanisms is based on the need to protect the confidentiality of backup information. Hardware security module (HSM) devices safeguard and manage cryptographic keys and provide cryptographic processing. Cryptographic operations (e.g., encryption, decryption, and signature generation and verification) are typically hosted on the HSM device, and many implementations provide hardware-accelerated mechanisms for cryptographic operations. This requirement is related to 03.13.11.
+REFERENCES
+Source Controls: CP-09, CP-09(08)
+Supporting Publications: SP 800-34 [52], SP 800-130 [53], SP 800-152 [54]"
+03.09.01,Personnel Security,"Personnel Screening
+a. Screen individuals prior to authorizing access to the system.
+b. Rescreen individuals in accordance with [Assignment: organization-defined conditions requiring rescreening].","DISCUSSION
+Personnel security screening activities involve the assessment of the conduct, integrity, judgment, loyalty, reliability, and stability of an individual (i.e., the individual’s trustworthiness) prior to authorizing access to the system or when elevating system access. The screening and rescreening activities reflect applicable federal laws, Executive Orders, directives, policies, regulations, and criteria established for the level of access required for the assigned position.
+REFERENCES
+Source Control: PS-03
+Supporting Publications: SP 800-181 [34]"
+03.09.02,Personnel Security,"Personnel Termination and Transfer
+a. When individual employment is terminated: 1. Disable system access within [Assignment: organization-defined time period], 2. Terminate or revoke authenticators and credentials, 3. Retrieve security-related system property.
+b. When individuals are reassigned or transferred: 1. Review and confirm the ongoing operational need, 2. Modify access authorization.","DISCUSSION
+Security-related system property includes hardware authentication tokens, system administration technical manuals, keys, identification cards, and building passes. Exit interviews ensure that terminated individuals understand the security constraints imposed by being former employees and that accountability is achieved for the organizational property. Security topics at exit interviews include reminding individuals of potential limitations on future employment and non-disclosure agreements. Exit interviews may not always be possible for some individuals, including in cases related to the unavailability of supervisors, illnesses, or job abandonment. The timely execution of termination actions is essential for individuals who have been terminated for cause. Organizations may consider disabling the accounts of individuals who are being terminated prior to the individuals being notified. This requirement applies to the reassignment or transfer of individuals when the personnel action is permanent or of such extended duration as to require protection. Protections that may be required for transfers or reassignments to other positions within organizations include returning old and issuing new identification cards, keys, and building passes; changing system access authorizations (i.e., privileges); closing system accounts and establishing new accounts; and providing access to official records to which individuals had access at previous work locations in previous system accounts.
+REFERENCES
+Source Controls: PS-04, PS-05
+Supporting Publications: None"
+03.10.01,Physical Protection,"Physical Access Authorizations
+a. Develop, approve, and maintain a list of individuals with authorized access to the facility where the system resides.
+b. Issue authorization credentials for facility access.
+c. Review the facility access list [Assignment: organization-defined frequency].
+d. Remove individuals from the facility access list when access is no longer required.","DISCUSSION
+A facility can include one or more physical locations containing systems or system components that process, store, or transmit CUI. Physical access authorizations apply to employees and visitors. Individuals with permanent physical access authorization credentials are not considered visitors. Authorization credentials include identification badges, identification cards, and smart cards. Organizations determine the strength of the authorization credentials consistent with applicable laws, Executive Orders, directives, regulations, policies, standards, and guidelines. Physical access authorizations may not be necessary to access certain areas within facilities that are designated as publicly accessible.
+REFERENCES
+Source Control: PE-02
+Supporting Publications: None"
+03.10.02,Physical Protection,"Monitoring Physical Access
+a. Monitor physical access to the facility where the system resides to detect and respond to physical security incidents.
+b. Review physical access logs [Assignment: organization-defined frequency] and upon occurrence of [Assignment: organization-defined events].","DISCUSSION
+A facility can include one or more physical locations containing systems or system components that process, store, or transmit CUI. Physical access monitoring includes publicly accessible areas within organizational facilities. Examples of physical access monitoring include guards, video surveillance equipment (i.e., cameras), and sensor devices. Reviewing physical access logs can help to identify suspicious activities, anomalous events, or potential threats. The reviews can be supported by audit logging controls if the access logs are part of an automated system. Incident response capabilities include investigations of physical security incidents and responses to those incidents. Incidents include security violations or suspicious physical access activities, such as access outside of normal work hours, repeated access to areas not normally accessed, access for unusual lengths of time, and out-of-sequence access.
+REFERENCES
+Source Control: PE-06
+Supporting Publications: None"
+03.10.06,Physical Protection,"Alternate Work Site
+a. Determine alternate work sites allowed for use by employees.
+b. Employ the following security requirements at alternate work sites: [Assignment: organization-defined security requirements].","DISCUSSION
+Alternate work sites include the private residences of employees or other facilities designated by the organization. Alternate work sites can provide readily available alternate locations during contingency operations. Organizations can define different security requirements for specific alternate work sites or types of sites, depending on the work-related activities conducted at the sites. Assessing the effectiveness of the requirements and providing a means to communicate incidents at alternate work sites supports the contingency planning activities of organizations.
+REFERENCES
+Source Control: PE-17
+Supporting Publications: SP 800-46 [14], SP 800-114 [20]"
+03.10.07,Physical Protection,"Physical Access Control
+a. Enforce physical access authorizations at entry and exit points to the facility.
+b. Maintain physical access audit logs for entry or exit points.
+c. Escort visitors, and control visitor activity.
+d. Secure keys, combinations, and other physical access devices.
+e. Control physical access to output devices.","DISCUSSION
+This requirement addresses physical locations containing systems or system components that process, store, or transmit CUI. Organizations determine the types of guards needed, including professional security staff or administrative staff. Physical access devices include keys, locks, combinations, biometric readers, and card readers. Physical access control systems comply with applicable laws, Executive Orders, directives, policies, regulations, standards, and guidelines. Organizations have flexibility in the types of audit logs employed. Audit logs can be procedural, automated, or some combination thereof. Physical access points can include exterior access points, interior access points to systems that require supplemental access controls, or both. Physical access control applies to employees and visitors. Individuals with permanent physical access authorizations are not considered visitors. Controlling physical access to output devices includes placing output devices in locked rooms or other secured areas with keypad or card reader access controls and only allowing access to authorized individuals, placing output devices in locations that can be monitored by personnel, installing monitor or screen filters, and using headphones. Examples of output devices include monitors, printers, scanners, facsimile machines, audio devices, and copiers.
+REFERENCES
+Source Controls: PE-03, PE-05
+Supporting Publications: None"
+03.10.08,Physical Protection,"Access Control for Transmission
+Control physical access to system distribution and transmission lines within organizational facilities.","DISCUSSION
+Safeguarding measures applied to system distribution and transmission lines prevent accidental damage, disruption, and physical tampering. Such measures may also be necessary to prevent eavesdropping or the modification of unencrypted transmissions. Safeguarding measures used to control physical access to system distribution and transmission lines include disconnected or locked spare jacks, locked wiring closets, cabling protection with conduit or cable trays, and wiretapping sensors.
+REFERENCES
+Source Control: PE-04
+Supporting Publications: None"
+03.11.01,Risk Assessment,"Risk Assessment
+a. Assess the risk (including supply chain risk) of unauthorized disclosure resulting from the processing, storage, or transmission of CUI.
+b. Update risk assessments [Assignment: organization-defined frequency].","DISCUSSION
+Establishing the system boundary is a prerequisite to assessing the risk of the unauthorized disclosure of CUI. Risk assessments consider threats, vulnerabilities, likelihood, and adverse impacts to organizational operations and assets based on the operation and use of the system and the unauthorized disclosure of CUI. Risk assessments also consider risks from external parties (e.g., contractors operating systems on behalf of the organization, service providers, individuals accessing systems, and outsourcing entities). Risk assessments can be conducted at the organization level, the mission or business process level, or the system level and at any phase in the system development life cycle. Risk assessments include supply chain-related risks associated with suppliers or contractors and the system, system component, or system service that they provide.
+REFERENCES
+Source Controls: RA-03, RA-03(01), SR-06
+Supporting Publications: SP 800-30 [55], SP 800-161 [33]"
+03.11.02,Risk Assessment,"Vulnerability Monitoring and Scanning
+a. Monitor and scan the system for vulnerabilities [Assignment: organization-defined frequency] and when new vulnerabilities affecting the system are identified.
+b. Remediate system vulnerabilities within [Assignment: organization-defined response times].
+c. Update system vulnerabilities to be scanned [Assignment: organization-defined frequency] and when new vulnerabilities are identified and reported.","DISCUSSION
+Organizations determine the required vulnerability scanning for system components and ensure that potential sources of vulnerabilities (e.g., networked printers, scanners, and copiers) are not overlooked. Vulnerability analyses for custom software may require additional approaches, such as static analysis, dynamic analysis, or binary analysis. Organizations can use these approaches in source code reviews and tools (e.g., static analysis tools, web-based application scanners, binary analyzers). Vulnerability scanning includes scanning for patch levels; scanning for functions, ports, protocols, and services that should not be accessible to users or devices; and scanning for improperly configured or incorrectly operating flow control mechanisms. To facilitate interoperability, organizations consider using scanning tools that express vulnerabilities in the Common Vulnerabilities and Exposures (CVE) naming convention. Sources for vulnerability information also include the Common Weakness Enumeration (CWE) listing, the National Vulnerability Database (NVD), and the Common Vulnerability Scoring System (CVSS).
+REFERENCES
+Source Controls: RA-05, RA-05(02)
+Supporting Publications: SP 800-40 [56], SP 800-53A [57], SP 800-70 [44], SP 800-115 [58], SP 800-126 [45]"
+03.11.04,Risk Assessment,"Risk Response
+Respond to findings from security assessments, monitoring, and audits.","DISCUSSION
+This requirement addresses the need to determine an appropriate response to risk before generating a plan of action and milestones (POAM) entry. It may be possible to mitigate the risk immediately so that a POAM entry is not needed. However, a POAM entry is generated if the risk response is to mitigate the identified risk and the mitigation cannot be completed immediately.
+REFERENCES
+Source Control: RA-07
+Supporting Publications: SP 800-30 [55], SP 800-37 [59], SP 800-39 [60], SP 800-160-1 [11]"
+03.12.01,Security Assessment and Monitoring,"Security Assessment
+Assess the security requirements for the system and its environment of operation [Assignment: organization-defined frequency] to determine if the requirements have been satisfied.","DISCUSSION
+By assessing the security requirements, organizations determine whether the necessary safeguards and countermeasures are implemented correctly, operating as intended, and producing the desired outcome. Security assessments identify weaknesses in the system and provide the essential information needed to make risk-based decisions. Security assessment reports document assessment results in sufficient detail as deemed necessary by the organization to determine the accuracy and completeness of the reports. Security assessment results are provided to the individuals or roles appropriate for the types of assessments being conducted.
+REFERENCES
+Source Control: CA-02
+Supporting Publications: SP 800-53 [8], SP 800-53A [57], SP 800-37 [59], SP 800-115 [58]"
+03.12.02,Security Assessment and Monitoring,"Plan of Action and Milestones
+a. Develop a plan of action and milestones for the system: 1. To document the planned remediation actions, 2. To reduce or eliminate known system vulnerabilities.
+b. Update the existing plan of action and milestones based on findings.","DISCUSSION
+Plans of action and milestones (POAMs) are important documents in organizational security programs. Organizations use POAMs to describe how unsatisfied security requirements will be met and how planned mitigations will be implemented. Organizations can document system security plans and POAMs as separate or combined documents in any format. Federal agencies may consider system security plans and POAMs as inputs to risk-based decisions on whether to process, store, or transmit CUI on a system hosted by a nonfederal organization.
+REFERENCES
+Source Control: CA-05
+Supporting Publications: SP 800-37 [59]"
+03.12.03,Security Assessment and Monitoring,"Continuous Monitoring
+Develop and implement a system-level continuous monitoring strategy that includes ongoing monitoring and security assessments.","DISCUSSION
+Continuous monitoring at the system level facilitates ongoing awareness of the system security posture to support risk management decisions. The terms continuous and ongoing imply that organizations assess and monitor their systems at a frequency that is sufficient to support risk-based decisions. Different types of security requirements may require different monitoring frequencies.
+REFERENCES
+Source Control: CA-07
+Supporting Publications: SP 800-37 [59], SP 800-39 [60], SP 800-53A [57], SP 800-115 [58], SP 800-137 [49]"
+03.12.05,Security Assessment and Monitoring,"Information Exchange
+a. Approve and manage the exchange of CUI between the system and other systems using [Selection: agreements].
+b. Document interface characteristics, security requirements, and responsibilities.
+c. Review and update the exchange agreements [Assignment: organization-defined frequency].","DISCUSSION
+Information exchange applies to information exchanges between two or more systems, both internal and external to the organization. Organizations consider the risks related to new or increased threats that may be introduced when systems exchange information with other systems that may have different security requirements or policies. The types of agreements selected are based on factors such as the relationship between the organizations exchanging information (e.g., government to government, business to business, government to business, government or business, or government or business to individual) and the level of access to the organizational system by users of the other system. The types of agreements can include information exchange security agreements, interconnection security agreements, memoranda of understanding or agreement, service-level agreements, or other types of agreements. Organizations may incorporate agreement information into formal contracts, especially for information exchanges established between federal agencies and nonfederal organizations (e.g., service providers, contractors, system developers, and system integrators). The types of information contained in exchange agreements include the interface characteristics, security requirements, controls, and responsibilities for each system.
+REFERENCES
+Source Control: CA-03
+Supporting Publications: SP 800-47 [83]"
+03.13.01,System and Communications Protection,"Boundary Protection
+a. Monitor and control communications at external managed interfaces to the system and key internal managed interfaces within the system.
+b. Implement subnetworks for publicly accessible system components that are physically or logically separated from internal networks.
+c. Connect to external systems only through managed interfaces that consist of boundary protection devices arranged in accordance with an organizational security architecture.","DISCUSSION
+Managed interfaces include gateways, routers, firewalls, network-based malicious code analysis, virtualization systems, and encrypted tunnels implemented within a security architecture. Subnetworks that are either physically or logically separated from internal networks are referred to as demilitarized zones or DMZs. Restricting or prohibiting interfaces within organizational systems includes restricting external web traffic to designated web servers within managed interfaces, prohibiting external traffic that appears to be spoofing internal addresses, and prohibiting internal traffic that appears to be spoofing external addresses.
+REFERENCES
+Source Control: SC-07
+Supporting Publications: SP 800-41 [64], SP 800-125B [65], SP 800-160-1 [11], SP 800-189 [67], SP 800-207 [66]"
+03.13.04,System and Communications Protection,"Information in Shared System Resources
+Prevent unauthorized and unintended information transfer via shared system resources.","DISCUSSION
+Preventing unauthorized and unintended information transfer via shared system resources stops information produced by the actions of prior users or roles (or actions of processes acting on behalf of prior users or roles) from being available to current users or roles (or current processes acting on behalf of current users or roles) that obtain access to shared system resources after those resources have been released back to the system. Information in shared system resources also applies to encrypted representations of information. In other contexts, the control of information in shared system resources is referred to as object reuse and residual information protection. Information in shared system resources does not address information remanence, which refers to the residual representation of data that has been nominally deleted, covert channels (including storage and timing channels) in which shared system resources are manipulated to violate information flow restrictions, or components within systems for which there are only single users or roles.
+REFERENCES
+Source Control: SC-04
+Supporting Publications: None"
+03.13.06,System and Communications Protection,"Network Communications - Deny by Default
+Deny network communications traffic by default, and allow network communications traffic by exception.","DISCUSSION
+This requirement applies to inbound and outbound network communications traffic at the system boundary and at identified points within the system. A deny-all, allow-by-exception network communications traffic policy ensures that only essential and approved connections are allowed.
+REFERENCES
+Source Control: SC-07(05)
+Supporting Publications: SP 800-41 [64], SP 800-77 [18], SP 800-189 [67]"
+03.13.08,System and Communications Protection,"Transmission and Storage Confidentiality
+Implement cryptographic mechanisms to prevent the unauthorized disclosure of CUI during transmission and while in storage.","DISCUSSION
+This requirement applies to internal and external networks and any system components that can transmit CUI, including servers, notebook computers, desktop computers, mobile devices, printers, copiers, scanners, facsimile machines, and radios. Unprotected communication paths are susceptible to interception and modification. Encryption protects CUI from unauthorized disclosure during transmission and while in storage. Cryptographic mechanisms that protect the confidentiality of CUI during transmission include TLS and IPsec. Information in storage (i.e., information at rest) refers to the state of CUI when it is not in process or in transit and resides on internal or external storage devices, storage area network devices, and databases. Protecting CUI in storage does not focus on the type of storage device or the frequency of access to that device but rather on the state of the information. This requirement relates to 03.13.11.
+REFERENCES
+Source Controls: SC-08, SC-08(01), SC-28, SC-28(01)
+Supporting Publications: FIPS 140-3 [38], FIPS 197 [68], SP 800-46 [14], SP 800-52 [69], SP 800-56A [73], SP 800-56B [74], SP 800-56C [75], SP 800-57-1 [15], SP 800-57-2 [16], SP 800-57-3 [17], SP 800-77 [18], SP 800-111 [51], SP 800-113 [19], SP 800-114 [20], SP 800-121 [21], SP 800-124 [28], SP 800-177 [70]"
+03.13.09,System and Communications Protection,"Network Disconnect
+Terminate the network connection associated with a communications session at the end of the session or after [Assignment: organization-defined time period] of inactivity.","DISCUSSION
+This requirement applies to internal and external networks. Terminating network connections associated with communications sessions includes deallocating TCP/IP addresses or port pairs at the operating system level or deallocating networking assignments at the application level if multiple application sessions are using a single network connection. Time periods of inactivity may be established by organizations and include time periods by type of network access or for specific network accesses.
+REFERENCES
+Source Control: SC-10
+Supporting Publications: None"
+03.13.10,System and Communications Protection,"Cryptographic Key Establishment and Management
+Establish and manage cryptographic keys in the system in accordance with the following key management requirements: [Assignment: organization-defined requirements for key generation, distribution, storage, access, and destruction].","DISCUSSION
+Cryptographic keys can be established and managed using either manual procedures or automated mechanisms supported by manual procedures. Organizations satisfy key establishment and management requirements in accordance with applicable federal laws, Executive Orders, policies, directives, regulations, and standards that specify appropriate options, levels, and parameters. This requirement is related to 03.13.11.
+REFERENCES
+Source Control: SC-12
+Supporting Publications: FIPS 140-3 [38], SP 800-56A [73], SP 800-56B [74], SP 800-
+56C [75], SP 800-57-1 [15], SP 800-57-2 [16], SP 800-57-3 [17], SP 800-63-3 [27]"
+03.13.11,System and Communications Protection,"Cryptographic Protection
+Implement the following types of cryptography to protect the confidentiality of CUI: [Assignment: organization-defined types of cryptography].","DISCUSSION
+Cryptography is implemented in accordance with applicable laws, Executive Orders, directives, regulations, policies, standards, and guidelines. FIPS-validated cryptography is recommended for the protection of CUI.
+REFERENCES
+Source Control: SC-13
+Supporting Publications: FIPS 140-3 [38]"
+03.13.12,System and Communications Protection,"Collaborative Computing Devices and Applications
+a. Prohibit the remote activation of collaborative computing devices and applications with the following exceptions: [Assignment: organization-defined exceptions].
+b. Provide an explicit indication of use to users physically present at the devices.","DISCUSSION
+Collaborative computing devices include white boards, microphones, and cameras. Notebook computers, smartphones, display monitors, and tablets containing cameras and microphones are considered part of collaborative computing devices when conferencing software is in use. Indication of use includes notifying users (e.g., a pop-up menu stating that recording is in progress or that the microphone has been turned on) when collaborative computing devices are activated. Dedicated video conferencing systems, which typically rely on one of the participants calling or connecting to the other party to activate the video conference, are excluded. Solutions to prevent device usage include webcam covers and buttons to disable microphones.
+REFERENCES
+Source Control: SC-15
+Supporting Publications: None"
+03.13.13,System and Communications Protection,"Mobile Code
+a. Define acceptable mobile code and mobile code technologies.
+b. Authorize, monitor, and control the use of mobile code.","DISCUSSION
+Mobile code includes software programs or parts of programs that are obtained from remote systems, transmitted across a network, and executed on a local system without explicit installation or execution by the recipient. Decisions regarding the use of mobile code are based on the potential for the code to cause damage to the system if used maliciously. Mobile code technologies include Java applets, JavaScript, HTML5, VBScript, and WebGL. Usage restrictions and implementation guidelines apply to the selection and use of mobile code installed on servers and downloaded and executed on individual workstations and devices, including notebook computers, smart phones, and smart devices. Mobile code policies and procedures address the actions taken to prevent the development, acquisition, and use of unacceptable mobile code within the system, including requiring mobile code to be digitally signed by a trusted source.
+REFERENCES
+Source Control: SC-18
+Supporting Publications: SP 800-28 [71]"
+03.13.15,System and Communications Protection,"Session Authenticity
+Protect the authenticity of communications sessions.","DISCUSSION
+Protecting session authenticity addresses communications protection at the session level, not at the packet level. Such protection establishes grounds for confidence at both ends of the communications sessions in the ongoing identities of other parties and the validity of the transmitted information. Authenticity protection includes protecting against adversary-in-the-middle attacks, session hijacking, and the insertion of false information into sessions.
+REFERENCES
+Source Control: SC-23
+Supporting Publications: SP 800-52 [69], SP 800-77 [18], SP 800-95 [72], SP 800-113 [19]"
+03.14.01,System and Information Integrity,"Flaw Remediation
+a. Identify, report, and correct system flaws.
+b. Install security-relevant software and firmware updates within [Assignment: organization-defined time period] of the release of the updates.","DISCUSSION
+Organizations identify systems that are affected by announced software and firmware flaws, including potential vulnerabilities that result from those flaws, and report this information to designated personnel with information security responsibilities. Security-relevant updates include patches, service packs, hot fixes, and anti-virus signatures. Organizations address the flaws discovered during security assessments, continuous monitoring, incident response activities, and system error handling. Organizations can take advantage of available resources (e.g., CWE or CVE databases) when remediating system flaws. Organization-defined time periods for updating security-relevant software and firmware may vary based on a variety of factors, including the criticality of the update (i.e., severity of the vulnerability related to the discovered flaw). Some types of flaw remediation may require more testing than other types.
+REFERENCES
+Source Control: SI-02
+Supporting Publications: SP 800-39 [60], SP 800-40 [56], SP 800-128 [41]"
+03.14.02,System and Information Integrity,"Malicious Code Protection
+a. Implement malicious code protection mechanisms at system entry and exit points to detect and eradicate malicious code.
+b. Update malicious code protection mechanisms as new releases are available.
+c. Configure malicious code protection mechanisms to: 1. Perform scans [Assignment: organization-defined frequency], 2. Block/quarantine malicious code.","DISCUSSION
+Malicious code insertions occur through the exploitation of system vulnerabilities. Malicious code can be inserted into the system in a variety of ways, including email, the internet, and portable storage devices. Malicious code includes viruses, worms, Trojan horses, and spyware. Malicious code can be encoded in various formats, contained in compressed or hidden files, or hidden in files using techniques such as steganography. Malicious code may be present in commercial off-the-shelf software and custom-built software and could include logic bombs, backdoors, and other types of attacks that could affect organizational mission and business functions. Periodic scans of the system and real-time scans of files from external sources as files are downloaded, opened, or executed can detect malicious code. Malicious code protection mechanisms can also monitor systems for anomalous or unexpected behaviors and take appropriate actions. Malicious code protection mechanisms include signature- and non-signature-based technologies. Non-signature-based detection mechanisms include artificial intelligence techniques that use heuristics to detect, analyze, and describe the characteristics or behavior of malicious code and to provide controls against such code for which signatures do not yet exist or for which existing signatures may not be effective. Malicious code for which active signatures do not yet exist or may be ineffective includes polymorphic malicious code (i.e., code that changes signatures when it replicates). Non-signature-based mechanisms include reputation-based technologies. Pervasive configuration management, anti-exploitation software, and software integrity controls may also be effective in preventing unauthorized code execution.  If malicious code cannot be detected by detection methods or technologies, organizations can rely on secure coding practices, configuration management and control, trusted procurement processes, and monitoring practices to help ensure that the software only performs intended functions. Organizations may determine that different actions are warranted in response to the detection of malicious code. For example, organizations can define actions to be taken in response to the detection of malicious code during scans, malicious downloads, or malicious activity when attempting to open or execute files.
+REFERENCES
+Source Control: SI-03
+Supporting Publications: SP 800-83 [76], SP 800-125B [65], SP 800-177 [70]"
+03.14.03,System and Information Integrity,"Security Alerts, Advisories, and Directives
+a. Receive system security alerts, advisories, and directives from external organizations on an ongoing basis.
+b. Generate and disseminate internal system security alerts, advisories, and directives, as necessary.","DISCUSSION
+There are many publicly available sources of system security alerts and advisories. The Department of Homeland Security’s Cybersecurity and Infrastructure Security Agency (CISA), the National Security Agency (NSA), and the Federal Bureau of Investigation (FBI) generate security alerts and advisories to maintain situational awareness across the Federal Government and in nonfederal organizations. Software vendors, subscription services, and industry Information Sharing and Analysis Centers (ISACs) may also provide security alerts and advisories. Compliance with security directives is essential due to the critical nature of many of these directives and the potential immediate adverse effects on organizational operations and assets, individuals, other organizations, and the Nation should the directives not be implemented in a timely manner.
+REFERENCES
+Source Control: SI-05
+Supporting Publications: SP 800-161 [33]"
+03.14.06,System and Information Integrity,"System Monitoring
+a. Monitor the system to detect: 1. Attacks and indicators of potential attacks and 2. Unauthorized connections.
+b. Identify unauthorized use of the system.
+c. Monitor inbound and outbound communications traffic.","DISCUSSION
+System monitoring involves external and internal monitoring. Internal monitoring includes the observation of events that occur within the system. External monitoring includes the observation of events that occur at the system boundary. Organizations can monitor the system by observing audit record activities in real time or by observing other system aspects, such as access patterns, characteristics of access, and other actions. The monitoring objectives may guide determination of the events. A system monitoring capability is achieved through a variety of tools and techniques (e.g., audit record monitoring software, intrusion detection systems, intrusion prevention systems, malicious code protection software, scanning tools, network monitoring software). Strategic locations for monitoring devices include selected perimeter locations and near server farms that support critical applications with such devices being employed at managed system interfaces. The granularity of monitoring the information collected is based on organizational monitoring objectives and the capability of the system to support such objectives. Systems connections can be network, remote, or local. A network connection is any connection with a device that communicates through a network (e.g., local area network, the internet). A remote connection is any connection with a device that communicates through an external network (e.g., the internet). Network, remote, and local connections can be either wired or wireless. Unusual or unauthorized activities or conditions related to inbound and outbound communications traffic include internal traffic that indicates the presence of malicious code in the system or propagating among system components, the unauthorized export of information, or signaling to external systems. Evidence of malicious code is used to identify a potentially compromised system. System monitoring requirements, including the need for types of system monitoring, may be referenced in other requirements.
+REFERENCES
+Source Controls: SI-04, SI-04(04)
+Supporting Publications: SP 800-61 [47], SP 800-83 [76], SP 800-92 [35], SP 800-94 [29], SP 800-137 [49], SP 800-177 [70]"
+03.14.08,System and Information Integrity,"Information Management and Retention
+Manage and retain CUI within the system and CUI output from the system in accordance with applicable laws, Executive Orders, directives, regulations, policies, standards, guidelines, and operational requirements.","DISCUSSION
+Federal agencies consider data retention requirements for nonfederal organizations. Retaining CUI on nonfederal systems after contracts or agreements have concluded increases the attack surface for those systems and the risk of the information being compromised. NARA provides federal policy and guidance on records retention and schedules.
+REFERENCES
+Source Control: SI-12
+Supporting Publications: None"
+03.15.01,Planning,"Policy and Procedures
+a. Develop, document, and disseminate to organizational personnel or roles the policies and procedures needed to satisfy the security requirements for the protection of CUI.
+b. Review and update policies and procedures [Assignment: organization-defined frequency].","DISCUSSION
+This requirement addresses policies and procedures for the protection of CUI. Policies and procedures contribute to security assurance and should address each family of the CUI security requirements. Policies can be included as part of the organizational security policy or be represented by separate policies that address each family of security requirements. Procedures describe how policies are implemented and can be directed at the individual or role that is the object of the procedure. Procedures can be documented in system security plans or in one or more separate documents.
+REFERENCES
+Source Controls: AC-01, AT-01, etc.
+Supporting Publications: SP 800-12 [61], SP 800-100 [62]"
+03.15.02,Planning,"System Security Plan
+a. Develop a system security plan that: 1. Defines the constituent system components, 2. Identifies the information types, 3. Describes specific threats, 4. Describes operational environment, 5. Provides overview of requirements, 6. Describes safeguards, 7. Identifies individuals, 8. Includes relevant information.
+b. Review and update the system security plan [Assignment: organization-defined frequency].
+c. Protect the system security plan from unauthorized disclosure.","DISCUSSION
+System security plans provide key characteristics of the system that is processing, storing, and transmitting CUI and how the system and information are protected. System security plans contain sufficient information to enable a design and implementation that are unambiguously compliant with the intent of the plans and the subsequent determinations of risk if the plan is implemented as intended. System security plans can be a collection of documents, including documents that already exist. Effective system security plans reference policies, procedures, and documents (e.g., design specifications) that provide additional detailed information. This reduces the documentation requirements associated with security programs and maintains security information in other established management or operational areas related to enterprise architecture, the system development life cycle, systems engineering, and acquisition.
+REFERENCES
+Source Control: PL-02
+Supporting Publications: SP 800-18 [63]"
+03.15.03,Planning,"Rules of Behavior
+a. Establish rules that describe the responsibilities and expected behavior for system usage and protecting CUI.
+b. Provide rules to individuals who require access to the system.
+c. Receive a documented acknowledgement from individuals.
+d. Review and update the rules of behavior [Assignment: organization-defined frequency].","DISCUSSION
+Rules of behavior represent a type of access agreement for system users. Organizations consider rules of behavior for the handling of CUI based on individual user roles and responsibilities and differentiate between rules that apply to privileged users and rules that apply to general users.
+REFERENCES
+Source Control: PL-04
+Supporting Publications: SP 800-18 [63]"
+03.16.01,System and Services Acquisition,"Security Engineering Principles
+Apply the following systems security engineering principles to the development or modification of the system and system components: [Assignment: organization-defined systems security engineering principles].","DISCUSSION
+Organizations apply systems security engineering principles to new development systems. For legacy systems, organizations apply systems security engineering principles to system modifications to the extent feasible, given the current state of hardware, software, and firmware components. The application of systems security engineering principles helps to develop trustworthy, secure, and resilient systems and reduce the susceptibility of organizations to disruptions, hazards, and threats. Examples include developing layered protections; establishing security policies, architectures, and controls as the foundation for system design; incorporating security requirements into the system development life cycle; delineating physical and logical security boundaries; ensuring that developers are trained on how to build trustworthy secure software; and performing threat modeling to identify use cases, threat agents, attack vectors and patterns, design patterns, and compensating controls needed to mitigate risk. Organizations that apply security engineering principles can facilitate the development of trustworthy, secure systems, system components, and system services; reduce risks to acceptable levels; and make informed risk-management decisions.
+REFERENCES
+Source Control: SA-08
+Supporting Publications: SP 800-160-1 [11], SP 800-160-2 [10], SP 800-207 [66]"
+03.16.02,System and Services Acquisition,"Unsupported System Components
+a. Replace system components when support for the components is no longer available from the developer, vendor, or manufacturer.
+b. Provide options for risk mitigation or alternative sources for continued support for unsupported components that cannot be replaced.","DISCUSSION
+Support for system components includes software patches, firmware updates, replacement parts, and maintenance contracts. An example of unsupported components includes when vendors no longer provide critical software patches or product updates, which can result in opportunities for adversaries to exploit weaknesses or deficiencies in the installed components. Exceptions to replacing unsupported system components include systems that provide critical mission or business capabilities when newer technologies are unavailable or when the systems are so isolated that installing replacement components is not an option. Alternative sources of support address the need to provide continued support for system components that are no longer supported by the original manufacturers, developers, or vendors when such components remain essential to organizational missions and business functions. If necessary, organizations can establish in-house support by developing customized patches for critical software components or obtain the services of external service providers who provide ongoing support for unsupported components through contractual relationships. Such contractual relationships can include open-source software value-added vendors. The increased risk of using unsupported system components can be mitigated by prohibiting the connection of such components to public or uncontrolled networks or implementing other forms of isolation.
+REFERENCES
+Source Control: SA-22
+Supporting Publications: None"
+03.16.03,System and Services Acquisition,"External System Services
+a. Require the providers of external system services used for the processing, storage, or transmission of CUI to comply with the following security requirements: [Assignment: organization-defined security requirements].
+b. Define and document user roles and responsibilities.
+c. Implement processes, methods, and techniques to monitor security requirement compliance.","DISCUSSION
+External system services are provided by external service providers. Organizations establish relationships with external service providers in a variety of ways, including through business partnerships, contracts, interagency agreements, lines of business arrangements, licensing agreements, joint ventures, and supply chain exchanges. The responsibility for managing risks from the use of external system services remains with the organization charged with protecting CUI. Service-level agreements define expectations of performance, describe measurable outcomes, and identify remedies, mitigations, and response requirements for instances of noncompliance. Information from external service providers regarding the specific functions, ports, protocols, and services used in the provision of such services can be useful when there is a need to understand the trade-offs involved in restricting certain functions and services or blocking certain ports and protocols. This requirement is related to 03.01.20.
+REFERENCES
+Source Control: SA-09
+Supporting Publications: SP 800-160-1 [11], SP 800-161 [33]"
+03.17.01,Supply Chain Risk Management,"Supply Chain Risk Management Plan
+a. Develop a plan for managing supply chain risks associated with the research and development, design, manufacturing, acquisition, delivery, integration, operations, maintenance, and disposal.
+b. Review and update the supply chain risk management plan [Assignment: organization-defined frequency].
+c. Protect the supply chain risk management plan from unauthorized disclosure.","DISCUSSION
+Dependence on the products, systems, and services of external providers and the nature of the relationships with those providers present an increasing level of risk to an organization. Threat actions that may increase security risks include unauthorized production, the insertion or use of counterfeits, tampering, poor manufacturing and development practices in the supply chain, theft, and the insertion of malicious software, firmware, and hardware. Supply chain risks can be endemic or systemic within a system, component, or service. Managing supply chain risks is a complex, multifaceted undertaking that requires a coordinated effort across an organization to build trust relationships and communicate with internal and external stakeholders. Supply chain risk management (SCRM) activities include identifying and assessing risks, determining appropriate risk response actions, developing SCRM plans to document response actions, and monitoring performance against the plans. The system-level SCRM plan is implementation-specific and provides constraints, policy implementation, requirements, and implications. It can either be stand-alone or incorporated into system security plans. The SCRM plan addresses the management, implementation, and monitoring of SCRM requirements and the development or sustainment of systems across the system development life cycle to support mission and business functions. Because supply chains can differ significantly across and within organizations, SCRM plans are tailored to individual program, organizational, and operational contexts.
+REFERENCES
+Source Control: SR-02
+Supporting Publications: SP 800-30 [55], SP 800-39 [60], SP 800-161 [33], SP 800-181 [34]"
+03.17.02,Supply Chain Risk Management,"Acquisition Strategies, Tools, and Methods
+Develop and implement acquisition strategies, contract tools, and procurement methods to identify, protect against, and mitigate supply chain risks.","DISCUSSION
+The acquisition process provides an important vehicle for protecting the supply chain. There are many useful tools and techniques available, including obscuring the end use of a system or system component, using blind purchases, requiring tamperevident packaging, or using trusted or controlled distribution. The results from a supply chain risk assessment can inform the strategies, tools, and methods that are most applicable to the situation. Tools and techniques may provide protections against unauthorized production, theft, tampering, the insertion of counterfeits, the insertion of malicious software or backdoors, and poor development practices throughout the system life cycle. Organizations also consider providing incentives for suppliers to implement safeguards, promote transparency in their processes and security practices, provide contract language that addresses the prohibition of tainted or counterfeit components, and restrict purchases from untrustworthy suppliers. Organizations consider providing training, education, and awareness programs for personnel regarding supply chain risks, available mitigation strategies, and when the programs should be employed. Methods for reviewing and protecting development plans, documentation, and evidence are commensurate with the security requirements of the organization. Contracts may specify documentation protection requirements.
+REFERENCES
+Source Control: SR-05
+Supporting Publications: SP 800-30 [55], SP 800-161 [33]"
+03.17.03,Supply Chain Risk Management,"Supply Chain Requirements and Processes
+a. Establish a process for identifying and addressing weaknesses or deficiencies in the supply chain elements and processes.
+b. Enforce the following security requirements to protect against supply chain risks to the system, system components, or system services: [Assignment: organization-defined security requirements].","DISCUSSION
+Supply chain elements include organizations, entities, or tools that are employed for the research, development, design, manufacturing, acquisition, delivery, integration, operations, maintenance, and disposal of systems and system components. Supply chain processes include hardware, software, firmware, and systems development processes; shipping and handling procedures; physical security programs; personnel security programs; configuration management tools, techniques, and measures to maintain provenance; or other programs, processes, or procedures associated with the development, acquisition, maintenance, and disposal of systems and system components. Supply chain elements and processes are provided by organizations, system integrators, or external service providers. Weaknesses or deficiencies in supply chain elements or processes represent potential vulnerabilities that can be exploited by adversaries to harm the organization and affect its ability to carry out its core missions or business functions.
+REFERENCES
+Source Control: SR-03
+Supporting Publications: SP 800-30 [55], SP 800-161 [33]"

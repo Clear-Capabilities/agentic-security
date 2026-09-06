@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.147.5",
-    "bundleSha256": "0cfc21d9bdecf4422a0934216444b948dccc8c4c978b0f7eca92d318d8b61e9c",
-    "commit": "acab4c512e2fb7785cf9837b820d7ddb67b35019",
+    "engineVersion": "0.148.0",
+    "bundleSha256": "7712a1e7ab1ddce297ca1a75a0342a8ac8d61ef4273723c902076a89cf9c6b99",
+    "commit": "a139aabd59e84fd66f25f6f0cb5145aee376b78f",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-09-05T04:40:13.697Z",
+    "generatedAt": "2026-09-06T13:03:14.165Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -786,9 +786,8 @@
           "calibration-holdout-check.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
           "llm-cost-ceiling.py": 1,
-          "nist-compliance/scan.py": 7,
+          "nist-compliance/scan.py": 8,
           "owasp-llm-top10/scan.py": 1,
-          "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
           "self-test-runner.mjs": 2,
           "synthesize-detector.mjs": 7,
@@ -804,7 +803,7 @@
   "provenanceCoverage": {
     "measuredThisRun": true,
     "n": 326,
-    "d": 368
+    "d": 369
   },
   "taintRecall": {
     "measuredThisRun": true,
