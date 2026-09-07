@@ -10,6 +10,80 @@
 
 
 
+## 0.148.2 - A confusing --assurance strict failure made specific and actionable; adversarial premortem re-run on NIST 800-171
+
+A user ran the README's own 5-minute quickstart command and got a confusing, uninformative
+failure — see the last item in this entry for the fix. Separately, 0.148.1's compliance-framework
+fixes were put through a second, independent adversarial pass rather than trusted on their own
+say-so. It found the individual fixes held up, but surfaced two live defects the first pass
+missed entirely, plus six gaps in how the fixes themselves were verified and disclosed.
+
+1. `module:verifier` and `module:sigstore-verify` were referenced by real controls in four
+   bundled frameworks, but nothing ever wrote either artifact — worse than a self-referential
+   mapping (which can at least clear, dishonestly), a mapping that can never clear at all, on
+   any project, permanently. `verifier.js` now writes a real record on every
+   `agentic-security verify` run, closing `module:verifier` for real — proven end-to-end:
+   NIST 800-171 `03.12.01` flips from missing to present after a real `verify` invocation.
+   `module:sigstore-verify` is disclosed as an engine gap instead: its real producer is a
+   fire-and-forget async annotation with no reliable completion point to hang a writer off,
+   a bigger fix than this pass's scope.
+
+2. A new writer-existence test (`scanner/test/module-artifact-liveness.test.js`) checks every
+   `module:` artifact resolves to a real writer or a real repo file, not just a name on a list.
+   Running it once found two more real, previously-unknown defects the manual premortem review
+   missed: a malformed `module:privacy-taint:emitDpiaArtifact` typo in `gdpr.json` (the
+   evaluator parses everything after `module:` as one literal key — no `:`-suffix syntax
+   exists — so this control could never clear), and a dead `module:exploitability-probability`
+   reference in `nist-csf-2.json` (that annotator writes no standalone artifact; removed as
+   redundant with the surviving `module:attack-taxonomy` leg on the same control). Both fixed.
+   The eight structurally self-referential `module:` entries found across this and the prior
+   release are now removed from the vocabulary table itself, not merely left unreferenced, so
+   there is nothing left to copy-paste back into a future mapping.
+
+3. `aibom.json` now auto-persists on every scan. It was only ever reachable through the CLI's
+   `--format aibom` report emitter, which prints to stdout — never to `.agentic-security/` —
+   so `module:aibom` (EU AI Act Art.11, NIST 800-171 `03.04.10`, NIST AI 600-1 `MG-4.1-001`)
+   could never clear on any project unless an operator manually redirected the CLI's output to
+   that exact path.
+
+4. The scoring-threshold provenance caveat added in 0.148.1 (that NIST 800-171's deep-attestation
+   scanner shares AI 600-1's unvalidated weights and thresholds) lived only in a doc and a
+   source docstring — never in the actual generated attestation markdown a customer would
+   submit. It now prints inline in that document whenever the catalog being scored isn't the
+   framework the scoring engine was built for.
+
+5. The held-out anchor set added in 0.148.1 to guard the 97 hand-authored `codeTestable`
+   ratings covered only 3 of the 9 controls that release's own rationale-expansion pass
+   actually touched — the other 6 had no drift protection despite being exactly the work the
+   gate exists to protect. Expanded to cover all 9.
+
+6. `module:why-fired` (EU AI Act Art.13), left an open, undecided question in 0.148.1's own
+   premortem, is now adjudicated: on a full reading of the control text (every other control in
+   the same framework uses "the system" to mean the assessed AI product) and of `why-fired.js`'s
+   actual purpose (explains this scanner's own detection provenance, not the assessed system's),
+   it is the same category error as the other eight — the artifact's content being genuinely
+   target-derived doesn't make the claim it was asked to back correct.
+
+7. `docs/SCORECARD.md` now tracks, per bundled framework, how many controls carry at least one
+   live mapping — not as a gate (a drop is sometimes a correct, honest fix and sometimes a real
+   regression, and only a human reading the diff each release can tell which), but so the
+   cumulative effect of "always subtract a bad mapping, never invent one" is visible instead of
+   assumed fine.
+
+8. The PRD's own implementation record (`NIST-800-171r3-PRD.md`) now documents this pass.
+
+9. `agentic-security ci <path> --assurance strict` on a directory with no git history — the
+   exact result of running the README's own quickstart command against a GitHub "Download ZIP"
+   extraction instead of a `git clone` — used to fail with only a bare count: "1210 finding(s)
+   have status outside [complete, uncommitted]." The scanner already knew and recorded the real
+   reason (`finding.findingProvenance.limitations[0] = 'not a Git repository'`), it just never
+   reached the message a user actually sees. The assurance-gate failure now names the dominant
+   recorded reason and, for the two most common shapes, gives a specific fix: no git history
+   ("run `git init && git add -A && git commit`, or scan a real `git clone`") and an unpinned
+   dependency / missing lockfile ("this is a permanent, by-design limitation — fix the SCA
+   finding or use `--assurance standard`"). `docs/walkthroughs/assurance-modes.md` documents
+   both (`scanner/src/pipeline/assurance-mode.js`).
+
 
 ## 0.148.1 - Six real false-positive fixes from a customer bug report, two report-consistency fixes
 

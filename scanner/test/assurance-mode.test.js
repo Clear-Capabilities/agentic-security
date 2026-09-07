@@ -135,3 +135,82 @@ test('advisory/standard modes: bad provenance never gates, matching every other 
   assert.equal(evaluateAssuranceMode('advisory', CLEAN, [{ id: 'f1', findingProvenance: fp }]).ok, true);
   assert.equal(evaluateAssuranceMode('standard', CLEAN, [{ id: 'f1', findingProvenance: fp }]).ok, true);
 });
+
+// ── A real user hit this ────────────────────────────────────────────────────
+// `agentic-security ci <a GitHub "Download ZIP" extraction, no .git> --assurance
+// strict` failed with only "1210 finding(s) have status outside [complete,
+// uncommitted]" — no indication all 1210 failed for the exact same, simple,
+// fixable reason coordinator.js already knows and records
+// (finding.findingProvenance.limitations[0] = 'not a Git repository'), which
+// never reached this message. These pin the fix.
+
+test('strict mode: when every bad finding shares the "not a Git repository" reason, the message names it and tells the user how to fix it', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['not a Git repository'] });
+  const findings = Array.from({ length: 1210 }, (_, i) => ({ id: `f${i}`, findingProvenance: fp }));
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /1210\/1210 finding\(s\) have status outside \[complete, uncommitted\]/);
+  assert.match(v.reason, /"not a Git repository"/);
+  assert.match(v.reason, /git init/);
+  assert.match(v.reason, /--assurance strict/);
+});
+
+test('strict mode: "repository state unavailable" gets the same specific, actionable message as "not a Git repository"', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['repository state unavailable'] });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: fp }]);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /"repository state unavailable"/);
+  assert.match(v.reason, /git init/);
+});
+
+test('strict mode: a single shared non-git-repo reason is still named even when it is something else entirely', () => {
+  const fp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['provenance disabled via --no-provenance'] });
+  const findings = [
+    { id: 'f1', findingProvenance: fp },
+    { id: 'f2', findingProvenance: fp },
+  ];
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /all 2 share the same reason: "provenance disabled via --no-provenance"/);
+});
+
+test('strict mode: mixed reasons across bad findings render as a ranked breakdown, not a bare count', () => {
+  const gitFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['a category error, never resolvable'] });
+  const otherFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['budget exhausted'] });
+  const findings = [
+    { id: 'f1', findingProvenance: gitFp },
+    { id: 'f2', findingProvenance: gitFp },
+    { id: 'f3', findingProvenance: gitFp },
+    { id: 'f4', findingProvenance: otherFp },
+  ];
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /3× "a category error, never resolvable"/);
+  assert.match(v.reason, /1× "budget exhausted"/);
+});
+
+test('strict mode: a finding with no findingProvenance at all falls back to its status, never throws building the message', () => {
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1' }, { id: 'f2' }]);
+  assert.equal(v.ok, false);
+  assert.doesNotThrow(() => v.reason);
+  assert.match(v.reason, /2\/2 finding\(s\)/);
+});
+
+test('strict mode: unpinned-dependency/no-lockfile provenance gaps get their own specific, honest "this is permanent" message', () => {
+  const unpinnedFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution does not apply to a unpinned_dep supply-chain entry'],
+  });
+  const noLockFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution does not apply to a no_lockfile supply-chain entry'],
+  });
+  const findings = [
+    { id: 'f1', findingProvenance: unpinnedFp },
+    { id: 'f2', findingProvenance: unpinnedFp },
+    { id: 'f3', findingProvenance: noLockFp },
+  ];
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /3 of them describe an ABSENT dependency declaration/);
+  assert.match(v.reason, /known, permanent limitation/);
+  assert.match(v.reason, /--assurance standard\/advisory/);
+});

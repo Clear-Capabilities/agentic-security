@@ -65,6 +65,62 @@ function _isValidMode(mode) {
   return ASSURANCE_MODES.includes(mode);
 }
 
+// A real user hit this: `agentic-security ci <a directory downloaded as a
+// GitHub zip, no .git present> --assurance strict` failed with the bare
+// count this function used to produce alone — "1210 finding(s) have status
+// outside [complete, uncommitted]" — with no indication that all 1210
+// findings failed for the exact same, simple, fixable reason
+// (`coordinator.js`'s `annotateGitProvenance` already knows and records it,
+// in `finding.findingProvenance.limitations[0]`, but that reason never
+// reached this message). A user reading "1210 problems" reasonably assumes
+// their CODE has 1210 problems, not that their DIRECTORY isn't a git
+// repository. This surfaces the dominant recorded reason instead of a bare
+// count, and gives the two most common, fully-fixable reasons ("not a Git
+// repository" from a zip download instead of `git clone`; a shallow CI
+// checkout) a one-line, specific remedy — the same specificity the
+// scanHealth branch above already gives for a stale-EPSS-cache failure.
+function _provenanceFailureReason(badProvenance, totalFindings) {
+  const counts = new Map();
+  for (const f of badProvenance) {
+    const reason = f?.findingProvenance?.limitations?.[0] || f?.findingProvenance?.status || 'unknown';
+    counts.set(reason, (counts.get(reason) || 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const [topReason, topCount] = ranked[0];
+  const allSameReason = ranked.length === 1;
+  const base = `strict mode requires complete finding provenance; ${badProvenance.length}/${totalFindings} finding(s) have status outside [complete, uncommitted]`;
+
+  if (topReason === 'not a Git repository' || topReason === 'repository state unavailable') {
+    return `${base} — reason: ${allSameReason ? 'all of them are' : `${topCount} of them are`} "${topReason}". ` +
+      `strict mode resolves finding provenance from git history, so it requires a real git repository ` +
+      `(a GitHub "Download ZIP" extracts without one). Run \`git init && git add -A && git commit -m init\` in ` +
+      `the scanned directory, point the scan at a real \`git clone\`, or drop --assurance strict for standard/advisory.`;
+  }
+  // engine.js's own comment on this branch: "unpinned_dep / no_lockfile and
+  // friends... describe the ABSENCE of a declaration, so 'which commit
+  // introduced this version' is not a question that has an answer to defer
+  // ... this is a known, disclosed limitation, not a bug... strict mode
+  // WILL fail on nearly any real project that has a package.json." That
+  // disclosure lived only in a source comment nobody hits this error reads —
+  // the README's own quickstart explicitly invites pointing --assurance
+  // strict at "your own project," where this is the single most likely
+  // outcome. Named here so the person who hits it learns it is expected and
+  // permanent, not something to keep investigating.
+  const supplyChainCount = ranked.filter(([r]) => r.startsWith('origin resolution does not apply to a')).reduce((s, [, n]) => s + n, 0);
+  if (supplyChainCount > 0 && supplyChainCount >= badProvenance.length / 2) {
+    return `${base} — ${supplyChainCount} of them describe an ABSENT dependency declaration ` +
+      `(an unpinned version, a missing lockfile) that has no origin commit to resolve, by design. This is a ` +
+      `known, permanent limitation: strict mode cannot pass while any are present, on any real project with ` +
+      `such a dependency. Fix the underlying SCA finding(s) (pin the version / add a lockfile) if you want ` +
+      `strict to pass, or use --assurance standard/advisory for a project you don't control the dependencies of.`;
+  }
+  if (allSameReason) {
+    return `${base} — all ${badProvenance.length} share the same reason: "${topReason}".`;
+  }
+  const breakdown = ranked.slice(0, 5).map(([reason, n]) => `${n}× "${reason}"`).join(', ');
+  return `${base} — breakdown: ${breakdown}${ranked.length > 5 ? ', …' : ''}.`;
+}
+
 /**
  * @param {string} mode - one of ASSURANCE_MODES; invalid/missing degrades to the default.
  * @param {object|null} scanHealth - the engine's computed scan.scanHealth (FR-206).
@@ -157,7 +213,7 @@ function evaluateAssuranceMode(mode, scanHealth, findings = []) {
     return {
       ok: false,
       mode: 'strict',
-      reason: `strict mode requires complete finding provenance; ${badProvenance.length} finding(s) have status outside [complete, uncommitted]`,
+      reason: _provenanceFailureReason(badProvenance, findings.length),
       conditions,
     };
   }
@@ -165,7 +221,7 @@ function evaluateAssuranceMode(mode, scanHealth, findings = []) {
   return { ok: true, mode: 'strict', reason: null, conditions };
 }
 
-const _internals = { _isValidMode };
+const _internals = { _isValidMode, _provenanceFailureReason };
 
 
 /***/ })
