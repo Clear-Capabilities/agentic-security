@@ -86,39 +86,89 @@ function _provenanceFailureReason(badProvenance, totalFindings) {
     counts.set(reason, (counts.get(reason) || 0) + 1);
   }
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const [topReason, topCount] = ranked[0];
-  const allSameReason = ranked.length === 1;
   const base = `strict mode requires complete finding provenance; ${badProvenance.length}/${totalFindings} finding(s) have status outside [complete, uncommitted]`;
 
-  if (topReason === 'not a Git repository' || topReason === 'repository state unavailable') {
-    return `${base} — reason: ${allSameReason ? 'all of them are' : `${topCount} of them are`} "${topReason}". ` +
-      `strict mode resolves finding provenance from git history, so it requires a real git repository ` +
-      `(a GitHub "Download ZIP" extracts without one). Run \`git init && git add -A && git commit -m init\` in ` +
-      `the scanned directory, point the scan at a real \`git clone\`, or drop --assurance strict for standard/advisory.`;
+  const gitReasons = ranked.filter(([r]) => r === 'not a Git repository' || r === 'repository state unavailable');
+  const gitCount = gitReasons.reduce((s, [, n]) => s + n, 0);
+  // engine.js's own comment on this branch: "unpinned_dep / no_lockfile...
+  // describe the ABSENCE of a declaration, so 'which commit introduced this
+  // version' is not a question that has an answer to defer ... this is a
+  // known, disclosed limitation, not a bug... strict mode WILL fail on
+  // nearly any real project that has a package.json." That disclosure lived
+  // only in a source comment nobody hits this error reads — the README's
+  // own quickstart explicitly invites pointing --assurance strict at "your
+  // own project," where this is the single most likely outcome. Named here
+  // so the person who hits it learns it is expected and permanent, not
+  // something to keep investigating. This prefix is deliberately narrower
+  // than "every non-vulnerable_dep supply-chain entry" — engine.js's
+  // provenance-stamping loop only uses it for unpinned_dep/no_lockfile,
+  // which genuinely have no origin commit; cdn_no_integrity/dynamic_require
+  // carry a real file:line and get a DIFFERENT string precisely so they
+  // never land in this "permanent, give up" bucket (adversarial premortem
+  // R2, 2026-09-07 — conflating the two told a user a resolvable coverage
+  // gap was an unfixable, by-design limitation).
+  const supplyChainReasons = ranked.filter(([r]) => r.startsWith('origin resolution does not apply to a'));
+  const supplyChainCount = supplyChainReasons.reduce((s, [, n]) => s + n, 0);
+  const knownReasonSet = new Set([...gitReasons, ...supplyChainReasons].map(([r]) => r));
+  const otherReasons = ranked.filter(([r]) => !knownReasonSet.has(r));
+  const otherCount = badProvenance.length - gitCount - supplyChainCount;
+  const knownCategoryCount = (gitCount > 0 ? 1 : 0) + (supplyChainCount > 0 ? 1 : 0);
+
+  // Exactly one KNOWN category, and nothing outside it — the shape every
+  // caller before this fix assumed was the only shape, and the one every
+  // existing test was written against. Kept as tight, single-topic prose
+  // rather than the multi-segment form below.
+  if (knownCategoryCount === 0) {
+    if (otherReasons.length === 1) {
+      return `${base} — all ${badProvenance.length} share the same reason: "${otherReasons[0][0]}".`;
+    }
+    const breakdown = otherReasons.slice(0, 5).map(([reason, n]) => `${n}× "${reason}"`).join(', ');
+    return `${base} — breakdown: ${breakdown}${otherReasons.length > 5 ? ', …' : ''}.`;
   }
-  // engine.js's own comment on this branch: "unpinned_dep / no_lockfile and
-  // friends... describe the ABSENCE of a declaration, so 'which commit
-  // introduced this version' is not a question that has an answer to defer
-  // ... this is a known, disclosed limitation, not a bug... strict mode
-  // WILL fail on nearly any real project that has a package.json." That
-  // disclosure lived only in a source comment nobody hits this error reads —
-  // the README's own quickstart explicitly invites pointing --assurance
-  // strict at "your own project," where this is the single most likely
-  // outcome. Named here so the person who hits it learns it is expected and
-  // permanent, not something to keep investigating.
-  const supplyChainCount = ranked.filter(([r]) => r.startsWith('origin resolution does not apply to a')).reduce((s, [, n]) => s + n, 0);
-  if (supplyChainCount > 0 && supplyChainCount >= badProvenance.length / 2) {
+  if (knownCategoryCount === 1 && otherCount === 0) {
+    if (gitCount > 0) {
+      const gitReasonNames = gitReasons.map(([r]) => `"${r}"`).join(' and ');
+      return `${base} — reason: ${gitCount === badProvenance.length ? 'all of them are' : `${gitCount} of them are`} ${gitReasonNames}. ` +
+        `strict mode resolves finding provenance from git history, so it requires a real git repository ` +
+        `(a GitHub "Download ZIP" extracts without one). Run \`git init && git add -A && git commit -m init\` in ` +
+        `the scanned directory, point the scan at a real \`git clone\`, or drop --assurance strict for standard/advisory.`;
+    }
     return `${base} — ${supplyChainCount} of them describe an ABSENT dependency declaration ` +
       `(an unpinned version, a missing lockfile) that has no origin commit to resolve, by design. This is a ` +
       `known, permanent limitation: strict mode cannot pass while any are present, on any real project with ` +
       `such a dependency. Fix the underlying SCA finding(s) (pin the version / add a lockfile) if you want ` +
       `strict to pass, or use --assurance standard/advisory for a project you don't control the dependencies of.`;
   }
-  if (allSameReason) {
-    return `${base} — all ${badProvenance.length} share the same reason: "${topReason}".`;
+
+  // Two or more independently-blocking categories on the SAME scan — the
+  // defect this closes (adversarial premortem R1, 2026-09-07): the old
+  // code picked whichever category had the most findings and silently
+  // dropped every other one, so a user could "fix" the reported problem,
+  // rerun, and hit a second wall the first run already had full information
+  // about but never mentioned — the same "the tool knew and didn't tell me"
+  // complaint this whole function exists to fix, recurring in a milder form.
+  const segments = [];
+  if (gitCount > 0) {
+    const gitReasonNames = gitReasons.map(([r]) => `"${r}"`).join(' and ');
+    segments.push(`${gitCount} of them are ${gitReasonNames} (strict mode requires a real git repository — ` +
+      `run \`git init && git add -A && git commit\`, or scan a real \`git clone\`)`);
   }
-  const breakdown = ranked.slice(0, 5).map(([reason, n]) => `${n}× "${reason}"`).join(', ');
-  return `${base} — breakdown: ${breakdown}${ranked.length > 5 ? ', …' : ''}.`;
+  if (supplyChainCount > 0) {
+    segments.push(`${supplyChainCount} of them describe an ABSENT dependency declaration (unpinned version / ` +
+      `missing lockfile) with no origin commit to resolve — a known, permanent limitation, not something a ` +
+      `rerun will fix`);
+  }
+  if (otherCount > 0) {
+    if (otherReasons.length === 1) {
+      segments.push(`${otherCount} share the reason "${otherReasons[0][0]}"`);
+    } else {
+      const breakdown = otherReasons.slice(0, 5).map(([reason, n]) => `${n}× "${reason}"`).join(', ');
+      segments.push(`${otherCount} break down as: ${breakdown}${otherReasons.length > 5 ? ', …' : ''}`);
+    }
+  }
+  return `${base} — MULTIPLE distinct reasons, not just one: ${segments.join('; ')}. Every category above must ` +
+    `be resolved for strict to pass (or drop to --assurance standard/advisory) — fixing only one will surface ` +
+    `the next on your following run.`;
 }
 
 /**

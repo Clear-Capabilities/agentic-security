@@ -10625,27 +10625,45 @@ function _deterministicFileTimings(timings) {
    // The supply-chain half. report/index.js normalizes EVERY supplyChain entry
    // into an SCA finding — not just the direct vulnerable_dep ones the resolver
    // can speak to — and pipeline/finding-schema.js requires findingProvenance on
-   // every channel. Three distinct populations reach this loop and they are not
-   // the same statement, so they do not share a limitation string:
+   // every channel. FOUR distinct populations reach this loop, not three, and
+   // they do not share a limitation string (adversarial premortem R2,
+   // 2026-09-07, follow-up to the assurance-strict message fix — this split
+   // used to be binary, and pipeline/assurance-mode.js's message building
+   // depends on the exact wording below to tell them apart):
    //
    //  - transitive vulnerable_deps: resolved by resolveTransitiveSCAOrigin
    //    above (M3 §3.2) — this branch is now reached only if that annotation
    //    pass itself failed to stamp the entry.
-   //  - unpinned_dep / no_lockfile and friends: these describe the ABSENCE of a
-   //    declaration, so "which commit introduced this version" is not a question
-   //    that has an answer to defer.
-   //  - anything the annotator failed to reach, as above.
+   //  - unpinned_dep / no_lockfile: these describe the ABSENCE of a
+   //    declaration, so "which commit introduced this version" is not a
+   //    question that has an answer to defer — permanently unresolvable, by
+   //    construction, not merely unresolved today.
+   //  - cdn_no_integrity / dynamic_require: NOT the same claim as the one
+   //    above, despite both reaching this loop as "not the vulnerable_dep
+   //    the resolver speaks to" — each of these carries a real `file`+`line`
+   //    (a specific `<script src>` tag or `require(...)` call someone
+   //    specifically wrote), so there IS a commit that introduced it; this
+   //    engine's resolver just isn't wired to walk it yet. Confusing this
+   //    with the absence case above told a user their finding was a
+   //    "permanent, by-design limitation" when it was really an ordinary,
+   //    fixable coverage gap.
+   //  - anything else: the annotator failed to reach it, as above.
    //
-   // The first two are honest `not_available` — that is exactly what the status
-   // is for. Only a genuine annotator failure is an `error`, which is why this
-   // loop distinguishes them rather than stamping one status for all three.
+   // The first three are honest `not_available` — that is exactly what the
+   // status is for. Only a genuine annotator failure is an `error`, which is
+   // why this loop distinguishes them rather than stamping one status for all.
+   const SUPPLY_CHAIN_ABSENCE_TYPES = new Set(['unpinned_dep', 'no_lockfile']);
    for (const sc of (supplyChain || [])) {
      if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
-     sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
-       limitations: [sc.type === 'vulnerable_dep'
-         ? 'transitive dependency origin resolution failed for this entry (annotator error)'
-         : `origin resolution does not apply to a ${sc.type || 'non-vulnerability'} supply-chain entry`],
-     });
+     let limitation;
+     if (sc.type === 'vulnerable_dep') {
+       limitation = 'transitive dependency origin resolution failed for this entry (annotator error)';
+     } else if (SUPPLY_CHAIN_ABSENCE_TYPES.has(sc.type)) {
+       limitation = `origin resolution does not apply to a ${sc.type} supply-chain entry`;
+     } else {
+       limitation = `origin resolution is not yet wired for a ${sc.type || 'non-vulnerability'} supply-chain entry (this describes a real source location, not an absent declaration — resolvable in principle, just not implemented today)`;
+     }
+     sc.findingProvenance = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: [limitation] });
    }
    // The OTHER two channels report/index.js normalizes into findings —
    // `scan.secrets` and `scan.logicVulns`. The same argument that produced the

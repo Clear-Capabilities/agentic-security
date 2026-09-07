@@ -10,6 +10,41 @@
 
 
 
+## 0.148.4 - Adversarial premortem re-run on the 0.148.2/0.148.3 --assurance strict fix: two real defects found and fixed
+
+0.148.2's fix for a confusing `--assurance strict` failure was itself put through an adversarial
+premortem rather than trusted on its own say-so, the same discipline applied to the compliance-
+framework work earlier. It found the message-building logic held up in the common single-reason
+case, but had two real defects when a scan had more than one kind of provenance problem at once —
+which, on a real project, is not an edge case.
+
+1. **Multiple concurrent reasons silently collapsed to one.** A non-git directory with an
+   unpinned dependency produces BOTH a `'not a Git repository'` reason (every SAST/secrets/logic
+   finding) AND a `'origin resolution does not apply to...'` reason (the unpinned-dependency SCA
+   finding) on the very same scan — not hypothetically; `engine.js`'s two SCA populations that get
+   real git-history resolution are filtered to `type === 'vulnerable_dep'` only, so `unpinned_dep`/
+   `no_lockfile` never pass through the git-repo check at all. The message-building code picked
+   whichever reason had the most findings and silently dropped the other, so a user could fix the
+   reported problem (initialize git), rerun, and hit a second wall the tool had full information
+   about on the very first run but never mentioned — a milder recurrence of the exact "the tool
+   knew and didn't tell me" complaint the original fix existed to close. `_provenanceFailureReason`
+   (`scanner/src/pipeline/assurance-mode.js`) now reports every real category present, not just the
+   largest one.
+
+2. **Two structurally different SCA gaps were given the same, wrong advice.** `unpinned_dep`/
+   `no_lockfile` genuinely have no origin commit to resolve (they describe an absent declaration) —
+   correctly labeled a permanent, by-design limitation. But `cdn_no_integrity`/`dynamic_require`
+   both carry a real file:line (a specific `<script src>` tag or `require(...)` call someone wrote)
+   that a future resolver update genuinely could walk; `engine.js`'s provenance-stamping loop
+   previously gave all four types the identical limitation string, so the message-building code told
+   a user with a `cdn_no_integrity` finding to stop investigating a resolvable coverage gap because
+   it looked identical to a truly unresolvable one. `engine.js` now gives the two classes distinct,
+   honest limitation strings.
+
+Both landed with new regression tests (`scanner/test/assurance-mode.test.js`) covering the exact
+multi-reason interaction that exposed the first defect, and the cdn/dynamic-require case for the
+second. No behavior changed for the single-reason case most scans will actually hit.
+
 ## 0.148.3 - Dependency currency fix; supersedes 0.148.2, which never published
 
 The `v0.148.2` tag was pushed but its release workflow's dependency-currency gate failed on a

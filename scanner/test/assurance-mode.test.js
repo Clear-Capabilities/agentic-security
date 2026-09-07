@@ -214,3 +214,63 @@ test('strict mode: unpinned-dependency/no-lockfile provenance gaps get their own
   assert.match(v.reason, /known, permanent limitation/);
   assert.match(v.reason, /--assurance standard\/advisory/);
 });
+
+// ── R1/R2 (adversarial premortem re-run, 2026-09-07) ────────────────────────
+// The first fix silently dropped every reason except the single largest
+// bucket. On a real non-git project with unpinned dependencies -- the
+// COMMON case, not an edge case -- that meant only the git-repo message
+// ever appeared, and the equally-real, equally-permanent supply-chain
+// limitation was never mentioned; a user would "fix" git, rerun, and hit a
+// wall the tool had full information about on the very first run.
+
+test('strict mode: BOTH "not a Git repository" and permanent supply-chain reasons present at once are BOTH reported, not just the larger bucket', () => {
+  const gitFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['not a Git repository'] });
+  const supplyFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['origin resolution does not apply to a unpinned_dep supply-chain entry'] });
+  const findings = [
+    ...Array.from({ length: 100 }, (_, i) => ({ id: `sast${i}`, findingProvenance: gitFp })),
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `sca${i}`, findingProvenance: supplyFp })),
+  ];
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  // The larger bucket (git, 100) must still be reported...
+  assert.match(v.reason, /100 of them are "not a Git repository"/);
+  assert.match(v.reason, /git init/);
+  // ...and the smaller bucket (supply-chain, 5) must NOT be silently dropped.
+  assert.match(v.reason, /5 of them describe an ABSENT dependency declaration/);
+  assert.match(v.reason, /known, permanent limitation/);
+  assert.match(v.reason, /fixing only one will surface the next/);
+});
+
+test('strict mode: all three of git + supply-chain + an unrelated reason are reported together', () => {
+  const gitFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['not a Git repository'] });
+  const supplyFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['origin resolution does not apply to a no_lockfile supply-chain entry'] });
+  const otherFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['budget exhausted'] });
+  const findings = [
+    { id: 'f1', findingProvenance: gitFp },
+    { id: 'f2', findingProvenance: supplyFp },
+    { id: 'f3', findingProvenance: otherFp },
+  ];
+  const v = evaluateAssuranceMode('strict', CLEAN, findings);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /1 of them are "not a Git repository"/);
+  assert.match(v.reason, /1 of them describe an ABSENT dependency declaration/);
+  assert.match(v.reason, /1 share the reason "budget exhausted"/);
+});
+
+// R2: cdn_no_integrity/dynamic_require carry a real file:line (an ordinary,
+// fixable coverage gap) and must NOT be told they are a "permanent,
+// by-design limitation" -- that claim is true only for unpinned_dep/
+// no_lockfile, which describe an absent declaration with no commit to point
+// to. Conflating the two told a user a fixable gap was unfixable.
+
+test('strict mode: cdn_no_integrity/dynamic_require provenance gaps do NOT get the "permanent limitation" message', () => {
+  const cdnFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution is not yet wired for a cdn_no_integrity supply-chain entry (this describes a real source location, not an absent declaration — resolvable in principle, just not implemented today)'],
+  });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: cdnFp }]);
+  assert.equal(v.ok, false);
+  assert.doesNotMatch(v.reason, /known, permanent limitation/);
+  assert.doesNotMatch(v.reason, /ABSENT dependency declaration/);
+  // It still gets SOME real, specific text, not a bare count.
+  assert.match(v.reason, /resolvable in principle/);
+});
