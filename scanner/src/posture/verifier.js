@@ -32,6 +32,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { runConfined, sandboxAvailable } from '../sandbox/index.js';
 import { isExplicitlyNoPoc } from './poc-cwe-map.js';
+import { isSafeStateDir, stateDir, statePath, stateWritesEnabled } from './state-dir.js';
 
 // ─── PoC static validation ──────────────────────────────────────────────────
 //
@@ -226,6 +227,75 @@ export function verifierCoverageSummary(findings) {
     if (v && v in out) out[v]++;
   }
   return out;
+}
+
+// ─── Run persistence (adversarial premortem Q1, 2026-09-07) ────────────────
+//
+// `compliance-frameworks/*.json` has mapped `module:verifier` to
+// `verifier-runs/` since this framework's control-to-artifact table was
+// written, but nothing ever wrote to it: `cmdVerify` (bin/agentic-security.js)
+// ran the loop and printed a summary, but never persisted one. That made
+// NIST 800-171 `03.12.01` (Security Assessment) and NIST CSF 2.0 `RC.RP`
+// (Recovery plans executed and improved) permanently unable to read
+// 'present' via this leg of their mapping, on any project, ever — worse than
+// a self-referential mapping (which can at least clear, dishonestly), a
+// mapping that can never clear at all. This closes that gap for real, one
+// record per `agentic-security verify` run, same shape as fix-metrics.js's
+// append-per-attempt pattern (that file uses one growing JSONL; this one
+// uses one file per run, because the table entry it satisfies is a
+// directory, not a file, and a per-run file is what a reader would expect
+// under a name like "verifier-runs/").
+const RUN_DIR = 'verifier-runs';
+
+/**
+ * Persist one record of an `agentic-security verify` invocation. Best-effort
+ * and silent on failure, same convention as every other posture writer: a
+ * verify run's own findings must never be lost because the record of having
+ * run could not be written.
+ *
+ * @returns {boolean} whether the record was written (for tests, not callers).
+ */
+export function recordVerifierRun(scanRoot, summary) {
+  if (!scanRoot || !summary || typeof summary !== 'object') return false;
+  try {
+    const dir = stateDir(scanRoot);
+    if (!isSafeStateDir(dir)) return false;
+    if (!stateWritesEnabled()) return false;
+    const runsDir = statePath(scanRoot, RUN_DIR);
+    fs.mkdirSync(runsDir, { recursive: true });
+    const now = new Date();
+    // Millisecond Date timestamps collide under back-to-back calls (two
+    // `verify` invocations in the same test, or a scripted loop). hrtime is
+    // monotonic and nanosecond-resolution within this process, so appending
+    // it guarantees both a distinct filename AND correct chronological sort
+    // order (alphabetical == call order), which a random suffix alone would
+    // not: two records written in the same millisecond would sort by random
+    // bytes, not by which call happened first.
+    const stamp = now.toISOString().replace(/[^0-9TZ]/g, '-');
+    const seq = process.hrtime.bigint().toString().padStart(20, '0');
+    const record = { timestamp: now.toISOString(), ...summary };
+    // One writeFileSync of one complete file: a concurrent reader sees a
+    // whole record or nothing (never a partial one, unlike an append target).
+    fs.writeFileSync(path.join(runsDir, `${stamp}-${seq}.json`), JSON.stringify(record, null, 2), 'utf8');
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Read every well-formed run record, oldest first. A file that does not
+ * parse is skipped, not thrown on — same tolerant-read convention as
+ * fix-metrics.js's readFixAttempts.
+ */
+export function readVerifierRuns(scanRoot) {
+  try {
+    const runsDir = statePath(scanRoot, RUN_DIR);
+    const files = fs.readdirSync(runsDir).filter((f) => f.endsWith('.json')).sort();
+    const out = [];
+    for (const f of files) {
+      try { out.push(JSON.parse(fs.readFileSync(path.join(runsDir, f), 'utf8'))); } catch { /* skip malformed */ }
+    }
+    return out;
+  } catch { return []; }
 }
 
 // For tests and the no-dead-modules check.

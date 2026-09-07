@@ -4,8 +4,11 @@
   "publisher": "OWASP Foundation",
   "license": "Creative Commons Attribution-ShareAlike 4.0",
   "url": "https://owasp.org/www-project-top-10-for-large-language-model-applications/",
-  "scope": "FULL TOP-10. All ten categories are present. Each category is a broad class rather than a single testable requirement, so a mapping indicates a detector exists for part of the class, not that the class is fully covered.",
-  "controlsDigest": "0a0351a9536790e4",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVersionDriftDetected": true,
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch): confirmed page is OWASP Top 10 for LLM Applications, but the CURRENT published edition is now 2026 (2026-08-04), not the 2025 edition this file bundles. See scope field for the disclosure and what remediation this requires.",
+  "scope": "FULL TOP-10. All ten categories are present. Each category is a broad class rather than a single testable requirement, so a mapping indicates a detector exists for part of the class, not that the class is fully covered. VERSION DRIFT, disclosed 2026-09-07: this bundle is the 2025 edition. OWASP published a 2026 edition on 2026-08-04 (confirmed live, the project page now archives 2025 and lists 2026 as current); the 10-category taxonomy may have changed. This file has NOT been re-mapped to the 2026 edition, that requires a deliberate review of the new categories against this engine's detector families, not a rushed relabel. Treat this bundle as 2025-accurate only until that review lands.",
+  "controlsDigest": "7500b9c4268eba6f",
   "controlCount": 10,
   "controls": [
     {
@@ -101,11 +104,10 @@
       "summary": "Excessive Agency — agent autonomy is bounded by explicit guards.",
       "codeTestable": "partial",
       "evidence": [
-        "MCP server config limits write-tools to confirm:true + reserved-write-path refusal.",
-        "Apply-fix path requires HMAC-verified scan."
+        "Apply-fix path requires HMAC-verified scan.",
+        "Removed module:mcp-tools after a second-review pass: that path points at THIS scanner's own source file (scanner/src/mcp/tools.js), which only resolves inside this tool's own checkout, never inside an arbitrary assessed project. It cannot evidence that the assessed LLM application bounds ITS OWN agent's autonomy. Category error (self-referential: about this tool, not the target)."
       ],
       "mapsTo": [
-        "module:mcp-tools",
         "module:apply-fix"
       ]
     },
@@ -114,13 +116,10 @@
       "summary": "Overreliance — human review checkpoints exist.",
       "codeTestable": "partial",
       "evidence": [
-        "security-fixer agent has Stop-on-verify-fail loop.",
-        "PreToolUse bodyguard exists."
+        "No automated signal in this engine after a second-review pass removed both prior mappings. module:security-fixer pointed at THIS scanner's own agent definition file (agents/security-fixer.md) and module:pre-edit-bodyguard at THIS scanner's own installed hook — both resolve only inside this tool's own checkout/plugin install, never inside an arbitrary assessed project, and neither evidences that the assessed LLM application itself has human review checkpoints. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework.",
+        "Reported as an engine gap: human review checkpoints around an LLM application's outputs are code-observable in principle (an approval-gate library, a human-in-the-loop wrapper in the assessed system's own code), but no detector here looks for that in the SCANNED project."
       ],
-      "mapsTo": [
-        "module:security-fixer",
-        "module:pre-edit-bodyguard"
-      ]
+      "mapsTo": []
     },
     {
       "id": "LLM10",

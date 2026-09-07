@@ -3,15 +3,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   validatePoc,
   proveSanitizerAbsence,
   verdictForFinding,
   annotateVerifierVerdicts,
   verifierCoverageSummary,
+  recordVerifierRun,
+  readVerifierRuns,
   _internals,
 } from '../src/posture/verifier.js';
 import { sandboxAvailable } from '../src/sandbox/index.js';
+
+// A real project root: state-dir.js refuses to create .agentic-security/
+// anywhere without a project marker, same convention as fix-metrics.test.js.
+function tmpRoot() {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'verifierruns-'));
+  fs.writeFileSync(path.join(d, 'package.json'), '{"name":"fixture"}');
+  return d;
+}
 
 // ─── validatePoc — refuse destructive/oversized/no-exit PoCs ───────────────
 
@@ -269,4 +282,47 @@ test('EA-02: runSandboxed executes the PoC through real confinement and reaches 
   } finally {
     proc.kill();
   }
+});
+
+// ─── recordVerifierRun / readVerifierRuns (adversarial premortem Q1) ───────
+
+test('recordVerifierRun writes a real file under .agentic-security/verifier-runs/', () => {
+  const root = tmpRoot();
+  try {
+    const ok = recordVerifierRun(root, { findingCount: 3, live: false, target: null, summary: { 'cannot-verify': 3 } });
+    assert.equal(ok, true);
+    const dir = path.join(root, '.agentic-security', 'verifier-runs');
+    assert.ok(fs.existsSync(dir), 'module:verifier maps to this directory — it must actually exist after a run');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+    assert.equal(files.length, 1);
+    const record = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8'));
+    assert.equal(record.findingCount, 3);
+    assert.equal(record.live, false);
+    assert.deepEqual(record.summary, { 'cannot-verify': 3 });
+    assert.ok(record.timestamp, 'each record must carry when the run happened');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('recordVerifierRun never throws on garbage input', () => {
+  assert.equal(recordVerifierRun(null, {}), false);
+  assert.equal(recordVerifierRun('/nonexistent-root', null), false);
+  assert.equal(recordVerifierRun(undefined, undefined), false);
+});
+
+test('readVerifierRuns round-trips multiple records in write order', () => {
+  const root = tmpRoot();
+  try {
+    recordVerifierRun(root, { findingCount: 1, summary: {} });
+    recordVerifierRun(root, { findingCount: 2, summary: {} });
+    const back = readVerifierRuns(root);
+    assert.equal(back.length, 2);
+    assert.deepEqual(back.map((r) => r.findingCount), [1, 2]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('readVerifierRuns on a project that never ran verify returns empty, not an error', () => {
+  const root = tmpRoot();
+  try {
+    assert.deepEqual(readVerifierRuns(root), []);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

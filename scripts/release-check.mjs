@@ -147,6 +147,19 @@ export const CHECKS = [
       'export and code-testability.json — a control with no rating fails the build.',
   },
   {
+    // Adversarial premortem P0.2 (2026-09-07): code-testability.json's 97
+    // hand-authored ratings shipped through the same single-author,
+    // no-second-review process that produced six false SAST findings in
+    // this repo's own history (see bench/self-scan/check.mjs's own header).
+    // That incident got a permanent gate; this one, until now, did not.
+    id: 'nist-800-171-labels',
+    title: 'NIST 800-171 codeTestable ratings match a reviewed anchor set',
+    slow: false,
+    remedy: 'Run `npm run bench:nist-800-171-labels:check` in scanner/ and read which ' +
+      'anchor drifted. If the drift is a deliberate, reviewed correction, update ' +
+      'bench/nist-800-171-labels/GOLDEN.json to match and record why in its `why` field.',
+  },
+  {
     id: 'package-contents',
     title: 'Package contents match the committed expectation',
     // Local: one npm pack --dry-run and a git ls-files call, no network. Cheap
@@ -840,6 +853,11 @@ function main(argv) {
       if (!verdict.ok) return verdict;
     }
     return evaluateCommandGate({ label: `${catalogs.length} catalogs checked`, exitCode: 0 });
+  });
+
+  evaluate('nist-800-171-labels', () => {
+    const r = run('node', [path.join(REPO, 'bench', 'nist-800-171-labels', 'check.mjs')], { cwd: REPO });
+    return evaluateCommandGate({ label: 'node bench/nist-800-171-labels/check.mjs', exitCode: r.status });
   });
 
   evaluate('package-contents', () => runPackageContentsCheck(REPO));

@@ -36,6 +36,15 @@ better than most bundled frameworks do, access enforcement, cryptographic protec
 configuration settings, flaw remediation and supply-chain integrity are all things this engine
 decides directly.
 
+> **This is not a CMMC assessment, and no output here is a certification, a passing score, or
+> an SPRS number.** "Control basis for CMMC Level 2" describes what 800-171 *is* to the CMMC
+> program, not what this tool produces. CMMC certification requires a C3PAO-conducted
+> assessment against 800-171A's own procedures; this tool has no relationship to that process.
+> Anyone citing this report's output in a self-attestation is citing automated technical-control
+> evidence for a subset of 800-171's requirements, not a compliance determination. See
+> [What this is not](#what-this-is-not) below for the complete list, and read it before you
+> attach this report to anything.
+
 ## The honesty model, applied here
 
 800-171 is a *system* standard, not an application-security standard. Much of it is about
@@ -72,6 +81,53 @@ with a one-line rationale per requirement in
 [`scripts/nist-800-171/code-testability.json`](../../scripts/nist-800-171/code-testability.json).
 Disagree with a rating and you are disagreeing with us, not with NIST. That file is the place
 to argue.
+
+## The deep-attestation scanner (`scan.py`)
+
+Alongside `/compliance --report`/`--walkthrough` above (the engine-native mapping evaluated
+against a scan), this framework also ships a standalone deep-attestation scanner, the same
+pattern as [NIST AI 600-1's](nist-ai-600-1-coverage.md#2-the-full-spreadsheet-catalog-212-controls-code-testable-ones-only):
+
+```bash
+python3 scripts/nist-800-171/scan.py <path-to-repo>       # markdown attestation sheet
+python3 scripts/nist-800-171/scan.py <path-to-repo> --json-out out.json
+```
+
+It walks the target repository directly (manifests, imports, paths, terms) and scores each of
+the 54 code-testable requirements with an evidence-rules file
+([`scripts/nist-800-171/evidence-rules.json`](../../scripts/nist-800-171/evidence-rules.json)),
+independent of any prior scan.
+
+**Its scoring weights and status thresholds are shared, unmodified code, inherited from the AI
+600-1 scanner — not independently recalibrated for 800-171's evidence-rules shape.** Both
+frameworks run through the same `scripts/nist-compliance/scan.py` engine (the docstring at the
+top of that file states the exact weights and thresholds), and 800-171's evidence rules were
+authored to fit that pre-existing scoring model, not the other way around. Adversarial premortem
+P1.5 (2026-09-07) measured a real structural difference between the two rule sets rather than
+assume they behave the same:
+
+| | AI 600-1 (122 rules) | 800-171 (54 rules) |
+|---|---|---|
+| Controls with a `libraries`/`imports` entry (can ever reach a **strong**-tier hit) | 98 (80%) | 22 (41%) |
+
+A **strong**-tier hit (manifest or import match) is the cheapest of the three paths to a
+`Compliant` verdict. 800-171's evidence rules lean harder on account-lifecycle, configuration and
+process terms (`code_term`/`named_path`/`doc_term`) than on named libraries — reasonably, since
+requirements like account provisioning or configuration baselines are not "install this package"
+questions the way an AI 600-1 control like content-provenance tooling often is. The practical
+effect: a genuinely well-evidenced 800-171 control is more likely to need the third, harder path
+to `Compliant` (≥3 distinct signal types **and** weight ≥ 10, see the scan.py docstring) than an
+equivalently well-evidenced AI 600-1 control, which more often clears through a manifest/import
+hit alone.
+
+This is **not** a case for a rushed, unvalidated tweak to the shared weights — a change tuned by
+eye against this one repository would be exactly the kind of unvalidated recalibration this note
+exists to avoid, and it would silently move AI 600-1's already-shipped verdicts too, since the
+engine is shared. Recalibrating for real would need a labelled corpus of 800-171-relevant
+repositories with known-correct verdicts, which does not exist today. Until it does: read a
+`Partial` or `Not Compliant` verdict from this tool as *this scanner did not find enough of the
+cheapest evidence shapes*, not as *this requirement is unmet* — the same "absence of automated
+evidence is not absence of the practice" honesty rule the rest of this page applies throughout.
 
 ## What this is not
 

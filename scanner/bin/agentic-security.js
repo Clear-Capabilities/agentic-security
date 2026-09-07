@@ -1875,7 +1875,7 @@ async function cmdVerify(args) {
     process.env.AGENTIC_SECURITY_VERIFY_LIVE = '1';
     process.env.AGENTIC_SECURITY_VERIFY_TARGET = targetFlag;
   }
-  const { annotateVerifierVerdicts, verifierCoverageSummary } = await import('../src/posture/verifier.js');
+  const { annotateVerifierVerdicts, verifierCoverageSummary, recordVerifierRun } = await import('../src/posture/verifier.js');
   const filter = args.flags.finding ? findings.filter(f => f.id === args.flags.finding || f.stableId === args.flags.finding) : findings;
   if (!filter.length) {
     console.error(`No matching findings (use --finding <id>).`);
@@ -1901,6 +1901,10 @@ async function cmdVerify(args) {
   const sum = verifierCoverageSummary(filter);
   console.log(`Verified ${filter.length} finding(s):`);
   for (const [k, v] of Object.entries(sum)) console.log(`  ${k}: ${v}`);
+  // Adversarial premortem Q1: a durable record that a security assessment of
+  // findings actually happened, so module:verifier has something real to
+  // point at (see verifier.js's recordVerifierRun header comment).
+  recordVerifierRun(scanRoot, { findingCount: filter.length, live: liveFlag, target: targetFlag || null, summary: sum });
   if (args.flags.verbose || args.flags.finding) {
     for (const f of filter) {
       console.log(`  ${f.file}:${f.line}  ${f.vuln}`);

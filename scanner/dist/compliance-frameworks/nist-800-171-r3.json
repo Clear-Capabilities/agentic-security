@@ -4,9 +4,12 @@
   "publisher": "NIST",
   "license": "public-domain (US Federal publication)",
   "url": "https://csrc.nist.gov/pubs/sp/800/171/r3/final",
+  "sourceDoi": "https://doi.org/10.6028/NIST.SP.800-171r3",
+  "sourcePdfSha256": "3e4631df8b5d61f40a6e542b52779ef30ddbbfff31e09214fa94ad6e6f5e6d08",
+  "sourceVerificationNote": "Verified 2026-09-07: the CSRC landing page URL resolves and states title \"Protecting Controlled Unclassified Information in Nonfederal Systems and Organizations\", Rev. 3, published May 2024. The DOI resolves (302) to the PDF at nvlpubs.nist.gov, whose own embedded XMP metadata (pdfx:DOI, pdfx:Comments) confirms NIST.SP.800-171r3. sourcePdfSha256 is the SHA-256 of that exact downloaded PDF, so a future re-check can detect if NIST republishes under the same URL/DOI with different content. This does not verify the CSV control export against the PDF text control-by-control — see scripts/nist-800-171/README for that gap.",
   "note": "Control text is generated from docs/standards/NIST_SP_800_171r3_Controls.csv by scripts/nist-800-171/build-catalog.py. The codeTestable rating is THIS ENGINE'S judgment, not NIST's. Unlike the AI 600-1 workbook, the 800-171 export rates no control for testability. Ratings and their rationales live in scripts/nist-800-171/code-testability.json.",
   "scope": "FULL CATALOGUE — all 97 requirements of NIST SP 800-171 Rev. 3 are carried, deliberately including those this engine cannot assess, because omitting them would read as coverage. Automated evidence is PARTIAL and unevenly distributed: 16 requirements are rated code-testable, 38 partial, and 43 are organisational, physical or personnel controls NOT represented by any automated signal: all of Awareness and Training, Personnel Security and Physical Protection, and most of Incident Response, Maintenance and Media Protection. Those are forced to 'partial' with an explicit disclosure and can never read as satisfied. This is not a CMMC assessment and produces no SPRS score.",
-  "controlsDigest": "28e4a38c393e1457",
+  "controlsDigest": "927295dcd1594189",
   "controlCount": 97,
   "controls": [
     {
@@ -330,10 +333,8 @@
       "summary": "Protection of Audit Information: a. Protect audit information and audit logging tools from unauthorized access, modification, and deletion. b. Authorize access to management of audit logging functionality to only a subset of…",
       "codeTestable": "partial",
       "evidence": [
-        "Artifact(s) present: integrity."
-      ],
-      "mapsTo": [
-        "module:integrity"
+        "No automated signal in this engine — this tool can sign and verify its OWN scan output (module:integrity), but that evidences this scanner's integrity, not whether the SCANNED PROJECT protects its own audit logs from unauthorized access, modification or deletion. No detector here inspects the scanned codebase for log-signing, tamper-evident storage, or access controls on audit data. Removed after a second-review pass found the original mapping was a category error (self-referential: about this tool, not the target).",
+        "Reported as an engine gap: this requirement is code-observable in principle (a detector could look for tamper-evident logging libraries or access-controlled log stores in application code), but no detector here decides it."
       ]
     },
     {

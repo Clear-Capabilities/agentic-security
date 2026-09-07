@@ -4,8 +4,10 @@
   "publisher": "US Department of Health and Human Services",
   "license": "US Federal regulation (public)",
   "url": "https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07: the WebFetch tool was blocked by eCFR's automated bot detection (redirected to unblock.federalregister.gov, a CAPTCHA challenge). Verified instead via a direct HTTP request (curl with a standard browser User-Agent, HTTP 200), confirming sections 164.302/304/306/308 (the HIPAA Security Rule administrative safeguards) are present at this URL. No content hash is pinned: eCFR explicitly serves the CURRENT version of the regulation by design (the URL path itself says \"current\"), so hash-pinning would treat a living regulatory text as a fixed publication.",
   "scope": "SELECTIVE SUBSET. 8 of the Security Rule technical safeguards. Administrative and physical safeguards are outside what a code scanner can observe and are NOT represented here.",
-  "controlsDigest": "7e94038dd9a64d3d",
+  "controlsDigest": "4be9e2264a574e33",
   "controlCount": 8,
   "controls": [
     {
@@ -73,10 +75,10 @@
       "summary": "Audit controls — record and examine activity in systems containing PHI.",
       "codeTestable": "partial",
       "evidence": [
-        "MCP audit log + fix history present and hash-chained."
+        "Fix history present and hash-chained.",
+        "Removed module:mcp-audit after a second-review pass: mcp-audit.log records calls to THIS tool's own MCP server, not activity in the covered entity's own systems containing PHI. Category error (self-referential: about this tool, not the target)."
       ],
       "mapsTo": [
-        "module:mcp-audit",
         "module:fix-history"
       ]
     },
@@ -85,13 +87,11 @@
       "summary": "Integrity — PHI not altered or destroyed in an unauthorized manner.",
       "codeTestable": "partial",
       "evidence": [
-        "last-scan.json HMAC integrity check passing.",
-        "Sigstore provenance verified for ML model files (if opt-in)."
+        "Removed module:integrity after a second-review pass: last-scan.json.sig is this scanner signing its OWN scan output, not evidence that the covered entity's PHI is protected from unauthorized alteration or destruction. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework.",
+        "Removed module:sigstore-verify after a second-review pass (adversarial premortem Q1, 2026-09-07): sigstore-attestations/ is never written anywhere in this codebase — the real Sigstore verification logic (scanner/src/sca/sigstore-verify.js) caches results in a per-user home-directory cache (~/.claude/agentic-security/sigstore-cache/), shared across every project scanned on that machine, by design (content-addressed by package sha256, correctly reused rather than duplicated per project). Its own annotation call is fire-and-forget async in engine.js, not awaited, so even a project-relative summary write would not reliably complete before the scan process exits — building one blind, without first fixing that completion guarantee, was judged a bigger and riskier change than this task's scope, so this mapping is disclosed as a gap instead of built unverified.",
+        "Reported as an engine gap: whether PHI integrity is protected against unauthorized alteration or destruction is code-observable in principle (checksums, WORM storage, tamper-evident logging in the covered entity's own application code), but no detector here evidences that in the SCANNED project."
       ],
-      "mapsTo": [
-        "module:integrity",
-        "module:sigstore-verify"
-      ]
+      "mapsTo": []
     },
     {
       "id": "§164.312(e)",

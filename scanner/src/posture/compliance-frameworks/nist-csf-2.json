@@ -4,8 +4,10 @@
   "publisher": "NIST",
   "license": "public-domain (US Federal publication)",
   "url": "https://www.nist.gov/cyberframework",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch): confirmed NIST Cybersecurity Framework, CSF 2.0 stated as current throughout the page, matching this bundle. No content hash pinned: this is a resource hub page (quick-start guides, profiles, informative references, a downloadable PDF), not a single fixed document.",
   "scope": "SELECTIVE SUBSET. 8 subcategories with a code-observable signal. CSF 2.0 has over 100 subcategories; GOVERN in particular is organisational and is NOT represented here.",
-  "controlsDigest": "bcff46f53e75f501",
+  "controlsDigest": "1df76b5bde1d0044",
   "controlCount": 8,
   "controls": [
     {
@@ -45,12 +47,11 @@
       "summary": "Vulnerabilities and threats are identified.",
       "codeTestable": "partial",
       "evidence": [
-        "Regular scan history under .agentic-security/scan-history/.",
-        "ATT&CK / ATLAS technique mapping on findings."
+        "ATT&CK / ATLAS technique mapping on findings (last-scan.json).",
+        "Removed module:exploitability-probability (adversarial premortem Q2, 2026-09-07): that name is not in the ARTIFACT vocabulary table — exploitability-probability.js is a real, live annotator (posture/exploitability-probability.js), but it sets fields directly on findings in memory and writes no standalone artifact of its own; its output lands in last-scan.json, the exact file the surviving module:attack-taxonomy leg on this control already checks. This mapping could never read 'present' via this leg, on any project, since it shipped — removed rather than pointed at a duplicate check with no new signal."
       ],
       "mapsTo": [
-        "module:attack-taxonomy",
-        "module:exploitability-probability"
+        "module:attack-taxonomy"
       ]
     },
     {

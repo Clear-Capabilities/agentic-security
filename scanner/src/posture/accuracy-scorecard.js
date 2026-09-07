@@ -266,6 +266,16 @@ export function buildScorecard(inputs) {
         }
         : null,
     },
+    // Adversarial premortem Q7 (2026-09-07). See mappingCoverageOf's own
+    // header comment (posture/auditor-walkthrough.js) for why this exists:
+    // measuring the trend, not gating it — no threshold, no baseline, no
+    // pass/fail, since a drop is sometimes the correct outcome of an honest
+    // fix and sometimes a real regression, and only a human reading the
+    // diff each release can tell which. `[]` (never omitted) when the
+    // caller supplies nothing, so a reader can tell "measured, zero
+    // frameworks" from "this scorecard predates the metric" the same way
+    // every other section here distinguishes absence from zero.
+    complianceMappingCoverage: inputs.complianceMappingCoverage || [],
   };
 }
 
@@ -528,6 +538,30 @@ export function renderScorecardMarkdown(m) {
     L.push('git-origin resolution pipeline, so a gap in this rate reflects the clone');
     L.push('itself (shallow history, uncommitted lines the pipeline could not blame) —');
     L.push('not a channel this measurement structurally cannot yet cover.');
+    L.push('');
+  }
+  if (Array.isArray(m.complianceMappingCoverage) && m.complianceMappingCoverage.length) {
+    L.push('## Compliance mapping coverage');
+    L.push('');
+    L.push('Adversarial premortem Q7 (2026-09-07): each fix to a category-error');
+    L.push('mapping (a control checking an artifact that evidences this scanner,');
+    L.push('not the target — see `03.03.08` in the NIST 800-171 coverage doc for the');
+    L.push('original instance) correctly SUBTRACTS a `mapsTo` entry. Nobody was');
+    L.push('tracking the cumulative effect release over release. This is not a');
+    L.push('gate — a drop is sometimes a correct, honest fix and sometimes a real');
+    L.push('regression, and only a human reading the diff each release can tell');
+    L.push('which — it exists so the trend is visible instead of assumed.');
+    L.push('');
+    L.push('| Framework | Controls with a live mapping | Share |');
+    L.push('| --- | --- | --- |');
+    for (const row of [...m.complianceMappingCoverage].sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+      L.push(`| ${row.id} | ${row.mappedCount}/${row.controlCount} | ${formatRate(row.mappedCount, row.controlCount)} |`);
+    }
+    L.push('');
+    L.push('"Live mapping" means the control carries at least one `family:`/`module:`/');
+    L.push('`rule:`/`graph:` entry, regardless of whether it would clear on any given');
+    L.push('scan — this counts what the engine CAN evidence, not what it evidenced');
+    L.push('this run.');
     L.push('');
   }
   // PRD F12.6 — the honest scorecard publishes the LIMITS too, not only the

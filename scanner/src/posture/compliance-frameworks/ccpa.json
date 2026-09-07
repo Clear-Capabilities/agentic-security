@@ -4,6 +4,8 @@
   "publisher": "California Legislature",
   "license": "California statute (public)",
   "url": "https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?division=3.&part=4.&lawCode=CIV&title=1.81.5",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch): resolves to California Civil Code Title 1.81.5 sections 1798.100-1798.145, correctly reflecting amendments through Stats. 2025, Ch. 67 (effective 2026-01-01). No content hash is pinned deliberately: this URL serves the CURRENT, continuously-amended text of codified law by design, not a fixed publication, hash-pinning would misrepresent a living legal source as a static one.",
   "scope": "SELECTIVE SUBSET. 4 of the CCPA/CPRA obligations, chosen because a code scanner can produce evidence for them. The statute is far broader; the majority of its duties (notice, consumer request handling, contracts, retention policy) are organisational and are NOT represented here. Absence of a control is not a statement of compliance.",
   "controlsDigest": "ebc1f708c329ab42",
   "controlCount": 4,

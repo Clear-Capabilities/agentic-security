@@ -308,7 +308,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all twenty-two checks in order', () => {
+test('release-gate — full run plans all twenty-four checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -340,8 +340,15 @@ test('release-gate — full run plans all twenty-two checks in order', () => {
   // protection-verdict-gate — slow, wiring bench/protection-verdict/
   // runner.mjs (Decision 2's false-protected release gate for
   // transit/atRest) into a release gate for the first time.
+  // Adversarial premortem P0.2 (2026-09-07, NIST 800-171 PRD) added
+  // nist-800-171-labels — fast, wiring bench/nist-800-171-labels/check.mjs
+  // (a held-out anchor set for the hand-authored codeTestable ratings, and
+  // a structural check for self-referential module: mappings) into a
+  // release gate for the first time; the ratings previously shipped through
+  // the same single-author, no-second-review process bench/self-scan/
+  // exists to guard against for detector findings, with no equivalent gate.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 23);
+  assert.equal(ids.length, 24);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -368,18 +375,19 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 10);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 13);
+  assert.equal(ids.length, 14);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
-  // package-contents, both provenance gates, the doc-link gate, and the two
+  // package-contents, both provenance gates, the doc-link gate, the two
   // gates over committed measurement artifacts (calibration-holdout,
   // independent-population-gate — both compare a committed file against a
-  // committed floor, no subprocess, cheap) must survive --fast: they are
-  // what make a fast run still meaningful.
+  // committed floor, no subprocess, cheap), and nist-800-171-labels (a
+  // committed-anchor-set comparison, same shape, no subprocess) must survive
+  // --fast: they are what make a fast run still meaningful.
   for (const keep of [
     'working-tree-clean', 'version-consistency', 'changelog-entry',
     'bundle-integrity', 'scorecard-freshness', 'attestation-self-check',
-    'nist-catalog-freshness', 'package-contents',
+    'nist-catalog-freshness', 'nist-800-171-labels', 'package-contents',
     'head-pushed', 'remote-ci-green', 'doc-links', 'calibration-holdout',
     'independent-population-gate',
   ]) {

@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.148.1",
-    "bundleSha256": "f6631e892fc735bf6cc220770f8fae86bb9df9a4f7fea0df1e9cb644e3332b3c",
-    "commit": "629dc6e7175ce146e5d0f8da83effe9dd6b01a67",
+    "bundleSha256": "50ac012aad784a997fa9c835b7f9c38c1f482592eb6e2876e96e488d6e46f4f4",
+    "commit": "62dc0fe5e7f4dfee64ec5ab929d37f53d25e3be0",
     "worktreeClean": false,
     "nodeVersion": "v24.16.0",
-    "generatedAt": "2026-09-06T15:34:29.437Z",
+    "generatedAt": "2026-09-07T13:21:20.785Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -801,7 +801,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 321,
+    "n": 325,
     "d": 368
   },
   "taintRecall": {
@@ -1378,5 +1378,67 @@
         }
       ]
     }
-  }
+  },
+  "complianceMappingCoverage": [
+    {
+      "id": "ccpa",
+      "controlCount": 4,
+      "mappedCount": 3,
+      "mappedFraction": 0.75
+    },
+    {
+      "id": "eu-ai-act",
+      "controlCount": 7,
+      "mappedCount": 5,
+      "mappedFraction": 0.7142857142857143
+    },
+    {
+      "id": "gdpr",
+      "controlCount": 6,
+      "mappedCount": 6,
+      "mappedFraction": 1
+    },
+    {
+      "id": "hipaa-security-rule",
+      "controlCount": 8,
+      "mappedCount": 6,
+      "mappedFraction": 0.75
+    },
+    {
+      "id": "nist-800-171-r3",
+      "controlCount": 97,
+      "mappedCount": 49,
+      "mappedFraction": 0.5051546391752577
+    },
+    {
+      "id": "nist-ai-600-1",
+      "controlCount": 6,
+      "mappedCount": 6,
+      "mappedFraction": 1
+    },
+    {
+      "id": "nist-csf-2",
+      "controlCount": 8,
+      "mappedCount": 8,
+      "mappedFraction": 1
+    },
+    {
+      "id": "nist-privacy-1-1",
+      "controlCount": 104,
+      "mappedCount": 28,
+      "mappedFraction": 0.2692307692307692
+    },
+    {
+      "id": "owasp-asvs-5",
+      "controlCount": 10,
+      "mappedCount": 10,
+      "mappedFraction": 1
+    },
+    {
+      "id": "owasp-llm-top-10",
+      "controlCount": 10,
+      "mappedCount": 9,
+      "mappedFraction": 0.9
+    }
+  ]
 }

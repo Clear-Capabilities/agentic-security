@@ -4,8 +4,11 @@
   "publisher": "NIST",
   "license": "public-domain (US Federal publication)",
   "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+  "sourceDoi": "https://doi.org/10.6028/NIST.AI.600-1",
+  "sourcePdfSha256": "6e73620ab6b64e90ef2c04bf0e0d6246185a2f4b1b13cab0df494496cff89b6a",
+  "sourceVerificationNote": "Verified 2026-09-07: the doi.org DOI resolves (302) to this exact url, and the downloaded PDF's own embedded XMP metadata (pdfx:Category, dc:title) confirms \"NIST AI 600-1\" / \"Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile\". sourcePdfSha256 is the SHA-256 of that exact downloaded PDF, so a future re-check can detect if NIST republishes under the same URL/DOI with different content.",
   "scope": "SELECTIVE SUBSET. 6 actions from the Generative AI Profile with a code-observable signal. The profile is far larger; governance, provenance and incident-response actions are organisational and are NOT represented here. The full control catalogue is built and gated separately by scripts/nist-compliance/build-catalog.py.",
-  "controlsDigest": "a6ad567713796b05",
+  "controlsDigest": "6e7cc01c5ba8ae22",
   "controlCount": 6,
   "controls": [
     {
@@ -84,11 +87,10 @@
       "summary": "Establish content provenance / authenticity controls.",
       "codeTestable": "partial",
       "evidence": [
-        "Sigstore provenance opt-in configured for model loads.",
-        "ATTRIBUTIONS.md generated."
+        "ATTRIBUTIONS.md generated.",
+        "Removed module:sigstore-verify after a second-review pass (adversarial premortem Q1, 2026-09-07): sigstore-attestations/ is never written anywhere in this codebase — see the identical removal note on hipaa-security-rule.json's §164.312(c) for the full reasoning (home-directory cache by design, fire-and-forget async producer, not a quick artifact-path fix). Content-provenance / authenticity controls for model loads remain only partially evidenced by this control's surviving module:license-attributions leg."
       ],
       "mapsTo": [
-        "module:sigstore-verify",
         "module:license-attributions"
       ]
     }

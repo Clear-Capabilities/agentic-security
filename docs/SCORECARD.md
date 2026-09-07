@@ -10,14 +10,14 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.148.1 |
-| Bundle SHA-256 | `f6631e892fc735bf6cc220770f8fae86bb9df9a4f7fea0df1e9cb644e3332b3c` |
-| Commit | `629dc6e7175ce146e5d0f8da83effe9dd6b01a67` |
+| Bundle SHA-256 | `50ac012aad784a997fa9c835b7f9c38c1f482592eb6e2876e96e488d6e46f4f4` |
+| Commit | `62dc0fe5e7f4dfee64ec5ab929d37f53d25e3be0` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.16.0 |
 | Corpus entries | 215 (215 scored) |
 | Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-06T15:34:29.437Z |
+| Generated (UTC) | 2026-09-07T13:21:20.785Z |
 
 ## What these numbers are, and what they are not
 
@@ -226,12 +226,41 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 321/368 (87.2%) |
+| 325/368 (88.3%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
 itself (shallow history, uncommitted lines the pipeline could not blame) —
 not a channel this measurement structurally cannot yet cover.
+
+## Compliance mapping coverage
+
+Adversarial premortem Q7 (2026-09-07): each fix to a category-error
+mapping (a control checking an artifact that evidences this scanner,
+not the target — see `03.03.08` in the NIST 800-171 coverage doc for the
+original instance) correctly SUBTRACTS a `mapsTo` entry. Nobody was
+tracking the cumulative effect release over release. This is not a
+gate — a drop is sometimes a correct, honest fix and sometimes a real
+regression, and only a human reading the diff each release can tell
+which — it exists so the trend is visible instead of assumed.
+
+| Framework | Controls with a live mapping | Share |
+| --- | --- | --- |
+| ccpa | 3/4 | 3/4 (75.0%) |
+| eu-ai-act | 5/7 | 5/7 (71.4%) |
+| gdpr | 6/6 | 6/6 (100.0%) |
+| hipaa-security-rule | 6/8 | 6/8 (75.0%) |
+| nist-800-171-r3 | 49/97 | 49/97 (50.5%) |
+| nist-ai-600-1 | 6/6 | 6/6 (100.0%) |
+| nist-csf-2 | 8/8 | 8/8 (100.0%) |
+| nist-privacy-1-1 | 28/104 | 28/104 (26.9%) |
+| owasp-asvs-5 | 10/10 | 10/10 (100.0%) |
+| owasp-llm-top-10 | 9/10 | 9/10 (90.0%) |
+
+"Live mapping" means the control carries at least one `family:`/`module:`/
+`rule:`/`graph:` entry, regardless of whether it would clear on any given
+scan — this counts what the engine CAN evidence, not what it evidenced
+this run.
 
 ## Independent evaluation population — the number that matters
 

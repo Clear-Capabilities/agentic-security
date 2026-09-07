@@ -257,6 +257,7 @@ import { generateBundles as generateExploitBundles } from './posture/exploit-bun
 import { buildMigrationPlan as buildPqcPlan, persistMigrationPlan as persistPqcPlan } from './posture/pqc-migration-plan.js';
 import { analyzeLicenseGraph, loadLicenseGraphPolicy } from './posture/license-graph.js';
 import { generateAttributions, persistAttributions } from './posture/license-attributions.js';
+import { buildAIBOM, persistAIBOM } from './posture/aibom.js';
 import { annotateAttackTaxonomy, summarizeTaxonomy } from './posture/attack-taxonomy.js';
 import { suppressByPastDecisions } from './posture/triage-memory.js';
 import { suppressByIntent } from './posture/intent-context.js';
@@ -10263,6 +10264,19 @@ function _deterministicFileTimings(timings) {
       try {
         _attributions = generateAttributions(annotatedComponents || []);
         if (_attributions && _attributions.componentCount) persistAttributions(scanRoot, _attributions);
+      } catch (_) {}
+    }
+    // AI-BOM: emit aibom.json (adversarial premortem Q2, 2026-09-07 — see
+    // aibom.js's persistAIBOM header comment for why this was missing).
+    // Previously only reachable via the CLI's --format aibom, which never
+    // wrote it here, so module:aibom (eu-ai-act.json Art.11, nist-800-171-r3
+    // .json 03.04.10, nist-ai-600-1.json MG-4.1-001) could never clear.
+    if (process.env.AGENTIC_SECURITY_NO_AIBOM !== '1') {
+      try {
+        const _aibom = buildAIBOM({ components: annotatedComponents || [] }, fc, {});
+        if (_aibom && (_aibom.models.length || _aibom.promptTemplates.length || _aibom.frameworks.length)) {
+          persistAIBOM(scanRoot, _aibom);
+        }
       } catch (_) {}
     }
     // Attack taxonomy summary — aggregates ATT&CK / ATLAS / kill-chain

@@ -4,8 +4,10 @@
   "publisher": "European Parliament & Council",
   "license": "EU law (Official Journal)",
   "url": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+  "sourceVerificationAttempted": "2026-09-07",
+  "sourceVerificationNote": "Verification attempted 2026-09-07 and NOT completed: eur-lex.europa.eu returned HTTP 202 with an empty body and an x-amzn-waf-action: challenge header (AWS WAF bot challenge), both via the WebFetch tool and via a direct curl request with a standard browser User-Agent. This is recorded honestly as an unverified URL rather than a false confirmation. GDPR (the sibling eur-lex.europa.eu/eli/reg/2016/679/oj source, same domain) resolved successfully in the same session, so this appears to be per-request or per-path challenge behavior, not a durable domain-wide block. Re-attempt this check periodically; a human should confirm the URL manually until automated verification succeeds.",
   "scope": "SELECTIVE SUBSET. 7 obligations drawn from the high-risk-system and GPAI articles where a code signal exists. The Act is far broader; conformity assessment, registration, human oversight and post-market monitoring are organisational and are NOT represented here.",
-  "controlsDigest": "16d15998a686a19b",
+  "controlsDigest": "f63f5763df191224",
   "controlCount": 7,
   "controls": [
     {
@@ -53,11 +55,10 @@
       "summary": "Record-keeping — automatic logging of system events for traceability.",
       "codeTestable": "partial",
       "evidence": [
-        "MCP audit log .agentic-security/mcp-audit.log present.",
-        "Scan history retained."
+        "Scan history retained.",
+        "Removed module:mcp-audit after a second-review pass: mcp-audit.log records calls to THIS tool's own MCP server, i.e. how an agent used this scanner — it is not evidence that the assessed AI system logs its own events. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework."
       ],
       "mapsTo": [
-        "module:mcp-audit",
         "module:scan-history"
       ]
     },
@@ -66,11 +67,10 @@
       "summary": "Transparency — instructions for use enable users to interpret the system's output correctly.",
       "codeTestable": "partial",
       "evidence": [
-        "why-fired annotation surfaces detection provenance on every finding."
+        "Removed module:why-fired after adversarial premortem Q6 (2026-09-07, re-run): why-fired.js explains why THIS SCANNER's OWN detectors fired on a finding ('the user can see exactly what produced the finding without reading the scanner source' — its own header comment) — it is provenance for this tool's decisions, not evidence that the ASSESSED AI system gives its own users instructions to interpret ITS OWN output, which is what Article 13 actually asks. Every other control in this framework uses 'the system' to mean the assessed AI product (Art.9's risk management system, Art.12's event logging), so this reads Art.13 the same way rather than as an exception. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework — this one was initially judged a borderline, undecided open question in the first premortem pass and is now adjudicated on a full reading of the actual control text and the actual module code.",
+        "Reported as an engine gap: whether an assessed AI system documents its own output for its own users is not something this engine, which never sees the assessed system's user-facing product surface, can evidence at all."
       ],
-      "mapsTo": [
-        "module:why-fired"
-      ]
+      "mapsTo": []
     },
     {
       "id": "Art.14",
@@ -78,10 +78,9 @@
       "codeTestable": "partial",
       "evidence": [
         "Fix application requires confirm:true.",
-        "Bodyguard hook can refuse risky edits."
+        "Removed module:pre-edit-bodyguard after a second-review pass: that file is this scanning tool's OWN installed hook, not an artifact of the assessed AI system. Its presence only shows this tool's plugin is installed, never that the assessed system itself permits human override or interruption. Category error (self-referential: about this tool, not the target)."
       ],
       "mapsTo": [
-        "module:pre-edit-bodyguard",
         "module:apply-fix"
       ]
     },
@@ -90,13 +89,10 @@
       "summary": "Accuracy, robustness, cybersecurity — appropriate level of accuracy and resilience.",
       "codeTestable": "partial",
       "evidence": [
-        "Calibration + held-out evaluation present (.agentic-security/calibration-seed.json).",
-        "OWASP Benchmark regression gate."
+        "No automated signal in this engine after a second-review pass removed both prior mappings. module:calibration and module:holdout-eval pointed at THIS scanner's own ML calibration corpus and held-out evaluation labels (calibration-seed.json, holdout-eval.jsonl) — files that describe how accurately this tool's OWN detectors are calibrated, not whether the assessed AI system has an appropriate level of accuracy, robustness or cybersecurity. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework.",
+        "Reported as an engine gap: an AI system's own accuracy/robustness testing is code-observable in principle (evaluation harnesses, robustness test suites in the assessed system's own repo), but no detector here looks for that in the SCANNED project."
       ],
-      "mapsTo": [
-        "module:calibration",
-        "module:holdout-eval"
-      ]
+      "mapsTo": []
     }
   ]
 }

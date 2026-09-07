@@ -29,6 +29,14 @@ source, manifests, configuration, documentation and CI in one repository. 43 of
 that no code scanner can evidence; they have no rules here and are absent from
 this attestation by design. This is not a CMMC assessment and produces no SPRS
 score. See docs/compliance/nist-800-171-r3-coverage.md.
+
+SCORING, and what it inherits: the weights and status thresholds below are
+`scripts/nist-compliance/scan.py`'s, shared with AI 600-1, not independently
+recalibrated for this evidence-rules.json's shape — see "The deep-attestation
+scanner" in docs/compliance/nist-800-171-r3-coverage.md for the measured
+difference (800-171's rules lean on term/path signals over named libraries far
+more than AI 600-1's do) and why a rushed recalibration was deliberately not
+done.
 """
 
 from __future__ import annotations

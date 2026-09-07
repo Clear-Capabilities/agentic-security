@@ -20,6 +20,7 @@ import {
   computeProvenanceCoverage,
   TIMESTAMP_MARKER,
 } from '../src/posture/accuracy-scorecard.js';
+import { mappingCoverageOf } from '../src/posture/auditor-walkthrough.js';
 
 // ── Hand-computable fixture ─────────────────────────────────────────────────
 // 6 scored entries + 1 env-error (must be excluded from every denominator).
@@ -648,4 +649,47 @@ test('renderScorecardMarkdown: Provenance coverage section is cleanly OMITTED (n
   const model = buildScorecard(fixtureInputs());
   const md = renderScorecardMarkdown(model);
   assert.doesNotMatch(md, /## Provenance coverage/);
+});
+
+// ── mappingCoverageOf / complianceMappingCoverage (adversarial premortem Q7) ─
+
+test('mappingCoverageOf counts controls with at least one live mapsTo entry', () => {
+  const fw = {
+    id: 'test-fw',
+    controls: [
+      { id: 'A', mapsTo: ['family:sql-injection'] },
+      { id: 'B', mapsTo: [] },
+      { id: 'C' }, // no mapsTo at all
+      { id: 'D', mapsTo: ['module:sbom-diff', 'family:x'] },
+    ],
+  };
+  const r = mappingCoverageOf(fw);
+  assert.deepEqual(r, { id: 'test-fw', controlCount: 4, mappedCount: 2, mappedFraction: 0.5 });
+});
+
+test('mappingCoverageOf never throws on garbage input', () => {
+  assert.deepEqual(mappingCoverageOf(null), { id: null, controlCount: 0, mappedCount: 0, mappedFraction: null });
+  assert.deepEqual(mappingCoverageOf({}), { id: undefined, controlCount: 0, mappedCount: 0, mappedFraction: null });
+  assert.deepEqual(mappingCoverageOf({ id: 'x', controls: [] }), { id: 'x', controlCount: 0, mappedCount: 0, mappedFraction: null });
+});
+
+test('renderScorecardMarkdown: Compliance mapping coverage section renders one row per supplied framework', () => {
+  const model = buildScorecard({
+    ...fixtureInputs(),
+    complianceMappingCoverage: [
+      { id: 'nist-800-171-r3', controlCount: 97, mappedCount: 49 },
+      { id: 'gdpr', controlCount: 6, mappedCount: 6 },
+    ],
+  });
+  const md = renderScorecardMarkdown(model);
+  assert.match(md, /## Compliance mapping coverage/);
+  assert.match(md, /\| gdpr \| 6\/6 \| 6\/6 \(100\.0%\) \|/);
+  assert.match(md, /\| nist-800-171-r3 \| 49\/97 \| 49\/97 \(50\.5%\) \|/);
+});
+
+test('renderScorecardMarkdown: Compliance mapping coverage section is cleanly OMITTED when no data was supplied', () => {
+  const model = buildScorecard(fixtureInputs());
+  const md = renderScorecardMarkdown(model);
+  assert.doesNotMatch(md, /## Compliance mapping coverage/);
+  assert.deepEqual(model.complianceMappingCoverage, []);
 });

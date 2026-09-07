@@ -379,13 +379,19 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 | Framework | `<framework>` id | Coverage map |
 |---|---|---|
 | NIST AI 600-1 (2024) — Generative AI Profile | `nist-ai-600-1` | [coverage](docs/compliance/nist-ai-600-1-coverage.md) |
-| NIST SP 800-171 Rev. 3 — Protecting CUI (CMMC basis) | `nist-800-171-r3` | [coverage](docs/compliance/nist-800-171-r3-coverage.md) · [demo](docs/brand/nist-800-171-demo.gif) |
+| NIST SP 800-171 Rev. 3 — Protecting CUI¹ | `nist-800-171-r3` | [coverage](docs/compliance/nist-800-171-r3-coverage.md) · [demo](docs/brand/nist-800-171-demo.gif) |
 | NIST Cybersecurity Framework 2.0 | `nist-csf-2` | — |
 | NIST Privacy Framework 1.1 | `nist-privacy-1-1` | [coverage](docs/compliance/nist-privacy-1-1-coverage.md) |
 | OWASP ASVS 5.0 | `owasp-asvs-5` | [coverage](docs/compliance/owasp-asvs-coverage.md) |
 | OWASP Top 10 for LLM Applications 2025 | `owasp-llm-top-10` | [coverage](docs/compliance/owasp-llm-top10-coverage.md) |
 | EU AI Act | `eu-ai-act` | [`scripts/eu-ai-act/`](scripts/eu-ai-act/) |
 | GDPR · HIPAA Security Rule · CCPA | `gdpr` · `hipaa-security-rule` · `ccpa` | — |
+
+¹ 800-171 is the control basis for CMMC Level 2 and DFARS 252.204-7012 contracts, but this
+tool does **not** perform a CMMC assessment, compute an SPRS score, or issue a certification —
+CMMC certification requires a C3PAO-conducted assessment. See [coverage: what this is
+not](docs/compliance/nist-800-171-r3-coverage.md#what-this-is-not) before citing this report's
+output in any self-attestation.
 
 Real `compliance --list` returns all 10 of these; 5 have a dedicated per-control coverage map today, tracked as a known gap rather than papered over — see [Compliance](docs/guides/compliance.md).
 

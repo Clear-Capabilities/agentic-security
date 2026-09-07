@@ -328,6 +328,96 @@ function _resolveOpenFindingMinSeverity(scanRoot, frameworkId) {
     : OPEN_FINDING_MIN_SEVERITY;
 }
 
+// `module:` mapping vocabulary → the on-disk artifact(s) that evidence it.
+// Hoisted to module scope (was previously re-declared on every control
+// evaluated, a wasted allocation with no reader) and exported so
+// `test/module-artifact-liveness.test.js` can check every entry here is
+// actually written somewhere in scanner/src/, without keeping a second,
+// driftable copy of this list. A table entry is either one path or an array
+// of acceptable ones — see the `scan-history` comment below for why an array
+// means "any of these satisfies it." A `.../` prefix marks a source-relative
+// artifact (resolved against the scan root itself, not the state dir).
+export const MODULE_ARTIFACTS = {
+  'sbom-diff':            'sbom-history/',
+  'license-attributions': 'ATTRIBUTIONS.md',
+  'threat-model-auto':    'threat-model.json',
+  'compliance-policy':    'compliance-evidence.json',
+  'fix-history':          'fix-history/log.json',
+  'privacy-taint':        'dpia.md',
+  'aibom':                'aibom.json',
+  'attack-taxonomy':      'last-scan.json',
+  // Two real spellings, both live in this codebase: security-trend.js and
+  // router.js read `scan-history.json` (a FILE), findings-memory.js uses
+  // `scan-history` (a DIRECTORY). Only the directory was listed here, so
+  // on a normal scan — which writes the .json — every control mapped to
+  // module:scan-history reported the artifact missing and could never
+  // clear. Five bundled frameworks were affected. An array means "any of
+  // these satisfies it", which is the honest reading: the control asks
+  // whether a scan history exists, not which shape it took.
+  'scan-history':         ['scan-history.json', 'scan-history/'],
+  'watch-mode':           'watch-status.json',
+  'cve-alert-daemon':     'cve-alerts/',
+  'triage':               'triage.json',
+  'triage-memory':        'triage-memory.jsonl',
+  // Adversarial premortem Q1 (2026-09-07): this entry existed since the
+  // ARTIFACT table did, but nothing ever wrote verifier-runs/ — no control
+  // mapped to it could ever read 'present', on any project, permanently.
+  // `verifier.js`'s `recordVerifierRun` now writes one record per real
+  // `agentic-security verify` invocation, closing the gap for real.
+  'verifier':             'verifier-runs/',
+  'apply-fix':            'fix-history/log.json',
+  // REMOVED, deliberately (adversarial premortem P2.8 + Q1/Q2/Q6, 2026-09-07):
+  // 'integrity' (last-scan.json.sig), 'mcp-audit' (mcp-audit.log),
+  // 'calibration' (calibration-seed.json), 'holdout-eval'
+  // (holdout-eval.jsonl), 'sigstore-verify' (sigstore-attestations/, never
+  // written — see hipaa-security-rule.json's §164.312(c) removal note),
+  // 'pre-edit-bodyguard' (hooks/pre-edit-bodyguard.js), 'security-fixer'
+  // (agents/security-fixer.md), 'mcp-tools' (scanner/src/mcp/tools.js), and
+  // 'why-fired' (last-scan.json — its CONTENT is target-derived, unlike the
+  // others, but it evidences THIS TOOL's own detection provenance, not any
+  // property of the assessed system; adjudicated on eu-ai-act.json Art.13's
+  // actual text, see that control's evidence[] for the full reasoning) all
+  // evidence THIS SCANNER's own state, operation, or installed files —
+  // never the scanned project's — and are structurally incapable of validly
+  // backing any `module:` mapping, not just accidentally missing a writer.
+  // Every live mapsTo reference to any of them was removed and disclosed as
+  // an engine gap (see each affected framework file's evidence[] for the
+  // specific reasoning); they are removed from the vocabulary table itself,
+  // not merely un-referenced, so there is nothing left to copy-paste back
+  // in. `compliance-mapping-liveness.test.js`'s self-referential-module test
+  // remains as a permanent regression guard against the STRING key
+  // reappearing in a mapsTo array even without a table entry to source it
+  // from.
+};
+
+// Adversarial premortem Q7 (2026-09-07): each `03.03.08`-style fix
+// (P2.8/Q1/Q2/Q6) subtracts a `mapsTo` entry to correct a category error —
+// the right call every time it happened, but nobody was tracking the
+// CUMULATIVE effect. "Always subtract, never invent" is correct engineering
+// discipline that can still trend, unmeasured, toward a framework that
+// automatically clears fewer and fewer controls each release, which looks
+// to a buyer like the tool doing less over time even though every
+// individual change made it more honest. This computes the number that
+// makes the trend visible instead of assumed: how many of a framework's
+// controls carry at least one LIVE mapsTo (family:/module:/rule:/graph:),
+// regardless of whether that mapping would currently clear on any given
+// scan — the question is "can this control ever be evidenced by this
+// engine at all," not "did today's scan clear it." Pure and side-effect
+// free, like the rest of this module's exports; the caller supplies the
+// already-loaded framework object (see `scripts/scorecard.mjs` for the
+// driver that loads every bundled framework and calls this once each).
+export function mappingCoverageOf(fw) {
+  const controls = (fw && fw.controls) || [];
+  const controlCount = controls.length;
+  const mappedCount = controls.filter((c) => Array.isArray(c.mapsTo) && c.mapsTo.length > 0).length;
+  return {
+    id: fw && fw.id,
+    controlCount,
+    mappedCount,
+    mappedFraction: controlCount ? mappedCount / controlCount : null,
+  };
+}
+
 export function evaluateFramework(scanRoot, fw, scan) {
   const minSeverity = _resolveOpenFindingMinSeverity(scanRoot, fw && fw.id);
   // CMP-2: last-scan.json (what this is actually handed in production) carries
@@ -521,46 +611,12 @@ export function evaluateFramework(scanRoot, fw, scan) {
         anySignal = true;
       } else if (m.startsWith('module:')) {
         const mod = m.slice('module:'.length);
-        const ARTIFACT = {
-          'sbom-diff':            'sbom-history/',
-          'license-attributions': 'ATTRIBUTIONS.md',
-          'threat-model-auto':    'threat-model.json',
-          'compliance-policy':    'compliance-evidence.json',
-          'mcp-audit':            'mcp-audit.log',
-          'fix-history':          'fix-history/log.json',
-          'privacy-taint':        'dpia.md',
-          'aibom':                'aibom.json',
-          'attack-taxonomy':      'last-scan.json',
-          'why-fired':            'last-scan.json',
-          // Two real spellings, both live in this codebase: security-trend.js and
-          // router.js read `scan-history.json` (a FILE), findings-memory.js uses
-          // `scan-history` (a DIRECTORY). Only the directory was listed here, so
-          // on a normal scan — which writes the .json — every control mapped to
-          // module:scan-history reported the artifact missing and could never
-          // clear. Five bundled frameworks were affected. An array means "any of
-          // these satisfies it", which is the honest reading: the control asks
-          // whether a scan history exists, not which shape it took.
-          'scan-history':         ['scan-history.json', 'scan-history/'],
-          'integrity':            'last-scan.json.sig',
-          'watch-mode':           'watch-status.json',
-          'cve-alert-daemon':     'cve-alerts/',
-          'triage':               'triage.json',
-          'triage-memory':        'triage-memory.jsonl',
-          'verifier':             'verifier-runs/',
-          'calibration':          'calibration-seed.json',
-          'holdout-eval':         'holdout-eval.jsonl',
-          'sigstore-verify':      'sigstore-attestations/',
-          'pre-edit-bodyguard':   '.../hooks/pre-edit-bodyguard.js',
-          'apply-fix':            'fix-history/log.json',
-          'security-fixer':       '.../agents/security-fixer.md',
-          'mcp-tools':            '.../scanner/src/mcp/tools.js',
-        };
         // A table entry is either one path or an array of acceptable ones. An
         // array means the artifact has more than one real spelling in this
         // codebase and any of them evidences the control; the FIRST is the
         // canonical name used in the observation text when none is found, so
         // the message still names something a reader can go create.
-        const target = ARTIFACT[mod];
+        const target = MODULE_ARTIFACTS[mod];
         const candidates = target == null ? [] : (Array.isArray(target) ? target : [target]);
         // A '.../' sentinel marks a source-relative artifact (project source,
         // e.g. a hook or agent file) — resolve it against the scan root itself.

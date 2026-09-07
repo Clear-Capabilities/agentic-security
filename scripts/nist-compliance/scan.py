@@ -867,6 +867,26 @@ def write_md(controls, rules, evidence, statuses, out_path, root,
                  "additionally requires external attestation (signed policy / "
                  "training records / vendor agreements / etc.).")
     lines.append("")
+    # Adversarial premortem Q3 (2026-09-07): the weights and thresholds below
+    # were designed against, and validated only against, NIST AI 600-1's
+    # evidence-rule shape (FW['slug'] == 'nist-ai-600-1', the framework this
+    # scanner was originally built for). Every OTHER framework catalog runs
+    # through the exact same code, unmodified — sharing one engine keeps a
+    # security-relevant fix from silently missing a sibling copy, but it also
+    # means an unvalidated scoring model reaches a real attestation an
+    # operator might submit. This caveat previously existed only in
+    # docs/compliance/nist-800-171-r3-coverage.md and this file's own
+    # docstring, neither of which the generated attestation — the artifact
+    # that actually leaves the building — ever referenced.
+    if FW["slug"] != "nist-ai-600-1":
+        lines.append(f"> **The scoring weights and status thresholds below are shared, "
+                     f"unmodified code from the NIST AI 600-1 scanner** — they have "
+                     f"NOT been independently validated against {FW['name']}'s "
+                     f"evidence-rule shape. Read a `Partial` or `Not Compliant` "
+                     f"verdict as *this scanner did not find enough of the cheapest "
+                     f"evidence shapes*, not as a calibrated judgment that the "
+                     f"requirement is unmet.")
+        lines.append("")
     lines.append("**Signal types and weights:**")
     lines.append("")
     lines.append("| Signal | Weight | What it means |")

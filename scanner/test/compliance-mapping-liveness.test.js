@@ -228,6 +228,69 @@ test('a real detector-backed control still reaches "present"', () => {
   assert.equal(r.status, 'present');
 });
 
+// Adversarial premortem P2.8 (2026-09-07) — semantic-correctness dimension.
+//
+// Every test above this line proves the MECHANISM works (vocabulary resolves,
+// aliases apply, an unevidenceable family caps below 'present'). None of them
+// ask whether a given mapping is actually ABOUT the thing the control claims.
+// `03.03.08` in nist-800-171-r3.json shipped with `module:integrity` — a
+// mapping that reads clean on every mechanical check above, because
+// last-scan.json.sig genuinely exists and genuinely is a `module:` artifact.
+// It was still wrong: that file is THIS SCANNER signing its own scan output,
+// not evidence that the SCANNED PROJECT protects its own audit logs. A
+// second-review pass over the OTHER `module:` mappings (not just the one
+// already found) turned up the same category error 9 more times across 5
+// other bundled frameworks — `module:mcp-audit` (an MCP call log of how an
+// agent used THIS tool, not the target's own event logging), `module:
+// integrity` again, `module:calibration`/`module:holdout-eval` (this
+// scanner's OWN ML corpus, shipped in scanner/dist/, never customer-specific),
+// and three modules whose path points inside THIS tool's own source tree
+// (`module:mcp-tools`, `module:security-fixer`, `module:pre-edit-bodyguard`)
+// — a path that can only ever resolve if the assessed project happens to BE
+// this repository, never an arbitrary target.
+//
+// The test below cannot judge every mapping's semantics — that needs a human
+// reading control text against artifact meaning, which is exactly the gap
+// this section closes for a NAMED, already-adjudicated set. It exists so a
+// close call, once adjudicated, can never be silently reintroduced (a copy-
+// paste of an existing control's mapsTo, a merge that resurrects a removed
+// entry) without a human deciding to widen the list.
+const SELF_REFERENTIAL_MODULES = {
+  'integrity': 'last-scan.json.sig is this scanner signing its OWN scan output, not the target\'s',
+  'mcp-audit': 'mcp-audit.log records calls to THIS tool\'s own MCP server, not the target\'s',
+  'calibration': 'calibration-seed.json is this scanner\'s OWN ML calibration corpus, not the target\'s',
+  'holdout-eval': 'holdout-eval.jsonl is this scanner\'s OWN held-out evaluation labels, not the target\'s',
+  'mcp-tools': 'scanner/src/mcp/tools.js is THIS tool\'s own source file, resolvable only inside this repo',
+  'security-fixer': 'agents/security-fixer.md is THIS tool\'s own agent file, resolvable only inside this repo',
+  'pre-edit-bodyguard': 'hooks/pre-edit-bodyguard.js is THIS tool\'s own hook file, resolvable only inside this repo',
+  // Adjudicated by adversarial premortem Q6 (2026-09-07, re-run): left as an
+  // open question in the first pass because last-scan.json's CONTENT is
+  // target-derived, unlike the others above — but the evidence it was
+  // asked to back (eu-ai-act.json Art.13, "instructions for use enable
+  // users to interpret the [assessed AI] system's output correctly") is
+  // about the ASSESSED system, and why-fired.js explains only THIS
+  // SCANNER's own detection provenance. Same category error, decided on a
+  // full reading of the control text rather than left undecided.
+  'why-fired': 'last-scan.json\'s whyFired annotation explains THIS SCANNER\'s own detector provenance, not the assessed system\'s own transparency to its users',
+};
+
+test('no bundled control maps to a module: artifact that evidences this scanner rather than the target', () => {
+  const offenders = [];
+  for (const file of fs.readdirSync(FRAMEWORK_DIR).filter((f) => f.endsWith('.json'))) {
+    const fw = JSON.parse(fs.readFileSync(path.join(FRAMEWORK_DIR, file), 'utf8'));
+    for (const c of fw.controls || []) {
+      for (const m of c.mapsTo || []) {
+        if (!m.startsWith('module:')) continue;
+        const mod = m.slice('module:'.length);
+        if (mod in SELF_REFERENTIAL_MODULES) {
+          offenders.push(`${file}:${c.id} maps to module:${mod} — ${SELF_REFERENTIAL_MODULES[mod]}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'self-referential module: mapping(s) found — see comment above this test');
+});
+
 test('every bundled control declares codeTestable', () => {
   // Anti-rot: a control added without the rating would silently regain the
   // ability to read 'present' on artifact existence alone.

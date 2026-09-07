@@ -33,9 +33,26 @@ import {
   buildScorecard,
   renderScorecardMarkdown,
 } from '../scanner/src/posture/accuracy-scorecard.js';
+import { mappingCoverageOf } from '../scanner/src/posture/auditor-walkthrough.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
+
+// Adversarial premortem Q7 (2026-09-07) — the impure half of
+// mappingCoverageOf: enumerate every bundled framework and load it. Kept
+// here rather than in accuracy-scorecard.js so that module stays free of
+// fs/path, same convention as the rest of this driver/pure-module split.
+function complianceMappingCoverage() {
+  const dir = path.join(REPO, 'scanner', 'src', 'posture', 'compliance-frameworks');
+  const out = [];
+  for (const fn of fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+    try {
+      const fw = JSON.parse(fs.readFileSync(path.join(dir, fn), 'utf8'));
+      out.push(mappingCoverageOf(fw));
+    } catch { /* a malformed framework file is caught by other gates; skip here */ }
+  }
+  return out;
+}
 
 function runJson(scriptRelPath, args, label) {
   const script = path.join(REPO, scriptRelPath);
@@ -216,6 +233,7 @@ function countPartiallyEvidenced(dir) {
     // caveat without which the corresponding number means something else than a
     // reader would assume.
     limits: computeLimits(),
+    complianceMappingCoverage: complianceMappingCoverage(),
   });
 
   const md = renderScorecardMarkdown(model);

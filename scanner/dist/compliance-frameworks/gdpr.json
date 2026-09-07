@@ -4,8 +4,10 @@
   "publisher": "European Parliament & Council",
   "license": "EU law (Official Journal)",
   "url": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch): eur-lex.europa.eu/eli/reg/2016/679/oj resolves to the consolidated text of Regulation (EU) 2016/679 (GDPR), confirming Articles 5, 25, 32, 33, 35 and 44 (the six represented here) match the mapped summaries. No content hash is pinned deliberately: EUR-Lex serves the CURRENT consolidated text and its page template can change independently of the legal text itself, so a page hash would drift on template changes that carry no legal-content change and would need constant, meaningless re-pinning — hash-pinning would misrepresent a living legal source as a static publication.",
   "scope": "SELECTIVE SUBSET. 6 articles where a code scanner can produce evidence (security of processing, data minimisation, DPIA inputs). GDPR has 99 articles; lawful basis, data-subject rights, transfers and records of processing are organisational and are NOT represented here.",
-  "controlsDigest": "749f9dad2b5657cb",
+  "controlsDigest": "cd018b0daad4fa66",
   "controlCount": 6,
   "controls": [
     {
@@ -67,11 +69,10 @@
       "codeTestable": "partial",
       "evidence": [
         "Fix history retained.",
-        "Audit log preserves the breach-window evidence."
+        "Removed module:mcp-audit after a second-review pass: mcp-audit.log records calls to THIS tool's own MCP server, not the controller's own breach-detection or notification workflow. Category error (self-referential: about this tool, not the target)."
       ],
       "mapsTo": [
-        "module:fix-history",
-        "module:mcp-audit"
+        "module:fix-history"
       ]
     },
     {
@@ -79,10 +80,11 @@
       "summary": "Data protection impact assessment (DPIA) for high-risk processing.",
       "codeTestable": "partial",
       "evidence": [
-        "DPIA artifact present at .agentic-security/dpia.md."
+        "DPIA artifact present at .agentic-security/dpia.md (privacy-taint.js's emitDpiaArtifact).",
+        "Fixed a malformed mapsTo entry (adversarial premortem Q2, 2026-09-07): 'module:privacy-taint:emitDpiaArtifact' does not match any key in the ARTIFACT vocabulary table (auditor-walkthrough.js parses everything after 'module:' as one literal key, with no ':'-suffix syntax) — this control could never read 'present' via this leg, on any project, since the mapping shipped. Corrected to the real key, 'module:privacy-taint'."
       ],
       "mapsTo": [
-        "module:privacy-taint:emitDpiaArtifact"
+        "module:privacy-taint"
       ]
     }
   ]

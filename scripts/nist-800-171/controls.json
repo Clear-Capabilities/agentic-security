@@ -7,7 +7,7 @@
   "source": "docs/standards/NIST_SP_800_171r3_Controls.csv",
   "sourceSha256": "fc01fdbfa17fc8c0995a824aea2c722fdf703e43411222026e910a3c4519e197",
   "testabilitySource": "scripts/nist-800-171/code-testability.json",
-  "testabilitySha256": "617f4bdd8c6a0926eed66cd8c6f62d2c909d0eba554fe680a7a5112e0d38b4d8",
+  "testabilitySha256": "3c237743a22d5a90ba60e0bfa5126fc81867d3d6c675cb0444ce88ef620d3038",
   "testabilityAuthoredBy": "engine team (not NIST; the source export carries no testability rating)",
   "generator": "scripts/nist-800-171/build-catalog.py",
   "controlCount": 97,
@@ -488,7 +488,7 @@
       "description": "Media Storage\nPhysically control and securely store system media that contain CUI.",
       "text": "DISCUSSION\nSystem media include digital and non-digital media. Digital media include diskettes, flash drives, magnetic tapes, external or removable solid state or magnetic drives, compact discs, and digital versatile discs. Non-digital media include paper and microfilm. Physically controlling stored media includes conducting inventories, establishing procedures to allow individuals to check out and return media to libraries, and maintaining accountability for stored media. Secure storage includes a locked drawer, desk, or cabinet or a controlled media library. Controlled areas provide physical and procedural controls to meet the requirements established for protecting information and systems. Sanitization techniques (e.g., destroying, cryptographically erasing, clearing, and purging) prevent the disclosure of CUI to unauthorized individuals. The sanitization process removes CUI from media such that the information cannot be retrieved or reconstructed.\nREFERENCES\nSource Control: MP-04\nSupporting Publications: SP 800-88 [50], SP 800-111 [51]",
       "code_testable": "No",
-      "code_testable_rationale": "Physical media storage."
+      "code_testable_rationale": "Media storage is a physical fact (a locked room, a controlled cabinet, an access-badged facility). Nothing about how CUI-bearing media is physically stored can be observed from source code or repository content."
     },
     {
       "id": "03.08.02",
@@ -497,7 +497,7 @@
       "description": "Media Access\nRestrict access to CUI on system media to authorized personnel or roles.",
       "text": "DISCUSSION\nSystem media include digital and non-digital media. Access to CUI on system media can be restricted by physically controlling such media. This includes conducting inventories, ensuring that procedures are in place to allow individuals to check out and return media to the media library, and maintaining accountability for stored media. For digital media, access to CUI can be restricted by using cryptographic means. Encrypting data in storage or at rest is addressed in 03.13.08.\nREFERENCES\nSource Control: MP-02\nSupporting Publications: SP 800-111 [51]",
       "code_testable": "No",
-      "code_testable_rationale": "Physical media access restriction."
+      "code_testable_rationale": "Restricting who may physically handle media containing CUI is an access-control decision enforced by locks, custody logs and personnel, not by anything a code or configuration scanner reads."
     },
     {
       "id": "03.08.03",
@@ -515,7 +515,7 @@
       "description": "Media Marking\nMark system media that contain CUI to indicate distribution limitations, handling caveats, and applicable CUI markings.",
       "text": "DISCUSSION\nSystem media include digital and non-digital media. Marking refers to the use or application of human-readable security attributes. Labeling refers to the use of security attributes for internal system data structures. Digital media include diskettes, magnetic tapes, external or removable solid state or magnetic drives, flash drives, compact discs, and digital versatile discs. Non-digital media include paper and microfilm. CUI is defined by NARA along with marking, safeguarding, and dissemination requirements for such information.\nREFERENCES\nSource Control: MP-03\nSupporting Publications: None",
       "code_testable": "No",
-      "code_testable_rationale": "Physical media marking."
+      "code_testable_rationale": "Marking physical media (labels, handling caveats printed on a disk or drive) is a physical labeling practice with no corresponding artifact in source code, configuration, or a git repository."
     },
     {
       "id": "03.08.05",
@@ -524,7 +524,7 @@
       "description": "Media Transport\na. Protect and control system media that contain CUI during transport outside of controlled areas.\nb. Maintain accountability of system media that contain CUI during transport outside of controlled areas.\nc. Document activities associated with the transport of system media that contain CUI.",
       "text": "DISCUSSION\nSystem media include digital and non-digital media. Digital media include flash drives, diskettes, magnetic tapes, external or removable solid state or magnetic drives, compact discs, and digital versatile discs. Non-digital media include microfilm and paper. Controlled areas are spaces for which organizations provide physical or procedural measures to meet the requirements established for protecting CUI and systems. Media protection during transport can include cryptography and/or locked containers. Activities associated with media transport include releasing media for transport, ensuring that media enter the appropriate transport processes, and the actual transport. Authorized transport and courier personnel may include individuals external to the organization. Maintaining accountability of media during transport includes restricting transport activities to authorized personnel and tracking or obtaining the records of transport activities as the media move through the transportation system to prevent and detect loss, destruction, or tampering. This requirement is related to 03.13.08 and 03.13.11.\nREFERENCES\nSource Controls: MP-05, SC-28\nSupporting Publications: SP 800-111 [51]",
       "code_testable": "No",
-      "code_testable_rationale": "Physical media transport."
+      "code_testable_rationale": "Protecting and tracking media in transit outside a controlled area (chain-of-custody logs, transport containers, courier procedures) is a logistics and physical-security process this engine has no visibility into."
     },
     {
       "id": "03.08.07",
@@ -551,7 +551,7 @@
       "description": "Personnel Screening\na. Screen individuals prior to authorizing access to the system.\nb. Rescreen individuals in accordance with [Assignment: organization-defined conditions requiring rescreening].",
       "text": "DISCUSSION\nPersonnel security screening activities involve the assessment of the conduct, integrity, judgment, loyalty, reliability, and stability of an individual (i.e., the individual’s trustworthiness) prior to authorizing access to the system or when elevating system access. The screening and rescreening activities reflect applicable federal laws, Executive Orders, directives, policies, regulations, and criteria established for the level of access required for the assigned position.\nREFERENCES\nSource Control: PS-03\nSupporting Publications: SP 800-181 [34]",
       "code_testable": "No",
-      "code_testable_rationale": "Personnel screening."
+      "code_testable_rationale": "Personnel screening (background checks prior to granting access, periodic rescreening) is an HR and vetting process conducted about people, entirely outside any code, configuration, or repository this engine reads."
     },
     {
       "id": "03.09.02",
@@ -569,7 +569,7 @@
       "description": "Physical Access Authorizations\na. Develop, approve, and maintain a list of individuals with authorized access to the facility where the system resides.\nb. Issue authorization credentials for facility access.\nc. Review the facility access list [Assignment: organization-defined frequency].\nd. Remove individuals from the facility access list when access is no longer required.",
       "text": "DISCUSSION\nA facility can include one or more physical locations containing systems or system components that process, store, or transmit CUI. Physical access authorizations apply to employees and visitors. Individuals with permanent physical access authorization credentials are not considered visitors. Authorization credentials include identification badges, identification cards, and smart cards. Organizations determine the strength of the authorization credentials consistent with applicable laws, Executive Orders, directives, regulations, policies, standards, and guidelines. Physical access authorizations may not be necessary to access certain areas within facilities that are designated as publicly accessible.\nREFERENCES\nSource Control: PE-02\nSupporting Publications: None",
       "code_testable": "No",
-      "code_testable_rationale": "Facility access authorization."
+      "code_testable_rationale": "Physical facility access authorization (who may enter the building or room housing the system) is enforced by badges, guards and physical access-control hardware, none of which is observable from source code."
     },
     {
       "id": "03.10.02",
@@ -578,7 +578,7 @@
       "description": "Monitoring Physical Access\na. Monitor physical access to the facility where the system resides to detect and respond to physical security incidents.\nb. Review physical access logs [Assignment: organization-defined frequency] and upon occurrence of [Assignment: organization-defined events].",
       "text": "DISCUSSION\nA facility can include one or more physical locations containing systems or system components that process, store, or transmit CUI. Physical access monitoring includes publicly accessible areas within organizational facilities. Examples of physical access monitoring include guards, video surveillance equipment (i.e., cameras), and sensor devices. Reviewing physical access logs can help to identify suspicious activities, anomalous events, or potential threats. The reviews can be supported by audit logging controls if the access logs are part of an automated system. Incident response capabilities include investigations of physical security incidents and responses to those incidents. Incidents include security violations or suspicious physical access activities, such as access outside of normal work hours, repeated access to areas not normally accessed, access for unusual lengths of time, and out-of-sequence access.\nREFERENCES\nSource Control: PE-06\nSupporting Publications: None",
       "code_testable": "No",
-      "code_testable_rationale": "Physical access monitoring."
+      "code_testable_rationale": "Monitoring physical access to a facility (camera footage, badge-swipe logs reviewed by security staff) is a physical-security operations activity with no code or repository artifact to inspect."
     },
     {
       "id": "03.10.06",
@@ -587,7 +587,7 @@
       "description": "Alternate Work Site\na. Determine alternate work sites allowed for use by employees.\nb. Employ the following security requirements at alternate work sites: [Assignment: organization-defined security requirements].",
       "text": "DISCUSSION\nAlternate work sites include the private residences of employees or other facilities designated by the organization. Alternate work sites can provide readily available alternate locations during contingency operations. Organizations can define different security requirements for specific alternate work sites or types of sites, depending on the work-related activities conducted at the sites. Assessing the effectiveness of the requirements and providing a means to communicate incidents at alternate work sites supports the contingency planning activities of organizations.\nREFERENCES\nSource Control: PE-17\nSupporting Publications: SP 800-46 [14], SP 800-114 [20]",
       "code_testable": "No",
-      "code_testable_rationale": "Alternate work site security."
+      "code_testable_rationale": "Security requirements for alternate work sites (home offices, temporary locations) are administrative and physical controls applied to a workspace, not something expressed in source code."
     },
     {
       "id": "03.10.07",
@@ -821,7 +821,7 @@
       "description": "System Security Plan\na. Develop a system security plan that: 1. Defines the constituent system components, 2. Identifies the information types, 3. Describes specific threats, 4. Describes operational environment, 5. Provides overview of requirements, 6. Describes safeguards, 7. Identifies individuals, 8. Includes relevant information.\nb. Review and update the system security plan [Assignment: organization-defined frequency].\nc. Protect the system security plan from unauthorized disclosure.",
       "text": "DISCUSSION\nSystem security plans provide key characteristics of the system that is processing, storing, and transmitting CUI and how the system and information are protected. System security plans contain sufficient information to enable a design and implementation that are unambiguously compliant with the intent of the plans and the subsequent determinations of risk if the plan is implemented as intended. System security plans can be a collection of documents, including documents that already exist. Effective system security plans reference policies, procedures, and documents (e.g., design specifications) that provide additional detailed information. This reduces the documentation requirements associated with security programs and maintains security information in other established management or operational areas related to enterprise architecture, the system development life cycle, systems engineering, and acquisition.\nREFERENCES\nSource Control: PL-02\nSupporting Publications: SP 800-18 [63]",
       "code_testable": "No",
-      "code_testable_rationale": "The system security plan is a document."
+      "code_testable_rationale": "A System Security Plan is a written document describing the system's components, boundaries, threats and safeguards. Its existence and content are authored and reviewed by people; this engine can generate supporting artifacts (a threat model, an SBOM) but does not produce or verify the SSP document itself."
     },
     {
       "id": "03.15.03",

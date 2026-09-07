@@ -4,6 +4,8 @@
   "publisher": "OWASP Foundation",
   "license": "Creative Commons Attribution-ShareAlike 4.0",
   "url": "https://owasp.org/www-project-application-security-verification-standard/",
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch): confirmed OWASP ASVS, latest stable release listed as 5.0.0, matching this bundle (owasp-asvs-5), released at Global AppSec EU Barcelona 2025-05-30. No content hash pinned: this is a project navigation page linking to a versioned downloads page, not the standard itself.",
   "scope": "SELECTIVE SUBSET. 10 verification requirements with a direct detector behind them. ASVS 5.0 has several hundred requirements across 17 chapters; the remainder are NOT represented here.",
   "controlsDigest": "6c4371a08f010f91",
   "controlCount": 10,

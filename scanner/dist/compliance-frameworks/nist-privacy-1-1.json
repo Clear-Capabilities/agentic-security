@@ -4,9 +4,9 @@
   "publisher": "NIST",
   "license": "public-domain (US Federal publication)",
   "url": "https://www.nist.gov/privacy-framework",
-  "note": "Each control carries NIST's own `codeTestable` rating (yes/partial/no). That rating says whether a control COULD be assessed from source code — it does not say this engine assesses it. `mapsTo` is present only where this engine produces a real signal; a control that NIST rates testable but which this engine cannot see is reported as an ENGINE GAP rather than silently passed.",
-  "scope": "FULL CATALOGUE, partially assessable. All 104 controls are present and each carries `codeTestable`. 48 are governance controls no scanner can assess; those report `manual`, never `satisfied`. See posture/privacy-framework.js.",
-  "controlsDigest": "447154af306c58d3",
+  "note": "Each control carries a `codeTestable` rating (yes/partial/no). This rating is HAND-AUTHORED BY THIS PROJECT, not NIST: the Privacy Framework document ships no machine-readable testability column (unlike NIST AI 600-1, whose source workbook has one, read by scripts/nist-compliance/build-catalog.py). The rating says whether a control COULD be assessed from source code, in this project's judgment, it does not say this engine assesses it, and it is not NIST's own claim. `mapsTo` is present only where this engine produces a real signal; a control rated testable but which this engine cannot see is reported as an ENGINE GAP rather than silently passed.",
+  "scope": "FULL CATALOGUE, partially assessable, transcribed from an Initial Public Draft (IPD) NOT yet finalized by NIST as of the last verification (see sourceVerificationNote). All 104 controls are present and each carries `codeTestable`, hand-authored by this project (see `note`), NOT a NIST-published rating. 48 are governance controls no scanner can assess; those report `manual`, never `satisfied`. See posture/privacy-framework.js.",
+  "controlsDigest": "3b91775abd5ffc1b",
   "controlCount": 104,
   "controls": [
     {
@@ -494,8 +494,11 @@
       "summary": "Log records are determined, documented, implemented, and reviewed in accordance with policy and incorporating the principle of data minimization.",
       "codeTestable": "partial",
       "mapsTo": [
-        "module:scan-history",
-        "module:mcp-audit"
+        "module:scan-history"
+      ],
+      "evidence": [
+        "Scan history retained.",
+        "Removed module:mcp-audit after a second-review pass: mcp-audit.log records calls to THIS tool's own MCP server, not the organisation's own log-record policy and review practice. Category error (self-referential: about this tool, not the target)."
       ]
     },
     {
@@ -605,8 +608,10 @@
       "category": "Data Processing Awareness (CM.AW-P)",
       "summary": "Records of data disclosures and sharing are maintained and can be accessed for review or transmission/disclosure.",
       "codeTestable": "yes",
-      "mapsTo": [
-        "module:mcp-audit"
+      "mapsTo": [],
+      "evidence": [
+        "No automated signal in this engine after a second-review pass removed the only prior mapping. module:mcp-audit pointed at THIS scanner's own MCP call log, not at the organisation's own records of data disclosures and sharing. Category error (self-referential: about this tool, not the target).",
+        "Reported as an engine gap: NIST rates this control code-testable (data-disclosure records could in principle be evidenced from a disclosure-log artifact in the scanned project), but no detector here looks for one."
       ]
     },
     {
@@ -623,8 +628,11 @@
       "summary": "Data provenance and lineage are maintained and can be accessed for review or transmission/disclosure.",
       "codeTestable": "partial",
       "mapsTo": [
-        "module:sbom-diff",
-        "module:integrity"
+        "module:sbom-diff"
+      ],
+      "evidence": [
+        "SBOM diff history retained.",
+        "Removed module:integrity after a second-review pass: last-scan.json.sig is this scanner signing its OWN scan output, not evidence of the organisation's own data provenance and lineage tracking. Category error (self-referential: about this tool, not the target), same class as the 03.03.08 fix in the NIST 800-171 framework."
       ]
     },
     {
@@ -845,5 +853,7 @@
       "summary": "Adequate resource capacity to ensure availability is maintained.",
       "codeTestable": "yes"
     }
-  ]
+  ],
+  "sourceVerifiedAt": "2026-09-07",
+  "sourceVerificationNote": "Verified 2026-09-07 (WebFetch, two independent prompts against https://www.nist.gov/privacy-framework): NIST Privacy Framework 1.1 is currently an Initial Public Draft (IPD), not a finalized standard, per the page's own \"PF 1.1 IPD\" labeling. Version 1.0 is NIST's current final release. This bundled framework's 104 controls were transcribed from the 1.1 IPD text; if NIST finalizes 1.1 with control-text or numbering changes, this file will not automatically reflect them and needs a re-check against the final publication when it ships. No sourcePdfSha256 is pinned because the source is a navigation hub page, not a single fixed document, and because a draft is expected to change before finalization, unlike a published SP."
 }

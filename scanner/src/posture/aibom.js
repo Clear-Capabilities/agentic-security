@@ -21,6 +21,7 @@
 // a labelled fixture set.
 
 import * as crypto from 'node:crypto';
+import { statePath, safeWriteState } from './state-dir.js';
 
 // SDK / API endpoint detection — same family list as scanner/src/sast/llm.js
 const HF_FROM_PRETRAINED_RE = /(?:Auto(?:Model|Tokenizer|Config|Processor|FeatureExtractor)|[A-Z][A-Za-z]*Model|[A-Z][A-Za-z]*Tokenizer)\.from_pretrained\s*\(\s*['"]([\w./-]+)['"](?:[^)]*?revision\s*=\s*['"]([\w]+)['"])?/g;
@@ -394,4 +395,25 @@ export function validateMLBOM(doc) {
     }
   }
   return { ok: errors.length === 0, errors, checked: 'structural (required fields + ML-BOM component shape), NOT full JSON-Schema validation' };
+}
+
+// ─── Persistence (adversarial premortem Q2, 2026-09-07) ────────────────────
+//
+// `compliance-frameworks/*.json` has mapped `module:aibom` to `aibom.json`
+// since those mappings were written (eu-ai-act.json Art.11, nist-800-171-r3
+// .json 03.04.10, nist-ai-600-1.json MG-4.1-001), but nothing ever wrote it
+// there automatically: `buildAIBOM` was only ever reachable through the CLI's
+// `--format aibom`/`--format aibom-md` report emitters, which print to
+// stdout (or wherever `--output` sends them) and never touch
+// `.agentic-security/`. Three controls across three frameworks could never
+// read 'present' via this leg, on any project, unless an operator happened
+// to manually redirect `--format aibom` output to that exact path. Fixed the
+// same way `license-attributions.js`'s `persistAttributions` and
+// `threat-model.js`'s `persistAutoThreatModel` already are: a default-on
+// (opt-out via AGENTIC_SECURITY_NO_AIBOM), best-effort write during every
+// scan, wired in engine.js next to those two.
+export function persistAIBOM(scanRoot, aibom) {
+  if (!aibom || typeof aibom !== 'object') return null;
+  safeWriteState(statePath(scanRoot, 'aibom.json'), JSON.stringify(aibom, null, 2));
+  return aibom;
 }
