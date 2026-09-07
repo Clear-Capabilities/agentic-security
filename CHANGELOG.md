@@ -10,6 +10,15 @@
 
 
 
+## 0.148.3 - Dependency currency fix; supersedes 0.148.2, which never published
+
+The `v0.148.2` tag was pushed but its release workflow's dependency-currency gate failed on a
+clean CI runner — `@types/node` (dev-only, scanner and ide/vscode) was one patch behind the
+latest published version, with no advisory and no legitimate reason to hold it. `npm publish`
+never ran for 0.148.2; nothing shipped under that version. Fixed by upgrading `@types/node` to
+`26.5.0` in both trees. No other change from 0.148.2's own content — see that entry below for
+what actually shipped.
+
 ## 0.148.2 - A confusing --assurance strict failure made specific and actionable; adversarial premortem re-run on NIST 800-171
 
 A user ran the README's own 5-minute quickstart command and got a confusing, uninformative
