@@ -263,7 +263,7 @@ test('strict mode: all three of git + supply-chain + an unrelated reason are rep
 // no_lockfile, which describe an absent declaration with no commit to point
 // to. Conflating the two told a user a fixable gap was unfixable.
 
-test('strict mode: cdn_no_integrity/dynamic_require provenance gaps do NOT get the "permanent limitation" message', () => {
+test('strict mode: cdn_no_integrity provenance gaps do NOT get the "permanent limitation" message, and get a specific, actionable message of their own (S1, third premortem pass)', () => {
   const cdnFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
     limitations: ['origin resolution is not yet wired for a cdn_no_integrity supply-chain entry (this describes a real source location, not an absent declaration — resolvable in principle, just not implemented today)'],
   });
@@ -271,6 +271,40 @@ test('strict mode: cdn_no_integrity/dynamic_require provenance gaps do NOT get t
   assert.equal(v.ok, false);
   assert.doesNotMatch(v.reason, /known, permanent limitation/);
   assert.doesNotMatch(v.reason, /ABSENT dependency declaration/);
-  // It still gets SOME real, specific text, not a bare count.
-  assert.match(v.reason, /resolvable in principle/);
+  assert.match(v.reason, /1 of them point at a real source location/);
+  assert.match(v.reason, /ordinary coverage gap, not a permanent limitation/);
+  // Unlike before S1, it now gets a concrete next step, same as every other named bucket.
+  assert.match(v.reason, /--assurance standard\/advisory/);
+});
+
+test('strict mode: dynamic_require provenance gaps get the identical "not yet wired" treatment as cdn_no_integrity (S3, third premortem pass — the two types share one code path, but neither had its own test before this)', () => {
+  const dynFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution is not yet wired for a dynamic_require supply-chain entry (this describes a real source location, not an absent declaration — resolvable in principle, just not implemented today)'],
+  });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: dynFp }, { id: 'f2', findingProvenance: dynFp }]);
+  assert.equal(v.ok, false);
+  assert.doesNotMatch(v.reason, /known, permanent limitation/);
+  assert.match(v.reason, /2 of them point at a real source location/);
+  assert.match(v.reason, /--assurance standard\/advisory/);
+});
+
+test('strict mode: no_lockfile ALONE (not paired with unpinned_dep) still gets the permanent-limitation message (S3, third premortem pass)', () => {
+  const lockFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution does not apply to a no_lockfile supply-chain entry'],
+  });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: lockFp }]);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /1 of them describe an ABSENT dependency declaration/);
+  assert.match(v.reason, /known, permanent limitation/);
+});
+
+test('strict mode: the multi-reason message renders as a bulleted, newline-separated list (S2, third premortem pass)', () => {
+  const gitFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, { limitations: ['not a Git repository'] });
+  const cdnFp = emptyProvenance(PROVENANCE_STATUS.NOT_AVAILABLE, {
+    limitations: ['origin resolution is not yet wired for a cdn_no_integrity supply-chain entry (this describes a real source location, not an absent declaration — resolvable in principle, just not implemented today)'],
+  });
+  const v = evaluateAssuranceMode('strict', CLEAN, [{ id: 'f1', findingProvenance: gitFp }, { id: 'f2', findingProvenance: cdnFp }]);
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /\n {2}- 1 of them are "not a Git repository"/);
+  assert.match(v.reason, /\n {2}- 1 of them point at a real source location/);
 });

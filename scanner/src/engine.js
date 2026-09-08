@@ -721,6 +721,19 @@ const AUTH_PATTERNS=[/(?:authenticate|isAuthenticated|requireAuth|passport\.auth
 // output becomes input.
 const IGNORE_DIRS=new Set(["node_modules",".git","__pycache__","vendor","dist","build",".next","venv","env",".venv","target","bin","obj",".cache","coverage","bower_components","tests","test","__tests__","spec","mocks",".agentic-security"]);
 const CODE_EXTS=new Set(["js","jsx","ts","tsx","mjs","cjs","py","rb","php","java","go","cs","rs","vue","svelte","html","htm","ejs","hbs","pug","erb","twig","graphql","gql","kt","scala","swift","dart","ex","exs","tf","tfvars","dockerfile","c","cc","cpp","cxx","h","hh","hpp","hxx","sol"]);
+// Supply-chain finding types that genuinely describe an ABSENT declaration
+// (no origin commit exists to resolve — see the provenance-stamping loop
+// later in this file for the full reasoning). Hoisted to module scope and
+// exported via `_internals` (S4, adversarial premortem third pass,
+// 2026-09-07) so `test/supply-chain-provenance-completeness.test.js` can
+// assert every OTHER supply-chain finding type this file produces is either
+// a member here or is a real source-location type (cdn_no_integrity,
+// dynamic_require) — without that guard, a future type added to one
+// detection loop and forgotten in this Set silently tells a user a
+// genuinely-unresolvable absence is an ordinary, fixable coverage gap, the
+// exact wrong-direction error the third premortem pass flagged as a
+// maintainability risk even though today's two-member Set is correct.
+const SUPPLY_CHAIN_ABSENCE_TYPES = new Set(['unpinned_dep', 'no_lockfile']);
 // Feat-2: IaC manifest filenames that aren't extension-based.
 const IAC_FILENAMES = new Set(['Dockerfile', 'Containerfile', 'docker-compose.yml', 'docker-compose.yaml', 'Chart.yaml']);
 function _isIaCFile(p){
@@ -10652,7 +10665,7 @@ function _deterministicFileTimings(timings) {
    // The first three are honest `not_available` — that is exactly what the
    // status is for. Only a genuine annotator failure is an `error`, which is
    // why this loop distinguishes them rather than stamping one status for all.
-   const SUPPLY_CHAIN_ABSENCE_TYPES = new Set(['unpinned_dep', 'no_lockfile']);
+   // (SUPPLY_CHAIN_ABSENCE_TYPES is module-scoped — see its own comment.)
    for (const sc of (supplyChain || [])) {
      if (!sc || typeof sc !== 'object' || sc.findingProvenance) continue;
      let limitation;
@@ -11239,4 +11252,5 @@ export {
 /** Internals exposed for targeted unit tests (not part of the public API). */
 export const _internals = {
   _isLikelyUnsafeRegex, _isAnchoredRegex, _hasNestedQuantifier, _extractRegexLiterals, _hasLeadingUnboundedQuantifier,
+  SUPPLY_CHAIN_ABSENCE_TYPES,
 };

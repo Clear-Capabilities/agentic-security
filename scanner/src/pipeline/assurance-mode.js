@@ -95,10 +95,19 @@ function _provenanceFailureReason(badProvenance, totalFindings) {
   // gap was an unfixable, by-design limitation).
   const supplyChainReasons = ranked.filter(([r]) => r.startsWith('origin resolution does not apply to a'));
   const supplyChainCount = supplyChainReasons.reduce((s, [, n]) => s + n, 0);
-  const knownReasonSet = new Set([...gitReasons, ...supplyChainReasons].map(([r]) => r));
+  // Third known bucket (S1, adversarial premortem third pass, 2026-09-07):
+  // cdn_no_integrity/dynamic_require's "not yet wired" string (see the
+  // engine.js comment this file's `supplyChainReasons` block already
+  // references) was previously falling through to the generic `otherReasons`
+  // path below — honest, but verbose, and with no recommended next step,
+  // unlike every other named bucket here. Giving it its own bucket closes
+  // that inconsistency without touching the two already-fixed buckets.
+  const notYetWiredReasons = ranked.filter(([r]) => r.startsWith('origin resolution is not yet wired for a'));
+  const notYetWiredCount = notYetWiredReasons.reduce((s, [, n]) => s + n, 0);
+  const knownReasonSet = new Set([...gitReasons, ...supplyChainReasons, ...notYetWiredReasons].map(([r]) => r));
   const otherReasons = ranked.filter(([r]) => !knownReasonSet.has(r));
-  const otherCount = badProvenance.length - gitCount - supplyChainCount;
-  const knownCategoryCount = (gitCount > 0 ? 1 : 0) + (supplyChainCount > 0 ? 1 : 0);
+  const otherCount = badProvenance.length - gitCount - supplyChainCount - notYetWiredCount;
+  const knownCategoryCount = (gitCount > 0 ? 1 : 0) + (supplyChainCount > 0 ? 1 : 0) + (notYetWiredCount > 0 ? 1 : 0);
 
   // Exactly one KNOWN category, and nothing outside it — the shape every
   // caller before this fix assumed was the only shape, and the one every
@@ -119,11 +128,17 @@ function _provenanceFailureReason(badProvenance, totalFindings) {
         `(a GitHub "Download ZIP" extracts without one). Run \`git init && git add -A && git commit -m init\` in ` +
         `the scanned directory, point the scan at a real \`git clone\`, or drop --assurance strict for standard/advisory.`;
     }
-    return `${base} — ${supplyChainCount} of them describe an ABSENT dependency declaration ` +
-      `(an unpinned version, a missing lockfile) that has no origin commit to resolve, by design. This is a ` +
-      `known, permanent limitation: strict mode cannot pass while any are present, on any real project with ` +
-      `such a dependency. Fix the underlying SCA finding(s) (pin the version / add a lockfile) if you want ` +
-      `strict to pass, or use --assurance standard/advisory for a project you don't control the dependencies of.`;
+    if (supplyChainCount > 0) {
+      return `${base} — ${supplyChainCount} of them describe an ABSENT dependency declaration ` +
+        `(an unpinned version, a missing lockfile) that has no origin commit to resolve, by design. This is a ` +
+        `known, permanent limitation: strict mode cannot pass while any are present, on any real project with ` +
+        `such a dependency. Fix the underlying SCA finding(s) (pin the version / add a lockfile) if you want ` +
+        `strict to pass, or use --assurance standard/advisory for a project you don't control the dependencies of.`;
+    }
+    return `${base} — ${notYetWiredCount} of them point at a real source location (a CDN script tag, a dynamic ` +
+      `require) this engine can't yet trace back to the commit that introduced it — unlike the ABSENT-declaration ` +
+      `case above, this is an ordinary coverage gap, not a permanent limitation, but it isn't fixable from your ` +
+      `side either. Use --assurance standard/advisory if you need this scan to pass today.`;
   }
 
   // Two or more independently-blocking categories on the SAME scan — the
@@ -133,28 +148,39 @@ function _provenanceFailureReason(badProvenance, totalFindings) {
   // rerun, and hit a second wall the first run already had full information
   // about but never mentioned — the same "the tool knew and didn't tell me"
   // complaint this whole function exists to fix, recurring in a milder form.
+  //
+  // Rendered as a bulleted, newline-separated list rather than one
+  // semicolon-joined paragraph (S2, adversarial premortem third pass,
+  // 2026-09-07) — each bullet is independently actionable, and a wall of
+  // clauses buried the fact that they are SEPARATE problems, each with its
+  // own fix, rather than one problem described three ways.
   const segments = [];
   if (gitCount > 0) {
     const gitReasonNames = gitReasons.map(([r]) => `"${r}"`).join(' and ');
-    segments.push(`${gitCount} of them are ${gitReasonNames} (strict mode requires a real git repository — ` +
-      `run \`git init && git add -A && git commit\`, or scan a real \`git clone\`)`);
+    segments.push(`${gitCount} of them are ${gitReasonNames} — strict mode requires a real git repository; ` +
+      `run \`git init && git add -A && git commit\`, or scan a real \`git clone\`.`);
   }
   if (supplyChainCount > 0) {
     segments.push(`${supplyChainCount} of them describe an ABSENT dependency declaration (unpinned version / ` +
       `missing lockfile) with no origin commit to resolve — a known, permanent limitation, not something a ` +
-      `rerun will fix`);
+      `rerun will fix.`);
+  }
+  if (notYetWiredCount > 0) {
+    segments.push(`${notYetWiredCount} of them point at a real source location this engine can't yet trace ` +
+      `back to a commit — an ordinary coverage gap, not a permanent limitation, but not fixable from your side.`);
   }
   if (otherCount > 0) {
     if (otherReasons.length === 1) {
-      segments.push(`${otherCount} share the reason "${otherReasons[0][0]}"`);
+      segments.push(`${otherCount} share the reason "${otherReasons[0][0]}".`);
     } else {
       const breakdown = otherReasons.slice(0, 5).map(([reason, n]) => `${n}× "${reason}"`).join(', ');
-      segments.push(`${otherCount} break down as: ${breakdown}${otherReasons.length > 5 ? ', …' : ''}`);
+      segments.push(`${otherCount} break down as: ${breakdown}${otherReasons.length > 5 ? ', …' : ''}.`);
     }
   }
-  return `${base} — MULTIPLE distinct reasons, not just one: ${segments.join('; ')}. Every category above must ` +
-    `be resolved for strict to pass (or drop to --assurance standard/advisory) — fixing only one will surface ` +
-    `the next on your following run.`;
+  const bullets = segments.map((s) => `  - ${s}`).join('\n');
+  return `${base} — MULTIPLE distinct reasons, not just one:\n${bullets}\nEvery category above must be ` +
+    `resolved for strict to pass (or drop to --assurance standard/advisory) — fixing only one will surface the ` +
+    `next on your following run.`;
 }
 
 /**

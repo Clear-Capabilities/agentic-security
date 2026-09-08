@@ -10,6 +10,32 @@
 
 
 
+## 0.148.5 - Third premortem pass on the --assurance strict fix: clean bill of health, four polish items closed anyway
+
+0.148.4's fix was put through a THIRD adversarial premortem pass to check whether it introduced
+anything new. It didn't — no High-or-above defect, and one specific hypothesis (a stale
+pre-0.148.4 cached scan producing the old, wrong message after upgrading) was investigated and
+disproven with direct evidence: `ci` always re-scans fresh, and the affected finding types never
+route through the disk-cached resolver path at all. Four Low-severity polish items surfaced
+anyway and are closed here, none of them changes to already-correct behavior:
+
+1. `cdn_no_integrity`/`dynamic_require` findings, alone with no other reason present, used to fall
+   through to a generic "share the same reason" message quoting the full raw internal string —
+   honest, but verbose, and missing the "(or drop to --assurance standard/advisory)" next step
+   every other named bucket already has. They now get their own short, specific message with that
+   same next step.
+2. The "MULTIPLE distinct reasons" message (fired when more than one category is present at once)
+   now renders as a bulleted, newline-separated list instead of one semicolon-joined paragraph —
+   each bullet is an independently actionable problem, and the old format buried that.
+3. `dynamic_require` and a standalone `no_lockfile` (previously only tested paired with
+   `unpinned_dep`) now each have their own direct test, closing a "shares a code path, never
+   independently verified" gap.
+4. A new completeness guard (`scanner/test/supply-chain-provenance-completeness.test.js`) asserts
+   every supply-chain finding type `engine.js` produces is deliberately classified as either a
+   genuine absence (no origin commit exists) or a real, resolvable-in-principle source location —
+   so a future finding type added to one detection loop and forgotten in the classification can't
+   silently tell a user a permanent limitation is fixable, or vice versa.
+
 ## 0.148.4 - Adversarial premortem re-run on the 0.148.2/0.148.3 --assurance strict fix: two real defects found and fixed
 
 0.148.2's fix for a confusing `--assurance strict` failure was itself put through an adversarial
