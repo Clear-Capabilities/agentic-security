@@ -271,6 +271,7 @@ export function buildLineageGraph(callGraph, opts = {}) {
       crossRepoLinkRecords,
       observationWindowStart: opts.observationWindowStart,
       observationWindowEnd: opts.observationWindowEnd,
+      onProgress: opts.onProgress,
     });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {

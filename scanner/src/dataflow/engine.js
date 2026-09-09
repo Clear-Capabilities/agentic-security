@@ -1492,6 +1492,18 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   const fnLimit = opts.fnLimit || 5000;
   const deadlineMs = typeof opts.deadlineMs === 'number' ? opts.deadlineMs : Infinity;
   let n = 0;
+  // Live progress for this engine's dominant per-function loop (below,
+  // bounded by fnLimit) — the longest-running phase of a deep scan on any
+  // real-sized project. Additive/opt-in: with no `opts.onProgress`, nothing
+  // here runs and every existing caller is byte-identical to before this
+  // existed. Only the pre-passes above (fixed-point empty-entry pre-pass,
+  // class-field cross-taint pass, k=2 pass) are NOT instrumented — they run
+  // before `fnList.length` is known to be the final total below, and adding
+  // per-iteration reporting to all four loops was judged disproportionate
+  // risk to this engine's own worklist for the UX gain; the operator sees
+  // the phase-start message the caller prints before this function is ever
+  // invoked, then live per-function progress once this loop begins.
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
 
   // Premortem #7: instantiate the k=1 SummaryCache and seed it with each
   // function's empty-entry-state summary (returnTainted bit). The cache is
@@ -1666,9 +1678,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       findings: ctx._findings,
     });
   }
+  const _progressTotal = Math.min(fnList.length, fnLimit);
   for (const fn of fnList) {
     if (++n > fnLimit) break;
     if (Date.now() > deadlineMs) break;  // global timeout
+    if (onProgress) onProgress({ current: n, total: _progressTotal });
     // Module-level functions: analyze with an empty entry state. The function
     // discovers its own sources from req.body/process.env/etc. as it walks.
     const callContext = {

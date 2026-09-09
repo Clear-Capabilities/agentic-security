@@ -10,6 +10,39 @@
 
 
 
+## 0.149.0 - Live progress reporting for long-running scans
+
+A scan running deep interprocedural taint analysis or the Data Flow Explorer's lineage graph
+build could sit silent for minutes with no sign anything was happening, which read as a hang and
+was a real reason people quit the run before it finished. This release wires progress reporting
+through the phases that were previously silent, and threads the existing stderr status line into
+every command that runs a fresh scan.
+
+1. `runTaintEngine` (`src/dataflow/engine.js`) now reports live `current/total` progress from its
+   dominant per-function analysis loop via an optional `opts.onProgress`, additive and byte-
+   identical when omitted.
+2. `runFieldIdentityAnalysis` (`src/lineage/driver.js`) reports the same live per-function progress
+   for the lineage graph build, threaded through `graph-builder.js` -> `coverage.js` ->
+   `index.js`'s `buildLineageGraph`.
+3. Both the deep-taint and lineage-graph phases are one synchronous, unbreakable call each (Node's
+   event loop can't tick mid-call), so a "starting (budget Ns)" message prints the instant each
+   phase begins, then live progress once its main loop runs.
+4. The ~52 posture/provenance annotators (previously silent as a block) now report
+   `[Annotating] N/52 <name>` as each one runs.
+5. The stderr `\r[phase] current/total` status line, previously wired only into the default `scan`
+   command, is now shared (`scanProgressReporter()`/`clearScanProgressLine()`) and used by
+   `scan --watch`, `ci`, `verify-attestation`, and `dataflow watch` (the seed scan and every
+   rescan) too.
+
+`posture`/`compliance`/`supply`/`triage`/`labs` read the persisted `last-scan.json` rather than
+scanning themselves, so they inherit this the moment a `scan` produced that file; `org-scan`
+(concurrent multi-repo) is deliberately left silent, since a shared progress line across parallel
+workers would just interleave and garble.
+
+Also: `ide/vscode`'s transitive `js-yaml` dev dependency (pulled in via `@vscode/vsce`) is bumped
+4.3.1 -> 4.3.2, closing a high-severity CPU-exhaustion advisory the release gate's dependency-
+currency check found (GHSA-2883-xcg3-v3hh) — a non-breaking patch release, `npm audit fix` only.
+
 ## 0.148.5 - Third premortem pass on the --assurance strict fix: clean bill of health, four polish items closed anyway
 
 0.148.4's fix was put through a THIRD adversarial premortem pass to check whether it introduced

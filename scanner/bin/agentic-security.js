@@ -53,6 +53,26 @@ const MACHINE_FORMATS = new Set([
   'json', 'sarif', 'oscal', 'cyclonedx', 'sbom', 'spdx', 'vex', 'openvex', 'pbom', 'aibom',
 ]);
 function isMachineFormat(fmt) { return MACHINE_FORMATS.has(String(fmt)); }
+
+// Shared stderr progress reporter for any command that runs a fresh scan —
+// the same `\r[phase] current/total file` status line the default `scan`
+// command has always printed, extracted so every OTHER scan-driving command
+// (`scan --watch`, `ci`, `verify-attestation`, `dataflow watch`) reports
+// progress too instead of running silently. Gated on `stderr.isTTY` exactly
+// like the original: piping to a file/CI log never gets a `\r`-spammed
+// status line. `runFullScan` (engine.js) now reports progress for every
+// phase, including the previously-silent deep-analysis/lineage/annotator
+// phases — see that file's own `setProgress` call sites.
+function scanProgressReporter() {
+  return (p) => {
+    if (process.stderr.isTTY) process.stderr.write(`\r[${p.phase}] ${p.current}/${p.total} ${p.file}     `);
+  };
+}
+// Wipes the progress line printed by scanProgressReporter() above — call
+// once a scan this reporter was attached to has finished.
+function clearScanProgressLine() {
+  if (process.stderr.isTTY) process.stderr.write('\r' + ' '.repeat(80) + '\r');
+}
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
 import { buildAIBOM, aibomToMarkdown } from '../src/posture/aibom.js';
@@ -619,11 +639,13 @@ async function cmdScan(args) {
     process.env.AGENTIC_SECURITY_INCREMENTAL = '1';
     const { watchProject, computeDelta, persistStatus, renderStatusLine } = await import('../src/posture/watch-mode.js');
     process.stderr.write(`[watch] scanning ${targetAbs} on change — Ctrl-C to stop. Status → .agentic-security/watch-status.md\n`);
-    const seed = await runScan(targetAbs, {});
+    const seed = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+    clearScanProgressLine();
     let prevFindings = seed.scan.findings || [];
     await watchProject(targetAbs, async () => {
       try {
-        const { scan } = await runScan(targetAbs, {});
+        const { scan } = await runScan(targetAbs, { onProgress: scanProgressReporter() });
+        clearScanProgressLine();
         const curr = scan.findings || [];
         const delta = computeDelta(prevFindings, curr);
         persistStatus(targetAbs, delta);
@@ -690,9 +712,7 @@ async function cmdScan(args) {
 
   const { scan, meta } = await runScan(target, {
     changedSince,
-    onProgress: (p) => {
-      if (process.stderr.isTTY) process.stderr.write(`\r[${p.phase}] ${p.current}/${p.total} ${p.file}     `);
-    },
+    onProgress: scanProgressReporter(),
   });
   // --require-provenance: flag (never fail) any finding whose provenance
   // isn't resolved, via scanHealth — deliberately independent of the
@@ -740,7 +760,7 @@ async function cmdScan(args) {
   // The BOM/attestation emitters stamp the producing engine's version into
   // their metadata; carry the real package version so it can never drift.
   if (meta && meta.engineVersion == null) meta.engineVersion = PKG_VERSION;
-  if (process.stderr.isTTY) process.stderr.write('\r' + ' '.repeat(80) + '\r');
+  clearScanProgressLine();
 
   const only = args.flags.only;
   if (only) {
@@ -1230,7 +1250,8 @@ async function cmdCi(args) {
   else          process.stderr.write(`[ci] full scan (no baseline ref detected)\n`);
 
   const profile = loadPersonaProfile(targetAbs, args);
-  const { scan, meta } = await runScan(target, { changedSince: baseline || null });
+  const { scan, meta } = await runScan(target, { changedSince: baseline || null, onProgress: scanProgressReporter() });
+  clearScanProgressLine();
 
   // Apply suppressions + overrides + packs, mirroring cmdScan's pipeline.
   scan.findings    = applySuppressions(scan.findings    || [], targetAbs, profile);
@@ -2740,7 +2761,8 @@ async function cmdVerifyRunAttestation(attestation, args) {
   const { normalizeFindings } = await import('../src/report/index.js');
   const { effectiveVersion } = await import('../src/posture/ruleset-version.js');
   const { verifyRunAttestation } = await import('../src/posture/attestation.js');
-  const { scan } = await runScan(projectPath);
+  const { scan } = await runScan(projectPath, { onProgress: scanProgressReporter() });
+  clearScanProgressLine();
   const r = verifyRunAttestation(attestation, {
     findings: normalizeFindings(scan),
     engineVersion: PKG_VERSION,
@@ -6224,7 +6246,8 @@ async function cmdDataflowWatch(args) {
   // uncached provenance-resolution cost on every edit), while every OTHER
   // state write named above stays fully suppressed. Do not "simplify" this
   // back to a bare runScan call.
-  const seed = await withStateWritesDisabled(() => runScan(targetAbs, {}), { exceptCategories: ['provenance-cache'] });
+  const seed = await withStateWritesDisabled(() => runScan(targetAbs, { onProgress: scanProgressReporter() }), { exceptCategories: ['provenance-cache'] });
+  clearScanProgressLine();
   if (!seed.scan.lineageGraph) {
     process.stderr.write(`agentic-security dataflow watch: seed scan produced no data-flow graph (${_lineageStatusReason(seed.scan.lineageStatus)}) — nothing to watch/diff against.\n`);
     return 1;
@@ -6266,7 +6289,8 @@ async function cmdDataflowWatch(args) {
       return;
     }
     try {
-      const { scan } = await withStateWritesDisabled(() => runScan(targetAbs, {}), { exceptCategories: ['provenance-cache'] });
+      const { scan } = await withStateWritesDisabled(() => runScan(targetAbs, { onProgress: scanProgressReporter() }), { exceptCategories: ['provenance-cache'] });
+      clearScanProgressLine();
       if (!scan.lineageGraph) {
         process.stderr.write(`[watch-dataflow] rescan produced no data-flow graph (${_lineageStatusReason(scan.lineageStatus)}) — skipping this change.\n`);
         return;

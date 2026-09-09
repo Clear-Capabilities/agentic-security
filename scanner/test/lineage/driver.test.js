@@ -85,6 +85,25 @@ test('runFieldIdentityAnalysis produces one result per function in the call grap
   assert.ok(cache instanceof FieldIdentitySummaryCache);
 });
 
+test('runFieldIdentityAnalysis: reports progress once per function via opts.onProgress', () => {
+  const fns = [
+    fnRecord('a.js::f1@1', 'f1', 'a.js'),
+    fnRecord('a.js::f2@2', 'f2', 'a.js'),
+    fnRecord('b.js::f3@1', 'f3', 'b.js'),
+  ];
+  const callGraph = handBuiltCallGraph(fns);
+  const calls = [];
+  runFieldIdentityAnalysis(callGraph, { onProgress: (p) => calls.push({ ...p }) });
+  assert.equal(calls.length, 3, `expected one progress call per function, got ${calls.length}`);
+  assert.deepEqual(calls.map(c => c.current), [1, 2, 3]);
+  assert.ok(calls.every(c => c.total === 3), `expected total=3 on every call, got ${JSON.stringify(calls)}`);
+});
+
+test('runFieldIdentityAnalysis: omitting opts.onProgress does not throw', () => {
+  const callGraph = handBuiltCallGraph([fnRecord('a.js::f1@1', 'f1', 'a.js')]);
+  assert.doesNotThrow(() => runFieldIdentityAnalysis(callGraph));
+});
+
 test('runFieldIdentityAnalysis handles an empty call graph gracefully', () => {
   const { results, cache } = runFieldIdentityAnalysis(handBuiltCallGraph([]));
   assert.strictEqual(results.size, 0);

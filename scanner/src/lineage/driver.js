@@ -66,9 +66,17 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
   const fnList = callGraph && callGraph.functions
     ? [...callGraph.functions.values()].sort((a, b) => (a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0))
     : [];
+  // Live progress, additive/opt-in — mirrors dataflow/engine.js's own
+  // `runTaintEngine` onProgress precedent exactly. Unlike that engine, this
+  // driver has only ONE pass over `fnList` (no fixed-point pre-passes), so
+  // every function this driver analyzes is reported, not just a dominant
+  // subset.
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+  let _progressN = 0;
 
   const results = new Map();
   for (const fn of fnList) {
+    if (onProgress) onProgress({ current: ++_progressN, total: fnList.length });
     const lookupCallee = createCallGraphLookup(callGraph, fn.file);
     const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
     // Path provenance (Sub-project C, increment 3, §13.7 item 14): thread

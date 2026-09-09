@@ -65,6 +65,16 @@ test('E5/4: buildLineageGraph.deterministic false/omitted produces a real, curre
   assert.ok(r.graph.generatedAt >= before);
 });
 
+test('buildLineageGraph: forwards opts.onProgress through to the field-identity driver end to end', () => {
+  const cg = irOf({
+    'a.js': "function f1(req, res){ res.send(req.body.password); }\nfunction f2(x){ return x; }\n",
+  });
+  const calls = [];
+  const r = buildLineageGraph(cg, { repository: 'r', onProgress: (p) => calls.push({ ...p }) });
+  assert.equal(r.status, 'complete');
+  assert.ok(calls.length >= 2, `expected onProgress forwarded through to the driver, got ${calls.length} calls`);
+});
+
 test('E5/5: buildLineageGraph.status is failed, with a recorded failure string, when the build genuinely throws — never a silent swallow', () => {
   // A callGraph whose functions Map iterates to a malformed function record
   // (no .cfg) reaches buildGraphWithCoverage's internals in a shape it

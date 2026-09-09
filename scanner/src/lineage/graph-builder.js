@@ -440,6 +440,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     recordHop: (h) => hops.push(h),
     seedEntryState: seedEntryStateFactory(seeds),
     ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
+    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
   });
   const store = new PathStore();
   store.addHops(hops);

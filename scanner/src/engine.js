@@ -9211,12 +9211,23 @@ function _deterministicFileTimings(timings) {
       // deadlineMs hint that the inner loops check; if absent, we still cap
       // function count via fnLimit. Operators who suspect a hung run can
       // kill the process and re-run with AGENTIC_SECURITY_DEEP=0.
+      setProgress({ phase: 'Deep analysis', current: 0, total: 0, file: `starting (budget ${Math.round(budgetMs / 1000)}s)` });
       const irFindings = runDeepAnalysis(perFile, callGraph, {
         fnLimit: parseInt(process.env.AGENTIC_SECURITY_DEEP_FN_LIMIT || '5000', 10),
         deadlineMs: t0 + budgetMs,
         // v0.69 — incremental cache inputs (used when AGENTIC_SECURITY_INCREMENTAL=1).
         scanRoot,
         fileContents: fc,
+        // Live per-function progress from the engine's own dominant loop
+        // (dataflow/engine.js's runTaintEngine) — the pre-passes before it
+        // (fixed-point pre-pass, class-field pass, k=2 pass) aren't
+        // individually instrumented (see that file's own onProgress
+        // comment), so the terminal shows the "starting" message above
+        // until this loop begins, then live current/total from here on.
+        onProgress: (p) => setProgress({
+          phase: 'Deep analysis', current: p.current, total: p.total,
+          file: `${Math.round((Date.now() - t0) / 1000)}s elapsed`,
+        }),
       });
       const elapsed = Date.now() - t0;
       if (elapsed > budgetMs) {
@@ -9302,7 +9313,15 @@ function _deterministicFileTimings(timings) {
       // if deep mode already built it, this is free; if not, this is what
       // first triggers the build (the whole reason this gate is independent).
       const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+      const _lineageT0 = Date.now();
+      setProgress({ phase: 'Lineage graph', current: 0, total: 0, file: `starting (budget ${Math.round(_lineageBudgetMs / 1000)}s)` });
       const _lr = buildLineageGraph(callGraph, {
+        // Live per-function progress from the field-identity driver's own
+        // single pass over every function (src/lineage/driver.js).
+        onProgress: (p) => setProgress({
+          phase: 'Lineage graph', current: p.current, total: p.total,
+          file: `${Math.round((Date.now() - _lineageT0) / 1000)}s elapsed`,
+        }),
         // scanRoot can be null (e.g. an MCP scan_diff caller, or
         // runFullScan invoked directly with no scanRoot) — fall back to
         // undefined rather than inventing a repository name from the
@@ -9580,7 +9599,22 @@ function _deterministicFileTimings(timings) {
   // since this project's own annotators are deliberately built never to
   // throw (posture/CLAUDE.md's "no throwing" convention) — this closure just
   // supplies the local _annotatorErrors array.
-  const _runAnnotator = (phase, fn) => runAnnotatorAsync(_annotatorErrors, phase, fn);
+  // Live progress for this whole annotator sequence (~52 `await
+  // _runAnnotator(...)` call sites below, re-derive via `grep -c "await
+  // _runAnnotator(" src/engine.js` rather than trusting this count to stay
+  // current) — previously silent even though it can take a real fraction of
+  // scan time on a large finding set. `_ANNOTATOR_TOTAL_ESTIMATE` is an
+  // upper bound, not an exact count: several call sites below are
+  // conditional (deep-mode-only, provenance-only, etc.), so a real scan
+  // reports fewer steps than the total and the progress bar does not
+  // necessarily reach it — that's the same "stale total, real motion" shape
+  // the pre-existing "Linking" phase already accepts.
+  const _ANNOTATOR_TOTAL_ESTIMATE = 52;
+  let _annotatorIdx = 0;
+  const _runAnnotator = (phase, fn) => {
+    setProgress({ phase: 'Annotating', current: ++_annotatorIdx, total: _ANNOTATOR_TOTAL_ESTIMATE, file: phase });
+    return runAnnotatorAsync(_annotatorErrors, phase, fn);
+  };
   await _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
   await _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
   await _runAnnotator("demoteUnreachable", () => {
