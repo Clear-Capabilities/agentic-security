@@ -8206,11 +8206,12 @@ async function queryOSV(components,allFileContents){
     }
   }
 
-  if(queries.length){
+  const _osvOffline=process.env.AGENTIC_SECURITY_OFFLINE==='1';
+  if(queries.length&&!_osvOffline){
     for(let i=0;i<queries.length;i+=1000){
       const chunkQ=queries.slice(i,i+1000),chunkC=uncached.slice(i,i+1000);
       try{
-        const resp=await fetch('https://api.osv.dev/v1/querybatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({queries:chunkQ})});
+        const resp=await fetch('https://api.osv.dev/v1/querybatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({queries:chunkQ}),signal:AbortSignal.timeout(8000)});
         const data=await resp.json();
         for(let idx=0;idx<(data.results||[]).length;idx++){
           const{comp,ck}=chunkC[idx];
@@ -8243,8 +8244,9 @@ async function queryOSV(components,allFileContents){
   }
   // Then fetch uncached vulns with bounded concurrency.
   async function _fetchOneVuln(vid){
+    if(_osvOffline)return null;
     try {
-      const resp = await fetch(`https://api.osv.dev/v1/vulns/${vid}`);
+      const resp = await fetch(`https://api.osv.dev/v1/vulns/${vid}`,{signal:AbortSignal.timeout(8000)});
       const d = await resp.json();
       const fixedVersions = new Set();
       const osvVulnFunctions = [];
@@ -8337,7 +8339,7 @@ async function queryRegistries(components){
   for(let i=0;i<npmNames.length;i+=CHUNK){
     await Promise.all(npmNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://registry.npmjs.org/'+name);
+        const resp=await fetch('https://registry.npmjs.org/'+name,{signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const latest=d['dist-tags']?.latest||'';const lic=d.license||(latest&&d.versions?.[latest]?.license)||'';infoMap.set('npm:'+name,{latestVersion:latest,license:lic,versions:d.versions||{}});
@@ -8347,7 +8349,7 @@ async function queryRegistries(components){
   for(let i=0;i<pypiNames.length;i+=CHUNK){
     await Promise.all(pypiNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://pypi.org/pypi/'+encodeURIComponent(name)+'/json');
+        const resp=await fetch('https://pypi.org/pypi/'+encodeURIComponent(name)+'/json',{signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const info=d.info||{};
@@ -8377,7 +8379,7 @@ async function queryRegistries(components){
   for(let i=0;i<packagistNames.length;i+=CHUNK){
     await Promise.all(packagistNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://packagist.org/packages/'+name+'.json');
+        const resp=await fetch('https://packagist.org/packages/'+name+'.json',{signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const pkg=d.package||{};
@@ -8398,7 +8400,7 @@ async function queryRegistries(components){
   for(let i=0;i<cargoNames.length;i+=CHUNK){
     await Promise.all(cargoNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://crates.io/api/v1/crates/'+encodeURIComponent(name),{headers:CRATES_UA});
+        const resp=await fetch('https://crates.io/api/v1/crates/'+encodeURIComponent(name),{headers:CRATES_UA,signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const versions={};
@@ -8415,7 +8417,7 @@ async function queryRegistries(components){
   for(let i=0;i<gemNames.length;i+=CHUNK){
     await Promise.all(gemNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://rubygems.org/api/v1/versions/'+encodeURIComponent(name)+'.json');
+        const resp=await fetch('https://rubygems.org/api/v1/versions/'+encodeURIComponent(name)+'.json',{signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const list=await resp.json();
         const versions={};
@@ -8433,7 +8435,7 @@ async function queryRegistries(components){
   for(let i=0;i<pubNames.length;i+=CHUNK){
     await Promise.all(pubNames.slice(i,i+CHUNK).map(async name=>{
       try{
-        const resp=await fetch('https://pub.dev/api/packages/'+encodeURIComponent(name),{headers:{Accept:'application/vnd.pub.v2+json'}});
+        const resp=await fetch('https://pub.dev/api/packages/'+encodeURIComponent(name),{headers:{Accept:'application/vnd.pub.v2+json'},signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const versions={};
@@ -8453,7 +8455,7 @@ async function queryRegistries(components){
     await Promise.all(mavenComps.slice(i,i+CHUNK).map(async c=>{
       try{
         const q=encodeURIComponent(`g:"${c.group}" AND a:"${c.name}"`);
-        const resp=await fetch(`https://search.maven.org/solrsearch/select?q=${q}&rows=1&wt=json`);
+        const resp=await fetch(`https://search.maven.org/solrsearch/select?q=${q}&rows=1&wt=json`,{signal:AbortSignal.timeout(8000)});
         if(!resp.ok)return;
         const d=await resp.json();
         const doc=(d.response?.docs||[])[0];

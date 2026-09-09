@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.149.0",
-    "bundleSha256": "080e8743db95f7b28cad5e33fe52383fe37a483d2c8bc0535bef1cfb3f9219e7",
-    "commit": "cfb33bb3d7013531fbbc69a3ae570a56819387e7",
+    "engineVersion": "0.149.1",
+    "bundleSha256": "355c84ce589f5528668e3a998ac7d3881acd362a59e75de241cb84088b7c42e5",
+    "commit": "b71fe516baf191a0db31e7a2bf55ea1944f0b685",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-09-09T02:31:07.095Z",
+    "generatedAt": "2026-09-09T13:34:15.117Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },

@@ -10,6 +10,23 @@
 
 
 
+## 0.149.1 - Fix scan hang on unbounded registry/OSV network calls
+
+An SCA scan could hang indefinitely at "Registry metadata..." (or, less visibly, during OSV
+lookup) with no timeout, no error, and no way to tell it apart from a genuine long-running scan.
+`queryRegistries()` and `queryOSV()` in `src/engine.js` fired `fetch()` against npm, PyPI,
+Packagist, crates.io, RubyGems, pub.dev, Maven Central, and the OSV API with no timeout at all —
+if any single registry stalled (rate-limiting, a proxy silently dropping the connection, DNS),
+the whole scan sat there forever, since Node's global `fetch` has no default timeout.
+
+1. All 9 registry/OSV fetches now carry `AbortSignal.timeout(8000)`, matching the convention
+   already used for the KEV feed fetch.
+2. `queryOSV`'s per-vulnerability detail fetch now also honors `AGENTIC_SECURITY_OFFLINE=1`, so
+   offline scans skip that network path instead of attempting and timing out on it.
+3. `queryRegistries` deliberately does **not** honor `AGENTIC_SECURITY_OFFLINE` — that flag's
+   established scope in this codebase is OSV/KEV/EPSS, and `test/sca-deprecated.test.js` already
+   depends on registry lookups still running (against a stubbed fetch) under `OFFLINE=1`.
+
 ## 0.149.0 - Live progress reporting for long-running scans
 
 A scan running deep interprocedural taint analysis or the Data Flow Explorer's lineage graph
