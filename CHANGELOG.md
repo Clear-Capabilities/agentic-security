@@ -33,6 +33,11 @@ Verified this time by reproducing 0.149.3's exact failure first — a fresh `npm
 run with `vendor/` deleted beforehand and with no `npm run build` in between — then confirming all three
 now pass.
 
+That same verification pass caught a second, smaller bug it introduced: `vendor-java-parser.mjs`'s success
+message went to stdout, and since `prepare` also runs during `npm pack`/`npm publish`, that text corrupted
+`npm pack --json`'s output for anything parsing it — including this repo's own `package-contents-check.mjs`.
+Moved to stderr, matching every other message in that script.
+
 ## 0.149.3 - Correct 0.149.2's fix: bundleDependencies + overrides hangs npm's resolver
 
 0.149.2's `bundleDependencies: ["java-parser"]` fix was never published — it passed every local

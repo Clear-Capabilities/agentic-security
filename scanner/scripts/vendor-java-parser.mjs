@@ -118,7 +118,11 @@ function main() {
       "export { default } from './node_modules/java-parser/src/index.js';\n",
   );
 
-  console.log(`vendor-java-parser: vendored ${copied.join(', ')} into vendor/java-parser/node_modules/`);
+  // stderr, not stdout: this script runs as part of the "prepare" lifecycle
+  // hook, which also fires during `npm pack`/`npm publish` — anything on
+  // stdout there corrupts `npm pack --json`'s output for whoever is parsing
+  // it (this repo's own release-check.mjs included).
+  console.error(`vendor-java-parser: vendored ${copied.join(', ')} into vendor/java-parser/node_modules/`);
 }
 
 main();
