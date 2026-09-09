@@ -1,4 +1,5 @@
 scanner/node_modules/
+scanner/vendor/
 ide/vscode/node_modules/
 ide/vscode/dist/
 

@@ -1,25 +1,26 @@
 {
-  "$comment": "Committed expectation for the package-contents release check (scripts/package-contents-check.mjs). Compares SHAPE, not bytes: the file COUNT here is a bounded tolerance, not an exact list — an exact list would need regenerating on every added source file, training people to refresh it without reading it. Update this file only when the package's actual shape changes on purpose, and say why in the commit message. 0.149.2: node_modules is now an expected top-level dir — java-parser is deliberately bundled (bundleDependencies in scanner/package.json) so consumers get the override-resolved, non-vulnerable lodash/lodash-es instead of the vulnerable versions java-parser's own chevrotain dependency hard-pins; see CHANGELOG.md.",
-  "topLevelDirectories": ["bin", "dist", "src", "node_modules"],
+  "$comment": "Committed expectation for the package-contents release check (scripts/package-contents-check.mjs). Compares SHAPE, not bytes: the file COUNT here is a bounded tolerance, not an exact list — an exact list would need regenerating on every added source file, training people to refresh it without reading it. Update this file only when the package's actual shape changes on purpose, and say why in the commit message. 0.149.3: node_modules is NOT an expected top-level dir (0.149.2's bundleDependencies approach hung npm's resolver when combined with the pre-existing `overrides` field — reverted). Instead `vendor/` ships a build-time snapshot of java-parser's resolved dependency closure (with the override-forced safe lodash/lodash-es already applied), referenced at runtime via the \"#java-parser\" imports-field subpath alias (scripts/vendor-java-parser.mjs, run by `npm run build`) rather than a plain `dependencies` entry — so a consumer's install never asks npm to resolve java-parser (and its vulnerable transitive lodash) at all. See CHANGELOG.md.",
+  "topLevelDirectories": ["bin", "dist", "src", "vendor"],
   "forbiddenPatterns": [
     "**/.agentic-security/**",
     "**/*.log",
     "**/.env*",
     "**/.superpowers/**",
     "**/.claude/**",
-    "node_modules/.bin/**",
-    "node_modules/@vercel/**",
-    "node_modules/@types/**"
+    "vendor/java-parser/node_modules/.bin/**",
+    "vendor/java-parser/node_modules/@vercel/**",
+    "vendor/java-parser/node_modules/@types/**"
   ],
   "requiredFiles": [
     "dist/agentic-security.mjs",
     "dist/agentic-security.mjs.sha256",
-    "node_modules/java-parser/package.json",
-    "node_modules/lodash/package.json",
-    "node_modules/lodash-es/package.json"
+    "vendor/java-parser/entry.mjs",
+    "vendor/java-parser/node_modules/java-parser/package.json",
+    "vendor/java-parser/node_modules/lodash/package.json",
+    "vendor/java-parser/node_modules/lodash-es/package.json"
   ],
   "fileCount": {
-    "expected": 2647,
+    "expected": 2648,
     "tolerance": 150
   }
 }

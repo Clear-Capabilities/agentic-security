@@ -31,7 +31,7 @@ let _javaParser = null;
 async function _loadJavaParser() {
   if (_javaParser) return _javaParser;
   try {
-    const mod = await import('java-parser');
+    const mod = await import('#java-parser');
     _javaParser = mod.parse || mod.default;
     return _javaParser;
   } catch {

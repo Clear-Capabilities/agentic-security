@@ -10,7 +10,48 @@
 
 
 
+## 0.149.3 - Correct 0.149.2's fix: bundleDependencies + overrides hangs npm's resolver
+
+0.149.2's `bundleDependencies: ["java-parser"]` fix was never published — it passed every local
+and CI check that runs *before* dependency resolution, but `npm ci`/`npm install` themselves hang
+indefinitely (confirmed: actively spinning CPU, not blocked on network) whenever
+`bundleDependencies` and the pre-existing `overrides` field are both present in the same
+package.json, on this npm version. That surfaced as CI's `test` job stuck on its `npm ci` step for
+30+ minutes with zero output; reproduced locally in a clean checkout. `bundleDependencies` alone
+resolves in under a second; `overrides` alone always has; only the combination hangs.
+
+Replaced with a different mechanism that achieves the same goal (ship java-parser's dependency
+closure with the override-forced safe `lodash`/`lodash-es` already applied, so a consumer's
+install never touches npm's own resolution of java-parser -> chevrotain's vulnerable pins) without
+touching dependency resolution at all:
+
+1. `java-parser` moved from `dependencies` to `devDependencies` — resolved normally (with the
+   override applied) for this repo's own build environment, never installed for a consumer.
+2. `scripts/vendor-java-parser.mjs` (run by `npm run build`, before `ncc build`) copies the
+   already-resolved, already-safe tree into `vendor/java-parser/node_modules/` — a plain directory
+   included via `files`, not `bundleDependencies`. It refuses to vendor anything if
+   `lodash`/`lodash-es` didn't resolve to the override-forced safe version, so a dropped override
+   fails the build loudly instead of silently vendoring the vulnerable version again.
+3. The one runtime call site plus one dynamic-import call site (`src/sast/java-ast-folding.js`,
+   `src/ir/parser-java.js`) now import `#java-parser` (a package.json `imports` subpath alias)
+   instead of the bare `java-parser` specifier. It points at `vendor/java-parser/entry.mjs`, a thin
+   re-export — Node refuses an `imports`/`exports` target that resolves through a `node_modules`
+   path segment, even one that exact target is otherwise valid, so the entry point has to sit
+   outside the vendored `node_modules/` and reach in via a plain relative import instead.
+
+Verified end-to-end this time, in order: `npm ci` in a genuinely fresh clone (not a `--dry-run`,
+not a stale `git clone` of the previous commit — the mistake that let 0.149.2's hang slip past
+local testing) completes in ~1s; the full test suite (6867 tests) passes, including the 22
+Java-specific tests that exercise both `#java-parser` call sites with real parsing; `npm pack` +
+a fresh install in an isolated project reports 0 vulnerabilities; the installed package's
+`./engine` library export and CLI `scan` both load and run real Java parsing correctly through the
+packed tarball, not just through the source tree.
+
 ## 0.149.2 - Fix vulnerable transitive deps shipping to installers, and a broken install script
+
+**Correction (0.149.3): this release's `bundleDependencies` fix was never published — it hangs
+`npm ci`/`npm install` when combined with the `overrides` field below, on this npm version. See
+the 0.149.3 entry above for what actually shipped.**
 
 Two packaging defects, both discovered while verifying a fresh `npm install` of 0.149.1 in an
 isolated project rather than trusting the source tree's own install:

@@ -2,7 +2,7 @@ export const id = 3736;
 export const ids = [3736];
 export const modules = {
 
-/***/ 3736:
+/***/ 1355:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {

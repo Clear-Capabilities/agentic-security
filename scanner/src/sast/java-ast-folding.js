@@ -19,7 +19,7 @@
 //   - Floating-point arithmetic
 //   - long / short / byte coercion edge cases (we treat all as Number)
 
-import { parse } from 'java-parser';
+import { parse } from '#java-parser';
 
 // ─── CST helpers ──────────────────────────────────────────────────────────
 
