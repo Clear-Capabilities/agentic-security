@@ -10,6 +10,29 @@
 
 
 
+## 0.149.4 - Fix 0.149.3's vendor/ gap: populate it in `prepare`, not only `build`
+
+0.149.3's `vendor/java-parser/` was only ever populated by `npm run build` (`scripts/vendor-java-parser.mjs`
+ran as the first step of the `build` script). That's fine for the published CLI (`dist/agentic-security.mjs`
+is always built before shipping) but wrong for anything that uses `src/` directly right after `npm ci` —
+which several of this repo's own CI jobs and local workflows do without ever running `npm run build` first.
+0.149.3's tag push made this concrete: the `corpus` and `determinism-attest` CI jobs both failed with
+`ERR_MODULE_NOT_FOUND` for `vendor/java-parser/entry.mjs` (`npm ci` then straight into
+`bench/cve-replay/runner.mjs` / `scripts/attest-fixture.mjs`, no build in between) — caught by
+`release.yml`'s own gate before anything published, so nothing shipped broken, but 0.149.3 itself never
+became installable.
+
+`scripts/prepare.mjs` (wired as the `prepare` lifecycle script, replacing the inline one-liner) now runs
+`vendor-java-parser.mjs` itself, guarded the same way the git-hook install already was (only when the
+sibling `scripts/pre-push-gate.mjs` exists — i.e. this is an actual checkout of this repo, never a
+consumer's install). `vendor/` is now populated immediately after `npm ci`/`npm install`, before anything
+else runs, matching `node_modules` itself.
+
+Verified this time by reproducing 0.149.3's exact failure first — a fresh `npm ci` followed immediately by
+`npm run bench:cve-replay:check`, `npm run corpus:provenance`, and `node scripts/attest-fixture.mjs`, all
+run with `vendor/` deleted beforehand and with no `npm run build` in between — then confirming all three
+now pass.
+
 ## 0.149.3 - Correct 0.149.2's fix: bundleDependencies + overrides hangs npm's resolver
 
 0.149.2's `bundleDependencies: ["java-parser"]` fix was never published — it passed every local
