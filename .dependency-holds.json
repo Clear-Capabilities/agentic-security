@@ -16,6 +16,22 @@
       "reason": "@types/vscode is not an ordinary dependency: it declares the VS Code API SURFACE the extension compiles against, and VS Code's own guidance is that it tracks `engines.vscode` — the OLDEST host the extension supports — rather than the newest published types. Upgrading it to latest is actively harmful: it lets the extension compile against APIs that do not exist on the hosts it claims to support, and the failure surfaces as a runtime TypeError in a user's editor rather than a build error here. 'Latest' is therefore the wrong target for this package by construction, which is exactly the case this hold list exists for. FOLLOW-UP, deliberately not resolved inside a release: ide/vscode/package.json currently declares `engines.vscode: ^1.95.0` while holding `@types/vscode: ^1.125.0`, so the types are already AHEAD of the declared minimum host — the same latent mismatch, pointed the other way. Fixing it means either lowering the types to ^1.95.0 or raising `engines` to ^1.125.0, and the second narrows the supported host range, which is a product decision rather than a dependency bump. Re-test at the review date, decide the baseline deliberately, then align both fields.",
       "addedAt": "2026-08-21",
       "reviewBy": "2027-02-28"
+    },
+    {
+      "package": "@types/node",
+      "tree": "scanner",
+      "heldAt": "26.5.1",
+      "reason": "DefinitelyTyped freezes @types/node's npm `latest` dist-tag at an older LTS-tracking major (22.20.2 at time of writing) while newer majors — including 26.x, what this repo actually targets (engines.node >=24.0.0) — publish only under TypeScript-version-specific tags (ts5.6, ts6.0, ...), never `latest`. Confirmed via `npm view @types/node dist-tags --json`: 26.5.1 is the true newest published version, one patch ahead of what we hold here, not \"behind\" anything. Comparing against `latest` for this package structurally never converges — there is no version bump that satisfies it. Re-test at the review date in case DefinitelyTyped's tagging convention has changed; if not, this hold (or a fix to dependency-currency.mjs's `latest`-tag comparison for this package) needs renewing rather than treated as resolved.",
+      "addedAt": "2026-09-09",
+      "reviewBy": "2027-03-09"
+    },
+    {
+      "package": "@types/node",
+      "tree": "ide/vscode",
+      "heldAt": "26.5.1",
+      "reason": "Same dist-tag quirk as the scanner/ hold of the same package: DefinitelyTyped's npm `latest` tag for @types/node is frozen below the true newest version (confirmed via `npm view @types/node dist-tags --json`), so no version bump satisfies the currency check for this package. See the scanner/ hold entry for the full explanation.",
+      "addedAt": "2026-09-09",
+      "reviewBy": "2027-03-09"
     }
   ]
 }
