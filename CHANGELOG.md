@@ -10,6 +10,31 @@
 
 
 
+## 0.149.2 - Fix vulnerable transitive deps shipping to installers, and a broken install script
+
+Two packaging defects, both discovered while verifying a fresh `npm install` of 0.149.1 in an
+isolated project rather than trusting the source tree's own install:
+
+1. `scanner/package.json`'s `overrides` field pins `lodash`/`lodash-es` to a safe `^4.18.1` — but
+   npm `overrides` only apply to the project that declares them, never to that project's own
+   consumers. `java-parser` → `chevrotain` hard-pins an old, vulnerable `lodash`/`lodash-es`
+   (`<=4.17.23`, prototype pollution / code injection, no upstream fix available), so every real
+   `npm install` of this package pulled in those vulnerable versions regardless of the override,
+   while the release gate's own dependency-currency check stayed green because it audits the
+   source tree (where the override does apply), not what ships. Fixed by adding
+   `"bundleDependencies": ["java-parser"]`, so the package now ships java-parser's dependency
+   subtree exactly as resolved here — with the override already applied — instead of letting a
+   consumer's install re-resolve it from the registry. Verified via `npm pack` + a fresh install
+   in an isolated project: `npm audit` now reports 0 vulnerabilities (was 7, 2 high).
+2. The `prepare` script (`node ../scripts/pre-push-gate.mjs --install-hook`) exists only to wire
+   up the local git pre-push hook for repo contributors, but that relative path resolves to
+   nothing once installed as a dependency (the target script isn't published). Modern npm's
+   install-script gating silently skipped it, but an older npm or another package manager
+   running it for real would fail the whole install. It now checks the target exists before
+   attempting to run it, verified both for a repo contributor (`npm install` in `scanner/`
+   still wires the hook) and for a dependency install (`npm rebuild --foreground-scripts`
+   against the packed tarball now completes with no error).
+
 ## 0.149.1 - Fix scan hang on unbounded registry/OSV network calls
 
 An SCA scan could hang indefinitely at "Registry metadata..." (or, less visibly, during OSV
