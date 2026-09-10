@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.149.4 |
-| Bundle SHA-256 | `0472adbb55e8731badcaf55ec1ae1b31ade5346588db21843a4c6e3219618ad2` |
-| Commit | `88a2fc41d41a25994e81080e6d95d114e5016d3a` |
+| Engine version | 0.150.0 |
+| Bundle SHA-256 | `991b9abd5ebc34f301c32a334f8a2b8816187aede0d700e6b3021b34aed9600f` |
+| Commit | `1b70a75ef77abc75e313e689c730975bc1010162` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 215 (215 scored) |
 | Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-09T20:12:30.323Z |
+| Generated (UTC) | 2026-09-10T21:12:09.440Z |
 
 ## What these numbers are, and what they are not
 
@@ -209,7 +209,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 481 |
+| `scanner/src` | 487 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -226,7 +226,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 321/368 (87.2%) |
+| 323/373 (86.6%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone

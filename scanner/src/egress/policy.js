@@ -187,13 +187,23 @@ export function evaluateEgress(ctx = {}) {
     scanRoot, purpose = 'unknown', endpoint,
     model = null, role = null, region = null, repository = null,
     path: filePath = null, dataClass = null, contextTokens = null,
+    // ollama-offline-prd.md §26: `_providerOf` labels EVERY loopback URL
+    // 'local', which is correct for the allow/deny/local-only POLICY
+    // decision (both `local` and `ollama` are loopback-scoped the same way)
+    // but wrong for the REPORTED provider name once a report wants to say
+    // specifically "Ollama" rather than the older generic preset. A caller
+    // that already knows its own provider identity (providers.js's
+    // resolveProvider already does) can pass it here; every existing caller
+    // that doesn't is unaffected — inference from the endpoint remains the
+    // default.
+    provider: providerOverride = null,
   } = ctx;
 
   if (!endpoint || typeof endpoint !== 'string') {
     return { allowed: false, decision: 'deny', reason: 'no endpoint provided to evaluateEgress', provider: 'unknown', policySource: 'default', purpose };
   }
 
-  const provider = _providerOf(endpoint);
+  const provider = providerOverride || _providerOf(endpoint);
 
   // Blunt, ops-friendly kill switch — same shape as the existing
   // AGENTIC_SECURITY_LLM_VALIDATE=0 precedent in llm-validator/index.js.

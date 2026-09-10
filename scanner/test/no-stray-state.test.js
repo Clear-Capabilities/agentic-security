@@ -140,6 +140,11 @@ const DELIBERATELY_UNGUARDED = new Set([
  *      exported relative-path constants that document where the file lives and
  *      are joined to a root by callers (including tests). The literal IS the
  *      published location.
+ *  · llm-validator/agent-tools.js — same shape as engine.js's IGNORE_DIRS
+ *      above: `list_files`'s directory walk skips `.agentic-security` (and
+ *      `node_modules`/`.git`) by NAME so the local agent loop's read-only
+ *      tools never surface scan state as if it were project source. A
+ *      skip-list name comparison, not a path constructed into that directory.
  *
  * This is NOT a second allowlist. Every entry is a place the string appears
  * without a path being constructed, and the test below proves each one still
@@ -154,6 +159,7 @@ const NOT_PATH_CONSTRUCTION = new Set([
   'src/posture/privacy-framework.js',
   'src/posture/verifier-target.js',
   'src/fix/apply-fix-service.js',
+  'src/llm-validator/agent-tools.js',
 ]);
 
 /** The seam itself, plus modules awaiting migration. NON-GROWING. */

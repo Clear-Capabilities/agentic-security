@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-06T15:47:22.108Z",
-  "commit": "bee8bfd3c3c05dcd491b4aed6665bef9d3b88e11",
+  "generatedAt": "2026-09-10T21:07:13.654Z",
+  "commit": "1b70a75ef77abc75e313e689c730975bc1010162",
   "targets": {
     "hooks": {
       "total": 21,
@@ -34,7 +34,7 @@
       }
     },
     "scanner/src": {
-      "total": 481,
+      "total": 487,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -78,8 +78,11 @@
         "lineage/observation-store.js": 2,
         "lineage/recipient-registry.js": 1,
         "lineage/remediation.js": 6,
+        "llm-validator/agent-tools.js": 4,
         "llm-validator/consistency.js": 1,
         "llm-validator/index.js": 5,
+        "llm-validator/model-probe.js": 1,
+        "llm-validator/ollama-provider.js": 1,
         "lsp/server.js": 3,
         "mcp/audit.js": 8,
         "mcp/server.js": 1,

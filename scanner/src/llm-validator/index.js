@@ -77,6 +77,7 @@ import { resolveProvider, buildProviderRequest, providerMatrix } from './provide
 import { evaluateEgress } from '../egress/policy.js';
 import { recordEgressCall, payloadMetrics } from '../egress/audit.js';
 import { MODEL_STATUS, summarizeModelStatus } from './model-status.js';
+import { callOllamaChat } from './ollama-provider.js';
 
 // The output cap we request. Shared with the cost estimate so the ceiling
 // charges exactly what we permit the model to produce.
@@ -146,6 +147,12 @@ function endpointConfig() {
     provider: c.provider,
     egress: c.egress,
     _shape: c.shape,
+    // ollama-offline-prd.md: the ollama provider carries its own host/
+    // timeout/keepAlive config (from ollama-provider.js's
+    // ollamaEndpointConfig) rather than a SHAPES-style shape. `callEndpoint`
+    // checks `provider === 'ollama'` and delegates to it before touching
+    // `_shape` at all.
+    _ollama: c.ollama || null,
   };
 }
 
@@ -339,7 +346,48 @@ function renderPrompt(finding, fileContents, challenge, nonce, scanRoot) {
     .replace('{{context}}', sterileContext || '(no surrounding code available)');
 }
 
-async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shape = null) {
+// PRD §17 — Ollama's `format` parameter, matching validateResponse's own
+// expected shape exactly. This is an ADDITIVE reliability improvement only:
+// it constrains what Ollama generates, but every downstream check
+// (challenge/nonce cross-check, verdict allowlist, escalate-on-anomaly) in
+// validateResponse is completely unchanged — a schema-constrained response
+// still goes through exactly the same fail-closed validation as before, so
+// this cannot make a bad response look more trusted than it already would.
+const OLLAMA_VALIDATE_SCHEMA = {
+  type: 'object',
+  required: ['challenge', 'file', 'line', 'verdict', 'confidence', 'reasoning'],
+  properties: {
+    challenge: { type: 'string' },
+    file: { type: 'string' },
+    line: { type: 'integer' },
+    verdict: { type: 'string', enum: ['accept', 'reject', 'escalate'] },
+    confidence: { type: 'number' },
+    reasoning: { type: 'string' },
+  },
+};
+
+async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shape = null, provider = null, ollamaConfig = null) {
+  // ollama-offline-prd.md §8.2/§38: native /api/chat, not a SHAPES entry —
+  // see ollama-provider.js's header for why this needs its own wire path
+  // rather than another `body(model, prompt, maxTokens)` function. The
+  // prompt itself (renderPrompt, redaction, the challenge/nonce template) is
+  // completely unchanged above this call — only the transport differs.
+  if (provider === 'ollama') {
+    const r = await callOllamaChat({
+      host: endpoint,
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: MAX_OUTPUT_TOKENS,
+      schema: OLLAMA_VALIDATE_SCHEMA,
+      keepAlive: ollamaConfig?.keepAlive,
+      timeouts: ollamaConfig
+        ? { connectTimeoutMs: ollamaConfig.connectTimeoutMs, requestTimeoutMs: ollamaConfig.requestTimeoutMs }
+        : undefined,
+    });
+    if (!r.ok) return { ok: false, error: r.reason || r.code, errorCode: r.code };
+    return { ok: true, text: String(r.result.text || ''), usage: r.result.usage || null };
+  }
+
   const { headers, body, extractText, extractUsage } = buildRequest(model, prompt, preset, shape);
   if (apiKey) {
     if (preset === 'anthropic') headers['x-api-key'] = apiKey;
@@ -461,7 +509,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
   // 'validate' role, cfg.model) — threading them through here is what
   // makes the model/role constraint dimensions genuinely enforceable for a
   // real caller, not just a mechanism nothing exercises.
-  const egressDecision = evaluateEgress({ scanRoot, purpose: 'llm-validator', endpoint: cfg.endpoint, role: 'validate', model: cfg.model });
+  const egressDecision = evaluateEgress({ scanRoot, purpose: 'llm-validator', endpoint: cfg.endpoint, role: 'validate', model: cfg.model, provider: cfg.provider });
   if (!egressDecision.allowed) {
     finding.validator_verdict = 'unvalidated';
     finding.unvalidated = true;
@@ -551,7 +599,7 @@ export async function validateOne(finding, fileContents, scanRoot, ledger = null
     }
   }
 
-  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset, cfg._shape);
+  const resp = await callEndpoint(cfg.endpoint, cfg.apiKey, cfg.model, prompt, cfg.preset, cfg._shape, cfg.provider, cfg._ollama);
   // Record actual usage when the endpoint reports it, else the estimate. An
   // unreported call is never free — but the two are recorded DISTINCTLY, so
   // the reported spend can say which it is. Presenting an upper bound as a

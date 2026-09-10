@@ -19,7 +19,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { validateMany } from '../src/llm-validator/index.js';
-import { MODEL_STATUS, summarizeModelStatus } from '../src/llm-validator/model-status.js';
+import { MODEL_STATUS, summarizeModelStatus, stageSummaryFromModelStatus } from '../src/llm-validator/model-status.js';
 
 function makeFinding(overrides = {}) {
   return {
@@ -285,6 +285,30 @@ test('summarizeModelStatus: an empty or missing findings array degrades to all-z
   assert.deepEqual(summarizeModelStatus([]).total, 0);
   assert.deepEqual(summarizeModelStatus(null).total, 0);
   assert.deepEqual(summarizeModelStatus(undefined).total, 0);
+});
+
+// ── stageSummaryFromModelStatus (ollama-offline-prd.md §26 "AI Assistance") ──
+
+test('stageSummaryFromModelStatus: completed/malformed/unavailable count as attempted calls, policy-blocked as refused (not a call)', () => {
+  const summary = summarizeModelStatus([
+    { llmValidationStatus: MODEL_STATUS.COMPLETED },
+    { llmValidationStatus: MODEL_STATUS.COMPLETED },
+    { llmValidationStatus: MODEL_STATUS.MALFORMED },
+    { llmValidationStatus: MODEL_STATUS.UNAVAILABLE },
+    { llmValidationStatus: MODEL_STATUS.POLICY_BLOCKED },
+    { llmValidationStatus: MODEL_STATUS.POLICY_BLOCKED },
+  ]);
+  const stage = stageSummaryFromModelStatus(summary);
+  assert.equal(stage.calls, 4, 'policy-blocked never reached the network — not a call');
+  assert.equal(stage.success, 2);
+  assert.equal(stage.refused, 2);
+  assert.equal(stage.failed, 2);
+});
+
+test('stageSummaryFromModelStatus: an all-disabled summary reports zero calls, not a crash', () => {
+  const summary = summarizeModelStatus([{ llmValidationStatus: MODEL_STATUS.DISABLED }]);
+  const stage = stageSummaryFromModelStatus(summary);
+  assert.deepEqual(stage, { calls: 0, success: 0, refused: 0, failed: 0 });
 });
 
 test('validateMany attaches findings.llmValidatorStatus as a scan-level aggregate, both on the disabled path and the enabled path', async () => {

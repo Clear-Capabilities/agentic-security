@@ -1598,6 +1598,28 @@ export function toShipVerdict(scan, options = {}) {
     lines.push(c('     /triage --explain <id>             why it fired, the data-flow trace, and the fix', DIM));
     lines.push(c('     scan . --format html -o report.html   shareable browser report (charts + filters)', DIM));
   }
+  // ollama-offline-prd.md §26 — "AI Assistance" summary. Only shown when a
+  // model tier actually ran (scan.aiAssistance is null when nothing is
+  // configured — see engine.js's own guard) so a deterministic-only scan's
+  // output is unchanged. Deliberately says "LLM inference was loopback-only"
+  // rather than "this entire scan was fully offline" (§26's own wording
+  // requirement) — this line describes the model calls, not deterministic
+  // network access elsewhere in the scan (OSV/KEV/EPSS), which is a
+  // different claim this block must not blur.
+  const _ai = scan.aiAssistance;
+  if (_ai) {
+    lines.push('');
+    lines.push(c('  AI Assistance', BOLD));
+    lines.push(c(`    Provider: ${_ai.provider || 'unknown'}   Model: ${_ai.model || 'unknown'}`, DIM));
+    lines.push(c(`    LLM egress: ${_ai.egress || 'unknown'}   Cloud fallback: disabled`, DIM));
+    for (const [stage, s] of Object.entries(_ai.stages || {})) {
+      const parts = [`${s.calls} call${s.calls === 1 ? '' : 's'}`, `success ${s.success}`];
+      if (s.refused) parts.push(`refused ${s.refused}`);
+      if (s.failed) parts.push(`failed ${s.failed}`);
+      lines.push(c(`    ${stage.padEnd(10)} ${parts.join('   ')}`, DIM));
+    }
+    lines.push(c(`    ${_ai.egress === 'loopback-only' ? 'LLM inference was loopback-only.' : 'LLM inference used a remote endpoint.'}`, DIM));
+  }
   // Coverage-honesty line (#5/#6): show the scan's blind spots — which
   // languages got flow analysis vs pattern-only, what was skipped, and how
   // many dangerous-looking calls had no finding. One concise line, not bloat.

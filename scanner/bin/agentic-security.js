@@ -127,6 +127,7 @@ Commands:
   mcp                          Start the MCP stdio server (scan_diff, query_taint, explain_finding, apply_fix)
   validator-cache stats|gc     Inspect / prune .agentic-security/llm-cache/ (use --older-than <days> --dry-run)
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
+  ask "<question>" [target]    Bounded local-model Q&A with read-only tool access (requires AGENTIC_SECURITY_LLM_PRESET=ollama)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
@@ -1452,6 +1453,77 @@ async function cmdProfile(args) {
 // /triage list | assign | transition | trend
 async function cmdTriage(args) {
   const target = path.resolve(args._[args._.length - 1] && !args._[args._.length - 1].startsWith('--') ? args._[args._.length - 1] : '.');
+  // ollama-offline-prd.md §34 — `triage --explain <finding-id>` is read-only
+  // narrative generation, not triage's own assign/transition/lock state
+  // machine, so it doesn't need the pro-tier gate below (and is checked
+  // before it for exactly that reason).
+  if (args.flags.explain) {
+    const id = String(args.flags.explain);
+    const lastScanPath = statePath(target, 'last-scan.json');
+    if (!fs.existsSync(lastScanPath)) { console.error('No prior scan found. Run `agentic-security scan` first.'); return 4; }
+    const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
+    const f = (last.findings || []).find(x => x.id === id) || (last.secrets || []).find(x => x.id === id);
+    if (!f) { console.error(`Finding ${id} not found in last scan.`); return 4; }
+    console.log('Deterministic evidence');
+    console.log('-----------------------');
+    console.log(`  ${f.vuln || f.title || 'finding'}  [${f.severity || 'unknown'}]  ${f.cwe || ''}`.trim());
+    console.log(`  ${f.file}:${f.line || '?'}`);
+    if (f.description) console.log(`  ${f.description}`);
+    const { proposeOllamaExplanation, EXPLAIN_ERROR } = await import('../src/llm-validator/explain-proposal.js');
+    const proposal = await proposeOllamaExplanation({
+      finding: { file: f.file, line: f.line, vuln: f.vuln, cwe: f.cwe, severity: f.severity, confidence: f.confidence ?? f.llm_confidence },
+      contextSnippet: f.snippet || '',
+      scanRoot: target,
+    });
+    console.log('');
+    if (proposal.ok) {
+      console.log(`Model-generated explanation (${proposal.model}) — not deterministic evidence`);
+      console.log('-----------------------------------------------------------------------');
+      console.log(`  ${proposal.modelExplanation}`);
+      if (proposal.confidenceNote) console.log(`  (${proposal.confidenceNote})`);
+    } else if (proposal.code === EXPLAIN_ERROR.NOT_CONFIGURED) {
+      console.log('(No AI-assisted explanation — configure AGENTIC_SECURITY_LLM_PRESET=ollama for one.)');
+    } else {
+      console.log(`(AI-assisted explanation unavailable: ${proposal.code} — ${proposal.reason})`);
+    }
+    return 0;
+  }
+  // ollama-offline-prd.md §18.1 — `triage --poc <finding-id>` is a headless,
+  // Ollama-backed PoC SKETCH (narrative only — never executed, never written
+  // to disk) for when Claude Code's own security-poc-generator agent isn't
+  // available. Same read-only exemption from the pro-tier gate as --explain.
+  if (args.flags.poc) {
+    const id = String(args.flags.poc);
+    const lastScanPath = statePath(target, 'last-scan.json');
+    if (!fs.existsSync(lastScanPath)) { console.error('No prior scan found. Run `agentic-security scan` first.'); return 4; }
+    const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
+    const f = (last.findings || []).find(x => x.id === id) || (last.secrets || []).find(x => x.id === id);
+    if (!f) { console.error(`Finding ${id} not found in last scan.`); return 4; }
+    console.log('Deterministic evidence');
+    console.log('-----------------------');
+    console.log(`  ${f.vuln || f.title || 'finding'}  [${f.severity || 'unknown'}]  ${f.cwe || ''}`.trim());
+    console.log(`  ${f.file}:${f.line || '?'}`);
+    if (f.description) console.log(`  ${f.description}`);
+    const { proposeOllamaPoc, POC_PROPOSAL_ERROR } = await import('../src/llm-validator/poc-proposal.js');
+    const proposal = await proposeOllamaPoc({
+      finding: { file: f.file, line: f.line, vuln: f.vuln, cwe: f.cwe, severity: f.severity },
+      contextSnippet: f.snippet || '',
+      scanRoot: target,
+    });
+    console.log('');
+    if (proposal.ok) {
+      console.log(`Model-generated PoC sketch (${proposal.model}) — unverified, not executed`);
+      console.log('-----------------------------------------------------------------------');
+      console.log(`  ${proposal.pocNarrative}`);
+      if (proposal.exampleInput) console.log(`  Example input: ${proposal.exampleInput}`);
+      if (proposal.expectedResult) console.log(`  Expected result: ${proposal.expectedResult}`);
+    } else if (proposal.code === POC_PROPOSAL_ERROR.NOT_CONFIGURED) {
+      console.log('(No AI-assisted PoC sketch — configure AGENTIC_SECURITY_LLM_PRESET=ollama for one.)');
+    } else {
+      console.log(`(AI-assisted PoC sketch unavailable: ${proposal.code} — ${proposal.reason})`);
+    }
+    return 0;
+  }
   const profile = loadProfile(target);
   if (profile.profile !== 'pro') {
     console.error('Triage is a pro-mode feature. Run `agentic-security profile set pro` to enable.');
@@ -1846,6 +1918,260 @@ async function cmdValidatorCache(args) {
   }
   console.error('Usage: agentic-security validator-cache <stats|gc> [path] [--older-than <days>] [--dry-run]');
   return 4;
+}
+
+// `agentic-security models list|status|doctor|inspect <model>`
+//
+// agentic-security-ollama-offline-prd.md §11.2/§31 — the local-AI UX. Every
+// subcommand is read-only and never itself triggers a model pull or a chat
+// call (models test/benchmark, which DO run inference, are P1/P2 scope not
+// implemented here — see the PRD coverage note in docs/guides/ollama.md).
+async function cmdModels(args) {
+  const sub = args._[1] || 'status';
+  const {
+    ollamaEndpointConfig, listOllamaModels, DEFAULT_OLLAMA_HOST,
+  } = await import('../src/llm-validator/ollama-provider.js');
+  const {
+    classifyModelFamily, capabilitiesFromFamilyHint, detectSystemMemory,
+    detectMemoryTier, recommendAdmission, MEMORY_PROFILES,
+  } = await import('../src/llm-validator/model-capabilities.js');
+  const { getModelCapabilities } = await import('../src/llm-validator/model-probe.js');
+  const { resolveProvider } = await import('../src/llm-validator/providers.js');
+  const wantsProbe = !!args.flags.probe;
+
+  const envOverride = {};
+  if (args.flags.host) envOverride.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags.host);
+  if (args.flags['allow-remote-ollama']) envOverride.AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE = '1';
+  const env = { ...process.env, ...envOverride };
+
+  if (sub === 'list' || sub === 'status' || sub === 'doctor') {
+    const cfg = ollamaEndpointConfig(env);
+    if (!cfg.ok) {
+      console.log(`✗ ${cfg.reason}`);
+      console.log('\nThe deterministic scanner will still run.\nNo cloud provider will be used automatically.');
+      return args.flags.json ? (writeStdout(JSON.stringify({ ok: false, code: cfg.code, reason: cfg.reason }, null, 2) + '\n'), 0) : 1;
+    }
+    const modelsResult = await listOllamaModels({ host: cfg.config.host });
+    if (!modelsResult.ok) {
+      console.log(`✗ Ollama server is not reachable at ${cfg.config.host}`);
+      console.log(`  (${modelsResult.code}: ${modelsResult.reason})`);
+      console.log('\nThe deterministic scanner will still run.\nNo cloud provider will be used automatically.');
+      if (args.flags.json) writeStdout(JSON.stringify({ ok: false, code: modelsResult.code, reason: modelsResult.reason }, null, 2) + '\n');
+      return 1;
+    }
+
+    if (sub === 'list') {
+      if (args.flags.json) {
+        writeStdout(JSON.stringify({ ok: true, host: cfg.config.host, models: modelsResult.models }, null, 2) + '\n');
+        return 0;
+      }
+      console.log(`Installed models (${cfg.config.host}):`);
+      if (modelsResult.models.length === 0) console.log('  (none installed)');
+      for (const m of modelsResult.models) {
+        const family = classifyModelFamily(m.name);
+        const caps = capabilitiesFromFamilyHint(m.name);
+        const sizeGb = Number.isFinite(m.sizeBytes) ? (m.sizeBytes / (1024 ** 3)).toFixed(1) + 'GB' : '?';
+        console.log(`  ${m.name.padEnd(24)} family=${family.padEnd(14)} size=${sizeGb.padEnd(8)} tools=${caps.tools === true ? 'yes' : caps.tools === false ? 'no' : 'not-detected'}`);
+      }
+      return 0;
+    }
+
+    // status / doctor
+    const mem = detectSystemMemory();
+    const tier = detectMemoryTier(mem.totalBytes);
+    const resolved = resolveProvider({ role: 'validate', env });
+    const model = resolved.ok ? resolved.config.model : null;
+    const totalGb = (mem.totalBytes / (1024 ** 3)).toFixed(1);
+    const freeGb = (mem.freeBytes / (1024 ** 3)).toFixed(1);
+
+    const lines = [];
+    lines.push(sub === 'doctor' ? 'agentic-security local AI doctor' : 'agentic-security models status');
+    lines.push('');
+    lines.push('✓ Ollama server reachable');
+    lines.push(cfg.config.offline ? '✓ Endpoint is loopback-only' : `↗ Endpoint is REMOTE (${cfg.config.host}) — offline guarantee does not apply`);
+    lines.push(`✓ ${modelsResult.models.length} model(s) installed`);
+    lines.push('');
+    lines.push(`System RAM: ${totalGb} GB (free: ${freeGb} GB)`);
+    lines.push(`Memory tier: ${tier}`);
+    if (model) {
+      const installed = modelsResult.models.some((m) => m.name === model);
+      lines.push(`Default model: ${model} ${installed ? '' : '(NOT currently installed)'}`);
+      const profileKey = tier === '8gb' ? '8gb' : (classifyModelFamily(model) === 'gemma4' ? '16gb-gemma' : '16gb-qwen');
+      const admission = recommendAdmission({ profile: profileKey, freeBytes: mem.freeBytes, requestedModel: model });
+      if (admission.admitted) {
+        lines.push(`  ✓ memory admission passed — context ${admission.contextTokens} tokens` +
+          (admission.fellBackToSmallerModel ? ` (fell back to ${admission.model})` : admission.reducedContext ? ' (context reduced)' : ''));
+      } else {
+        lines.push(`  ✗ memory admission FAILED — ${admission.reason}`);
+      }
+      const capsResult = await getModelCapabilities({ host: cfg.config.host, model, probe: wantsProbe });
+      const caps = capsResult.capabilities;
+      const capSourceLabel = caps.source?.runtimeProbe ? (capsResult.cached ? 'runtime-probed, cached' : 'runtime-probed')
+        : caps.source?.metadata ? 'Ollama metadata' : 'family hint — not runtime-probed';
+      lines.push(`  chat=${caps.chat ? 'yes' : 'no'} structuredJson=${caps.structuredJson} tools=${caps.tools} (${capSourceLabel})`);
+      if (wantsProbe) lines.push(capsResult.cached ? '  ✓ capability probe cached' : '  ✓ capability probe ran (now cached)');
+      else lines.push('  ↗ run with --probe to runtime-verify structured output / tool calling (consumes inference time)');
+    } else {
+      lines.push('Default model: (none resolved)');
+    }
+    lines.push('');
+    lines.push('Cloud fallback: disabled');
+    lines.push('Deterministic scanner: enabled');
+
+    if (args.flags.json) {
+      writeStdout(JSON.stringify({
+        ok: true, host: cfg.config.host, offline: cfg.config.offline, egress: cfg.config.egress,
+        installedModels: modelsResult.models.map((m) => m.name), systemRamGb: Number(totalGb), freeRamGb: Number(freeGb),
+        memoryTier: tier, defaultModel: model, cloudFallback: false,
+      }, null, 2) + '\n');
+    } else {
+      console.log(lines.join('\n'));
+    }
+    return 0;
+  }
+
+  if (sub === 'inspect') {
+    const name = args._[2];
+    if (!name) { console.error('Usage: agentic-security models inspect <model>'); return 4; }
+    const cfg = ollamaEndpointConfig(env);
+    if (!cfg.ok) { console.log(`✗ ${cfg.reason}`); return 1; }
+    const modelsResult = await listOllamaModels({ host: cfg.config.host });
+    if (!modelsResult.ok) { console.log(`✗ Ollama server is not reachable at ${cfg.config.host} (${modelsResult.code})`); return 1; }
+    const info = modelsResult.models.find((m) => m.name === name);
+    const family = classifyModelFamily(name);
+    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: wantsProbe });
+    const caps = capsResult.capabilities;
+    const out = { name, installed: !!info, family, capabilities: caps, cached: capsResult.cached, metadata: info || null };
+    if (args.flags.json) { writeStdout(JSON.stringify(out, null, 2) + '\n'); return 0; }
+    const capSourceLabel = caps.source?.runtimeProbe ? (capsResult.cached ? 'runtime-probed, cached' : 'runtime-probed')
+      : caps.source?.metadata ? 'Ollama metadata' : 'hint only';
+    console.log(`${name}`);
+    console.log(`  installed: ${out.installed ? 'yes' : 'no'}`);
+    console.log(`  family (hint): ${family}`);
+    console.log(`  capabilities (${capSourceLabel}): chat=${caps.chat} structuredJson=${caps.structuredJson} tools=${caps.tools} thinking=${caps.thinking}`);
+    if (!wantsProbe) console.log('  (run with --probe to runtime-verify structured output / tool calling)');
+    if (info) {
+      console.log(`  size: ${info.sizeBytes ? (info.sizeBytes / (1024 ** 3)).toFixed(1) + 'GB' : '?'}`);
+      console.log(`  parameters: ${info.parameterSize || '?'}  quantization: ${info.quantization || '?'}`);
+    }
+    return 0;
+  }
+
+  if (sub === 'test') {
+    // ollama-offline-prd.md §11.2 — `models test <model>` always runs the
+    // real Layer C runtime probes (structured output + tool calling), unlike
+    // doctor/inspect where --probe is opt-in: the whole point of `test` is
+    // to spend the inference time and get a definitive answer, cached
+    // afterward the same as any other probe.
+    const name = args._[2];
+    if (!name) { console.error('Usage: agentic-security models test <model>'); return 4; }
+    const cfg = ollamaEndpointConfig(env);
+    if (!cfg.ok) { console.log(`✗ ${cfg.reason}`); return 1; }
+    const modelsResult = await listOllamaModels({ host: cfg.config.host });
+    if (!modelsResult.ok) { console.log(`✗ Ollama server is not reachable at ${cfg.config.host} (${modelsResult.code})`); return 1; }
+    if (!modelsResult.models.some((m) => m.name === name)) {
+      console.log(`✗ Model '${name}' is not installed. Run \`ollama pull ${name}\` first.`);
+      return 1;
+    }
+    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: true });
+    const caps = capsResult.capabilities;
+    if (args.flags.json) {
+      writeStdout(JSON.stringify({ ok: true, name, capabilities: caps, cached: capsResult.cached }, null, 2) + '\n');
+      return 0;
+    }
+    console.log(`agentic-security models test ${name}`);
+    console.log('');
+    console.log(`  chat:            ${caps.chat ? '✓ yes' : '✗ no'}`);
+    console.log(`  structured JSON: ${caps.structuredJson === true ? '✓ yes' : caps.structuredJson === false ? '✗ no' : '? unknown (probe inconclusive)'}`);
+    console.log(`  tool calling:    ${caps.tools === true ? '✓ yes' : caps.tools === false ? '✗ no' : '? unknown (probe inconclusive)'}`);
+    if (caps.contextTokens) console.log(`  context window:  ${caps.contextTokens} tokens`);
+    console.log(`  ${capsResult.cached ? '✓ capability probe cached (already ran before)' : '✓ capability probe ran (now cached)'}`);
+    return 0;
+  }
+
+  if (sub === 'pull') {
+    // ollama-offline-prd.md §11.2/§24: "models pull must be REFUSED when
+    // strict offline mode is active because pulling a model requires network
+    // access." This CLI treats loopback-enforced Ollama as the default,
+    // always-on safety posture (see ollama-provider.js's header) rather than
+    // a separately-toggled "strict mode", so `models pull` refuses
+    // unconditionally and points at the real `ollama pull` instead of
+    // silently shelling out to it — downloading model weights is
+    // deliberately not something this CLI does on a user's behalf.
+    const name = args._[2] || '<model>';
+    console.log(
+      `Model '${name}' is not installed, or you asked to pull it.\n\n` +
+      'agentic-security never downloads model weights on your behalf — that keeps ' +
+      '"offline mode" honest (no surprise egress the moment you run a scan).\n\n' +
+      'Install it yourself, before disconnecting:\n' +
+      `  ollama pull ${name === '<model>' ? '<model>' : name}`,
+    );
+    return 1;
+  }
+
+  console.error('Usage: agentic-security models <list|status|doctor|inspect <model>|test <model>|pull <model>> [--host <url>] [--json] [--probe]');
+  console.error(`Default Ollama host: ${DEFAULT_OLLAMA_HOST}`);
+  return 4;
+}
+
+// `agentic-security ask "<question>" [target] [--max-iterations N]`
+//
+// ollama-offline-prd.md §18.2 — the one CLI surface for the bounded local
+// tool-calling agent loop (src/llm-validator/agent-loop.js). Deliberately a
+// separate command from `hunt` (structured candidate discovery, its own
+// propose/confirm/refute/judge pipeline) and `triage --explain/--poc`
+// (single-finding narrative, no tool access at all) — this is free-form Q&A
+// over the scanned project with READ-ONLY tool access, for questions that
+// don't map to either of those shapes ("which files touch this env var",
+// "does this project have a rate limiter").
+async function cmdAsk(args) {
+  const goal = args._[1];
+  if (!goal) { console.error('Usage: agentic-security ask "<question>" [target] [--max-iterations N]'); return 4; }
+  const target = path.resolve(args._[2] && !args._[2].startsWith('--') ? args._[2] : '.');
+  const { runAgentLoop, AGENT_LOOP_ERROR, DEFAULT_MAX_TOOL_ITERATIONS } = await import('../src/llm-validator/agent-loop.js');
+
+  const envOverride = {};
+  if (args.flags.host) envOverride.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags.host);
+  if (args.flags['allow-remote-ollama']) envOverride.AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE = '1';
+  const env = { ...process.env, ...envOverride };
+  const maxToolIterations = args.flags['max-iterations'] ? parseInt(args.flags['max-iterations'], 10) : DEFAULT_MAX_TOOL_ITERATIONS;
+
+  const r = await runAgentLoop({ goal, scanRoot: target, env, maxToolIterations });
+
+  if (!r.ok) {
+    if (r.code === AGENT_LOOP_ERROR.NOT_CONFIGURED) {
+      console.log('No local model configured for tool use — set AGENTIC_SECURITY_LLM_PRESET=ollama (see `agentic-security models doctor`).');
+    } else if (r.code === AGENT_LOOP_ERROR.TOOLS_UNSUPPORTED) {
+      console.log(`✗ ${r.reason}`);
+    } else {
+      console.log(`✗ ${r.code}: ${r.reason}`);
+    }
+    return 1;
+  }
+
+  if (args.flags.json) {
+    writeStdout(JSON.stringify(r, null, 2) + '\n');
+    return r.stopReason === 'complete' ? 0 : 1;
+  }
+
+  for (const call of r.toolCalls) {
+    console.log(`  → ${call.name}(${JSON.stringify(call.args)})  ${call.ok ? 'ok' : `failed: ${call.code}`}`);
+  }
+  console.log('');
+  if (r.stopReason === 'complete') {
+    console.log(r.finalText || '(no answer)');
+    return 0;
+  }
+  if (r.stopReason === 'policy-violation') {
+    console.log('✗ Stopped: the model requested a tool it was never offered.');
+    return 1;
+  }
+  if (r.stopReason === 'max-iterations') {
+    console.log(`✗ Stopped after the ${DEFAULT_MAX_TOOL_ITERATIONS}-iteration bound without a final answer. Try narrowing the question.`);
+    return 1;
+  }
+  console.log('✗ Stopped: wall-clock timeout reached without a final answer.');
+  return 1;
 }
 
 // `agentic-security verify [--finding <id>] [--target <url>] [--live]`
@@ -3080,9 +3406,42 @@ async function cmdFix(args) {
     }
   }
 
+  let ollamaFixMeta = null;
   if (newContent === null) {
-    console.error('No mechanical fix is available for this finding. Use the security-fixer subagent (default `fix` mode) and apply with `--apply` after it produces a replacement.');
+    // ollama-offline-prd.md §33 — when no stored/deterministic patch exists,
+    // AND an Ollama provider is configured for the fix role, ask it for a
+    // proposal. Whatever comes back goes through the EXACT SAME
+    // applyVerifiedFix() rescan/lint/test gate below as a deterministic
+    // patch — this branch only ever changes where `newContent` came from,
+    // never how it's verified.
+    const { proposeOllamaFix, FIX_PROPOSAL_ERROR } = await import('../src/llm-validator/fix-proposal.js');
+    const proposal = await proposeOllamaFix({
+      finding: { file: f.file, line: f.line, vuln: f.vuln, cwe: f.cwe, severity: f.severity },
+      fileContent: originalContent,
+      scanRoot,
+    });
+    if (proposal.ok) {
+      newContent = proposal.replacement;
+      ollamaFixMeta = { model: proposal.model, rationale: proposal.rationale, expectedSecurityEffect: proposal.expectedSecurityEffect };
+    } else if (proposal.code !== FIX_PROPOSAL_ERROR.NOT_CONFIGURED) {
+      // A configured Ollama fix attempt that failed is worth surfacing
+      // distinctly from "nothing was configured" — the operator asked for
+      // AI-assisted fix and it didn't work, which is different from never
+      // having asked.
+      console.error(`Ollama fix proposal unavailable (${proposal.code}): ${proposal.reason}`);
+    }
+  }
+
+  if (newContent === null) {
+    console.error('No mechanical fix is available for this finding. Use the security-fixer subagent (default `fix` mode), or configure AGENTIC_SECURITY_LLM_PRESET=ollama for an AI-assisted proposal, then apply with `--apply`.');
     return 4;
+  }
+
+  if (ollamaFixMeta) {
+    console.log(`AI-assisted proposal (model: ${ollamaFixMeta.model}) — not yet mechanically verified:`);
+    if (ollamaFixMeta.rationale) console.log(`  rationale: ${ollamaFixMeta.rationale}`);
+    if (ollamaFixMeta.expectedSecurityEffect) console.log(`  expected effect: ${ollamaFixMeta.expectedSecurityEffect}`);
+    console.log('');
   }
 
   if (isPreview) {
@@ -3180,7 +3539,104 @@ async function cmdUndo(args) {
   return 0;
 }
 
+// ollama-offline-prd.md §11.1's example transcript is an INTERACTIVE numbered
+// menu. This codebase has no interactive-prompt precedent anywhere else —
+// every other command here is flag-driven and scriptable, deliberately (CI
+// use is the primary case). Rather than introduce the first readline-based
+// prompt in the CLI, `setup --llm ollama` follows the PRD's own explicitly-
+// supported NONINTERACTIVE shape as the only shape: discover, pick a sane
+// memory-tier default when `--model` is omitted (recommend-and-proceed, not
+// block-and-ask), confirm the offline guarantee, print exactly what to
+// export. `--offline` is accepted for parity with the PRD's example command
+// line but is confirmatory only — Ollama's loopback enforcement is already
+// always-on by default (ollama-provider.js), not a mode this flag toggles.
+async function cmdSetupLlmOllama(args) {
+  const {
+    ollamaEndpointConfig, listOllamaModels, DEFAULT_OLLAMA_HOST,
+  } = await import('../src/llm-validator/ollama-provider.js');
+  const { detectSystemMemory, detectMemoryTier, recommendAdmission, classifyModelFamily } = await import('../src/llm-validator/model-capabilities.js');
+
+  const envOverride = {};
+  if (args.flags.host) envOverride.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags.host);
+  const env = { ...process.env, ...envOverride };
+  const cfg = ollamaEndpointConfig(env);
+  console.log('Local LLM provider: Ollama');
+  if (!cfg.ok) {
+    console.log(`✗ ${cfg.reason}`);
+    return 1;
+  }
+  console.log(`Server: ${cfg.config.host}`);
+
+  const modelsResult = await listOllamaModels({ host: cfg.config.host });
+  if (!modelsResult.ok) {
+    console.log(`✗ Ollama server is not reachable at ${cfg.config.host} (${modelsResult.code}: ${modelsResult.reason})`);
+    console.log('\nInstall Ollama and pull a model first — see docs/guides/ollama.md.');
+    console.log('The deterministic scanner will still run. No cloud provider will be used automatically.');
+    return 1;
+  }
+  console.log('Status: reachable');
+  console.log('');
+  if (modelsResult.models.length === 0) {
+    console.log('No models installed. Pull one first, e.g.:');
+    console.log('  ollama pull qwen3.5:4b');
+    return 1;
+  }
+  console.log('Installed models:');
+  for (const m of modelsResult.models) {
+    const sizeGb = Number.isFinite(m.sizeBytes) ? (m.sizeBytes / (1024 ** 3)).toFixed(1) + 'GB' : '?';
+    console.log(`  ${m.name.padEnd(24)} ${sizeGb}`);
+  }
+  console.log('');
+
+  let chosen = args.flags.model ? String(args.flags.model) : null;
+  if (chosen && !modelsResult.models.some((m) => m.name === chosen)) {
+    console.log(`↗ '${chosen}' is not currently installed — pull it first with \`ollama pull ${chosen}\`. Continuing with this choice anyway.`);
+  }
+  if (!chosen) {
+    // Recommend-and-proceed: pick the memory-tier's preferred model if it's
+    // installed, else the first installed model, rather than blocking on an
+    // interactive prompt this CLI has no precedent for.
+    const mem = detectSystemMemory();
+    const tier = detectMemoryTier(mem.totalBytes);
+    const installedNames = new Set(modelsResult.models.map((m) => m.name));
+    const preferredByTier = tier === '8gb' ? 'qwen3.5:4b'
+      : modelsResult.models.some((m) => classifyModelFamily(m.name) === 'gemma4') ? null : 'qwen3.5:9b';
+    chosen = (preferredByTier && installedNames.has(preferredByTier)) ? preferredByTier : modelsResult.models[0].name;
+    console.log(`Choose default model: ${chosen}  (auto-selected for your ${tier === 'unknown' ? 'detected' : tier} memory tier — pass --model to choose a different installed model)`);
+  } else {
+    console.log(`Choose default model: ${chosen}`);
+  }
+  console.log('');
+
+  const mem = detectSystemMemory();
+  const tier = detectMemoryTier(mem.totalBytes);
+  const profileKey = tier === '8gb' ? '8gb' : (classifyModelFamily(chosen) === 'gemma4' ? '16gb-gemma' : '16gb-qwen');
+  const admission = recommendAdmission({ profile: profileKey, freeBytes: mem.freeBytes, requestedModel: chosen });
+
+  console.log('Offline LLM mode:');
+  console.log('  ✓ Only loopback model requests are allowed');
+  console.log('  ✓ No cloud fallback');
+  console.log('  ✓ Missing local model falls back to deterministic-only scanning');
+  if (!admission.admitted) {
+    console.log(`  ↗ Memory admission check: ${admission.reason}`);
+  }
+  console.log('');
+  console.log('To use this configuration, export:');
+  console.log('  export AGENTIC_SECURITY_LLM_PRESET=ollama');
+  console.log(`  export AGENTIC_SECURITY_LLM_MODEL=${chosen}`);
+  if (cfg.config.host !== DEFAULT_OLLAMA_HOST) console.log(`  export AGENTIC_SECURITY_OLLAMA_HOST=${cfg.config.host}`);
+  console.log('');
+  console.log('Then verify with: agentic-security models doctor');
+  return 0;
+}
+
 async function cmdSetup(args) {
+  if (args.flags.llm) {
+    const provider = String(args.flags.llm).toLowerCase();
+    if (provider === 'ollama') return cmdSetupLlmOllama(args);
+    console.error(`agentic-security setup --llm: unsupported provider "${provider}" (only "ollama" runs a discovery/config flow here — other providers (anthropic/openai/gemini/local) configure via their AGENTIC_SECURITY_LLM_* env vars directly, no setup step needed).`);
+    return 4;
+  }
   const projectDir = path.resolve(args._[1] || '.');
   const commandsDir = path.join(projectDir, '.claude', 'commands');
   await fsp.mkdir(commandsDir, { recursive: true });
@@ -6353,6 +6809,16 @@ async function main() {
   checkNodeVersionOrExit();
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
+  // ollama-offline-prd.md §11.3/§10.2 — CLI flags win over every other
+  // configuration layer. A generic bridge here (rather than per-command
+  // flag parsing in cmdHunt/cmdSecure/etc.) means `--llm`/`--model` work
+  // the same way on any command without duplicating the same six lines —
+  // commands that don't consult an LLM provider simply never read the env
+  // vars this sets, so this is a no-op for them.
+  if (args.flags.llm) process.env.AGENTIC_SECURITY_LLM_PRESET = String(args.flags.llm);
+  if (args.flags.model) process.env.AGENTIC_SECURITY_LLM_MODEL = String(args.flags.model);
+  if (args.flags['allow-remote-ollama']) process.env.AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE = '1';
+  if (args.flags['ollama-host']) process.env.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags['ollama-host']);
   try {
     switch (cmd) {
       case 'scan':     process.exit(await cmdScan(args));
@@ -6370,6 +6836,8 @@ async function main() {
       case 'secure':   process.exit(await cmdSecure(args));
       case 'packs':    process.exit(await cmdPacks(args));
       case 'validator-cache': process.exit(await cmdValidatorCache(args));
+      case 'models':   process.exit(await cmdModels(args));
+      case 'ask':      process.exit(await cmdAsk(args));
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));
       case 'export':   process.exit(await cmdExport(args));

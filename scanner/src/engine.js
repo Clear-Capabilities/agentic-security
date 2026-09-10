@@ -190,6 +190,8 @@ import { demoteUnreachable } from './posture/reachability-filter.js';
 import { annotateExploitability, detectProjectContext } from './posture/exploitability.js';
 import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
+import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
+import { resolveProvider as resolveLlmProvider } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
 import { scanCrossLangGrpc } from './posture/cross-lang-grpc.js';
 import { scanCrossLangGraphql } from './posture/cross-lang-graphql.js';
@@ -9556,6 +9558,7 @@ function _deterministicFileTimings(timings) {
       _complianceReport = null, _exploitBundles = null, _pqcPlan = null,
       _licenseGraph = null, _attributions = null, _taxonomySummary = null;
   let _scanMeta = null;
+  let _aiAssistance = null;
   let _entrypointInventory = {};
   let _rootCauseSweep = null;
   let _proofCoverage = null;
@@ -9978,6 +9981,28 @@ function _deterministicFileTimings(timings) {
     // strict cache-cold reproducibility (premortem 2R2.3).
     const llmConcurrency = Math.max(1, parseInt(process.env.AGENTIC_SECURITY_LLM_CONCURRENCY || '1', 10));
     await llmValidateMany(finalFindings, { fileContents: fc, scanRoot, concurrency: llmConcurrency });
+    // ollama-offline-prd.md §26 — an "AI Assistance" summary. llmValidateMany
+    // attaches `.providerMatrix`/`.llmValidatorStatus` to the ARRAY itself
+    // (finalFindings), but applyValidatorVerdicts below returns a brand-new
+    // array via push() that never carries those over — so this data was
+    // computed and then silently discarded before reaching any consumer
+    // (report, CLI, SARIF). Capture it here, before that happens, whether or
+    // not the tier actually ran (a `model-disabled` summary is itself the
+    // honest "not configured" answer, not something to suppress).
+    try {
+      const status = finalFindings.llmValidatorStatus;
+      if (status && status.counts[MODEL_STATUS.DISABLED] !== status.total) {
+        const resolved = resolveLlmProvider({ role: 'validate' });
+        _aiAssistance = {
+          provider: resolved.ok ? resolved.config.provider : null,
+          model: resolved.ok ? resolved.config.model : null,
+          endpoint: resolved.ok ? resolved.config.endpoint : null,
+          egress: resolved.ok ? resolved.config.egress : null,
+          cloudFallback: false,
+          stages: { validate: stageSummaryFromModelStatus(status) },
+        };
+      }
+    } catch (_) { /* best-effort report annotation; never fails the scan */ }
     const { kept, dropped } = applyValidatorVerdicts(finalFindings);
     finalFindings = kept;
     for (const d of dropped) _suppressionLog.push({
@@ -10805,7 +10830,7 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,aiAssistance:_aiAssistance};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

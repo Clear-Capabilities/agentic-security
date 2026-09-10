@@ -26,6 +26,7 @@ links each, into the docs on this page:
 - [Fixing vulnerabilities](guides/fixing-vulnerabilities.md) — the triage → fix → verify loop
 - [Reading a finding's evidence](walkthroughs/finding-evidence.md) — every real field, explained one at a time
 - [Examples gallery](examples/README.md) — thirteen real findings, one screen each
+- [Local AI with Ollama](guides/ollama.md) — the fix/validate/hunt stages, running on your own machine
 
 **AppSec** — set the gate, read the evidence
 - [Scan health](walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
@@ -60,6 +61,7 @@ One page per job, each with copy-paste commands and expected output:
 - **[Data Flow Explorer](guides/data-flow-explorer.md)** — trace a sensitive field across your whole architecture
 - **[Finding provenance](guides/finding-provenance.md)** — which commit introduced a finding, and how confident that attribution is
 - **[Risk in dollars](guides/risk-dollars.md)** — the scenario-disclosure mechanism behind `riskDollars`
+- **[Local AI with Ollama](guides/ollama.md)** — run validation/fix/hunt against a model on your own machine, loopback-only, no cloud fallback
 
 ## Walkthroughs
 

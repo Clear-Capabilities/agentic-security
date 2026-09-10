@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.149.4",
-    "bundleSha256": "0472adbb55e8731badcaf55ec1ae1b31ade5346588db21843a4c6e3219618ad2",
-    "commit": "88a2fc41d41a25994e81080e6d95d114e5016d3a",
+    "engineVersion": "0.150.0",
+    "bundleSha256": "991b9abd5ebc34f301c32a334f8a2b8816187aede0d700e6b3021b34aed9600f",
+    "commit": "1b70a75ef77abc75e313e689c730975bc1010162",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-09-09T20:12:30.323Z",
+    "generatedAt": "2026-09-10T21:12:09.440Z",
     "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -576,7 +576,7 @@
         }
       },
       "scanner/src": {
-        "total": 481,
+        "total": 487,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -620,8 +620,11 @@
           "lineage/observation-store.js": 2,
           "lineage/recipient-registry.js": 1,
           "lineage/remediation.js": 6,
+          "llm-validator/agent-tools.js": 4,
           "llm-validator/consistency.js": 1,
           "llm-validator/index.js": 5,
+          "llm-validator/model-probe.js": 1,
+          "llm-validator/ollama-provider.js": 1,
           "lsp/server.js": 3,
           "mcp/audit.js": 8,
           "mcp/server.js": 1,
@@ -801,8 +804,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 321,
-    "d": 368
+    "n": 323,
+    "d": 373
   },
   "taintRecall": {
     "measuredThisRun": true,

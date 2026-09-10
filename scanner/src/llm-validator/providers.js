@@ -31,6 +31,7 @@
 // whose entire promise is that nothing leaves the machine.
 
 import { localEndpointConfig } from './local-endpoint.js';
+import { ollamaEndpointConfig, DEFAULT_OLLAMA_MODEL } from './ollama-provider.js';
 
 // Roles the pipeline dispatches under. Closed set on purpose — see above.
 export const ROLES = Object.freeze([
@@ -113,6 +114,7 @@ const DEFAULT_MODEL = {
   openai: 'gpt-4o-mini',
   gemini: 'gemini-2.0-flash',
   local: 'local-model',
+  ollama: DEFAULT_OLLAMA_MODEL,
 };
 
 function _envKey(role, suffix) {
@@ -152,6 +154,29 @@ export function resolveProvider({ role = 'validate', env = process.env } = {}) {
         provider: 'local', shape: SHAPES.generic, endpoint: r.config.endpoint,
         apiKey: r.config.apiKey, model: model || r.config.model,
         egress: 'loopback-only', role,
+      },
+    };
+  }
+
+  // 1b. Ollama — a DISTINCT preset from `local` (agentic-security-ollama-
+  //     offline-prd.md §3.3): `local` keeps its existing generic
+  //     `{prompt, model}` wire shape forever, so an existing BYO/local server
+  //     that expects exactly that shape never breaks. `ollama` speaks the
+  //     real native /api/chat protocol via ollama-provider.js instead of a
+  //     SHAPES entry — see that module's header for why. `config.shape` is
+  //     deliberately absent here; callers must check `provider === 'ollama'`
+  //     and delegate to ollama-provider.js rather than assume every resolved
+  //     config carries a SHAPES-style shape.
+  if (explicit === 'ollama') {
+    const r = ollamaEndpointConfig(env);
+    if (!r.ok) return { ok: false, reason: r.reason, code: r.code };
+    return {
+      ok: true,
+      config: {
+        provider: 'ollama', shape: null, endpoint: r.config.host,
+        apiKey: null, model: model || DEFAULT_OLLAMA_MODEL,
+        egress: r.config.egress, role,
+        ollama: r.config,
       },
     };
   }

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.149.4-blue)]()
+[![Version](https://img.shields.io/badge/version-0.150.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -185,6 +185,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 - [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) — inventory dependencies and AI components
 - [Responding to a leaked secret](docs/guides/leaked-secrets.md) — the rotation playbook
 - [Finding provenance](docs/guides/finding-provenance.md) — which commit introduced a finding
+- [Local AI with Ollama](docs/guides/ollama.md) — run validation/fix/hunt against a model on your own machine, no cloud calls
 
 **AppSec** — set the gate, read the evidence
 - [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
@@ -348,6 +349,28 @@ blast radius from a compromised node, or link data flow across two
 separately-scanned repositories (`federate declare`).
 
 Full walkthrough — [Code Boundaries guide](docs/guides/data-flow-explorer.md). Narrative, hop-by-hop companion using this exact `card_number` example — [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
+
+---
+
+### Run AI-assisted security analysis locally with Ollama
+
+The deterministic scanner never needed an LLM. For the *optional* reasoning
+stages — false-positive validation, patch synthesis, `hunt` — you can run a
+model entirely on your own machine instead of a cloud API:
+
+```bash
+ollama pull qwen3.5:4b
+export AGENTIC_SECURITY_LLM_PRESET=ollama
+export AGENTIC_SECURITY_LLM_MODEL=qwen3.5:4b
+agentic-security models doctor
+agentic-security secure .
+```
+
+Requests are refused before they're built if the endpoint isn't literal
+loopback, and a failed/unavailable Ollama call never silently falls back to a
+cloud provider — the finding just stays exactly as the deterministic scanner
+found it. Full guide, including the 8 GB / 16 GB RAM profiles and Gemma 4 —
+[Local AI with Ollama](docs/guides/ollama.md).
 
 ---
 

@@ -55,7 +55,12 @@ export async function disproveCandidate(candidate, opts = {}) {
   // missing endpoint always has, so it falls straight into this module's own
   // pre-existing rule — "silence never refutes" — with zero votes cast and no
   // prompt ever built for a denied endpoint.
-  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-disprove' });
+  // ollama-offline-prd.md §32 — the refutation panel is the PRD's `verify`
+  // role ("adversarial verification"): route it through role='verify' by
+  // default so AGENTIC_SECURITY_LLM_MODEL_VERIFY applies, same precedence
+  // (a caller-supplied opts.role still wins) hunter.js's lens routing uses.
+  const role = opts.role || 'verify';
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-disprove' });
 
   const votes = [];
   if (typeof llmInvoke === 'function') {

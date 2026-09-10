@@ -6,11 +6,66 @@
 //
 
 import { evaluateEgress } from '../egress/policy.js';
+import { resolveProvider } from '../llm-validator/providers.js';
+import { callOllamaChat } from '../llm-validator/ollama-provider.js';
 
 const DEFAULT_TIMEOUT_MS = 60000;
 
+// agentic-security-ollama-offline-prd.md §32 — hunt is one of the highest-
+// value initial Ollama use cases, and this is the single injected caller both
+// hunter.js and disprove.js already share (per this directory's CLAUDE.md:
+// "no other module may talk to an LLM directly"). Rather than give hunt its
+// own separate provider-resolution copy, `defaultLlmInvoke` now checks
+// `resolveProvider()` FIRST — but only when the caller hasn't already pinned
+// a literal `opts.endpoint` (the multi-endpoint consensus path in this same
+// file does exactly that, one resolved URL per voter, predating the provider
+// abstraction; that path must keep POSTing `{prompt}` to that literal URL
+// exactly as before, so it deliberately skips provider resolution).
+//
+// BACKWARD COMPATIBILITY: for every existing deployment that sets
+// AGENTIC_SECURITY_LLM_ENDPOINT with no PRESET, resolveProvider() resolves
+// that to `provider: 'byo'`, not `'ollama'` — so this function falls straight
+// through to the untouched raw-fetch path below, byte-identical to before.
+// Only `PRESET=ollama` takes the new branch. `'hunt'` is passed as the role
+// deliberately: it is not a member of providers.js's ROLES set, so
+// `resolveProvider` never picks up a role-specific override
+// (AGENTIC_SECURITY_LLM_MODEL_VALIDATE etc.) that was never meant to apply
+// to a hunt call — only the global AGENTIC_SECURITY_LLM_PRESET/_MODEL.
 export async function defaultLlmInvoke(prompt, opts = {}) {
   const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
+
+  if (!opts.endpoint) {
+    const resolved = resolveProvider({ role: opts.role || 'hunt' });
+    // A REFUSAL (a preset was explicitly configured and declined — e.g. a
+    // non-loopback Ollama host, or `local`'s own non-loopback refusal) must
+    // propagate here, not silently fall through to the legacy raw-endpoint
+    // path below. Falling through would mean a refused `ollama`/`local`
+    // config could still reach a network call via a leftover
+    // AGENTIC_SECURITY_LLM_ENDPOINT — exactly the bypass PRD §23.2 exists to
+    // prevent. `resolved.reason` is non-null ONLY for a genuine refusal;
+    // "nothing configured" always carries `reason: null` (providers.js).
+    if (!resolved.ok && resolved.reason) throw new Error(resolved.reason);
+    if (resolved.ok && resolved.config.provider === 'ollama') {
+      const oc = resolved.config.ollama;
+      const r = await callOllamaChat({
+        host: resolved.config.endpoint,
+        model: resolved.config.model,
+        messages: [{ role: 'user', content: prompt }],
+        keepAlive: oc?.keepAlive,
+        timeouts: oc
+          ? { connectTimeoutMs: oc.connectTimeoutMs, requestTimeoutMs: oc.requestTimeoutMs }
+          : { connectTimeoutMs: 3000, requestTimeoutMs: timeoutMs },
+      });
+      // PRD §23.4: never fall back to a cloud provider on failure — throwing
+      // here is exactly what the pre-existing raw-fetch path already does on
+      // a non-2xx/network error, and both hunter.js and disprove.js already
+      // treat a thrown/rejected llmInvoke as "this voter did not answer",
+      // never as "try something else".
+      if (!r.ok) throw new Error(`ollama ${r.code}: ${r.reason || 'request failed'}`);
+      return r.result.text;
+    }
+  }
+
   // The URL is the operator's own configured endpoint, read from an environment
   // variable they set. Reaching it is this module's entire purpose; no
   // request-controlled input exists anywhere on this path, and an operator who
@@ -157,6 +212,28 @@ export function resolveLlmInvokeWithDecision(opts = {}) {
     // for a caller that wants it.
     const decision = decisions.find(d => !d.allowed) || decisions[0] || null;
     return { invoke, decision, decisions };
+  }
+
+  // ollama-offline-prd.md §32: PRESET=ollama is a configured provider even
+  // when no raw AGENTIC_SECURITY_LLM_ENDPOINT is set — resolve it the exact
+  // same way llm-validator/index.js's endpointConfig() does, so hunt gets
+  // the SAME egress-evaluated-before-any-call treatment every other
+  // configured provider already gets here (this function's whole reason to
+  // exist, per the block comment above). Checked BEFORE the legacy
+  // raw-endpoint fallback below, matching providers.js's own precedence
+  // (ollama/local checked before a bare BYO endpoint).
+  const resolved = resolveProvider({ role: opts.role || 'hunt' });
+  if (!resolved.ok && resolved.reason) {
+    // A REFUSAL (non-loopback ollama/local, explicitly configured and
+    // declined) is itself a policy decision — same shape as an egress
+    // denial below, so callers' existing "read .reason when invoke is
+    // null" handling covers it without a new branch on their side.
+    return { invoke: null, decision: { allowed: false, reason: resolved.reason } };
+  }
+  if (resolved.ok && resolved.config.provider === 'ollama') {
+    const decision = evaluateEgress({ scanRoot: opts.scanRoot, purpose: opts.purpose || 'discovery', endpoint: resolved.config.endpoint, provider: 'ollama' });
+    if (!decision.allowed) return { invoke: null, decision };
+    return { invoke: (prompt) => defaultLlmInvoke(prompt, { timeoutMs: opts.timeoutMs, role: opts.role }), decision };
   }
 
   const endpoint = process.env.AGENTIC_SECURITY_LLM_ENDPOINT;

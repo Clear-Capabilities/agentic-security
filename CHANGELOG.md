@@ -10,6 +10,58 @@
 
 
 
+## 0.150.0 - Offline Ollama support: local models as a first-class provider, not a workaround
+
+Every LLM-backed role in this project (`validate`, `verify`, `explain`, `fix`, `poc`, `logic`, `hunt`)
+can now run entirely against a local Ollama install, with the same offline guarantee the existing
+`local` preset already made — nothing leaves the machine unless an operator explicitly opts into a
+remote host — and with zero change to `local`/BYO/`anthropic`/`openai`/`gemini` behavior.
+
+1. **New `ollama` provider** (`src/llm-validator/ollama-provider.js`), a distinct preset from `local`:
+   speaks Ollama's native `/api/chat` (messages array, JSON-schema-constrained structured output,
+   native tool calling, `think`, `keep_alive`), not the generic `{prompt, model}` shape `local` keeps
+   forever for its own existing consumers. Loopback enforced by default, with a named escape hatch
+   (`AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE=1`) for an explicitly-configured remote Ollama server —
+   never an accidental one. `AGENTIC_SECURITY_LLM_PRESET=ollama` plus per-role `_MODEL_<ROLE>`
+   overrides work exactly like every existing provider.
+2. **Every role now has a real call site.** `fix`/`explain`/`poc` had reserved env vars and nothing
+   that ever invoked them; each is real now: `agentic-security fix` falls back to an Ollama-proposed
+   patch when no deterministic one exists (verified through the exact same `applyVerifiedFix`
+   rescan/lint/test gate a deterministic patch already goes through — no new bypass path),
+   `agentic-security triage --explain <id>` and `--poc <id>` add read-only, narrative-only AI
+   assistance to triage, visually separated from deterministic evidence and forbidden from
+   fabricating exploit confirmation, cost, or compliance claims.
+3. **Model capability detection**, three layers, cheapest first: Ollama's own `/api/show` metadata
+   (authoritative where present), a non-authoritative family hint (Qwen 3.5, Qwen 3 Coder, Gemma 4,
+   FunctionGemma, and more — read from what's installed, never a hardcoded allowlist), and an opt-in
+   runtime probe (a real structured-output request, a real one-tool-call request) cached to disk by
+   Ollama version + model digest + model name so it never repeats needlessly. `agentic-security
+   models test <model>` runs it on demand; `models doctor`/`models inspect --probe` surface it.
+4. **RAM-aware model admission** — 8GB and 16GB (Qwen/Gemma) memory profiles, each trying its target
+   context, then a reduced context, then a smaller model, before ever falling back to
+   deterministic-only. Never falls back to a cloud provider under any circumstance.
+5. **A bounded local agent loop** (`agentic-security ask "<question>" [target]`): free-form Q&A with
+   read-only tool access (`read_file`, `list_files`, `search_code`, `read_finding`) confined to the
+   scan root, symlink-safe, secret-redacted, every tool result framed as untrusted data before it
+   re-enters the model's context. No write or execute tool exists in this cut. Hard-terminates after
+   12 tool-call iterations or a 5-minute wall clock, whichever comes first; a model requesting an
+   unregistered tool ends the loop immediately as a policy violation, not a retry.
+6. **`agentic-security setup --llm ollama [--model <name>]`** discovers the local server, lists
+   installed models, and picks a sane default for the detected RAM tier (or uses the one you name) —
+   noninteractive throughout, matching every other command in this CLI, rather than introducing this
+   codebase's first interactive prompt.
+7. **Per-scan AI Assistance reporting.** Fixed a real, pre-existing gap along the way: the validator's
+   own provider matrix and per-finding model-status summary were computed on every scan and then
+   silently discarded before reaching any report. `agentic-security scan` now prints provider, model,
+   egress mode, and validate-call success/refusal/failure counts when a model tier actually ran —
+   worded as "LLM inference was loopback-only," never as "this scan was fully offline," which is a
+   separate claim about the deterministic OSV/KEV/EPSS network path this line does not describe.
+
+Full docs at `docs/guides/ollama.md`. See `agentic-security-ollama-offline-prd.md`'s own Definition of
+Done section for the complete requirements matrix this release was built against; local benchmark
+suite / model-quality-history-by-digest (the PRD's own explicitly lowest-priority stretch scope) are
+the one tracked remainder.
+
 ## 0.149.4 - Fix 0.149.3's vendor/ gap: populate it in `prepare`, not only `build`
 
 0.149.3's `vendor/java-parser/` was only ever populated by `npm run build` (`scripts/vendor-java-parser.mjs`

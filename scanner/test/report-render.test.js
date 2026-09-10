@@ -330,3 +330,56 @@ test('Stage6: toHTML honors meta.startedAt for generatedAt (determinism parity w
   assert.equal(html1, html2, 'toHTML must be byte-identical across runs when meta.startedAt is fixed');
   assert.match(html1, /generated 1970-01-01T00:00:00\.000Z/);
 });
+
+// ── AI Assistance (ollama-offline-prd.md §26) ────────────────────────────
+
+test('toShipVerdict: no AI Assistance block when scan.aiAssistance is absent (deterministic-only scan unchanged)', () => {
+  const out = stripAnsi(toShipVerdict({ findings: [] }, { color: false }));
+  assert.doesNotMatch(out, /AI Assistance/);
+});
+
+test('toShipVerdict: renders provider/model/egress and a per-stage call breakdown', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only',
+      cloudFallback: false,
+      stages: { validate: { calls: 14, success: 12, refused: 0, failed: 2 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.match(out, /AI Assistance/);
+  assert.match(out, /Provider: ollama {3}Model: qwen3\.5:4b/);
+  assert.match(out, /LLM egress: loopback-only {3}Cloud fallback: disabled/);
+  assert.match(out, /validate {3}14 calls {3}success 12 {3}failed 2/);
+  assert.match(out, /LLM inference was loopback-only\./);
+  // §26's exact required wording is never used unless a full-airgap policy
+  // proves it — this block must never claim more than the model calls.
+  assert.doesNotMatch(out, /This entire scan was fully offline/);
+});
+
+test('toShipVerdict: a remote (non-loopback) egress gets the honest remote wording, never the loopback claim', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://10.0.0.5:11434', egress: 'remote', cloudFallback: false,
+      stages: { validate: { calls: 3, success: 3, refused: 0, failed: 0 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.match(out, /LLM inference used a remote endpoint\./);
+  assert.doesNotMatch(out, /loopback-only\./);
+});
+
+test('toShipVerdict: a refused-only stage (policy-blocked) renders without a "failed" segment', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only', cloudFallback: false,
+      stages: { validate: { calls: 0, success: 0, refused: 5, failed: 0 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.match(out, /validate {3}0 calls {3}success 0 {3}refused 5/);
+  assert.doesNotMatch(out, /validate.*failed/);
+});

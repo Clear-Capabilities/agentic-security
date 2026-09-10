@@ -64,3 +64,30 @@ export function summarizeModelStatus(findings) {
   }
   return { counts, notApplicable, total: (findings || []).length };
 }
+
+/**
+ * agentic-security-ollama-offline-prd.md §26 — turn a summarizeModelStatus()
+ * result into the "AI stages" call/success/refused/failed breakdown a report
+ * can render. Reuses the SAME five-state taxonomy every other status
+ * consumer already trusts, rather than adding new instrumentation: COMPLETED
+ * + MALFORMED + UNAVAILABLE are all outcomes of an ATTEMPTED call (the model
+ * was actually asked); POLICY_BLOCKED never reached the network at all, so
+ * it is reported as "refused" rather than folded into "calls". DISABLED
+ * (nothing configured) contributes to neither — a caller checks that
+ * separately (status.counts[MODEL_STATUS.DISABLED] === status.total means
+ * "don't render this stage at all").
+ *
+ * @returns {{calls:number, success:number, refused:number, failed:number}}
+ */
+export function stageSummaryFromModelStatus(status) {
+  const c = status?.counts || {};
+  const completed = c[MODEL_STATUS.COMPLETED] || 0;
+  const malformed = c[MODEL_STATUS.MALFORMED] || 0;
+  const unavailable = c[MODEL_STATUS.UNAVAILABLE] || 0;
+  return {
+    calls: completed + malformed + unavailable,
+    success: completed,
+    refused: c[MODEL_STATUS.POLICY_BLOCKED] || 0,
+    failed: malformed + unavailable,
+  };
+}

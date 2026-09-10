@@ -75,7 +75,16 @@ export async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
   const transcript = [];
   const lensKey = lens?.key || 'unknown';
   const base = { focusAreaId: focusArea.id, lens: lensKey, transcript };
-  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, purpose: 'discovery-hunter' });
+  // ollama-offline-prd.md §32 — "permit each refutation-panel member to be a
+  // separately configured local model" extends naturally to the hunter's own
+  // lenses: the `business-logic` lens is exactly the PRD's `logic` role
+  // ("cross-file business-logic reasoning"), so it alone routes through
+  // role='logic' (honoring AGENTIC_SECURITY_LLM_MODEL_LOGIC) while every
+  // other lens keeps the existing role='hunt' default — a caller-supplied
+  // `opts.role` still wins over both, same precedence resolveProvider
+  // already documents.
+  const role = opts.role || (lensKey === 'business-logic' ? 'logic' : 'hunt');
+  const { invoke: llmInvoke, decision: egressDecision } = resolveLlmInvokeWithDecision({ ...opts, role, purpose: 'discovery-hunter' });
 
   if (typeof llmInvoke !== 'function') {
     // FR-601: distinguish "policy denied a configured endpoint" from "nothing
