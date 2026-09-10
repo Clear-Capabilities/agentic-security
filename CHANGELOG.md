@@ -10,6 +10,16 @@
 
 
 
+## 0.150.1 - Fix 0.150.0's release-gate failure: @babel/core dependency currency
+
+0.150.0's tag push failed `release.yml`'s gate on its one network-dependent, deliberately-excluded-
+from-local-pre-push check: `scanner`'s `@babel/core` had drifted to 8.0.1 against a since-published
+8.0.5 on the registry — nothing to do with the Ollama work itself, just registry drift between when
+local verification ran and when the tag reached the clean CI runner. `npm install @babel/core@8.0.5`
+(already within the existing `^8.0.1` semver range) resolves it; `npm run test:smoke` and
+`npm run test:sast` (731 tests) both pass unchanged against the bump. No functional change beyond
+the dependency bump — see 0.150.0's entry for the actual release content.
+
 ## 0.150.0 - Offline Ollama support: local models as a first-class provider, not a workaround
 
 Every LLM-backed role in this project (`validate`, `verify`, `explain`, `fix`, `poc`, `logic`, `hunt`)
