@@ -32,6 +32,7 @@
 // never to this module's error path. See ollama-offline-egress.test.js.
 
 import { isLoopbackUrl } from './local-endpoint.js';
+import { recordOOMEvent } from './oom-feedback.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 export const DEFAULT_OLLAMA_MODEL = 'qwen3.5:4b';
@@ -44,6 +45,7 @@ const DEFAULT_MAX_CONCURRENCY = 1;
 // exactly one of these, never an ad-hoc string, so a caller (and a report) can
 // react on `code` instead of parsing prose.
 export const OLLAMA_ERROR_CODES = Object.freeze([
+  'ollama-disabled',
   'ollama-not-running',
   'ollama-unreachable',
   'ollama-non-loopback-refused',
@@ -69,6 +71,18 @@ function _err(code, reason) {
  * @returns {{ok:true, config:object} | {ok:false, code:string, reason:string}}
  */
 export function ollamaEndpointConfig(env = process.env) {
+  // Adversarial-review fix (2026-09): no kill switch existed for this whole
+  // provider, unlike AGENTIC_SECURITY_MCP_DISABLED for the MCP server —
+  // worse, a per-role AGENTIC_SECURITY_LLM_PRESET_<ROLE>=ollama override
+  // (providers.js's _forRole) can keep a role calling Ollama even after an
+  // operator unsets the GLOBAL preset during an incident, so "just unset
+  // the preset" is not reliably enough. This check is here, in the one
+  // function every Ollama call path resolves through (resolveProvider's
+  // ollama branch, and models/setup's direct callers), so it can never be
+  // bypassed by a role-specific override the operator forgot about.
+  if (env.AGENTIC_SECURITY_OLLAMA_DISABLED === '1') {
+    return _err('ollama-disabled', 'Ollama is disabled (AGENTIC_SECURITY_OLLAMA_DISABLED=1). Unset it to re-enable.');
+  }
   const rawHost = env.AGENTIC_SECURITY_OLLAMA_HOST || DEFAULT_OLLAMA_HOST;
   const host = String(rawHost).replace(/\/+$/, '');
   const allowRemote = env.AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE === '1';
@@ -220,7 +234,18 @@ export async function callOllamaChat({ host, model, messages, maxTokens, schema,
     if (res.status === 404 || /not found/i.test(detail)) {
       return _err('ollama-model-not-installed', `Model '${model}' is not installed. ${detail || ''}`.trim());
     }
-    if (/memory|oom/i.test(detail)) return _err('ollama-model-out-of-memory', detail || `HTTP ${res.status}`);
+    if (/memory|oom/i.test(detail)) {
+      // Adversarial-review fix (2026-09): this was a real, defined error
+      // code with no reactive call site anywhere — a wrong memory-admission
+      // estimate that caused a genuine OOM would repeat the identical wrong
+      // decision forever. Record it so recommendAdmission (model-
+      // capabilities.js) can warn on the NEXT admission check for this
+      // model on this machine, even though the underlying size/KV-cache
+      // ESTIMATES themselves stay uncalibrated (that needs real hardware
+      // variety a single machine's observed failures can't substitute for).
+      recordOOMEvent(model);
+      return _err('ollama-model-out-of-memory', detail || `HTTP ${res.status}`);
+    }
     if (/context/i.test(detail)) return _err('ollama-context-overflow', detail || `HTTP ${res.status}`);
     return _err('ollama-model-load-failed', detail || `HTTP ${res.status}`);
   }

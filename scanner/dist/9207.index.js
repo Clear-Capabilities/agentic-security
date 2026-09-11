@@ -10,8 +10,8 @@ export const modules = {
 /* harmony export */   verifyRunAttestation: () => (/* binding */ verifyRunAttestation)
 /* harmony export */ });
 /* unused harmony export ATTESTATION_CANONICALISATION */
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
-/* harmony import */ var _integrity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1130);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var _integrity_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(71130);
 // R4 — determinism as a contract.
 //
 // Determinism has been an implementation property of this engine (stable sorts,

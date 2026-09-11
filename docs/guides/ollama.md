@@ -231,6 +231,20 @@ one-tool-call request) unconditionally and caches the result — unlike
 whole point of `test` is to spend the inference time once and get a
 definitive answer.
 
+The cache is keyed by Ollama version + model digest + model name, and also
+carries a 30-day safety-net expiry — but neither is a substitute for a real
+re-check if you suspect a cached answer is wrong (a same-tag `ollama pull`
+doesn't always change the digest an older Ollama version reports, and a
+single-trial probe can occasionally land on an unlucky answer). Force a
+fresh probe with:
+
+```bash
+agentic-security models test qwen3.5:4b --force
+```
+
+`models doctor --probe --force` and `models inspect <model> --probe --force`
+support the same flag.
+
 ## 7. Hardware and context guidance
 
 `agentic-security` detects total/available RAM (`os.totalmem()`/`os.freemem()`)
@@ -327,10 +341,20 @@ requested model/context combination passed the memory admission check. If it
 didn't, use the recommended smaller model or context, or free memory.
 
 **Everything seems to work but nothing feels "smarter"** — check
-`models inspect <model>` for whether `structuredJson`/`tools` are actually
-detected for that model; these are family-hint defaults today (runtime
-capability probing is a planned follow-up), so an unusual model tag may report
-`unknown` rather than a confirmed yes/no.
+`models inspect <model> --probe` for whether `structuredJson`/`tools` are
+actually detected for that model at runtime; without `--probe` you're only
+seeing Ollama's own `/api/show` metadata or (failing that) a non-authoritative
+family-hint default, and an unusual model tag may report `unknown` rather
+than a confirmed yes/no either way.
+
+**I need to stop `agentic-security` from calling Ollama at all, right now** —
+set `AGENTIC_SECURITY_OLLAMA_DISABLED=1`. This is the one setting that
+overrides everything else, including a per-role
+`AGENTIC_SECURITY_LLM_PRESET_<ROLE>=ollama` override (`fix`/`explain`/`poc`/
+`verify`/`validate`/`logic` each support one independently of the global
+`AGENTIC_SECURITY_LLM_PRESET`) — unsetting only the global preset during an
+incident does NOT stop a role that has its own override configured, which is
+exactly the gap this flag exists to close. Unset it to re-enable.
 
 ## 12. Security/trust model
 
@@ -348,6 +372,30 @@ pipeline every provider goes through) apply identically to local models — a
 model running on your own machine is still an untrusted output source, just a
 private one.
 
+**Supply-chain trust boundary — read this before pulling a model from an
+unfamiliar source.** This project verifies its OWN npm dependencies with
+Sigstore-backed provenance (`src/sca/sigstore-verify.js`) — no equivalent
+exists, or can currently be added, for the Ollama binary or the model
+weights `ollama pull` downloads. Ollama's model registry does not publish
+Sigstore or comparable provenance attestations for models today, so this
+project has nothing to verify against even in principle. Concretely, this
+means:
+
+- `agentic-security` trusts whatever `ollama` binary is on `PATH` and
+  whatever model weights are already pulled — it never inspects, hashes, or
+  attests either.
+- A compromised `ollama` binary, or a maliciously-crafted model pulled from
+  a non-official registry/mirror, is outside every guarantee described in
+  this guide. The offline/loopback guarantees above are about NETWORK
+  egress from THIS tool once a model is running — they say nothing about
+  whether that model or the runtime executing it can be trusted in the
+  first place.
+- Practical mitigation, until upstream provenance exists: pull models only
+  from Ollama's own official library (`ollama pull <name>`, no custom
+  registry flags) and keep the `ollama` binary updated through your
+  platform's normal package manager, the same way you'd trust any other
+  locally-installed interpreter or runtime.
+
 ## 13. Model-quality benchmark
 
 A dedicated `agentic-security models benchmark <model>` command (scoring
@@ -356,3 +404,16 @@ and similar task-specific dimensions against this project's own corpus) is
 planned but not implemented in this release — see the PRD's Phase 3 scope.
 Until then, treat model choice as a tuning decision informed by the profiles
 above, not a benchmarked ranking.
+
+This is a different thing from **live contract testing**, which IS
+implemented: `AGENTIC_SECURITY_OLLAMA_E2E=1 npm run test:ollama-e2e`
+(scanner/test/ollama-e2e.test.js) runs against whatever Qwen/Gemma model you
+have installed and checks that the WIRE CONTRACT holds against a real
+server — valid structured output, a real tool-call round trip, prompt-
+injection resistance, graceful context-overflow handling — never whether the
+model's answers are any GOOD (that's the benchmark suite above, not yet
+built). Every other test in this codebase exercises the same logic against
+a fake in-process server standing in for Ollama, which is fast and hermetic
+but cannot catch a real model doing something a scripted reply never would.
+This tier is opt-in and slow by design (a cold local model can legitimately
+take minutes per call) — it is never run as part of normal CI.

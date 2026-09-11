@@ -2,14 +2,14 @@ export const id = 9503;
 export const ids = [9503];
 export const modules = {
 
-/***/ 9503:
+/***/ 89503:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   augmentReachabilityViaImports: () => (/* binding */ augmentReachabilityViaImports)
 /* harmony export */ });
 /* unused harmony exports languageOfFile, pkgMatches, extractJsImports, extractPyImports, extractImports, findImportAwareCallSites */
-/* harmony import */ var _sast_comment_strip_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(8455);
+/* harmony import */ var _sast_comment_strip_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(68455);
 // R7 — import-aware SCA function-reachability (JS/TS + Python).
 //
 // The default reachability pass (engine.js#markUsedVulnFunctions) is a regex

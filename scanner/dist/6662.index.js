@@ -10,7 +10,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   evaluateDriftPolicies: () => (/* binding */ evaluateDriftPolicies),
 /* harmony export */   loadDriftPolicies: () => (/* binding */ loadDriftPolicies)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 // drift-policy.js — M4 deliverable #8, sub-project 8b, Task 2: a
 // before/after drift-policy DSL evaluated against a GraphDiff (Task 1's
 // own output, see graph-diff.js).

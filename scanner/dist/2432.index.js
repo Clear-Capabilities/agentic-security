@@ -2,7 +2,7 @@ export const id = 2432;
 export const ids = [2432,5561];
 export const modules = {
 
-/***/ 5561:
+/***/ 75561:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -433,7 +433,7 @@ function evaluateVerificationEvidence(diff, requiredEvidenceFlowIds) {
 
 /***/ }),
 
-/***/ 2432:
+/***/ 52432:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -443,12 +443,12 @@ function evaluateVerificationEvidence(diff, requiredEvidenceFlowIds) {
 /* harmony export */   ledgerPaths: () => (/* binding */ ledgerPaths),
 /* harmony export */   readLedgerEvents: () => (/* binding */ readLedgerEvents)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1455);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7598);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(1174);
-/* harmony import */ var _lineage_remediation_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(5561);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51455);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77598);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(31174);
+/* harmony import */ var _lineage_remediation_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(75561);
 // remediation-ledger.js — M5 deliverable #6 (Blast-Radius: Remediation
 // Command Center, FR-507 + AC-31), Task 2 of the sub-project: the IMPURE
 // half. `../lineage/remediation.js` (Task 1) ships the pure RemediationItem

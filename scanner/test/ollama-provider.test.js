@@ -67,6 +67,23 @@ test('ollamaEndpointConfig defaults concurrency to 1 (PRD §22.1)', () => {
   assert.equal(r.config.maxConcurrency, 1);
 });
 
+// Adversarial-review fix (2026-09): a kill switch, checked in the ONE
+// function every Ollama call path resolves through, so a per-role
+// AGENTIC_SECURITY_LLM_PRESET_<ROLE>=ollama override can't survive an
+// incident-response "just unset the global preset" the way it used to.
+test('ollamaEndpointConfig: AGENTIC_SECURITY_OLLAMA_DISABLED=1 refuses unconditionally, even with an otherwise-valid loopback host', () => {
+  const r = ollamaEndpointConfig({ AGENTIC_SECURITY_OLLAMA_DISABLED: '1' });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'ollama-disabled');
+});
+
+test('resolveProvider: the kill switch overrides even a per-role override the global preset does not control', () => {
+  const env = { AGENTIC_SECURITY_LLM_PRESET_FIX: 'ollama', AGENTIC_SECURITY_OLLAMA_DISABLED: '1' };
+  const r = resolveProvider({ role: 'fix', env });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'ollama-disabled');
+});
+
 // ── buildOllamaChatBody / parseOllamaChatResponse — wire shape (§38) ────────
 
 test('buildOllamaChatBody produces the native /api/chat shape with messages, not {prompt}', () => {
@@ -191,6 +208,37 @@ test('callOllamaChat: model-not-installed maps to ollama-model-not-installed, ne
     assert.equal(r.code, 'ollama-model-not-installed');
   } finally {
     server.close();
+  }
+});
+
+// Adversarial-review fix (2026-09): ollama-model-out-of-memory was a real,
+// defined error code with zero call sites reacting to it — this is the one
+// choke point every Ollama HTTP call goes through, so recording here covers
+// every role (fix/explain/poc/validate/verify/logic/hunt/ask) uniformly.
+test('callOllamaChat: an out-of-memory response is recorded via oom-feedback.js, keyed by model', async () => {
+  const { priorOOMFor, _internals: oomInternals } = await import('../src/llm-validator/oom-feedback.js');
+  const fs = await import('node:fs');
+  const model = 'oom-provider-test-model:unique-' + Date.now();
+  const { server, host } = await startFakeOllama({
+    'POST /api/chat': (req, res) => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'model requires more system memory (8.2 GiB) than is currently available (4.1 GiB)' }));
+    },
+  });
+  try {
+    const r = await callOllamaChat({ host, model, messages: [{ role: 'user', content: 'x' }] });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'ollama-model-out-of-memory');
+    const prior = priorOOMFor(model);
+    assert.ok(prior, 'expected the OOM to be recorded');
+    assert.equal(prior.count, 1);
+  } finally {
+    server.close();
+    try {
+      const log = JSON.parse(fs.readFileSync(oomInternals.LOG_PATH, 'utf8'));
+      delete log[model];
+      fs.writeFileSync(oomInternals.LOG_PATH, JSON.stringify(log));
+    } catch {}
   }
 });
 

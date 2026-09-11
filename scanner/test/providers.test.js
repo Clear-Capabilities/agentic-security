@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  resolveProvider, buildProviderRequest, providerMatrix, ROLES, _internals,
+  resolveProvider, buildProviderRequest, providerMatrix, otherRemoteRoles, NO_CLOUD_FALLBACK, ROLES, _internals,
 } from '../src/llm-validator/providers.js';
 
 test('nothing configured is OFF, not an error', () => {
@@ -146,6 +146,86 @@ test('the matrix covers every declared role and says why a role is off', () => {
     assert.equal(m[role].provider, null);
     assert.match(m[role].reason, /not configured/);
   }
+});
+
+// --- otherRemoteRoles (AI Assistance report scope-disclosure fix) ---------
+
+test('NO_CLOUD_FALLBACK is a single asserted constant, not per-caller duplicated', () => {
+  assert.equal(NO_CLOUD_FALLBACK, true);
+});
+
+test('otherRemoteRoles: a role on ollama/local is excluded even when checking a different excludeRole', () => {
+  const env = { AGENTIC_SECURITY_LLM_PRESET: 'ollama' };
+  const others = otherRemoteRoles('validate', env);
+  assert.deepEqual(others, [], 'every role shares the same loopback ollama preset — nothing remote to disclose');
+});
+
+test('otherRemoteRoles: a per-role override to a cloud vendor is reported by name, excluded role is not', () => {
+  // 'hunt' is deliberately NOT in providers.js's ROLES (it has no per-role
+  // override at all — see discovery/hunter.js, which always falls back to
+  // the global preset). Use 'fix', which genuinely supports one.
+  const env = {
+    AGENTIC_SECURITY_LLM_PRESET: 'ollama',
+    AGENTIC_SECURITY_LLM_PRESET_FIX: 'anthropic',
+    AGENTIC_SECURITY_LLM_API_KEY_FIX: 'k',
+  };
+  const others = otherRemoteRoles('validate', env);
+  assert.ok(others.some((o) => o.role === 'fix' && o.provider === 'anthropic'), `expected fix/anthropic in ${JSON.stringify(others)}`);
+  assert.ok(!others.some((o) => o.role === 'validate'), 'the excluded role must never appear in its own disclosure list');
+});
+
+// Precise version of the same real scenario for 'hunt' specifically: since
+// hunt has no per-role preset of its own, it can only diverge from validate
+// via the GLOBAL preset while validate has ITS OWN override — not the other
+// way around. Still a genuine way for the two to disagree in practice.
+//
+// Second-round adversarial-review fix (2026-09): the FIRST version of this
+// test explicitly did NOT assert hunt by name ("hunt is not one of
+// providerMatrix's iterated ROLES... this documents the boundary rather
+// than asserting hunt by name") — because at the time, it genuinely never
+// could appear: `providerMatrix()` only iterates the six roles in `ROLES`,
+// and `hunt` is deliberately absent from that list. A fresh adversarial
+// pass caught that this made the exact scenario below — hunt following a
+// remote global preset while validate has its own local override — silently
+// invisible to the one mechanism built to catch it. `otherRemoteRoles` now
+// checks `hunt` explicitly (see `ROLES_WITH_NO_PER_ROLE_OVERRIDE`). This
+// test now asserts hunt BY NAME, where the original deliberately couldn't.
+test('otherRemoteRoles: hunt (no per-role override) is now reported by name when the GLOBAL preset is cloud and validate has its own ollama override', () => {
+  const env = {
+    AGENTIC_SECURITY_LLM_PRESET: 'anthropic',
+    ANTHROPIC_API_KEY: 'k',
+    AGENTIC_SECURITY_LLM_PRESET_VALIDATE: 'ollama',
+  };
+  const others = otherRemoteRoles('validate', env);
+  assert.ok(others.every((o) => o.role !== 'validate'));
+  assert.ok(others.some((o) => o.role === 'hunt' && o.provider === 'anthropic'),
+    `expected hunt/anthropic in ${JSON.stringify(others)} — hunt is the role most likely to silently diverge`);
+  assert.ok(others.every((o) => o.provider === 'anthropic'));
+});
+
+test('otherRemoteRoles: hunt is excluded from its OWN disclosure list when it is the scoped role', () => {
+  const env = {
+    AGENTIC_SECURITY_LLM_PRESET: 'anthropic',
+    ANTHROPIC_API_KEY: 'k',
+  };
+  const others = otherRemoteRoles('hunt', env);
+  assert.ok(!others.some((o) => o.role === 'hunt'), 'hunt must never appear in its own exclusion-scoped list');
+});
+
+test('otherRemoteRoles: hunt following the SAME loopback ollama global preset as every other role reports nothing', () => {
+  const env = { AGENTIC_SECURITY_LLM_PRESET: 'ollama' };
+  const others = otherRemoteRoles('validate', env);
+  assert.ok(!others.some((o) => o.role === 'hunt'), 'hunt sharing the loopback preset must not be flagged as remote');
+});
+
+test('otherRemoteRoles: never includes an API key', () => {
+  const env = {
+    AGENTIC_SECURITY_LLM_PRESET: 'ollama',
+    AGENTIC_SECURITY_LLM_PRESET_FIX: 'openai',
+    OPENAI_API_KEY: 'sk-super-secret-value',
+  };
+  const others = otherRemoteRoles('validate', env);
+  assert.ok(!JSON.stringify(others).includes('sk-super-secret-value'));
 });
 
 test('BYO keeps the LEGACY wire shape, not OpenAI\'s', () => {

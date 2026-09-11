@@ -2,7 +2,7 @@ export const id = 3736;
 export const ids = [3736];
 export const modules = {
 
-/***/ 1355:
+/***/ 23736:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -14,12 +14,12 @@ export const modules = {
 /* harmony export */   signPolicyBundle: () => (/* binding */ signPolicyBundle)
 /* harmony export */ });
 /* unused harmony exports POLICY_BUNDLE_SCHEMA, SCOPES, canonicalPolicyBytes, verifyPolicyBundle, computePolicyDrift */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8161);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7598);
-/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(8317);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(48161);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77598);
+/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(98317);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(31174);
 // Signed, portable policy bundles (assurance-hardening PRD FR-1001).
 //
 // "Support signed portable policy bundles with organization, repository, and

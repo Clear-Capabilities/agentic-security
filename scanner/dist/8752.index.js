@@ -2,7 +2,7 @@ export const id = 8752;
 export const ids = [8752];
 export const modules = {
 
-/***/ 8752:
+/***/ 58752:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -11,9 +11,9 @@ export const modules = {
 /* harmony export */   renderCacheStatusLine: () => (/* binding */ renderCacheStatusLine)
 /* harmony export */ });
 /* unused harmony export _internal */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8161);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(48161);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
 // Prompt-cache economics — turn Claude Code's own transcript usage into a
 // dollarized report: how much prompt caching saved, how much was wasted on
 // avoidable cache misses, and what invalidated the cache.

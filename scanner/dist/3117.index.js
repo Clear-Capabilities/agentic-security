@@ -2,7 +2,7 @@ export const id = 3117;
 export const ids = [3117];
 export const modules = {
 
-/***/ 3117:
+/***/ 93117:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -10,9 +10,9 @@ export const modules = {
 /* harmony export */   renderBadge: () => (/* binding */ renderBadge)
 /* harmony export */ });
 /* unused harmony exports badgeFromScanRoot, renderSvg, _internal */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 // Live SVG badge generator (v0.72).
 //
 // Every repo can drop a badge in its README pulling from the latest scan:

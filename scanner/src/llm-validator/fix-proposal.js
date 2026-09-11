@@ -52,7 +52,7 @@ export const FIX_PROPOSAL_ERROR = Object.freeze({
  * through the same redaction pipeline llm-validator/index.js's renderPrompt
  * uses, and is framed as data the model must never treat as instructions.
  */
-export function buildFixPrompt(finding, fileContent, scanRoot) {
+export function buildFixPrompt(finding, fileContent, scanRoot, rejectionFeedback) {
   const sterileContent = redactPayload({ text: String(fileContent || ''), filePath: finding.file, scanRoot }).text;
   return [
     'You are a security patch-synthesis component. You PROPOSE a fix; a separate',
@@ -71,6 +71,19 @@ export function buildFixPrompt(finding, fileContent, scanRoot) {
     sterileContent,
     '--- END-UNTRUSTED-FILE-CONTENT ---',
     '',
+    // Adversarial-review fix (2026-09): at temperature 0 with the SAME
+    // prompt, a rejected patch would very likely just reproduce itself on
+    // retry — this is the one place cmdFix's bounded one-time retry
+    // (bin/agentic-security.js) feeds the deterministic gate's OWN rejection
+    // reason back in, so the second attempt has an actual reason to differ
+    // rather than repeating the first attempt's exact mistake.
+    ...(rejectionFeedback ? [
+      'Your previous proposal for this exact finding was REJECTED by the',
+      'deterministic verification gate below. Propose a DIFFERENT fix that',
+      'avoids this specific problem — do not repeat the same patch:',
+      `  ${String(rejectionFeedback).slice(0, 500)}`,
+      '',
+    ] : []),
     'Propose a minimal, targeted fix for the finding above. Reply with ONLY a',
     'single JSON object, no other text:',
     '{"target_file": "<must exactly equal the File given above>", ' +
@@ -94,7 +107,7 @@ function validateFixResponse(obj, { file }) {
  * @returns {{ok:true, replacement, rationale, expectedSecurityEffect,
  *   testsToRun, model} | {ok:false, code, reason}}
  */
-export async function proposeOllamaFix({ finding, fileContent, scanRoot, env = process.env }) {
+export async function proposeOllamaFix({ finding, fileContent, scanRoot, env = process.env, rejectionFeedback } = {}) {
   const resolved = resolveProvider({ role: 'fix', env });
   if (!resolved.ok || resolved.config.provider !== 'ollama') {
     return {
@@ -112,7 +125,7 @@ export async function proposeOllamaFix({ finding, fileContent, scanRoot, env = p
     return { ok: false, code: FIX_PROPOSAL_ERROR.POLICY_BLOCKED, reason: decision.reason, egressDecision: decision };
   }
 
-  const prompt = buildFixPrompt(finding, fileContent, scanRoot);
+  const prompt = buildFixPrompt(finding, fileContent, scanRoot, rejectionFeedback);
   const oc = resolved.config.ollama;
   const r = await callOllamaStructured({
     host: resolved.config.endpoint,

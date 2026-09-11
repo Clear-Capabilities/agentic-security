@@ -2,7 +2,7 @@ export const id = 5350;
 export const ids = [5350];
 export const modules = {
 
-/***/ 5350:
+/***/ 55350:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -13,7 +13,7 @@ __webpack_require__.d(__webpack_exports__, {
 });
 
 // EXTERNAL MODULE: ./src/dataflow/privacy-taxonomy.js
-var privacy_taxonomy = __webpack_require__(7451);
+var privacy_taxonomy = __webpack_require__(47451);
 ;// CONCATENATED MODULE: ./src/lineage/decision-story.js
 // decision-story.js — M4 deliverable #7 (FR-501 §14, DFG-035): the
 // DecisionStory extension contract (§10.10) + a transparent 9-factor
@@ -223,13 +223,13 @@ function rankFlows(graph, opts = {}) {
 }
 
 // EXTERNAL MODULE: ./src/lineage/export-json.js
-var export_json = __webpack_require__(859);
+var export_json = __webpack_require__(40859);
 // EXTERNAL MODULE: ./src/lineage/ids.js
-var ids = __webpack_require__(5034);
+var ids = __webpack_require__(45034);
 // EXTERNAL MODULE: ./src/lineage/protection.js
-var protection = __webpack_require__(965);
+var protection = __webpack_require__(80965);
 // EXTERNAL MODULE: ./src/dataflow/privacy-governance.js
-var privacy_governance = __webpack_require__(3308);
+var privacy_governance = __webpack_require__(63308);
 ;// CONCATENATED MODULE: ./src/lineage/export-briefing.js
 // export-briefing.js — M4 deliverable #7 (FR-501 §14, DFG-035): Executive
 // Risk Story Mode. Turns Task 1's decision-story.js#rankFlows output into a

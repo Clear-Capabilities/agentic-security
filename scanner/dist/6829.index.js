@@ -12,10 +12,10 @@ export const modules = {
 /* harmony export */   signObligationEvidencePack: () => (/* binding */ signObligationEvidencePack),
 /* harmony export */   verifyObligationEvidencePack: () => (/* binding */ verifyObligationEvidencePack)
 /* harmony export */ });
-/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(8317);
-/* harmony import */ var _evidence_grade_wording_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3540);
-/* harmony import */ var _lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(859);
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7598);
+/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(98317);
+/* harmony import */ var _evidence_grade_wording_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(71159);
+/* harmony import */ var _lineage_export_json_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(40859);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77598);
 // obligation-evidence-pack.js — Milestone 4 sub-project 6c: signed,
 // versioned evidence packs for a Regulatory Obligation Overlay framework
 // evaluation (FR-504, PRD §10.10). Fourth sibling in the

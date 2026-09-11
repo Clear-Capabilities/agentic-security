@@ -2,17 +2,17 @@ export const id = 9824;
 export const ids = [9824];
 export const modules = {
 
-/***/ 9824:
+/***/ 49824:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   extractVulnFunctionsViaLLM: () => (/* binding */ extractVulnFunctionsViaLLM)
 /* harmony export */ });
 /* unused harmony export isLlmScaEnabled */
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(5712);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(45712);
 // LLM-assisted vulnerable function extraction for SCA findings.
 //
 // For CVEs without OSV ecosystem_specific data or GHSA fix commits,

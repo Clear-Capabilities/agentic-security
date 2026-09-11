@@ -2,17 +2,17 @@ export const id = 1700;
 export const ids = [1700];
 export const modules = {
 
-/***/ 1700:
+/***/ 31700:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   validateOsvFunctionsExist: () => (/* binding */ validateOsvFunctionsExist)
 /* harmony export */ });
 /* unused harmony export extractPythonPackageFunctions */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1421);
-/* harmony import */ var _ir_parser_py_cst_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(682);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31421);
+/* harmony import */ var _ir_parser_py_cst_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(40682);
 // Python package function extraction via the CST parser.
 //
 // Locates an installed Python package in site-packages or .venv,

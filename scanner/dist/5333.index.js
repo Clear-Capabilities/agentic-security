@@ -2,7 +2,7 @@ export const id = 5333;
 export const ids = [5333];
 export const modules = {
 
-/***/ 5333:
+/***/ 35333:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -10,13 +10,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   applyScaUpgrade: () => (/* binding */ applyScaUpgrade),
 /* harmony export */   planScaUpgrade: () => (/* binding */ planScaUpgrade)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1455);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7598);
-/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(1421);
-/* harmony import */ var node_util__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(7975);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51455);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77598);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(31421);
+/* harmony import */ var node_util__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(57975);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(31174);
 // SCA upgrade engine: dry-run plan + worktree-isolated apply.
 //
 // Phase 3 / Item 5 of the SCA improvement plan. The MCP `apply_fix` path

@@ -2,7 +2,7 @@ export const id = 4970;
 export const ids = [4970];
 export const modules = {
 
-/***/ 4970:
+/***/ 94970:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -11,7 +11,7 @@ export const modules = {
 /* harmony export */   evaluateAssuranceMode: () => (/* binding */ evaluateAssuranceMode)
 /* harmony export */ });
 /* unused harmony export _internals */
-/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4594);
+/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(34594);
 // Assurance modes (assurance-hardening PRD FR-204).
 //
 // "Add assurance modes: advisory, standard, and strict | Strict mode fails

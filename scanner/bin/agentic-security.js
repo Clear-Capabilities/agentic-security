@@ -1938,6 +1938,7 @@ async function cmdModels(args) {
   const { getModelCapabilities } = await import('../src/llm-validator/model-probe.js');
   const { resolveProvider } = await import('../src/llm-validator/providers.js');
   const wantsProbe = !!args.flags.probe;
+  const wantsForceProbe = !!args.flags.force;
 
   const envOverride = {};
   if (args.flags.host) envOverride.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags.host);
@@ -2004,12 +2005,16 @@ async function cmdModels(args) {
       } else {
         lines.push(`  ✗ memory admission FAILED — ${admission.reason}`);
       }
-      const capsResult = await getModelCapabilities({ host: cfg.config.host, model, probe: wantsProbe });
+      // Adversarial-review fix (2026-09): a memory estimate that has already
+      // been proven wrong by a real OOM on this machine no longer gets
+      // presented with the same unqualified confidence.
+      if (admission.priorOOMWarning) lines.push(`  ⚠ ${admission.priorOOMWarning}`);
+      const capsResult = await getModelCapabilities({ host: cfg.config.host, model, probe: wantsProbe, force: wantsForceProbe });
       const caps = capsResult.capabilities;
       const capSourceLabel = caps.source?.runtimeProbe ? (capsResult.cached ? 'runtime-probed, cached' : 'runtime-probed')
         : caps.source?.metadata ? 'Ollama metadata' : 'family hint — not runtime-probed';
       lines.push(`  chat=${caps.chat ? 'yes' : 'no'} structuredJson=${caps.structuredJson} tools=${caps.tools} (${capSourceLabel})`);
-      if (wantsProbe) lines.push(capsResult.cached ? '  ✓ capability probe cached' : '  ✓ capability probe ran (now cached)');
+      if (wantsProbe) lines.push(capsResult.cached ? '  ✓ capability probe cached (pass --force to re-probe)' : '  ✓ capability probe ran (now cached)');
       else lines.push('  ↗ run with --probe to runtime-verify structured output / tool calling (consumes inference time)');
     } else {
       lines.push('Default model: (none resolved)');
@@ -2039,7 +2044,7 @@ async function cmdModels(args) {
     if (!modelsResult.ok) { console.log(`✗ Ollama server is not reachable at ${cfg.config.host} (${modelsResult.code})`); return 1; }
     const info = modelsResult.models.find((m) => m.name === name);
     const family = classifyModelFamily(name);
-    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: wantsProbe });
+    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: wantsProbe, force: wantsForceProbe });
     const caps = capsResult.capabilities;
     const out = { name, installed: !!info, family, capabilities: caps, cached: capsResult.cached, metadata: info || null };
     if (args.flags.json) { writeStdout(JSON.stringify(out, null, 2) + '\n'); return 0; }
@@ -2073,19 +2078,25 @@ async function cmdModels(args) {
       console.log(`✗ Model '${name}' is not installed. Run \`ollama pull ${name}\` first.`);
       return 1;
     }
-    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: true });
+    // ollama-offline-prd.md premortem fix (2026-09): the capability cache has
+    // no expiry beyond its version+digest+name key, which doesn't always
+    // change on a same-tag re-pull — `--force` is the documented way to get
+    // a definitively fresh answer right now, mirroring the existing
+    // `validator-cache stats|gc --older-than <days>` convention rather than
+    // leaving `test` unable to ever overrule its own past result.
+    const capsResult = await getModelCapabilities({ host: cfg.config.host, model: name, probe: true, force: !!args.flags.force });
     const caps = capsResult.capabilities;
     if (args.flags.json) {
       writeStdout(JSON.stringify({ ok: true, name, capabilities: caps, cached: capsResult.cached }, null, 2) + '\n');
       return 0;
     }
-    console.log(`agentic-security models test ${name}`);
+    console.log(`agentic-security models test ${name}${args.flags.force ? ' --force' : ''}`);
     console.log('');
     console.log(`  chat:            ${caps.chat ? '✓ yes' : '✗ no'}`);
     console.log(`  structured JSON: ${caps.structuredJson === true ? '✓ yes' : caps.structuredJson === false ? '✗ no' : '? unknown (probe inconclusive)'}`);
     console.log(`  tool calling:    ${caps.tools === true ? '✓ yes' : caps.tools === false ? '✗ no' : '? unknown (probe inconclusive)'}`);
     if (caps.contextTokens) console.log(`  context window:  ${caps.contextTokens} tokens`);
-    console.log(`  ${capsResult.cached ? '✓ capability probe cached (already ran before)' : '✓ capability probe ran (now cached)'}`);
+    console.log(`  ${capsResult.cached ? '✓ capability probe cached (already ran before — pass --force to re-probe)' : '✓ capability probe ran (now cached)'}`);
     return 0;
   }
 
@@ -2109,7 +2120,7 @@ async function cmdModels(args) {
     return 1;
   }
 
-  console.error('Usage: agentic-security models <list|status|doctor|inspect <model>|test <model>|pull <model>> [--host <url>] [--json] [--probe]');
+  console.error('Usage: agentic-security models <list|status|doctor|inspect <model>|test <model>|pull <model>> [--host <url>] [--json] [--probe] [--force]');
   console.error(`Default Ollama host: ${DEFAULT_OLLAMA_HOST}`);
   return 4;
 }
@@ -2126,17 +2137,29 @@ async function cmdModels(args) {
 // "does this project have a rate limiter").
 async function cmdAsk(args) {
   const goal = args._[1];
-  if (!goal) { console.error('Usage: agentic-security ask "<question>" [target] [--max-iterations N]'); return 4; }
+  if (!goal) { console.error('Usage: agentic-security ask "<question>" [target] [--max-iterations N] [--timeout-ms N]'); return 4; }
   const target = path.resolve(args._[2] && !args._[2].startsWith('--') ? args._[2] : '.');
   const { runAgentLoop, AGENT_LOOP_ERROR, DEFAULT_MAX_TOOL_ITERATIONS } = await import('../src/llm-validator/agent-loop.js');
 
   const envOverride = {};
   if (args.flags.host) envOverride.AGENTIC_SECURITY_OLLAMA_HOST = String(args.flags.host);
   if (args.flags['allow-remote-ollama']) envOverride.AGENTIC_SECURITY_OLLAMA_ALLOW_REMOTE = '1';
+  // ollama-offline-prd.md premortem fix (2026-09): --timeout-ms sets the
+  // LOOP's own wall-clock budget (AGENTIC_SECURITY_LLM_AGENT_TIMEOUT_MS),
+  // which used to be a fixed 5 minutes no matter how high
+  // AGENTIC_SECURITY_LLM_TIMEOUT_MS (the PER-CALL timeout, still the right
+  // knob for "this one model reply is slow") was raised — raising only the
+  // per-call setting could not extend the loop, since a single slow call
+  // could already exceed the whole fixed budget.
+  if (args.flags['timeout-ms']) envOverride.AGENTIC_SECURITY_LLM_AGENT_TIMEOUT_MS = String(args.flags['timeout-ms']);
   const env = { ...process.env, ...envOverride };
   const maxToolIterations = args.flags['max-iterations'] ? parseInt(args.flags['max-iterations'], 10) : DEFAULT_MAX_TOOL_ITERATIONS;
 
   const r = await runAgentLoop({ goal, scanRoot: target, env, maxToolIterations });
+  // Adversarial-review fix (2026-09): surfaced here, not just in `models
+  // doctor`, so a user who never runs `doctor` still sees it before/after
+  // the exact command that would otherwise repeat a known OOM.
+  if (r.priorOOMWarning) console.log(`⚠ ${r.priorOOMWarning}`);
 
   if (!r.ok) {
     if (r.code === AGENT_LOOP_ERROR.NOT_CONFIGURED) {
@@ -2170,7 +2193,7 @@ async function cmdAsk(args) {
     console.log(`✗ Stopped after the ${DEFAULT_MAX_TOOL_ITERATIONS}-iteration bound without a final answer. Try narrowing the question.`);
     return 1;
   }
-  console.log('✗ Stopped: wall-clock timeout reached without a final answer.');
+  console.log('✗ Stopped: wall-clock timeout reached without a final answer. Try --timeout-ms <N> for a slow/cold-loading model (raising AGENTIC_SECURITY_LLM_TIMEOUT_MS alone does not extend this budget).');
   return 1;
 }
 
@@ -3475,12 +3498,51 @@ async function cmdFix(args) {
   const fixMeta = (approvedBy || approvalReason || patchAuthor)
     ? { approval: { approvedBy: approvedBy || '', reason: approvalReason || '' }, ...(patchAuthor ? { author: patchAuthor } : {}) }
     : null;
-  const result = await applyVerifiedFix({
+  let result = await applyVerifiedFix({
     scanRoot,
     finding: { file: f.file, id: f.id, stableId: f.stableId || null, ruleId: f.cwe || f.title, vuln: f.vuln || f.title },
     files: { [f.file]: newContent },
     fixMeta,
   });
+  // Adversarial-review fix (2026-09): an Ollama-sourced patch that gets
+  // rejected used to just fail outright — at temperature 0, a bare re-run
+  // of `fix` would almost certainly ask the identical question and get the
+  // identical bad patch back, burning the finite retry budget
+  // (applyVerifiedFix's own maxAttempts) with no chance of a better outcome.
+  // Orchestration test coverage: test/cli/fix-retry.test.js (real spawned
+  // CLI + fake Ollama server; statically skipped in this sandbox's
+  // documented child-process-loopback limitation, same as
+  // test/cli/models.test.js — flip to `test` where a spawned child can
+  // reach the parent's loopback server).
+  // ONE bounded retry, feeding the gate's own rejection reason back into the
+  // prompt so the model has an actual reason to propose something different
+  // — never more than one, matching this codebase's existing "exactly one
+  // retry" philosophy for model output elsewhere (callOllamaStructured's
+  // schema retry). A deterministic/stored patch (no ollamaFixMeta) is never
+  // retried — asking the same static template again cannot produce a
+  // different answer.
+  if (!result.ok && ollamaFixMeta && !result.budgetExceeded) {
+    console.log(`AI-assisted proposal was rejected (${result.reason}) — asking for one revised attempt...`);
+    const { proposeOllamaFix } = await import('../src/llm-validator/fix-proposal.js');
+    const retryProposal = await proposeOllamaFix({
+      finding: { file: f.file, line: f.line, vuln: f.vuln, cwe: f.cwe, severity: f.severity },
+      fileContent: originalContent,
+      scanRoot,
+      rejectionFeedback: result.reason,
+    });
+    if (retryProposal.ok) {
+      const retryResult = await applyVerifiedFix({
+        scanRoot,
+        finding: { file: f.file, id: f.id, stableId: f.stableId || null, ruleId: f.cwe || f.title, vuln: f.vuln || f.title },
+        files: { [f.file]: retryProposal.replacement },
+        fixMeta,
+      });
+      result = retryResult;
+      if (retryResult.ok) {
+        console.log(`  revised proposal accepted (rationale: ${retryProposal.rationale || 'n/a'})`);
+      }
+    }
+  }
   if (!result.ok) {
     console.error(`Refusing to apply: ${result.reason}`);
     if (result.budgetExceeded) console.error(`  (${result.attempts}/${result.maxAttempts} attempts already made for this finding)`);
@@ -3620,6 +3682,7 @@ async function cmdSetupLlmOllama(args) {
   if (!admission.admitted) {
     console.log(`  ↗ Memory admission check: ${admission.reason}`);
   }
+  if (admission.priorOOMWarning) console.log(`  ⚠ ${admission.priorOOMWarning}`);
   console.log('');
   console.log('To use this configuration, export:');
   console.log('  export AGENTIC_SECURITY_LLM_PRESET=ollama');

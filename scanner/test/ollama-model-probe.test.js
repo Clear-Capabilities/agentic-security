@@ -161,3 +161,96 @@ test('getModelCapabilities: probe:true runs both probes, merges as runtimeProbe,
     try { fs.unlinkSync(cachePath); } catch {}
   }
 });
+
+// Adversarial-review fix (2026-09): the cache used to be trusted forever
+// once written, with no way for a stale single-trial result to ever
+// self-correct short of manually deleting a file under
+// ~/.claude/agentic-security/. Two independent, separately-tested fixes.
+
+test('getModelCapabilities: a cache entry older than ttlMs is treated as a miss and re-probed', async () => {
+  const model = 'probe-ttl-test-model:unique-' + Date.now();
+  let chatCalls = 0;
+  const { server, host } = await startFakeOllama({
+    '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:ttl-test-digest' } }),
+    '/api/version': (req, res) => json(res, { version: '0.9.9-ttl' }),
+    '/api/chat': (req, res, body) => {
+      chatCalls++;
+      if (Array.isArray(body?.tools)) json(res, { message: { content: '', tool_calls: [] }, done: true });
+      else json(res, { message: { content: '{"ok": true}' }, done: true });
+    },
+  });
+  const cacheKey = _internals._cacheKey('0.9.9-ttl', 'sha256:ttl-test-digest', model);
+  const cachePath = _internals._cachePath(cacheKey);
+  try {
+    fs.mkdirSync(_internals.CACHE_DIR, { recursive: true });
+    // A stale entry, 60 days old, well past any reasonable TTL.
+    fs.writeFileSync(cachePath, JSON.stringify({ probedAt: Date.now() - 60 * 24 * 60 * 60 * 1000, result: { tools: true, structuredJson: true } }));
+    const r = await getModelCapabilities({ host, model, probe: true, ttlMs: 30 * 24 * 60 * 60 * 1000 });
+    assert.equal(r.cached, false, 'a stale entry must be re-probed, not trusted');
+    assert.ok(chatCalls > 0, 'a fresh probe must actually call /api/chat');
+  } finally { server.close(); try { fs.unlinkSync(cachePath); } catch {} }
+});
+
+test('getModelCapabilities: an entry within ttlMs is still trusted (the TTL is a backstop, not a replacement for the key)', async () => {
+  const model = 'probe-ttl-fresh-model:unique-' + Date.now();
+  let chatCalls = 0;
+  const { server, host } = await startFakeOllama({
+    '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:ttl-fresh-digest' } }),
+    '/api/version': (req, res) => json(res, { version: '0.9.9-ttl-fresh' }),
+    '/api/chat': (req, res) => { chatCalls++; json(res, { message: { content: '{}' }, done: true }); },
+  });
+  const cacheKey = _internals._cacheKey('0.9.9-ttl-fresh', 'sha256:ttl-fresh-digest', model);
+  const cachePath = _internals._cachePath(cacheKey);
+  try {
+    fs.mkdirSync(_internals.CACHE_DIR, { recursive: true });
+    fs.writeFileSync(cachePath, JSON.stringify({ probedAt: Date.now() - 1000, result: { tools: true, structuredJson: true } }));
+    const r = await getModelCapabilities({ host, model, probe: true, ttlMs: 30 * 24 * 60 * 60 * 1000 });
+    assert.equal(r.cached, true);
+    assert.equal(chatCalls, 0, 'a fresh cache entry must not trigger a re-probe');
+  } finally { server.close(); try { fs.unlinkSync(cachePath); } catch {} }
+});
+
+test('getModelCapabilities: force:true always re-probes, even with a fresh cache entry', async () => {
+  const model = 'probe-force-test-model:unique-' + Date.now();
+  let chatCalls = 0;
+  const { server, host } = await startFakeOllama({
+    '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:force-test-digest' } }),
+    '/api/version': (req, res) => json(res, { version: '0.9.9-force' }),
+    '/api/chat': (req, res, body) => {
+      chatCalls++;
+      if (Array.isArray(body?.tools)) json(res, { message: { content: '', tool_calls: [{ function: { name: 'echo_capability_probe', arguments: {} } }] }, done: true });
+      else json(res, { message: { content: '{"ok": true}' }, done: true });
+    },
+  });
+  const cacheKey = _internals._cacheKey('0.9.9-force', 'sha256:force-test-digest', model);
+  const cachePath = _internals._cachePath(cacheKey);
+  try {
+    fs.mkdirSync(_internals.CACHE_DIR, { recursive: true });
+    fs.writeFileSync(cachePath, JSON.stringify({ probedAt: Date.now(), result: { tools: false, structuredJson: false } }));
+    const r = await getModelCapabilities({ host, model, probe: true, force: true });
+    assert.equal(r.cached, false, 'force:true must never report a cache hit');
+    assert.ok(chatCalls > 0, 'force:true must actually re-run the probe');
+    assert.equal(r.capabilities.tools, true, 'the fresh (correct) result must win over the stale cached (wrong) one');
+  } finally { server.close(); try { fs.unlinkSync(cachePath); } catch {} }
+});
+
+test('getModelCapabilities: a pre-TTL cache file (bare result, no probedAt envelope) is still read as fresh — backward compatible', async () => {
+  const model = 'probe-legacy-cache-model:unique-' + Date.now();
+  let chatCalls = 0;
+  const { server, host } = await startFakeOllama({
+    '/api/show': (req, res) => json(res, { capabilities: ['completion'], details: { digest: 'sha256:legacy-digest' } }),
+    '/api/version': (req, res) => json(res, { version: '0.9.9-legacy' }),
+    '/api/chat': (req, res) => { chatCalls++; json(res, { message: { content: '{}' }, done: true }); },
+  });
+  const cacheKey = _internals._cacheKey('0.9.9-legacy', 'sha256:legacy-digest', model);
+  const cachePath = _internals._cachePath(cacheKey);
+  try {
+    fs.mkdirSync(_internals.CACHE_DIR, { recursive: true });
+    // The OLD cache shape, before this fix: a bare result object, no envelope.
+    fs.writeFileSync(cachePath, JSON.stringify({ tools: true, structuredJson: true }));
+    const r = await getModelCapabilities({ host, model, probe: true });
+    assert.equal(r.cached, true, 'a legacy bare-result cache file must still be read as a hit');
+    assert.equal(chatCalls, 0);
+    assert.equal(r.capabilities.tools, true);
+  } finally { server.close(); try { fs.unlinkSync(cachePath); } catch {} }
+});

@@ -2,7 +2,7 @@ export const id = 4399;
 export const ids = [4399];
 export const modules = {
 
-/***/ 4399:
+/***/ 54399:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -14,7 +14,8 @@ export const modules = {
 /* harmony export */   recommendAdmission: () => (/* binding */ recommendAdmission)
 /* harmony export */ });
 /* unused harmony exports KNOWN_MODEL_SIZE_GB, evaluateMemoryAdmission */
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(8161);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(48161);
+/* harmony import */ var _oom_feedback_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6782);
 // Model family hints, RAM-aware memory profiles, and the memory-admission
 // check for the Ollama provider (agentic-security-ollama-offline-prd.md
 // §13, §14, §15, §22.3, §30).
@@ -33,6 +34,7 @@ export const modules = {
 // fail BEFORE an OS-level OOM, not so it can claim an exact answer. Every
 // admission decision leaves a stated safety margin rather than trying to pack
 // memory to the byte.
+
 
 
 
@@ -217,7 +219,31 @@ function evaluateMemoryAdmission({
  * `{admitted:false}` with a human-readable explanation, which callers treat
  * as "run deterministic-only" (PRD §23.4).
  */
-function recommendAdmission({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
+function recommendAdmission(opts = {}) {
+  const result = _recommendAdmissionCore(opts);
+  // Adversarial-review fix (2026-09): a memory-admission ESTIMATE that
+  // actually caused a real OOM (ollama-provider.js's callOllamaChat now
+  // records this via oom-feedback.js) used to have no way to affect a
+  // future admission decision for the SAME model on the SAME machine — the
+  // exact same "admitted: true" would repeat forever. This does not
+  // recalibrate the underlying estimate (that needs real hardware variety
+  // one machine's observed failures can't substitute for); it attaches an
+  // honest warning so the decision is no longer presented with unqualified
+  // confidence.
+  const chosenModel = result.model || opts.requestedModel;
+  const prior = chosenModel ? (0,_oom_feedback_js__WEBPACK_IMPORTED_MODULE_1__/* .priorOOMFor */ .NL)(chosenModel) : null;
+  if (prior) {
+    return {
+      ...result,
+      priorOOMWarning: `'${chosenModel}' has previously failed with an out-of-memory error on this machine ` +
+        `(${prior.count} time${prior.count === 1 ? '' : 's'}, most recently ${new Date(prior.lastAt).toISOString()}). ` +
+        'The memory estimate below may be optimistic for your hardware.',
+    };
+  }
+  return result;
+}
+
+function _recommendAdmissionCore({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
   const p = MEMORY_PROFILES[profile];
   if (!p) return { admitted: false, reason: `unknown memory profile '${profile}'` };
 

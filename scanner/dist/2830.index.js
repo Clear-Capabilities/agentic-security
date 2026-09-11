@@ -10,9 +10,9 @@ export const modules = {
 /* harmony export */   summarizeHarnessPresence: () => (/* binding */ summarizeHarnessPresence)
 /* harmony export */ });
 /* unused harmony export HARNESS_DIRS */
-/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1455);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(8161);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(51455);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(48161);
 // Multi-harness configuration discovery.
 //
 // Finds every agent-harness configuration directory the user has, both at

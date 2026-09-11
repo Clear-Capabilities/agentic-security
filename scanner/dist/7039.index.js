@@ -2,7 +2,7 @@ export const id = 7039;
 export const ids = [7039,4399];
 export const modules = {
 
-/***/ 4399:
+/***/ 54399:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -14,7 +14,8 @@ export const modules = {
 /* harmony export */   recommendAdmission: () => (/* binding */ recommendAdmission)
 /* harmony export */ });
 /* unused harmony exports KNOWN_MODEL_SIZE_GB, evaluateMemoryAdmission */
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(8161);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(48161);
+/* harmony import */ var _oom_feedback_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6782);
 // Model family hints, RAM-aware memory profiles, and the memory-admission
 // check for the Ollama provider (agentic-security-ollama-offline-prd.md
 // §13, §14, §15, §22.3, §30).
@@ -33,6 +34,7 @@ export const modules = {
 // fail BEFORE an OS-level OOM, not so it can claim an exact answer. Every
 // admission decision leaves a stated safety margin rather than trying to pack
 // memory to the byte.
+
 
 
 
@@ -217,7 +219,31 @@ function evaluateMemoryAdmission({
  * `{admitted:false}` with a human-readable explanation, which callers treat
  * as "run deterministic-only" (PRD §23.4).
  */
-function recommendAdmission({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
+function recommendAdmission(opts = {}) {
+  const result = _recommendAdmissionCore(opts);
+  // Adversarial-review fix (2026-09): a memory-admission ESTIMATE that
+  // actually caused a real OOM (ollama-provider.js's callOllamaChat now
+  // records this via oom-feedback.js) used to have no way to affect a
+  // future admission decision for the SAME model on the SAME machine — the
+  // exact same "admitted: true" would repeat forever. This does not
+  // recalibrate the underlying estimate (that needs real hardware variety
+  // one machine's observed failures can't substitute for); it attaches an
+  // honest warning so the decision is no longer presented with unqualified
+  // confidence.
+  const chosenModel = result.model || opts.requestedModel;
+  const prior = chosenModel ? (0,_oom_feedback_js__WEBPACK_IMPORTED_MODULE_1__/* .priorOOMFor */ .NL)(chosenModel) : null;
+  if (prior) {
+    return {
+      ...result,
+      priorOOMWarning: `'${chosenModel}' has previously failed with an out-of-memory error on this machine ` +
+        `(${prior.count} time${prior.count === 1 ? '' : 's'}, most recently ${new Date(prior.lastAt).toISOString()}). ` +
+        'The memory estimate below may be optimistic for your hardware.',
+    };
+  }
+  return result;
+}
+
+function _recommendAdmissionCore({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
   const p = MEMORY_PROFILES[profile];
   if (!p) return { admitted: false, reason: `unknown memory profile '${profile}'` };
 
@@ -263,19 +289,19 @@ function recommendAdmission({ profile, freeBytes, requestedContextTokens, reques
 
 /***/ }),
 
-/***/ 7039:
+/***/ 27039:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getModelCapabilities: () => (/* binding */ getModelCapabilities)
 /* harmony export */ });
-/* unused harmony exports capabilitiesFromShowMetadata, probeStructuredOutput, probeToolCalling, _internals */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(8161);
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(7598);
-/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3837);
-/* harmony import */ var _model_capabilities_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4399);
+/* unused harmony exports DEFAULT_CACHE_TTL_MS, capabilitiesFromShowMetadata, probeStructuredOutput, probeToolCalling, _internals */
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(48161);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(77598);
+/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(23837);
+/* harmony import */ var _model_capabilities_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(54399);
 // PRD §13.2 — the three-layer model capability detection strategy.
 //
 // LAYER A (metadata) is the cheapest and most authoritative: Ollama's own
@@ -296,10 +322,21 @@ function recommendAdmission({ profile, freeBytes, requestedContextTokens, reques
 // CACHE KEY = Ollama version + model digest + model name (PRD §13.2 exactly).
 // Digest is load-bearing: `ollama pull` replacing a tag's underlying weights
 // must invalidate the cache even though the name/tag string is unchanged.
-// Persisted forever (no TTL) because the key itself is what expires the
-// entry — a version/digest bump makes a new key, not a stale hit on the old
-// one. Same disk-cache directory convention as sca/sigstore-verify.js and
+// Same disk-cache directory convention as sca/sigstore-verify.js and
 // engine.js's OSV cache (`~/.claude/agentic-security/<name>/`).
+//
+// TTL + force-reprobe (adversarial-review fix, 2026-09). The key-based
+// invalidation above is real but not complete: this module's own comment
+// used to claim the entry is safe "forever" because the key changes when
+// the model does — but `/api/show` doesn't expose a digest on every Ollama
+// version (falls back to model NAME alone then, a few lines below), so a
+// same-tag re-pull, or simply an unlucky single-trial probe the first time
+// (see probeStructuredOutput/probeToolCalling's own single-call design),
+// had no way to ever self-correct short of a user manually deleting a file
+// under `~/.claude/agentic-security/`. Two independent fixes, since either
+// alone leaves a real gap: a default TTL as a safety net for the case
+// nobody notices, and an explicit `force` option (`models test --force`)
+// for the case someone DOES suspect a stale answer and wants it right now.
 
 
 
@@ -310,18 +347,38 @@ function recommendAdmission({ profile, freeBytes, requestedContextTokens, reques
 
 const CACHE_DIR = node_path__WEBPACK_IMPORTED_MODULE_1__.join(node_os__WEBPACK_IMPORTED_MODULE_2__.homedir(), '.claude', 'agentic-security', 'ollama-capability-cache');
 
+// Default safety-net TTL: 30 days. Not the primary invalidation mechanism
+// (the key is) — a backstop for the cases the key can't see: a same-tag
+// re-pull on an Ollama version that doesn't expose a digest, or a single
+// unlucky probe trial that happened to pass/fail against the model's true
+// behavior. Overridable for anyone who wants a tighter or looser bound.
+const DEFAULT_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 function _ensureCacheDir() { try { node_fs__WEBPACK_IMPORTED_MODULE_0__.mkdirSync(CACHE_DIR, { recursive: true }); } catch {} }
 function _cacheKey(ollamaVersion, modelDigest, modelName) {
   return node_crypto__WEBPACK_IMPORTED_MODULE_3__.createHash('sha256').update(`${ollamaVersion}::${modelDigest}::${modelName}`).digest('hex');
 }
 function _cachePath(key) { return node_path__WEBPACK_IMPORTED_MODULE_1__.join(CACHE_DIR, key + '.json'); }
 
-function _readProbeCache(key) {
-  try { return JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(_cachePath(key), 'utf8')); } catch { return null; }
+/**
+ * @returns {object|null} the cached probe RESULT (not the envelope), or
+ *   `null` on a miss, a parse failure, OR an entry older than `ttlMs`.
+ */
+function _readProbeCache(key, ttlMs) {
+  let envelope;
+  try { envelope = JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(_cachePath(key), 'utf8')); } catch { return null; }
+  // Backward-compatible with a pre-TTL cache file that was just the bare
+  // result object (no `probedAt`) — treat an entry with no timestamp as
+  // fresh rather than discarding every cache written before this fix.
+  if (envelope && typeof envelope === 'object' && 'probedAt' in envelope && 'result' in envelope) {
+    if (Number.isFinite(ttlMs) && ttlMs > 0 && Date.now() - envelope.probedAt > ttlMs) return null;
+    return envelope.result;
+  }
+  return envelope;
 }
 function _writeProbeCache(key, value) {
   _ensureCacheDir();
-  try { node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(_cachePath(key), JSON.stringify(value)); } catch {}
+  try { node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(_cachePath(key), JSON.stringify({ probedAt: Date.now(), result: value })); } catch {}
 }
 
 /**
@@ -424,9 +481,16 @@ function _mergeLayer(base, overlay, sourceFlag) {
  * should use, since Layer C spends real inference time on the user's
  * machine.
  *
+ * `force: true` (adversarial-review fix, 2026-09 — `models test --force`)
+ * skips reading the cache — always runs a fresh probe and overwrites
+ * whatever was there. `ttlMs` (default 30 days, `DEFAULT_CACHE_TTL_MS`)
+ * bounds how long a cached entry is trusted without either; pass `0`/
+ * `Infinity` to disable the TTL safety net entirely and rely on the key
+ * alone, matching this module's original design intent.
+ *
  * @returns {{ok:true, capabilities:object, cached:boolean} | {ok:false, code, reason}}
  */
-async function getModelCapabilities({ host, model, env = process.env, probe = false, timeouts, keepAlive } = {}) {
+async function getModelCapabilities({ host, model, env = process.env, probe = false, force = false, ttlMs = DEFAULT_CACHE_TTL_MS, timeouts, keepAlive } = {}) {
   let capabilities = (0,_model_capabilities_js__WEBPACK_IMPORTED_MODULE_5__.capabilitiesFromFamilyHint)(model);
 
   const show = await (0,_ollama_provider_js__WEBPACK_IMPORTED_MODULE_4__/* .showOllamaModel */ .$G)({ host, model, timeouts });
@@ -447,7 +511,7 @@ async function getModelCapabilities({ host, model, env = process.env, probe = fa
   const modelDigest = show.ok && show.details?.digest ? show.details.digest : 'unknown-digest';
   const cacheKey = _cacheKey(ollamaVersion, modelDigest, model);
 
-  const cached = _readProbeCache(cacheKey);
+  const cached = force ? null : _readProbeCache(cacheKey, ttlMs);
   if (cached) {
     return { ok: true, capabilities: _mergeLayer(capabilities, cached, 'runtimeProbe'), cached: true };
   }

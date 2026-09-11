@@ -2,16 +2,16 @@ export const id = 3518;
 export const ids = [3518];
 export const modules = {
 
-/***/ 3518:
+/***/ 83518:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   computeGraphDiff: () => (/* binding */ computeGraphDiff)
 /* harmony export */ });
 /* unused harmony exports WATCHED_FLOW_FIELDS, validateGraphDiff */
-/* harmony import */ var _graph_snapshot_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(373);
-/* harmony import */ var _ids_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5034);
-/* harmony import */ var _dataflow_privacy_governance_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3308);
+/* harmony import */ var _graph_snapshot_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(30373);
+/* harmony import */ var _ids_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45034);
+/* harmony import */ var _dataflow_privacy_governance_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(63308);
 // graph-diff.js — M4 deliverable #9 (FR-503 §14, DFG-022), sub-project
 // 8b, Task 1: the GraphDiff extension contract + computeGraphDiff + honest
 // change-cause classification.

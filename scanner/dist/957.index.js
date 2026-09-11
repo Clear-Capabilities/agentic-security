@@ -10,10 +10,10 @@ export const modules = {
 /* harmony export */   proposeOllamaExplanation: () => (/* binding */ proposeOllamaExplanation)
 /* harmony export */ });
 /* unused harmony export buildExplainPrompt */
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4831);
-/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5712);
-/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(8947);
-/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3837);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45712);
+/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
+/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);
 // Ollama-assisted plain-English finding explanation (PRD §34). Unlike `fix`,
 // this role never proposes anything that gets written to disk or re-verified
 // — it produces narrative text only, so the safety property here is

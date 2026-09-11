@@ -2,7 +2,7 @@ export const id = 5051;
 export const ids = [5051,6944];
 export const modules = {
 
-/***/ 5051:
+/***/ 55051:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -14,19 +14,19 @@ __webpack_require__.d(__webpack_exports__, {
 // UNUSED EXPORTS: DEFAULT_IDLE_TIMEOUT_MS, MAX_REQUEST_BODY_BYTES, TOKEN_HEADER
 
 // EXTERNAL MODULE: external "node:http"
-var external_node_http_ = __webpack_require__(7067);
+var external_node_http_ = __webpack_require__(37067);
 // EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __webpack_require__(3024);
+var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(6760);
+var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/server/security.js
-var security = __webpack_require__(6944);
+var security = __webpack_require__(86944);
 // EXTERNAL MODULE: ./src/server/routes.js
-var routes = __webpack_require__(4268);
+var routes = __webpack_require__(84268);
 // EXTERNAL MODULE: external "node:url"
-var external_node_url_ = __webpack_require__(3136);
+var external_node_url_ = __webpack_require__(73136);
 // EXTERNAL MODULE: ./src/shared/frontend-root.js
-var frontend_root = __webpack_require__(1185);
+var frontend_root = __webpack_require__(61185);
 ;// CONCATENATED MODULE: ./src/server/static-assets.js
 // static-assets.js — Milestone 3, sub-project Wire.
 //
@@ -503,7 +503,7 @@ function createExploreServer({
 
 /***/ }),
 
-/***/ 4268:
+/***/ 84268:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -515,7 +515,7 @@ function createExploreServer({
 /* harmony export */   rR: () => (/* binding */ handleQuery)
 /* harmony export */ });
 /* unused harmony export wrapResponse */
-/* harmony import */ var _lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(859);
+/* harmony import */ var _lineage_export_json_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(40859);
 // routes.js — Milestone 3, sub-project Server, increment 1.
 //
 // Five pure GET-endpoint handlers, each `(graph, ...) -> {status, body}`.
@@ -649,7 +649,7 @@ function handleFlow(graph, id) {
 
 /***/ }),
 
-/***/ 6944:
+/***/ 86944:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -658,7 +658,7 @@ function handleFlow(graph, id) {
 /* harmony export */   Xv: () => (/* binding */ CSP_HEADER_VALUE),
 /* harmony export */   generateSessionToken: () => (/* binding */ generateSessionToken)
 /* harmony export */ });
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 // security.js — Milestone 3, sub-project Server, increment 1.
 //
 // Security primitives for the `explore` loopback HTTP server: session-token
@@ -774,14 +774,14 @@ const CSP_HEADER_VALUE = "default-src 'none'; frame-ancestors 'none'";
 
 /***/ }),
 
-/***/ 1185:
+/***/ 61185:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   D: () => (/* binding */ resolveFrontendRoot)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
 // frontend-root.js — locates the Data Flow Explorer's `frontend/` assets
 // (index.html/src/styles) regardless of whether this code is running:
 //   - unbundled, straight out of scanner/src/ or scanner/scripts/ (dev/test —

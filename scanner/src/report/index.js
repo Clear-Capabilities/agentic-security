@@ -1606,19 +1606,30 @@ export function toShipVerdict(scan, options = {}) {
   // requirement) — this line describes the model calls, not deterministic
   // network access elsewhere in the scan (OSV/KEV/EPSS), which is a
   // different claim this block must not blur.
+  //
+  // Adversarial-review finding (2026-09): the header used to carry no scope
+  // qualifier and "Cloud fallback: disabled" was a hardcoded string, not
+  // read from `_ai` at all — both fixed here. The header now names the ONE
+  // role this block actually measured (`scopeRole`), and a role that
+  // resolves to a remote/cloud provider is called out explicitly rather than
+  // left for the reader to wrongly generalize the loopback claim onto.
   const _ai = scan.aiAssistance;
   if (_ai) {
     lines.push('');
-    lines.push(c('  AI Assistance', BOLD));
+    lines.push(c(`  AI Assistance (${_ai.scopeRole || 'validate'} role only)`, BOLD));
     lines.push(c(`    Provider: ${_ai.provider || 'unknown'}   Model: ${_ai.model || 'unknown'}`, DIM));
-    lines.push(c(`    LLM egress: ${_ai.egress || 'unknown'}   Cloud fallback: disabled`, DIM));
+    lines.push(c(`    LLM egress: ${_ai.egress || 'unknown'}   Cloud fallback: ${_ai.cloudFallback ? 'enabled' : 'disabled'}`, DIM));
     for (const [stage, s] of Object.entries(_ai.stages || {})) {
       const parts = [`${s.calls} call${s.calls === 1 ? '' : 's'}`, `success ${s.success}`];
       if (s.refused) parts.push(`refused ${s.refused}`);
       if (s.failed) parts.push(`failed ${s.failed}`);
       lines.push(c(`    ${stage.padEnd(10)} ${parts.join('   ')}`, DIM));
     }
-    lines.push(c(`    ${_ai.egress === 'loopback-only' ? 'LLM inference was loopback-only.' : 'LLM inference used a remote endpoint.'}`, DIM));
+    lines.push(c(`    ${_ai.egress === 'loopback-only' ? `LLM inference for the ${_ai.scopeRole || 'validate'} role was loopback-only.` : `LLM inference for the ${_ai.scopeRole || 'validate'} role used a remote endpoint.`}`, DIM));
+    if (Array.isArray(_ai.otherRolesRemote) && _ai.otherRolesRemote.length > 0) {
+      const named = _ai.otherRolesRemote.map((r) => `${r.role} (${r.provider})`).join(', ');
+      lines.push(c(`    ⚠ other role(s) configured for a remote provider, NOT covered above: ${named}`, DIM));
+    }
   }
   // Coverage-honesty line (#5/#6): show the scan's blind spots — which
   // languages got flow analysis vs pattern-only, what was skipped, and how

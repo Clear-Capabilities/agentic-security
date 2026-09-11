@@ -2,7 +2,7 @@ export const id = 6257;
 export const ids = [6257];
 export const modules = {
 
-/***/ 6257:
+/***/ 66257:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -10,10 +10,10 @@ export const modules = {
 /* harmony export */   proposeOllamaFix: () => (/* binding */ proposeOllamaFix)
 /* harmony export */ });
 /* unused harmony export buildFixPrompt */
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4831);
-/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5712);
-/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(8947);
-/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3837);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45712);
+/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
+/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);
 // Ollama-assisted patch proposal for the `fix` role, used only when no
 // deterministic/stored patch exists (agentic-security-ollama-offline-prd.md
 // §33). Before this module, `fix`/`poc`/`explain`/`logic` had NO call site
@@ -68,7 +68,7 @@ const FIX_PROPOSAL_ERROR = Object.freeze({
  * through the same redaction pipeline llm-validator/index.js's renderPrompt
  * uses, and is framed as data the model must never treat as instructions.
  */
-function buildFixPrompt(finding, fileContent, scanRoot) {
+function buildFixPrompt(finding, fileContent, scanRoot, rejectionFeedback) {
   const sterileContent = (0,_egress_redact_js__WEBPACK_IMPORTED_MODULE_0__/* .redactPayload */ .cy)({ text: String(fileContent || ''), filePath: finding.file, scanRoot }).text;
   return [
     'You are a security patch-synthesis component. You PROPOSE a fix; a separate',
@@ -87,6 +87,19 @@ function buildFixPrompt(finding, fileContent, scanRoot) {
     sterileContent,
     '--- END-UNTRUSTED-FILE-CONTENT ---',
     '',
+    // Adversarial-review fix (2026-09): at temperature 0 with the SAME
+    // prompt, a rejected patch would very likely just reproduce itself on
+    // retry — this is the one place cmdFix's bounded one-time retry
+    // (bin/agentic-security.js) feeds the deterministic gate's OWN rejection
+    // reason back in, so the second attempt has an actual reason to differ
+    // rather than repeating the first attempt's exact mistake.
+    ...(rejectionFeedback ? [
+      'Your previous proposal for this exact finding was REJECTED by the',
+      'deterministic verification gate below. Propose a DIFFERENT fix that',
+      'avoids this specific problem — do not repeat the same patch:',
+      `  ${String(rejectionFeedback).slice(0, 500)}`,
+      '',
+    ] : []),
     'Propose a minimal, targeted fix for the finding above. Reply with ONLY a',
     'single JSON object, no other text:',
     '{"target_file": "<must exactly equal the File given above>", ' +
@@ -110,7 +123,7 @@ function validateFixResponse(obj, { file }) {
  * @returns {{ok:true, replacement, rationale, expectedSecurityEffect,
  *   testsToRun, model} | {ok:false, code, reason}}
  */
-async function proposeOllamaFix({ finding, fileContent, scanRoot, env = process.env }) {
+async function proposeOllamaFix({ finding, fileContent, scanRoot, env = process.env, rejectionFeedback } = {}) {
   const resolved = (0,_providers_js__WEBPACK_IMPORTED_MODULE_2__.resolveProvider)({ role: 'fix', env });
   if (!resolved.ok || resolved.config.provider !== 'ollama') {
     return {
@@ -128,7 +141,7 @@ async function proposeOllamaFix({ finding, fileContent, scanRoot, env = process.
     return { ok: false, code: FIX_PROPOSAL_ERROR.POLICY_BLOCKED, reason: decision.reason, egressDecision: decision };
   }
 
-  const prompt = buildFixPrompt(finding, fileContent, scanRoot);
+  const prompt = buildFixPrompt(finding, fileContent, scanRoot, rejectionFeedback);
   const oc = resolved.config.ollama;
   const r = await (0,_ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__/* .callOllamaStructured */ .uM)({
     host: resolved.config.endpoint,

@@ -237,6 +237,18 @@ export function buildProviderRequest(config, prompt, maxTokens) {
   };
 }
 
+// Architectural invariant, not a per-scan observation: nothing in this
+// module (or any caller of resolveProvider) ever reacts to a failed/refused
+// resolution by silently trying a DIFFERENT provider — a refusal is refused,
+// full stop (see the local/ollama loopback-refusal branches above, both of
+// which return `{ok:false}` rather than falling through to a vendor preset).
+// Declared once, HERE, so every place in the codebase that asserts "no cloud
+// fallback" (currently only engine.js's AI-Assistance report) reads the same
+// single source of truth instead of each hardcoding its own `false` literal
+// — if this invariant ever needs to become conditional, there is exactly one
+// place to change it and everything downstream updates with it.
+export const NO_CLOUD_FALLBACK = true;
+
 /** Which provider each role would use, for reporting. Never includes keys. */
 export function providerMatrix(env = process.env) {
   const out = {};
@@ -245,6 +257,44 @@ export function providerMatrix(env = process.env) {
     out[role] = r.ok
       ? { provider: r.config.provider, model: r.config.model, egress: r.config.egress }
       : { provider: null, reason: r.reason || 'not configured' };
+  }
+  return out;
+}
+
+// `hunt` is deliberately NOT one of `ROLES` above (discovery/hunter.js's own
+// comment: it has no per-role override of its own, always falling back to
+// whatever the GLOBAL preset resolves to) — which means `providerMatrix()`,
+// built by iterating `ROLES`, structurally never sees it. Adversarial-review
+// fix (2026-09, second pass): that made `otherRemoteRoles` blind to hunt by
+// construction, not by an oversight in its filter — and hunt is exactly the
+// role most likely to diverge from `validate` in the scenario this function
+// exists to catch (a global cloud preset with `validate` given its own
+// `ollama` override: hunt then silently follows the global cloud preset).
+// Checked explicitly, alongside the `ROLES`-iterated matrix, rather than
+// added to `ROLES` itself — doing that would wrongly imply hunt supports a
+// `_HUNT`-suffixed per-role override, which it does not and this fix does
+// not add.
+const ROLES_WITH_NO_PER_ROLE_OVERRIDE = Object.freeze(['hunt']);
+
+/**
+ * Which roles OTHER than `excludeRole` resolve to a remote (non-loopback)
+ * provider right now. Exists so a report scoped to one role (the AI
+ * Assistance block's `validate`-only measurement) can disclose when a
+ * DIFFERENT role is genuinely configured for a cloud vendor at the same
+ * time, instead of leaving that role invisible to a reader who reasonably
+ * generalizes a single-role loopback claim onto the whole scan.
+ *
+ * @returns {{role:string, provider:string}[]}
+ */
+export function otherRemoteRoles(excludeRole, env = process.env) {
+  const matrix = providerMatrix(env);
+  const out = Object.entries(matrix)
+    .filter(([role, r]) => role !== excludeRole && r.provider && r.egress === 'remote')
+    .map(([role, r]) => ({ role, provider: r.provider }));
+  for (const role of ROLES_WITH_NO_PER_ROLE_OVERRIDE) {
+    if (role === excludeRole) continue;
+    const r = resolveProvider({ role, env });
+    if (r.ok && r.config.egress === 'remote') out.push({ role, provider: r.config.provider });
   }
   return out;
 }

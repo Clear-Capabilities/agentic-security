@@ -10,6 +10,82 @@
 
 
 
+## 0.150.2 - Two adversarial-review passes on 0.150.0's Ollama support: redaction, disclosure, and robustness fixes
+
+0.150.0's offline-Ollama release was put through two rounds of adversarial premortem review after
+shipping. Both surfaced real gaps; this release closes them.
+
+**Security — secret redaction (the most important fix here).** The general-purpose `redactSecrets`
+function every Ollama-backed role (`fix`/`explain`/`poc`, the `ask` agent loop's `read_file`/
+`search_code` tools) routes untrusted file content through before it reaches a model had several
+real gaps, found and closed in order as review went deeper:
+
+1. Unquoted `.env`/shell-export syntax (`DB_PASSWORD=x`, no quotes) evaded the existing
+   quote-requiring pattern entirely — this was a previously-documented, never-fixed-at-the-general-
+   level gap (`secret-redaction.test.js`'s own long-standing comment named it).
+2. Compound identifiers joined by `_`/`-` (`DB_PASSWORD`, `STRIPE_API_KEY`) didn't match even in the
+   already-supported quoted form, because a plain `\b` treats `_` as a word character.
+3. A second review pass found the above fix was narrower than the real threat surface: **camelCase**
+   compounds (`authToken`, `apiSecret`), a **JSON-quoted key** (`"password": "value"` — the closing
+   quote wasn't consumed before the operator), **YAML** `key: value` syntax (added, deliberately
+   scoped to `.yml`/`.yaml` files only, to avoid colliding with the already-tested TypeScript
+   type-annotation and JS object-literal-key exclusions), and a secret **split across a string
+   concatenation** (`"Super" + "Secret123"` — only the first segment was redacted, leaking the tail)
+   all still leaked. All four are fixed, each with an explicit false-positive regression test
+   (`primaryKey`/`cacheKey` must not redact; `password: string;` in a `.ts` file must not redact;
+   ordinary string-building with no secret-shaped key name must not redact).
+
+**Governance — the "AI Assistance" report's role-scope disclosure had a blind spot.** 0.150.0 added
+a report block scoped to the `validate` role, with a warning when another role resolves to a remote
+provider — but `hunt` (the heaviest LLM-driven discovery work) is deliberately not one of
+`providers.js`'s per-role-overridable roles, so it could never appear in that warning, by
+construction. `hunt` is now checked explicitly.
+
+**Robustness.**
+- The wall-clock/per-call timeout mismatch in the `ask` agent loop (a slow call could exceed the
+  loop's own overall budget, and raising the documented remedy for slow models did nothing to help)
+  is fixed and was verified against two real installed Ollama models on real hardware
+  (`gemma4:e4b`, `qwen3.5:9b`) — both complete a live tool-calling round trip within the new budget.
+- The capability-probe cache now has a 30-day safety-net TTL and a `--force` flag
+  (`agentic-security models test <model> --force`), on top of its existing version+digest+name key.
+- Added `AGENTIC_SECURITY_OLLAMA_DISABLED=1`, a kill switch checked in the one function every Ollama
+  call path resolves through — closes a gap where a per-role override could survive an operator
+  unsetting only the global preset during an incident.
+- `agentic-security fix`'s Ollama-proposed-patch path now retries exactly once with the
+  deterministic gate's own rejection reason fed back into the prompt, instead of asking an
+  identical (temperature-0) question and getting an identical bad patch back. Automated test
+  coverage added (`test/cli/fix-retry.test.js`); previously this had only ever been verified by a
+  single manual run.
+- A real, observed out-of-memory failure is now recorded per-model and surfaced as a warning
+  wherever that model is used again — including proactively in the `ask` loop itself, not only in
+  `models doctor` (a user who never runs `doctor` used to get no warning at all before repeating the
+  same failure).
+- Built the PRD's own required opt-in live-model contract tier (`AGENTIC_SECURITY_OLLAMA_E2E=1 npm
+  run test:ollama-e2e`), which did not exist at 0.150.0 despite being an explicit requirement — run
+  against two real installed models, all 7 required contract checks pass. This tests the WIRE
+  CONTRACT (valid structured output, a real tool-call round trip, prompt-injection resistance,
+  graceful context-overflow handling), not output QUALITY — a model-quality benchmark suite remains
+  future work, and `docs/guides/ollama.md` says so explicitly rather than letting contract-passing
+  read as quality-proven.
+
+**Documentation.** `docs/guides/ollama.md` gained an honest statement of the Ollama supply-chain
+trust boundary (no Sigstore-equivalent verification exists for the `ollama` binary or pulled model
+weights, unlike this project's own npm dependencies) and a doc-drift test
+(`test/ollama-doc-drift.test.js`) that fails if the guide's stated numeric defaults (timeouts,
+context sizes, cache TTL, the tool-loop iteration ceiling) ever diverge from the real source
+constants — verified by deliberately breaking one and confirming the test catches it.
+
+**Clarification, not a correction, to 0.150.0's own wording** (this project's changelog convention
+is to never rewrite a past entry): "the same offline guarantee the existing `local` preset already
+made — nothing leaves the machine" describes LLM inference traffic only. The same scan still makes
+separate, deterministic OSV/KEV/EPSS network calls unless `AGENTIC_SECURITY_OFFLINE=1` is also set —
+`docs/guides/ollama.md` already said this; this entry says it here too, next to the original claim.
+Separately, PRD §26 asked for a combined validate/verify/explain/fix/hunt "AI Assistance" summary;
+what shipped in 0.150.0 measures the `validate` role only (the one role that runs automatically
+during a plain `scan`) — `docs/guides/ollama.md` and this entry disclose the scope-down; the other
+five roles are each single-finding or discovery-run commands with no natural combined-scan moment to
+summarize.
+
 ## 0.150.1 - Fix 0.150.0's release-gate failure: @babel/core dependency currency
 
 0.150.0's tag push failed `release.yml`'s gate on its one network-dependent, deliberately-excluded-

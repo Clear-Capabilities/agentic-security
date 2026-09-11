@@ -18,10 +18,21 @@
 // CACHE KEY = Ollama version + model digest + model name (PRD §13.2 exactly).
 // Digest is load-bearing: `ollama pull` replacing a tag's underlying weights
 // must invalidate the cache even though the name/tag string is unchanged.
-// Persisted forever (no TTL) because the key itself is what expires the
-// entry — a version/digest bump makes a new key, not a stale hit on the old
-// one. Same disk-cache directory convention as sca/sigstore-verify.js and
+// Same disk-cache directory convention as sca/sigstore-verify.js and
 // engine.js's OSV cache (`~/.claude/agentic-security/<name>/`).
+//
+// TTL + force-reprobe (adversarial-review fix, 2026-09). The key-based
+// invalidation above is real but not complete: this module's own comment
+// used to claim the entry is safe "forever" because the key changes when
+// the model does — but `/api/show` doesn't expose a digest on every Ollama
+// version (falls back to model NAME alone then, a few lines below), so a
+// same-tag re-pull, or simply an unlucky single-trial probe the first time
+// (see probeStructuredOutput/probeToolCalling's own single-call design),
+// had no way to ever self-correct short of a user manually deleting a file
+// under `~/.claude/agentic-security/`. Two independent fixes, since either
+// alone leaves a real gap: a default TTL as a safety net for the case
+// nobody notices, and an explicit `force` option (`models test --force`)
+// for the case someone DOES suspect a stale answer and wants it right now.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -32,18 +43,38 @@ import { capabilitiesFromFamilyHint } from './model-capabilities.js';
 
 const CACHE_DIR = path.join(os.homedir(), '.claude', 'agentic-security', 'ollama-capability-cache');
 
+// Default safety-net TTL: 30 days. Not the primary invalidation mechanism
+// (the key is) — a backstop for the cases the key can't see: a same-tag
+// re-pull on an Ollama version that doesn't expose a digest, or a single
+// unlucky probe trial that happened to pass/fail against the model's true
+// behavior. Overridable for anyone who wants a tighter or looser bound.
+export const DEFAULT_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 function _ensureCacheDir() { try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch {} }
 function _cacheKey(ollamaVersion, modelDigest, modelName) {
   return crypto.createHash('sha256').update(`${ollamaVersion}::${modelDigest}::${modelName}`).digest('hex');
 }
 function _cachePath(key) { return path.join(CACHE_DIR, key + '.json'); }
 
-function _readProbeCache(key) {
-  try { return JSON.parse(fs.readFileSync(_cachePath(key), 'utf8')); } catch { return null; }
+/**
+ * @returns {object|null} the cached probe RESULT (not the envelope), or
+ *   `null` on a miss, a parse failure, OR an entry older than `ttlMs`.
+ */
+function _readProbeCache(key, ttlMs) {
+  let envelope;
+  try { envelope = JSON.parse(fs.readFileSync(_cachePath(key), 'utf8')); } catch { return null; }
+  // Backward-compatible with a pre-TTL cache file that was just the bare
+  // result object (no `probedAt`) — treat an entry with no timestamp as
+  // fresh rather than discarding every cache written before this fix.
+  if (envelope && typeof envelope === 'object' && 'probedAt' in envelope && 'result' in envelope) {
+    if (Number.isFinite(ttlMs) && ttlMs > 0 && Date.now() - envelope.probedAt > ttlMs) return null;
+    return envelope.result;
+  }
+  return envelope;
 }
 function _writeProbeCache(key, value) {
   _ensureCacheDir();
-  try { fs.writeFileSync(_cachePath(key), JSON.stringify(value)); } catch {}
+  try { fs.writeFileSync(_cachePath(key), JSON.stringify({ probedAt: Date.now(), result: value })); } catch {}
 }
 
 /**
@@ -146,9 +177,16 @@ function _mergeLayer(base, overlay, sourceFlag) {
  * should use, since Layer C spends real inference time on the user's
  * machine.
  *
+ * `force: true` (adversarial-review fix, 2026-09 — `models test --force`)
+ * skips reading the cache — always runs a fresh probe and overwrites
+ * whatever was there. `ttlMs` (default 30 days, `DEFAULT_CACHE_TTL_MS`)
+ * bounds how long a cached entry is trusted without either; pass `0`/
+ * `Infinity` to disable the TTL safety net entirely and rely on the key
+ * alone, matching this module's original design intent.
+ *
  * @returns {{ok:true, capabilities:object, cached:boolean} | {ok:false, code, reason}}
  */
-export async function getModelCapabilities({ host, model, env = process.env, probe = false, timeouts, keepAlive } = {}) {
+export async function getModelCapabilities({ host, model, env = process.env, probe = false, force = false, ttlMs = DEFAULT_CACHE_TTL_MS, timeouts, keepAlive } = {}) {
   let capabilities = capabilitiesFromFamilyHint(model);
 
   const show = await showOllamaModel({ host, model, timeouts });
@@ -169,7 +207,7 @@ export async function getModelCapabilities({ host, model, env = process.env, pro
   const modelDigest = show.ok && show.details?.digest ? show.details.digest : 'unknown-digest';
   const cacheKey = _cacheKey(ollamaVersion, modelDigest, model);
 
-  const cached = _readProbeCache(cacheKey);
+  const cached = force ? null : _readProbeCache(cacheKey, ttlMs);
   if (cached) {
     return { ok: true, capabilities: _mergeLayer(capabilities, cached, 'runtimeProbe'), cached: true };
   }

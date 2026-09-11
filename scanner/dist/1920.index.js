@@ -2,7 +2,7 @@ export const id = 1920;
 export const ids = [1920,2238];
 export const modules = {
 
-/***/ 2238:
+/***/ 32238:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -12,9 +12,9 @@ export const modules = {
 /* harmony export */   sU: () => (/* binding */ loadFixAttempts)
 /* harmony export */ });
 /* unused harmony exports FIX_STAGES, bucketOf, summarizeFixDurations, _internals, summarizeFixAxes, renderFixAxes */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 // Time-to-validated-fix (R5, the reporting half).
 //
 // `verifyFix` already RUNS the stages and `test-runner.js` already times the
@@ -292,7 +292,7 @@ function renderFixAxes(sum) {
 
 /***/ }),
 
-/***/ 1920:
+/***/ 61920:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -300,11 +300,11 @@ function renderFixAxes(sum) {
 /* harmony export */   renderProductionFeedbackSummary: () => (/* binding */ renderProductionFeedbackSummary)
 /* harmony export */ });
 /* unused harmony exports CATEGORIES, collectFeedbackEvents, summarizeFeedbackTrend, _internals */
-/* harmony import */ var _suppressions_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(9277);
-/* harmony import */ var _triage_memory_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1905);
-/* harmony import */ var _sca_policy_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(123);
-/* harmony import */ var _fix_history_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4407);
-/* harmony import */ var _fix_metrics_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(2238);
+/* harmony import */ var _suppressions_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(89277);
+/* harmony import */ var _triage_memory_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(21905);
+/* harmony import */ var _sca_policy_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(30123);
+/* harmony import */ var _fix_history_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(84407);
+/* harmony import */ var _fix_metrics_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(32238);
 // FR-907 (assurance-hardening PRD): "Add longitudinal production feedback
 // measurement | Metrics separate user suppression, accepted risk, invalid
 // finding, fixed finding, and verification outcome."

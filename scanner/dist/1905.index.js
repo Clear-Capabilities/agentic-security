@@ -2,7 +2,7 @@ export const id = 1905;
 export const ids = [1905,3499];
 export const modules = {
 
-/***/ 4286:
+/***/ 11905:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -14,7 +14,7 @@ __webpack_require__.d(__webpack_exports__, {
 // UNUSED EXPORTS: makeBudget, makeTaintProbe
 
 // EXTERNAL MODULE: external "node:crypto"
-var external_node_crypto_ = __webpack_require__(7598);
+var external_node_crypto_ = __webpack_require__(77598);
 ;// CONCATENATED MODULE: ./src/discovery/partition.js
 //
 // Split the codebase into disjoint focus areas so parallel hunters cannot
@@ -110,13 +110,13 @@ function partitionCallGraph(callGraph, opts = {}) {
 }
 
 // EXTERNAL MODULE: ./src/discovery/lenses.js
-var discovery_lenses = __webpack_require__(3499);
+var discovery_lenses = __webpack_require__(33499);
 // EXTERNAL MODULE: ./src/egress/policy.js
-var policy = __webpack_require__(5712);
+var policy = __webpack_require__(45712);
 // EXTERNAL MODULE: ./src/llm-validator/providers.js
-var providers = __webpack_require__(8947);
+var providers = __webpack_require__(38947);
 // EXTERNAL MODULE: ./src/llm-validator/ollama-provider.js
-var ollama_provider = __webpack_require__(3837);
+var ollama_provider = __webpack_require__(23837);
 ;// CONCATENATED MODULE: ./src/discovery/llm-invoke.js
 //
 // Shared LLM endpoint caller. Both the hunter and the refutation panel need
@@ -643,7 +643,7 @@ async function disprovePanel(candidates, opts = {}) {
 }
 
 // EXTERNAL MODULE: ./src/posture/stable-id.js
-var stable_id = __webpack_require__(838);
+var stable_id = __webpack_require__(90838);
 ;// CONCATENATED MODULE: ./src/discovery/judge.js
 //
 // Turn surviving candidates into findings, then decide which are actually new.
@@ -744,11 +744,11 @@ function judgeCandidates(candidates, priorScan, triageFeedback) {
 }
 
 // EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __webpack_require__(3024);
+var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(6760);
+var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/posture/state-dir.js
-var state_dir = __webpack_require__(1174);
+var state_dir = __webpack_require__(31174);
 ;// CONCATENATED MODULE: ./src/discovery/memory.js
 // Cross-run discovery memory — PRD Phase 3 / C4.
 //
@@ -961,7 +961,7 @@ function makeTaintProbe(perFileIR, callGraph) {
 
 async function runDeepAnalysisSafe(perFileIR, callGraph) {
   try {
-    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 2555));
+    const { runDeepAnalysis } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 72555));
     return runDeepAnalysis(perFileIR, callGraph, {});
   } catch {
     return null;
@@ -1250,7 +1250,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
 
 /***/ }),
 
-/***/ 3499:
+/***/ 33499:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {

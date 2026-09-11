@@ -8,6 +8,17 @@ import {
   classifyModelFamily, capabilitiesFromFamilyHint, detectMemoryTier,
   evaluateMemoryAdmission, recommendAdmission, MEMORY_PROFILES, KNOWN_MODEL_SIZE_GB,
 } from '../src/llm-validator/model-capabilities.js';
+import { recordOOMEvent } from '../src/llm-validator/oom-feedback.js';
+import * as fs from 'node:fs';
+import { _internals as oomInternals } from '../src/llm-validator/oom-feedback.js';
+
+function cleanupOOMModel(model) {
+  try {
+    const log = JSON.parse(fs.readFileSync(oomInternals.LOG_PATH, 'utf8'));
+    delete log[model];
+    fs.writeFileSync(oomInternals.LOG_PATH, JSON.stringify(log));
+  } catch { /* nothing to clean up */ }
+}
 
 const GB = 1024 * 1024 * 1024;
 
@@ -161,6 +172,27 @@ test('recommendAdmission: unknown profile name fails closed, not silently', () =
   const r = recommendAdmission({ profile: 'does-not-exist', freeBytes: 100 * GB });
   assert.equal(r.admitted, false);
   assert.match(r.reason, /unknown memory profile/);
+});
+
+// Adversarial-review fix (2026-09): a memory-admission estimate that has
+// already caused a real, observed OOM on this machine must not keep being
+// presented with the same unqualified confidence.
+test('recommendAdmission: a model with a prior recorded OOM gets an explicit warning attached, even when still admitted', () => {
+  const model = 'oom-admission-test-model:unique-' + Date.now();
+  try {
+    recordOOMEvent(model);
+    const r = recommendAdmission({ profile: '16gb-qwen', freeBytes: 100 * GB, requestedModel: model });
+    assert.equal(r.admitted, true, 'plenty of free memory — still admitted');
+    assert.ok(r.priorOOMWarning, 'expected a priorOOMWarning field');
+    assert.match(r.priorOOMWarning, new RegExp(model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(r.priorOOMWarning, /1 time/);
+  } finally { cleanupOOMModel(model); }
+});
+
+test('recommendAdmission: a model with NO prior OOM history has no warning field at all', () => {
+  const model = 'oom-admission-clean-model:unique-' + Date.now();
+  const r = recommendAdmission({ profile: '16gb-qwen', freeBytes: 100 * GB, requestedModel: model });
+  assert.equal(r.priorOOMWarning, undefined);
 });
 
 test('MEMORY_PROFILES: all three required profiles exist with concurrency 1 (PRD §22.1)', () => {

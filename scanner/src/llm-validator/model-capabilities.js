@@ -18,6 +18,7 @@
 // memory to the byte.
 
 import * as os from 'node:os';
+import { priorOOMFor } from './oom-feedback.js';
 
 // PRD §12/§13 FR-1203 — non-authoritative family hint from a model name.
 // Longest/most-specific pattern first so `qwen3.5:4b` doesn't fall through to
@@ -200,7 +201,31 @@ export function evaluateMemoryAdmission({
  * `{admitted:false}` with a human-readable explanation, which callers treat
  * as "run deterministic-only" (PRD §23.4).
  */
-export function recommendAdmission({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
+export function recommendAdmission(opts = {}) {
+  const result = _recommendAdmissionCore(opts);
+  // Adversarial-review fix (2026-09): a memory-admission ESTIMATE that
+  // actually caused a real OOM (ollama-provider.js's callOllamaChat now
+  // records this via oom-feedback.js) used to have no way to affect a
+  // future admission decision for the SAME model on the SAME machine — the
+  // exact same "admitted: true" would repeat forever. This does not
+  // recalibrate the underlying estimate (that needs real hardware variety
+  // one machine's observed failures can't substitute for); it attaches an
+  // honest warning so the decision is no longer presented with unqualified
+  // confidence.
+  const chosenModel = result.model || opts.requestedModel;
+  const prior = chosenModel ? priorOOMFor(chosenModel) : null;
+  if (prior) {
+    return {
+      ...result,
+      priorOOMWarning: `'${chosenModel}' has previously failed with an out-of-memory error on this machine ` +
+        `(${prior.count} time${prior.count === 1 ? '' : 's'}, most recently ${new Date(prior.lastAt).toISOString()}). ` +
+        'The memory estimate below may be optimistic for your hardware.',
+    };
+  }
+  return result;
+}
+
+function _recommendAdmissionCore({ profile, freeBytes, requestedContextTokens, requestedModel } = {}) {
   const p = MEMORY_PROFILES[profile];
   if (!p) return { admitted: false, reason: `unknown memory profile '${profile}'` };
 

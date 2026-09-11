@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-10T21:07:13.654Z",
-  "commit": "1b70a75ef77abc75e313e689c730975bc1010162",
+  "generatedAt": "2026-09-11T14:24:15.295Z",
+  "commit": "3c4569f4a5758b3017c02820515df4b33297f140",
   "targets": {
     "hooks": {
       "total": 21,
@@ -82,7 +82,7 @@
         "llm-validator/consistency.js": 1,
         "llm-validator/index.js": 5,
         "llm-validator/model-probe.js": 1,
-        "llm-validator/ollama-provider.js": 1,
+        "llm-validator/oom-feedback.js": 1,
         "lsp/server.js": 3,
         "mcp/audit.js": 8,
         "mcp/server.js": 1,

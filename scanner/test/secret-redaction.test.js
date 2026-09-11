@@ -48,11 +48,14 @@ test('a hardcoded GitHub token does not appear raw in normalized findings, HTML,
 
 // Stage 6 correctness audit: scanConfigFiles (the ".env with Real-Looking
 // KEY" detector) was the one secrets-adjacent detector this Stage-4 fix
-// missed — it still shipped the raw, unmasked line as `snippet`. Standard
-// `.env` syntax (KEY=value, unquoted) also evades the MCP redact.js
-// catch-all, which requires a quoted value — so the leak reached
-// explain_finding's response unredacted too, not just the report formats
-// covered by the two tests above.
+// missed — it still shipped the raw, unmasked line as `snippet`, fixed here
+// for the report-format leak this test covers. Standard `.env` syntax
+// (KEY=value, unquoted) ALSO used to evade llm-validator/redact.js's
+// `redactSecrets` catch-all — that was a separate leak (explain_finding's
+// response, and every Ollama-backed role added later: fix/explain/poc/the
+// `ask` agent loop's read_file/search_code tools) fixed directly in
+// redact.js's ENV_STYLE_RE pass; see test/llm-redact.test.js's "unquoted
+// .env-style" tests for that fix's own coverage.
 test('a committed .env secret does not appear raw in normalized findings, HTML, or CSV output', async () => {
   const SECRET = 'SuperSecretPass123';
   const dir = mkTmp('dotenv', {

@@ -19,7 +19,23 @@
 //   - Floating-point arithmetic
 //   - long / short / byte coercion edge cases (we treat all as Number)
 
-import { parse } from '#java-parser';
+// Dynamic + try/caught, not a plain static import: java-ast-folding.js is
+// pulled in by engine.js, which every CLI invocation imports regardless of
+// language — a static import made a transient failure to resolve the
+// vendored '#java-parser' subpath (observed under heavy concurrent test
+// load: many processes resolving the same large vendored tree at once) a
+// module-LINK-time crash of the entire CLI, for every user, for every scan,
+// not just Java ones. This file already treats a `parse()` call failure as
+// non-fatal ("On parse error returns []; callers should fall back to
+// non-AST behavior" — see deadBranchRanges below); extending that same
+// degrade-to-empty philosophy to a load-time failure, instead of letting it
+// crash the process, is the fix.
+let parse = null;
+try {
+  ({ parse } = await import('#java-parser'));
+} catch {
+  parse = null;
+}
 
 // ─── CST helpers ──────────────────────────────────────────────────────────
 
@@ -518,7 +534,7 @@ function walkInterfaceDeclaration(id, out) {
 /** Parse a Java source file and return dead-branch line ranges.
  *  On parse error returns []; callers should fall back to non-AST behavior. */
 export function deadBranchRanges(source) {
-  if (!source || source.length === 0 || source.length > 800_000) return [];
+  if (!parse || !source || source.length === 0 || source.length > 800_000) return [];
   let cst;
   try {
     cst = parse(source);

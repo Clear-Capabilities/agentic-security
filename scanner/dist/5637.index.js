@@ -2,17 +2,20 @@ export const id = 5637;
 export const ids = [5637];
 export const modules = {
 
-/***/ 5637:
-/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+/***/ 55637:
+/***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
 
+__webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   computePrDelta: () => (/* binding */ computePrDelta),
 /* harmony export */   netNewGate: () => (/* binding */ netNewGate),
 /* harmony export */   renderPrDeltaText: () => (/* binding */ renderPrDeltaText)
 /* harmony export */ });
-/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
-/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8844);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(9753);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(31421);
+/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(78844);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(67198);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_engine_js__WEBPACK_IMPORTED_MODULE_2__]);
+_engine_js__WEBPACK_IMPORTED_MODULE_2__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // Shadowscan / security-DELTA on PR (v0.72).
 //
 // Most SAST PR-comment integrations show absolute counts — "12 findings
@@ -246,6 +249,8 @@ function renderPrDeltaText(delta) {
   return lines.join('\n');
 }
 
+__webpack_async_result__();
+} catch(e) { __webpack_async_result__(e); } });
 
 /***/ })
 

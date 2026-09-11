@@ -2,16 +2,16 @@ export const id = 8476;
 export const ids = [8476];
 export const modules = {
 
-/***/ 8476:
+/***/ 78476:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   synthesizeRules: () => (/* binding */ synthesizeRules)
 /* harmony export */ });
 /* unused harmony export _internals */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 // Auto-rule synthesis from repeated FPs (FR-LEARN-6).
 //
 // Reads `.agentic-security/triage-feedback.json` (populated by the /triage

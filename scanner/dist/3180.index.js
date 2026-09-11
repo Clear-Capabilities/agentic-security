@@ -2,7 +2,7 @@ export const id = 3180;
 export const ids = [3180];
 export const modules = {
 
-/***/ 3180:
+/***/ 73180:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -12,11 +12,11 @@ __webpack_require__.d(__webpack_exports__, {
 });
 
 // EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __webpack_require__(3024);
+var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(6760);
+var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: external "node:url"
-var external_node_url_ = __webpack_require__(3136);
+var external_node_url_ = __webpack_require__(73136);
 ;// CONCATENATED MODULE: ./scripts/bundle-frontend.mjs
 // bundle-frontend.mjs — Milestone 4, sub-project Self-contained HTML
 // report. A minimal, hand-rolled ES-module bundler, deliberately NOT a
@@ -196,9 +196,9 @@ function bundleFrontendModules(entryAbsPath) {
 }
 
 // EXTERNAL MODULE: ./src/lineage/export-json.js
-var export_json = __webpack_require__(859);
+var export_json = __webpack_require__(40859);
 // EXTERNAL MODULE: ./src/shared/frontend-root.js
-var frontend_root = __webpack_require__(1185);
+var frontend_root = __webpack_require__(61185);
 ;// CONCATENATED MODULE: ./scripts/generate-html-report.mjs
 // generate-html-report.mjs — Milestone 4, sub-project Self-contained
 // HTML report. Assembles ONE offline-safe HTML document: inline CSS,
@@ -312,14 +312,14 @@ ${bundledJs}
 
 /***/ }),
 
-/***/ 1185:
+/***/ 61185:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   D: () => (/* binding */ resolveFrontendRoot)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
 // frontend-root.js — locates the Data Flow Explorer's `frontend/` assets
 // (index.html/src/styles) regardless of whether this code is running:
 //   - unbundled, straight out of scanner/src/ or scanner/scripts/ (dev/test —

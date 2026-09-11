@@ -26,6 +26,7 @@ import { evaluateEgress } from '../egress/policy.js';
 import { TOOL_DEFINITIONS, TOOL_ERROR, runTool } from './agent-tools.js';
 import { getModelCapabilities } from './model-probe.js';
 import { statePath as defaultStatePath } from '../posture/state-dir.js';
+import { priorOOMFor } from './oom-feedback.js';
 
 export const AGENT_LOOP_ERROR = Object.freeze({
   NOT_CONFIGURED: 'agent-loop-not-configured',
@@ -36,6 +37,35 @@ export const AGENT_LOOP_ERROR = Object.freeze({
 
 export const DEFAULT_MAX_TOOL_ITERATIONS = 12;
 const DEFAULT_WALL_CLOCK_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Adversarial-review finding (2026-09), confirmed against a real, slow
+// (CPU-only) Ollama server: the wall-clock deadline used to be checked ONLY
+// at the top of each iteration, never around the in-flight callOllamaChat
+// itself. `docs/guides/ollama.md` tells users to raise
+// AGENTIC_SECURITY_LLM_TIMEOUT_MS for a cold-loading model — that value
+// flows into the PER-CALL requestTimeoutMs, which used to be entirely
+// independent of this loop's own wall-clock budget. A single call already
+// running when the wall clock expires would complete anyway (its own
+// timeout could be minutes longer), and only the NEXT iteration's top-of-
+// loop check would notice — reporting `wall-clock-timeout` after exactly
+// one useful call, no matter how high the per-call timeout was raised,
+// which made the documented remedy for slow models actively useless.
+//
+// Fix: cap the PER-CALL requestTimeoutMs at whatever wall-clock budget
+// actually remains, every iteration. A slow call now gets cut off by ITS
+// OWN timeout mechanism (producing the same clean `{ok:false,
+// code:'ollama-timeout'}` every other caller already handles) at exactly
+// the moment the wall clock would have run out anyway — never later. This
+// also makes the two settings coherent for the first time: raising
+// AGENTIC_SECURITY_LLM_TIMEOUT_MS now genuinely helps, as long as the loop's
+// OWN budget (wallClockTimeoutMs / AGENTIC_SECURITY_LLM_AGENT_TIMEOUT_MS)
+// is raised enough to give it room.
+function _cappedTimeouts(baseTimeouts, remainingMs) {
+  if (!baseTimeouts) return { requestTimeoutMs: Math.max(1, remainingMs) };
+  const base = Number(baseTimeouts.requestTimeoutMs);
+  const capped = Number.isFinite(base) ? Math.min(base, remainingMs) : remainingMs;
+  return { ...baseTimeouts, requestTimeoutMs: Math.max(1, capped) };
+}
 
 function systemPrompt(scanRoot) {
   return [
@@ -54,14 +84,49 @@ function systemPrompt(scanRoot) {
  *   maxToolIterations?:number, wallClockTimeoutMs?:number}} opts
  * `statePath` defaults to posture/state-dir.js's real implementation;
  * overridable only for tests that need a fixture-scoped state dir.
+ * `wallClockTimeoutMs`, when not passed explicitly, falls back to
+ * `AGENTIC_SECURITY_LLM_AGENT_TIMEOUT_MS` — a SEPARATE setting from
+ * `AGENTIC_SECURITY_LLM_TIMEOUT_MS` (the per-call timeout) on purpose: the
+ * two used to be incoherent (raising the per-call setting alone did nothing
+ * for a loop that could still time out after one call), so a caller who
+ * genuinely needs a longer overall budget for a slow model must raise BOTH.
  * @returns {{ok:true, finalText, iterations, toolCalls, stopReason} |
  *   {ok:false, code, reason}}
  */
-export async function runAgentLoop({
+export async function runAgentLoop(opts = {}) {
+  const result = await _runAgentLoopCore(opts);
+  // Adversarial-review fix (2026-09, second pass): Round 1's original OOM-
+  // feedback fix only surfaced `priorOOMWarning` in `models doctor`'s
+  // advisory output — a user who never happens to run `doctor` would OOM
+  // again on the exact same model via `ask` with no warning at all, since
+  // `recommendAdmission` (where the warning lives) is never consulted on
+  // this real call path. Surface it here too, on any outcome where a real
+  // call was actually attempted (a pure config/capability refusal before
+  // any call has nothing useful to warn about).
+  const attemptedARealCall = result.ok || result.code === AGENT_LOOP_ERROR.FAILED;
+  if (attemptedARealCall) {
+    const resolved = resolveProvider({ role: 'hunt', env: opts.env || process.env });
+    const prior = resolved.ok ? priorOOMFor(resolved.config.model) : null;
+    if (prior) {
+      return {
+        ...result,
+        priorOOMWarning: `'${resolved.config.model}' has previously failed with an out-of-memory error on this machine ` +
+          `(${prior.count} time${prior.count === 1 ? '' : 's'}, most recently ${new Date(prior.lastAt).toISOString()}).`,
+      };
+    }
+  }
+  return result;
+}
+
+async function _runAgentLoopCore({
   goal, scanRoot, env = process.env, statePath = defaultStatePath,
-  maxToolIterations = DEFAULT_MAX_TOOL_ITERATIONS, wallClockTimeoutMs = DEFAULT_WALL_CLOCK_TIMEOUT_MS,
+  maxToolIterations = DEFAULT_MAX_TOOL_ITERATIONS, wallClockTimeoutMs,
 } = {}) {
   const boundedIterations = Math.max(1, Math.min(maxToolIterations, DEFAULT_MAX_TOOL_ITERATIONS));
+  if (wallClockTimeoutMs === undefined) {
+    const fromEnv = Number(env.AGENTIC_SECURITY_LLM_AGENT_TIMEOUT_MS);
+    wallClockTimeoutMs = Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : DEFAULT_WALL_CLOCK_TIMEOUT_MS;
+  }
 
   const resolved = resolveProvider({ role: 'hunt', env });
   if (!resolved.ok || resolved.config.provider !== 'ollama') {
@@ -97,15 +162,30 @@ export async function runAgentLoop({
   const deadline = Date.now() + boundedTimeoutMs;
 
   for (let iteration = 0; iteration < boundedIterations; iteration++) {
-    if (Date.now() >= deadline) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
       return { ok: true, finalText: null, iterations: iteration, toolCalls: toolCallLog, stopReason: 'wall-clock-timeout' };
     }
 
+    // Cap this call's own timeout at whatever wall-clock budget remains, so
+    // a slow call can never silently outlive the loop's overall bound (see
+    // the header comment above _cappedTimeouts for the incident this fixes).
+    const callTimeouts = _cappedTimeouts(timeouts, remainingMs);
+    const deadlineWasBinding = timeouts && Number(timeouts.requestTimeoutMs) > remainingMs;
     const r = await callOllamaChat({
       host: resolved.config.endpoint, model: resolved.config.model, messages,
-      tools: TOOL_DEFINITIONS, keepAlive: oc?.keepAlive, timeouts,
+      tools: TOOL_DEFINITIONS, keepAlive: oc?.keepAlive, timeouts: callTimeouts,
     });
-    if (!r.ok) return { ok: false, code: AGENT_LOOP_ERROR.FAILED, reason: r.reason || r.code };
+    if (!r.ok) {
+      // A timeout caused by the WALL CLOCK (not the operator's own per-call
+      // setting) is this loop doing exactly what it's supposed to, not an
+      // unexpected error — report it the same way the pre-flight check
+      // above does, rather than as a hard failure.
+      if (r.code === 'ollama-timeout' && deadlineWasBinding) {
+        return { ok: true, finalText: null, iterations: iteration, toolCalls: toolCallLog, stopReason: 'wall-clock-timeout' };
+      }
+      return { ok: false, code: AGENT_LOOP_ERROR.FAILED, reason: r.reason || r.code };
+    }
 
     const toolCalls = r.result.toolCalls || [];
     if (toolCalls.length === 0) {

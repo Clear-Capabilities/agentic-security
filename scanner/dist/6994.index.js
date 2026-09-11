@@ -2,7 +2,7 @@ export const id = 6994;
 export const ids = [6994];
 export const modules = {
 
-/***/ 6994:
+/***/ 86994:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -10,10 +10,10 @@ export const modules = {
 /* harmony export */   proposeOllamaPoc: () => (/* binding */ proposeOllamaPoc)
 /* harmony export */ });
 /* unused harmony export buildPocPrompt */
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4831);
-/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5712);
-/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(8947);
-/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3837);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45712);
+/* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
+/* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);
 // Ollama-assisted PoC sketch for the `poc` role (agentic-security-ollama-offline-prd.md
 // §18.1 lists "PoC generation" among the P0-required model calls, alongside
 // fix/explain/logic/verify). Before this module `poc` had a reserved slot in

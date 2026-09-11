@@ -2,16 +2,16 @@ export const id = 8218;
 export const ids = [8218];
 export const modules = {
 
-/***/ 8218:
+/***/ 78218:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   loadFreshLineageGraph: () => (/* binding */ loadFreshLineageGraph),
 /* harmony export */   loadSignedGraph: () => (/* binding */ loadSignedGraph)
 /* harmony export */ });
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(1174);
-/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1130);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(31174);
+/* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(71130);
 // graph-loader.js — Milestone 3, sub-project Server, increment 1.
 //
 // Reads and VERIFIES the `.agentic-security/lineage-graph.json` artifact

@@ -2,14 +2,14 @@ export const id = 2826;
 export const ids = [2826];
 export const modules = {
 
-/***/ 2826:
+/***/ 32826:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   renderPrComment: () => (/* binding */ renderPrComment)
 /* harmony export */ });
 /* unused harmony export _internal */
-/* harmony import */ var _util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7097);
+/* harmony import */ var _util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(17097);
 // Advisor-tone PR comment renderer (v0.72).
 //
 // Replaces the typical "12 findings detected, see SARIF" wall of text

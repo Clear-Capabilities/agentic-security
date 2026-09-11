@@ -338,21 +338,22 @@ test('toShipVerdict: no AI Assistance block when scan.aiAssistance is absent (de
   assert.doesNotMatch(out, /AI Assistance/);
 });
 
-test('toShipVerdict: renders provider/model/egress and a per-stage call breakdown', () => {
+test('toShipVerdict: renders provider/model/egress and a per-stage call breakdown, header names the scoped role', () => {
   const scanWithAi = {
     findings: [],
     aiAssistance: {
+      scopeRole: 'validate',
       provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only',
-      cloudFallback: false,
+      cloudFallback: false, otherRolesRemote: [],
       stages: { validate: { calls: 14, success: 12, refused: 0, failed: 2 } },
     },
   };
   const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
-  assert.match(out, /AI Assistance/);
+  assert.match(out, /AI Assistance \(validate role only\)/);
   assert.match(out, /Provider: ollama {3}Model: qwen3\.5:4b/);
   assert.match(out, /LLM egress: loopback-only {3}Cloud fallback: disabled/);
   assert.match(out, /validate {3}14 calls {3}success 12 {3}failed 2/);
-  assert.match(out, /LLM inference was loopback-only\./);
+  assert.match(out, /LLM inference for the validate role was loopback-only\./);
   // §26's exact required wording is never used unless a full-airgap policy
   // proves it — this block must never claim more than the model calls.
   assert.doesNotMatch(out, /This entire scan was fully offline/);
@@ -362,12 +363,13 @@ test('toShipVerdict: a remote (non-loopback) egress gets the honest remote wordi
   const scanWithAi = {
     findings: [],
     aiAssistance: {
-      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://10.0.0.5:11434', egress: 'remote', cloudFallback: false,
+      scopeRole: 'validate',
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://10.0.0.5:11434', egress: 'remote', cloudFallback: false, otherRolesRemote: [],
       stages: { validate: { calls: 3, success: 3, refused: 0, failed: 0 } },
     },
   };
   const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
-  assert.match(out, /LLM inference used a remote endpoint\./);
+  assert.match(out, /LLM inference for the validate role used a remote endpoint\./);
   assert.doesNotMatch(out, /loopback-only\./);
 });
 
@@ -375,11 +377,60 @@ test('toShipVerdict: a refused-only stage (policy-blocked) renders without a "fa
   const scanWithAi = {
     findings: [],
     aiAssistance: {
-      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only', cloudFallback: false,
+      scopeRole: 'validate',
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only', cloudFallback: false, otherRolesRemote: [],
       stages: { validate: { calls: 0, success: 0, refused: 5, failed: 0 } },
     },
   };
   const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
   assert.match(out, /validate {3}0 calls {3}success 0 {3}refused 5/);
   assert.doesNotMatch(out, /validate.*failed/);
+});
+
+// Adversarial-review regression (2026-09): a reader must never be able to
+// read "LLM inference for the validate role was loopback-only" and
+// reasonably conclude every role was local, when another role is configured
+// for a cloud vendor at the same time.
+test('toShipVerdict: a remote OTHER role is disclosed explicitly, not left silent behind the validate-only loopback claim', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      scopeRole: 'validate',
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only',
+      cloudFallback: false,
+      otherRolesRemote: [{ role: 'hunt', provider: 'anthropic' }, { role: 'fix', provider: 'openai' }],
+      stages: { validate: { calls: 1, success: 1, refused: 0, failed: 0 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.match(out, /LLM inference for the validate role was loopback-only\./);
+  assert.match(out, /other role\(s\) configured for a remote provider, NOT covered above: hunt \(anthropic\), fix \(openai\)/);
+});
+
+test('toShipVerdict: no other remote roles configured — no disclosure line printed', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      scopeRole: 'validate',
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only',
+      cloudFallback: false, otherRolesRemote: [],
+      stages: { validate: { calls: 1, success: 1, refused: 0, failed: 0 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.doesNotMatch(out, /NOT covered above/);
+});
+
+test('toShipVerdict: cloudFallback is read from the field, not a hardcoded literal', () => {
+  const scanWithAi = {
+    findings: [],
+    aiAssistance: {
+      scopeRole: 'validate',
+      provider: 'ollama', model: 'qwen3.5:4b', endpoint: 'http://127.0.0.1:11434', egress: 'loopback-only',
+      cloudFallback: true, otherRolesRemote: [],
+      stages: { validate: { calls: 1, success: 1, refused: 0, failed: 0 } },
+    },
+  };
+  const out = stripAnsi(toShipVerdict(scanWithAi, { color: false }));
+  assert.match(out, /Cloud fallback: enabled/);
 });

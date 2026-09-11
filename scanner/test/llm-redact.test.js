@@ -81,6 +81,189 @@ test('redactSecrets: private_key / access_key / client_secret assignment forms',
 });
 
 // ---------------------------------------------------------------------------
+// Direction 1b: unquoted `.env`/shell-export syntax + compound identifiers
+// (premortem finding on the Ollama offline PRD, adversarial review 2026-09).
+// Two DISTINCT gaps closed together since both were needed to actually stop
+// the reported leak: KEY_VALUE_RE required a quote around the value at all
+// (so `DB_PASSWORD=x` passed through untouched even before this fix), AND a
+// plain `\b` treats `_` as a word character, so `password` never matched
+// inside `DB_PASSWORD` in the first place — fixing only the quote
+// requirement would still have missed every real-world `.env` name, since
+// those are almost always `PREFIX_WORD`, not the bare word alone.
+// ---------------------------------------------------------------------------
+
+test('redactSecrets: unquoted .env-style KEY=value (the exact previously-documented gap) is now redacted', () => {
+  const cases = [
+    'DB_PASSWORD=SuperSecretPass123',
+    'password=SuperSecretPass123',
+    'export API_KEY=abc123def456ghi789',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src);
+    assert.ok(redactions >= 1, `expected redaction for: ${src}`);
+    assert.ok(!text.includes('SuperSecretPass123') && !text.includes('abc123def456ghi789'), `value must be gone for: ${src}`);
+    assert.ok(text.includes('[REDACTED-SECRET]'), `expected placeholder for: ${src}`);
+  }
+});
+
+test('redactSecrets: compound .env-style names (vendor/namespace prefix + secret word) redact in BOTH quoted and unquoted form', () => {
+  const cases = [
+    'STRIPE_API_KEY=sk_live_abcdefghijklmnop',
+    'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIabcdef',
+    'GITHUB_TOKEN=ghp_abcdef123456ghijkl',
+    'JWT_SECRET=my-signing-secret-value',
+    'const DB_PASSWORD = "SuperSecretPass123";',
+    'STRIPE_API_KEY: "sk_live_abcdefghijklmnop"',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src);
+    assert.ok(redactions >= 1, `expected redaction for: ${src}`);
+    assert.ok(text.includes('[REDACTED-SECRET]'), `expected placeholder for: ${src}`);
+  }
+});
+
+test('redactSecrets: unquoted form still respects the Bearer-scheme exception', () => {
+  const src = 'authorization=Bearer abcdef123456ghijkl';
+  const { text, redactions } = redactSecrets(src);
+  assert.ok(redactions >= 1);
+  assert.ok(text.includes('authorization=Bearer [REDACTED-SECRET]'), `scheme word must survive: ${text}`);
+});
+
+test('redactSecrets: unquoted matching is line-anchored — a mid-statement comparison or call is never mistaken for an .env assignment', () => {
+  const cases = [
+    'if (password == expected) {}',
+    'if (password === expected) {}',
+    'const x = 5; token != y;',
+    'return this.password == null;',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src);
+    assert.equal(redactions, 0, `must not redact: ${src}`);
+    assert.equal(text, src, `must pass through unchanged: ${src}`);
+  }
+});
+
+test('redactSecrets: the suffix-side boundary still holds for compound names — a field ABOUT a secret is not the secret itself', () => {
+  const cases = [
+    'PASSWORD_HINT=some_hint_text',
+    'password_field = "hint"',
+    'tokenExpiry=3600',
+    'NODE_ENV=production',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src);
+    assert.equal(redactions, 0, `must not redact: ${src}`);
+    assert.equal(text, src, `must pass through unchanged: ${src}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Direction 1c: camelCase compounds, JSON-quoted keys, YAML colon syntax
+// (second-round adversarial review of the FIRST redaction fix, 2026-09) — the
+// original .env/compound-name fix closed the reported DB_PASSWORD-shaped gap
+// but a fresh review found the SAME class of leak still reachable through
+// three adjacent, at-least-as-common shapes.
+// ---------------------------------------------------------------------------
+
+test('redactSecrets: camelCase compound identifiers redact — the boundary fix generalized to snake_case/kebab-case originally, now to camelCase too', () => {
+  const cases = [
+    'authToken = "abcdef1234567890abcdef1234567890";',
+    'apiSecret: "abcdef1234567890abcdef1234567890"',
+    'userPassword="abcdef1234567890abcdef1234567890"',
+    'myApiKey = "abcdef1234567890abcdef1234567890";',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src, { filePath: 'a.js' });
+    assert.ok(redactions >= 1, `expected redaction for: ${src}`);
+    assert.ok(text.includes('[REDACTED-SECRET]'), `expected placeholder for: ${src}`);
+  }
+});
+
+test('redactSecrets: camelCase pass does NOT over-match a bare generic suffix ("Key" alone is not secret-shaped)', () => {
+  const cases = [
+    'primaryKey = "not-a-secret-just-a-db-key-name";',
+    'cacheKey = "some-cache-identifier-value-here";',
+    'sortKey = "some-sort-identifier-value-here";',
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src, { filePath: 'a.js' });
+    assert.equal(redactions, 0, `must not redact: ${src}`);
+    assert.equal(text, src);
+  }
+});
+
+test('redactSecrets: a JSON-quoted key ("password": "value") redacts — the key-name boundary logic already worked, the operator match did not consume the closing quote', () => {
+  const src = '{"password": "SuperSecret123456", "username": "admin"}';
+  const { text, redactions } = redactSecrets(src, { filePath: 'config.json' });
+  assert.ok(redactions >= 1);
+  assert.ok(!text.includes('SuperSecret123456'));
+  assert.ok(text.includes('"username": "admin"'), 'unrelated fields must survive untouched');
+});
+
+test('redactSecrets: YAML unquoted key: value redacts ONLY when the file is actually YAML', () => {
+  const yamlResult = redactSecrets('DB_PASSWORD: SuperSecret123456', { filePath: 'values.yaml' });
+  assert.ok(yamlResult.redactions >= 1, 'a real .yaml file should redact this');
+  assert.ok(!yamlResult.text.includes('SuperSecret123456'));
+
+  const ymlResult = redactSecrets('DB_PASSWORD: SuperSecret123456', { filePath: 'values.yml' });
+  assert.ok(ymlResult.redactions >= 1, '.yml extension must be recognized too');
+});
+
+test('redactSecrets: the YAML colon pattern is NEVER applied outside a .yml/.yaml file — this is what protects the existing TS-type-annotation and object-literal-key exclusions', () => {
+  const cases = [
+    ['DB_PASSWORD: SuperSecret123456', 'app.js'],
+    ['password: string;', 'a.ts'],
+    ['{ password: getSecret() }', 'a.js'],
+    ['password: string;', undefined], // no filePath at all — must not accidentally enable YAML mode
+  ];
+  for (const [src, filePath] of cases) {
+    const { text, redactions } = redactSecrets(src, { filePath });
+    assert.equal(redactions, 0, `must not redact outside YAML: ${src} (${filePath})`);
+    assert.equal(text, src);
+  }
+});
+
+test('redactSecrets: filePath is optional — omitting it entirely still runs every non-YAML pass correctly', () => {
+  const { text, redactions } = redactSecrets('apiKey = "abcdef1234567890abcdef1234567890";');
+  assert.ok(redactions >= 1);
+  assert.ok(text.includes('[REDACTED-SECRET]'));
+});
+
+// ---------------------------------------------------------------------------
+// Direction 1d: split-string-concatenation secrets (third-round adversarial
+// review, 2026-09) — `const secret = "Super" +\n "Secret123456";` used to
+// redact only the FIRST segment, leaking the tail of the real value.
+// ---------------------------------------------------------------------------
+
+test('redactSecrets: a secret split across a string concatenation is fully redacted, not just its first segment', () => {
+  const cases = [
+    'const secret = "Super" +\n  "Secret123456";',
+    'const apiKey = "sk_" + "live_" + "abcdef123456";',
+    'const authToken = "abc" + "def123456";', // camelCase name + concatenation
+  ];
+  for (const src of cases) {
+    const { text, redactions } = redactSecrets(src);
+    assert.ok(redactions >= 1, `expected redaction for: ${src}`);
+    assert.ok(!text.includes('Secret123456') && !text.includes('live_') && !text.includes('def123456'),
+      `every segment's content must be gone, not just the first: ${text}`);
+  }
+});
+
+test('redactSecrets: the concatenation pass never fires without a secret-shaped key name — ordinary string-building is untouched', () => {
+  const src = 'const greeting = "hello" + " " + "world";';
+  const { text, redactions } = redactSecrets(src);
+  assert.equal(redactions, 0);
+  assert.equal(text, src);
+});
+
+test('redactSecrets: a plain (non-concatenated) single-value assignment still redacts correctly after the concatenation-pass fix', () => {
+  const { text, redactions } = redactSecrets('const apiKey = "single-value-no-concat-abcdefgh";');
+  assert.ok(redactions >= 1);
+  assert.ok(text.includes('[REDACTED-SECRET]'));
+  assert.ok(!text.includes('single-value-no-concat-abcdefgh'));
+});
+
+// ---------------------------------------------------------------------------
 // Direction 2: ordinary code, no secrets, passes through byte-for-byte.
 // ---------------------------------------------------------------------------
 

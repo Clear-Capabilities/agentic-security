@@ -55,6 +55,42 @@ test('buildFixPrompt: frames the file as untrusted data, includes finding metada
   }
 });
 
+// Adversarial-review fix (2026-09): at temperature 0, retrying a rejected
+// patch with the IDENTICAL prompt would very likely just reproduce the same
+// bad patch — cmdFix's bounded one-time retry feeds the rejection reason
+// back in so the second attempt has an actual reason to differ.
+test('buildFixPrompt: rejectionFeedback tells the model its previous proposal was rejected and why, omitted by default', () => {
+  const scanRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ollama-fix-prompt-retry-'));
+  try {
+    const withoutFeedback = buildFixPrompt(FINDING, 'x', scanRoot);
+    assert.doesNotMatch(withoutFeedback, /previous proposal/i);
+
+    const withFeedback = buildFixPrompt(FINDING, 'x', scanRoot, 'introduced a new critical XSS finding');
+    assert.match(withFeedback, /previous proposal.*REJECTED/is);
+    assert.match(withFeedback, /introduced a new critical XSS finding/);
+    assert.match(withFeedback, /do not repeat the same patch/i);
+  } finally {
+    fs.rmSync(scanRoot, { recursive: true, force: true });
+  }
+});
+
+test('proposeOllamaFix: rejectionFeedback reaches the actual model prompt sent over the wire', async () => {
+  let receivedPrompt = null;
+  const { server, host } = await startFakeOllama((req, res, json) => {
+    receivedPrompt = json.messages?.[0]?.content || '';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ message: { content: JSON.stringify({ target_file: 'app.js', patch: 'x', rationale: 'x' }) }, done: true }));
+  });
+  try {
+    await withEnv({ AGENTIC_SECURITY_LLM_PRESET: 'ollama', AGENTIC_SECURITY_OLLAMA_HOST: host }, async () => {
+      await proposeOllamaFix({ finding: FINDING, fileContent: 'x', scanRoot: '.', rejectionFeedback: 'lint failed: unused variable' });
+    });
+    assert.match(receivedPrompt, /lint failed: unused variable/);
+  } finally {
+    server.close();
+  }
+});
+
 test('proposeOllamaFix: not configured (no PRESET) returns NOT_CONFIGURED without any network call', async () => {
   const r = await proposeOllamaFix({ finding: FINDING, fileContent: 'x', scanRoot: '.' });
   assert.equal(r.ok, false);

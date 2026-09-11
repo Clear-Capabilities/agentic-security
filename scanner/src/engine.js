@@ -191,7 +191,7 @@ import { annotateExploitability, detectProjectContext } from './posture/exploita
 import { applyFeedback as applyLearnedFeedback } from './posture/learning.js';
 import { validateMany as llmValidateMany, applyValidatorVerdicts } from './llm-validator/index.js';
 import { MODEL_STATUS, stageSummaryFromModelStatus } from './llm-validator/model-status.js';
-import { resolveProvider as resolveLlmProvider } from './llm-validator/providers.js';
+import { resolveProvider as resolveLlmProvider, otherRemoteRoles as llmOtherRemoteRoles, NO_CLOUD_FALLBACK } from './llm-validator/providers.js';
 import { scanCrossLangOpenAPI } from './posture/cross-lang-openapi.js';
 import { scanCrossLangGrpc } from './posture/cross-lang-grpc.js';
 import { scanCrossLangGraphql } from './posture/cross-lang-graphql.js';
@@ -9993,12 +9993,23 @@ function _deterministicFileTimings(timings) {
       const status = finalFindings.llmValidatorStatus;
       if (status && status.counts[MODEL_STATUS.DISABLED] !== status.total) {
         const resolved = resolveLlmProvider({ role: 'validate' });
+        // Adversarial-review finding (Ollama offline PRD premortem, 2026-09):
+        // this block only ever checked the `validate` role, but printed an
+        // unqualified "LLM inference was loopback-only" claim a reader could
+        // reasonably take as describing the WHOLE scan — while `verify`/
+        // `explain`/`fix`/`poc`/`logic`/`hunt` each have their own
+        // independent per-role provider override (providers.js's `_forRole`)
+        // and could genuinely be pointed at a cloud vendor at the same time.
+        // `otherRolesRemote` makes that visible instead of silent.
+        const otherRolesRemote = llmOtherRemoteRoles('validate');
         _aiAssistance = {
+          scopeRole: 'validate',
           provider: resolved.ok ? resolved.config.provider : null,
           model: resolved.ok ? resolved.config.model : null,
           endpoint: resolved.ok ? resolved.config.endpoint : null,
           egress: resolved.ok ? resolved.config.egress : null,
-          cloudFallback: false,
+          cloudFallback: !NO_CLOUD_FALLBACK,
+          otherRolesRemote,
           stages: { validate: stageSummaryFromModelStatus(status) },
         };
       }

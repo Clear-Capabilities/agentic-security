@@ -2,16 +2,16 @@ export const id = 6675;
 export const ids = [6675];
 export const modules = {
 
-/***/ 6675:
+/***/ 46675:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   runOnce: () => (/* binding */ runOnce)
 /* harmony export */ });
 /* unused harmony exports readDeps, _queryOsvForDep, loadState, persistState, loadConfig, formatPayload, _internals */
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(6760);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(1174);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 // Continuous CVE-watch daemon.
 //
 // Polls OSV for the project's dependency tree on a schedule (or one-shot),

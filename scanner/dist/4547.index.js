@@ -2,13 +2,13 @@ export const id = 4547;
 export const ids = [4547];
 export const modules = {
 
-/***/ 4547:
+/***/ 24547:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   applyScenario: () => (/* binding */ applyScenario)
 /* harmony export */ });
-/* harmony import */ var _protection_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(965);
+/* harmony import */ var _protection_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(80965);
 /* harmony import */ var _dataflow_privacy_sink_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3138);
 // scenario-engine.js — M5 deliverable #3a (FR-502): the clone-and-
 // override engine. Deep-clones the base graph, applies each declared

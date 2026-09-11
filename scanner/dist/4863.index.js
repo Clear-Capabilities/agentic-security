@@ -2,7 +2,7 @@ export const id = 4863;
 export const ids = [4863];
 export const modules = {
 
-/***/ 4863:
+/***/ 54863:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -12,13 +12,13 @@ __webpack_require__.d(__webpack_exports__, {
 });
 
 // EXTERNAL MODULE: external "node:fs"
-var external_node_fs_ = __webpack_require__(3024);
+var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: ./src/lineage/schema.js
-var schema = __webpack_require__(4073);
+var schema = __webpack_require__(84073);
 // EXTERNAL MODULE: ./src/lineage/protection.js
-var protection = __webpack_require__(965);
+var protection = __webpack_require__(80965);
 // EXTERNAL MODULE: ./src/lineage/classification.js
-var classification = __webpack_require__(2602);
+var classification = __webpack_require__(42602);
 ;// CONCATENATED MODULE: ./src/lineage/validate.js
 //
 // Structural validator for DataFlowGraph v1 (PRD section 10). Hand-rolled
@@ -302,7 +302,7 @@ function validateGraph(graph) {
 }
 
 // EXTERNAL MODULE: ./src/lineage/export-json.js
-var export_json = __webpack_require__(859);
+var export_json = __webpack_require__(40859);
 ;// CONCATENATED MODULE: ./src/lineage/federation-loader.js
 // federation-loader.js — M5 deliverable #8 (FR-304's "declared" half):
 // loadRemoteGraphExport(filePath) reads an exportGraphJSON-shaped file

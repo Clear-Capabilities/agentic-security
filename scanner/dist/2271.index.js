@@ -2,7 +2,7 @@ export const id = 2271;
 export const ids = [2271];
 export const modules = {
 
-/***/ 2271:
+/***/ 22271:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -12,8 +12,8 @@ export const modules = {
 /* harmony export */   signProvenanceEvidenceBundle: () => (/* binding */ signProvenanceEvidenceBundle),
 /* harmony export */   verifyProvenanceEvidenceBundle: () => (/* binding */ verifyProvenanceEvidenceBundle)
 /* harmony export */ });
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
-/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8317);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var _evidence_bundle_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(98317);
 // Signed provenance evidence bundles (Finding Provenance PRD, M4 §4.1).
 //
 // Sibling to posture/evidence-bundle.js, not a generalization of it — that

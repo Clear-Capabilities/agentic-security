@@ -2,7 +2,7 @@ export const id = 5830;
 export const ids = [5830];
 export const modules = {
 
-/***/ 5830:
+/***/ 95830:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -13,8 +13,8 @@ export const modules = {
 /* harmony export */   stampFindingTimestamps: () => (/* binding */ stampFindingTimestamps)
 /* harmony export */ });
 /* unused harmony export findingsExceedingSLA */
-/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7598);
-/* harmony import */ var _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4594);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var _provenance_schema_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(34594);
 // 0.8.0 Feat-11: MTTR / finding-age tracking — per-finding firstSeenAt/lastSeenAt with SLA breach detection.
 //
 // Stamps every finding with `firstSeenAt` (preserved from the baseline if the

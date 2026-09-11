@@ -2,7 +2,7 @@ export const id = 1379;
 export const ids = [1379];
 export const modules = {
 
-/***/ 1379:
+/***/ 31379:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -322,9 +322,9 @@ function renderStageCell(cell, row) {
 }
 
 // EXTERNAL MODULE: ./src/dataflow/privacy-governance.js
-var privacy_governance = __webpack_require__(3308);
+var privacy_governance = __webpack_require__(63308);
 // EXTERNAL MODULE: ./src/lineage/export-json.js
-var export_json = __webpack_require__(859);
+var export_json = __webpack_require__(40859);
 ;// CONCATENATED MODULE: ./src/lineage/export-privacy.js
 // export-privacy.js — Milestone 4 deliverable #10 (DFG-020): graph-derived
 // DPIA/RoPA export, migrating off the Layer-2 taint engine's

@@ -156,7 +156,7 @@ export function redactPayload({ text, filePath = null, scanRoot = null, taxonomy
 
   let out = text;
 
-  const secretResult = redactSecrets(out);
+  const secretResult = redactSecrets(out, { filePath });
   out = secretResult.text;
   categories.secrets = secretResult.redactions;
 

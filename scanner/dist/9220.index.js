@@ -2,7 +2,7 @@ export const id = 9220;
 export const ids = [9220];
 export const modules = {
 
-/***/ 9220:
+/***/ 19220:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
@@ -12,10 +12,10 @@ export const modules = {
 /* harmony export */   watchProject: () => (/* binding */ watchProject)
 /* harmony export */ });
 /* unused harmony exports readStatus, _internals */
-/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1455);
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(1174);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(51455);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(31174);
 // Watch mode — continuous incremental scan as the developer edits.
 //
 // Spawns a long-running scan watcher that:

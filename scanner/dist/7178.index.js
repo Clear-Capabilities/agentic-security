@@ -3,18 +3,21 @@ export const ids = [7178];
 export const modules = {
 
 /***/ 7178:
-/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+/***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
 
+__webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   runHistory: () => (/* binding */ runHistory),
 /* harmony export */   runWhatIf: () => (/* binding */ runWhatIf)
 /* harmony export */ });
 /* unused harmony export listHistoricalRefs */
-/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1421);
-/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3024);
-/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(6760);
-/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(8844);
-/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(9753);
+/* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(31421);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(78844);
+/* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(67198);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_engine_js__WEBPACK_IMPORTED_MODULE_4__]);
+_engine_js__WEBPACK_IMPORTED_MODULE_4__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // Time-travel + counterfactual scanning (v0.68).
 //
 // Two new modes that exploit the pure-input shape of runFullScan:
@@ -262,6 +265,8 @@ function _walkWorkingTree(root) {
   return out;
 }
 
+__webpack_async_result__();
+} catch(e) { __webpack_async_result__(e); } });
 
 /***/ })
 

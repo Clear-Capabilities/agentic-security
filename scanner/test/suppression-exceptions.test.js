@@ -206,9 +206,13 @@ test('scan --profile pro (FR-1004): an expired suppression reopens a real, detec
       fullEntry({ finding_id: finding.id, file: finding.file, expires_at: PAST }),
     ]));
     const second = run(['scan', root, '--profile', 'pro', '--format', 'json', '--no-network']);
+    // A crashed/timed-out second run (e.g. under heavy parallel test load) would leave
+    // last-scan.json stale from the first pass, masquerading as a suppression-logic bug.
+    // Surface that distinction up front instead of letting it hide inside stillPresent.
+    assert.ok(!second.error, `second scan process itself failed (spawn/timeout error): ${second.error}; stderr: ${second.stderr}`);
     const secondScan = JSON.parse(fs.readFileSync(path.join(root, '.agentic-security', 'last-scan.json'), 'utf8'));
     const stillPresent = (secondScan.findings || []).some(f => f.id === finding.id || (f.file === finding.file && f.line === finding.line && f.vuln === finding.vuln));
-    assert.ok(stillPresent, 'an expired exception must reopen the finding — it must still be present in scan output');
+    assert.ok(stillPresent, `an expired exception must reopen the finding — it must still be present in scan output. second.status=${second.status} second.signal=${second.signal} stderr=${second.stderr}`);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -225,8 +229,11 @@ test('scan --profile pro (FR-1004): a VALID, non-expired suppression for the sam
       fullEntry({ finding_id: finding.id, file: finding.file, expires_at: FUTURE }),
     ]));
     const second = run(['scan', root, '--profile', 'pro', '--format', 'json', '--no-network']);
+    // Same rationale as the sibling "expired" test above: a crashed/timed-out second run
+    // would leave last-scan.json stale from the first pass, masquerading as a suppression bug.
+    assert.ok(!second.error, `second scan process itself failed (spawn/timeout error): ${second.error}; stderr: ${second.stderr}`);
     const secondScan = JSON.parse(fs.readFileSync(path.join(root, '.agentic-security', 'last-scan.json'), 'utf8'));
     const stillPresent = (secondScan.findings || []).some(f => f.id === finding.id);
-    assert.equal(stillPresent, false, 'a valid, non-expired, fully-documented exception must suppress the finding');
+    assert.equal(stillPresent, false, `a valid, non-expired, fully-documented exception must suppress the finding. second.status=${second.status} second.signal=${second.signal} stderr=${second.stderr}`);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

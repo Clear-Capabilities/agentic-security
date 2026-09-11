@@ -2,13 +2,13 @@ export const id = 5343;
 export const ids = [5343];
 export const modules = {
 
-/***/ 5343:
+/***/ 65343:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   proposeGovernanceEdit: () => (/* binding */ proposeGovernanceEdit)
 /* harmony export */ });
-/* harmony import */ var _recipient_registry_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(6703);
+/* harmony import */ var _recipient_registry_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(96703);
 // governance-edit.js — M5 deliverable #5 (PRD line 1324's 5-part write
 // contract: preview, validation, backup/version guard, confirmation,
 // audit event). A CLI-only workflow for proposing a validated,
