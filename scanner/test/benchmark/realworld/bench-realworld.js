@@ -37,6 +37,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs/promises';
 import * as cp from 'node:child_process';
+import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // Realworld bench measures core scanner behavior against per-app
@@ -73,6 +74,20 @@ const VERBOSE = flag('--verbose') || flag('-v');
 // line-level scoring — every emitted finding must match the expected family
 // at the expected file:line for that test to count as a true positive.
 const NO_WILDCARDS = flag('--no-wildcards');
+// --cwe CWE-89,CWE-79 (or bare "89,79"): restrict a Juliet run to only the
+// listed CWE directories — PRD §38's targeted-run requirement, and the basis
+// for a CI-appropriate smoke subset (SARD_AGENTIC_SECURITY_PRD.md Phase 10 —
+// a full corpus scan takes 8-15 minutes, far too slow for ordinary CI).
+// Filters BOTH ground-truth construction (buildJulietExpected/
+// buildJulietCsExpected skip any other CWE dir outright) AND the actual scan
+// surface (unlisted juliet-cwe*/CWE*_ directories are appended to
+// excludePaths so runScan() never even reads those files) — a CWE filter
+// that only narrowed scoring while still paying the full scan cost would
+// defeat the entire point of a smoke-test flag.
+const CWE_FILTER_RAW = value('--cwe');
+const CWE_FILTER = CWE_FILTER_RAW
+  ? new Set(CWE_FILTER_RAW.split(',').map(s => s.trim().replace(/^CWE-?/i, '')).filter(Boolean))
+  : null;
 // --blind: run against a blinded copy of each corpus + hard-disable every
 // rule that reads benchmark answer-key markers (juliet-shape, the OWASP
 // "// condition 'B', which is safe" template suppressors, the
@@ -94,6 +109,17 @@ const STRIP_ALL_COMMENTS = flag('--strip-all-comments');
 // can't leak in.
 const SCRAMBLE_IDENTIFIERS = flag('--scramble-identifiers');
 const BLIND = _BLIND_RAW || STRIP_ALL_COMMENTS || SCRAMBLE_IDENTIFIERS;
+// --materialize-only: build the blinded workspace (comment stripping /
+// identifier scrambling / whatever --blind variant was requested) and exit
+// WITHOUT scanning. A full Juliet corpus scan takes ~15 minutes; iterating
+// on the neutralization transform itself (e.g. bench/sard/scripts/
+// leakage-audit.mjs) only needs the materialized tree, not scan results.
+const MATERIALIZE_ONLY = flag('--materialize-only');
+// --gt-dry-run: build the ground-truth expected[] array (including the
+// gtContentRoot dance for --scramble-identifiers + preciseMethodScoring) and
+// exit before scanning. Much cheaper than a full ~15-minute corpus scan when
+// only verifying the GT builder itself changed.
+const GT_DRY_RUN = flag('--gt-dry-run');
 // --in-process: run every --all target inside THIS process, the way the bench
 // worked before per-app isolation. Kept so the memory characteristics of the
 // two modes can be compared directly; not for CI.
@@ -115,7 +141,12 @@ function memTrace(label) {
   console.error(`  [mem] ${pad(label, 22)} rss:${mb(m.rss)}MB heap:${mb(m.heapUsed)}MB ext:${mb(m.external)}MB peakRss:${String(peak).padStart(6)}MB`);
 }
 
-if (!ALL && !APP) {
+// Guarded the same way the main() call at the bottom of this file is (see
+// that guard's comment for why): this ran unconditionally at MODULE-LOAD
+// time before, so an importer's own argv (which need not — and in
+// mutate.mjs's case, coincidentally did — look anything like this file's own
+// flags) could trip this exit(2) merely by importing a named export.
+if (import.meta.url === `file://${process.argv[1]}` && !ALL && !APP) {
   console.error('Usage: bench-realworld.js [--all | --app <name>] [--refresh-cache] [--json] [--verbose] [--no-wildcards] [--blind] [--strip-all-comments] [--in-process]');
   process.exit(2);
 }
@@ -169,7 +200,7 @@ const _BLIND_MARKER_PATTERNS = [
   /(@WebServlet\s*\(\s*(?:value\s*=\s*)?["'])(?:[^"'/]*\/)?\w+?-\d+\//g,
 ];
 
-function _blindTransform(text, opts = {}) {
+export function _blindTransform(text, opts = {}) {
   if (!text || typeof text !== 'string') return text;
   let out = text;
   for (let i = 0; i < _BLIND_MARKER_PATTERNS.length - 1; i++) {
@@ -192,21 +223,19 @@ function _blindTransform(text, opts = {}) {
   // so the GT (which keys on path) still binds correctly.
   if (opts.scrambleIdentifiers) {
     out = out
-      // Juliet method names → opaque.
-      .replace(/\bbadSink\b/g, 'op0Sink')
-      .replace(/\bbadSource\b/g, 'op0Source')
-      .replace(/\bgoodG2BSink\b/g, 'op1G2BSink')
-      .replace(/\bgoodG2BSource\b/g, 'op1G2BSource')
-      .replace(/\bgoodB2GSink\b/g, 'op1B2GSink')
-      .replace(/\bgoodB2GSource\b/g, 'op1B2GSource')
-      .replace(/\bgoodG2B\b/g, 'op1G2B')
-      .replace(/\bgoodB2G\b/g, 'op1B2G')
-      .replace(/\bgoodSink\b/g, 'op1Sink')
-      .replace(/\bgoodSource\b/g, 'op1Source')
-      // The literal method names `bad()` and `good()` — only as method-decl shapes,
-      // not as substrings of identifiers we already replaced (use lookbehind/ahead).
-      .replace(/\b(?<!op0)bad(?=\s*\()/g, 'op0')
-      .replace(/\b(?<!op1)good(?=\s*\()/g, 'op1')
+      // Juliet method/class names → opaque. Case-insensitive with an optional
+      // numbered flow-variant suffix (goodG2B1, badSink2, ...) and PascalCase
+      // class-name forms (BadSource/BadSink/GoodSource/GoodSink, used by
+      // Juliet's interface-based test structure) — a prior version of this
+      // rule set used exact-word-only literals (`\bbadSink\b` etc.) which
+      // missed both: confirmed still leaking via leakage-audit.mjs's
+      // `juliet-method-name` hits (many numbered variants per file) after
+      // the exact-word rules ran. Hash the matched text (case-normalized) so
+      // every reference to the same variant name within a file maps to the
+      // same opaque token, without needing to enumerate every Sink/Source ×
+      // G2B/B2G × digit-suffix combination by hand.
+      .replace(/\bbad(?:sink|source)?\d*\b/gi, (m) => `op0_${crypto.createHash('sha1').update(m.toLowerCase()).digest('hex').slice(0, 6)}`)
+      .replace(/\bgood(?:g2b|b2g)?(?:sink|source)?\d*\b/gi, (m) => `op1_${crypto.createHash('sha1').update(m.toLowerCase()).digest('hex').slice(0, 6)}`)
       // Juliet packages.
       .replace(/\bjuliet\.testcases\b/g, 'app.code')
       .replace(/\bjuliet\.support\b/g, 'app.lib')
@@ -217,7 +246,28 @@ function _blindTransform(text, opts = {}) {
       .replace(/\bhashAlg2\b/g, 'xb2')
       // OWASP test class literal name (as a String reference; class declaration
       // is in the filename which we don't touch).
-      .replace(/"BenchmarkTest\d+"/g, '"AppX"');
+      .replace(/"BenchmarkTest\d+"/g, '"AppX"')
+      // CWE-bearing testcase identifiers embedded directly in package/namespace
+      // statements, top-level class declarations, and same-file constructor
+      // references (e.g. Java `package juliet.testcases.CWE89_SQL_Injection...;`
+      // / `public class CWE89_SQL_Injection__Servlet_...`, C# equivalents).
+      // NOT covered by the method-name/package-prefix rules above — confirmed
+      // via bench/sard/scripts/leakage-audit.mjs finding 907,517 hits in a
+      // bare `--blind` run of sard-juliet-java, almost all of this exact
+      // pattern: even with the prefix scrambled, the CWE-and-descriptor tail
+      // survived verbatim. Replacement is a deterministic hash of the matched
+      // identifier, so every reference to the same testcase name in the file
+      // maps to the same opaque token. File paths are deliberately left
+      // untouched (GT keys on path), so this can leave the top-level class
+      // name mismatched with its filename — fine for static scanning (nothing
+      // here compiles the corpus) but would break `javac`/`csc`.
+      .replace(/\bCWE\d+_[A-Za-z0-9_]+\b/g, (m) => `case_${crypto.createHash('sha1').update(m).digest('hex').slice(0, 8)}`)
+      // "Juliet"/"testcases" as bare words (namespace segments, e.g. C#'s
+      // `Juliet.Testcases.*` — PascalCase, so the lowercase-only rule above
+      // doesn't match it) — case-insensitive since the leakage-audit term
+      // list treats "Juliet" as a leak regardless of case.
+      .replace(/\bjuliet\b/gi, 'app')
+      .replace(/\btestcases\b/gi, 'code');
   }
   return out;
 }
@@ -230,18 +280,30 @@ function _langFor(filename) {
 // Recursively materialize a blinded copy of `srcRoot` under `dstRoot`.
 // Skips dirs/files larger than 5 MB and a small skip list. Re-runs are
 // idempotent: a `.blinded.ok` marker file inside dstRoot causes skip.
+// Bump whenever _blindTransform's actual rewrite logic changes, so a stale
+// cached materialization (keyed only by which CLI flags were passed, not by
+// what the code underneath those flags does) can't silently keep serving
+// output from a since-fixed transform. `.bench-cache/` is on the coding
+// agent's deny-list (can't `rm -rf` it directly to force a refresh — see
+// bench/sard/IMPLEMENTATION_STATUS.md §0), so cache invalidation has to be
+// automatic rather than "just delete the directory."
+const _BLIND_TRANSFORM_VERSION = 2;
+
 async function _materializeBlinded(srcRoot, dstRoot, opts = {}) {
   const marker = path.join(dstRoot, '.blinded.ok');
-  // The marker records the transform variant — if the caller asks for a
-  // different variant than was cached, we re-blind into a fresh dir.
+  // The marker records the transform variant AND version — if either the
+  // requested variant or the transform code itself changed since the cached
+  // copy was built, re-blind into a fresh dir. `--refresh-cache` forces it
+  // unconditionally regardless of marker match.
   const mode = opts.scrambleIdentifiers ? 'scramble-identifiers'
              : opts.stripAllComments ? 'strip-all-comments'
              : 'markers-only';
-  const expectedMarker = `mode=${mode}\n`;
+  const expectedMarker = `mode=${mode} v${_BLIND_TRANSFORM_VERSION}\n`;
   try {
     const existing = await fs.readFile(marker, 'utf8');
-    if (existing.startsWith(expectedMarker)) return;
-    // Cached blind dir is the wrong variant — wipe it.
+    if (!opts.refresh && existing.startsWith(expectedMarker)) return;
+    // Cached blind dir is the wrong variant/version, or a refresh was
+    // requested — wipe it.
     await fs.rm(dstRoot, { recursive: true, force: true });
   } catch { /* not yet */ }
   await fs.mkdir(dstRoot, { recursive: true });
@@ -291,7 +353,7 @@ async function _materializeBlinded(srcRoot, dstRoot, opts = {}) {
   const _mode = opts.scrambleIdentifiers ? 'scramble-identifiers'
               : opts.stripAllComments ? 'strip-all-comments'
               : 'markers-only';
-  await fs.writeFile(marker, `mode=${_mode}\ncopied=${copied} files\n`);
+  await fs.writeFile(marker, `mode=${_mode} v${_BLIND_TRANSFORM_VERSION}\ncopied=${copied} files\n`);
 }
 
 async function ensureClone(name, repo, sha) {
@@ -416,6 +478,7 @@ async function buildJulietCppExpected(repoRoot, gt) {
     if (!e.isDirectory()) continue;
     const m = e.name.match(/^CWE(\d+)_/);
     if (!m) continue;
+    if (CWE_FILTER && !CWE_FILTER.has(m[1])) continue;
     const cwe = `CWE${m[1]}`;
     const family = cweMap[cwe];
     if (!family) continue;
@@ -528,7 +591,7 @@ function findCppMethodSpans(content) {
 // template-generated files which have predictable structure (no string-literal
 // brace surprises in method bodies because Juliet comments are sanitized
 // during template generation). Returns ALL methods, not just bad/good*.
-function findJavaMethodSpans(content) {
+export function findJavaMethodSpans(content) {
   const methods = [];
   const declRe = /^\s*(?:public|private|protected|static|\s)+(?:void|String|int|long|short|byte|boolean|float|double|Object|[A-Z][\w<>,\s.\[\]]*)\s+(\w+)\s*\([^)]*\)\s*(?:throws\s+[\w,\s.]+)?\s*\{/gm;
   let m;
@@ -797,11 +860,61 @@ SELECT cve_id, cwe_id, filename, code_before FROM ranked WHERE rk <= ${maxPerCwe
   return expected;
 }
 
+// C# mirror of findJavaMethodSpans (SARD PRD Phase 3 — localization accuracy
+// for C#, previously file-level-only). Juliet's C# generator uses the same
+// NSA CAS template family as Java, PascalCase per C# convention: Bad(),
+// BadSink(), BadSource(), Good(), GoodG2B(), GoodG2B1(), GoodB2G(), etc.
+// Brace-depth tracking identical to the Java version; only the declaration
+// regex changes (C# access modifiers, PascalCase return types).
+export function findCsharpMethodSpans(content) {
+  const methods = [];
+  const declRe = /^\s*(?:public|private|protected|internal|static|virtual|override|async|\s)+(?:void|string|int|long|short|byte|bool|float|double|object|[A-Z][\w<>,\s.\[\]]*)\s+(\w+)\s*\([^)]*\)\s*\{/gm;
+  let m;
+  while ((m = declRe.exec(content))) {
+    const name = m[1];
+    if (name === 'class' || name === 'if' || name === 'while' || name === 'for' || name === 'foreach' || name === 'switch' || name === 'using' || name === 'lock') continue;
+    const openIdx = m.index + m[0].length - 1;
+    let depth = 1, i = openIdx + 1;
+    while (i < content.length && depth > 0) {
+      const ch = content[i];
+      if (ch === '"' || ch === "'") {
+        const quote = ch; i++;
+        while (i < content.length && content[i] !== quote) {
+          if (content[i] === '\\') i += 2; else i++;
+        }
+        i++; continue;
+      }
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      i++;
+    }
+    const startLine = content.substring(0, m.index).split('\n').length + (content.substring(m.index).match(/^\s*\n/) ? 1 : 0);
+    const endLine = content.substring(0, i).split('\n').length;
+    methods.push({ name, startLine, endLine });
+  }
+  return methods;
+}
+
 // Build expected[] for the NIST SARD Juliet C# suite. Layout:
 //   src/testcases/CWE<N>_<descriptor>/<TestFile>.cs
 // Same shape as the C/C++ tree but with `src/` prefix and .cs extension.
-// Walks the tree, emits one expected entry per .cs file under a known CWE.
-async function buildJulietCsExpected(repoRoot, gt) {
+// Walks the tree, emits one expected entry per .cs file under a known CWE
+// (file-level), or one entry per Bad/GoodG2B method span when
+// gt.preciseMethodScoring is true (vulnerability-level + localization).
+// gtContentRoot: when set, method-span CONTENT (for isBad/isGoodG2B name
+// matching) is read from this root instead of repoRoot, while `rel` (used
+// for actual scoring against scanner findings) still stays relative to
+// repoRoot. Needed because `--scramble-identifiers` renames the exact
+// Bad()/GoodG2B() identifiers this function pattern-matches on — reading
+// scrambled content here made every file silently fall back to file-level
+// GT (confirmed this session: a `--scramble-identifiers --json` run of
+// sard-juliet-csharp-strict produced byte-identical aggregate numbers to
+// the non-strict/wildcard app, because `anyEmitted` was false everywhere).
+// gtContentRoot must be a 1:1-identical directory layout to repoRoot with
+// only identifiers differing (e.g. the plain `-blinded` materialization
+// paired with a `-blinded-scrambled` one) — comment-stripping is shared by
+// both so line numbers still line up; only token text differs.
+async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
   const expected = [];
   const cweMap = gt.cweToFamily || {};
   const root = path.join(repoRoot, 'src', 'testcases');
@@ -812,9 +925,11 @@ async function buildJulietCsExpected(repoRoot, gt) {
     if (!e.isDirectory()) continue;
     const m = e.name.match(/^CWE(\d+)_/);
     if (!m) continue;
+    if (CWE_FILTER && !CWE_FILTER.has(m[1])) continue;
     const cwe = `CWE${m[1]}`;
     const family = cweMap[cwe];
     if (!family) continue;
+    const precise = !!gt.preciseMethodScoring;
     async function walk(dir) {
       let dEntries;
       try { dEntries = await fs.readdir(dir, { withFileTypes: true }); }
@@ -827,14 +942,46 @@ async function buildJulietCsExpected(repoRoot, gt) {
         if (/^Test|TestCase\.cs$/.test(f.name)) continue;
         if (/AbstractTestCase|AbstractTestCaseWeb|AbstractTestCaseWebBase/.test(f.name)) continue;
         const rel = path.relative(repoRoot, p);
-        expected.push({
-          file: rel,
-          line: 1,
-          lineTolerance: 9999,
-          matchAny: true,
-          family,
-          cwe,
-        });
+        if (precise) {
+          const contentPath = gtContentRoot ? path.join(gtContentRoot, rel) : p;
+          let content = '';
+          try { content = await fs.readFile(contentPath, 'utf8'); } catch { /* skip */ }
+          if (!content) continue;
+          const methods = findCsharpMethodSpans(content);
+          let anyEmitted = false;
+          for (const meth of methods) {
+            // Only Bad()/BadSink()/BadSource() are TP-eligible — see the
+            // Java builder's comment for why GoodG2B() (and every other
+            // good*() variant) is deliberately excluded, not merely
+            // renamed: it's Juliet's safe half, not a legitimate firing.
+            const isBad = /^Bad(?:Sink|Source)?\d*$/.test(meth.name);
+            if (isBad) {
+              expected.push({
+                file: rel,
+                line: meth.startLine,
+                lineEnd: meth.endLine,
+                lineTolerance: 0,
+                matchAny: true,
+                family,
+                cwe,
+                method: meth.name,
+              });
+              anyEmitted = true;
+            }
+          }
+          if (!anyEmitted) {
+            expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
+          }
+        } else {
+          expected.push({
+            file: rel,
+            line: 1,
+            lineTolerance: 9999,
+            matchAny: true,
+            family,
+            cwe,
+          });
+        }
       }
     }
     await walk(path.join(root, e.name));
@@ -842,7 +989,9 @@ async function buildJulietCsExpected(repoRoot, gt) {
   return expected;
 }
 
-async function buildJulietExpected(repoRoot, gt) {
+// See buildJulietCsExpected's gtContentRoot comment above — same fix,
+// same reason, applied to the Java GT builder.
+async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
   const expected = [];
   const cweMap = gt.cweToFamily || {};
   const ignoredDirs = new Set(['juliet-support', 'gradle', 'build']);
@@ -853,6 +1002,7 @@ async function buildJulietExpected(repoRoot, gt) {
     if (!e.isDirectory() || ignoredDirs.has(e.name)) continue;
     const m = e.name.match(/^juliet-cwe(\d+)$/i);
     if (!m) continue;
+    if (CWE_FILTER && !CWE_FILTER.has(m[1])) continue;
     const cwe = `CWE${m[1]}`;
     const family = cweMap[cwe];
     if (!family) continue; // CWE not covered by our scanner — skip entirely.
@@ -881,20 +1031,34 @@ async function buildJulietExpected(repoRoot, gt) {
         if (precise) {
           // Per-method GT: extract bad/badSink method spans and emit one
           // expected entry per method with a line range. Engine emissions
-          // INSIDE the bad() range count as TPs; emissions in good*() ranges
-          // (which are intentionally sanitized) count as FPs — exposing the
-          // engine's true precision rather than masking it with file-level GT.
-          // goodG2B() pairs a good source with a bad sink — engine WILL fire
-          // there legitimately, so we include it as TP-eligible.
+          // INSIDE the bad() range count as TPs; emissions in ANY good*()
+          // range (goodG2B, goodB2G, good, goodSource, goodSink, ...) count
+          // as FPs — no expected entry covers them, so `score()`'s
+          // unconsumed-actual pass reports them as FPs — per PRD §18
+          // ("safe path reported = FP"). `goodG2B()` was previously ALSO
+          // marked TP-eligible on the theory that "a good source paired with
+          // a bad sink is a legitimate engine firing" — but Juliet's own
+          // convention is that ALL good*() variants (including goodG2B,
+          // "good-to-bad": safe/hardcoded source reaching a structurally
+          // dangerous sink) are the SAFE half of the testcase, specifically
+          // designed to catch a scanner that fires on sink shape alone
+          // without real source-taint verification. Crediting a
+          // goodG2B() firing as a TP rewarded exactly the imprecision
+          // Juliet is designed to expose, and scored a scanner that
+          // correctly stayed silent there as if it had missed a real
+          // vulnerability (an FN it didn't actually commit). Confirmed safe
+          // to change (no downstream consumer assumes the old convention —
+          // `validator-metrics.js`'s history is mode-labeled and this is a
+          // brand-new mode with no prior recorded runs).
+          const contentPath = gtContentRoot ? path.join(gtContentRoot, rel) : p;
           let content = '';
-          try { content = await fs.readFile(p, 'utf8'); } catch { /* skip */ }
+          try { content = await fs.readFile(contentPath, 'utf8'); } catch { /* skip */ }
           if (!content) continue;
           const methods = findJavaMethodSpans(content);
           let anyEmitted = false;
           for (const meth of methods) {
             const isBad = /^(?:bad|badSink|badSource|bad\d+)$/.test(meth.name);
-            const isGoodG2B = /^(?:goodG2B|goodG2B\d*)$/.test(meth.name);
-            if (isBad || isGoodG2B) {
+            if (isBad) {
               expected.push({
                 file: rel,
                 line: meth.startLine,
@@ -907,9 +1071,6 @@ async function buildJulietExpected(repoRoot, gt) {
               });
               anyEmitted = true;
             }
-            // good() / goodB2G() / goodSource — intentionally sanitized OR
-            // pair good source with good sink. Emissions inside these ranges
-            // are FPs (no expected entry covers them).
           }
           // Fallback: if no method spans found (unusual file shape), keep the
           // flat per-file entry to avoid silent recall loss.
@@ -971,7 +1132,13 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
     const a = actual[i];
     const aFile = fileOf(a);
     const base = aFile.replace(/\\/g,'/').split('/').slice(-1)[0];
-    const meta = { file: aFile, base, line: lineOf(a), fam: familyForBench(a.vuln, vulnFamilyMap, a), vuln: a.vuln };
+    // meta.cwe: the RAW finding's own claimed CWE (per the repo-wide findings
+    // schema, `{..., cwe, ...}`) — distinct from an expected entry's `.cwe`,
+    // which is the GT's answer. Threaded through to fps/tps so
+    // macro-score.mjs can build a genuine expected-CWE → reported-CWE
+    // confusion matrix (PRD §19) instead of one that just echoes the
+    // matched expected entry back at itself.
+    const meta = { file: aFile, base, line: lineOf(a), fam: familyForBench(a.vuln, vulnFamilyMap, a), vuln: a.vuln, cwe: a.cwe || null };
     actualMeta[i] = meta;
     if (!actualByBase.has(base)) actualByBase.set(base, []);
     actualByBase.get(base).push(i);
@@ -1018,7 +1185,13 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
       consumed.add(i);
       if (!matched) {
         // First matching actual contributes the single TP for this expected entry.
-        tps.push({ ...e, matchedVuln: meta.vuln });
+        // reportedCwe: the finding's OWN claimed cwe, kept separate from `.cwe`
+        // (the GT's expected cwe, already on `e`) — a family match doesn't
+        // require an exact CWE match, so these can legitimately differ even
+        // for a TP (e.g. a "hardcoded-secret" family finding tagged CWE798
+        // landing on a CWE256-expected entry) and that disagreement is
+        // exactly what a CWE confusion matrix needs to surface.
+        tps.push({ ...e, matchedVuln: meta.vuln, reportedCwe: meta.cwe });
         matched = true;
       }
       // matchAny: continue consuming additional matching actuals so they
@@ -1031,7 +1204,7 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
   for (let i = 0; i < actual.length; i++) {
     if (consumed.has(i)) continue;
     const meta = actualMeta[i];
-    fps.push({ file: meta.file, line: meta.line, family: meta.fam, vuln: meta.vuln });
+    fps.push({ file: meta.file, line: meta.line, family: meta.fam, vuln: meta.vuln, reportedCwe: meta.cwe });
   }
   return { tps, fps, fns };
 }
@@ -1060,8 +1233,31 @@ async function runOne(name, app, vulnFamilyMap) {
     await _materializeBlinded(originalRoot, blindedRoot, {
       stripAllComments: STRIP_ALL_COMMENTS || SCRAMBLE_IDENTIFIERS,
       scrambleIdentifiers: SCRAMBLE_IDENTIFIERS,
+      refresh: REFRESH,
     });
     repoRoot = blindedRoot;
+    if (MATERIALIZE_ONLY) {
+      // Hard exit rather than returning to the normal result-collection loop:
+      // this mode is single-app-only (multi-app/--all would only materialize
+      // the first target and silently skip the rest otherwise).
+      console.error(`  materialized only (--materialize-only): ${blindedRoot}`);
+      process.exit(0);
+    }
+  }
+  // preciseMethodScoring's GT extraction pattern-matches on the literal
+  // Bad()/GoodG2B() identifiers — `--scramble-identifiers` renames exactly
+  // those, so GT content must come from a parallel non-scrambled tree (same
+  // comment-stripping, so line numbers still align 1:1) rather than the
+  // tree the scanner actually reads. See buildJulietCsExpected's
+  // gtContentRoot comment for the bug this fixes.
+  let gtContentRoot = null;
+  if (BLIND && SCRAMBLE_IDENTIFIERS && app.groundTruth?.preciseMethodScoring) {
+    gtContentRoot = path.join(CACHE_ROOT, `${name}-${app.sha}-blinded`);
+    await _materializeBlinded(originalRoot, gtContentRoot, {
+      stripAllComments: true,
+      scrambleIdentifiers: false,
+      refresh: REFRESH,
+    });
   }
   let scanRoot = path.join(repoRoot, app.scanRoot || '.');
 
@@ -1072,13 +1268,13 @@ async function runOne(name, app, vulnFamilyMap) {
     expected = await buildOwaspBenchmarkExpected(repoRoot, app.groundTruth);
     if (Array.isArray(app.wildcardFamilies)) wildcardFamilies = app.wildcardFamilies;
   } else if (app.groundTruth.kind === 'juliet') {
-    expected = await buildJulietExpected(repoRoot, app.groundTruth);
+    expected = await buildJulietExpected(repoRoot, app.groundTruth, gtContentRoot);
     if (Array.isArray(app.wildcardFamilies)) wildcardFamilies = app.wildcardFamilies;
   } else if (app.groundTruth.kind === 'juliet-c-cpp') {
     expected = await buildJulietCppExpected(repoRoot, app.groundTruth);
     if (Array.isArray(app.wildcardFamilies)) wildcardFamilies = app.wildcardFamilies;
   } else if (app.groundTruth.kind === 'juliet-csharp') {
-    expected = await buildJulietCsExpected(repoRoot, app.groundTruth);
+    expected = await buildJulietCsExpected(repoRoot, app.groundTruth, gtContentRoot);
     if (Array.isArray(app.wildcardFamilies)) wildcardFamilies = app.wildcardFamilies;
   } else if (app.groundTruth.kind === 'bigvul-csv') {
     const extractRoot = path.join(CACHE_ROOT, `${name}-${app.sha}-extracted`);
@@ -1112,18 +1308,48 @@ async function runOne(name, app, vulnFamilyMap) {
     }
   }
 
+  if (GT_DRY_RUN) {
+    const withMethod = expected.filter(e => e.method).length;
+    console.error(`  --gt-dry-run: ${expected.length} expected entries (${withMethod} with a precise method span, ${expected.length - withMethod} file-level fallback)`);
+    console.error(JSON.stringify(expected.slice(0, 3), null, 2));
+    process.exit(0);
+  }
+
+  // --cwe: when active on a Juliet app, exclude every CWE directory NOT in
+  // the filter from the scan itself (not just from GT/scoring) — otherwise
+  // a "smoke" run would still pay the full ~15-minute scan cost and only
+  // narrow the reported numbers, defeating the point of the flag. Lists the
+  // corpus's own top-level CWE dirs at runtime rather than requiring the
+  // caller to know the full CWE list in advance.
+  let cweFilterExcludes = [];
+  if (CWE_FILTER && (app.groundTruth.kind === 'juliet' || app.groundTruth.kind === 'juliet-csharp')) {
+    const isJava = app.groundTruth.kind === 'juliet';
+    const dirRoot = isJava ? repoRoot : path.join(repoRoot, 'src', 'testcases');
+    let dirEntries = [];
+    try { dirEntries = await fs.readdir(dirRoot, { withFileTypes: true }); } catch { /* corpus not laid out as expected; leave unfiltered */ }
+    const re = isJava ? /^juliet-cwe(\d+)$/i : /^CWE(\d+)_/;
+    for (const e of dirEntries) {
+      if (!e.isDirectory()) continue;
+      const m = e.name.match(re);
+      if (!m) continue;
+      if (!CWE_FILTER.has(m[1])) cweFilterExcludes.push(isJava ? `${e.name}/**` : `src/testcases/${e.name}/**`);
+    }
+    console.error(`  --cwe ${[...CWE_FILTER].join(',')}: excluding ${cweFilterExcludes.length}/${dirEntries.filter(e => re.test(e.name)).length} CWE directories from the scan itself`);
+  }
+
   // Apply per-app excludePaths via a generated rules.yml under the scan root.
   // runScan() honors `<scanRoot>/.agentic-security/rules.yml#ignorePaths`. We
   // generate it fresh on every run so manifest changes propagate immediately,
   // and clean up after to leave the cache reusable. Done AFTER GT building
   // so the bigvul/cvefixes extract dirs exist before we drop the rules file.
   let rulesPath = null;
-  if (Array.isArray(app.excludePaths) && app.excludePaths.length) {
+  const allExcludePaths = [...(Array.isArray(app.excludePaths) ? app.excludePaths : []), ...cweFilterExcludes];
+  if (allExcludePaths.length) {
     const rulesDir = path.join(scanRoot, '.agentic-security');
     rulesPath = path.join(rulesDir, 'rules.yml');
     await fs.mkdir(rulesDir, { recursive: true });
     // Quote each path so leading `*` isn't parsed as a YAML alias.
-    const yml = 'ignorePaths:\n' + app.excludePaths.map(p => `  - ${JSON.stringify(p)}`).join('\n') + '\n';
+    const yml = 'ignorePaths:\n' + allExcludePaths.map(p => `  - ${JSON.stringify(p)}`).join('\n') + '\n';
     await fs.writeFile(rulesPath, yml);
   }
   // --no-wildcards: strip the relaxation and report strict line-level scoring.
@@ -1250,7 +1476,7 @@ async function runOne(name, app, vulnFamilyMap) {
     tp, fp, fn, precision, recall, f1: fOne,
     tpr, fpr, specificity, youden,
     negativesTotal: negatives.length, negTN: negTotalTN, negFP: negTotalFP,
-    perFamily, perCwe, fps, fns,
+    perFamily, perCwe, tps, fps, fns,
     elapsedSec: parseFloat(elapsed),
     expectedTotal: expected.length,
     auditorVerifiedSource,
@@ -1532,4 +1758,19 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error(e); process.exit(2); });
+// Guarded, not unconditional: this file now also exports findJavaMethodSpans/
+// findCsharpMethodSpans for reuse (SARD_AGENTIC_SECURITY_PRD.md Phase 7's
+// mutate.mjs), and a bare `import { findJavaMethodSpans } from './bench-
+// realworld.js'` with no guard here would ALSO run this entire CLI's main()
+// against WHATEVER process.argv the importing script happens to have —
+// found the hard way: mutate.mjs's own --app/--cwe flags happened to also be
+// valid bench-realworld.js flags, so importing it silently kicked off a full,
+// unwanted ~160s non-blind benchmark run as a side effect of a function
+// import. `import.meta.url === file://${process.argv[1]}` is the same
+// direct-execution guard every other multi-purpose script in bench/sard/
+// already uses (split.mjs, mutate.mjs, macro-score.mjs's peers) — this file
+// just predates that convention, having been CLI-only until this PRD's work
+// made it also import-worthy.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(e => { console.error(e); process.exit(2); });
+}

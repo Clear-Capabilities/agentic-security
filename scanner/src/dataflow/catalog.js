@@ -217,6 +217,32 @@ export const CATALOG = [
   { kind: 'source', id: 'java-request-getReader',      language: 'java', framework: 'servlet', match: { type: 'call', callee: 'getReader' },      label: 'request.getReader' },
   { kind: 'source', id: 'java-system-getenv',          language: 'java', framework: 'stdlib',  match: { type: 'call', callee: 'getenv' },         label: 'System.getenv' },
   { kind: 'source', id: 'java-system-getProperty',     language: 'java', framework: 'stdlib',  match: { type: 'call', callee: 'getProperty' },    label: 'System.getProperty' },
+  // Found via SARD_AGENTIC_SECURITY_PRD.md bench work: bench/sard/scripts/
+  // analyze-errors.mjs clustered Java false negatives by Juliet's own
+  // source-descriptor filename segment (evidence-based — see that script's
+  // header for why this is legitimate without reading raw corpus content)
+  // and found "console_readLine" and "database" among the largest clusters,
+  // spanning multiple unrelated CWEs uniformly — the signature of a missing
+  // SOURCE model, not a per-CWE bug. Confirmed by grep: this catalog had no
+  // entry for either before now. Both are standard real-world taint sources
+  // (interactive stdin input; a value read back out of a database result
+  // set — classic second-order injection), not SARD-specific.
+  { kind: 'source', id: 'java-io-readline',            language: 'java', framework: 'stdlib',  match: { type: 'call', callee: 'readLine' },       label: 'BufferedReader.readLine() / Console.readLine()' },
+  // `getString`/`getObject` are common enough method names on unrelated
+  // classes that this SHOULD be scoped to a resolved ResultSet-shaped
+  // receiver, and receiverTypeIn is written here expressing that intent —
+  // but verified (via a dedicated precision test, see java-taint-flow.
+  // test.js) that it is currently INERT for Java: `class-hierarchy.js`'s
+  // own module header states its CHA/classOfVar is JS/TS-only (built by
+  // walking Babel ASTs), so `_receiverTypeFor` always returns null for a
+  // Java call site and `_receiverTypeAllowed`'s "unknown != clean" rule
+  // (documented in this file, `_receiverTypeAllowed`'s own header) then
+  // permits the match unconditionally — identical to a bare unscoped entry
+  // today. Left in place (correct once Java CHA support exists, and
+  // documents the intended precision boundary) rather than removed, but
+  // do not assume it is actually gating anything yet.
+  { kind: 'source', id: 'java-resultset-getstring',    language: 'java', framework: 'jdbc',    match: { type: 'call', callee: 'getString', receiverTypeIn: ['resultset'] }, label: 'ResultSet.getString' },
+  { kind: 'source', id: 'java-resultset-getobject',    language: 'java', framework: 'jdbc',    match: { type: 'call', callee: 'getObject', receiverTypeIn: ['resultset'] }, label: 'ResultSet.getObject' },
 
   // ─── SOURCES (Annotation/Decorator-shaped) ────────────────────────────────
   // R14(a): annotation/decorator-shaped framework sources (Spring @RequestParam,
@@ -356,6 +382,20 @@ export const CATALOG = [
   { kind: 'source', id: 'php-post',     language: 'php', framework: 'core', match: { type: 'global', name: '_POST' },    label: '$_POST' },
   { kind: 'source', id: 'php-cookie',   language: 'php', framework: 'core', match: { type: 'global', name: '_COOKIE' },  label: '$_COOKIE' },
   { kind: 'source', id: 'php-server',   language: 'php', framework: 'core', match: { type: 'global', name: '_SERVER' },  label: '$_SERVER' },
+  // $_SESSION and $_ENV were absent from this catalog entirely (only
+  // _REQUEST/_GET/_POST/_COOKIE/_SERVER were modeled) — found via
+  // SARD_AGENTIC_SECURITY_PRD.md bench work on the NIST SARD PHP corpus,
+  // whose templates use $_SESSION as one of several source stand-ins.
+  // $_SESSION isn't purely attacker-controlled the way $_GET is (session
+  // data usually originates from server-side writes), but a common,
+  // real-world-relevant subclass IS attacker-controlled: any value the app
+  // itself copies into $_SESSION from $_GET/$_POST/$_COOKIE without
+  // validation. Modeling it as a source (same as the existing four) is the
+  // conservative, general choice — flagging that class rather than missing
+  // it entirely, consistent with how $_COOKIE (also partly server-set) is
+  // already modeled.
+  { kind: 'source', id: 'php-session',  language: 'php', framework: 'core', match: { type: 'global', name: '_SESSION' }, label: '$_SESSION' },
+  { kind: 'source', id: 'php-env',      language: 'php', framework: 'core', match: { type: 'global', name: '_ENV' },     label: '$_ENV' },
   { kind: 'source', id: 'php-symfony-query',   language: 'php', framework: 'symfony', match: { type: 'member', object: '$request', prop: 'query' },   label: '$request->query (Symfony)' },
   { kind: 'source', id: 'php-symfony-request', language: 'php', framework: 'symfony', match: { type: 'member', object: '$request', prop: 'request' }, label: '$request->request (Symfony)' },
   { kind: 'source', id: 'php-symfony-cookies', language: 'php', framework: 'symfony', match: { type: 'member', object: '$request', prop: 'cookies' }, label: '$request->cookies (Symfony)' },
@@ -444,6 +484,18 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-mysqli-query',   language: 'php', framework: 'mysqli',  match: { type: 'call', callee: 'mysqli_query' },  argIndex: 1,
     vuln: { name: 'SQL Injection (mysqli_query)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use prepared statements: $stmt = $conn->prepare("SELECT * WHERE id = ?"); $stmt->bind_param("i", $id);' } },
+  // Legacy mysql_* extension (deprecated PHP 5.5, removed 7.0) — still widely
+  // present in real-world PHP and, per SARD_AGENTIC_SECURITY_PRD.md bench
+  // work, in the NIST SARD PHP Vulnerability Test Suite corpus. Only
+  // php.js's same-line structural regex (`sqlInjectionStructural`) covered
+  // this call before; a variable assigned on one line and passed to
+  // mysql_query() on a later line (the dominant real-world and SARD shape)
+  // was invisible to the taint dataflow engine entirely. Query is argIndex 0
+  // (the optional link-identifier connection is argIndex 1), unlike
+  // mysqli_query's argIndex 1.
+  { kind: 'sink', id: 'php-mysql-query',   language: 'php', framework: 'mysql',   match: { type: 'call', callee: 'mysql_query' },   argIndex: 0,
+    vuln: { name: 'SQL Injection (mysql_query)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'The mysql_* extension is removed in PHP 7+; migrate to mysqli or PDO with prepared statements: $stmt = $mysqli->prepare("SELECT * WHERE id = ?"); $stmt->bind_param("i", $id).' } },
   { kind: 'sink', id: 'php-pdo-query',     language: 'php', framework: 'pdo',     match: { type: 'call', callee: 'query' },         argIndex: 0,
     vuln: { name: 'SQL Injection (PDO::query)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use PDO::prepare with bound parameters.' } },

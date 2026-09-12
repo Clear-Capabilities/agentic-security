@@ -72,7 +72,7 @@ open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 215 entries, engine v0.137.1 (measured 2026-08-19)
+### Result — 215 entries, engine v0.150.2 (measured 2026-09-12)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
@@ -82,12 +82,19 @@ blocker.
 | java | 25 | 25 (100%) | 13 (52%) |
 | js/ts | 38 | 38 (100%) | 22 (58%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
-| php | 23 | 23 (100%) | 12 (52%) |
+| php | 23 | 23 (100%) | 13 (57%) |
 | python | 32 | 32 (100%) | 21 (66%) |
 | ruby | 20 | 20 (100%) | 11 (55%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **215** | **215 (100%)** | **116 (54%)** |
+| **total** | **215** | **215 (100%)** | **117 (54%)** |
+
+php moved 12 → 13 (SARD_AGENTIC_SECURITY_PRD.md bench work: `$_SESSION`/
+`$_ENV` added as PHP taint sources, found via a real, evidence-based error
+cluster in the NIST SARD PHP corpus, not a SARD-specific shortcut — see
+`bench/sard/IMPLEMENTATION_STATUS.md`). Re-baselined via
+`npm run bench:layer-recall:update-baseline` per this gate's equality-check
+design (see below) rather than left to drift silently.
 
 **java**, **ruby** and **c#** were all **0 (0%)** on the first run of this
 instrument. None was a taint-engine limitation: all three were defects upstream

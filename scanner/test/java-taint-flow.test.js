@@ -271,3 +271,83 @@ public class Query {
   assert.ok(taint.some(f => /code injection/i.test(f.vuln)),
     `expected a Code Injection finding through the new-expression-started chain, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// SARD_AGENTIC_SECURITY_PRD.md bench work (bench/sard/scripts/
+// analyze-errors.mjs) clustered Java false negatives by Juliet's own
+// filename descriptor and found "console_readLine" as one of the largest
+// clusters, spanning multiple unrelated CWEs — the signature of a missing
+// SOURCE model, confirmed by grep: catalog.js had no `readLine` entry at
+// all before this. Real-world relevant (any CLI tool reading interactive
+// input), not SARD-specific.
+test('IR-TAINT: BufferedReader.readLine() flowing into Runtime.exec is reported', async () => {
+  const dir = mkTmp('readline-source', {
+    'App.java': `
+import java.io.*;
+public class App {
+  void handler() throws Exception {
+    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    String cmd = br.readLine();
+    Runtime.getRuntime().exec(cmd);
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /command injection/i.test(f.vuln)),
+    `expected a Command Injection finding from BufferedReader.readLine(), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// Same bench work found "database" (ResultSet-sourced values) as another
+// large, multi-CWE false-negative cluster. Scoped to a resolved
+// ResultSet-shaped receiver (receiverTypeIn) rather than left bare, since
+// `getString`/`getObject` are common enough method names elsewhere that an
+// unscoped match would be a real precision risk.
+test('IR-TAINT: ResultSet.getString() flowing into executeUpdate is reported (second-order SQLi)', async () => {
+  const dir = mkTmp('resultset-source', {
+    'App.java': `
+import java.sql.*;
+public class App {
+  void handler(Statement stmt) throws Exception {
+    ResultSet rs = stmt.executeQuery("SELECT name FROM users");
+    String name = rs.getString("name");
+    stmt.executeUpdate("SELECT * FROM t WHERE n = '" + name + "'");
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected a SQL Injection finding from ResultSet.getString(), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// NOT a precision guarantee — a documented CURRENT LIMITATION, pinned so it
+// can't regress silently in the other direction (a future engine change
+// making `getString()` NEWLY receiver-type-aware without anyone noticing
+// this test's assumption flipped). `java-resultset-getstring`'s
+// `receiverTypeIn: ['resultset']` LOOKS like a precision scope but is
+// actually inert today: class-hierarchy.js's CHA is JS/TS-only (walks Babel
+// ASTs), so `_receiverTypeFor` returns null for any Java call site and
+// `_receiverTypeAllowed`'s documented "unknown != clean" rule then permits
+// the match regardless of the receiver's real type. Confirmed here with a
+// receiver (`Config.Properties`) that is unambiguously NOT a ResultSet —
+// the source still fires. If Java ever gains CHA support, this test should
+// be revisited (and would then need to assert the OPPOSITE).
+test('IR-TAINT: getString() fires regardless of receiver type today (Java has no CHA yet — documented limitation, not a target)', async () => {
+  const dir = mkTmp('resultset-precision', {
+    'App.java': `
+public class Config {
+  static class Properties {
+    String getString(String key) { return "default"; }
+  }
+  void handler(java.sql.Statement stmt) throws Exception {
+    Properties p = new Properties();
+    String name = p.getString("name");
+    stmt.executeUpdate("SELECT * FROM t WHERE n = '" + name + "'");
+  }
+}
+`,
+  });
+  const taint = (await deepScan(dir)).filter(f => f.parser === 'IR-TAINT');
+  assert.ok(taint.some(f => /sql/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected getString() to still fire (Java receiver-type scoping is currently inert), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});

@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.150.2 |
-| Bundle SHA-256 | `54183e4ed75d70aeec00ba53f44450879c52d23fc1bd3ccc834719531f18a017` |
-| Commit | `21eab345fff3e80ffa01683e6b766dbf98595ea7` |
+| Engine version | 0.151.0 |
+| Bundle SHA-256 | `b804ee08a594d8f79c063fdbac2a4a5f14a4dfa0d3a1139a2b417d6cab16b3d0` |
+| Commit | `85956bf581e0ea4cd02818cf69a5b3ff8bda2636` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 215 (215 scored) |
 | Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-11T14:12:58.944Z |
+| Generated (UTC) | 2026-09-12T14:30:28.477Z |
 
 ## What these numbers are, and what they are not
 
@@ -162,7 +162,7 @@ Entries scored: 215
 | js/ts | 22/38 (57.9%) |
 | json | 0/1 (0.0%) |
 | kotlin | 10/21 (47.6%) |
-| php | 12/23 (52.2%) |
+| php | 13/23 (56.5%) |
 | python | 21/32 (65.6%) |
 | ruby | 11/20 (55.0%) |
 | terraform | 0/1 (0.0%) |
@@ -226,7 +226,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 324/373 (86.9%) |
+| 326/373 (87.4%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone

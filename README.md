@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.150.2-blue)]()
+[![Version](https://img.shields.io/badge/version-0.151.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -392,6 +392,16 @@ Eight first-class languages, with cross-language detectors for the OWASP-relevan
 Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, unrestricted file upload, missing authentication on state-changing routes, broken object/function-level authorization (BOLA/BFLA), and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
 
 The detectors are precision-first: parameterized queries, escaped output, allow-list guards, CSPRNG-derived IVs, framework CSRF middleware, and token-auth schemes are recognized and **not** flagged.
+
+---
+
+## Security benchmarking
+
+Agentic Security is evaluated against neutralized NIST SARD vulnerability datasets (the Juliet Test Suites for Java and C#, and the SARD PHP Vulnerability Test Suite).
+
+Benchmark inputs are stripped of vulnerability labels, CWE-bearing filenames and package/class names, comments, and Juliet good/bad naming conventions before the scanner ever sees them — verified by a dedicated leakage audit that fails closed on any residual answer-bearing string. Scoring is vulnerability-level (per method span, not per file), reports macro-F1 as the primary metric alongside per-CWE precision/recall, a CWE confusion matrix, and localization accuracy, and splits the corpus into non-overlapping train/dev/test sets by structural template family so near-duplicate flow variants never leak across the boundary.
+
+No benchmark scores are published in this repository — see `bench/README.md` for why. See `bench/sard/README.md` for how to run it yourself.
 
 ---
 

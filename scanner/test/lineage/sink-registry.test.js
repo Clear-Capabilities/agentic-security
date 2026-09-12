@@ -437,19 +437,20 @@ test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DIST
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned sink coverage counts: 101 modeled / 6 partial / 9 candidate / 82 unsupported', () => {
+test('pinned sink coverage counts: 102 modeled / 6 partial / 9 candidate / 82 unsupported', () => {
   // 194 -> 198 entries and 97 -> 101 modeled: Sub-project H's AC-07 closure
   // added the four CWE-201 AI-model-provider sink entries (OpenAI
   // chat.completions/responses, Anthropic messages, Bedrock
-  // InvokeModelCommand). Re-measured against the live catalog, not adjusted
-  // by arithmetic.
+  // InvokeModelCommand). 198 -> 199 and 101 -> 102: SARD_AGENTIC_SECURITY_PRD.md
+  // work added a php-mysql-query (CWE-89) sink entry. Re-measured against the
+  // live catalog, not adjusted by arithmetic.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 198);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 101);
+  assert.equal(SINKS.length, 199);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 102);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 82);
-  assert.equal(101 + 6 + 9 + 82, SINKS.length);
+  assert.equal(102 + 6 + 9 + 82, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

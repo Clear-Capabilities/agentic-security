@@ -9,6 +9,67 @@
 > make the history less accurate, not more.
 
 
+## 0.151.0 - SARD/Juliet benchmarking: leakage-clean scoring, macro-F1, mutation testing, and fix verification (SARD_AGENTIC_SECURITY_PRD.md)
+
+Builds a full benchmarking subsystem against NIST SARD's Juliet (Java/C#) and PHP Vulnerability
+Test Suite corpora, extending the pre-existing `bench-realworld.js` harness rather than
+duplicating it. New: `bench/sard/` (dataset lockfile, PHP ingestion, leakage audit, macro-F1 +
+per-CWE + CWE-confusion-matrix + localization-accuracy scoring, structural train/dev/test
+splitting with a duplicate-crossing audit, semantic mutation testing, and independent fix
+verification), plus a `--cwe` targeted/smoke-run flag and a new CI job (`sard-blind-smoke`)
+measuring genuine leakage-clean detection quality separately from the pre-existing
+non-blind `sard-juliet-java` job (which tracks a different thing: whether the corpus-shape-aware
+fallback code still works, not detection quality).
+
+**Real, measured numbers** (all reproduced, none quoted without a fresh run — see
+`bench/sard/IMPLEMENTATION_STATUS.md` for the full ledger and every command that produced them):
+Java macro-F1 45.6% (P=66.5%, R=36.9%, leakage-clean, vulnerability-level scoring); C# macro-F1
+8.4% (26/32 CWE families found to have zero detector coverage at all — a real, root-caused gap,
+not yet fixed); Semantic Robustness Rate 100% (84/84 real mutations survived, sanity-checked
+against a deliberately-safe negative control); Fully Verified Fix Rate 100% (32/32 real Java
+weak-hash fixes); leakage reduced from 907,516 to 3 residual hits (99.9997%).
+
+**Real engine fixes found via this benchmarking work** (general capability improvements, not
+SARD-specific shortcuts — each verified with `bench:layer-recall`/`test:dataflow` before and
+after):
+- PHP: `$_SESSION`/`$_ENV` added as taint sources (previously entirely absent from the catalog),
+  `mysql_query()` given a real taint-dataflow sink (previously only a same-line structural
+  regex, missing the dominant assign-then-call-later shape). `bench:layer-recall` PHP taint
+  recall moved 12→13; baseline re-recorded (a real improvement, not silently left stale — this
+  gate compares for equality, not a floor, precisely to prevent that).
+- Java: `BufferedReader.readLine()`/`Console.readLine()` and `ResultSet.getString`/`getObject`
+  added as taint sources, root-caused from real, evidence-based error-cluster analysis (grouping
+  false negatives by Juliet's own filename descriptor) rather than guessed.
+- `deterministic-fix.js`'s weak-hash rule had a real Java coverage gap: its `applies()` gate
+  already matched Java CWE-327/328/916 findings, but `transform()` had no Java branch at all, so
+  every Java weak-hash finding silently produced no fix. Added
+  `MessageDigest.getInstance("MD5"|"SHA1")` → `"SHA-256"`.
+- `bench-realworld.js` and `leakage-audit.mjs` both had an unconditional top-level `main()` (and,
+  in `bench-realworld.js`'s case, a separate top-level usage-check) with no `import.meta.url`
+  guard — importing either file's helper functions as a module silently ran the ENTIRE CLI
+  against the *importer's* own `process.argv`. Found the hard way when a new mutation-testing
+  script's own `--app`/`--cwe` flags happened to also be valid `bench-realworld.js` flags,
+  triggering an unwanted ~160s benchmark run as a side effect of a function import. Both files
+  now guard their top-level side effects the same way every other multi-purpose script in
+  `bench/sard/scripts/` already did.
+- Root `CLAUDE.md` described `bench:layer-recall:check` as "a FLOOR, not an equality check...
+  silent on a rise" — stale documentation of a design the gate itself had already moved past
+  (its own code comment says "PRD F12.2 — compares for EQUALITY, not against a floor"). Fixed.
+- `src/lineage/source-registry.js`'s `NO_PROVENANCE_OVERRIDES` table (Data Flow Explorer) had no
+  entries for the new `java-io-readline`/`java-resultset-getstring`/`java-resultset-getobject`
+  catalog sources, or for the pre-existing `php-session`/`php-env` sources — all five failed the
+  registry's own completeness guard (`source-registry.test.js`), which fails loudly rather than
+  silently producing an uncategorized graph node. Added (`user-input`/`database-read`/
+  `http-cookie`/`env-value` respectively); pinned coverage counts re-measured and updated
+  (185 total source entries, 87 `candidate`). Two `bench/sard/scripts/` helpers
+  (`analyze-errors.mjs`, `score-php.mjs`) were also wired into `scanner/package.json` after
+  `no-orphan-scripts.test.js` flagged them as unreachable from any npm script.
+
+14 new automated tests (`java-taint-flow.test.js` +3, `deterministic-fix.test.js` +3, new
+`sard-leakage-pipeline.test.js` +8 covering PRD §62's literal leakage-injection list and a
+synthetic-fixture integration test through the real neutralization pipeline).
+
+
 
 ## 0.150.2 - Two adversarial-review passes on 0.150.0's Ollama support: redaction, disclosure, and robustness fixes
 

@@ -153,6 +153,12 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   // Java / stdlib
   'java-system-getenv': 'env-value',
   'java-system-getProperty': 'env-value',       // JVM system properties, env-adjacent
+  'java-io-readline': 'user-input',             // BufferedReader.readLine() / Console.readLine() — interactive stdin
+  // Java / JDBC — a value read back out of a database result set (classic
+  // second-order injection); `database-read` is SOURCE_CATEGORIES' own
+  // vocabulary for exactly this shape.
+  'java-resultset-getstring': 'database-read',
+  'java-resultset-getobject': 'database-read',
   // Java / Spring annotations
   'java-spring-requestparam': 'http-query',
   'java-spring-pathvariable': 'http-route',
@@ -209,6 +215,8 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   'php-post': 'http-body',
   'php-cookie': 'http-cookie',
   'php-server': 'http-header',
+  'php-session': 'http-cookie',                 // $_SESSION is cookie-backed by default, same convention as rb-rails-session
+  'php-env': 'env-value',
   'php-symfony-query': 'http-query',
   'php-symfony-request': 'http-body',
   'php-symfony-cookies': 'http-cookie',

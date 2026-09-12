@@ -123,6 +123,67 @@
         "_doc": "UnitTestBot's mirror is Apache-2.0. Source is fetched on demand, never committed. Original NIST SARD content is public-domain (US Govt work)."
       }
     },
+    "sard-juliet-java-strict": {
+      "language": "java",
+      "repo": "https://github.com/UnitTestBot/juliet-java-test-suite.git",
+      "sha": "8b5b9d6edf20482abef09bf9300600556ba4e4b0",
+      "scanRoot": ".",
+      "_doc": "SARD_AGENTIC_SECURITY_PRD.md Phase 3 — same corpus as sard-juliet-java, but scored vulnerability-level: preciseMethodScoring emits one expected entry per bad()/goodG2B() method span (real line ranges) instead of one flat file-level entry, AND wildcardFamilies is empty so every finding must land inside its own matching expected span to count as a TP (a finding of the right family in the wrong file, or in a good() span, is scored as an FP, not silently absorbed). This is the honest per-vulnerability, localization-capable measurement the PRD's macro-F1/per-CWE/confusion-matrix/localization requirements need; sard-juliet-java itself is left unmodified for cross-version comparability of the existing looser numbers.",
+      "groundTruth": {
+        "kind": "juliet",
+        "preciseMethodScoring": true,
+        "cweToFamily": {
+          "CWE23": "path-traversal",
+          "CWE36": "path-traversal",
+          "CWE22": "path-traversal",
+          "CWE78": "command-injection",
+          "CWE79": "xss",
+          "CWE80": "xss",
+          "CWE81": "xss",
+          "CWE83": "xss",
+          "CWE89": "sql-injection",
+          "CWE90": "ldap-injection",
+          "CWE94": "code-injection",
+          "CWE113": "header-hardening",
+          "CWE256": "hardcoded-secret",
+          "CWE259": "hardcoded-secret",
+          "CWE315": "data-exposure",
+          "CWE319": "insecure-http",
+          "CWE321": "hardcoded-secret",
+          "CWE327": "weak-crypto",
+          "CWE328": "weak-crypto",
+          "CWE329": "weak-rng",
+          "CWE330": "weak-rng",
+          "CWE336": "weak-rng",
+          "CWE338": "weak-rng",
+          "CWE501": "trust-boundary",
+          "CWE502": "insecure-deserialization",
+          "CWE601": "open-redirect",
+          "CWE611": "xxe",
+          "CWE614": "header-hardening",
+          "CWE643": "xpath-injection",
+          "CWE798": "hardcoded-secret",
+          "CWE1004": "header-hardening"
+        },
+        "auditorVerifiedSource": "upstream-juliet-folders",
+        "_auditorVerifiedSourceDoc": "Provenance only. NOT an external sign-off. See docs/audit/README.md for the external-audit path."
+      },
+      "wildcardFamilies": [],
+      "excludePaths": [
+        "juliet-support/**",
+        "**/build/**",
+        "**/build.gradle*",
+        "**/.gradle/**",
+        "**/test/**",
+        "**/Test*.java",
+        ".github/**",
+        ".idea/**"
+      ],
+      "license": {
+        "spdx": "Apache-2.0",
+        "_doc": "UnitTestBot's mirror is Apache-2.0. Source is fetched on demand, never committed. Original NIST SARD content is public-domain (US Govt work)."
+      }
+    },
     "sard-juliet-csharp": {
       "language": "csharp",
       "repo": "https://github.com/snyk-schmidtty/juliet-test-suite-csharp.git",
@@ -191,6 +252,70 @@
         "xss",
         "format-string"
       ],
+      "excludePaths": [
+        "common/**",
+        "testcasesupport/**",
+        "**/test/**",
+        "**/Test*.cs",
+        ".github/**",
+        ".idea/**",
+        "lib/**"
+      ],
+      "license": {
+        "spdx": "public-domain",
+        "_doc": "NIST SARD content is US Govt work, public domain. Mirror by snyk-schmidtty — fetched on demand, never committed."
+      }
+    },
+    "sard-juliet-csharp-strict": {
+      "language": "csharp",
+      "repo": "https://github.com/snyk-schmidtty/juliet-test-suite-csharp.git",
+      "sha": "adf3314",
+      "scanRoot": "src/testcases",
+      "_doc": "SARD_AGENTIC_SECURITY_PRD.md Phase 3 — same corpus as sard-juliet-csharp, but scored vulnerability-level via preciseMethodScoring (findCsharpMethodSpans extracts Bad()/GoodG2B() method spans with real line ranges) and empty wildcardFamilies, so a finding must land inside its own matching expected span to count as a TP. sard-juliet-csharp itself is left unmodified for cross-version comparability.",
+      "groundTruth": {
+        "kind": "juliet-csharp",
+        "preciseMethodScoring": true,
+        "cweToFamily": {
+          "CWE23": "path-traversal",
+          "CWE36": "path-traversal",
+          "CWE78": "command-injection",
+          "CWE79": "xss",
+          "CWE80": "xss",
+          "CWE81": "xss",
+          "CWE83": "xss",
+          "CWE89": "sql-injection",
+          "CWE90": "ldap-injection",
+          "CWE94": "code-injection",
+          "CWE113": "header-hardening",
+          "CWE134": "format-string",
+          "CWE256": "hardcoded-secret",
+          "CWE259": "hardcoded-secret",
+          "CWE261": "hardcoded-secret",
+          "CWE313": "data-exposure",
+          "CWE314": "data-exposure",
+          "CWE315": "data-exposure",
+          "CWE319": "insecure-http",
+          "CWE321": "hardcoded-secret",
+          "CWE327": "weak-crypto",
+          "CWE328": "weak-crypto",
+          "CWE329": "weak-rng",
+          "CWE330": "weak-rng",
+          "CWE336": "weak-rng",
+          "CWE338": "weak-rng",
+          "CWE470": "code-injection",
+          "CWE523": "insecure-http",
+          "CWE539": "header-hardening",
+          "CWE601": "open-redirect",
+          "CWE614": "header-hardening",
+          "CWE643": "xpath-injection",
+          "CWE759": "weak-crypto",
+          "CWE760": "weak-crypto",
+          "CWE798": "hardcoded-secret"
+        },
+        "auditorVerifiedSource": "upstream-juliet-folders",
+        "_auditorVerifiedSourceDoc": "Provenance only. NOT an external sign-off. See docs/audit/README.md for the external-audit path."
+      },
+      "wildcardFamilies": [],
       "excludePaths": [
         "common/**",
         "testcasesupport/**",

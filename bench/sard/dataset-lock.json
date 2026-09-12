@@ -1,0 +1,17 @@
+{
+  "_doc": "SARD_AGENTIC_SECURITY_PRD.md §58 — pinned dataset sources. Java/C# Juliet are pinned via git SHA in scanner/test/benchmark/realworld/manifest.json (repo+sha there is the equivalent lock for those two); this file covers sources that don't go through that harness. SHA-256 values here were computed locally after download, never trusted from a third-party quote (see root CLAUDE.md verification-discipline rule).",
+  "sources": {
+    "sard-php-vulnerability-test-suite": {
+      "url": "https://samate.nist.gov/SARD/downloads/test-suites/2015-10-27-php-vulnerability-test-suite.zip",
+      "downloadedAt": "2026-09-12T05:22:00Z",
+      "byteSize": 167957206,
+      "sha256": "3407473fc2cfa38eea9216b8a7f22559b656f20ba5f2eb3b6992010265780f8c",
+      "author": "Bertrand Stivalet and Aurelien Delaitre (NIST SARD test-suite #103)",
+      "license": "public-domain (US Govt work, CC0-equivalent per SARD terms)",
+      "totalTestCases": 42212,
+      "structure": "one <numericId>-v1.0.0/ directory per test case, each with manifest.sarif (SARIF 2.1.0 ground truth: properties.state good|bad, results[].ruleId=CWE-<N>, results[].locations[].physicalLocation.region.startLine), Dockerfile, Makefile, and src/<CWE-and-descriptor-bearing-filename>.php.",
+      "verifiedBy": "curl -I HTTP 200 + content-length match, then `shasum -a 256` on the actual downloaded bytes, both this session — not a third-party-quoted checksum.",
+      "localPath": "bench/sard/raw/php-vulnerability-test-suite.zip"
+    }
+  }
+}

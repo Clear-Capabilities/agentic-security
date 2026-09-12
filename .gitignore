@@ -101,6 +101,24 @@ reports/findings-*.html
 # CVE-replay runner outputs — timestamped JSON snapshots, regenerated each run.
 bench/cve-replay/results/*.json
 
+# SARD benchmark (SARD_AGENTIC_SECURITY_PRD.md) — downloaded corpora, gold
+# labels, neutralized scanner workspaces, generated mutations, and reports are
+# all local-only. bench/README.md's policy is that no benchmark scores are
+# committed to this repo; the real Juliet Java/C#/C++ corpora already live
+# under bench-realworld.js's own .bench-cache/ (also gitignored) — raw/ here
+# is reserved for SARD suites that harness doesn't cover yet (e.g. PHP).
+bench/sard/raw/*
+!bench/sard/raw/.gitkeep
+bench/sard/gold/*
+!bench/sard/gold/.gitkeep
+bench/sard/workspace/*
+!bench/sard/workspace/.gitkeep
+bench/sard/mutations/*
+!bench/sard/mutations/.gitkeep
+bench/sard/reports/*.json
+bench/sard/reports/*.md
+bench/sard/reports/*.csv
+
 # AI-BOM artefact emitted by the scanner during dev runs.
 scanner/aibom.md
 

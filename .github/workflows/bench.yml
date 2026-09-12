@@ -197,3 +197,49 @@ jobs:
         with:
           name: bench-realworld-${{ github.run_id }}
           path: /tmp/realworld.json
+
+  # SARD_AGENTIC_SECURITY_PRD.md Phase 10 — deliberately SEPARATE from
+  # `realworld-bench` above, not folded into it. `realworld-bench`'s own
+  # `sard-juliet-java` entry runs WITHOUT `--blind`, so its 95% F1 floor is
+  # measuring whether the corpus-shape-aware fallback paths (bench-shape/
+  # index.js, gated behind AGENTIC_SECURITY_BENCH_SHAPE and force-disabled
+  # under --blind) still work — a legitimate regression signal for THAT
+  # subsystem, but not a statement about genuine detection quality (a scanner
+  # reading Juliet folder names trivially clears 95%). This job runs the
+  # PRD's actual ask: a leakage-clean (--blind --scramble-identifiers),
+  # vulnerability-level (-strict manifest entries), CI-fast (--cwe subset,
+  # ~2-3 min) smoke measurement, reported as a trend — same "informational,
+  # not blocking" tier as realworld-bench/synthetic-bench above, and for the
+  # identical reason (PRD R2): a detection-quality trend is not a statement
+  # about whether THIS build is publishable. Registered in
+  # .github/required-checks.json's `informational` list — a job observed on
+  # a commit but absent from both lists fails scanner/test/release-check.
+  # test.js's completeness check, so this registration is required, not
+  # optional.
+  sard-blind-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 'lts/*' }
+      - name: Install scanner deps
+        working-directory: scanner
+        run: npm ci
+      - name: Cache Juliet Java clone
+        uses: actions/cache@v6
+        with:
+          path: scanner/test/benchmark/realworld/.bench-cache
+          key: sard-cache-${{ hashFiles('scanner/test/benchmark/realworld/manifest.json') }}
+      - name: Run SARD blind smoke (5 representative CWEs)
+        working-directory: scanner
+        run: npm run bench:sard:smoke
+      - name: Upload SARD smoke report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sard-smoke-${{ github.run_id }}
+          # Per bench/README.md's policy, these numbers are never committed —
+          # this artifact is a run-scoped CI download, not a repo file.
+          path: bench/sard/reports/latest.json

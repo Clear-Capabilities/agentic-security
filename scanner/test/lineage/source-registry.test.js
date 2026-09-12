@@ -223,15 +223,19 @@ test('unsupported (defensive fallback): a synthetic no-provenance entry with an 
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned coverage counts: 84 modeled / 14 partial / 82 candidate / 0 unsupported', () => {
+test('pinned coverage counts: 84 modeled / 14 partial / 87 candidate / 0 unsupported', () => {
   const results = SOURCES.map(reclassifySource);
-  assert.equal(SOURCES.length, 180);
+  // SARD_AGENTIC_SECURITY_PRD.md work added 5 no-provenance Java/PHP source
+  // entries (java-io-readline, java-resultset-getstring/-getobject,
+  // php-session, php-env) — each resolves via NO_PROVENANCE_OVERRIDES (§4.3),
+  // which is always `candidate` by construction, so 82 -> 87, 180 -> 185.
+  assert.equal(SOURCES.length, 185);
   assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 84);
   // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 82);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 87);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(84 + 14 + 82, SOURCES.length);
+  assert.equal(84 + 14 + 87, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -242,11 +246,13 @@ test('pinned coverage counts: 84 modeled / 14 partial / 82 candidate / 0 unsuppo
 test('unreachable source categories match the pinned list from DESIGN_REGISTRIES.md §7.2', () => {
   const reachable = new Set(SOURCES.map((e) => reclassifySource(e).category).filter(Boolean));
   const unreachable = SOURCE_CATEGORIES.filter((c) => !reachable.has(c)).sort();
+  // database-read became reachable once java-resultset-getstring/-getobject
+  // were added and classified via NO_PROVENANCE_OVERRIDES (§4.3).
   assert.deepEqual(unreachable, [
-    'ai-memory', 'database-read', 'declared', 'graphql-argument',
+    'ai-memory', 'declared', 'graphql-argument',
     'grpc-field', 'queue-message', 'webhook-payload',
   ], 'source-side coverage gap changed — re-read DESIGN_REGISTRIES.md §7.2');
-  assert.equal(reachable.size, 14);
+  assert.equal(reachable.size, 15);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
