@@ -62,6 +62,15 @@ function patternsFor(lang) {
       { key: 'roslyn', re: new RegExp(String.raw`\bCSharpScript\s*\.\s*(?:EvaluateAsync|RunAsync|Create)\s*\(\s*${notLiteral}`, 'g') },
       { key: 'datatable-compute', re: new RegExp(String.raw`\.\s*Compute\s*\(\s*${notLiteral}`, 'g'),
         gate: /\b(?:DataTable|DataColumn|DataView)\b/ },
+      // System.CodeDom.Compiler's CSharpCodeProvider/VBCodeProvider — the
+      // historically standard .NET dynamic-compile-and-run API, predating
+      // Roslyn's CSharpScript by over a decade and still the one most
+      // widely documented and used. Canonical shape is
+      // `provider.CompileAssemblyFromSource(parameters, source)` — the
+      // tainted source is the SECOND argument, not the first, unlike every
+      // other sink in this file. A literal source string doesn't match.
+      { key: 'codedom-compile', re: new RegExp(String.raw`\.\s*CompileAssemblyFromSource\s*\(\s*[^,()]+\s*,\s*${notLiteral}`, 'g'),
+        gate: /\b(?:CSharpCodeProvider|VBCodeProvider|CodeDomProvider)\b/ },
     ];
   }
   if (lang === 'js') {

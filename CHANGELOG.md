@@ -9,6 +9,79 @@
 > make the history less accurate, not more.
 
 
+## 0.151.2 - Real C# SAST accuracy improvements: interprocedural call-graph fixes + new detector coverage
+
+Follow-up to 0.151.1's SARD work: a direct effort to improve the scanner's actual code-scanning
+accuracy (not benchmark-shape gaming), using self-authored probe fixtures rather than reading the
+deny-listed SARD corpus. Found and fixed two general engine bugs plus several detector gaps, all
+verified with real self-authored fixtures and zero regressions. Full account, including the
+benchmark-scoring limitation that makes the bigger fix's true impact invisible on the SARD
+number specifically, in `bench/sard/IMPLEMENTATION_STATUS.md`'s "Real accuracy improvement pass"
+section.
+
+**Engine fixes (general, not SARD-specific):**
+- **C# `this.method(...)` same-instance calls never resolved in the call graph.** A same-class
+  helper call written as `this.badSink(data)` silently blocked all interprocedural taint into
+  the callee, for every sink inside it. `parser-cs.js` lowers this to the flat callee string
+  `"this.foo"`, but the target method's registered name is bare (`"foo"`) — the opposite
+  asymmetry from Java's documented class-qualified-name gap, and unhandled by the existing
+  bare-tail fallback (which explicitly skips any callee containing a dot). Fixed in
+  `callgraph.js` with a new resolution branch, unconditional (not a guess — `this.` unambiguously
+  means "a member of the current instance"). 4 new tests.
+- **C# cross-class calls never resolved at all — same file or not.** `parser-cs.js`'s function
+  IDs never recorded which class a method belongs to, so `callgraph.js`'s cross-class index
+  (which resolves `new Helper().Sink(x)`, `Helper h = new Helper(); h.Sink(x)`, and bare
+  `Helper.Sink(x)`) was permanently empty for C#. Fixed by having the parser track each method's
+  enclosing class (matching Java's/JS's existing `"ClassName.method"` convention) plus a
+  companion local variable-type-inference pass for the `Helper h = new Helper(); h.Sink(x)`
+  shape (refuses to guess when a variable holds more than one distinct constructed type in the
+  same function). Also closed a related gap found along the way: a bare
+  `new Helper().Sink(data);` statement with no assignment previously dropped entirely. 8 new
+  tests, zero regressions across the full test suite.
+- Fixing the class-qualified naming above required also hardening the `this.`-call fix from the
+  same session to fall back to the existing bare-tail index, so the two fixes compose correctly
+  rather than one silently breaking the other.
+
+**Detector coverage:**
+- **CWE-94 code injection: `CSharpCodeProvider.CompileAssemblyFromSource` had zero coverage.**
+  The only existing C# code-injection patterns were Roslyn's `CSharpScript` (2014+) and
+  `DataTable.Compute` — missing `System.CodeDom.Compiler`'s `CSharpCodeProvider`, the
+  historically standard .NET dynamic-compile API, predating Roslyn scripting by a decade and
+  still the most commonly documented one. Largest single measured improvement of this release.
+- **CWE-78 command injection: `Process.Start` with a non-shell-literal filename was explicitly
+  out of scope.** Missed a real, well-documented .NET Framework gotcha:
+  `ProcessStartInfo.UseShellExecute` defaults to `true` on .NET Framework (only .NET Core/5+
+  default it to `false`), so `Process.Start("ping", tainted)` goes through the OS shell
+  regardless of the filename. Added as a companion sink at `high` (not `critical`) severity to
+  reflect the framework-version caveat, alongside the existing shell-literal-gated entry.
+- **LDAP injection attribute matching was a hardcoded 10-item enum** (`uid`/`cn`/`mail`/...).
+  Real LDAP/Active Directory schemas define far more attributes than any fixed list can
+  enumerate, including custom extensions — a real, general precision/recall bug for production
+  LDAP code, not a benchmark-specific one. Widened to a general LDAP-attribute-name shape.
+
+**Self-inflicted bug caught by this project's own gate:**
+- The new C# class-boundary-detection regex was a genuine, timing-confirmed ReDoS (30,000
+  non-matching modifier-keyword repeats took 5+ real seconds) — caught by `bench:self-scan:check`
+  exactly as designed. A first fix (bounding the repetition count) was measurably linear but
+  still tripped the static ReDoS detector's "nested quantifier" heuristic; unrolled into explicit
+  non-nested optional groups to satisfy both real safety and the detector.
+
+**What this release honestly does NOT close:**
+- The cross-class fix is proven correct via direct fixtures and unit tests, but the real SARD
+  corpus's macro-F1 for C# barely moved (8.4% → 10.8%, almost entirely from the CWE-94 fix
+  above) — traced to a benchmark-scoring limitation, not a detection gap: `bench-realworld.js`'s
+  scorer only credits a finding located inside the *expected method's own line range*, and an
+  interprocedural finding is, by definition, located in the callee it flows into. The scanner is
+  now more accurate; the benchmark's strict per-method scoring can't see it yet. Scoped as a
+  concrete next step, not fixed here.
+- Java's own version of the `this.`-call bug (`parser-java.js` lowers it to the literal string
+  `"unknown"` before it ever reaches the call graph) is unfixed — a separate, parser-level gap.
+- Weak-crypto/weak-RNG families (`new Random()`, `MD5`/`SHA1` for passwords) were investigated
+  and deliberately left alone: the existing precision heuristic (requires a security-suggestive
+  identifier nearby) is real and general, and loosening it just to score higher on this one
+  benchmark would trade away real-world precision — the exact shortcut this work was asked not
+  to take.
+
 ## 0.151.1 - Adversarial premortem on the SARD benchmarking subsystem: 12 real findings, 12 real fixes
 
 A structured adversarial premortem ("assume this subsystem has completely failed six months

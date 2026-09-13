@@ -176,6 +176,34 @@ export function buildCallGraph(perFileIR, fileContents) {
                        // 2b. Bare-tail fallback, same file only, refuses to
                        // guess on ambiguity (see bareTailInFile above).
                        (!c.callee.includes('.') ? (bareTailInFile.get(fn.file)?.get(c.callee) || null) : null) ||
+                       // 2c. `this.method(...)` same-instance call. The
+                       // OPPOSITE asymmetry from 2b: there the FUNCTION name
+                       // carries a qualifier (Java's class-qualified `fn.name`)
+                       // and the call site is bare; here the call site carries
+                       // a qualifier (`this.`) and `fn.name` is bare (C#'s
+                       // `parser-cs.js`, and any other hand-rolled parser that
+                       // lowers `this.foo(...)` to the literal dotted string
+                       // "this.foo" rather than stripping the receiver).
+                       // Found via the SARD C# benchmark: a same-class helper
+                       // call written as `this.badSink(data)` — an extremely
+                       // common idiom — never resolved, silently blocking
+                       // interprocedural taint into the helper for every sink
+                       // inside it, across every CWE. `this.` unambiguously
+                       // means "a member of the CURRENT instance", so
+                       // resolving it to a same-file method of the same name
+                       // is an exact, intentionally-qualified match — not a
+                       // guess — and runs unconditionally like 2b, never
+                       // gated behind `allowTailGuess`. Falls back to the
+                       // SAME bareTailInFile index 2b uses (not just a direct
+                       // sameFileMap hit) because `fn.name` may ALSO be
+                       // class-qualified (once a parser records the
+                       // enclosing class, e.g. C#'s post-class-tracking-fix
+                       // `"ClassName.method"`) — without this fallback, a
+                       // `this.`-call would stop resolving the moment a
+                       // parser started producing class-qualified names.
+                       (/^this\.\w+$/.test(c.callee)
+                         ? (sameFileMap?.get(c.callee.slice(5)) || bareTailInFile.get(fn.file)?.get(c.callee.slice(5)) || null)
+                         : null) ||
                        // 3. Cross-TU qualified-name index (C++ header/source
                        // pairing) — gated on the CALLER carrying a `qname`
                        // (only parser-cpp.js emits one) so a same-named call
@@ -253,6 +281,16 @@ export function buildCallGraph(perFileIR, fileContents) {
       if (!name.includes('.')) {
         const tail = bareTailInFile.get(callerFile)?.get(name);
         if (tail) return tail;
+      }
+      // `this.method(...)` same-instance call — see the identical branch
+      // and its full rationale in the `edges` loop above. Exact match, same
+      // file only, unconditional (not gated behind allowTailGuess). Also
+      // falls back to bareTailInFile for a class-qualified `fn.name` — see
+      // the matching comment on the `edges`-loop branch.
+      if (/^this\.\w+$/.test(name)) {
+        const tail = name.slice(5);
+        const viaThis = local?.get(tail) || bareTailInFile.get(callerFile)?.get(tail);
+        if (viaThis) return viaThis;
       }
     }
     for (const m of byNameInFile.values()) {

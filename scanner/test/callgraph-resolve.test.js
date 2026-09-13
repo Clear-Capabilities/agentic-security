@@ -68,6 +68,58 @@ test('an aliased re-export resolves via the source function, when fileContents i
     `expected the aliased re-export to resolve to impl.js's helper, got ${JSON.stringify(resolved)}`);
 });
 
+// Taint-recall: `this.method(arg)` same-instance calls. Found via the SARD
+// C# benchmark — a hand-rolled parser (parser-cs.js) lowers `this.foo(x)` to
+// the flat dotted callee string "this.foo", but `fn.name` for the target
+// method is bare ("foo", not class-qualified) — the OPPOSITE asymmetry from
+// Java's documented class-qualified-name bug, and unhandled by the existing
+// bareTailInFile fallback (which explicitly skips any callee containing a
+// dot). Confirmed empirically: this same-class delegation pattern silently
+// blocked ALL interprocedural taint into the callee, for every sink inside
+// it, across LDAP/XPath/response-splitting/code-injection/command-injection
+// — not a narrow case.
+test('resolveKnownCallee resolves a `this.method(...)` call to the same-file bare-named method', () => {
+  const perFileIR = {
+    'Api.cs': { functions: [
+      { qid: 'Api.cs::bad@1#a', name: 'bad', file: 'Api.cs', calls: [{ callee: 'this.badSink', line: 3 }] },
+      { qid: 'Api.cs::badSink@10#b', name: 'badSink', file: 'Api.cs', calls: [] },
+    ] },
+  };
+  const g = buildCallGraph(perFileIR, { 'Api.cs': '' });
+  assert.equal(g.resolveKnownCallee('this.badSink', 'Api.cs'), 'Api.cs::badSink@10#b');
+});
+
+test('edges[] also resolves a `this.method(...)` call site (not just resolveKnownCallee)', () => {
+  const perFileIR = {
+    'Api.cs': { functions: [
+      { qid: 'Api.cs::bad@1#a', name: 'bad', file: 'Api.cs', calls: [{ callee: 'this.badSink', site: 's1', line: 3 }] },
+      { qid: 'Api.cs::badSink@10#b', name: 'badSink', file: 'Api.cs', calls: [] },
+    ] },
+  };
+  const g = buildCallGraph(perFileIR, { 'Api.cs': '' });
+  const edge = g.edges.find(e => e.caller === 'Api.cs::bad@1#a');
+  assert.ok(edge, 'expected an edge from bad()');
+  assert.equal(edge.callee, 'Api.cs::badSink@10#b');
+});
+
+test('`this.method(...)` does NOT resolve across files (same-file only, never a cross-file guess)', () => {
+  const perFileIR = {
+    'Api.cs': { functions: [{ qid: 'Api.cs::bad@1#a', name: 'bad', file: 'Api.cs', calls: [{ callee: 'this.badSink', line: 3 }] }] },
+    'Other.cs': { functions: [{ qid: 'Other.cs::badSink@1#c', name: 'badSink', file: 'Other.cs', calls: [] }] },
+  };
+  const g = buildCallGraph(perFileIR, { 'Api.cs': '', 'Other.cs': '' });
+  assert.equal(g.resolveKnownCallee('this.badSink', 'Api.cs'), null,
+    'a same-instance call must never resolve to a method defined in a DIFFERENT file/class');
+});
+
+test('a `this.`-prefixed name that matches nothing in the file still returns null (no false edge)', () => {
+  const perFileIR = {
+    'Api.cs': { functions: [{ qid: 'Api.cs::bad@1#a', name: 'bad', file: 'Api.cs', calls: [] }] },
+  };
+  const g = buildCallGraph(perFileIR, { 'Api.cs': '' });
+  assert.equal(g.resolveKnownCallee('this.nonExistent', 'Api.cs'), null);
+});
+
 test('buildProjectIR (the real call site) resolves an aliased re-export end to end', () => {
   const fileContents = {
     'impl.js': 'function helper(x) {}\n',

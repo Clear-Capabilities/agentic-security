@@ -24,7 +24,9 @@ public class C {
   assert.equal(ir.file, 'Demo.cs');
   assert.equal(ir.functions.length, 1);
   const fn = ir.functions[0];
-  assert.equal(fn.name, 'Greet');
+  // Class-qualified ("ClassName.method"), the same convention
+  // parser-java.js/parser-js.js already use — see parser-cs.js's `_qid()`.
+  assert.equal(fn.name, 'C.Greet');
   assert.deepEqual(fn.params, ['name']);
   assert.ok(fn.cfg && fn.cfg.entry === 'entry' && fn.cfg.exit === 'exit');
   // At least entry, one assign, one return, exit.
@@ -98,7 +100,7 @@ public class M {
 }
 `);
   assert.equal(ir.functions.length, 3);
-  assert.deepEqual(ir.functions.map(f => f.name).sort(), ['A', 'B', 'C']);
+  assert.deepEqual(ir.functions.map(f => f.name).sort(), ['M.A', 'M.B', 'M.C']);
 });
 
 // ── C#: `new Type(...)` with a concatenated argument must not blow the stack ──
@@ -169,4 +171,73 @@ fun handle(call: ApplicationCall) {
   assert.equal(assign.source.object.kind, 'member');
   assert.equal(assign.source.object.prop, 'parameters');
   assert.equal(assign.source.object.object.name, 'call');
+});
+
+// Class-tracking (found via the SARD C# benchmark investigation — see
+// test/catalog-cs-p1.test.js's "cs-cross-class" tests for the end-to-end
+// taint proof this unlocks). `fn.name`/`fn.qid` now record the enclosing
+// class, matching parser-java.js's/parser-js.js's existing convention.
+test('cs: a method inside a class gets a class-qualified name and qid', () => {
+  const ir = parseCSharpFile('D.cs', `
+public class Widget {
+    public void Render() { }
+}
+`);
+  assert.equal(ir.functions.length, 1);
+  assert.equal(ir.functions[0].name, 'Widget.Render');
+  assert.match(ir.functions[0].qid, /^D\.cs::Widget::Render@\d+#[0-9a-f]+$/);
+});
+
+test('cs: a method with NO enclosing class (top-level statements) keeps the bare, non-class-qualified form', () => {
+  const ir = parseCSharpFile('E.cs', `
+void TopLevelHelper(string x) { }
+`);
+  assert.equal(ir.functions.length, 1);
+  assert.equal(ir.functions[0].name, 'TopLevelHelper');
+  assert.match(ir.functions[0].qid, /^E\.cs::TopLevelHelper@\d+#[0-9a-f]+$/);
+});
+
+test('cs: a method inside a NESTED class resolves to the innermost enclosing class, not the outer one', () => {
+  const ir = parseCSharpFile('F.cs', `
+public class Outer {
+    class Inner {
+        public void Helper() { }
+    }
+}
+`);
+  const fn = ir.functions.find(f => f.name.endsWith('.Helper'));
+  assert.ok(fn, `expected a Helper method, got: ${JSON.stringify(ir.functions.map(f => f.name))}`);
+  assert.equal(fn.name, 'Inner.Helper', 'expected the INNERMOST class (Inner), not the outer one (Outer)');
+});
+
+test('cs: two classes in one file with a same-named method both get their own, correctly-qualified entries (no collision)', () => {
+  const ir = parseCSharpFile('G.cs', `
+public class Alpha {
+    public void BadSink(string data) { }
+}
+public class Beta {
+    public void BadSink(string data) { }
+}
+`);
+  const names = ir.functions.map(f => f.name).sort();
+  assert.deepEqual(names, ['Alpha.BadSink', 'Beta.BadSink']);
+  // Each qid is genuinely distinct (previously they'd have collided on the
+  // bare, class-unaware qid shape whenever the two methods' bodies also
+  // happened to hash the same — an empty body pair, as here, is exactly
+  // that adversarial case).
+  assert.notEqual(ir.functions[0].qid, ir.functions[1].qid);
+});
+
+// The CLASS_RE ReDoS fix (bench:self-scan:check caught this file's own
+// first-draft class-boundary regex as a genuine, timing-confirmed
+// catastrophic-backtracking bug — 30 000 non-matching modifier-keyword
+// repeats took 5+ real seconds with an unbounded `*`). Pinned here as a
+// permanent regression guard, not just fixed and forgotten.
+test('cs: class-boundary detection does not exhibit catastrophic backtracking on a long non-matching modifier run', () => {
+  const evil = ' public '.repeat(50000) + 'not actually a class declaration';
+  const t0 = Date.now();
+  const ir = parseCSharpFile('Evil.cs', `public class Real { public void M() { ${evil} } }`);
+  const elapsed = Date.now() - t0;
+  assert.ok(ir, 'parser must still return a valid IR object');
+  assert.ok(elapsed < 2000, `expected well under 2s (linear-time), took ${elapsed}ms — likely a ReDoS regression`);
 });

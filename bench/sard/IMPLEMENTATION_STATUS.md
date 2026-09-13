@@ -1108,3 +1108,261 @@ about C# interprocedural taint (F5) before it was written down as fact.**
 That is the exact failure mode the whole adversarial-premortem exercise
 exists to prevent, and it very nearly happened again, from the inside, in
 the middle of "fixing" the premortem's own findings.
+
+---
+
+## Real accuracy improvement pass (2026-09-12, follow-up session)
+
+User ask, verbatim in intent: improve the tool's actual code-scanning
+accuracy on SARD (not benchmark-shape gaming — "be sure not to look for the
+answers in comments that would bypass having a real code scanner"). This
+section covers real engine/detector fixes made and verified against the
+live corpus, plus what remains open. All numbers below come from a fresh
+`npm run bench:sard:{java,csharp}` run in this session, not memory.
+
+### Root cause found: `--deep` (the IR-TAINT engine) was never enabled for these benchmarks
+
+`bench:sard:java`/`bench:sard:csharp` never passed `--deep` to
+`bench-realworld.js`, despite that flag existing (added by an earlier
+session specifically for this purpose) and despite `scanner/src/dataflow/`
+carrying 30+ real, cataloged C# sources/sinks for exactly the CWE families
+scoring zero (XSS, LDAP, XPath, response-splitting, code-injection). Every
+number in this ledger before this entry was measured with the taint engine
+switched OFF — only regex-based structural detectors were ever exercised.
+**Fixed: both scripts now pass `--deep`.** This is a real, general,
+supported scanning mode (not a benchmark-only setting) — enabling it here
+just means the benchmark finally measures what the tool can actually do.
+
+### Root cause found and fixed: C# `this.method(...)` calls never resolved in the call graph (general engine bug, not SARD-specific)
+
+Investigated via self-authored probe fixtures (own code, mimicking
+well-documented public Juliet/.NET idioms — never read from the deny-listed
+corpus) rather than corpus inspection, per the user's instruction. A
+same-class helper call written as `this.badSink(data)` — extremely common,
+and Juliet's canonical `Bad()`/`BadSink()` split sometimes uses it — never
+resolved to a call-graph edge at all, silently blocking ALL interprocedural
+taint into the callee for every sink inside it. Root cause: `parser-cs.js`
+lowers `this.foo(x)` to the flat callee string `"this.foo"`, but
+`fn.name` for the target method is registered bare (`"foo"`).
+`src/ir/callgraph.js`'s existing `bareTailInFile` fallback handles the
+OPPOSITE asymmetry (Java's class-qualified `fn.name` vs. a bare call site)
+and explicitly excludes any callee containing a dot — so this exact,
+common shape fell through every resolution branch. **Fixed** with a new,
+narrowly-scoped branch in both the `edges` builder and `_resolveImpl`: a
+`this.`-qualified callee resolves to a same-file method of the bare tail
+name, unconditionally (not gated behind the existing `allowTailGuess`
+guess-flag) — `this.` unambiguously means "a member of the current
+instance", so this is an exact match, not a guess, exactly matching the
+reasoning already used for the class-qualified case. Verified via 4 new
+`test/callgraph-resolve.test.js` cases (including a same-file-only guard —
+must NOT resolve cross-file/cross-class) and 2 new end-to-end
+`test/catalog-cs-p1.test.js` cases proving real taint flow (LDAP, command
+injection) through a `this.`-qualified call, mirroring the file's existing
+bare-call tests exactly.
+
+**Measured impact:** proven immediately and dramatically on self-authored
+probe fixtures (a `this.`-qualified two-method LDAP/XPath/response-
+splitting/command-injection/code-injection chain went from 0 IR-TAINT
+findings to all 5 firing correctly). On the real corpus the C# macro-F1
+moved 8.4% → 10.8% (P 8.1%→11.2%, R 5.7%→8.5%) — real but smaller than the
+probe suggested, meaning Juliet's C# corpus does not predominantly use the
+`this.`-qualified form for the still-zero families (see below). **Java's
+macro-F1 was unchanged (45.6%, byte-identical) with `--deep` enabled** —
+confirmed this is NOT a regression: Java's own version of this bug is
+worse and different (`parser-java.js` lowers an unresolvable `this.`-call
+to the literal string `"unknown"` before it ever reaches `callgraph.js`,
+per the existing `../ir/CLAUDE.md` note), so this specific fix cannot reach
+Java's callees at all — a genuine, separate, NOT-yet-fixed gap, flagged
+here as the clear next item for Java specifically.
+
+### Two real detector-coverage gaps found and fixed via the same probe methodology
+
+- **CWE-94 code injection: `CSharpCodeProvider.CompileAssemblyFromSource`
+  had zero coverage.** `code-injection-multilang.js`'s only C# patterns
+  were Roslyn's `CSharpScript` (a 2014+ API) and `DataTable.Compute` —
+  missing `System.CodeDom.Compiler`'s `CSharpCodeProvider`, the
+  historically standard .NET dynamic-compile API that predates Roslyn
+  scripting by a decade and is still the most commonly documented one.
+  Added a new pattern (tainted SECOND argument, since
+  `CompileAssemblyFromSource(parameters, source)` is the canonical shape,
+  unlike every other sink in that file which checks arg 0). **Measured
+  impact: real and large — CWE-94 went from 0 TP to 390 TP** in the actual
+  corpus run, the single largest per-CWE improvement of this whole pass.
+  2 new cases in `test/code-injection-multilang.test.js`.
+- **CWE-78 command injection: `Process.Start(nonShellLiteralFilename,
+  taintedArgs)` was explicitly out of scope.** The existing
+  `cs-process-start` catalog sink deliberately required arg 0 to be a
+  literal shell invocation (`cmd.exe`/`sh`/`bash`) — correct precision
+  reasoning for arg-array (`execve`-style) safety on modern .NET, but it
+  misses a real, well-documented .NET Framework gotcha: `ProcessStartInfo.
+  UseShellExecute` **defaults to `true` on .NET Framework** (only .NET
+  Core/5+ default it to `false`), so `Process.Start("ping", tainted)` goes
+  through the OS shell regardless of the filename. Added a companion sink
+  (`cs-process-start-args`, `argIndex: 1` only, `severity: 'high'` not
+  `critical` to reflect the framework-version caveat) rather than widening
+  the existing battle-tested entry. Verified via `test/catalog-cs-p1.test.js`
+  (fires on the risky shape; a precision-control test confirms it does
+  NOT fire when the TAINT is in the filename position instead).
+
+### One general precision fix, unrelated to any specific gap found above
+
+`ldap-injection.js`'s `ATTR` constant was a hardcoded 10-item enum of LDAP
+attribute names (`uid`/`cn`/`mail`/...). Real LDAP/AD schemas define far
+more attributes than any fixed list can enumerate, including custom schema
+extensions — this was a real, general recall bug for production LDAP code,
+not a SARD-specific one. Widened to a general LDAP-attribute-name shape
+(`[A-Za-z][\w-]{0,40}`), unchanged elsewhere (still gated on the
+surrounding `(<attr>=` filter-syntax shape for the ungated inline path, and
+on a file-level LDAP-API hint for the lower-confidence variable-form path)
+— verified zero regression across the existing LDAP test suite (84 tests)
+and the self-scan precision baseline (zero drift on this codebase's own
+487 `scanner/src` files).
+
+### Verification
+
+Zero regressions: `test:dataflow` (1054/1054), `test:sast` (731/731),
+`bench:cve-replay:check` (215/215, no drift), `bench:self-scan:check` (no
+drift, all 4 tracked dirs), `bench:layer-recall:check` (matches baseline
+exactly). 6 new/updated targeted tests pin the fixes specifically. Both
+`bench:sard:java`/`bench:sard:csharp` npm scripts now include `--deep`
+permanently (this is the tool's real capability being measured, not a
+one-off flag for this session).
+
+### The bigger cross-class fix — implemented, verified, and its actual effect fully explained
+
+A further round of self-authored probing (still never reading the deny-
+listed corpus) found a THIRD, bigger asymmetry than the `this.`-call one
+above. `parser-cs.js`'s `_qid()` was `${file}::${name}@${line}#${sha}` —
+no class name anywhere in it. `callgraph.js`'s `classMethods` map (which
+resolves `SomeClass.method(...)` / `new SomeClass().method(...)` /
+`SomeClass x = new SomeClass(); x.method(...)` — ANY cross-class call, same
+file or not) is keyed by parsing `::([A-Z]\w*)::(\w+)@` out of the QID — a
+shape C#'s qid could never produce. **This made the entire cross-class
+resolution path permanently dead for C#**, confirmed via two probes (an
+inline `new Helper().BadSink(data)` and the more idiomatic
+`Helper h = new Helper(); h.BadSink(data);`) that both produced zero
+`IR-TAINT` findings before the fix.
+
+**Fixed, with user sign-off to attempt the larger, riskier change:**
+`parser-cs.js` now tracks each method's enclosing class while parsing
+(`_findClassRanges` finds every class/struct body's character range via
+balanced-brace matching; `_enclosingClassName` picks the innermost range
+containing a method's declaration offset) and threads it into `_qid()`/
+`fn.name`, matching parser-java.js's/parser-js.js's existing
+`"ClassName.method"` convention exactly (`classMethods` and
+`class-hierarchy.js`'s CHA both already recognized this shape — it just
+never had C# entries to match). A companion fix,
+`_applyVarTypeRewrite`/`_localVarConstructedTypes`, closes the OTHER half:
+`Helper h = new Helper(); h.BadSink(data)` produces a callee string
+`"h.BadSink"` (the local variable's name, not its class), which
+`classMethods` can never match on its own — local, same-function,
+unambiguous type inference rewrites it to `"Helper.BadSink"` in place
+(refuses to guess when a variable is assigned two DIFFERENT constructed
+types in one function — same "never fabricate an edge" convention
+`bareTailInFile` already uses). A third small fix closed a related gap
+found along the way: a bare inline `new Helper().BadSink(data);` used as
+its OWN statement (no assignment at all) previously fell through to
+`unknown` entirely — `_lowerStmt` had no `new`-prefixed branch, only
+`_lowerExpr` did.
+
+**Two more real, general bugs found and fixed while landing this:**
+(1) `fn.name` becoming class-qualified broke the ALREADY-WORKING
+`this.method(...)` fix (it looked up the bare tail directly against
+`sameFileMap`, keyed by the now-dotted name) — fixed by also falling back
+to the existing `bareTailInFile` index, in both `callgraph.js` resolution
+paths. (2) `bench:self-scan:check` caught a genuine, timing-confirmed
+ReDoS in `CLASS_RE`'s own first draft (30 000 non-matching modifier-keyword
+repeats: 5+ real seconds) — an unbounded modifier-list star combined with
+an unanchored search retrying at every position. A `{0,6}`-bounded version
+was measurably linear (200 000 repeats: 17ms) but still tripped
+`redos-nfa.js`'s static "nested quantifier" heuristic (it can't see that a
+NUMERIC bound caps the blowup) — unrolled into 4 explicit non-nested
+optional groups instead, satisfying both real safety and the detector,
+matching this codebase's own established precedent for exactly this
+detector-vs-reality gap (see the Kotlin trailing-lambda note in
+`../ir/CLAUDE.md`).
+
+**Verified correct end-to-end**, both via direct probes (all previously-
+zero families — LDAP, XPath, response-splitting, command injection — now
+fire via `IR-TAINT` through both cross-class shapes) and via 3 new
+`test/catalog-cs-p1.test.js` cases (inline instantiate-and-call, variable-
+held instance, and the ambiguous-type-refuses-to-guess precision control)
+plus 5 new `test/parser-cs-kt.test.js` cases (class-qualified naming,
+top-level/no-class fallback, innermost-nested-class resolution, two
+same-named methods in different classes not colliding, and a permanent
+ReDoS regression guard). Zero regressions across the full suite:
+`test:dataflow` (1070/1070), `test:sast` (732/732), `bench:cve-replay:check`
+(215/215), `bench:self-scan:check` (no drift once the ReDoS fix landed),
+`bench:layer-recall:check` (matches baseline exactly).
+
+**The real corpus's macro-F1 was UNCHANGED (10.8%) after this fix — and
+that result is now fully explained, not a mystery.** Comparing the LDAP
+family's FPs against its FNs in the same run made the actual mechanism
+visible: `CWE90_LDAP_Injection__Connect_tcp_01.cs` produces an FN at line
+32 (the `Bad` method's expected span) AND an unmatched FP at line 62 in
+the SAME FILE. **The detector now correctly fires — at the REAL sink
+location, inside a helper method `Bad()` calls — but `bench-realworld.js`'s
+`score()` only credits a finding whose line falls within `[e.line,
+e.lineEnd]`, the EXPECTED method's OWN span** (`aLine < e.line ||
+aLine > e.lineEnd` → no match, unconditionally). An interprocedural
+finding, by definition, is NOT located inside the caller's own line range
+— it's in the callee. **This is a benchmark SCORING-methodology
+limitation, not a scanner detection gap**: the tool is now objectively
+MORE accurate (it pinpoints the actual `DirectorySearcher.Filter`
+assignment inside the real helper method, rather than missing the flow
+entirely), but the strict per-method ground truth — built around Juliet's
+"one flaw, one `Bad()` method" assumption — has no way to credit a finding
+whose location moved to a transitively-called method. Not fixed this
+session (it means teaching `score()` to accept a match anywhere reachable
+via the call graph from the expected method's span, not just inside it —
+real, scoped, non-trivial benchmark-infrastructure work, distinct from the
+scanner fix above): flagged as the concrete next step for whoever picks
+this up, with the exact mechanism now on record so it isn't re-discovered
+from scratch.
+
+### What remains genuinely open (honest account)
+
+- **The same-file/cross-class interprocedural fix is real and verified,
+  but its benefit on THIS benchmark is invisible until `score()`'s
+  method-span matching is taught to follow the call graph** (see directly
+  above) — this is very likely why LDAP (90), XPath (643), response-
+  splitting (113), and command injection (78) still show tp=0 despite
+  `catalog.js` already carrying real sinks for all of them and the fix
+  being independently proven correct. The other still-zero families —
+  all 4 XSS variants (79/80/81/83), reflection code injection (470), the
+  data-exposure trio (313/314/315), insecure-HTTP (319/523), and cookie-
+  hardening (539/614) — were not individually probed this round; the same
+  scoring mechanism is the leading hypothesis for at least the injection-
+  class ones among them, but not yet confirmed the way LDAP was.
+- **Java's own `this.`-call bug (`parser-java.js` lowering to the literal
+  string `"unknown"`) is unfixed.** Given Java's macro-F1 (45.6%) is
+  already far ahead of C#'s, and this specific gap is parser-level (not
+  the callgraph-level fix that helped C#), it needs its own investigation
+  and is flagged, not started, here.
+- **Weak-crypto/weak-RNG families (327/328/759/760/329/330/336/338) were
+  investigated and deliberately NOT touched.** `weak-randomness.js`'s
+  existing `SECURITY_CONTEXT` heuristic (requires a security-suggestive
+  identifier — `token`/`password`/`key`/etc. — within a 6-line window)
+  is a real, general precision mechanism protecting against `new Random()`
+  false-positives in ordinary (non-crypto) code, but Juliet's actual
+  convention almost certainly uses generic, non-suggestive variable names
+  for these CWEs (by design — Juliet tests the STRUCTURAL pattern, not
+  naming). Loosening this heuristic to fire on bare `new Random()`/weak-
+  hash usage regardless of naming context would be trading away real-
+  world precision specifically to score higher on this benchmark — the
+  exact "answer-key" style shortcut the user explicitly asked NOT to take.
+  Left as a genuinely hard, unsolved precision/recall tradeoff rather than
+  gamed.
+- **"World's best SAST on every CWE in SARD" is a multi-session-scale
+  goal.** This pass found and fixed two general engine bugs (`this.`-calls
+  and cross-class calls, both with broad, not-SARD-specific benefit) plus
+  3 detector-coverage/precision gaps, plus a self-inflicted ReDoS caught by
+  this codebase's own gate. Measured C# macro-F1 moved from 8.4% to 10.8%
+  on this benchmark specifically because of the scoring-methodology gap
+  just explained — the REAL detection improvement is broader than that
+  number shows, and is independently verified by direct probes and unit
+  tests. Framed honestly rather than oversold: not the "close to 100%" the
+  user was hoping for, and the scoring-methodology fix needed to make the
+  cross-class improvement visible on THIS benchmark is real, identified,
+  scoped work for a future session — not a mystery, and not attempted here
+  given the length this session had already reached.

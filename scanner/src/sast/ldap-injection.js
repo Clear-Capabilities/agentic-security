@@ -23,9 +23,18 @@ import { blankComments } from './_comment-strip.js';
 // etc.) so we don't fire on every `"foo=" + bar` concatenation in unrelated
 // code.
 
-// LDAP filter attributes that strongly imply an LDAP filter (not a generic
-// key=value string). Shared across all language patterns.
-const ATTR = '(?:uid|cn|mail|sAMAccountName|givenName|sn|memberOf|userPrincipalName|distinguishedName|ou)';
+// LDAP filter attribute name. Real LDAP/AD schemas define far more
+// attributes than any fixed enum can enumerate (custom schema extensions,
+// and standard-but-uncommon ones like `department`/`title`/`employeeID`/
+// `homeDirectory`/`description`) — a hardcoded whitelist here is a real,
+// general precision-vs-recall bug, not just narrow for one benchmark.
+// Matches conventional LDAP attribute-name shape (alnum + hyphen, the RFC
+// 4512 `descr` production, simplified). Path A (inline concat, ungated) and
+// Path B (variable-form) both already anchor on a `(<attr>=` filter-syntax
+// shape plus, for Path B, a file-level LDAP-API hint (`LDAP_HINT_RE`) — the
+// widened ATTR only loosens which attribute NAME is accepted, not whether
+// the surrounding shape looks like an LDAP filter at all.
+const ATTR = '[A-Za-z][\\w-]{0,40}';
 
 // Path A — concatenation/interpolation INSIDE (or adjacent to) the sink call.
 // High-confidence; does not need the file-level context hint.

@@ -23,6 +23,20 @@ test('C# — CSharpScript.EvaluateAsync / DataTable.Compute on non-literal fire;
   assert.ok(clean('E.cs', 'class E { object r(string x){ return Helper.Compute(x); } }'));
 });
 
+// System.CodeDom.Compiler's CSharpCodeProvider — the historically standard
+// .NET dynamic-compile API, predating Roslyn's CSharpScript by over a
+// decade and still the one most commonly used (including by the SARD/
+// Juliet Java... err C# test suite). Found missing entirely while
+// investigating the SARD C# benchmark's zero CWE-94 coverage.
+test('C# — CSharpCodeProvider.CompileAssemblyFromSource on a non-literal source fires; literal source is clean', () => {
+  assert.ok(fires('P.cs',
+    'using System.CodeDom.Compiler;\nclass P { void r(string src){ var provider = new CSharpCodeProvider(); var parameters = new CompilerParameters(); var results = provider.CompileAssemblyFromSource(parameters, src); } }'));
+  assert.ok(clean('P.cs',
+    'using System.CodeDom.Compiler;\nclass P { void r(){ var provider = new CSharpCodeProvider(); var parameters = new CompilerParameters(); var results = provider.CompileAssemblyFromSource(parameters, "class C {}"); } }'));
+  // Same call shape without the CSharpCodeProvider/CodeDomProvider gate must not fire.
+  assert.ok(clean('P.cs', 'class P { void r(string src){ Helper.CompileAssemblyFromSource(parameters, src); } }'));
+});
+
 test('Go — yaegi interp.Eval / template.Parse of non-literal fire; literal template clean', () => {
   assert.ok(fires('e.go', 'package main\nimport "github.com/traefik/yaegi/interp"\nfunc r(code string){ i := interp.New(interp.Options{}); i.Eval(code) }'));
   assert.ok(fires('e.go', 'package main\nimport "text/template"\nfunc r(in string, w io.Writer){ t,_ := template.New("x").Parse(in); t.Execute(w, nil) }'));

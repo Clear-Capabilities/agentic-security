@@ -248,3 +248,173 @@ public class E {
   assert.equal(taint.length, 0,
     `lowercase "request" must not match the Request.* catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ')}`);
 });
+
+// Found via the SARD C# benchmark investigation (macro-F1 8.4%, 26/32 CWEs
+// at zero detector coverage): the two tests above use `BadSink(data)` — a
+// BARE same-class call. `this.BadSink(data)` — equally idiomatic, and the
+// form a private helper call is MORE often written in — silently failed to
+// resolve at all (`src/ir/callgraph.js`'s call-site resolution never
+// stripped the `this.` prefix before matching against `fn.name`, which
+// `parser-cs.js` registers bare), blocking interprocedural taint into every
+// sink behind a `this.`-qualified helper call, for every CWE. Fixed in
+// `callgraph.js` (see `test/callgraph-resolve.test.js` for the resolver-
+// level tests); these four cases pin the SAME fix end-to-end through a real
+// scan, for the two sink families the pre-existing tests above already
+// cover via the bare-call form.
+test('cs-interproc-basic (this.-qualified): LDAP injection propagates through a `this.badSink(data)` call', async () => {
+  const dir = mkTmp('ldap-interproc-this', `
+public class F {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["uid"];
+        this.BadSink(data);
+    }
+    private void BadSink(string data) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(uid=" + data + ")";
+        searcher.FindAll();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection to propagate across a this.-qualified method call, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-interproc-basic (this.-qualified): command injection propagates through a `this.badSink(data)` call', async () => {
+  const dir = mkTmp('cmdi-interproc-this', `
+using System.Diagnostics;
+public class G {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["cmd"];
+        this.BadSink(data);
+    }
+    private void BadSink(string data) {
+        Process.Start("cmd.exe", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected Command Injection to propagate across a this.-qualified method call, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-process-start-args: a NON-shell-literal filename with tainted arguments still fires (UseShellExecute defaults to true on .NET Framework)', async () => {
+  const dir = mkTmp('cmdi-process-start-args', `
+using System.Diagnostics;
+public class H {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["host"];
+        Process.Start("ping", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected Process.Start("ping", data) (non-shell filename) to still fire as command injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-process-start-args precision control: a tainted FILENAME with literal arguments does not fire this sink (argIndex is 1 only)', async () => {
+  const dir = mkTmp('cmdi-process-start-args-control', `
+using System.Diagnostics;
+public class I {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["exe"];
+        Process.Start(data, "-la");
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /cs-process-start-args|Process\.Start arguments/i.test(`${f.vuln} ${f.id || ''}`)),
+    `cs-process-start-args must only check argIndex 1 (arguments), not arg 0 (filename), got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
+// Found via the SAME SARD investigation as the this.-qualified tests above,
+// but a bigger, separate bug: `parser-cs.js`'s `_qid()` never recorded
+// which CLASS a method belongs to at all, so `callgraph.js`'s classMethods
+// index (which resolves ANY cross-class call — `new Helper().Sink(x)`,
+// `Helper h = new Helper(); h.Sink(x)`, or a bare `Helper.Sink(x)`) was
+// PERMANENTLY EMPTY for C#, independent of same-file vs. cross-file. This
+// blocked Juliet's other dominant helper-class idiom (alongside the
+// `this.`-qualified same-class case fixed above) for every CWE whose sink
+// sits inside a separate helper class. Fixed by having parser-cs.js track
+// each method's enclosing class (`_findClassRanges`/`_enclosingClassName`)
+// and thread it into `fn.name`/`fn.qid`, matching parser-java.js's/
+// parser-js.js's existing `"ClassName.method"` convention exactly — plus a
+// companion local-variable-type rewrite (`_applyVarTypeRewrite`) for the
+// `Helper h = new Helper(); h.Sink(x)` shape, since `h.Sink` as a raw
+// callee string can never match `classMethods` (keyed by the REAL class
+// name, not a local variable name).
+test('cs-cross-class: LDAP injection propagates through `new Helper().BadSink(data)` (inline instantiate-and-call, same file)', async () => {
+  const dir = mkTmp('ldap-cross-class-inline', `
+public class Helper1 {
+    public void BadSink(string data) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(uid=" + data + ")";
+        searcher.FindAll();
+    }
+}
+public class J {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["uid"];
+        new Helper1().BadSink(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection to propagate through new Helper1().BadSink(data), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-cross-class: LDAP injection propagates through `Helper h = new Helper(); h.BadSink(data);` (variable-held instance, same file)', async () => {
+  const dir = mkTmp('ldap-cross-class-var', `
+public class Helper2 {
+    public void BadSink(string data) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(cn=" + data + ")";
+        searcher.FindAll();
+    }
+}
+public class K {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["cn"];
+        Helper2 h = new Helper2();
+        h.BadSink(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection to propagate through a variable-held Helper2 instance, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-cross-class precision control: a variable assigned TWO DIFFERENT constructed types in one function is not rewritten (refuses to guess on ambiguity)', async () => {
+  // If `h` is reassigned from `new HelperA()` to `new HelperB()` within the
+  // same function, `h.BadSink(data)` could mean either class's method —
+  // genuinely ambiguous. The rewrite must refuse (leave the callee as the
+  // bare `h.BadSink`, matching this codebase's "never fabricate an edge"
+  // convention elsewhere) rather than guess wrong and silently misattribute
+  // a real flow to the wrong class's method.
+  const dir = mkTmp('cross-class-var-ambiguous', `
+public class HelperA2 {
+    public void BadSink(string data) { }
+}
+public class HelperB2 {
+    public void BadSink(string data) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(uid=" + data + ")";
+        searcher.FindAll();
+    }
+}
+public class L {
+    public void Bad(HttpRequest Request, bool flag) {
+        string data = Request.Params["uid"];
+        HelperA2 h = new HelperA2();
+        h = new HelperB2();
+        h.BadSink(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.length, 0,
+    `an ambiguously-typed variable must not resolve to either class's method (no guessed edge), got: ${taint.map(f => f.vuln).join(', ')}`);
+});

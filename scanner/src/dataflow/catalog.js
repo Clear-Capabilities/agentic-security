@@ -1248,6 +1248,23 @@ export const CATALOG = [
     match: { type: 'call', callee: 'Start', requireLiteralArg: { index: 0, pattern: '^"cmd(?:\\.exe)?"$|^"(?:/bin/)?(?:sh|bash)"$' } }, argIndex: 'all',
     vuln: { name: 'Command Injection (Process.Start string-form)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use ProcessStartInfo with separated FileName + Arguments; never pass /c with concat.' } },
+  // Companion to the entry above, for the NON-shell-literal filename case
+  // that entry deliberately excludes (`Process.Start("ping", tainted)`).
+  // This is a real, distinct risk, not a benchmark-only shape:
+  // `ProcessStartInfo.UseShellExecute` DEFAULTS TO TRUE on .NET Framework
+  // (only .NET Core/5+ default it to false), so an unqualified
+  // `Process.Start(anyFileName, args)` on Framework code goes through the
+  // OS shell regardless of what the filename is — the two-argument
+  // string-form overload used here always constructs a `ProcessStartInfo`
+  // with that same default. Scored `high`, not `critical`, to reflect that
+  // modern (.NET Core+) code with an explicit `UseShellExecute = false`
+  // elsewhere is safe from this specific mechanism even though this
+  // call-site check cannot see that — argIndex is 1 only (the arguments),
+  // never the filename itself, which is far more often a fixed literal.
+  { kind: 'sink', id: 'cs-process-start-args', language: 'cs', framework: 'stdlib',
+    match: { type: 'call', callee: 'Start' }, argIndex: 1,
+    vuln: { name: 'Command Injection (Process.Start arguments, UseShellExecute defaults to true on .NET Framework)', severity: 'high', cwe: 'CWE-78',
+            remediation: 'Set UseShellExecute = false and pass arguments via ProcessStartInfo.ArgumentList (never a single concatenated string), or validate/allow-list the argument content.' } },
   { kind: 'sink', id: 'cs-file-readall',       language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadAllText' },    argIndex: 0,
     vuln: { name: 'Path Traversal (File.ReadAllText with user input)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize the path with Path.GetFullPath and verify it starts with an allow-listed base directory.' } },

@@ -13,8 +13,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCSharpFile } from '../src/ir/parser-cs.js';
 
+// Matches by bare tail, not exact equality: `fn.name` is class-qualified
+// (`"ClassName.method"`, the same convention parser-java.js/parser-js.js
+// already use) whenever the method sits inside a class — which every
+// fixture in this file does — so an exact-name match would never find
+// anything. These tests only care that a function named `fnName` exists
+// with the right shape, not which class it's in.
+function bareTail(name) { return String(name || '').split('.').pop(); }
+
 function callNodes(ir, fnName) {
-  const fn = ir.functions.find(f => f.name === fnName);
+  const fn = ir.functions.find(f => bareTail(f.name) === fnName);
   assert.ok(fn, `expected function "${fnName}"`);
   return Object.values(fn.cfg.nodes).filter(n => n.kind === 'call');
 }
@@ -129,7 +137,7 @@ public class PingController {
 }
 `;
   const ir = parseCSharpFile('PingController.cs', code);
-  const fn = ir.functions.find(f => f.name === 'Ping');
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Ping');
   assert.ok(fn);
   assert.deepEqual(fn.params, ['host']);
   assert.ok(fn.paramAnnotations);
@@ -226,7 +234,7 @@ public class C {
 }
 `;
   const ir = parseCSharpFile('C.cs', code);
-  const fn = ir.functions.find(f => f.name === 'Run');
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Run');
   assert.ok(fn);
   const nodes = Object.values(fn.cfg.nodes);
   const bind = nodes.find(n => n.kind === 'assign' && n.target === 'id');
@@ -277,7 +285,7 @@ public class C {
 }
 `;
   const ir = parseCSharpFile('C.cs', code);
-  const fn = ir.functions.find(f => f.name === 'Run');
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Run');
   assert.ok(fn);
   const nodes = Object.values(fn.cfg.nodes);
   const initAssign = nodes.find(n => n.kind === 'assign' && n.target === 'i');
@@ -352,7 +360,7 @@ public class C {
 }
 `;
   const ir = parseCSharpFile('C.cs', code);
-  const fn = ir.functions.find(f => f.name === 'Run');
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Run');
   assert.ok(fn);
   const nodes = Object.values(fn.cfg.nodes);
   const assign = nodes.find(n => n.kind === 'assign' && n.target === 'conn');
@@ -360,7 +368,10 @@ public class C {
   assert.equal(assign.source?.kind, 'call');
   assert.equal(assign.source?.callee, 'SqlConnection');
   const calls = nodes.filter(n => n.kind === 'call');
-  assert.ok(calls.some(c => c.callee === 'conn.Open'), 'expected the following statement to still lower correctly');
+  // `conn.Open` — or, since `conn`'s constructed type (`SqlConnection`) is
+  // now tracked (a separate, later fix; see parser-cs.js's
+  // `_applyVarTypeRewrite`), the rewritten `SqlConnection.Open` form.
+  assert.ok(calls.some(c => c.callee === 'conn.Open' || c.callee === 'SqlConnection.Open'), 'expected the following statement to still lower correctly, got: ' + JSON.stringify(calls));
 });
 
 // Taint-engine PRD P1: METHOD_RE required a mandatory leading modifier
@@ -379,7 +390,7 @@ public class C {
 `;
   const ir = parseCSharpFile('C.cs', code);
   assert.ok(ir);
-  const fn = ir.functions.find(f => f.name === 'Render');
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Render');
   assert.ok(fn, `expected an IR function for the no-modifier method "Render", got: ${JSON.stringify(ir.functions.map(f => f.name))}`);
   const calls = callNodes(ir, 'Render');
   assert.ok(calls.some(c => c.callee === 'Execute' || c.callee === 'db.Execute'),
@@ -403,7 +414,7 @@ public class C {
 `;
   const ir = parseCSharpFile('C.cs', code);
   assert.ok(ir);
-  const names = ir.functions.map(f => f.name);
+  const names = ir.functions.map(f => bareTail(f.name));
   assert.ok(names.includes('Helper'), `expected Helper to be captured, got: ${JSON.stringify(names)}`);
   assert.ok(names.includes('Handler'), `expected Handler to still be captured after a no-modifier method precedes it, got: ${JSON.stringify(names)}`);
   const handlerCalls = callNodes(ir, 'Handler');
@@ -438,7 +449,7 @@ public class C {
 `;
   const ir = parseCSharpFile('C.cs', code);
   assert.ok(ir);
-  const names = ir.functions.map(f => f.name);
+  const names = ir.functions.map(f => bareTail(f.name));
   assert.deepEqual(names, ['Handler'],
     `control-flow keywords must never be captured as their own function, got: ${JSON.stringify(names)}`);
   const calls = callNodes(ir, 'Handler');

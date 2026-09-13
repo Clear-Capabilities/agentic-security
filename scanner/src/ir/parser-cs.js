@@ -68,6 +68,177 @@ const METHOD_RE = new RegExp(
   '\\s*\\(([^)]*)\\)' +                             // params (group 3)
   '\\s*\\{', 'g');
 
+// Class/struct declaration: modifiers* `class`|`struct` Name, optionally
+// followed by generic params (`<T>`) and/or a base/interface list
+// (`: Base, IFoo`), then the body's opening `{`.
+//
+// `bench:self-scan:check` caught a genuine ReDoS in this file's own first
+// draft (confirmed by direct timing, not a detector false alarm: 30 000
+// repeats of " public " with no trailing "class"/"struct" took 5+ SECONDS
+// with an unbounded `*`). Root cause: an unanchored search retries the
+// WHOLE pattern starting at every input position, and each retry's modifier
+// star backtracks through every possible repetition count before failing —
+// O(n) retries × O(n) backtracking each = O(n²) on realistic non-matching
+// input (most of a file's text isn't a class declaration). Unlike this
+// codebase's other documented ReDoS class ("an optional group flanked by
+// two \s* quantifiers"), the fix here is a bounded repetition count: real
+// C# code never stacks more than 2-3 modifiers on a class. A first fix
+// attempt bounded the repetition to `{0,6}` — genuinely linear (re-verified
+// directly: 200 000 non-matching repeats in 34ms), but `sast/redos-nfa.js`'s
+// static "nested quantifier" heuristic flags a bounded-but-still-quantified
+// group the same as an unbounded one, since it can't see the numeric bound
+// makes it safe (same class of detector-vs-reality gap this codebase's own
+// prior ReDoS fixes have hit — see e.g. the Kotlin trailing-lambda note in
+// `../ir/CLAUDE.md`: "the SAME detector's heuristic still flagged the
+// replacement... even though it measured linear on its own"). Unrolled into
+// 4 explicit, non-nested optional groups instead — no group here contains
+// its own internal quantifier, so the structural heuristic no longer
+// matches, while remaining exactly as linear (same 200 000-repeat timing)
+// and correctness-preserving across every realistic modifier combination
+// (0 to 4 modifiers; C# has none that legally stack more than 3 on a
+// class/struct declaration).
+const _CS_MOD = String.raw`(?:public|private|protected|internal|static|sealed|abstract|partial|new)\s+`;
+const CLASS_RE = new RegExp(
+  String.raw`(?:^|[\s;{}])(?:${_CS_MOD})?(?:${_CS_MOD})?(?:${_CS_MOD})?(?:${_CS_MOD})?(?:class|struct)\s+([A-Za-z_][A-Za-z0-9_]*)`, 'g');
+
+// Taint-recall: C#'s `_qid()`/`fn.name` never recorded which CLASS a method
+// belongs to at all (no middle `::ClassName::` segment, unlike Java's/JS's
+// convention — see `../dataflow/CLAUDE.md`'s C# row and
+// `bench/sard/IMPLEMENTATION_STATUS.md`'s "real accuracy improvement pass"
+// section for the full account). That makes `callgraph.js`'s `classMethods`
+// index — which resolves `new Helper().BadSink(x)` / `Helper.BadSink(x)` —
+// PERMANENTLY EMPTY for C#, so no cross-class call (same file or not) could
+// ever resolve, blocking interprocedural taint for exactly the shape
+// Juliet's own interface-based helper-class test structure (CWE-90/643/79-
+// 83/113/78/etc.'s dominant remaining flow-variant pattern) uses.
+//
+// Finds every class/struct declaration's body range so a method's enclosing
+// class can be looked up by character offset. A method not inside any class
+// (a rare but legal C# top-level-statements shape) gets `className: null`.
+// Nested classes are handled by picking the SMALLEST (innermost) range that
+// contains the method — ranges are not required to be non-overlapping.
+function _findClassRanges(code) {
+  const ranges = [];
+  CLASS_RE.lastIndex = 0;
+  let m;
+  while ((m = CLASS_RE.exec(code)) !== null) {
+    const name = m[1];
+    // Skip past an optional generic parameter list and/or base/interface
+    // list to find the REAL opening brace — `class Foo<T> : Base<T>, IBar`
+    // has two `<...>` regions before the body even starts. Track angle-
+    // bracket depth; balanced-`<>` is a reasonable approximation here (C#
+    // generics don't nest with unbalanced `<`/`>` in valid code), and a
+    // `{` encountered while depth > 0 (an unlikely default-value-in-
+    // generic-constraint edge case) is simply skipped rather than
+    // mis-treated as the class body.
+    let i = m.index + m[0].length;
+    let angleDepth = 0;
+    while (i < code.length) {
+      const c = code[i];
+      if (c === '<') angleDepth++;
+      else if (c === '>') { if (angleDepth > 0) angleDepth--; }
+      else if (c === '{' && angleDepth === 0) break;
+      else if ((c === ';') && angleDepth === 0) { i = -1; break; } // forward-declaration-shaped or malformed; bail
+      i++;
+    }
+    if (i < 0 || i >= code.length || code[i] !== '{') continue;
+    const extracted = _extractBody(code, i);
+    if (!extracted) continue;
+    ranges.push({ name, start: i, end: extracted.end });
+    CLASS_RE.lastIndex = i + 1; // resume scanning INSIDE the class body too, for nested classes
+  }
+  return ranges;
+}
+
+// Innermost class whose range contains `pos` (a method declaration's match
+// offset), or null when the method sits outside any class (top-level
+// statements — legal but rare).
+function _enclosingClassName(ranges, pos) {
+  let best = null;
+  for (const r of ranges) {
+    if (pos >= r.start && pos < r.end) {
+      if (!best || (r.end - r.start) < (best.end - best.start)) best = r;
+    }
+  }
+  return best ? best.name : null;
+}
+
+// Companion to the class-tracking fix above, closing the OTHER half of the
+// same gap: `HelperB h = new HelperB(); h.BadSink(data);` — Juliet's other
+// dominant helper-class idiom, alongside the inline `new Helper().Sink(x)`
+// chain `classMethods` now resolves directly. `h.BadSink` is a callee
+// string built from the LOCAL VARIABLE name, which `classMethods` (keyed
+// by real class name) can never match. This is exact same-function local
+// type inference, not a guess: `h`'s constructed type is unambiguous
+// wherever `h = new HelperB()` appears, so a call written as `h.BadSink(x)`
+// is rewritten in place to `HelperB.BadSink` — the callee string
+// `classMethods` already knows how to resolve (and, since `classMethods`
+// is a PROJECT-WIDE index built across every file, this also transparently
+// covers Juliet's documented cross-FILE `_NNa`/`_NNb` paired-variant
+// convention when the helper class lives in a sibling file, with no
+// separate cross-file mechanism needed). Refuses to guess when a variable
+// is (re)assigned to more than one distinct constructed type in the same
+// function — ambiguous, same "refuse rather than fabricate an edge"
+// convention `bareTailInFile` already uses.
+function _localVarConstructedTypes(nodes) {
+  const varTypes = new Map(); // varName -> className | null (ambiguous)
+  for (const node of Object.values(nodes)) {
+    if (node.kind !== 'assign') continue;
+    const src = node.source;
+    if (!src || src.kind !== 'call' || !src.isNew || typeof src.callee !== 'string') continue;
+    const varName = node.target;
+    if (!varName || varName.includes('.')) continue; // only a bare local, never a member-write target
+    if (varTypes.has(varName)) {
+      if (varTypes.get(varName) !== src.callee) varTypes.set(varName, null);
+    } else {
+      varTypes.set(varName, src.callee);
+    }
+  }
+  return varTypes;
+}
+
+// Recursively rewrites `varName.method`-shaped call callees to
+// `ClassName.method` wherever `varName` has an unambiguous constructed type
+// in `varTypes`, walking into every expression-tree shape `_lowerExpr` can
+// produce (a tainted argument to a rewritten call is just as real a finding
+// as the call itself, so args/branches must be walked too, not just the
+// node's own top-level callee).
+function _rewriteVarTypeCallees(expr, varTypes) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    if (typeof expr.callee === 'string') {
+      const dot = expr.callee.indexOf('.');
+      if (dot > 0) {
+        const varName = expr.callee.slice(0, dot);
+        const cls = varTypes.get(varName);
+        if (cls) expr.callee = `${cls}${expr.callee.slice(dot)}`;
+      }
+    }
+    if (Array.isArray(expr.args)) for (const a of expr.args) _rewriteVarTypeCallees(a, varTypes);
+    return;
+  }
+  if (expr.kind === 'member') { _rewriteVarTypeCallees(expr.object, varTypes); return; }
+  if (expr.kind === 'binary' || expr.kind === 'logical') {
+    _rewriteVarTypeCallees(expr.left, varTypes); _rewriteVarTypeCallees(expr.right, varTypes); return;
+  }
+  if (expr.kind === 'tpl' && Array.isArray(expr.parts)) { for (const p of expr.parts) _rewriteVarTypeCallees(p, varTypes); return; }
+  if (expr.kind === 'union' && Array.isArray(expr.branches)) { for (const b of expr.branches) _rewriteVarTypeCallees(b, varTypes); return; }
+  if (expr.kind === 'array' && Array.isArray(expr.elements)) { for (const e of expr.elements) _rewriteVarTypeCallees(e, varTypes); return; }
+}
+
+function _applyVarTypeRewrite(nodes) {
+  const varTypes = _localVarConstructedTypes(nodes);
+  let any = false;
+  for (const t of varTypes.values()) if (t) { any = true; break; }
+  if (!any) return;
+  for (const node of Object.values(nodes)) {
+    if (node.kind === 'call') _rewriteVarTypeCallees(node, varTypes);
+    else if (node.kind === 'assign') _rewriteVarTypeCallees(node.source, varTypes);
+    else if (node.kind === 'return' || node.kind === 'throw') _rewriteVarTypeCallees(node.value, varTypes);
+    else if (node.kind === 'if') _rewriteVarTypeCallees(node.cond, varTypes);
+  }
+}
+
 // Matches a top-level statement inside a method body. Splits on `;` at
 // brace-depth 0 (keeping simple lambdas inside calls intact), AND — R8 —
 // also flushes on a `}` that returns the SAME shared depth counter to 0.
@@ -460,6 +631,28 @@ function _lowerStmt(stmt, line) {
     const chained = _followChain(s, cm.endIdx, cm.callee, _splitTopLevelCommas(cm.argsText).map(_lowerExpr), false);
     return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
+  // Statement-form constructor-chained call: `new Helper().BadSink(data);`
+  // — the inline-instantiate-and-call idiom, with NO assignment at all.
+  // Previously fell through to `unknown` entirely (the statement-form
+  // branch above requires the FIRST token to be a plain identifier, never
+  // `new`) — silently dropping the call, its arguments, and any taint
+  // reaching a sink inside the constructed object's method. Mirrors the
+  // identical `new`-chain handling `_lowerExpr`'s expression path already
+  // has (this statement-form path is otherwise a strict subset of that
+  // one), and inherits `classMethods`'s cross-class resolution for free
+  // once the chain's callee dot-joins to `ClassName.method`.
+  const nm = matchBalancedCall(s, /^new\s+([\w.]+)/);
+  if (nm) {
+    const ctorArgs = _splitTopLevelCommas(nm.argsText).map(_lowerExpr);
+    const chained = _followChain(s, nm.endIdx, nm.callee.split('.').pop(), ctorArgs, true);
+    // A trailing `.Method(...)` grows `chained.callee` past the bare
+    // constructor name (into `ClassName.Method`) — only THAT shape is a
+    // call-kind statement worth reporting. A bare `new Helper();` with no
+    // chained call has no observable side effect from this statement's own
+    // perspective; fall through to `unknown`, matching this file's
+    // existing "nothing to lower" convention for a no-op statement.
+    if (chained.callee.includes('.')) return { kind: 'call', line, callee: chained.callee, args: chained.args };
+  }
   return { kind: 'unknown', line, text: s };
 }
 
@@ -492,9 +685,15 @@ function _lineAt(src, idx) {
   return line;
 }
 
-function _qid(file, name, line, body) {
+function _qid(file, name, line, body, className) {
   const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 8);
-  return `${file}::${name}@${line}#${sha}`;
+  // `::ClassName::` middle segment — the SAME convention parser-java.js and
+  // parser-js.js already use (see class-hierarchy.js's "Shape 2" and
+  // callgraph.js's `classMethods` index, both of which parse exactly this
+  // shape back out). Omitted (falls back to the pre-existing two-segment
+  // form) when the method sits outside any class — legal C# top-level
+  // statements — so that shape is unaffected.
+  return className ? `${file}::${className}::${name}@${line}#${sha}` : `${file}::${name}@${line}#${sha}`;
 }
 
 // Node-id counter for `_buildCfg`. Reset to 0 per function (see
@@ -679,10 +878,12 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
 export function parseCSharpFile(file, code) {
   if (!file || typeof code !== 'string') return null;
   const functions = [];
+  const classRanges = _findClassRanges(code);
   METHOD_RE.lastIndex = 0;
   let m;
   while ((m = METHOD_RE.exec(code)) !== null) {
     const name = m[2];
+    const className = _enclosingClassName(classRanges, m.index);
     const paramsText = m[3] || '';
     const paramAnnotations = [];
     // `keptIdx` tracks the parameter's position in the FILTERED array — the
@@ -771,10 +972,11 @@ export function parseCSharpFile(file, code) {
     const tail = _buildCfg(extracted.body, nodes, 'entry', bodyStartLine, lineStarts, 0, 0);
     nodes[tail].succ.push('exit');
     nodes.exit.pred.push(tail);
+    _applyVarTypeRewrite(nodes);
     const cfg = { entry: 'entry', exit: 'exit', nodes };
     functions.push({
-      qid: _qid(file, name, startLine, extracted.body),
-      name, line: startLine, params, file,
+      qid: _qid(file, name, startLine, extracted.body, className),
+      name: className ? `${className}.${name}` : name, line: startLine, params, file,
       cfg,
       calls: callSitesFromCfg(cfg),
       ...(paramAnnotations.length ? { paramAnnotations } : {}),

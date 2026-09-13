@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.151.1",
+  "version": "0.151.2",
   "description": "Scanner engine for the agentic-security Claude Code plugin — SAST, SCA (function-level reachability + CISA KEV), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, business logic, toxic-combinations scoring, SBOM, pipeline integrity, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -131,8 +131,8 @@
     "bench:sca-replay:label": "node ../bench/sca-replay/label.mjs",
     "bench:sard:score": "node ../bench/sard/scripts/macro-score.mjs",
     "bench:sard:leakage-audit": "node ../bench/sard/scripts/leakage-audit.mjs",
-    "bench:sard:java": "node test/benchmark/realworld/bench-realworld.js --app sard-juliet-java-strict --blind --scramble-identifiers --json | node ../bench/sard/scripts/macro-score.mjs",
-    "bench:sard:csharp": "node test/benchmark/realworld/bench-realworld.js --app sard-juliet-csharp-strict --blind --scramble-identifiers --json | node ../bench/sard/scripts/macro-score.mjs",
+    "bench:sard:java": "node test/benchmark/realworld/bench-realworld.js --app sard-juliet-java-strict --blind --scramble-identifiers --deep --json | node ../bench/sard/scripts/macro-score.mjs",
+    "bench:sard:csharp": "node test/benchmark/realworld/bench-realworld.js --app sard-juliet-csharp-strict --blind --scramble-identifiers --deep --json | node ../bench/sard/scripts/macro-score.mjs",
     "bench:sard:java:fast-unsafe": "node test/benchmark/realworld/bench-realworld.js --app sard-juliet-java-strict --blind --json | node ../bench/sard/scripts/macro-score.mjs",
     "bench:sard:split": "node ../bench/sard/scripts/split.mjs",
     "bench:sard:split:check": "node ../bench/sard/scripts/split.mjs --verify",
