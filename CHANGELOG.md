@@ -9,6 +9,80 @@
 > make the history less accurate, not more.
 
 
+## 0.151.1 - Adversarial premortem on the SARD benchmarking subsystem: 12 real findings, 12 real fixes
+
+A structured adversarial premortem ("assume this subsystem has completely failed six months
+from now — work backwards to why") was run against 0.151.0's SARD benchmarking work, producing
+19 findings across data/leakage, methodology, security, MLOps, and governance. All 12 findings
+judged actionable were fixed and verified with real runs — none deferred, none papered over. Full
+account, including one deliberate self-correction, in `bench/sard/IMPLEMENTATION_STATUS.md`'s
+"Adversarial premortem + full remediation pass" section.
+
+**Data & leakage:**
+- Train/dev/test splits (`bench/sard/splits/*.json`) were computed and self-verified but never
+  consumed by scoring — every prior macro-F1 number was measured over the full corpus, not a
+  held-out split. `bench-realworld.js` now has a real `--split train|dev|test` flag filtering
+  both ground truth and actual findings symmetrically (8 new tests).
+- `leakage-audit.mjs`'s own `CWE` term couldn't match Juliet's real fused naming convention
+  (`CWE89`, no separator) — `'CWE89'.match(/\bCWE\b/i)` returns null. Added a dedicated
+  `cwe-number` check independent of the plain term (2 new tests).
+- PHP's identifier neutralization renamed exactly one hardcoded variable (`$tainted`) — an ad hoc
+  point-fix, not a designed protection. Generalized to the same hash-based rule pattern Java/C#
+  already use.
+
+**Methodology:**
+- The C# "26/32 CWE families, root-caused, not fixed" claim was re-investigated and found wrong
+  as stated: catalog entries already exist for several of the "uncovered" families. A first
+  re-investigation pass concluded the interprocedural taint engine was broken — before writing
+  that down, a controlled test matrix caught that the "evidence" for it was a coincidental
+  structural-detector hit, not real taint (a lowercase `request` parameter never matched the
+  catalog's case-sensitive source entry, in either the passing or failing fixture). With the
+  casing fixed, interprocedural taint propagation works correctly for this shape. The real
+  root cause of the C# corpus gap remains genuinely open. 3 new regression tests.
+- Added the previously-missing adversarial (must-flip) mutation side to `mutate.mjs` —
+  `ADVERSARIAL_SOURCE_LITERALIZATION` replaces a tainted source's initializer with a hardcoded
+  literal and scores the opposite polarity from the existing metamorphic mutators. Found a real
+  detector precision gap on its first use: a structural Java SQL-injection detector fires on
+  "string built via concatenation" regardless of whether the value is genuinely tainted, while
+  the real taint engine correctly stays silent (5 new tests; the detector gap itself is
+  disclosed, not fixed here).
+- `compare-baseline.mjs`'s flat 2-percentage-point regression tolerance either hid a real
+  regression on a high-support metric or failed on ordinary noise for a low-support one — exactly
+  the double-bind measured live this session (an unrelated holdout app's F1 moved between two
+  identical runs). Added `adaptiveTolerance()`, widening the band for low-support metrics only,
+  one-directionally (10 new tests, including the first automated end-to-end CLI proof for this
+  script in either direction).
+- Headline metrics (100% Fully Verified Fix Rate, 100% Semantic Robustness Rate) now carry
+  explicit scope qualifiers in the implementation ledger, so neither can be quoted out of
+  context as a whole-corpus claim.
+
+**Security:**
+- PRD §56 "LLM Isolation" had zero implementation and zero test anywhere in this repo. Added
+  `test/sard-llm-isolation.test.js` against the real LLM-validator prompt builder: an
+  already-neutralized input produces a leakage-clean prompt; the scanner's own CWE classification
+  is legitimate content, not a leak; and, disclosed rather than hidden, the prompt builder has no
+  independent redaction of its own — isolation is entirely inherited from upstream neutralization.
+
+**MLOps/CI:**
+- `realworld-bench`'s `needs: synthetic-bench` meant a real, unrelated regression in
+  `synthetic-bench` (91.3%→85.9% F1, first observed 2026-09-08) silently skipped
+  `realworld-bench` for 5+ consecutive scheduled runs with zero alert. Removed the dependency —
+  both are already independently-tiered informational jobs.
+- `compare-baseline.mjs` was local-only by design (no committed scores), leaving no CI-enforced
+  regression gate at all. Wired a GitHub Actions cache (never a git commit) into `sard-blind-smoke`
+  so a genuine regression fails the job for real, without touching the "no scores committed"
+  policy.
+- The external-holdout generalization gate could never fail: every existing curated app's ground
+  truth was bootstrapped from a past scanner run, not built independently. Added
+  `bench/holdout-independent/tinymart/` — a small, hand-written app whose ground truth was
+  authored from its own source before the scanner ever ran against it. Proved the gate has real
+  teeth end to end: clean baseline, deliberately removed a vulnerability (gate correctly failed,
+  naming the app and the exact regression), reverted (gate returned to clean, numbers matched
+  byte-for-byte). 5 new tests.
+
+No detection-engine changes in this release — every fix above is to the benchmarking/CI
+infrastructure itself, not to `scanner/src/`.
+
 ## 0.151.0 - SARD/Juliet benchmarking: leakage-clean scoring, macro-F1, mutation testing, and fix verification (SARD_AGENTIC_SECURITY_PRD.md)
 
 Builds a full benchmarking subsystem against NIST SARD's Juliet (Java/C#) and PHP Vulnerability

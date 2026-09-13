@@ -107,7 +107,7 @@ function sampleBadFiles(root, app, cwes, limit) {
 }
 
 // IDENTIFIER_RENAME: first local var decl inside the bad() span -> opaque name.
-function mutateIdentifierRename(content, span) {
+export function mutateIdentifierRename(content, span) {
   const lines = content.split('\n');
   const spanText = lines.slice(span.startLine - 1, span.endLine).join('\n');
   const declRe = /\b(?:String|int|long|boolean|double|float|Object|char|byte|short)\s+(\w+)\s*=/;
@@ -124,7 +124,7 @@ function mutateIdentifierRename(content, span) {
 }
 
 // BOOLEAN_EQUIVALENCE: `x != null` -> `!(x == null)`, scoped to the span.
-function mutateBooleanEquivalence(content, span) {
+export function mutateBooleanEquivalence(content, span) {
   const lines = content.split('\n');
   const spanText = lines.slice(span.startLine - 1, span.endLine).join('\n');
   const neqRe = /(\w+)\s*!=\s*null/;
@@ -145,7 +145,7 @@ function mutateBooleanEquivalence(content, span) {
 // the HIGHEST survival rate by construction — a detector losing a finding
 // here would indicate the engine's matching is unreasonably fragile to
 // unrelated surrounding code, not a real semantic change.
-function mutateNoopInsertion(content, span, seed) {
+export function mutateNoopInsertion(content, span, seed) {
   const lines = content.split('\n');
   const spanText = lines.slice(span.startLine - 1, span.endLine).join('\n');
   const braceIdx = spanText.indexOf('{');
@@ -156,10 +156,51 @@ function mutateNoopInsertion(content, span, seed) {
   return { content: newLines.join('\n'), detail: `inserted no-op "int ${marker} = 0;" as first statement` };
 }
 
+// ADVERSARIAL_SOURCE_LITERALIZATION — SARD_AGENTIC_SECURITY_PRD.md
+// adversarial-premortem remediation, Round 2 F6: the three mutators above
+// are all METAMORPHIC (behavior-preserving; the finding MUST survive).
+// Semantic Robustness Rate has only ever measured that side — PRD §26's own
+// "safe-code mutation stability" / bench/mutation/runner.mjs's own
+// established two-sided design (metamorphic must HOLD, adversarial must
+// FLIP) was never built for the SARD corpus at all before this. This is the
+// adversarial (near-miss) counterpart: replace the tainted variable's own
+// INITIALIZER — not its name, its assigned VALUE — with a type-appropriate
+// hardcoded literal, genuinely severing the taint at its origin. A finding
+// that still fires afterward is a genuine false positive (the detector is
+// pattern-matching the SHAPE, not the actual data flow) and the correct,
+// desired outcome is `LOST` — the mirror image of the metamorphic mutators,
+// where `LOST` is the failure. Deliberately mechanical (a type-keyed literal
+// table, not per-CWE knowledge) so this stays a general, reusable capability
+// rather than a benchmark-specific shortcut, matching PRD §23's own rule.
+const ADVERSARIAL_LITERALS = {
+  String: '"sard_adversarial_literal"',
+  int: '0', long: '0L', short: '0', byte: '0',
+  double: '0.0', float: '0.0f',
+  boolean: 'false',
+  char: "'x'",
+  Object: 'null',
+};
+export function mutateAdversarialLiteralization(content, span) {
+  const lines = content.split('\n');
+  const spanText = lines.slice(span.startLine - 1, span.endLine).join('\n');
+  const declRe = /\b(String|int|long|boolean|double|float|Object|char|byte|short)\s+(\w+)\s*=\s*([^;]+);/;
+  const m = spanText.match(declRe);
+  if (!m) return null;
+  const [whole, type, varName] = m;
+  const literal = ADVERSARIAL_LITERALS[type];
+  if (!literal) return null;
+  const replacement = `${type} ${varName} = ${literal};`;
+  const mutatedSpan = spanText.replace(whole, replacement);
+  if (mutatedSpan === spanText) return null;
+  const newLines = [...lines.slice(0, span.startLine - 1), ...mutatedSpan.split('\n'), ...lines.slice(span.endLine)];
+  return { content: newLines.join('\n'), detail: `replaced initializer of "${varName}" with hardcoded literal ${literal} (was: ${whole.trim()})` };
+}
+
 const MUTATORS = [
-  { name: 'NOOP_STATEMENT_INSERTION', fn: (content, span) => mutateNoopInsertion(content, span, content.length) },
-  { name: 'IDENTIFIER_RENAME', fn: mutateIdentifierRename },
-  { name: 'BOOLEAN_EQUIVALENCE', fn: mutateBooleanEquivalence },
+  { name: 'NOOP_STATEMENT_INSERTION', fn: (content, span) => mutateNoopInsertion(content, span, content.length), dimension: 'metamorphic' },
+  { name: 'IDENTIFIER_RENAME', fn: mutateIdentifierRename, dimension: 'metamorphic' },
+  { name: 'BOOLEAN_EQUIVALENCE', fn: mutateBooleanEquivalence, dimension: 'metamorphic' },
+  { name: 'ADVERSARIAL_SOURCE_LITERALIZATION', fn: mutateAdversarialLiteralization, dimension: 'adversarial' },
 ];
 
 async function scanSingleFile(relFileName, content) {
@@ -212,20 +253,20 @@ async function main() {
     for (const mutator of MUTATORS) {
       const mutated = mutator.fn(content, badSpan);
       if (!mutated) {
-        results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, status: 'NOT_APPLICABLE' });
+        results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, dimension: mutator.dimension, status: 'NOT_APPLICABLE' });
         continue;
       }
       // Validation 1: PARSES.
       let parsed;
       try { parsed = await parseJavaFile(path.basename(s.file), mutated.content); } catch { parsed = null; }
       if (!parsed || !Array.isArray(parsed.functions) || parsed.functions.length === 0) {
-        results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, status: 'INVALID_PARSE_FAILED', detail: mutated.detail });
+        results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, dimension: mutator.dimension, status: 'INVALID_PARSE_FAILED', detail: mutated.detail });
         continue;
       }
       // Validation 2 + measurement: does the SAME finding survive?
       const mutatedFindings = await scanSingleFile(s.rel, mutated.content);
       const survived = findingMatches(mutatedFindings, s.family);
-      results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, status: survived ? 'SURVIVED' : 'LOST', detail: mutated.detail });
+      results.push({ file: s.rel, cwe: s.cwe, family: s.family, mutation: mutator.name, dimension: mutator.dimension, status: survived ? 'SURVIVED' : 'LOST', detail: mutated.detail });
 
       // Persist the mutated file for inspection.
       const outDir = path.join(MUTATIONS_DIR, opts.app, path.dirname(s.rel), mutator.name);
@@ -234,35 +275,54 @@ async function main() {
     }
   }
 
-  const scored = results.filter(r => r.status === 'SURVIVED' || r.status === 'LOST');
-  const survived = scored.filter(r => r.status === 'SURVIVED').length;
-  const srr = scored.length ? survived / scored.length : null;
+  // Two independent scoring axes, matching bench/mutation/runner.mjs's own
+  // established two-sided design — never blended into one number, since
+  // "correct" points in OPPOSITE directions for each: a metamorphic mutation
+  // must SURVIVE (the finding still fires — verdict must NOT move); an
+  // adversarial mutation must be LOST (the finding stops firing — verdict
+  // MUST move, because the vulnerability was genuinely removed).
+  const metaScored = results.filter(r => r.dimension === 'metamorphic' && (r.status === 'SURVIVED' || r.status === 'LOST'));
+  const metaSurvived = metaScored.filter(r => r.status === 'SURVIVED').length;
+  const srr = metaScored.length ? metaSurvived / metaScored.length : null;
+
+  const advScored = results.filter(r => r.dimension === 'adversarial' && (r.status === 'SURVIVED' || r.status === 'LOST'));
+  const advCorrect = advScored.filter(r => r.status === 'LOST').length; // LOST = verdict correctly flipped
+  const advFalsePositiveRate = advScored.length ? (advScored.length - advCorrect) / advScored.length : null;
+
   const invalid = results.filter(r => r.status === 'INVALID_PARSE_FAILED').length;
   const skippedNoBaseline = results.filter(r => r.status === 'SKIPPED_NO_BASELINE_TP').length;
   const notApplicable = results.filter(r => r.status === 'NOT_APPLICABLE').length;
 
   const report = {
     generatedAt: new Date().toISOString(), app: opts.app, sampled: samples.length,
-    semanticRobustnessRate: srr, scored: scored.length, survived, lost: scored.length - survived,
+    semanticRobustnessRate: srr, metamorphicScored: metaScored.length, metamorphicSurvived: metaSurvived, metamorphicLost: metaScored.length - metaSurvived,
+    adversarialCorrectnessRate: advScored.length ? advCorrect / advScored.length : null,
+    adversarialFalsePositiveRate: advFalsePositiveRate, adversarialScored: advScored.length, adversarialCorrect: advCorrect,
     invalidParseFailed: invalid, skippedNoBaseline, notApplicable,
     byMutator: Object.fromEntries(MUTATORS.map(m => {
-      const rows = scored.filter(r => r.mutation === m.name);
+      const rows = results.filter(r => r.mutation === m.name && (r.status === 'SURVIVED' || r.status === 'LOST'));
+      if (m.dimension === 'adversarial') {
+        const correct = rows.filter(r => r.status === 'LOST').length;
+        return [m.name, { dimension: m.dimension, scored: rows.length, correctlyFlipped: correct, rate: rows.length ? correct / rows.length : null }];
+      }
       const s = rows.filter(r => r.status === 'SURVIVED').length;
-      return [m.name, { scored: rows.length, survived: s, rate: rows.length ? s / rows.length : null }];
+      return [m.name, { dimension: m.dimension, scored: rows.length, survived: s, rate: rows.length ? s / rows.length : null }];
     })),
     results,
   };
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
   fs.writeFileSync(path.join(REPORTS_DIR, 'mutation-report.json'), JSON.stringify(report, null, 2) + '\n');
 
-  console.log(`\nSemantic Robustness Rate: ${srr === null ? 'N/A' : (srr*100).toFixed(1) + '%'} (${survived}/${scored.length} mutations survived)`);
+  console.log(`\nSemantic Robustness Rate (metamorphic): ${srr === null ? 'N/A' : (srr*100).toFixed(1) + '%'} (${metaSurvived}/${metaScored.length} mutations survived)`);
+  console.log(`Adversarial correctness rate: ${report.adversarialCorrectnessRate === null ? 'N/A' : (report.adversarialCorrectnessRate*100).toFixed(1) + '%'} (${advCorrect}/${advScored.length} verdicts correctly flipped to not-detected)`);
   console.log(`  invalid (parse failed, excluded from scoring): ${invalid}`);
   console.log(`  skipped (baseline itself didn't fire): ${skippedNoBaseline}`);
   console.log(`  not applicable (mutator found no matching shape): ${notApplicable}`);
   for (const [name, s] of Object.entries(report.byMutator)) {
-    console.log(`  ${name}: ${s.rate === null ? 'N/A' : (s.rate*100).toFixed(1) + '%'} (${s.survived}/${s.scored})`);
+    const label = s.dimension === 'adversarial' ? `${s.correctlyFlipped}/${s.scored} correctly flipped` : `${s.survived}/${s.scored} survived`;
+    console.log(`  ${name} [${s.dimension}]: ${s.rate === null ? 'N/A' : (s.rate*100).toFixed(1) + '%'} (${label})`);
   }
   console.log(`\nWritten: ${path.relative(process.cwd(), path.join(REPORTS_DIR, 'mutation-report.json'))}`);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

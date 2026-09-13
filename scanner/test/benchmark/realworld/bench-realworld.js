@@ -54,10 +54,23 @@ if (process.env.AGENTIC_SECURITY_NO_INTEGRATION == null) {
 
 import { runScan } from '../../../src/runScan.js';
 import { blankComments } from '../../../src/sast/_comment-strip.js';
+// Adversarial-review finding (SARD_AGENTIC_SECURITY_PRD.md premortem, Round
+// 1, F1): bench/sard/splits/*.json was computed, self-verified, and
+// committed but NEVER consumed by this file or macro-score.mjs — every
+// macro-F1 number this project produced was measured over the FULL corpus
+// (train+dev+test mixed), making the split infrastructure decorative and
+// PRD §14/§68's "test split is not used for ordinary tuning" acceptance
+// criterion unenforceable. `familyKeyFor` is reused directly (never
+// reimplemented) so a --split filter here can never compute a different
+// family key than the one that actually produced the split file.
+import { familyKeyFor } from '../../../../bench/sard/scripts/split.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST = path.join(__dirname, 'manifest.json');
 const CACHE_ROOT = path.join(__dirname, '.bench-cache');
+// scanner/test/benchmark/realworld/ -> repo root, for `app.local` (a
+// committed-to-this-repo holdout fixture path, repo-root-relative).
+const HERE_REPO_ROOT = path.join(__dirname, '..', '..', '..', '..');
 const EXPECTED_DIR = path.join(__dirname, 'expected');
 const LINE_TOLERANCE = 2;
 
@@ -88,6 +101,48 @@ const CWE_FILTER_RAW = value('--cwe');
 const CWE_FILTER = CWE_FILTER_RAW
   ? new Set(CWE_FILTER_RAW.split(',').map(s => s.trim().replace(/^CWE-?/i, '')).filter(Boolean))
   : null;
+// --split train|dev|test: score ONLY the files whose template family (per
+// bench/sard/splits/<app>.json) is assigned to the requested bucket. Unlike
+// --cwe this is a SCORING-only filter, not a scan-surface one — the whole
+// corpus is still scanned (correctness, not CI speed, is the point here; a
+// held-out check is a deliberate, occasional run, not a per-PR gate), but
+// both the ground-truth `expected[]` array AND the scanner's own `actual[]`
+// findings are filtered to the requested split's files before `score()`
+// ever sees them, symmetrically — filtering only `expected` would silently
+// convert every excluded-split finding into a false positive (no GT left to
+// match it), undercounting precision for a reason that has nothing to do
+// with real detection quality.
+const SPLIT_FILTER = value('--split');
+if (SPLIT_FILTER && !['train', 'dev', 'test'].includes(SPLIT_FILTER)) {
+  console.error(`--split must be train, dev, or test (got: ${SPLIT_FILTER})`);
+  process.exit(2);
+}
+const SPLITS_DIR = path.join(__dirname, '..', '..', '..', '..', 'bench', 'sard', 'splits');
+// Exported for unit testing (test/sard-split-scoring.test.js) — both
+// functions take the target split explicitly rather than reading the
+// module-level SPLIT_FILTER, so a test can exercise every bucket without
+// re-parsing process.argv.
+export async function loadSplitDoc(appName) {
+  const p = path.join(SPLITS_DIR, `${appName}.json`);
+  let raw;
+  try { raw = await fs.readFile(p, 'utf8'); }
+  catch (e) { throw new Error(`--split requires a split file at ${p} (run \`node bench/sard/scripts/split.mjs --app ${appName}\` first): ${e.message}`); }
+  const doc = JSON.parse(raw);
+  if (!doc || typeof doc.families !== 'object') throw new Error(`${p} is not a well-formed split file (missing .families)`);
+  return doc;
+}
+// True when `rel`'s template family is assigned to `wantSplit` in
+// `splitDoc`. `missingFamilyCounter`, when passed, is incremented for a file
+// whose family key isn't in the split doc at all (stale split / corpus
+// update) — FAILS CLOSED (excluded from scoring, never silently counted
+// either way) rather than guessing, and the caller reports the count so this
+// isn't a silent drop.
+export function inRequestedSplit(rel, splitDoc, wantSplit, missingFamilyCounter) {
+  const key = familyKeyFor(path.basename(rel));
+  const assigned = splitDoc.families[key];
+  if (!assigned) { if (missingFamilyCounter) missingFamilyCounter.count++; return false; }
+  return assigned === wantSplit;
+}
 // --blind: run against a blinded copy of each corpus + hard-disable every
 // rule that reads benchmark answer-key markers (juliet-shape, the OWASP
 // "// condition 'B', which is safe" template suppressors, the
@@ -131,6 +186,13 @@ const IN_PROCESS = flag('--in-process');
 // phases are instrumented. Off by default; costs a forced GC per boundary when
 // --expose-gc is available, so it is a diagnostic, not a CI flag.
 const MEM_TRACE = flag('--mem-trace');
+// --deep: enable the IR-taint engine (AGENTIC_SECURITY_DEEP) for this run's
+// scan. Off by default — matches the existing dvwa/juice-shop/etc. bench
+// baselines, which were all measured without deep mode, so turning it on
+// unconditionally would silently move every app's numbers at once. A
+// general, reusable capability (any --app can use it), not a SARD-specific
+// flag: runScan()'s own `deep` option already exists for exactly this.
+const DEEP = flag('--deep');
 
 function memTrace(label) {
   if (!MEM_TRACE) return;
@@ -356,7 +418,19 @@ async function _materializeBlinded(srcRoot, dstRoot, opts = {}) {
   await fs.writeFile(marker, `mode=${_mode} v${_BLIND_TRANSFORM_VERSION}\ncopied=${copied} files\n`);
 }
 
-async function ensureClone(name, repo, sha) {
+// SARD_AGENTIC_SECURITY_PRD.md adversarial-premortem remediation, F14: every
+// existing external-holdout app is cloned from a real upstream repo and its
+// expected.json carries `provenance: "bootstrap-from-engine-output-*"` — the
+// ground truth was SEEDED from a past scanner run, not built independently,
+// which is exactly why they all carry `requiresReAudit:true` and the
+// generalization gate's fail-closed branch can never fire against real
+// data. `local` is for a genuinely independent alternative: a small,
+// hand-written, COMMITTED-TO-THIS-REPO fixture whose ground truth was
+// authored from the code itself, before the scanner ever saw it — no clone,
+// no bootstrap. When `app.local` is set, this function returns that
+// repo-relative path directly and never touches git.
+export async function ensureClone(name, repo, sha, local) {
+  if (local) return path.join(HERE_REPO_ROOT, local);
   const dest = path.join(CACHE_ROOT, `${name}-${sha}`);
   let exists = true;
   try { await fs.access(dest); } catch { exists = false; }
@@ -1219,7 +1293,7 @@ async function runOne(name, app, vulnFamilyMap) {
   const blindLabel = BLIND ? (STRIP_ALL_COMMENTS ? ' [BLIND+STRIP-ALL-COMMENTS]' : ' [BLIND]') : '';
   console.error(`\n=== ${name} (${app.language})${blindLabel} ===`);
   memTrace('start');
-  const originalRoot = await ensureClone(name, app.repo, app.sha);
+  const originalRoot = await ensureClone(name, app.repo, app.sha, app.local);
   // In blind mode, materialize a sanitized copy with answer-key markers
   // stripped, then point repoRoot at the blinded copy. The GT builders
   // walk this root and emit blinded paths; the scanner reads blinded files.
@@ -1308,6 +1382,28 @@ async function runOne(name, app, vulnFamilyMap) {
     }
   }
 
+  // --split train|dev|test: narrow `expected` to only the requested split's
+  // families BEFORE anything downstream (GT_DRY_RUN included) sees it, so
+  // `--gt-dry-run --split test` is a cheap way to sanity-check the filter
+  // itself before paying for a full scan. Scoped to Juliet apps only (the
+  // only ground-truth kinds with a real splits.json today), matching
+  // CWE_FILTER's own scoping — an app with no split file fails loudly
+  // rather than silently scoring the unfiltered corpus under a flag that
+  // claims to have filtered it.
+  let splitMissingFamilies = { count: 0 };
+  let splitDoc = null;
+  if (SPLIT_FILTER) {
+    if (app.groundTruth.kind !== 'juliet' && app.groundTruth.kind !== 'juliet-csharp') {
+      console.error(`--split is only meaningful for juliet/juliet-csharp ground truth (got: ${app.groundTruth.kind})`);
+      process.exit(2);
+    }
+    splitDoc = await loadSplitDoc(name);
+    const before = expected.length;
+    expected = expected.filter(e => inRequestedSplit(e.file, splitDoc, SPLIT_FILTER, splitMissingFamilies));
+    console.error(`  --split ${SPLIT_FILTER}: ${expected.length}/${before} expected entries kept` +
+      (splitMissingFamilies.count ? ` (${splitMissingFamilies.count} excluded: family not in split file — stale split?)` : ''));
+  }
+
   if (GT_DRY_RUN) {
     const withMethod = expected.filter(e => e.method).length;
     console.error(`  --gt-dry-run: ${expected.length} expected entries (${withMethod} with a precise method span, ${expected.length - withMethod} file-level fallback)`);
@@ -1385,7 +1481,7 @@ async function runOne(name, app, vulnFamilyMap) {
       else { cur.peak = maxRss; cur.last = now; }
     };
   }
-  const { scan } = await runScan(scanRoot, onProgress ? { onProgress } : {});
+  const { scan } = await runScan(scanRoot, { ...(onProgress ? { onProgress } : {}), ...(DEEP ? { deep: true } : {}) });
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   if (phaseRss) {
     for (const [phase, v] of phaseRss) {
@@ -1395,12 +1491,29 @@ async function runOne(name, app, vulnFamilyMap) {
   memTrace('after scan');
   if (rulesPath) { try { await fs.rm(path.dirname(rulesPath), { recursive: true, force: true }); } catch {} }
 
-  const actual = [
+  let actual = [
     ...(scan.findings || []),
     ...(scan.logicVulns || []),
     ...(scan.secrets || []),
     ...(scan.supplyChain || []),
   ];
+
+  // --split, part 2 (symmetric with the `expected` filter above): the whole
+  // corpus was still scanned (a --split run doesn't narrow the scan surface,
+  // only what's scored), so `actual` still contains findings from EVERY
+  // split. A finding in an excluded-split file has no `expected` entry left
+  // to match after the filter above — left unfiltered, it would silently
+  // become a false positive for a reason that has nothing to do with real
+  // detection quality. Drop it from `actual` instead, the same way it was
+  // dropped from `expected`, so it is neither a spurious FP nor an
+  // impossible TP. `splitMissingFamilies` is intentionally NOT
+  // double-counted here (the `expected`-side pass already reports it) — a
+  // finding on a family absent from the split file is just as excluded.
+  if (SPLIT_FILTER && splitDoc) {
+    const beforeActual = actual.length;
+    actual = actual.filter(a => inRequestedSplit(fileOf(a), splitDoc, SPLIT_FILTER, null));
+    console.error(`  --split ${SPLIT_FILTER}: ${actual.length}/${beforeActual} actual findings kept (rest belong to other splits)`);
+  }
 
   memTrace('after actual[] merge');
   const { tps, fps, fns } = score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies);

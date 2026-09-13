@@ -1,0 +1,10 @@
+{
+  "name": "tinymart",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SARD_AGENTIC_SECURITY_PRD.md external-holdout fixture — see bench/holdout-independent/README.md. NOT a real application; never installed or run, only scanned.",
+  "dependencies": {
+    "express": "^4.19.0",
+    "mysql": "^2.18.1"
+  }
+}

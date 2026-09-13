@@ -56,6 +56,22 @@ export const TERMS = [
 // method-declaration shape: `bad(`, `good(`, `goodG2B(`, `goodB2G(`, or a
 // bare identifier ending exactly in one of these names.
 const METHOD_NAME_RE = /\b(?:bad|good(?:G2B|B2G)?)\d*\s*\(/gi;
+// Independent check for the fused CWE+digits shape (CWE89, CWE_89, CWE-89,
+// "CWE 89") — added after an adversarial review found this audit's own bare
+// `\bCWE\b` TERM entry cannot match it: `\b` requires a non-word character
+// immediately after "CWE", and a digit or underscore is a word character, so
+// `'CWE89'.match(/\bCWE\b/i)` and `'CWE_89'.match(/\bCWE\b/i)` both return
+// null — reproduced live. This is Juliet's ACTUAL real-world naming
+// convention (`package juliet.testcases.CWE89_SQL_Injection...`), and
+// bench-realworld.js's own `_blindTransform` only strips it when a trailing
+// `_[A-Za-z0-9_]+` qualifier follows (`\bCWE\d+_[A-Za-z0-9_]+\b`) — a bare
+// "CWE89" with no trailing underscore-qualified name (e.g. inside a string
+// literal or log message, which the comment-stripping pass correctly never
+// touches) survives the transform AND, until this fix, evaded the audit that
+// is supposed to catch exactly that failure mode independently. This check
+// is deliberately separate from the plain `CWE` TERM entry above — it must
+// keep firing even if a future refactor ever removed the bare-word one.
+const CWE_NUMBER_RE = /\bCWE[\s_-]?\d+\b/gi;
 
 const BINARY_EXT = new Set(['.class', '.jar', '.dll', '.exe', '.zip', '.png', '.jpg', '.gif', '.pdf']);
 
@@ -148,6 +164,17 @@ export function auditFile(file, termRegexes, showContext) {
       if (METHOD_NAME_RE.lastIndex === m.index) METHOD_NAME_RE.lastIndex++;
     }
     if (count > 0) hits.push({ term: 'juliet-method-name', count, examples: [...examples].slice(0, 5) });
+  }
+  {
+    CWE_NUMBER_RE.lastIndex = 0;
+    let m, count = 0;
+    const examples = new Set();
+    while ((m = CWE_NUMBER_RE.exec(content))) {
+      count++;
+      examples.add(m[0]);
+      if (CWE_NUMBER_RE.lastIndex === m.index) CWE_NUMBER_RE.lastIndex++;
+    }
+    if (count > 0) hits.push({ term: 'cwe-number', count, examples: [...examples].slice(0, 5) });
   }
   return hits;
 }

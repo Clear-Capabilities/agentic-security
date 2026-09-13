@@ -44,6 +44,25 @@ test('leakage audit: a file containing "CWE-89" is flagged', () => {
   assert.ok(hits.some(h => h.term === 'CWE'), `expected a CWE hit, got: ${JSON.stringify(hits)}`);
 });
 
+test('leakage audit: a fused CWE+digits reference (CWE89, CWE_89, "CWE 89") is flagged even with no word boundary after "CWE"', () => {
+  // Adversarial-review finding: the bare `CWE` TERM's `\bCWE\b` regex cannot
+  // match "CWE89" — `\b` requires a non-word character right after "CWE",
+  // and a digit is a word character, so this exact, real-world Juliet naming
+  // shape (`package juliet.testcases.CWE89_...`) previously evaded this
+  // audit entirely whenever bench-realworld.js's own `_blindTransform`
+  // regex (`\bCWE\d+_[A-Za-z0-9_]+\b`, requiring a trailing underscore-
+  // qualified name) also failed to match — e.g. a bare "CWE89" inside a
+  // string literal or log message, which comment-stripping correctly never
+  // touches. This is the dedicated `cwe-number` check added to close that
+  // gap; it must fire independently of the plain `CWE` TERM.
+  for (const variant of ['CWE89', 'CWE_89', 'CWE-89', 'CWE 89']) {
+    const file = mkTmpFile('a.java', `String note = "see ${variant} for details";`);
+    const hits = auditFile(file, termRegexes(), false);
+    assert.ok(hits.some(h => h.term === 'cwe-number'),
+      `expected a cwe-number hit for "${variant}", got: ${JSON.stringify(hits)}`);
+  }
+});
+
 test('leakage audit: a bare bad() method declaration is flagged', () => {
   const file = mkTmpFile('a.java', 'public class A { void bad() { sink(source()); } }');
   const hits = auditFile(file, termRegexes(), false);
@@ -82,6 +101,28 @@ test('leakage audit: clean, ordinary Java source produces zero hits', () => {
   const file = mkTmpFile('a.java', 'public class Calculator {\n  int add(int a, int b) { return a + b; }\n}\n');
   const hits = auditFile(file, termRegexes(), false);
   assert.equal(hits.length, 0, `expected no hits on clean code, got: ${JSON.stringify(hits)}`);
+});
+
+// ── Defense-in-depth regression: a bare "CWE89" reference (no trailing
+//    underscore-qualified name) inside a STRING LITERAL survives the real
+//    `_blindTransform` (correctly — it isn't a comment, and the transform's
+//    own CWE-tag rule requires `\bCWE\d+_[A-Za-z0-9_]+\b`), but the audit
+//    must still catch it independently. Proven through the REAL transform,
+//    with the exact flag combination the shipped bench:sard:java/csharp/
+//    smoke npm scripts pass. ─────────────────────────────────────────────
+
+test('leakage audit: a bare CWE-number reference that SURVIVES _blindTransform is still caught by the audit', () => {
+  const raw = 'String note = "Error processing request, see CWE89 for remediation guidance";\n' +
+              'logger.warn("Potential CWE89 exposure detected");\n';
+  const transformed = _blindTransform(raw, { scrambleIdentifiers: true, stripAllComments: true });
+  // The transform must NOT have touched it — this pins the exact gap this
+  // test exists to guard, so a future transform fix doesn't make this test
+  // silently vacuous.
+  assert.match(transformed, /CWE89/, 'expected the bare CWE89 string literal to survive the transform unchanged');
+  const file = mkTmpFile('a.java', transformed);
+  const hits = auditFile(file, termRegexes(), false);
+  assert.ok(hits.some(h => h.term === 'cwe-number'),
+    `expected the audit to independently catch the transform-surviving CWE89 reference, got: ${JSON.stringify(hits)}`);
 });
 
 // ── Small integration test: a synthetic Juliet-SHAPED fixture through the

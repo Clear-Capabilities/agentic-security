@@ -1,5 +1,5 @@
 {
-  "_doc": "External vulnerable apps used to verify detection precision and recall against real-world ground truth. Source code is NEVER committed to this repo — bench-realworld.js shallow-clones each app to .bench-cache/{name}-{sha}/ on demand. To update an app, change `sha` and the cache key changes too. Run: `npm run bench:realworld -- --app <name>` or `--all`.",
+  "_doc": "External vulnerable apps used to verify detection precision and recall against real-world ground truth. Source code is normally NOT committed to this repo — bench-realworld.js shallow-clones each app to .bench-cache/{name}-{sha}/ on demand (change `sha` to update; the cache key changes too). The ONE deliberate exception is an app with a `local` field instead of `repo`/`sha` (see `tinymart` below) — a small, hand-written, genuinely independent holdout fixture committed directly under bench/holdout-independent/, built specifically because every cloned app's ground truth carries `provenance: bootstrap-from-engine-output-*` and can never truly serve as a held-out generalization check (SARD_AGENTIC_SECURITY_PRD.md adversarial-premortem remediation, F14). Run: `npm run bench:realworld -- --app <name>` or `--all`.",
   "apps": {
     "owasp-benchmark": {
       "language": "java",
@@ -412,6 +412,21 @@
       "license": {
         "spdx": "Apache-2.0",
         "_doc": "Apache-2.0. We never redistribute the source — fetched on demand."
+      }
+    },
+    "tinymart": {
+      "language": "javascript",
+      "local": "bench/holdout-independent/tinymart",
+      "_doc": "SARD_AGENTIC_SECURITY_PRD.md adversarial-premortem remediation, F14 — the genuinely INDEPENDENT external holdout. No `repo`/`sha`: `local` is a repo-root-relative path to a small, hand-written app committed directly in this repo (see bench/holdout-independent/README.md). Ground truth (expected/tinymart.json) carries `requiresReAudit: false` and `provenance: authored-independently-...` — it was written from reading this fixture's own source before the scanner was ever run against it, unlike every OTHER curated app here, which all carry `provenance: bootstrap-from-engine-output-*`.",
+      "scanRoot": ".",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/tinymart.json",
+        "_doc": "Hand-authored — see expected/tinymart.json's own _doc for the independence account."
+      },
+      "license": {
+        "spdx": "N/A",
+        "_doc": "Original work written for this benchmark; not derived from any upstream project."
       }
     },
     "damn-vulnerable-defi": {

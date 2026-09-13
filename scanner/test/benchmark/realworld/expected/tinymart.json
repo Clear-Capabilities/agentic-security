@@ -1,0 +1,62 @@
+{
+  "_doc": "SARD_AGENTIC_SECURITY_PRD.md adversarial-premortem remediation, F14 — a genuinely INDEPENDENT external-holdout app. Unlike every other curated fixture in this directory (provenance: bootstrap-from-engine-output-*), this ground truth was authored by reading bench/holdout-independent/tinymart/'s own source BEFORE the scanner was ever run against it — every entry below states what was deliberately written to be vulnerable and why, not what a prior scan run happened to report. See bench/holdout-independent/README.md for the full independence account.",
+  "expected": [
+    {
+      "file": "routes/products.js",
+      "line": 10,
+      "lineTolerance": 2,
+      "family": "sql-injection",
+      "severity": "high",
+      "cwe": "CWE-89",
+      "note": "req.query.category concatenated directly into SQL text passed to db.query()"
+    },
+    {
+      "file": "routes/products.js",
+      "line": 32,
+      "lineTolerance": 2,
+      "family": "sql-injection",
+      "severity": "high",
+      "cwe": "CWE-89",
+      "note": "req.params.vendorId concatenated directly into SQL text — a path param that looks numeric-safe but is never validated or parameterized"
+    },
+    {
+      "file": "routes/admin.js",
+      "line": 10,
+      "lineTolerance": 2,
+      "family": "command-injection",
+      "severity": "critical",
+      "cwe": "CWE-78",
+      "note": "req.query.host concatenated into a shell command string passed to child_process.exec()"
+    },
+    {
+      "file": "routes/files.js",
+      "line": 14,
+      "lineTolerance": 2,
+      "family": "path-traversal",
+      "severity": "high",
+      "cwe": "CWE-22",
+      "note": "req.query.filename joined onto INVOICE_DIR with no containment check before fs.readFile()"
+    },
+    {
+      "file": "routes/comments.js",
+      "line": 18,
+      "lineTolerance": 2,
+      "family": "xss",
+      "severity": "high",
+      "cwe": "CWE-79",
+      "note": "stored comment text/author (from req.body, unescaped) concatenated directly into an HTML response"
+    },
+    {
+      "file": "config.js",
+      "line": 10,
+      "lineTolerance": 1,
+      "family": "stripe-test-key",
+      "severity": "medium",
+      "cwe": "CWE-798",
+      "note": "a Stripe-shaped test-mode API key literal hardcoded in source (sk_test_, deliberately not sk_live_, so this fixture never trips a host's secret push-protection scanner). family is the engine's actual familyFor() output for this named-credential rule (\"Stripe Test/Secret Key\" does not start with any _VULN_FAMILY_PREFIX entry, so it is NOT 'hardcoded-secret' — verified against a real scan, not assumed)"
+    }
+  ],
+  "wildcardFamilies": [],
+  "provenance": "authored-independently-2026-09-12",
+  "requiresReAudit": false
+}

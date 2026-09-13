@@ -148,13 +148,52 @@ function stripPhpComments(src) {
   return out;
 }
 
-// Confirmed leak (IMPLEMENTATION_STATUS.md): this corpus's generator names
-// its tainted variable literally `$tainted`. Word-boundary-anchored so
-// `$taintedFoo` (if it exists elsewhere) is left alone rather than
-// partially mangled — better to under-rename and let leakage-audit.mjs
-// catch a residual than to risk a broken rename corrupting valid PHP.
+// Adversarial-review finding (SARD_AGENTIC_SECURITY_PRD.md premortem, Round
+// 1, F3): the original version of this function renamed exactly one
+// hardcoded variable name (`$tainted`, confirmed leaking this session — see
+// IMPLEMENTATION_STATUS.md) and nothing else — a single ad hoc point-fix
+// discovered by iterating against the audit, not a designed protection, and
+// structurally far weaker than bench-realworld.js's `_blindTransform`
+// (general, hash-based, case-insensitive rules covering numbered flow
+// variants and PascalCase forms for Java/C#). Generalized to the same
+// DESIGN PATTERN here — general, hash-based, defense-in-depth rules rather
+// than one hardcoded name — even though a real run of the (now-strengthened,
+// see leakage-audit.mjs's `cwe-number` check) leakage audit against the
+// materialized workspace found ZERO hits across all 5000 already-ingested
+// cases either way (this corpus's own generator, Stivalet & Delaitre's SARD
+// PHP Vulnerability Test Suite, does not appear to use Juliet's bad()/good()
+// naming convention at all). This closes the STRUCTURAL gap (no general
+// mechanism existed) rather than a currently-observed leak.
+//
+// Word-boundary-anchored throughout so a legitimate identifier that merely
+// CONTAINS one of these substrings (`$taintedFoo`, `badge`, `goodwill`) is
+// left alone — better to under-rename and let leakage-audit.mjs catch a
+// residual than to risk a broken rename corrupting valid PHP.
 function neutralizeIdentifiers(src) {
-  return src.replace(/\$tainted\b/g, '$value');
+  return src
+    // The one confirmed leak this session found, kept for backward
+    // compatibility with already-ingested cases (the hash-based rule below
+    // would ALSO catch `$tainted`, but renaming it identically both ways
+    // means re-ingesting doesn't change already-committed gold/workspace
+    // content for cases that only ever had this one variable name).
+    .replace(/\$tainted\b/g, '$value')
+    // General Juliet-style bad/good identifiers, defense-in-depth for a
+    // future generator variant or corpus update — mirrors
+    // bench-realworld.js's `_blindTransform` hash-based rule shape (case-
+    // insensitive, numbered-flow-variant-aware) so the two pipelines share
+    // one protection design rather than PHP staying a special case.
+    .replace(/\$?\bbad(?:sink|source)?\d*\b/gi, (m) => (m[0] === '$' ? '$' : '') + `op0_${crypto.createHash('sha1').update(m.replace(/^\$/, '').toLowerCase()).digest('hex').slice(0, 6)}`)
+    .replace(/\$?\bgood(?:g2b|b2g)?(?:sink|source)?\d*\b/gi, (m) => (m[0] === '$' ? '$' : '') + `op1_${crypto.createHash('sha1').update(m.replace(/^\$/, '').toLowerCase()).digest('hex').slice(0, 6)}`)
+    // A CWE-and-descriptor tail fused directly onto an identifier (the same
+    // shape bench-realworld.js's own CWE-tag rule closes for Java/C#).
+    .replace(/\bCWE\d+_[A-Za-z0-9_]+\b/g, (m) => `case_${crypto.createHash('sha1').update(m).digest('hex').slice(0, 8)}`)
+    // A bare CWE+digits reference with no trailing descriptor (a string
+    // literal or log message, say) — the exact shape leakage-audit.mjs's
+    // new `cwe-number` check exists to catch independently if this rule
+    // ever misses a variant.
+    .replace(/\bCWE[\s_-]?\d+\b/gi, (m) => `ref_${crypto.createHash('sha1').update(m.toUpperCase()).digest('hex').slice(0, 6)}`)
+    .replace(/\bjuliet\b/gi, 'app')
+    .replace(/\btestcases?\b/gi, 'code');
 }
 
 function main() {

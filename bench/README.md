@@ -39,6 +39,7 @@ They are **not** quality evidence for marketing.
 | bigvul | Upstream CSV | CSV-claimed | None on file |
 | cvefixes | Upstream SQLite (Zenodo) | DB-claimed | None on file |
 | nodegoat / juice-shop / dvwa / pygoat / railsgoat / *-clean / openzeppelin-contracts / ... | Bootstrapped from scanner output then filtered | Self-referential | n/a (not eligible) |
+| tinymart | **Genuinely independent** — a small app hand-written for `bench/holdout-independent/tinymart/`, with ground truth authored from its own source before the scanner was ever run against it (SARD_AGENTIC_SECURITY_PRD.md adversarial-premortem remediation, F14: every OTHER curated app above is bootstrapped from scanner output, so the external-holdout regression gate could never fail against real data). Not "bootstrapped then filtered" like its neighbors — see `bench/holdout-independent/README.md` and `expected/tinymart.json`'s own `_doc`. | Author-verified (not scanner-derived) | n/a (small, single-repo fixture; not eligible for the external-sign-off process above) |
 
 ## Running locally
 

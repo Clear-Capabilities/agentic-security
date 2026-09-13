@@ -36,12 +36,53 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPORTS_DIR = path.join(HERE, '..', 'reports');
+// Test-only override so the real CLI can be exercised end-to-end (both a
+// clean pass and a genuine regression) against a disposable temp directory,
+// never the developer's own real local baseline. Unset in every real
+// invocation (bench:sard:update-baseline / :check-baseline), so production
+// behavior is exactly the pre-existing HERE-relative resolution.
+const REPORTS_DIR = process.env.SARD_BASELINE_REPORTS_DIR_FOR_TESTS || path.join(HERE, '..', 'reports');
 const LATEST_PATH = path.join(REPORTS_DIR, 'latest.json');
 const BASELINE_PATH = path.join(REPORTS_DIR, 'baseline.json');
 
 const TOLERANCE = 0.02; // 2 percentage points — configurable via thresholds.json in a future pass, not needed yet with only 2 apps.
 const MIN_SUPPORT = 5; // per-CWE regressions below this many expected entries are noise, not signal.
+
+// Adversarial-premortem remediation, Round 1 F4 / Round 2 F8: a flat
+// TOLERANCE was found doing real, silent double duty — this script's own
+// prior comment already admitted it, quoting real observed harness
+// nondeterminism (an unrelated holdout app's F1 moved 16.6%->15.6% between
+// two consecutive runs with ZERO code changes). A flat percentage-point
+// tolerance is the wrong shape for that: a metric measured on very FEW
+// expected entries has genuinely higher sampling variance than one measured
+// on thousands, so the same 2pp band is simultaneously too loose for a
+// large-support metric (a real regression could hide under it) and too
+// tight for a tiny-support one (ordinary noise reads as a failure).
+// `adaptiveTolerance` scales the band up for low support using a standard
+// `1/sqrt(n)`-shaped widening, and is deliberately ONE-DIRECTIONAL — it
+// never returns less than `baseTolerance`, so nothing that passed before
+// this change can start failing because of it; only genuinely low-support
+// metrics get MORE forgiving, never the reverse. `REFERENCE_SUPPORT` is the
+// support level at which the base tolerance applies unscaled — DELIBERATELY
+// set well above `MIN_SUPPORT`, not equal to it: `MIN_SUPPORT` answers "is
+// there enough data to score this at all" (below it, the per-CWE check is
+// skipped outright, tolerance is irrelevant); `REFERENCE_SUPPORT` answers a
+// different question, "is there enough data that the FLAT tolerance is
+// trustworthy." Setting them equal would make the widening a dead letter —
+// every per-CWE row the comparison actually SEES already cleared
+// `MIN_SUPPORT`, so if that were also the reference level, `support >=
+// REFERENCE_SUPPORT` would hold for every row reached and nothing would
+// ever widen (an earlier draft of this fix made exactly this mistake; a
+// unit test below is what caught it). 30 is a plain, round "enough samples
+// that a proportion's sampling noise is small" choice — no corpus-specific
+// tuning, deliberately, since PRD §23 forbids tuning benchmark mechanics to
+// a specific dataset's shape.
+const REFERENCE_SUPPORT = 30;
+export function adaptiveTolerance(baseTolerance, support) {
+  if (!Number.isFinite(support) || support <= 0) return baseTolerance;
+  const scale = Math.sqrt(REFERENCE_SUPPORT / support);
+  return baseTolerance * Math.max(1, scale);
+}
 
 function args() {
   const a = process.argv.slice(2);
@@ -83,19 +124,22 @@ function main() {
     const macroDelta = app.macroF1 - base.macroF1;
     const microDelta = app.aggregate.microF1 - base.aggregate.microF1;
     const precisionDelta = app.aggregate.precision - base.aggregate.precision;
+    const aggregateSupport = (base.aggregate.tp || 0) + (base.aggregate.fn || 0);
+    const aggregateTolerance = adaptiveTolerance(TOLERANCE, aggregateSupport);
 
     if (macroDelta < 0) { failed = true; lines.push(`  ✗ ${app.name}: macro F1 regressed ${(base.macroF1*100).toFixed(1)}% -> ${(app.macroF1*100).toFixed(1)}% (${(macroDelta*100).toFixed(1)}pp)`); }
     else lines.push(`  ✓ ${app.name}: macro F1 ${(base.macroF1*100).toFixed(1)}% -> ${(app.macroF1*100).toFixed(1)}% (${macroDelta>=0?'+':''}${(macroDelta*100).toFixed(1)}pp)`);
 
-    if (microDelta < -TOLERANCE) { failed = true; lines.push(`  ✗ ${app.name}: micro F1 regressed beyond tolerance: ${(base.aggregate.microF1*100).toFixed(1)}% -> ${(app.aggregate.microF1*100).toFixed(1)}%`); }
-    if (precisionDelta < -TOLERANCE) { failed = true; lines.push(`  ✗ ${app.name}: precision regressed beyond tolerance (secure-code FP proxy): ${(base.aggregate.precision*100).toFixed(1)}% -> ${(app.aggregate.precision*100).toFixed(1)}%`); }
+    if (microDelta < -aggregateTolerance) { failed = true; lines.push(`  ✗ ${app.name}: micro F1 regressed beyond tolerance (${(aggregateTolerance*100).toFixed(2)}pp, support=${aggregateSupport}): ${(base.aggregate.microF1*100).toFixed(1)}% -> ${(app.aggregate.microF1*100).toFixed(1)}%`); }
+    if (precisionDelta < -aggregateTolerance) { failed = true; lines.push(`  ✗ ${app.name}: precision regressed beyond tolerance (secure-code FP proxy, ${(aggregateTolerance*100).toFixed(2)}pp, support=${aggregateSupport}): ${(base.aggregate.precision*100).toFixed(1)}% -> ${(app.aggregate.precision*100).toFixed(1)}%`); }
 
     const baseCwe = Object.fromEntries((base.perCwe || []).map(r => [r.cwe, r]));
     for (const row of app.perCwe || []) {
       const prior = baseCwe[row.cwe];
       if (!prior || prior.support < MIN_SUPPORT) continue;
       const delta = row.f1 - prior.f1;
-      if (delta < -TOLERANCE) { failed = true; lines.push(`  ✗ ${app.name} ${row.cwe}: F1 regressed beyond tolerance: ${(prior.f1*100).toFixed(1)}% -> ${(row.f1*100).toFixed(1)}% (support=${row.support})`); }
+      const cweTolerance = adaptiveTolerance(TOLERANCE, prior.support);
+      if (delta < -cweTolerance) { failed = true; lines.push(`  ✗ ${app.name} ${row.cwe}: F1 regressed beyond tolerance (${(cweTolerance*100).toFixed(2)}pp): ${(prior.f1*100).toFixed(1)}% -> ${(row.f1*100).toFixed(1)}% (support=${row.support})`); }
     }
   }
 
@@ -108,4 +152,4 @@ function main() {
   console.log('\n✓ no regression beyond tolerance.');
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

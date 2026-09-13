@@ -165,3 +165,86 @@ public class C {
   assert.equal(taint.filter(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)).length, 0,
     `an unrelated .Filter= must not trigger the LDAP sink, got: ${taint.map(f => f.vuln).join(', ')}`);
 });
+
+// ── Interprocedural regression proof (SARD_AGENTIC_SECURITY_PRD.md
+//    adversarial-premortem remediation, Round 1 F5/F17) — nothing in this
+//    file previously covered cross-method C# taint flow at all.
+//
+// This proof exists because of a real, self-caught mistake worth recording
+// so it isn't quietly repeated: a first investigation pass concluded C#'s
+// interprocedural taint engine was broken, based on a two-method fixture
+// using `request.Params["cmd"]` (LOWERCASE `request`) producing 0 findings
+// against a single-method version of the same fixture producing 1. Before
+// that conclusion was written down as fact, the SINGLE-method finding's
+// `parser` field was checked and turned out to be `CSHARP` — a single-
+// function-scoped SAST STRUCTURAL detector, not `IR-TAINT`. `catalog.js`'s
+// `MEMBER_INDEX` lookup for `cs-request-params` (`{object: 'Request', prop:
+// 'Params'}`) is a case-SENSITIVE exact-string key, so lowercase
+// `request.Params[...]` never matched any real taint source in EITHER
+// fixture — the "single-method success" was a coincidental structural-
+// detector hit that doesn't span function boundaries, not evidence of
+// working taint, and the "two-method failure" was just the continued
+// absence of any real source. With the casing fixed to match the real
+// catalog entry (`Request.Params[...]`), BOTH shapes correctly produce an
+// `IR-TAINT` finding — proven below with two independent sinks. See
+// bench/sard/IMPLEMENTATION_STATUS.md's C# detector-coverage-gap row for
+// the full account of the retraction and what remains genuinely open.
+test('cs-interproc-basic: taint from Request.Params propagates through a private helper method (Bad()/BadSink() split, Juliet\'s own convention)', async () => {
+  const dir = mkTmp('ldap-interproc', `
+public class C {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["uid"];
+        BadSink(data);
+    }
+    private void BadSink(string data) {
+        var searcher = new DirectorySearcher();
+        searcher.Filter = "(uid=" + data + ")";
+        searcher.FindAll();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection to propagate across the method call, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-interproc-basic: taint from Request.Params propagates through a private helper method (command injection via Process.Start)', async () => {
+  const dir = mkTmp('cmdi-interproc', `
+using System.Diagnostics;
+public class D {
+    public void Bad(HttpRequest Request) {
+        string data = Request.Params["cmd"];
+        BadSink(data);
+    }
+    private void BadSink(string data) {
+        Process.Start("cmd.exe", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected Command Injection to propagate across the method call, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-interproc-basic precision control: lowercase "request" (not matching any cataloged Request.* source) must not spuriously fire IR-TAINT', async () => {
+  // Guards against the exact confound the retraction above describes
+  // recurring silently: a lowercase `request` parameter name must never be
+  // treated as though it matched a real cataloged source. A structural
+  // detector MAY still fire (that's a different, legitimate detection
+  // layer) — this only asserts the IR-TAINT layer specifically stays quiet.
+  const dir = mkTmp('cmdi-interproc-lowercase-control', `
+using System.Diagnostics;
+public class E {
+    public void Bad(HttpRequest request) {
+        string data = request.Params["cmd"];
+        BadSink(data);
+    }
+    private void BadSink(string data) {
+        Process.Start("cmd.exe", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.length, 0,
+    `lowercase "request" must not match the Request.* catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
