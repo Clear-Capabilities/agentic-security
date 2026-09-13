@@ -1490,6 +1490,52 @@ against a scoped `--cwe CWE-90,CWE-643,CWE-113,CWE-78 --json` capture:
   broken stage per PRD §14's failure taxonomy) rather than another guess.
   **Concrete next step for whoever picks this up.**
 
+### 4. Follow-up same session: every synthetic reproduction of the suspected shape DETECTS correctly — the real gap is unidentified, not one of these
+
+Before handing this off, tested every mechanism that plausibly explained
+CWE90's `tp:0` against direct, non-corpus, hand-written `.cs` fixtures (never
+Juliet source — see the trust-boundary note in item 3):
+
+- Same-file `this.`-qualified helper call, `Environment.GetEnvironmentVariable`
+  source → `DirectorySearcher.Filter` sink: **detects.**
+- Cross-FILE (two `.cs` files, mirroring Juliet's documented `_NNa`/`_NNb`
+  paired-variant convention) via inline `new ClassB().Method(x)`: **detects**
+  once the fixture uses realistic PascalCase C# naming (an initial attempt
+  using Java-style `camelCase` failed to resolve — that was a fixture bug on
+  this session's part, not an engine bug: `classMethods` resolution is
+  case-sensitive and Juliet's own C# convention is PascalCase `BadSink`,
+  confirmed against the `isBad` regex the GT-builder already uses).
+- Cross-file via the variable-held form (`ClassB h = new ClassB(); h.Method(x)`):
+  **detects** — and correctly attributes the finding back to the CALLER's
+  file/line (inside `bad()`'s own span), which would score as a direct match
+  without even needing this session's flow-aware scorer fix.
+- The exact same cross-file, inline-instantiate fixture run through
+  `_blindTransform({ scrambleIdentifiers: true })` (bench-realworld.js's own
+  exported function, applied directly, then scanned): **still detects** —
+  the scramble transform's per-matched-text hashing keeps a renamed class/
+  method consistent across every file that references it, so scrambling
+  does not desynchronize cross-file resolution.
+- Ruled out a function-count/timeout budget truncation theory directly:
+  re-scored the ALREADY-CAPTURED scoped `--cwe CWE-90,CWE-643,CWE-113,CWE-78`
+  JSON (a few hundred files, nowhere near `AGENTIC_SECURITY_DEEP_FN_LIMIT`'s
+  default 5000) through `macro-score.mjs` on its own — still `F1=0.0%`
+  across all four CWEs. Whatever is happening is present even at this much
+  smaller scale, so it isn't a budget/timeout artifact of the full-corpus run.
+
+**Honest conclusion:** every hypothesis this session could test without
+reading corpus source has been tested and ruled out (same-file vs cross-file,
+inline vs variable-held, unscrambled vs scrambled, small-scale vs
+full-corpus). The real corpus's actual code shape for these three CWEs must
+differ from all of the above in some way not yet identified. This is the
+trust boundary in §0 doing exactly what it's designed to do: the coding
+agent genuinely cannot finish this diagnosis without either (a) a
+privileged/human role reading a handful of the actual `Bad()` method bodies
+for these three CWEs and reporting back the real shape (structure only, not
+pasted as a scanner-tunable pattern), or (b) extending `analyze-errors.mjs`
+with a further filename-only signal this session didn't think of. Recorded
+here specifically so a future session does not re-spend a full pass
+re-deriving and re-testing the same five hypotheses above.
+
 ### Net honest assessment
 
 Real, general, verified-safe engineering landed (items 1 and 2 especially —
@@ -1497,7 +1543,10 @@ neither is SARD-specific and both pass the full regression suite with zero
 drift). C# SARD macro-F1 is still 10.8% on this benchmark. The dominant
 blocker for CWE90/643/78 specifically is not the scorer and not (only) the
 LDAP sink's receiver-matching precision — it's an unresolved taint-
-propagation gap for a cluster of source shapes shared across all three CWEs,
-now scoped and evidenced (not guessed) via `analyze-errors.mjs`, plus one
-independently-real structural-detector precision bug found as a side effect.
+propagation gap for a cluster of source shapes shared across all three CWEs.
+Five plausible mechanisms were individually tested and ruled out (item 4);
+the actual root cause needs corpus-content access this agent deliberately
+does not have, not more blind guessing. Plus one independently-real
+structural-detector precision bug (the taint-blind LDAP regex, item 3) found
+as a side effect, also not yet fixed.
 Both are concrete, bounded next tasks, not "close the loop and it's done."
