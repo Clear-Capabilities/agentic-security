@@ -43,7 +43,7 @@ function readInput() {
   catch (e) { throw new Error(`no --input file and stdin unreadable: ${e.message}`); }
 }
 
-function f1(p, r) { return (p + r) === 0 ? 0 : (2 * p * r) / (p + r); }
+export function f1(p, r) { return (p + r) === 0 ? 0 : (2 * p * r) / (p + r); }
 
 // A "strict" app (empty wildcardFamilies + preciseMethodScoring) gives
 // genuine per-vulnerability TP/FP/FN. A non-strict Juliet app's
@@ -55,7 +55,7 @@ function f1(p, r) { return (p + r) === 0 ? 0 : (2 * p * r) / (p + r); }
 // caveat rather than silently reporting a misleading number.
 function isStrictApp(name) { return /-strict$/.test(name); }
 
-function perCweTable(perCwe) {
+export function perCweTable(perCwe) {
   const rows = [];
   for (const [cwe, c] of Object.entries(perCwe || {})) {
     const tp = c.tp || 0, fp = c.fp || 0, fn = c.fn || 0;
@@ -67,9 +67,34 @@ function perCweTable(perCwe) {
   return rows;
 }
 
-function macroF1(rows) {
+export function macroF1(rows) {
   if (!rows.length) return 0;
   return rows.reduce((s, r) => s + r.f1, 0) / rows.length;
+}
+
+// Adversarial-premortem remediation: macro-F1 is an unweighted mean over
+// CWE rows by design (macro-averaging is meant to give a rare CWE equal
+// weight to a common one) — that is not itself a bug. What it hides is
+// VARIANCE: a CWE with 1 expected instance has a binary 0-or-1 F1 and
+// carries the same 1/N weight as one with 1,000, so a handful of tiny-
+// support CWEs can swing the headline number with no visibility into it.
+// `compare-baseline.mjs` already refuses to trust a per-CWE REGRESSION
+// below `MIN_SUPPORT=5` expected entries (the identical constant, kept in
+// sync deliberately — this is the same noise-floor judgment call, applied
+// to the headline number instead of a delta). This does not change what
+// the primary macroF1() above reports (historical numbers stay comparable)
+// — it adds a supplementary, explicitly-labeled second figure so a reader
+// can see how much of the headline is resting on low-support rows.
+const MIN_SUPPORT_FOR_MACRO = 5;
+
+export function macroF1MinSupport(rows, minSupport = MIN_SUPPORT_FOR_MACRO) {
+  const eligible = rows.filter(r => r.support >= minSupport);
+  const excluded = rows.filter(r => r.support > 0 && r.support < minSupport);
+  return {
+    value: eligible.length ? eligible.reduce((s, r) => s + r.f1, 0) / eligible.length : null,
+    cweCount: eligible.length,
+    excludedCwes: excluded.map(r => ({ cwe: r.cwe, support: r.support, f1: r.f1 })),
+  };
 }
 
 // Normalize "CWE-89" / "CWE89" / "89" to a bare digit string so the GT's
@@ -167,6 +192,7 @@ function main() {
     const entry = manifestEntry(r.name);
     const rows = perCweTable(r.perCwe);
     const macro = macroF1(rows);
+    const macroMinSupport = macroF1MinSupport(rows);
     const confusion = confusionMatrix(r.tps, r.fps);
     const localization = localizationAccuracy(r.tps);
 
@@ -181,6 +207,7 @@ function main() {
       peakRssMb: r.peakRssMb,
       aggregate: { tp: r.tp, fp: r.fp, fn: r.fn, precision: r.precision, recall: r.recall, microF1: r.f1 },
       macroF1: macro,
+      macroF1MinSupport: macroMinSupport,
       cweCount: rows.length,
       perCwe: rows,
       cweConfusion: confusion,
@@ -202,6 +229,11 @@ function main() {
     mdLines.push(`Scanned ${r.scanned} findings over ${r.elapsedSec}s, peak RSS ${r.peakRssMb}MB.`);
     mdLines.push('');
     mdLines.push(`**Macro F1 (CWE-averaged, primary metric): ${(macro * 100).toFixed(1)}%**  ·  Micro F1: ${(r.f1 * 100).toFixed(1)}%  ·  Precision: ${(r.precision * 100).toFixed(1)}%  ·  Recall: ${(r.recall * 100).toFixed(1)}%`);
+    if (macroMinSupport.excludedCwes.length) {
+      const minSupPct = macroMinSupport.value === null ? 'n/a' : `${(macroMinSupport.value * 100).toFixed(1)}%`;
+      mdLines.push('');
+      mdLines.push(`> **Support-floor diagnostic**: ${macroMinSupport.excludedCwes.length} of ${rows.length} CWE(s) have fewer than ${MIN_SUPPORT_FOR_MACRO} expected instances (binary 0/1 F1, full 1/N weight in the headline macro-F1 above). Macro F1 restricted to CWEs with ≥${MIN_SUPPORT_FOR_MACRO} expected instances: **${minSupPct}** (over ${macroMinSupport.cweCount} CWEs). Low-support CWEs excluded from that figure: ${macroMinSupport.excludedCwes.map(c => `${c.cwe} (n=${c.support}, F1=${(c.f1 * 100).toFixed(0)}%)`).join(', ')}.`);
+    }
     mdLines.push('');
     mdLines.push('| CWE | TP | FP | FN | Precision | Recall | F1 |');
     mdLines.push('|---|---|---|---|---|---|---|');
@@ -250,9 +282,13 @@ function main() {
   fs.writeFileSync(path.join(REPORTS_DIR, 'latest.md'), mdLines.join('\n') + '\n');
 
   for (const app of report.apps) {
-    console.log(`${app.name}: macroF1=${(app.macroF1 * 100).toFixed(1)}%  microF1=${(app.aggregate.microF1 * 100).toFixed(1)}%  P=${(app.aggregate.precision * 100).toFixed(1)}%  R=${(app.aggregate.recall * 100).toFixed(1)}%  CWEs=${app.cweCount}${app.strict ? '' : '  [non-strict]'}`);
+    const msup = app.macroF1MinSupport;
+    const msupNote = msup && msup.excludedCwes.length
+      ? `  macroF1(support>=${MIN_SUPPORT_FOR_MACRO})=${msup.value === null ? 'n/a' : (msup.value * 100).toFixed(1) + '%'} [${msup.excludedCwes.length} low-support CWE(s) excluded]`
+      : '';
+    console.log(`${app.name}: macroF1=${(app.macroF1 * 100).toFixed(1)}%  microF1=${(app.aggregate.microF1 * 100).toFixed(1)}%  P=${(app.aggregate.precision * 100).toFixed(1)}%  R=${(app.aggregate.recall * 100).toFixed(1)}%  CWEs=${app.cweCount}${app.strict ? '' : '  [non-strict]'}${msupNote}`);
   }
   console.log(`\nWritten: ${path.relative(process.cwd(), path.join(REPORTS_DIR, 'latest.json'))}, ${path.relative(process.cwd(), path.join(REPORTS_DIR, 'latest.md'))}`);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

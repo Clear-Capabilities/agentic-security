@@ -176,6 +176,15 @@ not yet fixed); Semantic Robustness Rate 100% (84/84 real mutations survived, sa
 against a deliberately-safe negative control); Fully Verified Fix Rate 100% (32/32 real Java
 weak-hash fixes); leakage reduced from 907,516 to 3 residual hits (99.9997%).
 
+> **Erratum, added after an adversarial premortem review (see 0.151.1's entry below for the
+> first round; a second round found this gap specifically):** the Java 45.6% / C# 8.4% macro-F1
+> figures above were measured over the FULL corpus (train+dev+test mixed via the `--blind`
+> flag), not a held-out split. The `--split train|dev|test` flag 0.151.1 added did not exist yet
+> when these numbers were produced, and no held-out re-measurement has been published since. Read
+> these two figures as "leakage-clean, but not yet a genuine held-out generalization claim" — the
+> other three numbers in this paragraph (mutation survival, fix verification, leakage reduction)
+> are unaffected by this caveat.
+
 **Real engine fixes found via this benchmarking work** (general capability improvements, not
 SARD-specific shortcuts — each verified with `bench:layer-recall`/`test:dataflow` before and
 after):

@@ -1,0 +1,73 @@
+name: Dependency currency
+
+# Adversarial-premortem remediation (SARD_80_F1_SCANNER_PRD.md review, Round 3
+# finding F3.4): scripts/dependency-currency.mjs's "Half A" — any advisory at
+# moderate severity or above, in either package tree, with NO opt-out — was
+# previously wired ONLY into scripts/release-check.mjs's prepublishOnly path.
+# It is deliberately excluded from the LOCAL pre-push gate (see this script's
+# own "SLOW BY CLASSIFICATION" header note and root CLAUDE.md's "Dependency
+# currency + the hold list" section): it is a network round-trip against four
+# manifests, and an offline developer must still be able to push. That
+# exclusion is correct and stays as-is.
+#
+# What it left open: a known-vulnerable dependency could be merged and live on
+# `main` indefinitely between releases with zero CI signal at all — nothing
+# between "the pre-push gate doesn't run it" and "the next `npm publish`
+# happens to catch it" (which could be weeks). Hosted CI is always
+# network-connected, so the offline-developer constraint that justifies
+# excluding this from pre-push does not apply here.
+#
+# Triggered narrowly rather than on every push (this check is a genuine
+# network round-trip, and this repo has already learned once — see
+# .github/required-checks.json's realworld-bench/jetbrains-plugin notes — that
+# a network-bound job made a blanket-blocking habit becomes a habitually-
+# bypassed one): a manifest change is exactly the moment a new vulnerable
+# dependency would be introduced, so PR/push triggers are scoped to the four
+# manifest files this check actually reads. A daily schedule additionally
+# catches a NEW advisory disclosed against a dependency nobody touched.
+#
+# This is deliberately NOT the same tier as sard-blind-smoke/realworld-bench
+# (informational trend jobs). A known CVE is a correctness fact once the
+# registry answers, not a quality trend — see .github/required-checks.json's
+# own doctrine distinguishing the two. Listed there as BLOCKING.
+on:
+  pull_request:
+    paths:
+      - 'scanner/package.json'
+      - 'scanner/package-lock.json'
+      - 'ide/vscode/package.json'
+      - 'ide/vscode/package-lock.json'
+      - '.dependency-holds.json'
+      - '.github/workflows/dependency-currency.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scanner/package.json'
+      - 'scanner/package-lock.json'
+      - 'ide/vscode/package.json'
+      - 'ide/vscode/package-lock.json'
+      - '.dependency-holds.json'
+  schedule:
+    # 04:43 UTC daily — off the hour, same reasoning as bench.yml's schedule.
+    - cron: '43 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-currency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install scanner/ dependencies
+        working-directory: scanner
+        run: npm ci
+      # ide/vscode is installed on demand by the check itself
+      # (dependency-currency.mjs's gatherTreeFacts / dependenciesInstalled) —
+      # no separate install step needed here.
+      - name: Dependency currency check (known advisories + outdated/holds)
+        run: node scripts/dependency-currency.mjs

@@ -7,6 +7,15 @@ This ledger is the persistent execution record for that PRD. Status values:
 **Rule:** `VERIFIED` means a command was actually run in the current session and its output
 was read — never assigned because "the code exists."
 
+> **⚠ HELD-OUT STATUS, read before citing any macro-F1/precision/recall number in this file:**
+> as of this revision, **zero** of the Java/C#/PHP numbers anywhere in this ledger were produced
+> with `--split test`. Every number is a full-corpus (train+dev+test mixed) measurement. This is
+> not a subtle caveat buried in prose — it means none of these numbers yet answer the PRD's own
+> Definition of Done (§29), which requires a TEST-split measurement. Do not report, summarize, or
+> quote a number from this file as progress evidence without restating this. If a future session
+> runs a genuine `--split test` measurement for a language, update THIS banner to say so
+> per-language — do not delete it or loosen it for all three languages at once.
+
 This ledger was started by a prior session (session log entries dated 2026-09-11 22:03 and
 earlier survive below) and is being continued here after a `/clear`. The prior session's own
 architecture survey is preserved verbatim in section 0 below; this session independently
