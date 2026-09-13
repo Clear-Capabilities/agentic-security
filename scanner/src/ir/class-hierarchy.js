@@ -137,8 +137,25 @@ export function buildClassHierarchy(perFileIR) {
         // "confidently resolved" type can suppress a real finding. Same
         // `n.source.isNew` test collectInstantiatedClasses uses below.
         if (!src.isNew) continue;
+        // SARD_80_F1_SCANNER_PRD.md §9/§15.1: the Babel-only `{kind:'ident'}`
+        // shape below is what parser-js.js emits for `new Foo()`. Every
+        // hand-rolled parser (C#, Go, PHP, Ruby, Kotlin, Java-CST — see
+        // ../ir/CLAUDE.md's IR shape contract: `callee: string|expr`) instead
+        // emits a flat, possibly dot-joined STRING callee for a `new`
+        // expression (e.g. `"DirectorySearcher"`, or a fully-qualified
+        // `"System.DirectoryServices.DirectorySearcher"`). Before this fix
+        // `classOfVar` was silently a permanent no-op for every one of those
+        // languages — not merely incomplete, since the only caller-visible
+        // effect of "unknown" and "wrong" is identical (both return null) —
+        // discovered while wiring `receiverTypeIn`-based sink matching for a
+        // C# write-sink (`cs-directorysearcher-filter`) and finding
+        // `callContext._cha` present but every lookup coming back null even
+        // for the exact `var x = new DirectorySearcher()` shape this
+        // function's own header comment describes as supported.
         const callee = src.callee;
-        const className = callee?.kind === 'ident' ? callee.name : null;
+        const className = callee?.kind === 'ident' ? callee.name
+          : typeof callee === 'string' ? (callee.includes('.') ? callee.slice(callee.lastIndexOf('.') + 1) : callee)
+          : null;
         if (!className) continue;
         if (classes.has(className) || /^[A-Z]/.test(className)) {
           // Convention: PascalCase `new` callees treated as constructors.

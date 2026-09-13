@@ -166,6 +166,44 @@ public class C {
     `an unrelated .Filter= must not trigger the LDAP sink, got: ${taint.map(f => f.vuln).join(', ')}`);
 });
 
+// SARD_80_F1_SCANNER_PRD.md §9/§15.1: the name regex above is a real
+// precision heuristic (see the precision test just above), but it is also
+// exactly what identifier scrambling defeats — and what an ordinary
+// codebase that just doesn't name the variable "searcher" would defeat too.
+// `receiverTypeIn: ['^DirectorySearcher$']` on the catalog entry lets the
+// CHA-resolved allocation type carry the same signal independent of naming.
+test('cs-directorysearcher-filter: fires via CHA-resolved allocation type even when the receiver is NOT named search-like', async () => {
+  const dir = mkTmp('ldap-filter-renamed', `
+public class C {
+    public void Handler([FromQuery] string uid) {
+        var _q7f = new DirectorySearcher();
+        _q7f.Filter = "(uid=" + uid + ")";
+        _q7f.FindAll();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected LDAP Injection via allocation-type resolution, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// The type-based path must stay just as precise as the name-based path: a
+// receiver confidently typed as something OTHER than DirectorySearcher must
+// not fire merely because its (irrelevant) name also fails the regex.
+test('cs-directorysearcher-filter precision: a non-search-named receiver whose CHA type is NOT DirectorySearcher still does not fire', async () => {
+  const dir = mkTmp('ldap-filter-typed-clean', `
+public class C {
+    public void Handler([FromQuery] string mode) {
+        var _q7f = new ImageOptions();
+        _q7f.Filter = mode;
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.filter(f => /ldap/i.test(`${f.vuln} ${f.cwe}`)).length, 0,
+    `a differently-typed receiver must not trigger the LDAP sink, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
 // ── Interprocedural regression proof (SARD_AGENTIC_SECURITY_PRD.md
 //    adversarial-premortem remediation, Round 1 F5/F17) — nothing in this
 //    file previously covered cross-method C# taint flow at all.

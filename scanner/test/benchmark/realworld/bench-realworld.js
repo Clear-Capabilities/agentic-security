@@ -1192,7 +1192,103 @@ async function loadFamilyMap() {
 function lineOf(a) { return a.sink?.line ?? a.line ?? a.source?.line ?? 0; }
 function fileOf(a) { return a.file || a.sink?.file || a.source?.file || ''; }
 
-function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
+// --- PRD SARD_80_F1 §9.1 flow-aware matching: same-file call-graph reachability ---
+//
+// The strict per-method GT (buildJulietCsExpected / buildJulietExpected) only
+// ever credited a finding whose line fell inside the expected Bad() method's
+// OWN [startLine, endLine] span. A finding correctly relocated to a helper
+// method that Bad() calls (interprocedural — the scanner's own cross-class/
+// same-class call-graph fix landed this session) was scored as a SIMULTANEOUS
+// FN (nothing in Bad()'s span) and FP (an "unexplained" finding elsewhere in
+// the file) even though it is the objectively more accurate result. See
+// bench/sard/IMPLEMENTATION_STATUS.md's LDAP (CWE90) writeup for the exact
+// mechanism this fixes.
+//
+// Deliberately scoped to SAME-FILE reachability only (not cross-file): this is
+// the specific, understood gap: Juliet's own multi-flaw-variant files (e.g.
+// `Bad()`, `Bad2()` calling private same-class helpers) already carry every
+// call edge that matters, and staying same-file avoids the larger, unverified
+// claim of resolving cross-file helper identity — PRD §9.2 says score
+// conservatively when attribution is unproven, so this only extends credit
+// where the file itself proves the call.
+//
+// Anti-inflation guard (PRD §9.2 "shared by good and bad paths"): a candidate
+// method reachable from the expected Bad() method is REFUSED credit if it is
+// ALSO reachable from any Good*/good* method in the same file — Juliet's own
+// naming convention for the safe half of a testcase (already relied on by
+// isBad()'s sibling checks in the expected-builders above), used here purely
+// by the trusted benchmark controller to avoid crediting a helper the good
+// path legitimately shares, never by the production scanner.
+
+export function findEnclosingMethod(methods, line) {
+  let best = null;
+  for (const m of methods) {
+    if (line < m.startLine || line > m.endLine) continue;
+    if (!best || (m.endLine - m.startLine) < (best.endLine - best.startLine)) best = m;
+  }
+  return best;
+}
+
+// Call edges are resolved only among this file's OWN declared method names
+// (no keyword filtering needed: "if"/"for"/etc. are never in `methodNames`),
+// which keeps this a cheap, precedent-consistent regex pass rather than a
+// real parse — same tradeoff findCsharpMethodSpans/findJavaMethodSpans above
+// already make for method-span extraction.
+export function buildSameFileCallGraph(content, methods) {
+  const lines = content.split('\n');
+  const methodNames = new Set(methods.map(m => m.name));
+  const graph = new Map();
+  for (const m of methods) {
+    const bodyText = lines.slice(m.startLine - 1, m.endLine).join('\n');
+    const callRe = /\b([A-Za-z_]\w*)\s*\(/g;
+    const edges = new Set();
+    let cm;
+    while ((cm = callRe.exec(bodyText))) {
+      const callee = cm[1];
+      if (callee !== m.name && methodNames.has(callee)) edges.add(callee);
+    }
+    graph.set(m.name, edges);
+  }
+  return graph;
+}
+
+export function reachableFrom(graph, startName, maxDepth = 6) {
+  const visited = new Set();
+  const queue = [[startName, 0]];
+  while (queue.length) {
+    const [name, depth] = queue.shift();
+    if (visited.has(name) || depth > maxDepth) continue;
+    visited.add(name);
+    for (const next of (graph.get(name) || [])) {
+      if (!visited.has(next)) queue.push([next, depth + 1]);
+    }
+  }
+  visited.delete(startName);
+  return visited;
+}
+
+const _callGraphInfoCache = new Map(); // absolute file path -> info | null
+
+async function getCallGraphInfo(fileAbsPath, language) {
+  if (_callGraphInfoCache.has(fileAbsPath)) return _callGraphInfoCache.get(fileAbsPath);
+  let content = null;
+  try { content = await fs.readFile(fileAbsPath, 'utf8'); } catch { /* file not found under this root */ }
+  let info = null;
+  if (content) {
+    const methods = language === 'cs' ? findCsharpMethodSpans(content) : findJavaMethodSpans(content);
+    const graph = buildSameFileCallGraph(content, methods);
+    const goodReachable = new Set();
+    for (const m of methods) {
+      if (!/^good/i.test(m.name)) continue;
+      for (const n of reachableFrom(graph, m.name)) goodReachable.add(n);
+    }
+    info = { methods, graph, goodReachable };
+  }
+  _callGraphInfoCache.set(fileAbsPath, info);
+  return info;
+}
+
+export async function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies, gtContentRoot) {
   const tps = []; const fps = []; const fns = [];
   const consumed = new Set();
   const wildSet = new Set(wildcardFamilies || []);
@@ -1253,7 +1349,25 @@ function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies) {
       // Range match (per-method Juliet GT): match if aLine ∈ [e.line, e.lineEnd].
       // Otherwise fall back to point match within tolerance.
       if (typeof e.lineEnd === 'number' && e.lineEnd >= e.line) {
-        if (aLine < e.line || aLine > e.lineEnd) continue;
+        let inRange = aLine >= e.line && aLine <= e.lineEnd;
+        // Flow-aware fallback (PRD §9.1): the sink may have relocated to a
+        // same-file helper the expected method actually calls. See the
+        // module comment above `findEnclosingMethod` for scope/rationale.
+        if (!inRange && e.method) {
+          const lang = /\.cs$/i.test(e.file) ? 'cs' : /\.java$/i.test(e.file) ? 'java' : null;
+          if (lang) {
+            const gtFileAbs = path.join(gtContentRoot || scanRoot, e.file);
+            const info = await getCallGraphInfo(gtFileAbs, lang);
+            if (info) {
+              const enclosing = findEnclosingMethod(info.methods, aLine);
+              if (enclosing && enclosing.name !== e.method && !info.goodReachable.has(enclosing.name)) {
+                const reachable = reachableFrom(info.graph, e.method);
+                if (reachable.has(enclosing.name)) inRange = true;
+              }
+            }
+          }
+        }
+        if (!inRange) continue;
       } else if (Math.abs(aLine - e.line) > tol) continue;
       if (meta.fam !== e.family) continue;
       consumed.add(i);
@@ -1516,7 +1630,7 @@ async function runOne(name, app, vulnFamilyMap) {
   }
 
   memTrace('after actual[] merge');
-  const { tps, fps, fns } = score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies);
+  const { tps, fps, fns } = await score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies, gtContentRoot);
   memTrace('after score');
   const tp = tps.length, fp = fps.length, fn = fns.length;
   if (MEM_TRACE) console.error(`  [mem] counts actual:${actual.length} expected:${expected.length} tp:${tp} fp:${fp} fn:${fn}`);

@@ -1366,3 +1366,138 @@ from scratch.
   cross-class improvement visible on THIS benchmark is real, identified,
   scoped work for a future session — not a mystery, and not attempted here
   given the length this session had already reached.
+
+## Session N+1: PRD §9.1 scorer fix + a general CHA bug found while chasing it (real, but corpus number still unchanged — honest account)
+
+Picked up the exact next step the previous session flagged: teach the C#/Java
+strict scorer to credit an interprocedural finding relocated to a same-file
+helper, per PRD §9.1/§9.2. Three real, independently-verified changes landed;
+**none of them moved the C# SARD macro-F1 off 10.8%**, and this section
+explains exactly why, with evidence, rather than declaring victory or
+burying the null result.
+
+### 1. Scorer flow-aware matching (PRD §9.1/§9.2) — implemented, tested, did not move this corpus
+
+`scanner/test/benchmark/realworld/bench-realworld.js`: `score()` now credits
+a finding when it's inside the expected `Bad()` method's own span (unchanged)
+**or** inside a same-file helper that's call-graph-reachable from `Bad()` —
+built by the trusted benchmark controller itself (a lightweight, regex-based,
+same-file call graph: `findEnclosingMethod`/`buildSameFileCallGraph`/
+`reachableFrom`/`getCallGraphInfo`), never the production scanner. Refuses
+credit when the helper is *also* reachable from any `Good*`/`good*` method in
+the file (PRD §9.2's "shared by good and bad paths → score conservatively").
+Deliberately same-file only, not cross-file — the specific, understood LDAP
+gap from the previous session's writeup. 7 new unit tests
+(`test/sard-flow-aware-scoring.test.js`), all against real on-disk fixtures
+exercising `score()` end-to-end (it now does its own `fs.readFile`), covering
+the credit case, the anti-inflation refusal, an unrelated-method non-credit,
+and an unchanged-behavior regression check.
+
+**Why it didn't move the number:** re-running `bench:sard:csharp` before and
+after showed CWE90/643/113/78 all still at `tp:0, fp:0` in `perCwe`. The
+scorer fix only ever *reclassifies an existing actual finding* from
+FN+FP into TP — it has nothing to work with when the actual findings array
+contains no matching family at all. Confirmed this is what was happening,
+not a scorer bug, via items 2 and 3 below.
+
+### 2. General CHA bug found while diagnosing: `classOfVar` silently never worked for any hand-rolled-parser language
+
+While wiring a CHA-based (type, not name) receiver check for a C# sink (see
+#3), found `callContext._cha` present but `classOfVar` returning `null` for
+an unmistakable `var x = new DirectorySearcher();` binding. Root cause:
+`scanner/src/ir/class-hierarchy.js`'s `buildClassHierarchy` only recognized
+the Babel `{kind:'ident', name}` callee shape for a `new` expression's
+callee. Per `../ir/CLAUDE.md`'s own IR shape contract (`callee: string|expr`),
+every hand-rolled parser — C#, Go, PHP, Ruby, Kotlin, Java (java-parser CST)
+— instead emits a flat, possibly dot-joined **string** callee. `callee?.kind
+=== 'ident'` is simply false for a string, so `typeOfVar` was never
+populated for any of those six languages, and always has been — not a
+regression, a day-one gap. This is the mechanism `_receiverTypeFor` (engine.js,
+used by every `receiverTypeIn` catalog gate, e.g. `py-requests-get`) and any
+future type-aware precision work depends on, so it was silently inert for
+6 of this codebase's 9-ish first-class languages.
+
+**Fix** (`class-hierarchy.js`): also accept a string callee, taking the last
+dot-segment as the class name (handles a fully-qualified constructor call
+too). Purely additive — `classOfVar` returning non-null where it always
+returned null before can only ADD matches to permissive-on-unknown gates,
+never suppress an existing one.
+
+**Verified with the full regression suite, not just the new unit tests:**
+`test:dataflow` 1079/1079, `test:sast` 732/732, `bench:cve-replay:check`
+215/215 (no drift), `bench:mutation:check` 34/34, `bench:self-scan:check`
+clean (no new self-findings), `bench:layer-recall:check` unchanged at
+baseline (117/215, no regression, no unrecorded gain). This is a real,
+general engine fix independent of SARD — it is exactly the kind of
+improvement PRD §5's "would this help real code if SARD didn't exist" test
+is asking for — but it is Phase 2 (shared engine), not a per-language win by
+itself.
+
+### 3. LDAP `receiverTypeIn` addition (`cs-directorysearcher-filter`) — unit-tested, verified correct, still did not move the corpus number
+
+Added `receiverTypeIn: ['^DirectorySearcher$']` alongside the existing
+`receiver: '[Ss]earch'` name regex (OR, not replace — `catalog.js`'s
+`_receiverTypeConfirms` + `matchMemberWriteSink`'s new `receiverType` param,
+threaded from `engine.js`'s assign-node handling via the same `classOfVar`
+call `_receiverTypeFor` uses). Two new tests in `test/catalog-cs-p1.test.js`
+prove it fires on `var _q7f = new DirectorySearcher(); _q7f.Filter = tainted;`
+(a renamed receiver the old name-only regex would miss — exactly what
+`--scramble-identifiers` does, and what an ordinary codebase not named
+"searcher" would also do) and that a differently-typed receiver still does
+not fire. All pass; no regression to the existing name-based precision test.
+
+**This did NOT move CWE90's corpus number either** (still `tp:0, fp:0` in
+the strict per-method scorer). Root-caused via `bench/sard/scripts/
+analyze-errors.mjs` (filename-only diagnostics — never inspected raw corpus
+source, per the trust boundary in `bench/sard/IMPLEMENTATION_STATUS.md §0`)
+against a scoped `--cwe CWE-90,CWE-643,CWE-113,CWE-78 --json` capture:
+
+- **A real, independent detector bug, found as a side effect:**
+  `src/sast/ldap-injection.js`'s Path B ("filter built in a variable")
+  regex is taint-BLIND — it matches the shape `"(attr=" + someIdentifier`
+  regardless of whether `someIdentifier` is attacker-controlled, gated only
+  by a file-level `LDAP_HINT_RE` (e.g. any `DirectorySearcher` mention
+  anywhere in the file). Juliet's own convention puts several `Good*()`
+  safe variants (hardcoded values, same shape) in the SAME file as `Bad()`
+  — this rule fires on those too, contributing real FPs (the
+  `ldap-injection-filter-string-built-via-c` family appears across the FN
+  table's `Connect_tcp`/`Environment`/`Database`/etc. FP clusters at
+  volumes far exceeding one-TP-per-file). **Not fixed this session** — a
+  taint-blind structural rule producing FPs on a benchmark's safe-variant
+  methods is a real, general precision bug (would also false-positive on
+  any real C# codebase with a hardcoded, non-attacker-controlled LDAP
+  filter string reused near a genuinely dangerous one), scoped correctly to
+  its own dedicated fix-and-verify pass, not a drive-by edit under an
+  already-long session. See `[[project_regex_substring_fp_pattern]]` (this
+  session's memory) — this is the same defect *class* (a loosely-scoped
+  detector matching shape/text rather than real semantics), not proven to
+  share a root cause with any of the six prior instances.
+- **Still open, not yet isolated:** why the CATALOG (taint-aware) LDAP sink
+  — the one this session's `receiverTypeIn` fix targeted, and which a direct
+  `[FromQuery] string uid` probe fixture proves DOES fire end-to-end via
+  IR-TAINT — produces zero TPs against the real corpus's `Bad()` methods.
+  The FN cluster table's source-variant descriptors (`Connect_tcp`,
+  `Listen_tcp`, `NetClient`, `ReadLine`, `Database`, `Get_Cookies_Web`,
+  `Params_Get_Web`, `QueryString_Web`) each show FN=163 across ALL THREE of
+  CWE90/643/78 simultaneously — a pattern suggesting the SOURCE side, not
+  the LDAP-specific sink, is where propagation stops for these particular
+  source shapes. `Environment.GetEnvironmentVariable` and
+  `Request.QueryString`/`.Cookies`/`.Form` ARE already cataloged as C#
+  sources (`cs-env-var`, `cs-request-*`), so this is not simple absence —
+  it needs the same kind of direct, isolated reproduction this session used
+  for the DirectorySearcher shape (build a minimal fixture per source
+  variant, confirm whether IR-TAINT fires end-to-end, find the earliest
+  broken stage per PRD §14's failure taxonomy) rather than another guess.
+  **Concrete next step for whoever picks this up.**
+
+### Net honest assessment
+
+Real, general, verified-safe engineering landed (items 1 and 2 especially —
+neither is SARD-specific and both pass the full regression suite with zero
+drift). C# SARD macro-F1 is still 10.8% on this benchmark. The dominant
+blocker for CWE90/643/78 specifically is not the scorer and not (only) the
+LDAP sink's receiver-matching precision — it's an unresolved taint-
+propagation gap for a cluster of source shapes shared across all three CWEs,
+now scoped and evidenced (not guessed) via `analyze-errors.mjs`, plus one
+independently-real structural-detector precision bug found as a side effect.
+Both are concrete, bounded next tasks, not "close the loop and it's done."

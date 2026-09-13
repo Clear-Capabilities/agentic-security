@@ -1321,7 +1321,15 @@ export const CATALOG = [
   // the assignment itself is the sink, receiver-scoped to variable names
   // containing "search" (DirectorySearcher's overwhelmingly common naming
   // convention) since "Filter" alone is too generic a property name.
-  { kind: 'sink', id: 'cs-directorysearcher-filter', language: 'cs', framework: 'stdlib', match: { type: 'member', object: '_any_', prop: 'Filter', receiver: '[Ss]earch' }, argIndex: 'rhs',
+  //
+  // SARD_80_F1 §9/§15.1: `receiverTypeIn` added alongside the name regex
+  // (OR, not replace — see `matchMemberWriteSink`) so a receiver whose CHA-
+  // resolved allocation type is confidently `DirectorySearcher` also fires,
+  // regardless of what the local variable happens to be named. The `[Ss]earch`
+  // name regex stays as the fallback for receivers CHA can't type (a field,
+  // a parameter, a factory-returned instance) — dropping it would trade the
+  // real CVE-2020-1722 precision test's guarantee for pure name-independence.
+  { kind: 'sink', id: 'cs-directorysearcher-filter', language: 'cs', framework: 'stdlib', match: { type: 'member', object: '_any_', prop: 'Filter', receiver: '[Ss]earch', receiverTypeIn: ['^DirectorySearcher$'] }, argIndex: 'rhs',
     vuln: { name: 'LDAP Injection (DirectorySearcher.Filter assigned a concatenated value)', severity: 'high', cwe: 'CWE-90',
             remediation: 'Escape LDAP special characters in filter components, or build the filter with a parameterized helper.' } },
 
@@ -1614,6 +1622,24 @@ function _receiverTypeAllowed(entry, receiverType) {
   return pats.some((p) => new RegExp(p, 'i').test(String(receiverType)));
 }
 
+// PRD SARD_80_F1 §9/§15.1 ("type-aware precision"): a CONFIDENT positive
+// match against `match.receiverTypeIn`, as opposed to `_receiverTypeAllowed`'s
+// permissive "unknown or matches" check above. Used to let a CHA-resolved
+// allocation type (`let x = new DirectorySearcher()`) satisfy an entry's
+// receiver constraint EVEN WHEN the receiver's own NAME fails
+// `match.receiver` — e.g. `var ds = new DirectorySearcher(); ds.Filter = …`
+// is exactly as real as the `searcher.Filter = …` shape the name regex was
+// written for, and identifier-scrambled/adversarial-holdout scanning must
+// not depend on which one a given codebase happens to use. Returns false
+// (never a fallback to "permit") whenever the type is unresolved or the
+// entry has no `receiverTypeIn` at all — this function only ever ADDS a
+// positive signal, it never substitutes for "unknown".
+function _receiverTypeConfirms(entry, receiverType) {
+  const pats = entry.match && entry.match.receiverTypeIn;
+  if (!pats || !pats.length || !receiverType) return false;
+  return pats.some((p) => new RegExp(p, 'i').test(String(receiverType)));
+}
+
 // Merge the expanded sanitizer catalog. We dedupe on `id` (case-insensitive)
 // so a base-catalog entry always wins over a same-id expanded one — the base
 // catalog is the curated/blessed surface; the expansion is additive coverage.
@@ -1803,8 +1829,8 @@ export function matchSinkOrSanitizer(calleeExpr, file, receiverType) {
   const raw = _calleeIndexHits(calleeExpr);
   if (!raw.length) return null;
   const hits = filterByProvenance(raw)
+    .filter(h => _receiverAllowed(h, calleeExpr) || _receiverTypeConfirms(h, receiverType))
     .filter(h => _languageAllowed(h, file))
-    .filter(h => _receiverAllowed(h, calleeExpr))
     .filter(h => _receiverTypeAllowed(h, receiverType));
   return hits.length ? hits : null;
 }
@@ -1823,7 +1849,7 @@ export function matchSinkOrSanitizer(calleeExpr, file, receiverType) {
 // indexed (catalog.js's own indexing loop keys every entry by
 // `${match.object}.${match.prop}` regardless of what object names are, so a
 // wildcard entry lives under the literal key "_any_.<prop>").
-export function matchMemberWriteSink(targetPath, file) {
+export function matchMemberWriteSink(targetPath, file, receiverType) {
   if (typeof targetPath !== 'string' || !targetPath.includes('.')) return null;
   const prop = targetPath.slice(targetPath.lastIndexOf('.') + 1);
   if (!prop) return null;
@@ -1842,11 +1868,21 @@ export function matchMemberWriteSink(targetPath, file) {
     // "any segment matches" semantics as _receiverAllowed's string-callee
     // branch, just computed directly from targetPath since there's no
     // expression object here to walk.
+    //
+    // SARD_80_F1 §9/§15.1: `receiverType` (a CHA-resolved allocation type
+    // for a bare, non-dotted receiver segment — see engine.js's call site)
+    // is an ALTERNATIVE to the name regex, never a replacement — a
+    // confidently-resolved type satisfying `receiverTypeIn` fires the sink
+    // even when the receiver's own name fails `match.receiver` (renamed/
+    // scrambled identifiers, or a codebase that just names it differently).
+    // An entry with no `receiverTypeIn` is unaffected (the OR's right side
+    // is always false — see `_receiverTypeConfirms`).
     .filter(h => {
       const pat = h.match && h.match.receiver;
+      const typeConfirmed = _receiverTypeConfirms(h, receiverType);
       if (!pat) return true;
       const segs = targetPath.slice(0, targetPath.length - prop.length - 1).split('.');
-      return segs.some(s => new RegExp(pat).test(s));
+      return segs.some(s => new RegExp(pat).test(s)) || typeConfirmed;
     });
   return hits.length ? hits : null;
 }

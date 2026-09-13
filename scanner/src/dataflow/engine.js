@@ -922,7 +922,19 @@ function step(node, stateIn, callContext) {
       // (lhsPath in parser-js.js); a bare identifier target ("x") has no
       // dot and _matchMemberWriteSink correctly returns null for it.
       if (target && target.includes('.')) {
-        const _memberHits = matchMemberWriteSink(target, _currentFile);
+        // PRD SARD_80_F1 §9/§15.1: a bare, non-dotted receiver segment
+        // (`searcher` in `searcher.Filter`) can be CHA-typed exactly like
+        // `_receiverTypeFor` types a call receiver — same classOfVar lookup,
+        // same "only a plain local var-name assigned `new X()`" scope. This
+        // lets a write-sink entry's `receiverTypeIn` fire on the real
+        // allocation type when the variable's NAME doesn't match its
+        // `receiver` regex (renamed identifiers, or just a different naming
+        // convention than the one the regex was written against).
+        const _receiverVar = target.slice(0, target.lastIndexOf('.'));
+        const _memberReceiverType = (_receiverVar && !_receiverVar.includes('.') && callContext && callContext._cha)
+          ? classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, _receiverVar)
+          : null;
+        const _memberHits = matchMemberWriteSink(target, _currentFile, _memberReceiverType);
         if (_memberHits && exprTaint(node.source, state, callContext)) {
           findings.push(..._memberWriteSinkFindings(
             _memberHits, node.source, state, callContext, node.line, target));
