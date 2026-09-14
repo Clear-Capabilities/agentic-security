@@ -1466,6 +1466,210 @@ export const CATALOG = [
   // inert, but a future sanitizer consumer would silently turn this into a
   // false negative. realpath() stays: it genuinely canonicalises a path,
   // which is the property CWE-22 sinks care about.
+
+  // ─── SOURCES (Rust) ───────────────────────────────────────────────────────
+  // Rust's web frameworks (axum, actix-web, rocket, warp) deliver request data
+  // through EXTRACTOR-TYPED parameters (`Query(q): Query<P>`, `q: web::Query<P>`),
+  // not through calls on a request object, so the dominant source shape is the
+  // annotation channel: `parser-rust.js` emits a `paramAnnotations` entry whose
+  // `decorator` is the extractor's type name (or `RouteParam` for every plain
+  // parameter of a `#[get("/…/<x>")]`-attributed rocket handler). A closure
+  // handler's extractor param is lowered to a synthetic `__rs_extract__.<Type>`
+  // call instead, matched by the receiver-scoped call sources below.
+  { kind: 'source', id: 'rs-extract-query',      language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Query' },       label: 'Query<T> extractor (axum/actix)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-extract-path',       language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Path' },        label: 'Path<T> extractor (axum/actix)',  provenance: 'path-param' },
+  { kind: 'source', id: 'rs-extract-json',       language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Json' },        label: 'Json<T> extractor (axum/actix/rocket)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-extract-form',       language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Form' },        label: 'Form<T> extractor (axum/actix/rocket)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-extract-headermap',  language: 'rs', framework: 'web', match: { type: 'annotation', name: 'HeaderMap' },   label: 'HeaderMap extractor (axum)', provenance: 'header' },
+  { kind: 'source', id: 'rs-extract-typedheader',language: 'rs', framework: 'web', match: { type: 'annotation', name: 'TypedHeader' }, label: 'TypedHeader<T> extractor (axum)', provenance: 'header' },
+  { kind: 'source', id: 'rs-extract-rawquery',   language: 'rs', framework: 'web', match: { type: 'annotation', name: 'RawQuery' },    label: 'RawQuery extractor (axum)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-extract-rawform',    language: 'rs', framework: 'web', match: { type: 'annotation', name: 'RawForm' },     label: 'RawForm extractor (axum)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-extract-multipart',  language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Multipart' },   label: 'Multipart extractor (axum/actix)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-extract-multipartform', language: 'rs', framework: 'web', match: { type: 'annotation', name: 'MultipartForm' }, label: 'MultipartForm extractor (actix)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-extract-httprequest',language: 'rs', framework: 'web', match: { type: 'annotation', name: 'HttpRequest' }, label: 'HttpRequest (actix)' },
+  { kind: 'source', id: 'rs-extract-request',    language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Request' },     label: 'Request<Body> (axum/hyper)' },
+  { kind: 'source', id: 'rs-extract-cookiejar',  language: 'rs', framework: 'web', match: { type: 'annotation', name: 'CookieJar' },   label: 'CookieJar extractor', provenance: 'cookie' },
+  { kind: 'source', id: 'rs-extract-cookies',    language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Cookies' },     label: 'Cookies extractor', provenance: 'cookie' },
+  { kind: 'source', id: 'rs-extract-host',       language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Host' },        label: 'Host extractor (axum)', provenance: 'header' },
+  { kind: 'source', id: 'rs-extract-originaluri',language: 'rs', framework: 'web', match: { type: 'annotation', name: 'OriginalUri' }, label: 'OriginalUri extractor (axum)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-extract-rawpathparams', language: 'rs', framework: 'web', match: { type: 'annotation', name: 'RawPathParams' }, label: 'RawPathParams extractor (axum)', provenance: 'path-param' },
+  { kind: 'source', id: 'rs-extract-bytes',      language: 'rs', framework: 'web', match: { type: 'annotation', name: 'Bytes' },       label: 'Bytes body extractor (axum)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-route-param',        language: 'rs', framework: 'rocket', match: { type: 'annotation', name: 'RouteParam' }, label: 'route parameter of a #[get("/<x>")] handler (rocket)', provenance: 'path-param' },
+  // Closure-handler extractors (`web::get().to(|q: web::Query<P>| async move { … })`).
+  { kind: 'source', id: 'rs-closure-extract-query',   language: 'rs', framework: 'web', match: { type: 'call', callee: 'Query',       receiver: '^__rs_extract__$' }, label: 'Query<T> closure extractor', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-closure-extract-path',    language: 'rs', framework: 'web', match: { type: 'call', callee: 'Path',        receiver: '^__rs_extract__$' }, label: 'Path<T> closure extractor', provenance: 'path-param' },
+  { kind: 'source', id: 'rs-closure-extract-json',    language: 'rs', framework: 'web', match: { type: 'call', callee: 'Json',        receiver: '^__rs_extract__$' }, label: 'Json<T> closure extractor', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-closure-extract-form',    language: 'rs', framework: 'web', match: { type: 'call', callee: 'Form',        receiver: '^__rs_extract__$' }, label: 'Form<T> closure extractor', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-closure-extract-headers', language: 'rs', framework: 'web', match: { type: 'call', callee: 'HeaderMap',   receiver: '^__rs_extract__$' }, label: 'HeaderMap closure extractor', provenance: 'header' },
+  { kind: 'source', id: 'rs-closure-extract-request', language: 'rs', framework: 'web', match: { type: 'call', callee: 'HttpRequest', receiver: '^__rs_extract__$' }, label: 'HttpRequest closure extractor' },
+  // Request-object accessors (actix `HttpRequest`, hyper/axum `Request`).
+  { kind: 'source', id: 'rs-req-query-string', language: 'rs', framework: 'actix', match: { type: 'call', callee: 'query_string' }, label: 'req.query_string() (actix)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-req-match-info',   language: 'rs', framework: 'actix', match: { type: 'call', callee: 'match_info' },   label: 'req.match_info() (actix)', provenance: 'path-param' },
+  { kind: 'source', id: 'rs-req-cookie',       language: 'rs', framework: 'actix', match: { type: 'call', callee: 'cookie', receiver: '^(?:req|request|jar|cookies)$' }, label: 'req.cookie() (actix)', provenance: 'cookie' },
+  { kind: 'source', id: 'rs-req-headers',      language: 'rs', framework: 'web',   match: { type: 'call', callee: 'headers', receiver: '^(?:req|request|parts)$' }, label: 'req.headers()', provenance: 'header' },
+  { kind: 'source', id: 'rs-req-uri-query',    language: 'rs', framework: 'hyper', match: { type: 'call', callee: 'query', receiver: '^uri$' }, label: 'req.uri().query() (hyper/axum)', provenance: 'url-param' },
+  // warp composes filters; the extracted value arrives as a closure parameter
+  // bound (by parser-rust.js) to the receiver chain, so `warp.query`-style
+  // MEMBER sources cover `warp::query().map(|q| …)` and the CALL forms cover
+  // `let q = warp::query::<P>();`.
+  { kind: 'source', id: 'rs-warp-query-member',  language: 'rs', framework: 'warp', match: { type: 'member', object: 'warp', prop: 'query' },  label: 'warp::query() (warp)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-warp-body-member',   language: 'rs', framework: 'warp', match: { type: 'member', object: 'warp', prop: 'body' },   label: 'warp::body::* (warp)', provenance: 'http-body' },
+  { kind: 'source', id: 'rs-warp-header-member', language: 'rs', framework: 'warp', match: { type: 'member', object: 'warp', prop: 'header' }, label: 'warp::header() (warp)', provenance: 'header' },
+  { kind: 'source', id: 'rs-warp-path-member',   language: 'rs', framework: 'warp', match: { type: 'member', object: 'warp', prop: 'path' },   label: 'warp::path::param() (warp)', provenance: 'path-param' },
+  { kind: 'source', id: 'rs-warp-query',   language: 'rs', framework: 'warp', match: { type: 'call', callee: 'query', receiver: '^warp$' },  label: 'warp::query() (warp)', provenance: 'url-param' },
+  { kind: 'source', id: 'rs-warp-param',   language: 'rs', framework: 'warp', match: { type: 'call', callee: 'param', receiver: '^(?:warp|path)$' }, label: 'warp::path::param() (warp)', provenance: 'path-param' },
+  { kind: 'source', id: 'rs-warp-header',  language: 'rs', framework: 'warp', match: { type: 'call', callee: 'header', receiver: '^warp$' }, label: 'warp::header() (warp)', provenance: 'header' },
+  // Process environment and CLI arguments: untrusted in the same sense the
+  // other languages' `getenv`/`argv` entries are.
+  { kind: 'source', id: 'rs-env-var',    language: 'rs', framework: 'std', match: { type: 'call', callee: 'var',     receiver: '^env$' }, label: 'std::env::var()', provenance: 'env' },
+  { kind: 'source', id: 'rs-env-var-os', language: 'rs', framework: 'std', match: { type: 'call', callee: 'var_os',  receiver: '^env$' }, label: 'std::env::var_os()', provenance: 'env' },
+  { kind: 'source', id: 'rs-env-args',   language: 'rs', framework: 'std', match: { type: 'call', callee: 'args',    receiver: '^env$' }, label: 'std::env::args()', provenance: 'cli' },
+  { kind: 'source', id: 'rs-env-args-os',language: 'rs', framework: 'std', match: { type: 'call', callee: 'args_os', receiver: '^env$' }, label: 'std::env::args_os()', provenance: 'cli' },
+
+  // ─── SINKS (Rust) ─────────────────────────────────────────────────────────
+  // parser-rust.js accumulates chain arguments INNERMOST-first (source order),
+  // so on a builder chain like `sqlx::query(&sql).bind(x).fetch_all(pool)` the
+  // SQL text is arg 0 whichever terminal method the chain ends on, and on
+  // `Command::new("sh").arg("-c").arg(x).output()` the literal program name is
+  // arg 0. Terminal-method entries below are receiver-scoped to the chain root.
+  // `sqlx::query!(…)` keeps its `!` in the callee (`sqlx.query!`) and is never
+  // matched: it is the compile-time-checked, parameterized form.
+  { kind: 'sink', id: 'rs-sql-query',        language: 'rs', framework: 'sqlx/postgres/mysql/rusqlite', match: { type: 'call', callee: 'query', receiverExclude: '^(?:warp|uri|url|Url|Uri)$' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (query with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Keep the SQL text a literal and bind the value: `sqlx::query("SELECT * FROM t WHERE id = $1").bind(id)`, `client.query("… WHERE id = $1", &[&id])`, or `conn.query_row("… WHERE id = ?1", params![id], …)`. Never build SQL with format!/concat from request data.' } },
+  { kind: 'sink', id: 'rs-sql-query-as',     language: 'rs', framework: 'sqlx', match: { type: 'call', callee: 'query_as' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (sqlx::query_as with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use `sqlx::query_as::<_, T>("… WHERE id = $1").bind(id)` or the compile-checked `sqlx::query_as!(T, "… $1", id)`.' } },
+  { kind: 'sink', id: 'rs-sql-query-scalar', language: 'rs', framework: 'sqlx', match: { type: 'call', callee: 'query_scalar' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (sqlx::query_scalar with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use `sqlx::query_scalar("… WHERE id = $1").bind(id)` or `sqlx::query_scalar!`.' } },
+  { kind: 'sink', id: 'rs-sql-raw-sql',      language: 'rs', framework: 'sqlx', match: { type: 'call', callee: 'raw_sql' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (sqlx::raw_sql)', severity: 'critical', cwe: 'CWE-89',
+            remediation: '`raw_sql` cannot bind parameters; switch to `sqlx::query("…$1").bind(value)` for anything derived from input.' } },
+  { kind: 'sink', id: 'rs-sql-diesel-sql-query', language: 'rs', framework: 'diesel', match: { type: 'call', callee: 'sql_query' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (diesel::sql_query with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Bind with `diesel::sql_query("… WHERE id = $1").bind::<Integer, _>(id)`, or use the typed query DSL instead of raw SQL.' } },
+  { kind: 'sink', id: 'rs-sql-diesel-sql',   language: 'rs', framework: 'diesel', match: { type: 'call', callee: 'sql', receiver: '^(?:diesel|dsl)$' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (diesel::dsl::sql fragment from input)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'A `sql()` fragment is spliced verbatim; keep it a literal and pass values via `.bind()` or the typed DSL.' } },
+  { kind: 'sink', id: 'rs-sql-execute',      language: 'rs', framework: 'rusqlite/postgres/mysql', match: { type: 'call', callee: 'execute', receiverExclude: '^(?:Command|cmd|command|process)$' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (execute with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Keep the statement a literal and bind: `conn.execute("INSERT INTO t (a) VALUES (?1)", params![a])` / `client.execute("… $1", &[&a])`.' } },
+  { kind: 'sink', id: 'rs-sql-execute-batch',language: 'rs', framework: 'rusqlite', match: { type: 'call', callee: 'execute_batch' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (execute_batch with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: '`execute_batch` runs unparameterized SQL; split into single `execute` calls with `params![…]` for any value from input.' } },
+  { kind: 'sink', id: 'rs-sql-batch-execute',language: 'rs', framework: 'postgres', match: { type: 'call', callee: 'batch_execute' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (batch_execute with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: '`batch_execute` takes no parameters; use `client.execute("… $1", &[&value])` for input-derived values.' } },
+  { kind: 'sink', id: 'rs-sql-prepare',      language: 'rs', framework: 'rusqlite/postgres', match: { type: 'call', callee: 'prepare' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (prepare with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Preparing a statement does not parameterize text that was already interpolated. Use `?1`/`$1` placeholders in a literal and pass values at execution time.' } },
+  { kind: 'sink', id: 'rs-sql-prepare-cached',language: 'rs', framework: 'rusqlite', match: { type: 'call', callee: 'prepare_cached' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (prepare_cached with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use `?1` placeholders in a literal statement and pass values via `params![…]`.' } },
+  { kind: 'sink', id: 'rs-sql-query-row',    language: 'rs', framework: 'rusqlite', match: { type: 'call', callee: 'query_row' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (query_row with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use `conn.query_row("SELECT … WHERE id = ?1", params![id], |r| …)`.' } },
+  { kind: 'sink', id: 'rs-sql-query-map',    language: 'rs', framework: 'rusqlite', match: { type: 'call', callee: 'query_map', receiver: '^(?:conn|db|connection|stmt)$' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (query_map with runtime-built SQL)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Prepare a literal statement with `?1` placeholders and pass values via `params![…]`.' } },
+  ...['fetch_all', 'fetch_one', 'fetch_optional', 'fetch', 'fetch_many', 'bind', 'persistent'].map(method => (
+    { kind: 'sink', id: `rs-sqlx-chain-${method}`, language: 'rs', framework: 'sqlx', match: { type: 'call', callee: method, receiver: '^(?:query|query_as|query_scalar|raw_sql|sql_query)$' }, argIndex: 0,
+      vuln: { name: `SQL Injection (sqlx query chain .${method} with runtime-built SQL)`, severity: 'critical', cwe: 'CWE-89',
+              remediation: 'Keep the SQL literal and bind values: `sqlx::query("SELECT * FROM t WHERE id = $1").bind(id).fetch_all(pool)`; only the placeholder form is parameterized.' } }
+  )),
+  // Command injection. `Command::new(<tainted>)` is always dangerous (the
+  // program itself comes from input). Everything else is only shell-interpreted
+  // when the program is a literal shell (`sh -c`), gated by requireLiteralArg on
+  // arg 0 (the innermost `Command::new` argument); `Command::new("ls").arg(x)`
+  // never invokes a shell and does not fire.
+  { kind: 'sink', id: 'rs-command-new-program', language: 'rs', framework: 'std::process', match: { type: 'call', callee: 'new', receiver: '^Command$' }, argIndex: 0,
+    vuln: { name: 'Command Injection (Command::new with input-derived program)', severity: 'high', cwe: 'CWE-78',
+            remediation: 'Resolve the program from a fixed allow-list (`match name { "ls" => "/bin/ls", … }`) instead of passing request data to `Command::new`.' } },
+  ...['arg', 'args', 'output', 'status', 'spawn', 'env', 'current_dir', 'stdin', 'stdout', 'stderr'].map(method => (
+    { kind: 'sink', id: `rs-command-shell-${method}`, language: 'rs', framework: 'std::process',
+      match: { type: 'call', callee: method, receiver: '^Command$', requireLiteralArg: { index: 0, pattern: '^"(?:/bin/|/usr/bin/)?(?:sh|bash|zsh|dash|ksh)"$|^"cmd(?:\\.exe)?"$|^"powershell(?:\\.exe)?"$|^"pwsh"$' } }, argIndex: 'all',
+      vuln: { name: 'Command Injection (Command::new("sh").arg("-c") with input-derived arguments)', severity: 'critical', cwe: 'CWE-78',
+              remediation: 'Drop the shell: `Command::new("ping").arg("-c").arg("1").arg(&host)` passes argv directly and never interprets metacharacters. If a shell is unavoidable, allow-list the value or quote it with `shell_escape::escape`.' } }
+  )),
+  // Path traversal: std::fs / tokio::fs / async_std::fs free functions, and
+  // File / OpenOptions constructors. `Path::new(x).join(y)` is not itself a
+  // sink; the access is. A canonicalize + starts_with containment check in the
+  // sink window is recognized by engine.js's dropGuardedFindings.
+  ...['read', 'read_to_string', 'read_dir', 'write', 'remove_file', 'remove_dir', 'remove_dir_all', 'create_dir', 'create_dir_all', 'copy', 'rename', 'hard_link', 'symlink', 'metadata', 'read_link', 'set_permissions'].map(method => (
+    { kind: 'sink', id: `rs-fs-${method}`, language: 'rs', framework: 'std::fs', match: { type: 'call', callee: method, receiver: '^fs$' }, argIndex: 'all',
+      vuln: { name: `Path Traversal (fs::${method} with input-derived path)`, severity: 'high', cwe: 'CWE-22',
+              remediation: 'Join onto a fixed base, canonicalize, and reject anything outside it: `let p = base.join(name).canonicalize()?; if !p.starts_with(&base) { return Err(…) }`. Reject `..` and absolute paths before use.' } }
+  )),
+  ...['open', 'create', 'create_new', 'options'].map(method => (
+    { kind: 'sink', id: `rs-file-${method}`, language: 'rs', framework: 'std::fs', match: { type: 'call', callee: method, receiver: '^(?:File|OpenOptions)$' }, argIndex: 0,
+      vuln: { name: `Path Traversal (File::${method} with input-derived path)`, severity: 'high', cwe: 'CWE-22',
+              remediation: 'Canonicalize the joined path and verify `starts_with(base)` before opening; or map the input to a fixed set of known file names.' } }
+  )),
+  // Reflected XSS: an HTML body built from input. `HttpResponse::Ok().body(x)`
+  // (actix), `Html(x)` (axum), `RawHtml(x)` (rocket), `warp::reply::html(x)`.
+  { kind: 'sink', id: 'rs-actix-body', language: 'rs', framework: 'actix', match: { type: 'call', callee: 'body', receiver: '^(?:HttpResponse|HttpResponseBuilder|Response)$' }, argIndex: 'all',
+    vuln: { name: 'Cross-Site Scripting (response body built from input)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Escape before interpolating: `html_escape::encode_text(&name)`, or render through an auto-escaping template engine (askama, tera) instead of `format!` into the body.' } },
+  { kind: 'sink', id: 'rs-axum-html', language: 'rs', framework: 'axum', match: { type: 'call', callee: 'Html', receiverExclude: '^__rs_extract__$' }, argIndex: 0,
+    vuln: { name: 'Cross-Site Scripting (axum Html response built from input)', severity: 'high', cwe: 'CWE-79',
+            remediation: '`Html(format!(…))` sends the string verbatim. Escape with `html_escape::encode_text` or return an askama/maud template, which escapes by default.' } },
+  { kind: 'sink', id: 'rs-rocket-rawhtml', language: 'rs', framework: 'rocket', match: { type: 'call', callee: 'RawHtml' }, argIndex: 0,
+    vuln: { name: 'Cross-Site Scripting (rocket RawHtml response built from input)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Return a `Template::render` (auto-escaped) or escape the value with `html_escape::encode_text` before wrapping it in `RawHtml`.' } },
+  { kind: 'sink', id: 'rs-warp-reply-html', language: 'rs', framework: 'warp', match: { type: 'call', callee: 'html', receiver: '^reply$' }, argIndex: 0,
+    vuln: { name: 'Cross-Site Scripting (warp::reply::html built from input)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'Escape with `html_escape::encode_text` or render an auto-escaping template before `warp::reply::html`.' } },
+  // SSRF: outbound HTTP clients given an input-derived URL.
+  ...['get', 'post', 'put', 'patch', 'delete', 'head', 'request'].map(method => (
+    { kind: 'sink', id: `rs-http-client-${method}`, language: 'rs', framework: 'reqwest/ureq', match: { type: 'call', callee: method, receiver: '^(?:reqwest|ureq|isahc|surf|Client|client|http_client|http)$' }, argIndex: 'all',
+      vuln: { name: `Server-Side Request Forgery (HTTP client ${method} with input-derived URL)`, severity: 'high', cwe: 'CWE-918',
+              remediation: 'Parse with `url::Url::parse`, then allow-list the scheme and host (and reject loopback/RFC1918/169.254.169.254) before the request is sent.' } }
+  )),
+  // Open redirect.
+  ...['to', 'temporary', 'permanent', 'see_other', 'found', 'moved'].map(method => (
+    { kind: 'sink', id: `rs-redirect-${method}`, language: 'rs', framework: 'web', match: { type: 'call', callee: method, receiver: '^Redirect$' }, argIndex: 0,
+      vuln: { name: `Open Redirect (Redirect::${method} with input-derived target)`, severity: 'medium', cwe: 'CWE-601',
+              remediation: 'Only redirect to relative paths you validate (`target.starts_with(\'/\') && !target.starts_with("//")`) or to hosts on an allow-list.' } }
+  )),
+  { kind: 'sink', id: 'rs-actix-insert-header', language: 'rs', framework: 'actix', match: { type: 'call', callee: 'insert_header', receiver: '^HttpResponse$' }, argIndex: 'all',
+    vuln: { name: 'Header Injection / Open Redirect (response header set from input)', severity: 'medium', cwe: 'CWE-113',
+            remediation: 'Validate the value against an allow-list and strip CR/LF; for Location headers only allow relative paths or allow-listed hosts.' } },
+  // Log injection (low): request data written into structured logs unchanged.
+  ...['info', 'warn', 'error', 'debug', 'trace'].map(macro => (
+    { kind: 'sink', id: `rs-log-${macro}`, language: 'rs', framework: 'log/tracing', match: { type: 'call', callee: `${macro}!` }, argIndex: 0,
+      vuln: { name: `Log Injection (${macro}! with input-derived content)`, severity: 'low', cwe: 'CWE-117',
+              remediation: 'Log input as a structured field (`tracing::info!(user = %name, "login")`) or strip CR/LF so a request cannot forge log lines.' } }
+  )),
+  // Deserialization of input with format-level object construction.
+  ...['from_slice', 'from_reader', 'from_str'].map(method => (
+    { kind: 'sink', id: `rs-serde-pickle-${method}`, language: 'rs', framework: 'serde_pickle', match: { type: 'call', callee: method, receiver: '^serde_pickle$' }, argIndex: 0,
+      vuln: { name: `Deserialization of Untrusted Data (serde_pickle::${method})`, severity: 'medium', cwe: 'CWE-502',
+              remediation: 'Pickle can encode arbitrary object construction; deserialize input with serde_json/serde into a concrete typed struct instead.' } }
+  )),
+  { kind: 'sink', id: 'rs-bincode-deserialize', language: 'rs', framework: 'bincode', match: { type: 'call', callee: 'deserialize', receiver: '^bincode$' }, argIndex: 0,
+    vuln: { name: 'Deserialization of Untrusted Data (bincode::deserialize without size limits)', severity: 'medium', cwe: 'CWE-502',
+            remediation: 'Use `bincode::DefaultOptions::new().with_limit(MAX)` so a length prefix from input cannot drive a huge allocation, and deserialize into a concrete type.' } },
+  // Unbounded allocation driven by input.
+  { kind: 'sink', id: 'rs-with-capacity', language: 'rs', framework: 'std', match: { type: 'call', callee: 'with_capacity', receiver: '^(?:Vec|String|HashMap|HashSet|VecDeque|BTreeMap)$' }, argIndex: 0,
+    vuln: { name: 'Uncontrolled Resource Consumption (with_capacity sized by input)', severity: 'medium', cwe: 'CWE-770',
+            remediation: 'Clamp the requested size: `Vec::with_capacity(n.min(MAX_ITEMS))`, or grow lazily with `Vec::new()` and push.' } },
+
+  // ─── SANITIZERS (Rust) ────────────────────────────────────────────────────
+  // `x.parse::<i64>()` is a numeric parse; `Url::parse` is not a sanitizer of
+  // anything, so it is excluded by receiver.
+  { kind: 'sanitizer', id: 'rs-parse-numeric', language: 'rs', match: { type: 'call', callee: 'parse', receiverExclude: '^(?:Url|Uri|url|reqwest|Path|PathBuf|serde_json|json|toml|serde_yaml)$' }, effect: 'strip', appliesTo: ['*'] },
+  { kind: 'sanitizer', id: 'rs-html-escape-encode-text', language: 'rs', match: { type: 'call', callee: 'encode_text' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'rs-html-escape-encode-safe', language: 'rs', match: { type: 'call', callee: 'encode_safe' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'rs-html-escape-attr', language: 'rs', match: { type: 'call', callee: 'encode_double_quoted_attribute' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'rs-ammonia-clean', language: 'rs', match: { type: 'call', callee: 'clean', receiver: '^ammonia$' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'rs-askama-escape', language: 'rs', match: { type: 'call', callee: 'escape', receiver: '^(?:askama|v_htmlescape|html_escape|tera)$' }, effect: 'strip', appliesTo: ['xss'] },
+  { kind: 'sanitizer', id: 'rs-shell-escape', language: 'rs', match: { type: 'call', callee: 'escape', receiver: '^shell_escape$' }, effect: 'strip', appliesTo: ['cmd'] },
+  { kind: 'sanitizer', id: 'rs-shlex-quote', language: 'rs', match: { type: 'call', callee: 'quote', receiver: '^shlex$' }, effect: 'strip', appliesTo: ['cmd'] },
+  { kind: 'sanitizer', id: 'rs-shlex-try-quote', language: 'rs', match: { type: 'call', callee: 'try_quote', receiver: '^shlex$' }, effect: 'strip', appliesTo: ['cmd'] },
+  { kind: 'sanitizer', id: 'rs-sanitize-filename', language: 'rs', match: { type: 'call', callee: 'sanitize', receiver: '^sanitize_filename$' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'rs-path-file-name', language: 'rs', match: { type: 'call', callee: 'file_name' }, effect: 'strip', appliesTo: ['path'] },
+  { kind: 'sanitizer', id: 'rs-percent-encode', language: 'rs', match: { type: 'call', callee: 'utf8_percent_encode' }, effect: 'strip', appliesTo: ['url'] },
 ];
 
 // ─── Expanded sanitizer catalog (v0.65.0) ────────────────────────────────
@@ -1498,6 +1702,7 @@ const _LANG_EXT = {
   php:  /\.(?:php|phtml)$/i,
   rb:   /\.rb$/i,
   java: /\.java$/i,
+  rs:   /\.rs$/i,
 };
 
 // cpp delegates to cppExtRe() rather than duplicating a literal set, so it

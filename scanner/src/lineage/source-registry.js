@@ -228,6 +228,13 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   'kt-request-param': 'http-query',
   'kt-request-header': 'http-header',
   'kt-ktor-parameters': 'http-query',
+  // Rust — the whole HttpRequest/Request object (actix/axum/hyper). No
+  // single SOURCE_CATEGORIES value names "the whole request"; http-body
+  // is the closest existing precedent (go-r-body/go-r-form already map a
+  // merged/whole-request-shaped read the same way).
+  'rs-extract-httprequest': 'http-body',
+  'rs-extract-request': 'http-body',
+  'rs-closure-extract-request': 'http-body',
 });
 
 // ─────────────────────────────────────────────────────────────────────────

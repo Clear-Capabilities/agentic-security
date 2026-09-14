@@ -63,6 +63,59 @@ const FINDINGS = [
     remediation: 'Define a typed struct with serde for the extractor: `#[derive(Deserialize)] struct UserPath { id: i64 }`. Typed extractors reject malformed input at the framework boundary instead of bubbling raw strings into your handlers.',
     infoOnly: true,
   },
+  {
+    id: 'rust-tls-verify-disabled', severity: 'high', cwe: 'CWE-295', family: 'tls-verification',
+    // reqwest::ClientBuilder::danger_accept_invalid_certs(true) /
+    // danger_accept_invalid_hostnames(true) — the method name itself says
+    // "danger"; this only fires on the literal `true` argument, since a
+    // variable/computed argument might legitimately gate it off in prod.
+    re: /\bdanger_accept_invalid_(?:certs|hostnames)\s*\(\s*true\s*\)/g,
+    vuln: 'TLS certificate/hostname verification disabled',
+    remediation: 'Remove `danger_accept_invalid_certs`/`danger_accept_invalid_hostnames` (or pass a variable that is `false` in production). If a private CA is the real problem, add its root with `Certificate::from_pem` + `.add_root_certificate(...)` instead of disabling verification.',
+  },
+  {
+    id: 'rust-weak-hash-md5', severity: 'medium', cwe: 'CWE-327', family: 'weak-crypto',
+    re: /\b(?:md5::compute|Md5::new|Md5::default)\s*\(/g,
+    vuln: 'Weak cryptographic hash — MD5',
+    remediation: 'MD5 is broken for any security purpose (collision-resistance, password storage, integrity). Use `sha2::Sha256` for integrity/fingerprinting or `argon2`/`bcrypt` for password hashing.',
+  },
+  {
+    id: 'rust-weak-hash-sha1', severity: 'medium', cwe: 'CWE-327', family: 'weak-crypto',
+    re: /\b(?:Sha1::new|Sha1::default|sha1::Sha1)\s*[:(]/g,
+    vuln: 'Weak cryptographic hash — SHA-1',
+    remediation: 'SHA-1 has practical collision attacks. Use `sha2::Sha256`/`Sha512` (or `blake3`) for anything security-relevant.',
+  },
+  {
+    id: 'rust-weak-cipher', severity: 'high', cwe: 'CWE-327', family: 'weak-crypto',
+    // des::Des / des::TdesEde3 (DES/3DES) and rc4::Rc4 — broken/deprecated
+    // ciphers still published as crates.
+    re: /\b(?:des::Des\b|des::TdesEde[23]\b|Rc4::new)\s*[:(<]/g,
+    vuln: 'Weak/broken cipher — DES/3DES/RC4',
+    remediation: 'Use an AEAD cipher from the `aes-gcm` or `chacha20poly1305` crates (`Aes256Gcm`, `ChaCha20Poly1305`). DES, 3DES and RC4 are all broken or deprecated for new use.',
+  },
+  {
+    id: 'rust-weak-rng-token', severity: 'high', cwe: 'CWE-338', family: 'weak-rng',
+    // rand::random()/thread_rng() feeding an identifier that names a
+    // token/secret/key/session — `rand`'s default RNG is NOT a CSPRNG-grade
+    // guarantee for security tokens the way `getrandom`/`OsRng` are treated
+    // in the ecosystem's own guidance; flag the security-sensitive naming
+    // context, not `rand::random()` in general (rolling dice is fine).
+    re: /\b(?:let|const)\s+(?:mut\s+)?\w*(?:token|secret|session|api_?key|password|nonce|salt|csrf)\w*\s*(?::[^=]+)?=\s*(?:rand::random|rand::thread_rng\s*\(\s*\)\.gen)\b/gi,
+    vuln: 'Weak randomness for a security-sensitive value (rand::random/thread_rng)',
+    remediation: 'Use `rand::rngs::OsRng` (or the `getrandom` crate) to seed tokens/session ids/keys — `rand::thread_rng()`/`rand::random()` are not documented as cryptographically secure. `let mut buf = [0u8; 32]; OsRng.fill_bytes(&mut buf);`',
+  },
+  {
+    id: 'rust-unsafe-raw-memory', severity: 'medium', cwe: 'CWE-119', family: 'memory-safety',
+    // transmute / from_raw_parts(_mut) / get_unchecked(_mut) — the classic
+    // unsafe memory-reinterpretation and bounds-skipping primitives. Scoped
+    // to occurrences that are themselves already inside an `unsafe` block
+    // in practice (transmute/from_raw_parts require it to compile at all;
+    // get_unchecked does not, so it's included for the same reason: it
+    // skips the bounds check the safe `[]` indexing performs).
+    re: /\b(?:std::mem::transmute|mem::transmute|std::slice::from_raw_parts(?:_mut)?|slice::from_raw_parts(?:_mut)?)\s*[:(<]|\.get_unchecked(?:_mut)?\s*\(/g,
+    vuln: 'Unsafe raw-memory operation (transmute/from_raw_parts/get_unchecked)',
+    remediation: 'Prefer safe alternatives where possible: `as` casts or `bytemuck`/`zerocopy` instead of `transmute`; `<[T]>::get(i)`/checked slicing instead of `get_unchecked`. If unsafe is unavoidable, document the exact invariant (length, alignment, lifetime) that makes it sound at this call site.',
+  },
 ];
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
@@ -93,7 +146,11 @@ export function scanRust(fp, raw) {
         stride: rule.family === 'sql-injection' ? 'Tampering'
               : rule.family === 'command-injection' ? 'Elevation of Privilege'
               : rule.family === 'weak-rng' ? 'Spoofing'
+              : rule.family === 'weak-crypto' ? 'Information Disclosure'
+              : rule.family === 'tls-verification' ? 'Spoofing'
+              : rule.family === 'memory-safety' ? 'Denial of Service'
               : 'Information Disclosure',
+        family: rule.family,
         snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
         remediation: rule.remediation,
         confidence: 0.85,

@@ -1551,7 +1551,11 @@ function _hasSsrfHostGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _SSR
 // before `Path.Combine(..., filename)`) left the finding firing on the FIXED
 // revision. Safe to match on shape because _guardMatchNearSinkIdentifier
 // already requires the guard to name the same identifier as the sink.
-const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b|\b(?:[Ee]nsure|[Vv]alidate|[Aa]ssert|[Rr]equire|[Vv]erify|[Cc]heck)\w{1,40}\s*\(/;
+// `starts_with`/`strip_prefix` (Rust's own snake_case naming) and
+// `canonicalize` (Rust's `Path::canonicalize`, the containment check's
+// resolve-then-compare half) join the existing camelCase/PascalCase forms —
+// same guard, a different language's naming convention.
+const _PATH_GUARD_RE = /\b(?:basename|GetFileName|secure_filename|sanitize_filename|send_from_directory|safe_join)\s*\(|\b(?:startsWith|startswith|StartsWith|HasPrefix|starts_with|strip_prefix)\s*\(|\bgetCanonicalPath\b|\btoRealPath\b|\bcanonicalize\s*\(|\bfilepath\s*\.\s*(?:Clean|Base|Abs)\b|\b(?:[Ee]nsure|[Vv]alidate|[Aa]ssert|[Rr]equire|[Vv]erify|[Cc]heck)\w{1,40}\s*\(/;
 function _hasPathGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _PATH_GUARD_RE); }
 
 // Reflected-XSS output-encoding guard: an HTML escaper applied near the sink.

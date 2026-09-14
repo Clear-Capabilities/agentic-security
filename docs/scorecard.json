@@ -2,12 +2,12 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.151.3",
-    "bundleSha256": "4a292d6c58e05ef367148df9b1c770195da2247a905890c06db0d1ee7e19d414",
-    "commit": "3175ab0702c9363e6f0dd7ca5ed8197756e4fe1e",
+    "bundleSha256": "20f079b2997e6c44886f390e2095526b1677c7098d773bf046e709a07a3d7450",
+    "commit": "e41a3b24a3efc6543a837fb0384b876bb92875e5",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-09-14T01:20:05.895Z",
-    "corpusVersion": "879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5",
+    "generatedAt": "2026-09-14T14:51:39.675Z",
+    "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
   "methodology": {
@@ -21,17 +21,17 @@
   },
   "corpus": {
     "measuredThisRun": true,
-    "totalEntries": 215,
-    "scoredEntries": 215,
+    "totalEntries": 220,
+    "scoredEntries": 220,
     "notScored": [],
     "overall": {
       "detection": {
-        "n": 215,
-        "d": 215
+        "n": 220,
+        "d": 220
       },
       "silence": {
-        "n": 215,
-        "d": 215
+        "n": 220,
+        "d": 220
       }
     },
     "byLanguage": [
@@ -168,6 +168,18 @@
         }
       },
       {
+        "key": "rust",
+        "entries": 5,
+        "detection": {
+          "n": 5,
+          "d": 5
+        },
+        "silence": {
+          "n": 5,
+          "d": 5
+        }
+      },
+      {
         "key": "terraform",
         "entries": 1,
         "detection": {
@@ -267,14 +279,14 @@
       },
       {
         "key": "CWE-22",
-        "entries": 15,
+        "entries": 16,
         "detection": {
-          "n": 15,
-          "d": 15
+          "n": 16,
+          "d": 16
         },
         "silence": {
-          "n": 15,
-          "d": 15
+          "n": 16,
+          "d": 16
         }
       },
       {
@@ -411,14 +423,14 @@
       },
       {
         "key": "CWE-78",
-        "entries": 23,
+        "entries": 24,
         "detection": {
-          "n": 23,
-          "d": 23
+          "n": 24,
+          "d": 24
         },
         "silence": {
-          "n": 23,
-          "d": 23
+          "n": 24,
+          "d": 24
         }
       },
       {
@@ -459,14 +471,14 @@
       },
       {
         "key": "CWE-89",
-        "entries": 13,
+        "entries": 15,
         "detection": {
-          "n": 13,
-          "d": 13
+          "n": 15,
+          "d": 15
         },
         "silence": {
-          "n": 13,
-          "d": 13
+          "n": 15,
+          "d": 15
         }
       },
       {
@@ -495,14 +507,14 @@
       },
       {
         "key": "CWE-918",
-        "entries": 10,
+        "entries": 11,
         "detection": {
-          "n": 10,
-          "d": 10
+          "n": 11,
+          "d": 11
         },
         "silence": {
-          "n": 10,
-          "d": 10
+          "n": 11,
+          "d": 11
         }
       },
       {
@@ -521,26 +533,26 @@
     "byTier": [
       {
         "key": "capability",
-        "entries": 205,
+        "entries": 207,
         "detection": {
-          "n": 205,
-          "d": 205
+          "n": 207,
+          "d": 207
         },
         "silence": {
-          "n": 205,
-          "d": 205
+          "n": 207,
+          "d": 207
         }
       },
       {
         "key": "deep",
-        "entries": 7,
+        "entries": 10,
         "detection": {
-          "n": 7,
-          "d": 7
+          "n": 10,
+          "d": 10
         },
         "silence": {
-          "n": 7,
-          "d": 7
+          "n": 10,
+          "d": 10
         }
       },
       {
@@ -576,7 +588,7 @@
         }
       },
       "scanner/src": {
-        "total": 487,
+        "total": 491,
         "byFile": {
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
@@ -608,6 +620,7 @@
           "ir/parser-py-cst.js": 1,
           "ir/parser-py.helper.py": 1,
           "ir/parser-rb.js": 2,
+          "ir/parser-rust.js": 4,
           "ir/type-stubs.js": 8,
           "ir/universal-ir.js": 1,
           "leaderboard.js": 3,
@@ -805,12 +818,12 @@
   "provenanceCoverage": {
     "measuredThisRun": true,
     "n": 326,
-    "d": 373
+    "d": 374
   },
   "taintRecall": {
     "measuredThisRun": true,
     "wholeCorpus": {
-      "entriesScored": 215,
+      "entriesScored": 220,
       "byLanguage": [
         {
           "language": "c#",
@@ -883,6 +896,13 @@
           }
         },
         {
+          "language": "rust",
+          "taint": {
+            "n": 5,
+            "d": 5
+          }
+        },
+        {
           "language": "terraform",
           "taint": {
             "n": 0,
@@ -892,7 +912,7 @@
       ]
     },
     "deepTierOnly": {
-      "entriesScored": 7,
+      "entriesScored": 10,
       "byLanguage": [
         {
           "language": "c/c++",
@@ -928,6 +948,13 @@
             "n": 1,
             "d": 1
           }
+        },
+        {
+          "language": "rust",
+          "taint": {
+            "n": 3,
+            "d": 3
+          }
         }
       ]
     }
@@ -935,9 +962,9 @@
   "committedInputs": {
     "corpusBaseline": {
       "source": "bench/cve-replay/corpus-baseline.json",
-      "generatedAt": "2026-08-16",
-      "total": 215,
-      "passing": 215
+      "generatedAt": "2026-09-14",
+      "total": 220,
+      "passing": 220
     },
     "independent": {
       "source": "bench/independent/RESULT.json",

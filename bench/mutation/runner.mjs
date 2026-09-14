@@ -766,6 +766,42 @@ end
   el.insertAdjacentHTML('beforeend', name);
 });`,
   },
+  // Rust: sqlx::query(&format!(...)) vs the parameterized .bind() form —
+  // the exact contrast the engine must draw to be more than a taint-blind
+  // sink-name matcher. `format!` splices the value into the SQL text itself;
+  // `.bind()` keeps the SQL a literal and passes the value out-of-band.
+  {
+    id: 'rs-sqli-format-baseline',
+    class: 'baseline',
+    dimension: 'detection',
+    file: 'main.rs',
+    cwe: /CWE-89/,
+    expectDetected: true,
+    why: 'sqlx::query(&format!("...{}...", input)) splices the request value into the SQL text — SQL injection',
+    code: `use axum::extract::Query;
+use std::collections::HashMap;
+
+async fn f(Query(params): Query<HashMap<String, String>>, pool: &sqlx::PgPool) {
+    let q = params.get("q").unwrap().to_string();
+    sqlx::query(&format!("SELECT * FROM t WHERE q = '{}'", q)).fetch_all(pool).await.unwrap();
+}`,
+  },
+  {
+    id: 'rs-sqli-bind-adversarial',
+    class: 'adversarial',
+    dimension: 'detection',
+    file: 'main.rs',
+    cwe: /CWE-89/,
+    expectDetected: false,
+    why: 'the `.bind()` form keeps the SQL text a compile-time literal and passes the value as a parameter — genuinely safe, and the verdict must flip from the baseline above, not just always fire on any sqlx::query call',
+    code: `use axum::extract::Query;
+use std::collections::HashMap;
+
+async fn f(Query(params): Query<HashMap<String, String>>, pool: &sqlx::PgPool) {
+    let q = params.get("q").unwrap().to_string();
+    sqlx::query("SELECT * FROM t WHERE q = $1").bind(q).fetch_all(pool).await.unwrap();
+}`,
+  },
 ];
 
 async function verdictFor(c, tmpRoot) {

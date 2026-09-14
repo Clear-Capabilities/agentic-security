@@ -1263,8 +1263,10 @@ function step(node, stateIn, callContext) {
         // Widening to case-insensitive only ADDS matches (recall-preserving);
         // no existing lowercase mutator name collides with an unrelated,
         // dangerous PascalCase method by accident (checked against the C#/Java
-        // catalog sink list).
-        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|addrange|enqueue|__setitem__)$/i;
+        // catalog sink list). `push_str`/`extend_from_slice` are Rust's
+        // String/Vec appenders (`push`/`extend`/`insert` already cover the
+        // other languages and apply to Rust unchanged).
+        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|addrange|enqueue|__setitem__|push_str|extend_from_slice)$/i;
         // Mutate the state Set IN PLACE (the binding is const; the call case
         // returns this same Set ref). Avoids touching the unrelated
         // mutated-param paths in this case, keeping the blast radius to

@@ -95,7 +95,7 @@ import * as fs from 'node:fs';
 
 test('language scoping: every catalog language has an extension mapping', () => {
   const map = _languageExtensions();
-  for (const lang of ['js', 'py', 'cs', 'kt', 'go', 'php', 'rb', 'java', 'cpp']) {
+  for (const lang of ['js', 'py', 'cs', 'kt', 'go', 'php', 'rb', 'java', 'rs', 'cpp']) {
     assert.ok(map[lang], `${lang} must be scoped`);
   }
 });
@@ -124,6 +124,7 @@ test('language scoping: extension sets match the IR dispatch exactly', () => {
     ['php',  /\.(?:php|phtml)$/i],
     ['rb',   /\.rb$/i],
     ['java', /\.java$/i],
+    ['rs',   /\.rs$/i],
   ];
   const map = _languageExtensions();
   for (const [lang, expected] of cases) {

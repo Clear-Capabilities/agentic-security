@@ -10,14 +10,14 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.151.3 |
-| Bundle SHA-256 | `4a292d6c58e05ef367148df9b1c770195da2247a905890c06db0d1ee7e19d414` |
-| Commit | `3175ab0702c9363e6f0dd7ca5ed8197756e4fe1e` |
+| Bundle SHA-256 | `20f079b2997e6c44886f390e2095526b1677c7098d773bf046e709a07a3d7450` |
+| Commit | `e41a3b24a3efc6543a837fb0384b876bb92875e5` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
-| Corpus entries | 215 (215 scored) |
-| Corpus version | `879d7270d062f3ca100b9053b83004d63d7357e3f5b2bba724b8cc7a357be7b5` |
+| Corpus entries | 220 (220 scored) |
+| Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-14T01:20:05.895Z |
+| Generated (UTC) | 2026-09-14T14:51:39.675Z |
 
 ## What these numbers are, and what they are not
 
@@ -56,8 +56,8 @@ cannot defend would cost more credibility than the number is worth.
 
 | Population | Detected / correctly silent |
 | --- | --- |
-| Vulnerable fixtures (`pre/`) — detection | 215/215 (100.0%) |
-| Fixed counterparts (`post/`) — correct silence | 215/215 (100.0%) |
+| Vulnerable fixtures (`pre/`) — detection | 220/220 (100.0%) |
+| Fixed counterparts (`post/`) — correct silence | 220/220 (100.0%) |
 
 All corpus entries scored; no entry was excluded.
 
@@ -76,6 +76,7 @@ All corpus entries scored; no entry was excluded.
 | php | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
 | python | 32 | 32/32 (100.0%) | 32/32 (100.0%) |
 | ruby | 20 | 20/20 (100.0%) | 20/20 (100.0%) |
+| rust | 5 | 5/5 (100.0%) | 5/5 (100.0%) |
 | terraform | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 
 ### By CWE
@@ -89,7 +90,7 @@ All corpus entries scored; no entry was excluded.
 | CWE-1333 | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
 | CWE-1427 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-208 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-22 | 15 | 15/15 (100.0%) | 15/15 (100.0%) |
+| CWE-22 | 16 | 16/16 (100.0%) | 16/16 (100.0%) |
 | CWE-284 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
 | CWE-327 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
@@ -101,22 +102,22 @@ All corpus entries scored; no entry was excluded.
 | CWE-601 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-611 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-643 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-78 | 23 | 23/23 (100.0%) | 23/23 (100.0%) |
+| CWE-78 | 24 | 24/24 (100.0%) | 24/24 (100.0%) |
 | CWE-787 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-79 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
 | CWE-798 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
-| CWE-89 | 13 | 13/13 (100.0%) | 13/13 (100.0%) |
+| CWE-89 | 15 | 15/15 (100.0%) | 15/15 (100.0%) |
 | CWE-90 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | CWE-916 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
-| CWE-918 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
+| CWE-918 | 11 | 11/11 (100.0%) | 11/11 (100.0%) |
 | CWE-94 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 
 ### By corpus tier
 
 | Tier | Entries | Detection (`pre/`) | Correct silence (`post/`) |
 | --- | --- | --- | --- |
-| capability | 205 | 205/205 (100.0%) | 205/205 (100.0%) |
-| deep | 7 | 7/7 (100.0%) | 7/7 (100.0%) |
+| capability | 207 | 207/207 (100.0%) | 207/207 (100.0%) |
+| deep | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
 | regression | 3 | 3/3 (100.0%) | 3/3 (100.0%) |
 
 ## Taint-layer recall by language
@@ -151,7 +152,7 @@ below for current counts.
 
 ### Whole corpus (diagnostic)
 
-Entries scored: 215
+Entries scored: 220
 
 | Language | IR-TAINT recall |
 | --- | --- |
@@ -165,11 +166,12 @@ Entries scored: 215
 | php | 13/23 (56.5%) |
 | python | 21/32 (65.6%) |
 | ruby | 11/20 (55.0%) |
+| rust | 5/5 (100.0%) |
 | terraform | 0/1 (0.0%) |
 
 ### Deep-tier only — taint-shaped subset (headline)
 
-Entries scored: 7
+Entries scored: 10
 
 | Language | IR-TAINT recall |
 | --- | --- |
@@ -178,6 +180,7 @@ Entries scored: 7
 | kotlin | 1/1 (100.0%) |
 | php | 1/1 (100.0%) |
 | python | 1/1 (100.0%) |
+| rust | 3/3 (100.0%) |
 
 Not yet measured on this subset: c#, go, java, json, ruby, terraform
 
@@ -209,7 +212,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 487 |
+| `scanner/src` | 491 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -226,7 +229,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 326/373 (87.4%) |
+| 326/374 (87.2%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -336,8 +339,8 @@ very different once broken down this way.
 
 ## Committed artifacts referenced (not re-run by this command)
 
-- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-08-16):
-  215/215 entries recorded as passing. The gate
+- **Corpus baseline** (*committed artifact*, `bench/cve-replay/corpus-baseline.json`, generated 2026-09-14):
+  220/220 entries recorded as passing. The gate
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,
