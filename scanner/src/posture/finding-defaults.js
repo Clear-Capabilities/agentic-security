@@ -19,6 +19,8 @@ const _CWE_FAMILY = {
   'CWE-90':  'ldap-injection',
   'CWE-91':  'xpath-injection',
   'CWE-94':  'code-injection',
+  'CWE-95':  'code-injection',
+  'CWE-98':  'code-injection',
   'CWE-22':  'path-traversal',
   'CWE-23':  'path-traversal',
   'CWE-36':  'path-traversal',

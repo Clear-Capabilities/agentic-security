@@ -67,10 +67,16 @@ const CWE_TO_FAMILY = {
   'CWE-79': 'xss', 'CWE-80': 'xss', 'CWE-81': 'xss', 'CWE-83': 'xss',
   'CWE-89': 'sql-injection',
   'CWE-90': 'ldap-injection',
-  'CWE-91': 'code-injection', // XML/XPath injection family in this corpus's own taxonomy
+  // CWE-91: this corpus's own taxonomy calls it "XML/XPath injection", and
+  // the scanner's real family for CWE-91 (posture/finding-defaults.js
+  // _CWE_FAMILY, and the php-domxpath-query catalog sink) is
+  // 'xpath-injection', not 'code-injection' — a real family-name mismatch
+  // fixed here (adversarial-premortem-style bug: a good-looking mapping that
+  // silently made this whole CWE unscoreable by family comparison).
+  'CWE-91': 'xpath-injection',
   'CWE-94': 'code-injection',
   'CWE-95': 'code-injection', // eval injection
-  'CWE-98': 'code-injection', // PHP remote file inclusion
+  'CWE-98': 'code-injection', // PHP remote file inclusion — matches finding-defaults.js's CWE-98 entry
   'CWE-601': 'open-redirect',
   'CWE-643': 'xpath-injection',
   'CWE-862': 'missing-authz',

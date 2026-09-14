@@ -307,6 +307,35 @@ function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
+  // SARD PHP corpus: the backtick shell-execution operator (`` `cmd` ``,
+  // equivalent to shell_exec()) is a completely distinct delimiter from a
+  // double-quoted string and had NO recognizer at all — it fell through
+  // every branch below to {kind:'unknown'}, silently dropping the shell
+  // command (and any interpolated taint inside it) entirely. This is this
+  // corpus's single most common command-injection shape (83 of 224 bad
+  // dev-split cases use it as their first source assignment). Lowered to a
+  // synthetic call (`__php_backtick_exec__`, an identifier real PHP code
+  // can never actually name a dotted method) carrying the interpolated
+  // command as its sole argument — same convention as parser-rb.js's
+  // `__ruby_backtick_exec__` and this file's own `__php_echo__`. Reuses the
+  // double-quoted interpolation scanner below (backticks interpolate `$var`/
+  // `{$expr}` exactly like double-quoted strings do in PHP).
+  const btLiteral = s.match(/^`((?:[^`\\]|\\.)*)`$/);
+  if (btLiteral) {
+    const inner = btLiteral[1];
+    const re = /\{(\$[^}]+)\}|(\$[A-Za-z_]\w*(?:->[A-Za-z_]\w*|\[[^\]]+\])?)/g;
+    let lastIndex = 0;
+    const parts = [];
+    let m;
+    while ((m = re.exec(inner)) !== null) {
+      if (m.index > lastIndex) parts.push({ kind: 'literal', value: inner.slice(lastIndex, m.index) });
+      parts.push(_lowerExpr(m[1] !== undefined ? m[1] : m[2]));
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < inner.length) parts.push({ kind: 'literal', value: inner.slice(lastIndex) });
+    const cmd = parts.length === 1 ? parts[0] : { kind: 'tpl', parts };
+    return { kind: 'call', callee: '__php_backtick_exec__', args: [cmd] };
+  }
   // Stage 3 correctness audit (detection depth, per-language-IR): PHP
   // double-quoted strings interpolate variables directly
   // ("SELECT ... WHERE id=$id", "hi {$user->name}") — single-quoted
@@ -490,6 +519,26 @@ function _lowerStmt(stmt, line) {
   if (/^(?:echo|print)\b/.test(s)) {
     const rest = s.replace(/^(?:echo|print)\s*/, '');
     return { kind: 'call', line, callee: '__php_echo__', args: _splitTopLevelCommas(rest).map(_lowerExpr) };
+  }
+  // `include`/`require`/`include_once`/`require_once` are PHP LANGUAGE
+  // CONSTRUCTS, not function calls — `include $page . ".php";` (the common,
+  // paren-free form) has no `(` immediately after the keyword, and even the
+  // parenthesized form never reaches the statement-form call regex below
+  // because these keywords aren't ordinary identifiers to that regex's own
+  // exclusion (PHP itself reserves them). Lowered to a synthetic call
+  // (`__php_include__`), same convention as `__php_echo__` above.
+  if (/^(?:include|require)(?:_once)?\b/.test(s)) {
+    const rest = s.replace(/^(?:include|require)(?:_once)?\s*/, '').replace(/^\((.*)\)$/, '$1');
+    return { kind: 'call', line, callee: '__php_include__', args: [_lowerExpr(rest)] };
+  }
+  // A bare backtick expression as its OWN statement (not assigned to a
+  // variable) matches none of the branches below — matchBalancedCall's
+  // callee regex requires an identifier/`$var` prefix, which a backtick
+  // literal isn't. Delegate straight to _lowerExpr, same fix parser-rb.js
+  // needed for the identical shape.
+  if (/^`/.test(s)) {
+    const call = _lowerExpr(s);
+    if (call.kind === 'call') return { kind: 'call', line, callee: call.callee, args: call.args };
   }
   // Assignment: $var = expr
   const assign = s.match(/^(\$[\w]+(?:->[\w]+)*)\s*=\s*(.+)$/s);
@@ -797,6 +846,53 @@ function _scanTryCatchFinally(s) {
 // blank line (or, at module level, any blanked-out function span — see
 // `_blankSpans`) that preceded a statement, which is exactly what made
 // module-level PHP findings report the wrong source line.
+// Find the ')' that balances the '(' at `openIdx`, string/paren-aware.
+function _findMatchingParen(s, openIdx) {
+  let depth = 0, inStr = null, escape = false;
+  for (let i = openIdx; i < s.length; i++) {
+    const c = s[i];
+    if (escape) { escape = false; continue; }
+    if (inStr) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === '\'') { inStr = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+// SARD PHP corpus: `if (($value = fgets($handle, 4096)) == false) { ... }` —
+// an assignment embedded inside an if/while CONDITION, PHP's dominant real-
+// world idiom for reading a file/stream line by line (238 of 995 dev-split
+// cases use exactly this shape). `_lowerStmt`'s assignment regex only
+// matches statement-position assignments, so `$value` never got a real
+// assign CFG node — the source read was invisible regardless of what
+// catalog entries exist for the RHS callee. Extracts every `($var = expr)`
+// sub-expression from a condition's text (balanced-paren aware, so nested
+// calls like `fgets($handle, 4096)` don't confuse the scan), replacing each
+// with the bare target variable so the boolean test itself still lowers
+// normally (`$value == false`), and returns the extracted assignments to be
+// emitted as real CFG nodes immediately before the if/while node.
+function _hoistCondAssign(cond) {
+  const assigns = [];
+  let s = cond;
+  const re = /\(\s*(\$[A-Za-z_]\w*(?:->[A-Za-z_]\w*)*)\s*=(?!=)\s*/;
+  let guard = 0;
+  let m;
+  while (guard++ < 5 && (m = re.exec(s)) !== null) {
+    const openIdx = m.index;
+    const closeIdx = _findMatchingParen(s, openIdx);
+    if (closeIdx === -1) break;
+    const exprText = s.slice(openIdx + m[0].length, closeIdx);
+    assigns.push({ target: m[1], source: _lowerExpr(exprText) });
+    s = s.slice(0, openIdx) + m[1] + s.slice(closeIdx + 1);
+  }
+  return { assigns, cond: s };
+}
+
 function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
   if (depth > 12) return prevId;
   const stmts = _splitStatements(bodyText);
@@ -827,8 +923,15 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
     // of regex `.indices`, same principle).
     const ifMatch = s.match(/^if\s*\((.+?)\)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/ds);
     if (ifMatch) {
-      const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifMatch[1]), line });
-      _linkNodes(nodes, prev, ifNode);
+      const { assigns: ifAssigns, cond: ifCond } = _hoistCondAssign(ifMatch[1]);
+      let condPrev = prev;
+      for (const a of ifAssigns) {
+        const aNode = _addNode(nodes, { kind: 'assign', target: a.target, source: a.source, line });
+        _linkNodes(nodes, condPrev, aNode);
+        condPrev = aNode;
+      }
+      const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifCond), line });
+      _linkNodes(nodes, condPrev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
       const thenStartLine = line + _countNewlines(s, ifMatch.indices[2][0]);
       const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, thenStartLine, depth + 1);
@@ -846,10 +949,17 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
 
     const whileMatch = s.match(/^while\s*\((.+?)\)\s*\{([\s\S]*)\}\s*$/ds);
     if (whileMatch) {
+      const { assigns: whileAssigns } = _hoistCondAssign(whileMatch[1]);
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _linkNodes(nodes, prev, header);
+      let condPrev = header;
+      for (const a of whileAssigns) {
+        const aNode = _addNode(nodes, { kind: 'assign', target: a.target, source: a.source, line });
+        _linkNodes(nodes, condPrev, aNode);
+        condPrev = aNode;
+      }
       const bodyStartLine = line + _countNewlines(s, whileMatch.indices[2][0]);
-      const bodyTail = _buildCfg(whileMatch[2], nodes, header, bodyStartLine, depth + 1);
+      const bodyTail = _buildCfg(whileMatch[2], nodes, condPrev, bodyStartLine, depth + 1);
       _linkNodes(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _linkNodes(nodes, header, join);
