@@ -468,9 +468,34 @@ function _followChain(s, endIdx, calleeSoFar, argsSoFar, isNew) {
   return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar), false);
 }
 
+// A C-style cast `(Type)expr` / `(Type) expr` is transparent for taint: the
+// value is the operand. Juliet's collection variants (`Object o = data;
+// string d = (string)o;`) and every `(string)reader.GetValue(0)` read hit
+// this shape; before it was recognised the whole expression fell through to
+// `{kind:'unknown'}` and the taint died at the cast. The type token must
+// look like a type (identifier, optional generics/array/nullable) so a
+// parenthesised arithmetic expression like `(a + b)` is not mistaken for a
+// cast.
+const _CAST_RE = /^\(\s*[A-Za-z_][\w.]*(?:<[^()]*>)?(?:\[\s*\])*\??\s*\)\s*(?=[A-Za-z_("@$])/;
+
 function _lowerExpr(text) {
   const s = String(text || '').trim();
   if (!s) return { kind: 'unknown' };
+  const castM = s.match(_CAST_RE);
+  if (castM) return _lowerExpr(s.slice(castM[0].length));
+  // Parenthesised object creation starting a chain: `(new X()).M(args)`.
+  // Same shape as the un-parenthesised `new X().M(args)` branch below,
+  // which cannot see it because the leading `(` blocks the `^new` anchor.
+  if (s.startsWith('(')) {
+    const closeIdx = _matchDelim(s, 0, '(', ')');
+    if (closeIdx !== -1 && /^\s*new\s/.test(s.slice(1, closeIdx))) {
+      const inner = _lowerExpr(s.slice(1, closeIdx).trim());
+      if (inner.kind === 'call' && s.slice(closeIdx + 1).trim().startsWith('.')) {
+        return _followChain(s, closeIdx + 1, inner.callee, inner.args, inner.isNew);
+      }
+      return inner;
+    }
+  }
   // Member access: a.b.c["foo"]
   if (/^[A-Za-z_][\w.]*\[[^\]]*\]$/.test(s)) {
     // E.g. Request.Form["name"]. Split on first '[' to isolate index.
@@ -653,6 +678,17 @@ function _lowerStmt(stmt, line) {
     // existing "nothing to lower" convention for a no-op statement.
     if (chained.callee.includes('.')) return { kind: 'call', line, callee: chained.callee, args: chained.args };
   }
+  // Parenthesised form of the same idiom: `(new Helper()).BadSink(data);`.
+  // The statement-form call branch above anchors on an identifier and the
+  // `new` branch anchors on the keyword, so a leading `(` matched neither
+  // and the statement was dropped whole. `_lowerExpr` already understands
+  // the shape; only a chained call (dotted callee) is worth a node.
+  if (s.startsWith('(')) {
+    const e = _lowerExpr(s);
+    if (e.kind === 'call' && typeof e.callee === 'string' && e.callee.includes('.')) {
+      return { kind: 'call', line, callee: e.callee, args: e.args };
+    }
+  }
   return { kind: 'unknown', line, text: s };
 }
 
@@ -810,6 +846,21 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
             _linkNodes(nodes, prev, assignId);
             prev = assignId;
           }
+        }
+      } else if (kwNorm === 'using' && condRaw !== null) {
+        // `using (SqlCommand cmd = new SqlCommand(query, conn)) { … }`: the
+        // resource clause is a real declaration, and in ADO.NET it is where
+        // the command text (the SQL-injection sink argument) is bound. It
+        // was previously discarded with the header, so `cmd` had no
+        // provenance and the constructor sink never saw its argument.
+        // Lowered as an ordinary assign ahead of the body; a bare
+        // expression clause (`using (GetLock())`) has no target and is
+        // skipped as before.
+        const declNode = _lowerStmt(condRaw.trim(), line);
+        if (declNode && declNode.kind === 'assign') {
+          const declId = _addNode(nodes, declNode);
+          _linkNodes(nodes, prev, declId);
+          prev = declId;
         }
       } else {
         const needsCond = /^(?:if|while|for|switch|else if|catch)$/.test(kwNorm);
