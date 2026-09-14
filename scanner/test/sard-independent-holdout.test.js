@@ -88,3 +88,35 @@ test('holdout-check.mjs: HOLDOUT_APPS includes tinymart alongside the pre-existi
   const apps = JSON.parse(m[1].replace(/'/g, '"'));
   assert.ok(apps.includes('tinymart'), `expected tinymart in HOLDOUT_APPS, got: ${JSON.stringify(apps)}`);
 });
+
+// Adversarial-premortem remediation (Round 2 F2.3 / Round 5 F5.2): same fix
+// as compare-baseline.mjs's --update-baseline (see that file's
+// appendAuditLog comment for the full reasoning on why this stays a local,
+// gitignored trail rather than a committed one) — arguably MORE important
+// here, since the PRD explicitly calls this gate "never used for tuning",
+// and a --reason-less silent baseline rewrite defeats that guarantee just as
+// surely as tuning against it would. Only args() parsing is unit-tested here
+// (not a full CLI round-trip): holdout-check.mjs's CLI spawns real scans
+// against dvwa/juice-shop/nodegoat/pygoat/railsgoat, which needs those repos
+// cloned — too slow/network-dependent for the fast suite. The full
+// --update-baseline -> --check-baseline cycle (including the reason
+// requirement) should be spot-checked manually after this change, same as
+// this file's own header already documents doing for the gate's fail-closed
+// behavior.
+test('holdout-check.mjs args(): parses --reason', async () => {
+  const { args } = await import('../../bench/sard/scripts/holdout-check.mjs');
+  const withReason = (() => {
+    const orig = process.argv;
+    process.argv = [...orig.slice(0, 2), '--update-baseline', '--reason', 'because I said so'];
+    try { return args(); } finally { process.argv = orig; }
+  })();
+  assert.equal(withReason.update, true);
+  assert.equal(withReason.reason, 'because I said so');
+
+  const withoutReason = (() => {
+    const orig = process.argv;
+    process.argv = [...orig.slice(0, 2), '--update-baseline'];
+    try { return args(); } finally { process.argv = orig; }
+  })();
+  assert.equal(withoutReason.reason, null);
+});

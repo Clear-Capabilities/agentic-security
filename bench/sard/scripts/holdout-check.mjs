@@ -35,6 +35,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REALWORLD_DIR = path.join(HERE, '..', '..', '..', 'scanner', 'test', 'benchmark', 'realworld');
 const REPORTS_DIR = path.join(HERE, '..', 'reports');
 const BASELINE_PATH = path.join(REPORTS_DIR, 'holdout-baseline.json');
+const AUDIT_LOG_PATH = path.join(REPORTS_DIR, 'holdout-baseline-update-log.jsonl');
 
 // The external holdout set (PRD §43). Kept as a literal list, not derived
 // from the manifest automatically, so adding a new curated app to the
@@ -64,9 +65,31 @@ function toleranceFor(support) {
   return adaptiveTolerance(TOLERANCE, support);
 }
 
-function args() {
+export function args() {
   const a = process.argv.slice(2);
-  return { update: a.includes('--update-baseline'), check: a.includes('--check-baseline') };
+  const reasonIdx = a.indexOf('--reason');
+  return {
+    update: a.includes('--update-baseline'),
+    check: a.includes('--check-baseline'),
+    reason: reasonIdx !== -1 ? a[reasonIdx + 1] : null,
+  };
+}
+
+// Same reasoning and same shape as compare-baseline.mjs's appendAuditLog —
+// see that function's comment for why this is a local, gitignored trail
+// rather than a committed one. This holdout gate is arguably the more
+// important of the two to have SOME trail on, since it's the one check the
+// PRD explicitly calls out as "never used for tuning" — silently rewriting
+// its baseline defeats that guarantee just as surely as tuning against it.
+function appendAuditLog(reason, before, after) {
+  fs.mkdirSync(path.dirname(AUDIT_LOG_PATH), { recursive: true });
+  const beforeByName = Object.fromEntries((before?.apps || []).map(a => [a.name, a]));
+  const entry = {
+    timestamp: new Date().toISOString(),
+    reason,
+    apps: after.map(a => ({ name: a.name, f1Before: beforeByName[a.name]?.f1 ?? null, f1After: a.f1 })),
+  };
+  fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(entry) + '\n');
 }
 
 function runApp(name) {
@@ -109,8 +132,15 @@ function main() {
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
 
   if (opts.update) {
+    if (!opts.reason || !opts.reason.trim()) {
+      console.error('✗ --update-baseline requires --reason "<why this new number is a legitimate baseline>".');
+      process.exit(2);
+    }
+    const before = fs.existsSync(BASELINE_PATH) ? JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')) : null;
     fs.writeFileSync(BASELINE_PATH, JSON.stringify({ generatedAt: new Date().toISOString(), apps: ok }, null, 2) + '\n');
+    appendAuditLog(opts.reason, before, ok);
     console.log(`\n✓ holdout baseline updated (local-only, gitignored): ${path.relative(process.cwd(), BASELINE_PATH)}`);
+    console.log(`  reason: ${opts.reason}`);
     for (const r of ok) console.log(`  ${r.name}: P=${(r.precision*100).toFixed(1)}% R=${(r.recall*100).toFixed(1)}% F1=${(r.f1*100).toFixed(1)}%${r.requiresReAudit ? '  [informational — requiresReAudit]' : ''}`);
     return;
   }

@@ -118,6 +118,7 @@ bench/sard/mutations/*
 bench/sard/reports/*.json
 bench/sard/reports/*.md
 bench/sard/reports/*.csv
+bench/sard/reports/*.jsonl
 
 # AI-BOM artefact emitted by the scanner during dev runs.
 scanner/aibom.md

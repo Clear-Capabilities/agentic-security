@@ -429,6 +429,36 @@
         "_doc": "Original work written for this benchmark; not derived from any upstream project."
       }
     },
+    "pyshelf": {
+      "language": "python",
+      "local": "bench/holdout-independent/pyshelf",
+      "_doc": "SARD_80_F1_SCANNER_PRD.md adversarial-premortem remediation, P1 item 6 — a SECOND genuinely independent external holdout, in Python (tinymart above is JavaScript). Same independence discipline: ground truth (expected/pyshelf.json) was authored from reading bench/holdout-independent/pyshelf/app.py's own source before the scanner was ever run against it. requiresReAudit: false, provenance: authored-independently-*.",
+      "scanRoot": ".",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/pyshelf.json",
+        "_doc": "Hand-authored — see expected/pyshelf.json's own _doc for the independence account."
+      },
+      "license": {
+        "spdx": "N/A",
+        "_doc": "Original work written for this benchmark; not derived from any upstream project."
+      }
+    },
+    "microledger": {
+      "language": "java",
+      "local": "bench/holdout-independent/microledger",
+      "_doc": "SARD_80_F1_SCANNER_PRD.md adversarial-premortem remediation, P1 item 6 — a THIRD genuinely independent external holdout, in Java — one of this PRD's own three SARD target languages, the most directly relevant addition. Same independence discipline: ground truth (expected/microledger.json) was authored from reading bench/holdout-independent/microledger/src/LedgerServlet.java's own source before the scanner was ever run against it. requiresReAudit: false, provenance: authored-independently-*.",
+      "scanRoot": ".",
+      "groundTruth": {
+        "kind": "curated",
+        "path": "expected/microledger.json",
+        "_doc": "Hand-authored — see expected/microledger.json's own _doc for the independence account."
+      },
+      "license": {
+        "spdx": "N/A",
+        "_doc": "Original work written for this benchmark; not derived from any upstream project."
+      }
+    },
     "damn-vulnerable-defi": {
       "language": "solidity",
       "repo": "https://github.com/theredguild/damn-vulnerable-defi.git",

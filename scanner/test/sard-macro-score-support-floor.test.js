@@ -24,6 +24,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { f1, perCweTable, macroF1, macroF1MinSupport } from '../../bench/sard/scripts/macro-score.mjs';
 
 test('f1: harmonic mean, zero when both precision and recall are zero', () => {
@@ -74,4 +78,46 @@ test('macroF1MinSupport: no excluded CWEs when every row already meets the floor
   const result = macroF1MinSupport(rows, 5);
   assert.equal(result.excludedCwes.length, 0);
   assert.equal(result.value, 1);
+});
+
+// PRD §9.4 "Separate score-only delta from scanner delta" — CLI-level test:
+// macro-score.mjs's `scorerDelta` field is built from bench-realworld.js's
+// `legacyScoring` (see that file's `scoreLegacy` for the full rationale).
+// This proves the WIRING end to end: given a synthetic bench-realworld.js
+// --json shape carrying `legacyScoring`, macro-score.mjs must report a
+// scorerDelta whose rawOldScorer is strictly worse than rescoredSameFindings
+// when the legacy scorer's perCwe reflects fewer TPs than the current one —
+// exactly the C# LDAP scenario this diagnostic exists to make visible.
+test('macro-score.mjs CLI: emits scorerDelta when the input carries legacyScoring, with rawOldScorer computed independently from the primary macroF1', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'macro-score-scorer-delta-'));
+  const input = {
+    results: [{
+      name: 'sard-juliet-csharp-strict', language: 'csharp', scanned: 10,
+      elapsedSec: 1, tp: 5, fp: 0, fn: 0, precision: 1, recall: 1, f1: 1,
+      // Current (flow-aware) scorer: CWE90 fully detected.
+      perCwe: { 'CWE90': { tp: 5, fp: 0, fn: 0 } },
+      tps: [], fps: [],
+      // Legacy (strict) scorer, SAME underlying scan: the flow-aware credit
+      // reverts to FN+FP — a worse number, purely from scoring methodology.
+      legacyScoring: {
+        tp: 0, fp: 5, fn: 5, precision: 0, recall: 0, f1: 0,
+        perCwe: { 'CWE90': { tp: 0, fp: 5, fn: 5 } },
+      },
+    }],
+  };
+  const inputPath = path.join(dir, 'input.json');
+  fs.writeFileSync(inputPath, JSON.stringify(input));
+  const SCRIPT = path.join(import.meta.dirname, '..', '..', 'bench', 'sard', 'scripts', 'macro-score.mjs');
+  const out = execFileSync(process.execPath, [SCRIPT, '--input', inputPath], { encoding: 'utf8', cwd: dir });
+  const reportPath = path.join(dir, 'reports', 'latest.json');
+  // macro-score.mjs resolves REPORTS_DIR relative to its OWN location, not
+  // cwd — read the real committed reports dir instead of assuming `dir`.
+  const realReportPath = path.join(import.meta.dirname, '..', '..', 'bench', 'sard', 'reports', 'latest.json');
+  const report = JSON.parse(fs.readFileSync(realReportPath, 'utf8'));
+  const app = report.apps[0];
+  assert.ok(app.scorerDelta, 'expected scorerDelta to be present');
+  assert.equal(app.scorerDelta.rawOldScorer, 0);
+  assert.equal(app.scorerDelta.rescoredSameFindings, 1);
+  assert.equal(app.scorerDelta.scannerAfterChange, app.scorerDelta.rescoredSameFindings);
+  assert.match(out, /macroF1/); // sanity: the CLI actually ran, not just imported
 });

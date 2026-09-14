@@ -1,0 +1,53 @@
+{
+  "_doc": "SARD_80_F1_SCANNER_PRD.md adversarial-premortem remediation, Round 1 F1.4 / P1 item 6 — a THIRD genuinely independent external-holdout app, in Java — one of this PRD's own three target languages, making this the most directly relevant addition to the generalization gate. This ground truth was authored by reading bench/holdout-independent/microledger/src/LedgerServlet.java's own source BEFORE the scanner was ever run against it. Family-name spellings were confirmed against one real scan run afterward (same disclosed practice tinymart.json's hardcoded-secret entry already used) — never which findings to expect, only how the engine spells an already-decided classification.",
+  "expected": [
+    {
+      "file": "src/LedgerServlet.java",
+      "line": 40,
+      "lineTolerance": 2,
+      "family": "sql-injection",
+      "severity": "high",
+      "cwe": "CWE-89",
+      "note": "request.getParameter('customer') concatenated directly into SQL text passed to Statement.executeQuery()"
+    },
+    {
+      "file": "src/LedgerServlet.java",
+      "line": 56,
+      "lineTolerance": 2,
+      "family": "command-injection",
+      "severity": "critical",
+      "cwe": "CWE-78",
+      "note": "request.getParameter('account') concatenated into a shell command string passed to Runtime.exec(String)"
+    },
+    {
+      "file": "src/LedgerServlet.java",
+      "line": 71,
+      "lineTolerance": 2,
+      "family": "path-traversal",
+      "severity": "high",
+      "cwe": "CWE-22",
+      "note": "request.getParameter('file') joined onto INVOICES_DIR via new File(dir, name) with no canonical-path containment check before FileReader opens it"
+    },
+    {
+      "file": "src/LedgerServlet.java",
+      "line": 100,
+      "lineTolerance": 2,
+      "family": "xss",
+      "severity": "high",
+      "cwe": "CWE-79",
+      "note": "request.getParameter('q') concatenated directly into the HTTP response body via response.getWriter().write() with no encoding"
+    },
+    {
+      "file": "src/LedgerServlet.java",
+      "line": 30,
+      "lineTolerance": 1,
+      "family": "aws-access-key-id",
+      "severity": "critical",
+      "cwe": "CWE-798",
+      "note": "AWS's own well-known documentation example access key literal (AKIAIOSFODNN7EXAMPLE), matching this repo's 'AWS Access Key ID' credential rule"
+    }
+  ],
+  "wildcardFamilies": [],
+  "provenance": "authored-independently-2026-09-13",
+  "requiresReAudit": false
+}

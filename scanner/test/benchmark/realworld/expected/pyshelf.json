@@ -1,0 +1,44 @@
+{
+  "_doc": "SARD_80_F1_SCANNER_PRD.md adversarial-premortem remediation, Round 1 F1.4 / P1 item 6 — a SECOND genuinely independent external-holdout app, in Python (bench/holdout-independent/tinymart is JavaScript; every other curated app in this directory is bootstrap-from-engine-output). This ground truth was authored by reading bench/holdout-independent/pyshelf/app.py's own source BEFORE the scanner was ever run against it. Deliberately 4 classes, not 5: a hardcoded-secret sub-fixture was attempted twice (SendGrid-shaped, then Stripe sk_test_-shaped) and BOTH were rejected by GitHub's own push-protection secret scanner — see app.py's own note. tinymart/config.js already covers that class independently.",
+  "expected": [
+    {
+      "file": "app.py",
+      "line": 41,
+      "lineTolerance": 2,
+      "family": "sql-injection",
+      "severity": "high",
+      "cwe": "CWE-89",
+      "note": "request.args.get('q') interpolated directly into SQL text via an f-string passed to cur.execute()"
+    },
+    {
+      "file": "app.py",
+      "line": 61,
+      "lineTolerance": 2,
+      "family": "command-injection",
+      "severity": "critical",
+      "cwe": "CWE-78",
+      "note": "request.args.get('isbn') concatenated into a shell command string passed to subprocess.run(..., shell=True)"
+    },
+    {
+      "file": "app.py",
+      "line": 80,
+      "lineTolerance": 2,
+      "family": "path-traversal",
+      "severity": "high",
+      "cwe": "CWE-22",
+      "note": "request.args.get('file') joined onto REVIEWS_DIR with no containment check before open()"
+    },
+    {
+      "file": "app.py",
+      "line": 103,
+      "lineTolerance": 2,
+      "family": "xss",
+      "severity": "high",
+      "cwe": "CWE-79",
+      "note": "request.args.get('name') concatenated directly into the TEMPLATE STRING passed to render_template_string, bypassing Jinja2 autoescaping entirely (autoescaping only applies to template VARIABLES)"
+    }
+  ],
+  "wildcardFamilies": [],
+  "provenance": "authored-independently-2026-09-13",
+  "requiresReAudit": false
+}

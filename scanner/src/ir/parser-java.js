@@ -192,15 +192,37 @@ function exprFromCst(node) {
     if (node.children.Identifier) return { kind: 'ident', name: node.children.Identifier[0].image };
     // Binary expression
     if (node.children.BinaryOperator || node.children.binaryExpression) {
-      // Best-effort: take the two operands.
+      // Found via the independent-holdout fixture microledger (SARD_80_F1_
+      // SCANNER_PRD.md P1 item 6): this branch hardcoded `op: '?'` for EVERY
+      // binary expression, regardless of the real operator, and only ever
+      // took the first two operands — chevrotain's `binaryExpression`
+      // production for a chain like `"a" + query + "b"` is FLAT (one node
+      // listing all 3 operands and both `+` tokens), not a nested binary
+      // tree, so a 3+-operand chain silently dropped every operand past the
+      // second AND mislabeled the operator on top of that.
+      //
+      // Neither defect was independently harmless: a taint value sitting in
+      // the THIRD (or later) operand of a concatenation was invisible to the
+      // taint walker regardless of the operator bug, and a real corpus
+      // fixture with exactly this shape (`"<div>..." + query + "</div>"`,
+      // one `sink(a + tainted + b)` call) lost its finding entirely — not
+      // merely mislabeled. `node.children.BinaryOperator` is chevrotain's own
+      // token array for this production; `.image` is the literal operator
+      // text (confirmed via direct CST inspection this session — `+`, not a
+      // synthesized value). Left-folds all operands with their real
+      // operators, matching left-to-right evaluation order; the `|| '+'`
+      // fallback only matters if a future java-parser version ever changes
+      // this shape so operator/operand counts disagree, and `+` is the
+      // overwhelmingly dominant real-world case for this production
+      // (string concatenation), so it is the safer of two bad guesses.
       const kids = node.children.unaryExpression || node.children.expression || [];
+      const ops = (node.children.BinaryOperator || []).map(t => t.image);
       if (kids.length >= 2) {
-        return {
-          kind: 'binary',
-          op: '?',
-          left: exprFromCst(kids[0]),
-          right: exprFromCst(kids[1]),
-        };
+        let result = exprFromCst(kids[0]);
+        for (let i = 1; i < kids.length; i++) {
+          result = { kind: 'binary', op: ops[i - 1] || '+', left: result, right: exprFromCst(kids[i]) };
+        }
+        return result;
       }
     }
     // Fall through: recurse the first child

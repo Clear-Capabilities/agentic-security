@@ -109,7 +109,7 @@ test('compare-baseline CLI: --update-baseline then a clean, unregressed --check-
   const dir = mkReportsDir();
   const report = sampleReport(0.60, 0.55, 0.70, 60, 40);
   writeReport(dir, 'latest.json', report);
-  const update = runCli(dir, ['--update-baseline']);
+  const update = runCli(dir, ['--update-baseline', '--reason', 'test']);
   assert.equal(update.code, 0, `--update-baseline should succeed, got: ${update.out}`);
   assert.ok(fs.existsSync(path.join(dir, 'baseline.json')), 'baseline.json should now exist');
 
@@ -119,10 +119,60 @@ test('compare-baseline CLI: --update-baseline then a clean, unregressed --check-
   assert.equal(check.code, 0, `identical report must pass the regression gate, got: ${check.out}`);
 });
 
+// Adversarial-premortem remediation (Round 2 F2.3 / Round 5 F5.2): the exact
+// workflow this project's own sessions used to produce every SARD number to
+// date — run the bench, read the number, `--update-baseline` — left zero
+// trace: no reason required, no diff shown, no audit trail of any kind.
+// Deliberately NOT fixed by committing baseline.json to git (that would
+// violate bench/README.md's own deliberate "no benchmark scores committed"
+// policy just as directly as the gap it would close) — instead
+// `--update-baseline` now requires `--reason`, and appends a LOCAL,
+// gitignored (bench/sard/reports/*.jsonl) audit entry recording who asked
+// for the update and why, alongside the before/after numbers, so THIS
+// machine's own operator has a forensic trail even though no third party
+// can inspect it.
+test('compare-baseline CLI: --update-baseline without --reason is refused', () => {
+  const dir = mkReportsDir();
+  writeReport(dir, 'latest.json', sampleReport(0.60, 0.55, 0.70, 60, 40));
+  const update = runCli(dir, ['--update-baseline']);
+  assert.equal(update.code, 2, `missing --reason should be refused with a usage error, got exit ${update.code}: ${update.out}`);
+  assert.match(update.out, /--reason/);
+  assert.ok(!fs.existsSync(path.join(dir, 'baseline.json')), 'baseline.json must NOT be written when --reason is missing');
+});
+
+test('compare-baseline CLI: --update-baseline with a blank --reason is also refused', () => {
+  const dir = mkReportsDir();
+  writeReport(dir, 'latest.json', sampleReport(0.60, 0.55, 0.70, 60, 40));
+  const update = runCli(dir, ['--update-baseline', '--reason', '   ']);
+  assert.equal(update.code, 2);
+});
+
+test('compare-baseline CLI: a successful --update-baseline appends a local audit log entry with the reason and before/after numbers', () => {
+  const dir = mkReportsDir();
+  writeReport(dir, 'latest.json', sampleReport(0.60, 0.55, 0.70, 60, 40));
+  assert.equal(runCli(dir, ['--update-baseline', '--reason', 'initial baseline for this test']).code, 0);
+
+  const logPath = path.join(dir, 'baseline-update-log.jsonl');
+  assert.ok(fs.existsSync(logPath), 'baseline-update-log.jsonl should be written');
+  const firstEntry = JSON.parse(fs.readFileSync(logPath, 'utf8').trim().split('\n')[0]);
+  assert.equal(firstEntry.reason, 'initial baseline for this test');
+  assert.equal(firstEntry.apps[0].name, 'sard-juliet-java-strict');
+  assert.equal(firstEntry.apps[0].macroF1Before, null); // no prior baseline existed
+  assert.equal(firstEntry.apps[0].macroF1After, 0.60);
+
+  // A second update, with a real prior baseline this time, must record BOTH sides.
+  writeReport(dir, 'latest.json', sampleReport(0.65, 0.60, 0.75, 65, 35));
+  assert.equal(runCli(dir, ['--update-baseline', '--reason', 'genuine improvement, re-verified']).code, 0);
+  const entries = fs.readFileSync(logPath, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  assert.equal(entries.length, 2, 'the log must APPEND, not overwrite');
+  assert.equal(entries[1].apps[0].macroF1Before, 0.60);
+  assert.equal(entries[1].apps[0].macroF1After, 0.65);
+});
+
 test('compare-baseline CLI: a genuine, large regression exits 1 and names the metric', () => {
   const dir = mkReportsDir();
   writeReport(dir, 'latest.json', sampleReport(0.60, 0.55, 0.70, 60, 40));
-  assert.equal(runCli(dir, ['--update-baseline']).code, 0);
+  assert.equal(runCli(dir, ['--update-baseline', '--reason', 'test']).code, 0);
 
   // A genuine 20-point macro-F1 drop — must fail regardless of adaptive
   // widening (this is a real regression, not noise).
@@ -148,7 +198,7 @@ test('compare-baseline CLI: a small, low-support per-CWE wobble that the OLD fla
   const baseF1 = 0.60;
   const base = sampleReport(0.60, baseF1, baseF1, 6, 4); // tp=6, fn=4 -> support=10
   writeReport(dir, 'latest.json', base);
-  assert.equal(runCli(dir, ['--update-baseline']).code, 0);
+  assert.equal(runCli(dir, ['--update-baseline', '--reason', 'test']).code, 0);
 
   const wobbled = JSON.parse(JSON.stringify(base));
   wobbled.apps[0].perCwe[0].f1 = baseF1 - wobblePp;

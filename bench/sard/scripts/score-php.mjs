@@ -8,8 +8,17 @@
 // --json run — one report format for both corpora, not two.
 //
 // Usage:
-//   node bench/sard/scripts/score-php.mjs [--limit N] [--json]
+//   node bench/sard/scripts/score-php.mjs [--limit N] [--json] [--split train|dev|test]
 //   node bench/sard/scripts/score-php.mjs --json | node bench/sard/scripts/macro-score.mjs
+//
+// Adversarial-premortem remediation (finding F1.2): every PHP number reported
+// anywhere in this ledger to date was fit-and-report on the same undivided
+// sample — no split existed for this corpus at all (unlike bench-realworld.js's
+// `--split` for Java/C#). ingest-php.mjs now assigns a `split` field per case
+// at ingest time (see its own header comment for the family-key derivation,
+// which differs from Juliet's since this corpus has no `_NN[ab]` convention);
+// `--split` here is the consuming half — filters BEFORE `--limit` so a limited
+// run still samples only from the requested split, not the whole corpus.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -23,12 +32,27 @@ const WORKSPACE_ROOT = path.join(SARD_ROOT, 'workspace', 'php');
 
 function args() {
   const a = process.argv.slice(2);
-  const out = { limit: null, json: false };
+  const out = { limit: null, json: false, split: null };
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '--limit') out.limit = parseInt(a[++i], 10);
     else if (a[i] === '--json') out.json = true;
+    else if (a[i] === '--split') out.split = a[++i];
+  }
+  if (out.split && !['train', 'dev', 'test'].includes(out.split)) {
+    console.error(`✗ --split must be train|dev|test, got: ${out.split}`);
+    process.exit(2);
   }
   return out;
+}
+
+// Pure, exported for direct unit testing — mirrors bench-realworld.js's own
+// `inRequestedSplit` shape (a dedicated testable filter function rather than
+// inline logic in main()). An entry with no `split` field is always excluded
+// when a split is requested: it was ingested before this feature existed, so
+// its bucket is genuinely unknown, not merely unset.
+export function filterBySplit(gold, split) {
+  if (!split) return gold;
+  return gold.filter(g => g.split === split);
 }
 
 // Same taxonomy the scanner's own detectors use for `finding.family` /
@@ -56,6 +80,15 @@ async function main() {
     process.exit(2);
   }
   let gold = JSON.parse(fs.readFileSync(GOLD_PATH, 'utf8'));
+
+  if (opts.split) {
+    const before = gold.length;
+    const noSplitField = gold.filter(g => !g.split).length;
+    gold = filterBySplit(gold, opts.split);
+    console.error(`  --split ${opts.split}: ${gold.length}/${before} cases kept` +
+      (noSplitField ? ` (${noSplitField} of the excluded cases have no split field at all — re-ingest to backfill)` : ''));
+  }
+
   if (opts.limit) gold = gold.slice(0, opts.limit);
 
   const perCwe = {};
@@ -109,4 +142,4 @@ async function main() {
   }
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

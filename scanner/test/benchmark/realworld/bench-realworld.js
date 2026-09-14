@@ -1288,10 +1288,12 @@ async function getCallGraphInfo(fileAbsPath, language) {
   return info;
 }
 
-export async function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies, gtContentRoot) {
-  const tps = []; const fps = []; const fns = [];
-  const consumed = new Set();
-  const wildSet = new Set(wildcardFamilies || []);
+// Shared by score() and scoreLegacy() (PRD §9.4) so the two scorers can
+// never disagree about anything OTHER than the flow-aware fallback itself —
+// if this indexing diverged between them, a macroF1 delta between the two
+// could be measuring an unrelated bookkeeping difference instead of the
+// scoring-methodology change it's meant to isolate.
+function _indexActuals(actual, vulnFamilyMap) {
   // Perf: index actuals by basename for O(1) lookup instead of O(A) scan per
   // expected entry. With 55k expected × 87k actuals this drops 4.8B ops to
   // ~150k. Each actual is also cached with its precomputed file/line/family
@@ -1313,6 +1315,65 @@ export async function score(actual, expected, vulnFamilyMap, scanRoot, wildcardF
     if (!actualByBase.has(base)) actualByBase.set(base, []);
     actualByBase.get(base).push(i);
   }
+  return { actualByBase, actualMeta };
+}
+
+// PRD §9.4 — "Separate score-only delta from scanner delta": a scorer
+// improvement (like §9.1's flow-aware fallback) must never be silently
+// blended into a reported number as if it were a scanner capability gain —
+// this is exactly the mistake the goodG2B fix made before being caught (see
+// bench/sard/IMPLEMENTATION_STATUS.md). `scoreLegacy` is the STRICT,
+// pre-§9.1 line-range-only matcher (no same-file call-graph fallback),
+// deliberately kept alive rather than deleted so every future report can run
+// BOTH scorers over the identical `actual[]`/`expected[]` in one scan pass —
+// no need to snapshot an "old" scan run first, and no risk of the two
+// numbers actually reflecting two different scans. It is a STRICT subset of
+// score()'s matching logic (drops only the flow-aware branch), so it is
+// synchronous — no call-graph file reads needed at all.
+export function scoreLegacy(actual, expected, vulnFamilyMap, wildcardFamilies) {
+  const tps = []; const fps = []; const fns = [];
+  const consumed = new Set();
+  const wildSet = new Set(wildcardFamilies || []);
+  const { actualByBase, actualMeta } = _indexActuals(actual, vulnFamilyMap);
+  if (wildSet.size) {
+    for (let i = 0; i < actual.length; i++) {
+      const meta = actualMeta[i];
+      if (wildSet.has(meta.fam)) { consumed.add(i); tps.push({ family: meta.fam, file: meta.file, line: meta.line, wildcard: true, matchedVuln: meta.vuln }); }
+    }
+  }
+  for (const e of expected) {
+    const tol = typeof e.lineTolerance === 'number' ? e.lineTolerance : LINE_TOLERANCE;
+    let matched = false;
+    const baseE = e.file.replace(/\\/g,'/').split('/').slice(-1)[0];
+    const candidates = actualByBase.get(baseE) || [];
+    for (const i of candidates) {
+      if (consumed.has(i)) continue;
+      const meta = actualMeta[i];
+      if (meta.base !== baseE && !meta.file.endsWith('/' + e.file)) continue;
+      const aLine = meta.line;
+      if (typeof e.lineEnd === 'number' && e.lineEnd >= e.line) {
+        if (aLine < e.line || aLine > e.lineEnd) continue; // NO flow-aware fallback here — the whole point.
+      } else if (Math.abs(aLine - e.line) > tol) continue;
+      if (meta.fam !== e.family) continue;
+      consumed.add(i);
+      if (!matched) { tps.push({ ...e, matchedVuln: meta.vuln, reportedCwe: meta.cwe }); matched = true; }
+      if (!e.matchAny) break;
+    }
+    if (!matched && !wildSet.has(e.family)) fns.push(e);
+  }
+  for (let i = 0; i < actual.length; i++) {
+    if (consumed.has(i)) continue;
+    const meta = actualMeta[i];
+    fps.push({ file: meta.file, line: meta.line, family: meta.fam, vuln: meta.vuln, reportedCwe: meta.cwe });
+  }
+  return { tps, fps, fns };
+}
+
+export async function score(actual, expected, vulnFamilyMap, scanRoot, wildcardFamilies, gtContentRoot) {
+  const tps = []; const fps = []; const fns = [];
+  const consumed = new Set();
+  const wildSet = new Set(wildcardFamilies || []);
+  const { actualByBase, actualMeta } = _indexActuals(actual, vulnFamilyMap);
   // First pass: wildcardFamilies — credit every actual finding whose family is
   // listed (advisory rules that fire correctly across many files; we don't
   // track them per-line).
@@ -1638,6 +1699,25 @@ async function runOne(name, app, vulnFamilyMap) {
   const recall    = tp+fn === 0 ? 1 : tp/(tp+fn);
   const fOne      = f1(precision, recall);
 
+  // PRD §9.4 — computed from the IDENTICAL actual[]/expected[] as the score
+  // above (same scan, no re-run), so any delta between this and the primary
+  // result above is PURELY a scoring-methodology effect, never a detection
+  // change. See scoreLegacy's own header comment for the full rationale.
+  const legacy = scoreLegacy(actual, expected, vulnFamilyMap, wildcardFamilies);
+  const legacyTp = legacy.tps.length, legacyFp = legacy.fps.length, legacyFn = legacy.fns.length;
+  const legacyPrecision = legacyTp+legacyFp === 0 ? 1 : legacyTp/(legacyTp+legacyFp);
+  const legacyRecall    = legacyTp+legacyFn === 0 ? 1 : legacyTp/(legacyTp+legacyFn);
+  const legacyPerCwe = {};
+  const legacyBumpCwe = (cwe, k) => { if (!cwe) return; (legacyPerCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++; };
+  for (const t of legacy.tps) legacyBumpCwe(t.cwe, 'tp');
+  for (const x of legacy.fps) legacyBumpCwe(x.cwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
+  for (const x of legacy.fns) legacyBumpCwe(x.cwe, 'fn');
+  const legacyScoring = {
+    tp: legacyTp, fp: legacyFp, fn: legacyFn,
+    precision: legacyPrecision, recall: legacyRecall, f1: f1(legacyPrecision, legacyRecall),
+    perCwe: legacyPerCwe,
+  };
+
   // Per-family breakdown (positive class)
   const perFamily = {};
   const bump = (fam, k) => { (perFamily[fam] ??= {tp:0,fp:0,fn:0,tn:0,fpNeg:0})[k]++; };
@@ -1704,6 +1784,7 @@ async function runOne(name, app, vulnFamilyMap) {
     tpr, fpr, specificity, youden,
     negativesTotal: negatives.length, negTN: negTotalTN, negFP: negTotalFP,
     perFamily, perCwe, tps, fps, fns,
+    legacyScoring, // PRD §9.4 — see scoreLegacy's header comment.
     elapsedSec: parseFloat(elapsed),
     expectedTotal: expected.length,
     auditorVerifiedSource,

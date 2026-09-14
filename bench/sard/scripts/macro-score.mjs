@@ -196,6 +196,26 @@ function main() {
     const confusion = confusionMatrix(r.tps, r.fps);
     const localization = localizationAccuracy(r.tps);
 
+    // PRD §9.4 — "Separate score-only delta from scanner delta". Computed
+    // from bench-realworld.js's scoreLegacy() output: the SAME actual[]/
+    // expected[] as the primary result above, scored with the strict,
+    // pre-flow-aware-fallback matcher. Any delta between rawOldScorer and
+    // rescoredSameFindings below is BY CONSTRUCTION a scoring-methodology
+    // effect, not a scanner capability change — the two numbers come from
+    // one scan, not two. Absent (both null) for any report produced before
+    // this field existed, or for a non-strict/wildcard app where neither
+    // scorer variant is a meaningful vulnerability-level measurement anyway.
+    let scorerDelta = null;
+    if (r.legacyScoring) {
+      const legacyRows = perCweTable(r.legacyScoring.perCwe);
+      scorerDelta = {
+        rawOldScorer: macroF1(legacyRows),
+        rescoredSameFindings: macro,
+        scannerAfterChange: macro,
+        note: 'rawOldScorer and rescoredSameFindings are computed from the IDENTICAL scan (same actual[]/expected[]) — the delta between them is purely a scoring-methodology effect. scannerAfterChange currently just repeats rescoredSameFindings: this script has no mechanism (yet) for comparing against a genuinely PRIOR scan run from before a scanner code change — see bench/sard/IMPLEMENTATION_STATUS.md for how to interpret this until that exists.',
+      };
+    }
+
     report.apps.push({
       name: r.name,
       language: r.language,
@@ -208,6 +228,7 @@ function main() {
       aggregate: { tp: r.tp, fp: r.fp, fn: r.fn, precision: r.precision, recall: r.recall, microF1: r.f1 },
       macroF1: macro,
       macroF1MinSupport: macroMinSupport,
+      scorerDelta,
       cweCount: rows.length,
       perCwe: rows,
       cweConfusion: confusion,
@@ -233,6 +254,10 @@ function main() {
       const minSupPct = macroMinSupport.value === null ? 'n/a' : `${(macroMinSupport.value * 100).toFixed(1)}%`;
       mdLines.push('');
       mdLines.push(`> **Support-floor diagnostic**: ${macroMinSupport.excludedCwes.length} of ${rows.length} CWE(s) have fewer than ${MIN_SUPPORT_FOR_MACRO} expected instances (binary 0/1 F1, full 1/N weight in the headline macro-F1 above). Macro F1 restricted to CWEs with ≥${MIN_SUPPORT_FOR_MACRO} expected instances: **${minSupPct}** (over ${macroMinSupport.cweCount} CWEs). Low-support CWEs excluded from that figure: ${macroMinSupport.excludedCwes.map(c => `${c.cwe} (n=${c.support}, F1=${(c.f1 * 100).toFixed(0)}%)`).join(', ')}.`);
+    }
+    if (scorerDelta) {
+      mdLines.push('');
+      mdLines.push(`> **PRD §9.4 scorer-delta diagnostic** (same scan, both scorers): rawOldScorer (strict, pre-flow-aware) **${(scorerDelta.rawOldScorer * 100).toFixed(1)}%** → rescoredSameFindings (current scorer, same findings) **${(scorerDelta.rescoredSameFindings * 100).toFixed(1)}%** (${scorerDelta.rescoredSameFindings >= scorerDelta.rawOldScorer ? '+' : ''}${((scorerDelta.rescoredSameFindings - scorerDelta.rawOldScorer) * 100).toFixed(1)}pp — a PURE scoring-methodology delta, not a scanner improvement). scannerAfterChange is not independently measured here (no prior-scan comparison mechanism yet) and currently repeats rescoredSameFindings — do not read it as proof of a NEW detection gain until this script gains that capability.`);
     }
     mdLines.push('');
     mdLines.push('| CWE | TP | FP | FN | Precision | Recall | F1 |');

@@ -25,6 +25,7 @@ import {
   reachableFrom,
   findCsharpMethodSpans,
   score,
+  scoreLegacy,
 } from './benchmark/realworld/bench-realworld.js';
 
 test('findEnclosingMethod: picks the smallest containing span', () => {
@@ -135,6 +136,46 @@ test('score(): credits a finding relocated to a same-file helper the expected Ba
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+// PRD §9.4 "Separate score-only delta from scanner delta": scoreLegacy is
+// the strict, pre-§9.1 matcher, deliberately kept callable so a report can
+// show both numbers from ONE scan. This is the isolation proof: the EXACT
+// same actual[]/expected[] that score() credits (test just above) must be
+// an FN+FP under scoreLegacy — if it weren't, the scorer-delta diagnostic
+// would be measuring nothing.
+test('scoreLegacy(): does NOT credit the same relocated finding score() credits — same actual/expected, no call-graph fallback', () => {
+  const content = csContent({ sharedWithGood: false });
+  const methods = findCsharpMethodSpans(content);
+  const bad = methods.find(m => m.name === 'Bad');
+  const sinkLine = content.split('\n').findIndex(l => l.includes('searcher.Filter = data')) + 1;
+
+  const expected = [{
+    file: CS_REL, line: bad.startLine, lineEnd: bad.endLine,
+    lineTolerance: 0, matchAny: true, family: 'ldap-injection', cwe: 'CWE90', method: 'Bad',
+  }];
+  // Absolute path doesn't matter here — scoreLegacy never reads the
+  // filesystem (no call-graph lookup at all), unlike score().
+  const actual = [{ file: `/fake/${CS_REL}`, line: sinkLine, vuln: 'ldap-injection' }];
+
+  const { tps, fps, fns } = scoreLegacy(actual, expected, {}, []);
+  assert.equal(tps.length, 0, 'scoreLegacy must not apply the flow-aware fallback');
+  assert.equal(fps.length, 1, 'the relocated finding is a real FP under strict line-range matching');
+  assert.equal(fns.length, 1, 'and the expected Bad() entry is a real FN under strict line-range matching');
+});
+
+test('scoreLegacy() and score() agree on a DIRECT match (both credit a finding inside Bad()\'s own span)', () => {
+  const content = csContent({ sharedWithGood: false });
+  const methods = findCsharpMethodSpans(content);
+  const bad = methods.find(m => m.name === 'Bad');
+  const expected = [{
+    file: CS_REL, line: bad.startLine, lineEnd: bad.endLine,
+    lineTolerance: 0, matchAny: true, family: 'ldap-injection', cwe: 'CWE90', method: 'Bad',
+  }];
+  const actual = [{ file: `/fake/${CS_REL}`, line: bad.startLine + 1, vuln: 'ldap-injection' }];
+  const { tps, fps } = scoreLegacy(actual, expected, {}, []);
+  assert.equal(tps.length, 1);
+  assert.equal(fps.length, 0);
 });
 
 test('score(): does NOT credit a helper that is also reachable from a Good*() method (PRD §9.2)', async () => {

@@ -47,6 +47,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { bucketFor } from './split.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SARD_ROOT = path.resolve(HERE, '..');
@@ -101,6 +102,44 @@ function extractText(entryPath) {
 function opaqueCaseId(numericId) {
   return 'case_' + crypto.createHash('sha256').update(String(numericId)).digest('hex').slice(0, 10);
 }
+
+// Adversarial-premortem remediation (SARD_80_F1_SCANNER_PRD.md review, Round 1
+// finding F1.2): PHP had no train/dev/test split at all — split.mjs's
+// familyKeyFor only strips Juliet's `.java`/`.cs` extension + `_NN[ab]` flow-
+// variant suffix, and score-php.mjs never consumed a split even if one
+// existed. Every PHP number reported anywhere in this ledger to date was
+// fit-and-report on the same undivided sample.
+//
+// This corpus (Stivalet & Delaitre, SARD PHP Vulnerability Test Suite) does
+// NOT use Juliet's `_NN[ab]` numbered-variant convention — confirmed by
+// direct inspection of all 42,212 case filenames (`unzip -l`, this session):
+// every descriptor filename is unique, and the numeric directory ID carries
+// no structural meaning of its own. Its actual near-duplicate axis is
+// different: the filename is
+// `CWE_<N>__<source>__<sanitizer>__<sink-descriptor>[-<encoding>][_<quote-style>].php`,
+// and the SAME (CWE, source, sanitizer, sink) combination recurs across
+// several cases differing ONLY in cosmetic surface syntax — a trailing
+// `_simple_quote`/`_double_quote` suffix, or which literal printf format
+// specifier (`%s`/`%d`/`%u`/...) the sink descriptor names. Verified
+// empirically (not guessed): stripping exactly those two cosmetic axes
+// collapses the corpus's 42,212 unique filenames into 35,588 family keys,
+// with real multi-member families (e.g. 5 members per {CWE, source,
+// sanitizer, sink} combination — one per format-specifier/quote-style
+// permutation actually generated). Leaving either axis unstripped would
+// split near-identical surface variants of the same underlying vulnerability
+// across train/dev/test, exactly the leakage this exists to prevent.
+export function phpFamilyKeyFor(descriptorFilename) {
+  return String(descriptorFilename)
+    .replace(/\.php$/i, '')
+    .replace(/_simple_quote$/i, '')
+    .replace(/_double_quote$/i, '')
+    .replace(/-sprintf_%[a-zA-Z]$/i, '-sprintf');
+}
+
+// Same seed/algorithm split.mjs uses for Java/C# (imported bucketFor, not
+// reimplemented) — one shared split concept across all three languages
+// rather than a parallel, potentially-inconsistent PHP-only notion of it.
+export const PHP_SPLIT_SEED = 'sard-split-v1';
 
 // Strip PHP comments (// # and /* */), preserving newline count so SARIF
 // line numbers still index correctly into the neutralized file — the same
@@ -235,12 +274,20 @@ function main() {
     const cwe = result?.ruleId || null; // e.g. "CWE-90"; null for a "good" case
     const line = result?.locations?.[0]?.physicalLocation?.region?.startLine ?? null;
     const family = cwe ? (CWE_TO_FAMILY[cwe] || null) : null;
+    // Split assignment happens HERE, at ingest time, while the real
+    // descriptor filename (artifactUri's basename) is still in hand — it is
+    // never written to gold.json itself (only the opaque caseId is), so the
+    // split key can't leak the original filename downstream. See
+    // phpFamilyKeyFor's header comment for why this corpus needs a different
+    // family-key shape than Java/C#'s Juliet-suffix stripping.
+    const templateFamily = phpFamilyKeyFor(path.basename(artifactUri));
+    const split = bucketFor(PHP_SPLIT_SEED, templateFamily);
 
     const neutralized = neutralizeIdentifiers(stripPhpComments(srcText));
     fs.mkdirSync(caseDir, { recursive: true });
     fs.writeFileSync(path.join(caseDir, 'src.php'), neutralized);
 
-    const entry = { caseId, state, cwe, family, file: 'src.php', line, originalId: numericId };
+    const entry = { caseId, state, cwe, family, file: 'src.php', line, originalId: numericId, split };
     goldByCase.set(caseId, entry);
     ingested++;
   }
@@ -251,6 +298,11 @@ function main() {
   console.log(`\nPHP SARD ingestion: ${ingested} ingested, ${skipped} already present (skipped), ${malformed} malformed.`);
   console.log(`Gold store: ${finalGold.length} total entries → ${path.relative(process.cwd(), GOLD_PATH)}`);
   console.log(`Workspace:  ${path.relative(process.cwd(), WORKSPACE_ROOT)}`);
+  const splitCounts = { train: 0, dev: 0, test: 0 };
+  for (const g of finalGold) if (g.split) splitCounts[g.split]++;
+  const noSplit = finalGold.length - (splitCounts.train + splitCounts.dev + splitCounts.test);
+  console.log(`Split (family-keyed, seed=${PHP_SPLIT_SEED}): train=${splitCounts.train} dev=${splitCounts.dev} test=${splitCounts.test}` +
+    (noSplit ? `  ⚠ ${noSplit} entries carry no split field (ingested by an older script version — re-ingest to backfill)` : ''));
   const badCount = finalGold.filter(g => g.state === 'bad').length;
   const unmappedCwe = finalGold.filter(g => g.state === 'bad' && g.cwe && !g.family);
   console.log(`  state=bad: ${badCount}, state=good: ${finalGold.length - badCount}`);
@@ -260,4 +312,4 @@ function main() {
   }
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) main();

@@ -44,6 +44,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = process.env.SARD_BASELINE_REPORTS_DIR_FOR_TESTS || path.join(HERE, '..', 'reports');
 const LATEST_PATH = path.join(REPORTS_DIR, 'latest.json');
 const BASELINE_PATH = path.join(REPORTS_DIR, 'baseline.json');
+const AUDIT_LOG_PATH = path.join(REPORTS_DIR, 'baseline-update-log.jsonl');
 
 const TOLERANCE = 0.02; // 2 percentage points — configurable via thresholds.json in a future pass, not needed yet with only 2 apps.
 const MIN_SUPPORT = 5; // per-CWE regressions below this many expected entries are noise, not signal.
@@ -86,7 +87,43 @@ export function adaptiveTolerance(baseTolerance, support) {
 
 function args() {
   const a = process.argv.slice(2);
-  return { update: a.includes('--update-baseline'), check: a.includes('--check-baseline') };
+  const reasonIdx = a.indexOf('--reason');
+  return {
+    update: a.includes('--update-baseline'),
+    check: a.includes('--check-baseline'),
+    reason: reasonIdx !== -1 ? a[reasonIdx + 1] : null,
+  };
+}
+
+// Adversarial-premortem remediation (SARD_80_F1_SCANNER_PRD.md review, Round 2
+// finding F2.3 / Round 5 finding F5.2): `--update-baseline` took no reason
+// argument, showed no diff, and left no trace — the exact workflow used to
+// produce every number in this project's own history, checked by nothing but
+// the prose ledger the same party writes. The fix is deliberately NOT
+// "commit baseline.json to git" (an earlier draft of this finding proposed
+// that): bench/README.md's policy against committing raw benchmark scores is
+// itself a deliberate, reasoned decision (this script's own header explains
+// why), and a JSONL audit log containing real F1 numbers would violate it
+// exactly as directly as committing baseline.json would. So the log stays
+// LOCAL and gitignored too (bench/sard/reports/*.jsonl) — this does not make
+// the workflow independently auditable by a third party, and doesn't claim
+// to. What it does: requires a human/agent to state WHY before overwriting a
+// baseline (a moment of deliberate justification instead of a silent
+// overwrite), and gives THIS machine's own operator a forensic trail to
+// check against if a later number looks suspicious — strictly better than
+// the previous "no trace of any kind," not a claim of external audit.
+function appendAuditLog(reason, before, after) {
+  fs.mkdirSync(path.dirname(AUDIT_LOG_PATH), { recursive: true });
+  const entry = {
+    timestamp: new Date().toISOString(),
+    reason,
+    apps: after.apps.map(a => ({
+      name: a.name,
+      macroF1Before: before?.apps?.find(b => b.name === a.name)?.macroF1 ?? null,
+      macroF1After: a.macroF1,
+    })),
+  };
+  fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(entry) + '\n');
 }
 
 function main() {
@@ -102,8 +139,18 @@ function main() {
   const latest = JSON.parse(fs.readFileSync(LATEST_PATH, 'utf8'));
 
   if (opts.update) {
+    if (!opts.reason || !opts.reason.trim()) {
+      console.error('✗ --update-baseline requires --reason "<why this new number is a legitimate baseline>".');
+      console.error('  This does not gatekeep the update — it requires you to have an actual reason before overwriting');
+      console.error('  the number future runs regress against. State the reason, don\'t just repeat the command with one.');
+      process.exit(2);
+    }
+    const before = fs.existsSync(BASELINE_PATH) ? JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')) : null;
     fs.writeFileSync(BASELINE_PATH, JSON.stringify(latest, null, 2) + '\n');
+    appendAuditLog(opts.reason, before, latest);
     console.log(`✓ baseline updated (local-only, gitignored) from ${latest.apps.length} app(s): ${path.relative(process.cwd(), BASELINE_PATH)}`);
+    console.log(`  reason: ${opts.reason}`);
+    console.log(`  logged to ${path.relative(process.cwd(), AUDIT_LOG_PATH)} (also local-only — see this script's header)`);
     for (const app of latest.apps) console.log(`  ${app.name}: macroF1=${(app.macroF1 * 100).toFixed(1)}% microF1=${(app.aggregate.microF1 * 100).toFixed(1)}%`);
     return;
   }
