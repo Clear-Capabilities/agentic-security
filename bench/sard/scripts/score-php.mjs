@@ -140,7 +140,7 @@ async function main() {
     try {
       const { scan } = await runScan(caseDir, opts.deep ? { deep: true } : {});
       findings = scan.findings || [];
-      if (opts.deep && scan.analysisTier && scan.analysisTier.irTaint) deepTierSeen = true;
+      if (opts.deep && scan._scanMeta && scan._scanMeta.analysisTier && scan._scanMeta.analysisTier.irTaint && scan._scanMeta.analysisTier.irTaint.php) deepTierSeen = true;
     } catch (e) {
       console.error(`  ⚠ ${g.caseId}: scan failed (${e.message})`);
       continue;
