@@ -1461,6 +1461,32 @@ export async function score(actual, expected, vulnFamilyMap, scanRoot, wildcardF
 function f1(p, r) { return p+r === 0 ? 0 : (2*p*r)/(p+r); }
 function pad(s, n) { s = String(s); return s.length >= n ? s : s + ' '.repeat(n - s.length); }
 
+// SARD_80_F1 (C# investigation): `buildJulietCsExpected` builds its gold
+// entries' `cwe` field as `CWE${n}` — no dash (see its `const cwe =
+// \`CWE${m[1]}\`;` line) — while the actual finding side's fallback in
+// `bumpCwe`/`legacyBumpCwe` below extracts `CWE-\d+` (WITH a dash, the
+// standard format `dataflow/catalog.js` and every non-Juliet detector use)
+// whenever a finding carries no `reportedCwe`. TP/FN bump off the
+// EXPECTED entry's `cwe` (dash-less for C#), while FP bump off the
+// FINDING's own cwe text (dashed) — two keys that can never collide for
+// the SAME real CWE, so the per-CWE table silently split into two
+// disjoint buckets: one holding only tp/fn (100% precision, looks
+// perfect), one holding only fp (0% precision, reads as an unrelated
+// phantom CWE) — corrupting the CWE COUNT the macro-F1 average divides
+// by, not just cosmetic. Canonicalizing to bare digits (`22`, not
+// `CWE22`/`CWE-22`) before bumping merges both sides onto the SAME row
+// regardless of which builder produced which side's dash convention.
+export function _cweDigits(cwe) {
+  const m = String(cwe || '').match(/(\d+)/);
+  return m ? m[1] : null;
+}
+// Canonical display key both bump functions key on — `CWE-NN`, dash
+// included, regardless of which side's raw string did or didn't have one.
+export function _cweKey(cwe) {
+  const d = _cweDigits(cwe);
+  return d ? `CWE-${d}` : null;
+}
+
 async function runOne(name, app, vulnFamilyMap) {
   // --strip-all-comments implies --blind. The "blind" label in stderr is
   // augmented so the user can tell the strictest mode apart from
@@ -1708,9 +1734,9 @@ async function runOne(name, app, vulnFamilyMap) {
   const legacyPrecision = legacyTp+legacyFp === 0 ? 1 : legacyTp/(legacyTp+legacyFp);
   const legacyRecall    = legacyTp+legacyFn === 0 ? 1 : legacyTp/(legacyTp+legacyFn);
   const legacyPerCwe = {};
-  const legacyBumpCwe = (cwe, k) => { if (!cwe) return; (legacyPerCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++; };
+  const legacyBumpCwe = (cwe, k) => { const key = _cweKey(cwe); if (!key) return; (legacyPerCwe[key] ??= {tp:0,fp:0,fn:0})[k]++; };
   for (const t of legacy.tps) legacyBumpCwe(t.cwe, 'tp');
-  for (const x of legacy.fps) legacyBumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
+  for (const x of legacy.fps) legacyBumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-?\d+/)?.[0])), 'fp');
   for (const x of legacy.fns) legacyBumpCwe(x.cwe, 'fn');
   const legacyScoring = {
     tp: legacyTp, fp: legacyFp, fn: legacyFn,
@@ -1741,9 +1767,9 @@ async function runOne(name, app, vulnFamilyMap) {
   // (an earlier session's own ledger entry, this session's C# investigation,
   // and bench/sard/scripts/naive-baseline.mjs's very first real run).
   const perCwe = {};
-  const bumpCwe = (cwe, k) => { if (!cwe) return; (perCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++; };
+  const bumpCwe = (cwe, k) => { const key = _cweKey(cwe); if (!key) return; (perCwe[key] ??= {tp:0,fp:0,fn:0})[k]++; };
   for (const t of tps) bumpCwe(t.cwe, 'tp');
-  for (const x of fps) bumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
+  for (const x of fps) bumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-?\d+/)?.[0])), 'fp');
   for (const x of fns) bumpCwe(x.cwe, 'fn');
 
   // Youden Index (TPR − FPR) — requires a real negative class. OWASP Benchmark
