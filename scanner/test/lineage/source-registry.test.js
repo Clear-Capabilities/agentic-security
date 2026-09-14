@@ -223,7 +223,7 @@ test('unsupported (defensive fallback): a synthetic no-provenance entry with an 
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned coverage counts: 122 modeled / 14 partial / 90 candidate / 0 unsupported', () => {
+test('pinned coverage counts: re-measured after merging the Rust + Java SARD catalog additions', () => {
   const results = SOURCES.map(reclassifySource);
   // SARD_AGENTIC_SECURITY_PRD.md work added 5 no-provenance Java/PHP source
   // entries (java-io-readline, java-resultset-getstring/-getobject,
@@ -233,15 +233,19 @@ test('pinned coverage counts: 122 modeled / 14 partial / 90 candidate / 0 unsupp
   // 3 annotation-based extractor rows with no matching PROVENANCE_MAP row of
   // their own so they resolve `candidate` (rs-extract-httprequest/-request,
   // rs-closure-extract-request via NO_PROVENANCE_OVERRIDES), the rest carry
-  // real `provenance` values and resolve `modeled` — 185 -> 226,
-  // 84 -> 122 modeled, 87 -> 90 candidate, partial unchanged at 14.
-  assert.equal(SOURCES.length, 226);
+  // real `provenance` values and resolve `modeled`. Java's own SARD push
+  // separately added 3 more no-provenance servlet sources (getAttribute,
+  // getQueryString, Cookie.getValue), also `candidate` via
+  // NO_PROVENANCE_OVERRIDES. Both landed on top of each other in the same
+  // merge; the figures below are re-measured against the merged catalog,
+  // not summed by hand from each branch's own delta.
+  assert.equal(SOURCES.length, 229);
   assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 122);
   // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 90);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 93);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(122 + 14 + 90, SOURCES.length);
+  assert.equal(122 + 14 + 93, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

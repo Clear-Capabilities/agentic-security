@@ -243,6 +243,13 @@ export const CATALOG = [
   // do not assume it is actually gating anything yet.
   { kind: 'source', id: 'java-resultset-getstring',    language: 'java', framework: 'jdbc',    match: { type: 'call', callee: 'getString', receiverTypeIn: ['resultset'] }, label: 'ResultSet.getString' },
   { kind: 'source', id: 'java-resultset-getobject',    language: 'java', framework: 'jdbc',    match: { type: 'call', callee: 'getObject', receiverTypeIn: ['resultset'] }, label: 'ResultSet.getObject' },
+  // SARD_80_F1_SCANNER_PRD.md Juliet Java audit: getAttribute/getQueryString
+  // are as common as getParameter in the servlet source set the catalog
+  // already covers, and Cookie.getValue is the standard way the array
+  // returned by the already-cataloged getCookies() is actually read.
+  { kind: 'source', id: 'java-request-getAttribute',   language: 'java', framework: 'servlet', match: { type: 'call', callee: 'getAttribute' },   label: 'request.getAttribute' },
+  { kind: 'source', id: 'java-request-getQueryString', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'getQueryString' }, label: 'request.getQueryString' },
+  { kind: 'source', id: 'java-cookie-getvalue',        language: 'java', framework: 'servlet', match: { type: 'call', callee: 'getValue' },       label: 'Cookie.getValue' },
 
   // ─── SOURCES (Annotation/Decorator-shaped) ────────────────────────────────
   // R14(a): annotation/decorator-shaped framework sources (Spring @RequestParam,
@@ -792,6 +799,26 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-new-File',    language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'File' }, argIndex: 0,
     vuln: { name: 'Path Traversal (new File)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Canonicalize with Path.normalize + startsWith(base).' } },
+  // Juliet's own dominant file-sink shapes: `new FileInputStream(path)`,
+  // `new FileReader(path)`, `new RandomAccessFile(path, mode)`. Each is a
+  // distinct constructor (not an alias for `new File(...)`, which some
+  // callers wrap it around instead), so `java-new-File`'s bare `callee:
+  // 'File'` never matches any of them.
+  { kind: 'sink', id: 'java-new-FileInputStream', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'FileInputStream' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (new FileInputStream)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path and verify it stays within an allow-listed base directory before opening it.' } },
+  { kind: 'sink', id: 'java-new-FileOutputStream', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'FileOutputStream' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (new FileOutputStream)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path and verify it stays within an allow-listed base directory before opening it.' } },
+  { kind: 'sink', id: 'java-new-FileReader', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'FileReader' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (new FileReader)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path and verify it stays within an allow-listed base directory before opening it.' } },
+  { kind: 'sink', id: 'java-new-FileWriter', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'FileWriter' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (new FileWriter)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path and verify it stays within an allow-listed base directory before opening it.' } },
+  { kind: 'sink', id: 'java-new-RandomAccessFile', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'RandomAccessFile' }, argIndex: 0,
+    vuln: { name: 'Path Traversal (new RandomAccessFile)', severity: 'high', cwe: 'CWE-22',
+            remediation: 'Canonicalize the path and verify it stays within an allow-listed base directory before opening it.' } },
   { kind: 'sink', id: 'go-os-open',       language: 'go', framework: 'os',      match: { type: 'call', callee: 'Open' }, argIndex: 0,
     vuln: { name: 'Path Traversal (os.Open)', severity: 'high', cwe: 'CWE-22',
             remediation: 'Use filepath.Clean + verify the path is rooted in your allow-list dir.' } },
@@ -1206,6 +1233,35 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-servlet-setheader', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
+  { kind: 'sink', id: 'java-servlet-addheader', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'addHeader' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.addHeader)', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
+  // `Cookie`'s own value comes from its constructor's 2nd arg, so the sink
+  // is the constructor, not addCookie() (which only ever receives the
+  // already-built Cookie object).
+  { kind: 'sink', id: 'java-new-Cookie', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'Cookie' }, argIndex: 1,
+    vuln: { name: 'HTTP Response Splitting / Header Injection (new Cookie(name, value))', severity: 'high', cwe: 'CWE-113',
+            remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a cookie value.' } },
+  // CWE-470: unsafe reflection. Juliet's canonical shape passes a
+  // user-controlled class name straight to Class.forName, then constructs
+  // or invokes it — the class-name argument is the attacker's real lever.
+  { kind: 'sink', id: 'java-class-forname', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'forName' }, argIndex: 0,
+    vuln: { name: 'Unsafe Reflection (Class.forName)', severity: 'high', cwe: 'CWE-470',
+            remediation: 'Validate the class name against an explicit allow-list before loading it reflectively.' } },
+  { kind: 'sink', id: 'java-method-invoke', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'invoke', receiver: '^method$' }, argIndex: 'all',
+    vuln: { name: 'Unsafe Reflection (Method.invoke)', severity: 'high', cwe: 'CWE-470',
+            remediation: 'Validate the target method/class against an explicit allow-list before invoking it reflectively.' } },
+  // CWE-134: uncontrolled format string. `String.format`/`Formatter.format`/
+  // `PrintStream.printf` all treat arg 0 as the format string itself; a
+  // tainted format string (as opposed to a tainted format ARGUMENT, which is
+  // ordinary and safe) can leak memory contents via `%s`/`%n$s` or crash the
+  // process.
+  { kind: 'sink', id: 'java-string-format', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'format' }, argIndex: 0,
+    vuln: { name: 'Uncontrolled Format String (String.format / Formatter.format)', severity: 'medium', cwe: 'CWE-134',
+            remediation: 'Never pass user input as the format string itself; use a fixed format string and pass user input only as an argument.' } },
+  { kind: 'sink', id: 'java-printstream-printf', language: 'java', framework: 'stdlib', match: { type: 'call', callee: 'printf' }, argIndex: 0,
+    vuln: { name: 'Uncontrolled Format String (PrintStream.printf)', severity: 'medium', cwe: 'CWE-134',
+            remediation: 'Never pass user input as the format string itself; use a fixed format string and pass user input only as an argument.' } },
   { kind: 'sink', id: 'kt-servlet-setheader', language: 'kt', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },

@@ -81,6 +81,29 @@ import { blankComments } from './_comment-strip.js';
 
 function _lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
+// SARD_80_F1_SCANNER_PRD.md Juliet Java audit: `hasOIS` (file-wide) plus a
+// bare `\w+.readObject()` anywhere in the same file was measured at 122 FPs
+// on real corpus fixtures — the file-wide check does not require the CALL's
+// own receiver to be the tracked ObjectInputStream variable, so a file that
+// merely constructs an OIS somewhere (even for a genuinely unrelated
+// CWE's own source idiom) makes every OTHER bare `.readObject()` call in
+// the file match too, regardless of that call's own receiver type. Track
+// the actual variable name(s) assigned from `new ObjectInputStream(...)`
+// and require the receiver to be one of them — real correlation between
+// the construction and the call, not file-wide co-occurrence.
+const OIS_VAR_RE = /\bObjectInputStream\s+(\w+)\s*=\s*new\s+ObjectInputStream\b|\b(\w+)\s*=\s*new\s+ObjectInputStream\b/g;
+
+function _objectInputStreamVars(code) {
+  const vars = new Set();
+  let m;
+  const re = new RegExp(OIS_VAR_RE.source, OIS_VAR_RE.flags);
+  while ((m = re.exec(code))) {
+    const name = m[1] || m[2];
+    if (name) vars.add(name);
+  }
+  return vars;
+}
+
 export function scanJavaDeserialization(fp, raw) {
   if (!/\.(?:java|kt|kts|scala|groovy|gradle)$/i.test(fp)) return [];
   if (!raw || raw.length > 500_000) return [];
@@ -89,6 +112,7 @@ export function scanJavaDeserialization(fp, raw) {
   // one, a bare .readObject() call is almost certainly RMI/JDBC/socket noise
   // unrelated to native serialization gadgets.
   const hasOIS = /\bnew\s+ObjectInputStream\b/.test(code);
+  const oisVars = _objectInputStreamVars(code);
   // Pre-pass for XStream — gate the broad `.fromXML(` regex.
   const hasXStream = /\bXStream\b|\bxstream\.|com\.thoughtworks\.xstream/.test(code);
   const findings = [];
@@ -104,8 +128,13 @@ export function scanJavaDeserialization(fp, raw) {
       if (p.requireOIS && !hasOIS) continue;
       // For the ObjectInputStream pattern, the second branch (bare \w+.readObject)
       // only fires when there's an OIS in the file AND the method receiver isn't
-      // obviously a JDBC ResultSet (rs/results/rset names).
-      if (p.requireOIS && m[1] && /^(?:rs|result|results|rset|resultset)$/i.test(m[1])) continue;
+      // obviously a JDBC ResultSet (rs/results/rset names) AND the receiver is
+      // actually a variable this file constructed as an ObjectInputStream —
+      // real correlation, not just file-wide co-occurrence (see oisVars above).
+      if (p.requireOIS && m[1]) {
+        if (/^(?:rs|result|results|rset|resultset)$/i.test(m[1])) continue;
+        if (!oisVars.has(m[1])) continue;
+      }
       const line = _lineOf(raw, m.index);
       push({
         id: `java-deser:${fp}:${line}:${p.name.replace(/\s+/g, '_')}`,

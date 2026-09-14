@@ -202,12 +202,13 @@ test('D3/preservation: a real entry with no confident mapping is `unsupported` a
 
 test('D3/preservation: every `unsupported` sink entry carries a non-empty reason (no silent drop is possible)', () => {
   const unsupported = SINKS.map(reclassifySink).filter((r) => r.coverageStatus === 'unsupported');
-  // 83 -> 99: the Rust catalog additions (SARD 80% F1 push) added 10
-  // CWE-78 command-injection sinks (Command::new + 9 shell-arg terminal
-  // methods) and 1 CWE-770 resource-exhaustion sink, all mapped
-  // `unsupported` by CWE_MAP's own pre-existing rows for those CWEs —
-  // recomputed live against the current catalog, not hand-counted.
-  assert.equal(unsupported.length, 99);
+  // Both the Rust catalog additions (SARD 80% F1 push: 10 CWE-78
+  // command-injection sinks + 1 CWE-770 resource-exhaustion sink, all
+  // mapped `unsupported` by CWE_MAP's own pre-existing rows) and the Java
+  // SARD push (2 new CWEs, CWE-470/CWE-134, each `unsupported`) landed in
+  // the same merge. Re-measured against the merged catalog, not
+  // hand-summed from either branch's own delta.
+  assert.equal(unsupported.length, 103);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -450,7 +451,7 @@ test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DIST
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned sink coverage counts: 165 modeled / 6 partial / 9 candidate / 99 unsupported', () => {
+test('pinned sink coverage counts: re-measured after merging the Rust + Java SARD catalog additions', () => {
   // 194 -> 198 entries and 97 -> 101 modeled: Sub-project H's AC-07 closure
   // added the four CWE-201 AI-model-provider sink entries (OpenAI
   // chat.completions/responses, Anthropic messages, Bedrock
@@ -461,20 +462,23 @@ test('pinned sink coverage counts: 165 modeled / 6 partial / 9 candidate / 99 un
   // (Process.Start non-shell-literal command injection, CWE-78) —
   // `unsupported` because FR-201's category vocabulary has no `process`/
   // shell-execution category, the same reason the pre-existing
-  // `cs-process-start` entry is also unsupported.
-  // 200 -> 279: the Rust catalog additions (SARD 80% F1 push, 79 new sink
-  // entries) added a new `log` CWE_MAP row (CWE-117) contributing to
-  // `modeled`, 4 new CWE-79 `http-response`/modeled entries, 10 CWE-78 +
-  // 1 CWE-770 `unsupported` entries, and the rest modeled real-category
-  // sinks (SQLi/path/SSRF/redirect/deserialization). Re-measured against
-  // the live catalog, not adjusted by arithmetic.
+  // `cs-process-start` entry is also unsupported. Both the Rust catalog
+  // additions (SARD 80% F1 push, 79 new sink entries: a new `log` CWE_MAP
+  // row (CWE-117) contributing to `modeled`, 4 new CWE-79
+  // `http-response`/modeled entries, 10 CWE-78 + 1 CWE-770 `unsupported`
+  // entries, the rest modeled real-category sinks) and the Java SARD push
+  // (11 sinks: 5 CWE-22 file-constructor sinks + 2 CWE-113 header sinks,
+  // all `modeled`, plus 2 new CWEs, CWE-470/CWE-134, each `unsupported`,
+  // neither an FR-201 egress category, same reasoning as the existing
+  // CWE-95/CWE-1333 rows) landed in the same merge. Re-measured against
+  // the merged catalog, not hand-summed from either branch's own delta.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 279);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 165);
+  assert.equal(SINKS.length, 290);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 172);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 99);
-  assert.equal(165 + 6 + 9 + 99, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 103);
+  assert.equal(172 + 6 + 9 + 103, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

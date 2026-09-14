@@ -149,6 +149,13 @@ export const CWE_MAP = Object.freeze({
   // Rust catalog additions (SARD 80% F1 push).
   'CWE-117':  Object.freeze({ category: 'log', status: 'modeled', why: 'log injection — the sink IS a log-writing call (log!/tracing! macros)' }),
   'CWE-770':  Object.freeze({ category: null, status: 'unsupported', why: 'uncontrolled resource consumption — the sink is an in-process allocation, not an egress destination' }),
+  // SARD_80_F1_SCANNER_PRD.md Juliet Java audit: two CWEs newly added to
+  // CATALOG (Class.forName/Method.invoke reflection; String.format/printf
+  // uncontrolled format string). Both are in-process-computation
+  // destinations, same class as CWE-95/CWE-1333 above — no FR-201 egress
+  // category models either.
+  'CWE-470':  Object.freeze({ category: null, status: 'unsupported', why: 'unsafe reflection — destination is the class loader / reflection API, not an FR-201 egress category' }),
+  'CWE-134':  Object.freeze({ category: null, status: 'unsupported', why: 'uncontrolled format string — destination is the string formatter, not an FR-201 egress category' }),
 });
 
 // §5.2 — CWE-79's refinement key. FR-201 lumps "browser DOM or client

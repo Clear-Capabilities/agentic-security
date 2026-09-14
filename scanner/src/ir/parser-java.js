@@ -57,6 +57,18 @@ function exprFromCst(node) {
   }
   if (node.children) {
     // CST node with named children — recurse into the most informative one.
+    // Assignment: java-parser models `x = y` (and `x += y`) as a
+    // binaryExpression whose children are {unaryExpression (LHS),
+    // AssignmentOperator, expression (RHS)}. There is no BinaryOperator
+    // token, so this shape previously fell through to the generic
+    // "recurse the first child" branch and lowered to the LHS alone: every
+    // expression-statement assignment in a method body vanished from the CFG.
+    if (node.children.AssignmentOperator) {
+      const op = node.children.AssignmentOperator[0]?.image || '=';
+      const lhs = node.children.unaryExpression?.[0];
+      const rhs = node.children.expression?.[0];
+      return { kind: 'binary', op, left: exprFromCst(lhs), right: exprFromCst(rhs) };
+    }
     // Method invocation
     if (node.children.methodInvocation) return _methodInvocation(node.children.methodInvocation[0]);
     // `primary` is how java-parser actually models a call: the name lives in
@@ -118,11 +130,47 @@ function exprFromCst(node) {
       // own args ahead of the constructor's, preserving the outermost-first
       // convention.
       const ctorPrefix = prefix?.children?.newExpression?.[0]?.children?.unqualifiedClassInstanceCreationExpression?.[0];
+      // `(new X(args)).m(a)`: the parenthesized-constructor form Juliet's
+      // multi-file flow variants use for every cross-class sink call. The
+      // prefix is a parenthesisExpression wrapping the constructor, so
+      // neither the fqn nor the ctorPrefix branch below sees it and the
+      // chain used to lower to a bare `m` with the class name dropped.
+      // Seed the chain from the inner lowered constructor exactly like the
+      // direct `new X().m()` form so callgraph.js's `Class.method` index
+      // can resolve it.
+      const parenInner = prefix?.children?.parenthesisExpression?.[0]?.children?.expression?.[0];
+      let parenExpr = null;
+      // Tracks whether the chain so far is STILL exactly the bare
+      // constructor call with no method invoked on the result yet — cleared
+      // the moment the suffix loop below consumes a real
+      // methodInvocationSuffix. Only in that still-true state does the
+      // eventual return carry `isNew: true`, matching class-hierarchy.js's
+      // `typeOfVar` contract (`b.action(data)` for `A_81_base b = new
+      // A_81_bad();` needs the RHS lowered with isNew so allocation-typed
+      // dispatch can resolve `b`'s declared type); `(new B()).badSink(x)`
+      // must NOT carry it, since the resulting call IS `B.badSink`, not a
+      // constructor.
+      let isCtorSeed = false;
       if (fqn) {
         chainCallee = _flattenFqnToString(fqn);
       } else if (ctorPrefix) {
-        chainCallee = ctorPrefix.children?.classOrInterfaceTypeToInstantiate?.[0]?.children?.Identifier?.[0]?.image || '';
+        chainCallee = _ctorClassName(ctorPrefix);
         chainArgs = (ctorPrefix.children?.argumentList?.[0]?.children?.expression || []).map(exprFromCst);
+        isCtorSeed = true;
+      } else if (parenInner) {
+        parenExpr = exprFromCst(parenInner);
+        if (parenExpr.kind === 'call' && parenExpr.isNew) {
+          chainCallee = parenExpr.callee;
+          chainArgs = parenExpr.args || [];
+          isCtorSeed = true;
+        } else if (!suffixes.length) {
+          return parenExpr;
+        } else {
+          // `(a + b).toString()`: no textual receiver name exists. Carry the
+          // inner expression as an extra argument so its taint still reaches
+          // the chained call (recall-preserving, mirrors receiver-taint).
+          chainArgs = [parenExpr];
+        }
       }
       // No FQN/constructor prefix — e.g. `this.foo(x)`, `super.foo(x)`
       // (prefix is a keyword expression). chainCallee starts empty; the
@@ -140,16 +188,30 @@ function exprFromCst(node) {
           appendPending();
           const args = (inv.children?.argumentList?.[0]?.children?.expression || []).map(exprFromCst);
           chainArgs = chainArgs === null ? args : args.concat(chainArgs);
+          isCtorSeed = false; // a real method is now being invoked on the constructed object
           continue;
         }
         const ident = suf.children?.Identifier?.[0]?.image;
-        if (ident) pendingName.push(ident);
+        if (ident) { pendingName.push(ident); isCtorSeed = false; }
       }
       if (chainArgs !== null) {
         appendPending(); // a trailing member access after the last call (e.g. a field read)
-        return { kind: 'call', callee: chainCallee || 'unknown', args: chainArgs };
+        return { kind: 'call', callee: chainCallee || 'unknown', args: chainArgs, ...(isCtorSeed ? { isNew: true } : {}) };
       }
-      return exprFromCst(prefix);
+      // No call anywhere in the chain: a plain member read such as
+      // `this.inst` or `obj.field` (an fqn prefix already lowers to a member
+      // chain on its own; this covers the `this`/`super`/parenthesized
+      // prefix shapes whose member suffixes were previously discarded).
+      if (pendingName.length) {
+        let cur = parenExpr || exprFromCst(prefix);
+        for (const p of pendingName) cur = { kind: 'member', object: cur, prop: p };
+        return cur;
+      }
+      return parenExpr || exprFromCst(prefix);
+    }
+    if (node.children.parenthesisExpression) {
+      const inner = node.children.parenthesisExpression[0]?.children?.expression?.[0];
+      if (inner) return exprFromCst(inner);
     }
     // Taint-recall PRD (80%): a cast expression — `(String) xp.evaluate(...)`,
     // `(int) computeVal(x)` — was falling through to the generic "recurse the
@@ -175,7 +237,7 @@ function exprFromCst(node) {
     if (node.children.fqnOrRefType) return _fqnExpr(node.children.fqnOrRefType[0]);
     if (node.children.unqualifiedClassInstanceCreationExpression) {
       const ci = node.children.unqualifiedClassInstanceCreationExpression[0];
-      const callee = (ci.children?.classOrInterfaceTypeToInstantiate?.[0]?.children?.Identifier?.[0]?.image) || 'new';
+      const callee = _ctorClassName(ci) || 'new';
       // Taint-recall PRD (80%): args was hardcoded to [] — every
       // `new X(arg1, arg2)` constructor call lowered with its arguments
       // silently discarded, so a sink modeled as a constructor call
@@ -260,6 +322,145 @@ function _fqnIdents(node) {
   return out;
 }
 
+const _ASSIGN_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
+function _isAssignment(expr) {
+  return !!expr && expr.kind === 'binary' && _ASSIGN_OPS.has(expr.op);
+}
+
+// Dotted access-path string for a member chain rooted at an identifier or
+// `this`; null when the chain is rooted at something with no name (a call
+// result, a literal).
+function _memberPath(expr) {
+  if (!expr) return null;
+  if (expr.kind === 'ident') return expr.name;
+  if (expr.kind === 'member') {
+    const base = _memberPath(expr.object);
+    return base ? `${base}.${expr.prop}` : null;
+  }
+  return null;
+}
+
+// Targets for one lowered assignment LHS. See emitAssignment for why a
+// field write yields a bare alias alongside its qualified path.
+function _assignTargets(left) {
+  const path = _memberPath(left);
+  if (!path) return [];
+  if (!path.includes('.')) return [path];
+  const segs = path.split('.');
+  const out = [path];
+  if (segs.length === 2 && (segs[0] === 'this' || /^[A-Z]/.test(segs[0]))) out.push(segs[1]);
+  return out;
+}
+
+// { name, line, bases, fields } for one class/interface declaration node.
+// `classType` (extends) and each `interfaceType` (implements) both bottom
+// out at a plain `Identifier` array — a fully-qualified supertype
+// (`extends java.util.AbstractList`) yields multiple Identifier tokens, of
+// which only the LAST is the actual type name, matching `_ctorClassName`'s
+// same convention. Field names come from every `fieldDeclaration`'s
+// `variableDeclaratorList` directly under `classBody` — one declaration can
+// name several comma-separated fields (`private String inst, other;`).
+function _classRecord(node, name) {
+  const bases = [];
+  const extendsIds = node.children?.classExtends?.[0]?.children?.classType?.[0]?.children?.Identifier;
+  if (Array.isArray(extendsIds) && extendsIds.length) bases.push(extendsIds[extendsIds.length - 1].image);
+  const interfaceTypes = node.children?.classImplements?.[0]?.children?.interfaceTypeList?.[0]?.children?.interfaceType || [];
+  for (const it of interfaceTypes) {
+    const ids = it.children?.classType?.[0]?.children?.Identifier;
+    if (Array.isArray(ids) && ids.length) bases.push(ids[ids.length - 1].image);
+  }
+  const fields = [];
+  const classBody = node.children?.classBody?.[0];
+  for (const cbd of classBody?.children?.classBodyDeclaration || []) {
+    const fd = cbd.children?.classMemberDeclaration?.[0]?.children?.fieldDeclaration?.[0];
+    const declarators = fd?.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator || [];
+    for (const d of declarators) {
+      const fname = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
+      if (fname) fields.push(fname);
+    }
+  }
+  return { name, line: _lineOf(node), bases, fields };
+}
+
+// The simple class name of a `new X(...)` expression. A fully-qualified
+// instantiation (`new java.util.LinkedList<String>()`) carries one Identifier
+// token per package segment plus the class, so taking the FIRST token
+// yielded "java"; the class is always the LAST segment, and type arguments
+// live under a separate typeArgumentsOrDiamond child that is simply not
+// consulted.
+// Ported from parser-cs.js's identical mechanism (see its own header comment
+// for the full rationale). Closes Juliet's dominant abstract/interface
+// dispatch idiom (flow variants 81/82): `A_81_base b = new A_81_bad();
+// b.action(data);` lowers `b.action`'s callee to the local-variable-named
+// string `"b.action"`, which `callgraph.js`'s `classMethods` index (keyed by
+// real class name, `"A_81_bad.action"`) can never match. Since a variable's
+// constructed type is unambiguous within one function (once assigned via a
+// `{kind:'call', isNew:true}` source — see emitAssignment/isCtorSeed above),
+// rewriting `b.action` to `A_81_bad.action` in place lets the EXISTING
+// project-wide `classMethods` index resolve it with no engine changes.
+// Refuses to guess when a variable is (re)assigned two distinct constructed
+// types in the same function, matching this file's own `bareTailInFile`
+// ambiguity-refusal convention elsewhere.
+function _localVarConstructedTypes(nodes) {
+  const varTypes = new Map(); // varName -> className | null (ambiguous)
+  for (const node of Object.values(nodes)) {
+    if (node.kind !== 'assign') continue;
+    const src = node.source;
+    if (!src || src.kind !== 'call' || !src.isNew || typeof src.callee !== 'string') continue;
+    const varName = node.target;
+    if (!varName || varName.includes('.')) continue; // only a bare local, never a field-write target
+    if (varTypes.has(varName)) {
+      if (varTypes.get(varName) !== src.callee) varTypes.set(varName, null);
+    } else {
+      varTypes.set(varName, src.callee);
+    }
+  }
+  return varTypes;
+}
+
+function _rewriteVarTypeCallees(expr, varTypes) {
+  if (!expr || typeof expr !== 'object') return;
+  if (expr.kind === 'call') {
+    if (typeof expr.callee === 'string') {
+      const dot = expr.callee.indexOf('.');
+      if (dot > 0) {
+        const varName = expr.callee.slice(0, dot);
+        const cls = varTypes.get(varName);
+        if (cls) expr.callee = `${cls}${expr.callee.slice(dot)}`;
+      }
+    }
+    if (Array.isArray(expr.args)) for (const a of expr.args) _rewriteVarTypeCallees(a, varTypes);
+    return;
+  }
+  if (expr.kind === 'member') { _rewriteVarTypeCallees(expr.object, varTypes); return; }
+  if (expr.kind === 'binary' || expr.kind === 'logical') {
+    _rewriteVarTypeCallees(expr.left, varTypes); _rewriteVarTypeCallees(expr.right, varTypes); return;
+  }
+  if (expr.kind === 'tpl' && Array.isArray(expr.parts)) { for (const p of expr.parts) _rewriteVarTypeCallees(p, varTypes); return; }
+  if (expr.kind === 'union' && Array.isArray(expr.branches)) { for (const b of expr.branches) _rewriteVarTypeCallees(b, varTypes); return; }
+  if (expr.kind === 'array' && Array.isArray(expr.elements)) { for (const e of expr.elements) _rewriteVarTypeCallees(e, varTypes); return; }
+}
+
+function _applyVarTypeRewrite(nodes) {
+  const varTypes = _localVarConstructedTypes(nodes);
+  let any = false;
+  for (const t of varTypes.values()) if (t) { any = true; break; }
+  if (!any) return;
+  for (const node of Object.values(nodes)) {
+    if (node.kind === 'call') _rewriteVarTypeCallees(node, varTypes);
+    else if (node.kind === 'assign') _rewriteVarTypeCallees(node.source, varTypes);
+    else if (node.kind === 'return' || node.kind === 'throw') _rewriteVarTypeCallees(node.value, varTypes);
+    else if (node.kind === 'if') _rewriteVarTypeCallees(node.cond, varTypes);
+  }
+}
+
+// The simple class name of a `new X(...)` expression.
+function _ctorClassName(ci) {
+  const ids = ci?.children?.classOrInterfaceTypeToInstantiate?.[0]?.children?.Identifier;
+  if (!Array.isArray(ids) || !ids.length) return '';
+  return ids[ids.length - 1].image || '';
+}
+
 function _fqnExpr(node) {
   if (!node || !node.children) return { kind: 'unknown' };
   const idImages = _fqnIdents(node);
@@ -340,6 +541,40 @@ function buildCfgFromBody(bodyNode) {
     return id;
   }
 
+  // Lower one assignment expression (already through exprFromCst) to CFG
+  // assign node(s). A compound operator (`+=`) reads the target too, so its
+  // source is a tpl of [target, rhs], the same shape string interpolation
+  // lowers to. Field writes emit a bare alias next to the qualified target:
+  // `this.f = v` is read back as `f` elsewhere in the class, and a
+  // class-qualified static (`A.sf = v`) is read back as `sf`. An array
+  // element write taints the whole array (its read lowers to the array
+  // identifier, so the element-level path would never match).
+  function emitAssignment(expr, line) {
+    const targets = _assignTargets(expr.left);
+    if (!targets.length) return;
+    const source = expr.op === '='
+      ? expr.right
+      : { kind: 'tpl', parts: [expr.left, expr.right] };
+    for (const target of targets) emit({ kind: 'assign', target, source, line, succ: [] });
+  }
+
+  // `while ((line = r.readLine()) != null)` and the if-form: the assignment
+  // lives inside the condition expression, not in a statement of its own.
+  // Emit every assignment nested in the condition subtree ahead of the
+  // header node so the bound variable carries the call's taint into the
+  // body.
+  function emitCondAssignments(condCst, line) {
+    if (!condCst || typeof condCst !== 'object') return;
+    if (condCst.children?.AssignmentOperator) {
+      const expr = exprFromCst(condCst);
+      if (_isAssignment(expr)) emitAssignment(expr, line);
+      return;
+    }
+    for (const k of Object.keys(condCst.children || {})) {
+      for (const c of condCst.children[k]) emitCondAssignments(c, line);
+    }
+  }
+
   walkStmts(bodyNode);
 
   function walkStmts(stmtNode) {
@@ -366,7 +601,7 @@ function buildCfgFromBody(bodyNode) {
             const target = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
             const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0];
             if (target) {
-              emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(lv), succ: [] });
+              emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(lv), succ: [], decl: true });
             }
           }
         }
@@ -382,11 +617,9 @@ function buildCfgFromBody(bodyNode) {
       const e = kids.expressionStatement[0]?.children?.statementExpression?.[0]?.children?.expression?.[0];
       if (e) {
         const expr = exprFromCst(e);
-        if (expr.kind === 'call') emit({ ...expr, line: _lineOf(kids.expressionStatement[0]), succ: [] });
-        else if (expr.kind === 'binary' && expr.op === '=') {
-          // assignment expr `x = y;`
-          emit({ kind: 'assign', target: expr.left?.name || null, source: expr.right, line: _lineOf(kids.expressionStatement[0]), succ: [] });
-        }
+        const line = _lineOf(kids.expressionStatement[0]);
+        if (expr.kind === 'call') emit({ ...expr, line, succ: [] });
+        else if (_isAssignment(expr)) emitAssignment(expr, line);
       }
     }
     if (kids.returnStatement) {
@@ -402,6 +635,7 @@ function buildCfgFromBody(bodyNode) {
     if (kids.ifStatement) {
       const i = kids.ifStatement[0];
       const cond = i.children?.expression?.[0];
+      emitCondAssignments(cond, _lineOf(i));
       emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(i), succ: [] });
       // Then branch body falls through linearly; v1 simplification.
       for (const sub of (i.children?.statement || [])) walkStmts(sub);
@@ -409,6 +643,7 @@ function buildCfgFromBody(bodyNode) {
     if (kids.whileStatement) {
       const w = kids.whileStatement[0];
       const cond = w.children?.expression?.[0];
+      emitCondAssignments(cond, _lineOf(w));
       emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(w), succ: [] });
       for (const sub of (w.children?.statement || [])) walkStmts(sub);
     }
@@ -460,6 +695,7 @@ function buildCfgFromBody(bodyNode) {
     if (kids.doStatement) {
       const d = kids.doStatement[0];
       const cond = d.children?.expression?.[0];
+      emitCondAssignments(cond, _lineOf(d));
       emit({ kind: 'loop-header', cond: cond ? exprFromCst(cond) : null, line: _lineOf(d), succ: [] });
       for (const sub of (d.children?.statement || [])) walkStmts(sub);
     }
@@ -594,6 +830,15 @@ export async function parseJavaFile(file, raw) {
   if (!cst) return null;
 
   const functions = [];
+  // Class records for class-hierarchy analysis: `bases` (extends + all
+  // implements names) feeds abstract/interface-receiver dispatch (Juliet
+  // flow variants 81/82 — `A_81_base b = new A_81_bad(); b.action(data)`
+  // needs to know A_81_bad extends A_81_base to resolve the call), `fields`
+  // (instance and static declared names) lets cross-method taint tell a
+  // field write (`sf = data;`, live across the whole class) apart from an
+  // unrelated local variable of the same name in another method. Same
+  // optional per-file shape `parser-cpp.js` already attaches.
+  const classes = [];
   // Walk the CST for methodDeclaration nodes.
   function walkForMethods(node, className) {
     if (!node || !node.children) return;
@@ -605,6 +850,7 @@ export async function parseJavaFile(file, raw) {
           const newClassName = child.children?.typeIdentifier?.[0]?.children?.Identifier?.[0]?.image
             || child.children?.Identifier?.[0]?.image
             || className;
+          if (newClassName) classes.push(_classRecord(child, newClassName));
           walkForMethods(child, newClassName);
           continue;
         }
@@ -663,6 +909,7 @@ export async function parseJavaFile(file, raw) {
           if (body) {
             const methodLine = _lineOf(md);
             const cfg = buildCfgFromBody(body);
+            _applyVarTypeRewrite(cfg.nodes);
             functions.push({
               // Sibling frontends (parser-js.js) suffix the qid with `@line`
               // so overloaded/same-named methods don't collide — without it,
@@ -685,5 +932,5 @@ export async function parseJavaFile(file, raw) {
   }
   walkForMethods(cst, null);
 
-  return { file, functions, topLevel: null };
+  return { file, functions, topLevel: null, ...(classes.length ? { classes } : {}) };
 }
