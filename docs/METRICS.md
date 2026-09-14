@@ -72,7 +72,7 @@ open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 215 entries, engine v0.150.2 (measured 2026-09-12)
+### Result — 220 entries, engine v0.151.3+ (measured 2026-09-14, pre-release)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
@@ -85,9 +85,24 @@ blocker.
 | php | 23 | 23 (100%) | 13 (57%) |
 | python | 32 | 32 (100%) | 21 (66%) |
 | ruby | 20 | 20 (100%) | 11 (55%) |
+| rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **215** | **215 (100%)** | **117 (54%)** |
+| **total** | **220** | **220 (100%)** | **122 (55%)** |
+
+**rust is new** (0 → 5, this session): Rust joined the first-class language
+set with a hand-rolled IR frontend (`scanner/src/ir/parser-rust.js`, the
+`parser-go.js`/`parser-cs.js` pattern) and a full sources/sinks/sanitizers
+catalog entry (SQLi, command injection, path traversal, SSRF, open redirect,
+log injection, deserialization, resource exhaustion). All 5 corpus entries
+(2 `capability/`, 3 `deep/`) score 100% on first measurement because Rust's
+web-framework idiom (axum/actix/rocket extractor-typed parameters) routes
+almost every request value through the `paramAnnotations` side-channel
+directly into a taint source — there is no syntactic/regex fallback layer
+for Rust yet (unlike Go/Python/PHP's `*-structural.js` modules), so every
+Rust corpus entry is inherently taint-shaped. 100% on 5 entries is not yet
+evidence of ecosystem-wide recall; it is the honest number the corpus
+supports today, disclosed rather than hedged.
 
 php moved 12 → 13 (SARD_AGENTIC_SECURITY_PRD.md bench work: `$_SESSION`/
 `$_ENV` added as PHP taint sources, found via a real, evidence-based error

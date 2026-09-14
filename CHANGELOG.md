@@ -9,6 +9,37 @@
 > make the history less accurate, not more.
 
 
+## Unreleased - Rust: first-class language (SAST + Layer-2 taint), part of the SARD 80% F1 push
+
+Rust joins the first-class language set (JS/TS, Python, Java, Kotlin, Go, Ruby, PHP, C#) with both
+a hand-rolled IR frontend (`scanner/src/ir/parser-rust.js`, the `parser-go.js`/`parser-cs.js`
+pattern) feeding the Layer-2 taint engine, and dedicated SAST rules — Rust previously had only the
+opt-in, WASM-based tree-sitter long-tail path, which nothing in the taint engine ever consumed.
+
+- **Taint coverage** (`dataflow/catalog.js`, ~90 new source/sink/sanitizer entries): SQL injection
+  (sqlx/diesel/rusqlite/postgres, distinguishing the compile-checked `query!` macro and `.bind()`
+  parameterization from `format!`-built SQL text), command injection (`Command::new("sh").arg("-c")`
+  vs. safe argv-array execution), path traversal (`std::fs`/`tokio::fs`, recognizing a
+  canonicalize+`starts_with` containment guard), SSRF (reqwest/ureq), reflected XSS
+  (actix/axum/rocket/warp response bodies), open redirect, log injection, insecure deserialization,
+  and uncontrolled resource consumption. Sources include axum/actix/rocket extractor-typed
+  parameters (`Query`/`Path`/`Json`/`Form`/`HeaderMap`) via a new `paramAnnotations` side-channel
+  and route-attributed handlers (`#[get("/<x>")]`).
+- **SAST rules** (`sast/rust.js`): TLS verification disabled, weak hash/cipher (MD5/SHA-1/DES/RC4),
+  weak randomness feeding a token/secret identifier, and unsafe raw-memory operations
+  (`transmute`/`from_raw_parts`/`get_unchecked`) — alongside the pre-existing sqlx-format/shell-form
+  command-injection/zero-seed-RNG/unsafe-block regex rules.
+- **A real parser design lesson, not specific to Rust's own correctness**: `.unwrap()`/`.expect(msg)`
+  chained onto a sink call shift the chain's terminal segment away from the sink's own name (the same
+  "terminal segment shift" defect class already documented for Go/Java/Kotlin) — nearly every
+  real-world async Rust call site ends this way, so they are popped from the parsed call chain
+  rather than merely treated as taint-transparent.
+- **Measured**: `bench/layer-recall` — 5/5 (100%) whole-corpus, 3/3 (100%) deep-tier on first
+  measurement (see `docs/METRICS.md`; the corpus is small today, so this reflects the corpus's own
+  composition, not general ecosystem coverage). `bench/cve-replay` — 5 new entries (2 capability,
+  3 deep), all `pre:TP post:TN`. `bench/mutation` — 1 new detection-dimension baseline/adversarial
+  pair (`format!`-built SQL fires; the parameterized `.bind()` form does not).
+
 ## 0.151.3 - Adversarial premortem on the SARD benchmarking PROGRAM itself: full remediation, first genuine held-out numbers
 
 A structured adversarial premortem ("assume this has completely failed six months from now — work

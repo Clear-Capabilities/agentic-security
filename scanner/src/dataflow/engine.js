@@ -1206,7 +1206,10 @@ function step(node, stateIn, callContext) {
         // target, so it reaches this rule instead of the assign path. The
         // matching read lowers to `bag.[]`, already covered by the tainted
         // receiver prefix.
-        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|__setitem__)$/;
+        // `push_str`/`extend_from_slice` are Rust's String/Vec appenders
+        // (`push`/`extend`/`insert` were already here for the other
+        // languages and apply to Rust unchanged).
+        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|__setitem__|push_str|extend_from_slice)$/;
         // Mutate the state Set IN PLACE (the binding is const; the call case
         // returns this same Set ref). Avoids touching the unrelated
         // mutated-param paths in this case, keeping the blast radius to

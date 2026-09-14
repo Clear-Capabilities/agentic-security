@@ -19,6 +19,7 @@ import { parseJavaFile } from './parser-java.js';
 import { parseGoFile } from './parser-go.js';
 import { parsePhpFile } from './parser-php.js';
 import { parseRubyFile } from './parser-rb.js';
+import { parseRustFile } from './parser-rust.js';
 import { parseCppFile, cppExtRe } from './parser-cpp.js';
 import { buildCallGraph } from './callgraph.js';
 import { buildClassHierarchy } from './class-hierarchy.js';
@@ -164,6 +165,9 @@ export function buildProjectIR(fileContents) {
       } else if (/\.rb$/i.test(file)) {
         const ir = parseRubyFile(file, code);
         if (ir) perFile[file] = ir;
+      } else if (/\.rs$/i.test(file)) {
+        const ir = parseRustFile(file, code);
+        if (ir) perFile[file] = ir;
       } else if (cppExtRe().test(file)) {
         const ir = parseCppFile(file, code);
         if (ir) perFile[file] = ir;
@@ -226,6 +230,9 @@ export async function buildProjectIRAsync(fileContents) {
       } else if (/\.rb$/i.test(file)) {
         const ir = parseRubyFile(file, code);
         if (ir) perFile[file] = ir;
+      } else if (/\.rs$/i.test(file)) {
+        const ir = parseRustFile(file, code);
+        if (ir) perFile[file] = ir;
       } else if (cppExtRe().test(file)) {
         const ir = parseCppFile(file, code);
         if (ir) perFile[file] = ir;
@@ -269,4 +276,4 @@ export function parsePythonFile(file, code) {
   return parsePythonFileRegex(file, code);
 }
 
-export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, parseCppFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable, pythonParserDegradation, resetPythonParserDegradation };
+export { parseJsFile, parseJavaFile, parseCSharpFile, parseKotlinFile, parseGoFile, parsePhpFile, parseRubyFile, parseRustFile, parseCppFile, buildCallGraph, buildClassHierarchy, computeSSA, isSSAEnabled, probePythonAvailable, pythonParserDegradation, resetPythonParserDegradation };

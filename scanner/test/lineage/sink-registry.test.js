@@ -171,8 +171,13 @@ test("D3/3c: sink node kinds are category-derived, and the biconditional kind ==
   // consequence of new coverage, not a regression, and NOT this task's
   // problem to fix. Asserted as a full biconditional here deliberately,
   // because until then it is true and catches more.
+  // 'log' joined the reachable kind set when the Rust catalog additions
+  // (SARD 80% F1 push) added the first CWE_MAP row mapping to the `log`
+  // category (CWE-117, log injection) — CATEGORY_NODE_KIND['log'] is
+  // 'log', not 'process', so this is additive and does not touch the
+  // biconditional the loop below checks.
   const kinds = new Set(SINKS.map((e) => reclassifySink(e).kind));
-  assert.deepEqual([...kinds].sort(), ['external', 'process', 'sink', 'store']);
+  assert.deepEqual([...kinds].sort(), ['external', 'log', 'process', 'sink', 'store']);
   for (const e of SINKS) {
     const r = reclassifySink(e);
     if (r.coverageStatus === 'unsupported') assert.equal(r.kind, 'process', `${e.id}`);
@@ -197,7 +202,12 @@ test('D3/preservation: a real entry with no confident mapping is `unsupported` a
 
 test('D3/preservation: every `unsupported` sink entry carries a non-empty reason (no silent drop is possible)', () => {
   const unsupported = SINKS.map(reclassifySink).filter((r) => r.coverageStatus === 'unsupported');
-  assert.equal(unsupported.length, 83);
+  // 83 -> 99: the Rust catalog additions (SARD 80% F1 push) added 10
+  // CWE-78 command-injection sinks (Command::new + 9 shell-arg terminal
+  // methods) and 1 CWE-770 resource-exhaustion sink, all mapped
+  // `unsupported` by CWE_MAP's own pre-existing rows for those CWEs —
+  // recomputed live against the current catalog, not hand-counted.
+  assert.equal(unsupported.length, 99);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -212,7 +222,10 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
 
 test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every other framework is `http-response`/`modeled`', () => {
   const cwe79 = SINKS.filter((e) => e.vuln?.cwe === 'CWE-79');
-  assert.equal(cwe79.length, 16);
+  // 16 -> 20: the Rust catalog additions (SARD 80% F1 push) added 4 XSS
+  // sinks (actix body, axum Html, rocket RawHtml, warp reply::html), none
+  // `framework: 'dom'|'react'`, so all 4 land in the `otherCount` bucket.
+  assert.equal(cwe79.length, 20);
   let domCount = 0;
   let otherCount = 0;
   for (const e of cwe79) {
@@ -230,7 +243,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 10);
+  assert.equal(otherCount, 14);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -437,7 +450,7 @@ test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DIST
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned sink coverage counts: 102 modeled / 6 partial / 9 candidate / 83 unsupported', () => {
+test('pinned sink coverage counts: 165 modeled / 6 partial / 9 candidate / 99 unsupported', () => {
   // 194 -> 198 entries and 97 -> 101 modeled: Sub-project H's AC-07 closure
   // added the four CWE-201 AI-model-provider sink entries (OpenAI
   // chat.completions/responses, Anthropic messages, Bedrock
@@ -448,15 +461,20 @@ test('pinned sink coverage counts: 102 modeled / 6 partial / 9 candidate / 83 un
   // (Process.Start non-shell-literal command injection, CWE-78) —
   // `unsupported` because FR-201's category vocabulary has no `process`/
   // shell-execution category, the same reason the pre-existing
-  // `cs-process-start` entry is also unsupported. Re-measured against the
-  // live catalog, not adjusted by arithmetic.
+  // `cs-process-start` entry is also unsupported.
+  // 200 -> 279: the Rust catalog additions (SARD 80% F1 push, 79 new sink
+  // entries) added a new `log` CWE_MAP row (CWE-117) contributing to
+  // `modeled`, 4 new CWE-79 `http-response`/modeled entries, 10 CWE-78 +
+  // 1 CWE-770 `unsupported` entries, and the rest modeled real-category
+  // sinks (SQLi/path/SSRF/redirect/deserialization). Re-measured against
+  // the live catalog, not adjusted by arithmetic.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 200);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 102);
+  assert.equal(SINKS.length, 279);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 165);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 83);
-  assert.equal(102 + 6 + 9 + 83, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 99);
+  assert.equal(165 + 6 + 9 + 99, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

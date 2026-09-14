@@ -61,11 +61,12 @@ const EXT_LANG = {
   '.js': 'js/ts', '.jsx': 'js/ts', '.ts': 'js/ts', '.tsx': 'js/ts', '.mjs': 'js/ts', '.cjs': 'js/ts',
   '.py': 'python', '.php': 'php', '.rb': 'ruby', '.java': 'java', '.go': 'go',
   '.cs': 'c#', '.kt': 'kotlin', '.c': 'c/c++', '.cc': 'c/c++', '.cpp': 'c/c++', '.h': 'c/c++',
+  '.rs': 'rust',
 };
 
 const MANIFEST_ALIASES = {
   javascript: 'js/ts', typescript: 'js/ts', js: 'js/ts', ts: 'js/ts', node: 'js/ts',
-  py: 'python', rb: 'ruby', csharp: 'c#', cs: 'c#', kt: 'kotlin', cpp: 'c/c++', c: 'c/c++',
+  py: 'python', rb: 'ruby', csharp: 'c#', cs: 'c#', kt: 'kotlin', cpp: 'c/c++', c: 'c/c++', rs: 'rust',
 };
 
 export function languageOf(manifest, files) {

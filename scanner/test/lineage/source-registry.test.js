@@ -223,19 +223,25 @@ test('unsupported (defensive fallback): a synthetic no-provenance entry with an 
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned coverage counts: 84 modeled / 14 partial / 87 candidate / 0 unsupported', () => {
+test('pinned coverage counts: 122 modeled / 14 partial / 90 candidate / 0 unsupported', () => {
   const results = SOURCES.map(reclassifySource);
   // SARD_AGENTIC_SECURITY_PRD.md work added 5 no-provenance Java/PHP source
   // entries (java-io-readline, java-resultset-getstring/-getobject,
   // php-session, php-env) — each resolves via NO_PROVENANCE_OVERRIDES (§4.3),
   // which is always `candidate` by construction, so 82 -> 87, 180 -> 185.
-  assert.equal(SOURCES.length, 185);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 84);
+  // Rust joined the catalog (SARD 80% F1 push) with 38 new source entries —
+  // 3 annotation-based extractor rows with no matching PROVENANCE_MAP row of
+  // their own so they resolve `candidate` (rs-extract-httprequest/-request,
+  // rs-closure-extract-request via NO_PROVENANCE_OVERRIDES), the rest carry
+  // real `provenance` values and resolve `modeled` — 185 -> 226,
+  // 84 -> 122 modeled, 87 -> 90 candidate, partial unchanged at 14.
+  assert.equal(SOURCES.length, 226);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 122);
   // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 87);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 90);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(84 + 14 + 87, SOURCES.length);
+  assert.equal(122 + 14 + 90, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

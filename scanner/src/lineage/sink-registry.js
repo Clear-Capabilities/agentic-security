@@ -146,6 +146,9 @@ export const CWE_MAP = Object.freeze({
   'CWE-787':  Object.freeze({ category: null, status: 'unsupported', why: 'out-of-bounds write — destination is raw memory' }),
   'CWE-1333': Object.freeze({ category: null, status: 'unsupported', why: 'ReDoS — destination is the regex engine' }),
   'CWE-114':  Object.freeze({ category: null, status: 'unsupported', why: 'untrusted library load — destination is the dynamic loader' }),
+  // Rust catalog additions (SARD 80% F1 push).
+  'CWE-117':  Object.freeze({ category: 'log', status: 'modeled', why: 'log injection — the sink IS a log-writing call (log!/tracing! macros)' }),
+  'CWE-770':  Object.freeze({ category: null, status: 'unsupported', why: 'uncontrolled resource consumption — the sink is an in-process allocation, not an egress destination' }),
 });
 
 // §5.2 — CWE-79's refinement key. FR-201 lumps "browser DOM or client

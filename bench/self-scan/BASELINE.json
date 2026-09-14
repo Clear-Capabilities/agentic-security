@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-11T14:24:15.295Z",
-  "commit": "3c4569f4a5758b3017c02820515df4b33297f140",
+  "generatedAt": "2026-09-14T13:43:09.444Z",
+  "commit": "e41a3b24a3efc6543a837fb0384b876bb92875e5",
   "targets": {
     "hooks": {
       "total": 21,
@@ -34,7 +34,7 @@
       }
     },
     "scanner/src": {
-      "total": 487,
+      "total": 491,
       "byFile": {
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
@@ -66,6 +66,7 @@
         "ir/parser-py-cst.js": 1,
         "ir/parser-py.helper.py": 1,
         "ir/parser-rb.js": 2,
+        "ir/parser-rust.js": 4,
         "ir/type-stubs.js": 8,
         "ir/universal-ir.js": 1,
         "leaderboard.js": 3,
