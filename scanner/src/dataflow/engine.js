@@ -101,10 +101,8 @@ function _addPathAliasAware(state, path, callContext) {
   return s;
 }
 
-let _activeConstantVars = null;
 // The file of the function currently being analyzed. Set at the top of
-// analyzeFunction (same context-threading pattern as _activeConstantVars
-// above) so exprIsSource/exprTaint/step can pass it to matchSource /
+// analyzeFunction so exprIsSource/exprTaint/step can pass it to matchSource /
 // matchSinkOrSanitizer without plumbing it through every call signature.
 // It scopes language-specific catalog entries (currently just `cpp`) to
 // files of that language — see the header comment in catalog.js.
@@ -342,8 +340,6 @@ function _calleeReceiverTainted(callee, state, callContext) {
 function exprTaint(expr, state, callContext) {
   if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr)) return true;
   if (!expr) return false;
-  // Constant propagation: variables assigned from literals are never tainted
-  if (expr.kind === 'ident' && _activeConstantVars && _activeConstantVars.has(expr.name)) return false;
   // P1.1 — field-sensitive access path: if the expression is a pure
   // ident/member chain ("x.y.z"), ask the access-path lattice whether any
   // shorter prefix in the state covers it. This is what makes
@@ -1012,11 +1008,6 @@ function step(node, stateIn, callContext) {
         if (_unsan.size) _unByVar.set(target, _unsan);
         else _unByVar.delete(target);
       }
-      // Constant propagation: track variables assigned from literals
-      if (target && _activeConstantVars) {
-        if (node.source && node.source.kind === 'literal') _activeConstantVars.set(target, node.source.value);
-        else _activeConstantVars.delete(target);
-      }
       let newState = state;
       // Premortem #7: interprocedural return-taint via SummaryCache. If the
       // RHS is a call to a known callee whose empty-entry-state summary says
@@ -1421,7 +1412,6 @@ function analyzeFunction(fn, entryState, callContext) {
   const outStates = new Map();
   inStates.set(fn.cfg.entry, new Set(entryState));
   work.push(fn.cfg.entry);
-  _activeConstantVars = new Map();
   _currentFile = fn.file || null;
   // v0.70 #2 — points-to context for the step() transfer. Setting it here
   // (instead of plumbing through step's signature) keeps the worklist loop
