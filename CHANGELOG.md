@@ -9,6 +9,110 @@
 > make the history less accurate, not more.
 
 
+## 0.151.3 - Adversarial premortem on the SARD benchmarking PROGRAM itself: full remediation, first genuine held-out numbers
+
+A structured adversarial premortem ("assume this has completely failed six months from now — work
+backwards to why") was run against the SARD benchmarking PROGRAM as a whole this time — not a single
+release's engine work, but the measurement methodology, CI enforcement, and governance around it.
+Every P0/P1 item and most P2 items from that review's remediation plan were implemented and verified.
+Full account, including several self-corrections where an initial premortem finding didn't survive
+closer scrutiny, in `bench/sard/IMPLEMENTATION_STATUS.md`'s "full remediation pass" section.
+
+**This release does NOT claim progress toward the SARD PRD's 80% F1 target.** It claims the opposite
+kind of thing: that the numbers reported from here on are measured correctly, and that several
+real (if narrow) engine and infrastructure bugs were found and fixed along the way.
+
+**First-ever genuine held-out `--split test` measurements, both closer-to-target languages** (the
+`--split` flag existed since 0.151.1 but had never actually been run in TEST mode before this
+release — every number in every prior changelog entry was measured on the full corpus):
+
+- Java: macro-F1 46.7%, micro-F1 48.2%, precision 60.7%, recall 39.9% — close to the full-corpus
+  45.6%, real evidence against overfitting, but 33+ points from the 80% target.
+- C#: macro-F1 10.2%, micro-F1 7.1%, precision 8.7%, recall 5.9% — close to the full-corpus 10.8%,
+  same conclusion, ~70 points from target.
+- PHP: macro-F1 0.0% on its first-ever properly train/dev/test-split sample (this corpus had NO
+  split mechanism at all before this release — see below). Consistent with, not worse than, the
+  prior unstratified-sample finding.
+
+**Data & measurement integrity:**
+- Macro-F1 had no support floor: a CWE with a handful of expected instances carried the same 1/N
+  weight in the average as one with hundreds. Added a supplementary support-floor-adjusted figure
+  (`macroF1MinSupport`) alongside the existing headline number, mirroring the floor
+  `compare-baseline.mjs` already applied to per-CWE regression deltas.
+- PHP had no train/dev/test split of any kind — every PHP number ever reported was fit-and-report
+  on the same undivided sample. This corpus (Stivalet & Delaitre's SARD PHP suite) doesn't use
+  Juliet's numbered-flow-variant naming at all; its real near-duplicate axis (verified against all
+  42,212 real filenames) is a {CWE, source, sanitizer, sink} combination recurring across cosmetic
+  quote-style/printf-specifier variants. Built the split around that, ingested and split 5,000
+  real cases (train/dev/test ≈ 60/20/20, matching design).
+- Two more genuinely independent external-holdout apps (`pyshelf`, Python; `microledger`, Java —
+  one of the SARD PRD's own three target languages), alongside the existing `tinymart`. Every
+  other curated holdout app's ground truth is bootstrapped from a past scanner run — circular for
+  the purpose it exists to serve.
+- The benchmark scorer now separates a scoring-methodology delta from a scanner-capability delta
+  in every report (`rawOldScorer`/`rescoredSameFindings`/`scannerAfterChange`), so a future scorer
+  fix can never again silently blend into a reported "improvement" the way an earlier session's
+  scorer fix once did before being caught.
+- Added a deliberately taint-blind regex-only baseline (Java, 4 families) so macro-F1 has an
+  interpretable floor: P=9.8%, R=51.6%, F1=16.5% micro on the held-out split, against the real
+  scanner's P=60.7% on the identical split.
+
+**Real engine/infrastructure bugs found and fixed (general, not benchmark-specific):**
+- `parser-java.js`'s binary-expression fallback hardcoded operator `'?'` regardless of the real
+  operator, and only ever kept the first two operands of a chevrotain `binaryExpression` node — a
+  3+-operand string concatenation (`"a" + tainted + "b"`, a flat CST production, not a nested tree)
+  silently dropped every operand past the second. Found while building the `microledger` holdout
+  fixture; fixed with new regression tests.
+- Per-CWE false-positive attribution read a `cwe` field on unmatched-finding objects that has never
+  existed there (the real field is `reportedCwe`) — silently zeroing every per-CWE FP count
+  regardless of aggregate precision. This exact defect had already been found and disclosed twice
+  before in this project's own history without being fixed at the source; fixed now.
+- Two more instances of an unguarded top-level `main()` (importing the module for its exported
+  functions silently ran the entire CLI as a side effect) in `ingest-php.mjs`/`score-php.mjs`/
+  `macro-score.mjs` — the same bug class 0.151.1 fixed elsewhere, missed in these three.
+
+**CI/governance:**
+- New blocking (but manifest-path-filtered, never running on every push) `dependency-currency`
+  check: a known-vulnerable dependency previously could merge to `main` and live indefinitely
+  between releases with zero CI signal at all — it was wired only into the publish-time gate.
+- New weekly `sard-full-test-split` CI job: full corpus, all three languages, on `--split test`
+  specifically — closing the gap the existing 5-CWE Java-only `sard-blind-smoke` smoke job leaves
+  open. Deliberately informational tier, with the reasoning made explicit in
+  `.github/required-checks.json`: a weekly job's check-run essentially never lands on the exact
+  commit a release tags, so marking it blocking would be a hollow gesture.
+- `--update-baseline` (both the SARD regression gate and the external-holdout gate) now requires
+  `--reason` and leaves a local, gitignored audit-log trail with before/after numbers — the exact
+  previously-untracked workflow used to produce every benchmark number in this project's history.
+- Corrected the record on the 0.151.0 changelog entry above: added an erratum disclosing that its
+  headline macro-F1 figures were full-corpus, not held-out, at the time they were published — a
+  caveat that existed in the internal ledger but had never reached this shipped file.
+
+**Security (adjacent, not part of the SARD PRD's own scope, reviewed because the product markets
+this exact capability):**
+- Wrote the previously-missing threat-model doc for the LLM-driven discovery pipeline
+  (`scanner/src/discovery/THREAT_MODEL.md`).
+- The hunter prompt now wraps scanned source in explicit untrusted-data markers
+  (data-marking/"spotlighting" — a real mitigation, not a guarantee), and the refutation-panel
+  prompt now explicitly frames a candidate's rationale as an unverified claim rather than an
+  implicitly-trusted fact, closing a plausible two-hop injection chain (a crafted source comment →
+  absorbed into the hunter's own rationale → trusted verbatim by the refuter).
+- `scanner/src/llm-validator/` is explicitly flagged as NOT yet reviewed to this depth — a
+  dedicated pass on it is a legitimate next step, not attempted here.
+
+**Also added:** SARD_80_F1_SCANNER_PRD.md §19.1, a velocity checkpoint that forces an explicit,
+written decision ("detector-fixable gap, or architectural limit?") after three flat-or-negative
+session-over-session data points for a language, rather than letting incremental patching continue
+indefinitely with no mechanism for noticing it isn't working.
+
+**Not fixed, disclosed honestly rather than left silent:** a previously-documented harness
+nondeterminism (`nodegoat` F1 moving between two identical runs in an earlier session) could not be
+reproduced this session across 5 attempts (sequential and concurrent). Recorded as a real
+non-finding, not claimed as a fix.
+
+Verified: full `npm test` CI gate green (properly captured exit code, after catching a lossy
+`| tail` pipe that briefly masked one unrelated, since-confirmed-flaky test in an earlier run of
+the same suite), `test:discovery` 90/90, bundle rebuilt.
+
 ## 0.151.2 - Real C# SAST accuracy improvements: interprocedural call-graph fixes + new detector coverage
 
 Follow-up to 0.151.1's SARD work: a direct effort to improve the scanner's actual code-scanning
