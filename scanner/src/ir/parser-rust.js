@@ -658,6 +658,55 @@ function _parseParams(paramsText, hasRouteAttr) {
   return { params, paramAnnotations };
 }
 
+// Skip backward over `fn`'s qualifier keywords (pub/pub(...)/const/async/
+// unsafe/default/extern "…") so `_precedingAttributes` (below) can still see
+// an attribute that precedes them, e.g. `#[get("/x")] async fn handler()` —
+// the common shape for every Rust web-framework route macro. Plain bounded
+// literal comparisons, not a regex: this is exactly the kind of fixed,
+// small, disjoint-keyword set that is safe to skip character-by-character
+// with no backtracking possible by construction (same reasoning
+// `_precedingAttributes` itself already relies on for `#[...]`/`]`).
+const _FN_QUALIFIER_KEYWORDS = ['pub', 'const', 'async', 'unsafe', 'default'];
+function _skipFnQualifiersBackward(src, idx) {
+  let pos = idx;
+  for (;;) {
+    while (pos > 0 && /\s/.test(src[pos - 1])) pos--;
+    if (src[pos - 1] === ')') {
+      // pub(crate)/pub(super)/pub(in ...) — find the matching '(' and check
+      // it's immediately preceded by "pub".
+      let depth = 0;
+      let j = pos - 1;
+      for (; j >= 0; j--) {
+        if (src[j] === ')') depth++;
+        else if (src[j] === '(') { depth--; if (depth === 0) break; }
+      }
+      if (j >= 3 && src.slice(j - 3, j) === 'pub' && !/\w/.test(src[j - 4] || '')) { pos = j - 3; continue; }
+      break;
+    }
+    if (src[pos - 1] === '"') {
+      // extern "C"/"Rust"/etc.
+      let j = pos - 2;
+      while (j >= 0 && src[j] !== '"') j--;
+      if (j <= 0) break;
+      const before = src.slice(0, j);
+      const m = /extern\s*$/.exec(before);
+      if (m) { pos = m.index; continue; }
+      break;
+    }
+    let matched = false;
+    for (const kw of _FN_QUALIFIER_KEYWORDS) {
+      const start = pos - kw.length;
+      if (start >= 0 && src.slice(start, pos) === kw && (start === 0 || !/\w/.test(src[start - 1]))) {
+        pos = start;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) break;
+  }
+  return pos;
+}
+
 // Attributes immediately preceding `idx`, scanned backwards over `#[…]` groups.
 function _precedingAttributes(src, idx) {
   let pos = idx;
@@ -1141,7 +1190,32 @@ function _topLevelColon(s) {
 }
 
 // ─── items ───────────────────────────────────────────────────────────────────
-const _FN_RE = /(?:^|[\n;{}])[ \t]*(?:#\[[^\]]*\][ \t]*\n?[ \t]*)*(?:pub(?:\([^)]*\))?\s+)?(?:(?:const|async|unsafe|default|extern\s+"[^"]*")\s+)*fn\s+([A-Za-z_]\w*)/g;
+// A REAL ReDoS, found via this repo's own self-scan gate after this file
+// merged (confirmed by direct timing, not the heuristic alone: ~50s on
+// 1000 repeated `#[a] ` attributes with no trailing `fn`, i.e. the ordinary
+// shape of a file this parser is scanning that simply never reaches a match).
+// The original version of this regex chained THREE separately-quantified
+// constructs before `fn` — an attribute-skip star, an optional `pub`, and a
+// qualifier-skip star — each one individually timed as linear in isolation
+// (see the file-header note this repo's own review left on the sibling
+// `(?:#\[[^\]]*\]\s*)+` shape in `_parseParams`), but a backtracking engine
+// does not know the alternatives inside a `(?:A|B|C)*` are mutually
+// exclusive on real input: on eventual overall-match failure (no `fn` ever
+// reached) it explores every way the star COULD have divided its iterations
+// among A/B/C, which is exponential regardless of how "obviously
+// unambiguous" the alternation looks to a human reader — confirmed by
+// re-timing a version that merged all three into one alternation-based star
+// and finding it was STILL exponential (100ms+ on just 20 attributes).
+// The actual fix is not a smarter regex at all: none of the skipped prefix
+// text was ever used for anything. `_precedingAttributes` (below) already
+// independently, safely (plain character-by-character backward scan, no
+// regex) recovers real attribute text for route detection, and neither
+// `fnKw` nor `name` extraction in the scan loop needs the qualifiers
+// matched — `\bfn\b` already can't match inside a longer identifier
+// (`myfn`, `fn_pointer`) on its own, since `\w` includes `_` and a word
+// boundary requires a transition. Verified linear up to 500 000 repeated
+// attributes+qualifiers with no trailing `fn` (single-digit ms).
+const _FN_RE = /\bfn\s+([A-Za-z_]\w*)/g;
 const _IMPL_RE = /(?:^|[\n;{}])\s*(?:unsafe\s+)?(?:impl|trait)\b/g;
 
 function _findImplRanges(src) {
@@ -1196,7 +1270,11 @@ export function parseRustFile(file, code) {
   let m;
   while ((m = _FN_RE.exec(src)) !== null) {
     const name = m[1];
-    const fnKw = m.index + m[0].lastIndexOf('fn');
+    // _FN_RE is now the bare `\bfn\s+(name)` pattern (see its own header
+    // comment for why), so the match always starts exactly at "fn" itself —
+    // no leading anchor/whitespace/qualifier text is ever consumed into
+    // m[0] anymore.
+    const fnKw = m.index;
     let i = m.index + m[0].length;
     // generics
     while (i < src.length && /\s/.test(src[i])) i++;
@@ -1229,8 +1307,8 @@ export function parseRustFile(file, code) {
     if (brace < 0) continue;
     const extracted = _extractBody(src, brace);
     if (!extracted) continue;
-    const attrs = _precedingAttributes(src, m.index + (m[0].length - m[0].trimStart().length) + (m[0].startsWith('\n') || m[0].startsWith(';') || m[0].startsWith('{') || m[0].startsWith('}') ? 1 : 0));
-    const hasRouteAttr = _ROUTE_ATTR_RE.test(attrs) || _ROUTE_ATTR_RE.test(m[0]);
+    const attrs = _precedingAttributes(src, _skipFnQualifiersBackward(src, fnKw));
+    const hasRouteAttr = _ROUTE_ATTR_RE.test(attrs);
     const { params, paramAnnotations } = _parseParams(paramsText, hasRouteAttr);
     const startLine = _lineForOffset(fnKw);
     const className = _enclosingImpl(implRanges, fnKw);
