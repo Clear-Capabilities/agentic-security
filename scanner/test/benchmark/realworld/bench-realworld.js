@@ -1710,7 +1710,7 @@ async function runOne(name, app, vulnFamilyMap) {
   const legacyPerCwe = {};
   const legacyBumpCwe = (cwe, k) => { if (!cwe) return; (legacyPerCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++; };
   for (const t of legacy.tps) legacyBumpCwe(t.cwe, 'tp');
-  for (const x of legacy.fps) legacyBumpCwe(x.cwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
+  for (const x of legacy.fps) legacyBumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
   for (const x of legacy.fns) legacyBumpCwe(x.cwe, 'fn');
   const legacyScoring = {
     tp: legacyTp, fp: legacyFp, fn: legacyFn,
@@ -1730,10 +1730,20 @@ async function runOne(name, app, vulnFamilyMap) {
   // path-traversal) is the bottleneck within a family. CWE comes from
   // the expected-finding entry when present; for actuals (FPs) we
   // try to read f.cwe directly.
+  //
+  // "try to read f.cwe directly" was WRONG for a long time: fps.push() a few
+  // lines above (both here and in scoreLegacy) has only ever set
+  // `reportedCwe` on an FP entry, never a bare `cwe` — `cwe` on an EXPECTED/
+  // FN entry is the ground truth's answer, a concept an unmatched actual
+  // finding doesn't have. `x.cwe` on an fp was therefore always undefined,
+  // silently zeroing every per-CWE FP count regardless of aggregate
+  // precision — found independently three times before being fixed here
+  // (an earlier session's own ledger entry, this session's C# investigation,
+  // and bench/sard/scripts/naive-baseline.mjs's very first real run).
   const perCwe = {};
   const bumpCwe = (cwe, k) => { if (!cwe) return; (perCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++; };
   for (const t of tps) bumpCwe(t.cwe, 'tp');
-  for (const x of fps) bumpCwe(x.cwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
+  for (const x of fps) bumpCwe(x.reportedCwe || (x.vuln && (x.vuln.match(/CWE-\d+/)?.[0])), 'fp');
   for (const x of fns) bumpCwe(x.cwe, 'fn');
 
   // Youden Index (TPR − FPR) — requires a real negative class. OWASP Benchmark

@@ -1558,4 +1558,134 @@ the actual root cause needs corpus-content access this agent deliberately
 does not have, not more blind guessing. Plus one independently-real
 structural-detector precision bug (the taint-blind LDAP regex, item 3) found
 as a side effect, also not yet fixed.
+
+## Session N+2: full remediation pass on the adversarial-premortem's own
+findings — first genuine held-out TEST-split numbers, ever
+
+Following an adversarial premortem run against THIS PRD/ledger itself
+(not the scanner — the benchmarking program), every P0/P1 item and most
+P2 items from that review's remediation plan were implemented and
+verified this session. Full account, including several self-corrections
+where an initial finding didn't survive closer scrutiny, in the session's
+own commit messages (`fix: remediation plan P0 ...`, `fix: remediation
+plan P1 ...`). Headline results:
+
+**First-ever genuine `--split test` measurements, both languages** (the
+`--split` flag existed since 0.151.1 but had never actually been run in
+TEST mode before this session — every prior number in this ledger was
+full-corpus):
+
+| Language | macro-F1 (TEST) | micro-F1 | Precision | Recall | macro-F1 (support≥5) |
+|---|---|---|---|---|---|
+| Java | 46.7% | 48.2% | 60.7% | 39.9% | 52.9% (4 low-support CWEs excluded) |
+| C# | 10.2% | 7.1% | 8.7% | 5.9% | 8.5% (3 low-support CWEs excluded) |
+| PHP | 0.0% | 0.0% | 0.0% | 0.0% | n/a |
+
+**Read this table carefully, not optimistically.** Both Java and C#'s
+held-out numbers land close to their full-corpus counterparts (45.6%/10.8%
+respectively) — genuinely reassuring evidence that neither number was an
+overfitting artifact of measuring on training data, but NEITHER is
+anywhere near the PRD's 80% TEST target, and per §19.1's new velocity
+checkpoint (P2 item 13, added this session), this now counts as a real
+data point toward that trend judgment, not just "another run." PHP's 0.0%
+is the FIRST time this corpus has ever had a real train/dev/test split at
+all (item 5, below) — its number was already known to be ~0% on an
+unstratified sample; this is the same finding on a properly-partitioned
+one, not new information, but now measured correctly instead of on an
+undivided convenience sample.
+
+**Remediation items closed this session** (see individual commits for full
+detail on each):
+- P0-1: CHANGELOG.md erratum disclosing the 0.151.0 headline numbers were
+  full-corpus, not held-out.
+- P0-2: strengthened "not held-out" banners in both the PRD and this
+  ledger's own header.
+- P0-3: traced the premortem's claimed macro-F1 zero-support-CWE inflation
+  bug to dead code (self-corrected — it doesn't fire given how perCwe is
+  actually built); implemented the real surviving fix instead
+  (`macroF1MinSupport`, a support-floor diagnostic).
+- P0-4: new blocking, path-filtered `dependency-currency` CI check —
+  known-vulnerable dependencies previously could merge to `main` and live
+  indefinitely between releases with zero CI signal.
+- P1-5: PHP now has a real train/dev/test split (`phpFamilyKeyFor` — this
+  corpus's actual near-duplicate axis, verified empirically against all
+  42,212 real filenames, is nothing like Juliet's `_NN[ab]` suffix).
+- P1-6: two more genuinely independent external-holdout apps (`pyshelf`,
+  Python; `microledger`, Java — one of this PRD's own three languages),
+  alongside the existing `tinymart`. Investigating microledger's one honest
+  miss found and fixed a real, previously-unknown parser-java.js bug
+  (a hardcoded `'?'` operator and dropped operands past the second in a
+  3+-operand string concatenation) — general, not SARD-specific, with its
+  own regression tests. A SEPARATE, deeper bug (a second method in a class
+  can suppress an earlier method's finding) was isolated but not
+  root-caused; disclosed in `bench/holdout-independent/README.md`.
+- P1-7: PRD §9.4 scorer-delta separation — `scoreLegacy()` (strict,
+  pre-flow-aware) now runs alongside the current scorer in the SAME pass,
+  so a future scorer fix can never again silently blend into a reported
+  "improvement" the way the goodG2B fix once did.
+- P1-8: new weekly `sard-full-test-split` CI job — full corpus, all three
+  languages, `--split test` — closing the gap the 5-CWE Java-only
+  `sard-blind-smoke` smoke job left open. Deliberately informational tier
+  (a weekly job's check-run essentially never lands on a release commit;
+  marking it blocking would be hollow — see `.github/required-checks.json`).
+- P1-9: `--update-baseline` now requires `--reason` and leaves a local
+  (gitignored) audit-log trail with before/after numbers, on both
+  `compare-baseline.mjs` and `holdout-check.mjs`. Caught and fixed a real
+  break this same change would have caused in `sard-blind-smoke`'s existing
+  CI step before it could ship broken.
+- P2-11: `naive-baseline.mjs` — a deliberately taint-blind regex sink-name
+  sweep (Java, 4 families), scored with the same infrastructure, gives
+  macro-F1 an interpretable floor. First real run (`--split test`):
+  micro-F1 13.6%→16.5% (before/after a real per-CWE FP-attribution bug fix
+  found while building this tool — see next item), precision under 10%.
+  Confirms the real scanner (P=60.7% on the same split) is doing
+  substantially more than pattern-matching sink names.
+- **Found while building the naive baseline, fixed at the source**: per-CWE
+  FP attribution in `bench-realworld.js`'s `runOne` read `x.cwe` on an FP
+  entry, a field that has never existed there (`reportedCwe` is the real
+  field name) — silently zeroing every per-CWE FP count regardless of
+  aggregate precision. This is the SAME defect an earlier session's own
+  ledger entry already named and this session's own earlier C# work
+  independently re-derived — found a THIRD time, now actually fixed at the
+  source (`bumpCwe`/`legacyBumpCwe` in `bench-realworld.js`), not just
+  disclosed again.
+- P2-12: threat model doc for the discovery pipeline
+  (`scanner/src/discovery/THREAT_MODEL.md`) plus real hardening —
+  `lenses.js`'s `buildHunterPrompt` now wraps scanned source in explicit
+  untrusted-data markers (data-marking/"spotlighting"), and `disprove.js`'s
+  `buildRefutePrompt` now explicitly frames a candidate's rationale as an
+  unverified claim rather than an implicitly-trusted fact — closing a
+  plausible two-hop injection chain (source comment → hunter's rationale →
+  trusted by the refuter). `scanner/src/llm-validator/` is explicitly
+  flagged as NOT yet reviewed to this depth, not reviewed-and-safe.
+- P2-13: new PRD §19.1 velocity checkpoint — forces an explicit, written
+  decision ("detector-fixable gap, or architectural limit?") after 3
+  flat/negative session-over-session data points for a language, rather
+  than letting incremental patching continue indefinitely with no mechanism
+  for noticing it isn't working.
+
+**Not closed, disclosed honestly**: P2-10, root-cause the harness
+nondeterminism (`nodegoat` F1 16.6%→15.6% across two identical runs,
+originally observed in an earlier session). Time-boxed reproduction attempt
+this session: ran the exact same invocation
+(`node test/benchmark/realworld/bench-realworld.js --app nodegoat --json`,
+matching `holdout-check.mjs`'s own real invocation) 5 times — 2
+sequentially, 3 concurrently (to approximate whatever machine-load
+conditions might have originally triggered it) — and got byte-identical
+`{tp:20, fp:210, fn:6, f1:0.15625}` on all 5. **Could not reproduce it.**
+This is a real, honest result, not a fix: either (a) the underlying cause
+was already resolved as a side effect of unrelated engine work done between
+the original observation and now, or (b) it is genuinely rare/load-
+dependent enough that 5 attempts is not enough to catch it, or (c) it was
+specific to a machine/environment difference (a prior session's CI runner
+vs. this session's local machine) never actually characterized. No basis
+to distinguish between these three without either a documented recurrence
+or a substantially larger repro budget than a bounded pass justifies.
+`adaptiveTolerance` (P1 of the prior premortem) remains in place as
+defense-in-depth for genuine sampling noise regardless of which of the
+three explanations is correct — this finding doesn't argue for removing
+it, only that its original justifying incident could not be reproduced on
+demand. Flagged as a concrete next step: if this recurs, capture full
+stdout/stderr and a process/environment snapshot from BOTH runs before
+concluding anything further about it.
 Both are concrete, bounded next tasks, not "close the loop and it's done."
