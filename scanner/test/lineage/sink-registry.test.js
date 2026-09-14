@@ -202,13 +202,16 @@ test('D3/preservation: a real entry with no confident mapping is `unsupported` a
 
 test('D3/preservation: every `unsupported` sink entry carries a non-empty reason (no silent drop is possible)', () => {
   const unsupported = SINKS.map(reclassifySink).filter((r) => r.coverageStatus === 'unsupported');
-  // Both the Rust catalog additions (SARD 80% F1 push: 10 CWE-78
+  // The Rust catalog additions (SARD 80% F1 push: 10 CWE-78
   // command-injection sinks + 1 CWE-770 resource-exhaustion sink, all
-  // mapped `unsupported` by CWE_MAP's own pre-existing rows) and the Java
-  // SARD push (2 new CWEs, CWE-470/CWE-134, each `unsupported`) landed in
-  // the same merge. Re-measured against the merged catalog, not
-  // hand-summed from either branch's own delta.
-  assert.equal(unsupported.length, 103);
+  // mapped `unsupported` by CWE_MAP's own pre-existing rows), the Java
+  // SARD push (2 new CWEs, CWE-470/CWE-134, each `unsupported`), and the
+  // PHP SARD push (1 new CWE, CWE-98 local/remote file inclusion — the
+  // destination is the PHP interpreter itself, same in-process-computation
+  // shape as the existing CWE-94/CWE-1336 rows) all landed in the same
+  // merge. Re-measured against the merged catalog, not hand-summed from
+  // any branch's own delta.
+  assert.equal(unsupported.length, 112);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -470,15 +473,19 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // (11 sinks: 5 CWE-22 file-constructor sinks + 2 CWE-113 header sinks,
   // all `modeled`, plus 2 new CWEs, CWE-470/CWE-134, each `unsupported`,
   // neither an FR-201 egress category, same reasoning as the existing
-  // CWE-95/CWE-1333 rows) landed in the same merge. Re-measured against
-  // the merged catalog, not hand-summed from either branch's own delta.
+  // CWE-95/CWE-1333 rows), plus the PHP SARD push (a new CWE-98
+  // local/remote file inclusion row, `unsupported` — the destination is the
+  // PHP interpreter itself, same in-process-computation shape as the
+  // existing CWE-94/CWE-1336 rows) landed in the same merge. Re-measured
+  // against the merged catalog, not hand-summed from any branch's own
+  // delta.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 290);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 172);
+  assert.equal(SINKS.length, 303);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 176);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 103);
-  assert.equal(172 + 6 + 9 + 103, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 112);
+  assert.equal(176 + 6 + 9 + 112, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

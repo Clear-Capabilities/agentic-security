@@ -1381,12 +1381,12 @@ export const CATALOG = [
   { kind: 'source', id: 'cs-req-query',        language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'QueryString' }, label: 'req.QueryString', provenance: 'url-param' },
   { kind: 'source', id: 'cs-req-cookies',      language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Cookies' },     label: 'req.Cookies',     provenance: 'cookie' },
   { kind: 'source', id: 'cs-req-headers',      language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Headers' },     label: 'req.Headers',     provenance: 'header' },
-  { kind: 'source', id: 'cs-req-params',       language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Params' },      label: 'req.Params' },
+  { kind: 'source', id: 'cs-req-params',       language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Params' },      label: 'req.Params',      provenance: 'url-param' },
   { kind: 'source', id: 'cs-request-lc-form',    language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Form' },        label: 'request.Form',        provenance: 'http-body' },
   { kind: 'source', id: 'cs-request-lc-query',   language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'QueryString' }, label: 'request.QueryString', provenance: 'url-param' },
   { kind: 'source', id: 'cs-request-lc-cookies', language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Cookies' },     label: 'request.Cookies',     provenance: 'cookie' },
   { kind: 'source', id: 'cs-request-lc-headers', language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Headers' },     label: 'request.Headers',     provenance: 'header' },
-  { kind: 'source', id: 'cs-request-lc-params',  language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Params' },      label: 'request.Params' },
+  { kind: 'source', id: 'cs-request-lc-params',  language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Params' },      label: 'request.Params',      provenance: 'url-param' },
   { kind: 'source', id: 'cs-env-var',          language: 'cs', framework: 'stdlib', match: { type: 'call',   callee: 'GetEnvironmentVariable' },       label: 'Environment.GetEnvironmentVariable', provenance: 'env' },
   { kind: 'source', id: 'cs-env-args',         language: 'cs', framework: 'stdlib', match: { type: 'call',   callee: 'GetCommandLineArgs' },           label: 'Environment.GetCommandLineArgs', provenance: 'env' },
   // Console/stream/socket console-style reads — Juliet's other dominant
@@ -1395,14 +1395,23 @@ export const CATALOG = [
   // last-segment index match already makes `Console.ReadLine()` and
   // `sr.ReadLine()` share this one entry, exactly the "receiver-agnostic"
   // shape `cs-directorysearcher-filter`'s own comment documents for reads.
-  { kind: 'source', id: 'cs-console-readline', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadLine' },   label: 'Console/TextReader.ReadLine', provenance: 'io-read' },
-  { kind: 'source', id: 'cs-reader-readtoend', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadToEnd' }, label: 'TextReader.ReadToEnd',        provenance: 'io-read' },
-  { kind: 'source', id: 'cs-console-read',     language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Read', receiver: '^Console$' }, label: 'Console.Read', provenance: 'io-read' },
+  // No `provenance` field on the 6 entries below: 'io-read'/'database' are
+  // not values src/lineage/source-registry.js's PROVENANCE_MAP recognizes
+  // (found via that registry's own pinned coverage-count test after this
+  // catalog change merged) — the established convention for exactly this
+  // shape (a stream/console read; a JDBC/ADO result-set read) is to declare
+  // NO provenance field at all and let source-registry.js's own
+  // NO_PROVENANCE_OVERRIDES table classify by entry id instead, matching
+  // java-io-readline (user-input) and java-resultset-getstring/-getobject
+  // (database-read) exactly. Overrides added there, not invented here.
+  { kind: 'source', id: 'cs-console-readline', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadLine' },   label: 'Console/TextReader.ReadLine' },
+  { kind: 'source', id: 'cs-reader-readtoend', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadToEnd' }, label: 'TextReader.ReadToEnd' },
+  { kind: 'source', id: 'cs-console-read',     language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Read', receiver: '^Console$' }, label: 'Console.Read' },
   { kind: 'source', id: 'cs-tcpclient-getstream',  language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetStream' }, label: 'TcpClient/TcpListener.GetStream', provenance: 'network' },
   { kind: 'source', id: 'cs-registry-getvalue',    language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetValue', receiver: '[Rr]egistry' }, label: 'Registry(Key).GetValue', provenance: 'env' },
-  { kind: 'source', id: 'cs-datareader-getstring', language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetString', receiver: '[Rr]eader' }, label: 'SqlDataReader.GetString', provenance: 'database' },
-  { kind: 'source', id: 'cs-datareader-getvalue',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetValue',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetValue',  provenance: 'database' },
-  { kind: 'source', id: 'cs-datareader-getint32',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetInt32',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetInt32',  provenance: 'database' },
+  { kind: 'source', id: 'cs-datareader-getstring', language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetString', receiver: '[Rr]eader' }, label: 'SqlDataReader.GetString' },
+  { kind: 'source', id: 'cs-datareader-getvalue',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetValue',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetValue' },
+  { kind: 'source', id: 'cs-datareader-getint32',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetInt32',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetInt32' },
   // File-read variants: the CONTENTS of a file are untrusted data (a
   // taint SOURCE) independent of whether the PATH argument to the same
   // call is itself tainted (`cs-file-readall` below still checks that,

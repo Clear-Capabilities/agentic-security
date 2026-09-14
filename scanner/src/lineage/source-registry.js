@@ -163,6 +163,18 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   // vocabulary for exactly this shape.
   'java-resultset-getstring': 'database-read',
   'java-resultset-getobject': 'database-read',
+  // C# / stdlib console+stream reads and ADO.NET result-set reads — same
+  // two shapes as java-io-readline/java-resultset-getstring above, added by
+  // a separate SARD_80_F1_SCANNER_PRD.md catalog push. catalog.js
+  // deliberately declares no `provenance` field for these (an earlier
+  // draft used invented 'io-read'/'database' provenance strings that
+  // PROVENANCE_MAP has never recognized).
+  'cs-console-readline': 'user-input',
+  'cs-reader-readtoend': 'user-input',
+  'cs-console-read': 'user-input',
+  'cs-datareader-getstring': 'database-read',
+  'cs-datareader-getvalue': 'database-read',
+  'cs-datareader-getint32': 'database-read',
   // Java / Spring annotations
   'java-spring-requestparam': 'http-query',
   'java-spring-pathvariable': 'http-route',

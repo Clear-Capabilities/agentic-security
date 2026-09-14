@@ -138,6 +138,11 @@ export const CWE_MAP = Object.freeze({
   'CWE-78':   Object.freeze({ category: null, status: 'unsupported', why: 'shell/process execution — no FR-201 category models process execution' }),
   'CWE-95':   Object.freeze({ category: null, status: 'unsupported', why: 'code evaluation (eval/Function/exec/compile) — destination is an interpreter' }),
   'CWE-94':   Object.freeze({ category: null, status: 'unsupported', why: 'code injection / template compilation — destination is an interpreter or template engine' }),
+  // PHP SARD catalog addition: include/require executes the included file
+  // as PHP code — same in-process-computation shape as CWE-94/CWE-1336
+  // above (the destination is the PHP interpreter itself), no FR-201
+  // egress category models it either.
+  'CWE-98':   Object.freeze({ category: null, status: 'unsupported', why: 'local/remote file inclusion — destination is the PHP interpreter executing the included file as code, not an FR-201 egress category' }),
   'CWE-1336': Object.freeze({ category: null, status: 'unsupported', why: 'SSTI — destination is a template engine, not a data destination' }),
   'CWE-502':  Object.freeze({ category: null, status: 'unsupported', why: 'deserialization — destination is a deserializer' }),
   'CWE-611':  Object.freeze({ category: null, status: 'unsupported', why: 'XXE — destination is an XML parser' }),

@@ -236,16 +236,25 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // real `provenance` values and resolve `modeled`. Java's own SARD push
   // separately added 3 more no-provenance servlet sources (getAttribute,
   // getQueryString, Cookie.getValue), also `candidate` via
-  // NO_PROVENANCE_OVERRIDES. Both landed on top of each other in the same
-  // merge; the figures below are re-measured against the merged catalog,
-  // not summed by hand from each branch's own delta.
-  assert.equal(SOURCES.length, 229);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 122);
-  // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 93);
+  // NO_PROVENANCE_OVERRIDES. C#'s SARD push added 8 more sources: 2
+  // (`cs-req-params`/`cs-request-lc-params`) declare `provenance: 'url-param'`
+  // directly and resolve `modeled`; 6 (3 console/stream reads, 3 ADO.NET
+  // result-set reads) originally shipped with invented, unrecognized
+  // provenance strings (`'io-read'`/`'database'`) that made them resolve
+  // `unsupported` — fixed at the source (provenance field removed, two new
+  // NO_PROVENANCE_OVERRIDES rows added mirroring java-io-readline/
+  // java-resultset-getstring exactly), so they resolve `candidate`. PHP's
+  // own SARD push added 1 source (`php-readline`, `provenance: 'stdin'`,
+  // the same existing LOSSY convention as `cpp-gets`/`cpp-scanf`) —
+  // `partial`. All four branches landed in the same merge; the figures
+  // below are re-measured against the merged catalog, not summed by hand
+  // from any branch's own delta.
+  assert.equal(SOURCES.length, 260);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 146);
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 15);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 99);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(122 + 14 + 93, SOURCES.length);
+  assert.equal(146 + 15 + 99, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
