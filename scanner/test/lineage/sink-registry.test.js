@@ -197,7 +197,7 @@ test('D3/preservation: a real entry with no confident mapping is `unsupported` a
 
 test('D3/preservation: every `unsupported` sink entry carries a non-empty reason (no silent drop is possible)', () => {
   const unsupported = SINKS.map(reclassifySink).filter((r) => r.coverageStatus === 'unsupported');
-  assert.equal(unsupported.length, 83);
+  assert.equal(unsupported.length, 87);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -437,7 +437,7 @@ test('D3/FR-203 vs §16.7: the two `unresolved`-kind cases are structurally DIST
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned sink coverage counts: 102 modeled / 6 partial / 9 candidate / 83 unsupported', () => {
+test('pinned sink coverage counts: 109 modeled / 6 partial / 9 candidate / 87 unsupported', () => {
   // 194 -> 198 entries and 97 -> 101 modeled: Sub-project H's AC-07 closure
   // added the four CWE-201 AI-model-provider sink entries (OpenAI
   // chat.completions/responses, Anthropic messages, Bedrock
@@ -448,15 +448,24 @@ test('pinned sink coverage counts: 102 modeled / 6 partial / 9 candidate / 83 un
   // (Process.Start non-shell-literal command injection, CWE-78) —
   // `unsupported` because FR-201's category vocabulary has no `process`/
   // shell-execution category, the same reason the pre-existing
-  // `cs-process-start` entry is also unsupported. Re-measured against the
-  // live catalog, not adjusted by arithmetic.
+  // `cs-process-start` entry is also unsupported. 200 -> 211 and
+  // 102 -> 109 modeled / 83 -> 87 unsupported: SARD_80_F1_SCANNER_PRD.md's
+  // Juliet Java coverage push added 11 sinks — 5 CWE-22 file-constructor
+  // sinks (FileInputStream/FileOutputStream/FileReader/FileWriter/
+  // RandomAccessFile) + 2 CWE-113 header sinks (addHeader, new Cookie) all
+  // `modeled` (both CWEs already had CWE_MAP rows), and 2 new CWEs each
+  // contributing 2 `unsupported` sinks: CWE-470 (Class.forName/Method.invoke
+  // reflection) and CWE-134 (String.format/printf uncontrolled format
+  // string) — neither is an FR-201 egress category, same reasoning as the
+  // existing CWE-95/CWE-1333 rows. Re-measured against the live catalog,
+  // not adjusted by arithmetic.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 200);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 102);
+  assert.equal(SINKS.length, 211);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 109);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 83);
-  assert.equal(102 + 6 + 9 + 83, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 87);
+  assert.equal(109 + 6 + 9 + 87, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

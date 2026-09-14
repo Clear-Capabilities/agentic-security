@@ -150,6 +150,10 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   'java-request-getCookies': 'http-cookie',
   'java-request-getInputStream': 'http-body',
   'java-request-getReader': 'http-body',
+  // SARD_80_F1_SCANNER_PRD.md Juliet Java audit
+  'java-request-getAttribute': 'http-query',    // request-scoped attribute bag, same request-derived shape as getParameter
+  'java-request-getQueryString': 'http-query',
+  'java-cookie-getvalue': 'http-cookie',
   // Java / stdlib
   'java-system-getenv': 'env-value',
   'java-system-getProperty': 'env-value',       // JVM system properties, env-adjacent

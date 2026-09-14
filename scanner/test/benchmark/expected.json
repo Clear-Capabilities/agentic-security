@@ -121,6 +121,7 @@
       "XXE:": "xxe",
       "Unsafe XML Parsing": "xxe",
       "JNDI Injection": "jndi-injection",
+      "LDAP Injection": "ldap-injection",
       "Insecure Java Deserialization": "insecure-deserialization",
       "Zip Slip": "zip-slip",
       "Host Header Attack": "host-header",

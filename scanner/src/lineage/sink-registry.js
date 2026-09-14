@@ -146,6 +146,13 @@ export const CWE_MAP = Object.freeze({
   'CWE-787':  Object.freeze({ category: null, status: 'unsupported', why: 'out-of-bounds write — destination is raw memory' }),
   'CWE-1333': Object.freeze({ category: null, status: 'unsupported', why: 'ReDoS — destination is the regex engine' }),
   'CWE-114':  Object.freeze({ category: null, status: 'unsupported', why: 'untrusted library load — destination is the dynamic loader' }),
+  // SARD_80_F1_SCANNER_PRD.md Juliet Java audit: two CWEs newly added to
+  // CATALOG (Class.forName/Method.invoke reflection; String.format/printf
+  // uncontrolled format string). Both are in-process-computation
+  // destinations, same class as CWE-95/CWE-1333 above — no FR-201 egress
+  // category models either.
+  'CWE-470':  Object.freeze({ category: null, status: 'unsupported', why: 'unsafe reflection — destination is the class loader / reflection API, not an FR-201 egress category' }),
+  'CWE-134':  Object.freeze({ category: null, status: 'unsupported', why: 'uncontrolled format string — destination is the string formatter, not an FR-201 egress category' }),
 });
 
 // §5.2 — CWE-79's refinement key. FR-201 lumps "browser DOM or client

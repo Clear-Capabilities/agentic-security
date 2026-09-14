@@ -223,19 +223,23 @@ test('unsupported (defensive fallback): a synthetic no-provenance entry with an 
 // number survive silently for weeks).
 // ───────────────────────────────────────────────────────────────────────────
 
-test('pinned coverage counts: 84 modeled / 14 partial / 87 candidate / 0 unsupported', () => {
+test('pinned coverage counts: 84 modeled / 14 partial / 90 candidate / 0 unsupported', () => {
   const results = SOURCES.map(reclassifySource);
   // SARD_AGENTIC_SECURITY_PRD.md work added 5 no-provenance Java/PHP source
   // entries (java-io-readline, java-resultset-getstring/-getobject,
   // php-session, php-env) — each resolves via NO_PROVENANCE_OVERRIDES (§4.3),
   // which is always `candidate` by construction, so 82 -> 87, 180 -> 185.
-  assert.equal(SOURCES.length, 185);
+  // 185 -> 188, 87 -> 90: SARD_80_F1_SCANNER_PRD.md's Juliet Java coverage
+  // push added 3 more no-provenance servlet sources (getAttribute,
+  // getQueryString, Cookie.getValue), each also resolved via
+  // NO_PROVENANCE_OVERRIDES and therefore also `candidate` by construction.
+  assert.equal(SOURCES.length, 188);
   assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 84);
   // 2 url-fragment + 2 stdin + 5 MCP argument + 5 descriptor-generic cpp (§4.2)
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 14);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 87);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 90);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(84 + 14 + 87, SOURCES.length);
+  assert.equal(84 + 14 + 90, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
