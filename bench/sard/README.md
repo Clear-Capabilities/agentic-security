@@ -64,10 +64,15 @@ npm run bench:sard:split:check -- --app sard-juliet-java-strict   # duplicate-cr
 # Error clustering (pure post-processing over an already-completed run's --json output).
 node ../bench/sard/scripts/analyze-errors.mjs --input <path-to-a-bench-realworld---json-output>
 
-# Local regression gates.
-npm run bench:sard:update-baseline   # after macro-score.mjs has written reports/latest.json
+# Local regression gates. --reason is required (adversarial-premortem
+# remediation P1 item 9): forces a deliberate justification before
+# overwriting the number future runs regress against, and appends a local
+# (gitignored) audit-log entry recording it alongside the before/after
+# numbers — see compare-baseline.mjs's own header for why this stays local
+# rather than committed.
+npm run bench:sard:update-baseline -- --reason "<why this is a legitimate new baseline>"
 npm run bench:sard:check-baseline
-npm run bench:sard:holdout-update-baseline   # external, never-SARD-tuned corpora
+npm run bench:sard:holdout-update-baseline -- --reason "<why>"   # external, never-SARD-tuned corpora
 npm run bench:sard:holdout-check
 ```
 
@@ -225,12 +230,14 @@ Not yet built (Phase 8). The deterministic MCP toolchain (`synthesize_fix` → `
 ## Updating baselines
 
 ```bash
-# SARD numbers (per-app, local-only).
+# SARD numbers (per-app, local-only). --reason is required — see the Quick
+# Start section above.
 node ../bench/sard/scripts/macro-score.mjs --input <run>.json   # writes reports/latest.json
-node ../bench/sard/scripts/compare-baseline.mjs --update-baseline
+node ../bench/sard/scripts/compare-baseline.mjs --update-baseline --reason "<why>"
 
-# External holdout (dvwa, juice-shop, nodegoat, pygoat, railsgoat — never SARD-tuned).
-node ../bench/sard/scripts/holdout-check.mjs --update-baseline
+# External holdout (dvwa, juice-shop, nodegoat, pygoat, railsgoat, tinymart,
+# pyshelf, microledger — never SARD-tuned).
+node ../bench/sard/scripts/holdout-check.mjs --update-baseline --reason "<why>"
 ```
 
 Run `holdout-check.mjs --check-baseline` after any SARD-driven engine change (a new catalog.js

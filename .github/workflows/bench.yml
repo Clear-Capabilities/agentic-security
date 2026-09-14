@@ -283,7 +283,13 @@ jobs:
       - name: Seed SARD baseline (first run only — cache miss)
         if: steps.sard-baseline-cache.outputs.cache-hit != 'true'
         working-directory: scanner
-        run: npm run bench:sard:update-baseline
+        # --reason is required as of the P1 remediation item that added an
+        # audit-log entry to --update-baseline (compare-baseline.mjs) — see
+        # that script's own comment for why (never committed to the repo,
+        # just a local/CI-ephemeral forensic trail). This IS the deliberate
+        # human decision the reason exists to force: a maintainer reviewing
+        # this workflow file chose to auto-seed on first run.
+        run: npm run bench:sard:update-baseline -- --reason "CI first-run baseline seed (sard-blind-smoke, automated per this workflow's own design)"
       - name: Save seeded SARD baseline
         if: steps.sard-baseline-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6

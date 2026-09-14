@@ -1,0 +1,145 @@
+name: SARD full-corpus TEST-split
+
+# Adversarial-premortem remediation (SARD_80_F1_SCANNER_PRD.md review,
+# finding F4.1/F4.2, P1 item 8): the ONLY previously-scheduled SARD job
+# (sard-blind-smoke, in bench.yml) covers 5 of ~100+ CWEs, Java only, and
+# never once used --split test — meaning a regression across the other 95%
+# of CWE surface, or in C#/PHP entirely, or specifically on the held-out
+# split the PRD's own Definition of Done requires, could persist indefinitely
+# with zero CI signal of any kind.
+#
+# This closes that gap: full corpus, all three languages, --split test.
+# Deliberately NOT folded into sard-blind-smoke (different cost class
+# entirely — this is the ~20-30 min-per-language run, not the ~2-3 min
+# smoke slice) and deliberately NOT PR-triggered (this repo already learned,
+# the expensive way, not to make a run this slow block routine work — see
+# .github/required-checks.json's realworld-bench/jetbrains-plugin notes).
+# Weekly schedule + manual dispatch only.
+#
+# HONEST SCOPE LIMITATION, not a silent one: PHP's full corpus is 42,212
+# cases, each requiring 2 subprocess extractions (~0.24s/case measured this
+# session) — a true full run is ~2.75 HOURS, not remotely CI-feasible even
+# weekly. This job runs PHP ingestion bounded to PHP_INGEST_LIMIT (default
+# 5000, matching the largest sample this project has ever ingested) rather
+# than the full corpus. Java and C# ARE run against their genuine full
+# corpora — only PHP is scoped down, and it says so in its own step name.
+#
+# TIER: informational, not blocking (.github/required-checks.json) — a
+# weekly job's check-run essentially never lands on the exact commit a
+# release tags, so marking it "blocking" would be a hollow gesture (per
+# release-check.mjs's evaluateRemoteCi, a check absent from a commit cannot
+# fail the gate — see that function's own doctrine, confirmed by reading it
+# before relying on it). The REAL escalation is a loud, failing CI run
+# (notifications + a red check in commit history), same mechanism
+# sard-blind-smoke/realworld-bench already rely on for their own trend
+# regressions — this is a full-corpus companion to that pattern, not a
+# fundamentally different guarantee.
+on:
+  schedule:
+    # 51 minutes past 4am UTC on Sundays — off the hour, off bench.yml's own
+    # daily 4:17 slot, so the two large scheduled jobs don't queue behind
+    # each other on the same runner pool.
+    - cron: '51 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      php_ingest_limit:
+        description: 'PHP cases to ingest before scoring (full corpus is 42,212 and takes ~2.75h — see this workflow file header)'
+        required: false
+        default: '5000'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  sard-full-test-split:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install scanner dependencies
+        working-directory: scanner
+        run: npm ci
+
+      - name: Cache Juliet Java/C# clones
+        uses: actions/cache@v6
+        with:
+          path: scanner/test/benchmark/realworld/.bench-cache
+          key: sard-full-cache-${{ hashFiles('scanner/test/benchmark/realworld/manifest.json') }}
+
+      - name: Java — full corpus, --split test
+        working-directory: scanner
+        run: npm run bench:sard:java:test-split -- > /tmp/sard-java-test.json
+
+      - name: C# — full corpus, --split test
+        working-directory: scanner
+        run: npm run bench:sard:csharp:test-split -- > /tmp/sard-csharp-test.json
+
+      - name: Cache PHP corpus zip
+        uses: actions/cache@v6
+        with:
+          path: bench/sard/raw/php-vulnerability-test-suite.zip
+          key: sard-php-corpus-v1
+
+      - name: PHP — bounded ingest (see this workflow's own header for why not the full corpus)
+        working-directory: scanner
+        run: |
+          if [ ! -f ../bench/sard/raw/php-vulnerability-test-suite.zip ]; then
+            mkdir -p ../bench/sard/raw
+            curl -sf --max-time 300 -o ../bench/sard/raw/php-vulnerability-test-suite.zip \
+              "$(node -e "console.log(JSON.parse(require('fs').readFileSync('../bench/sard/dataset-lock.json')).sources['sard-php-vulnerability-test-suite'].url)")"
+          fi
+          node ../bench/sard/scripts/ingest-php.mjs --limit "${{ github.event.inputs.php_ingest_limit || '5000' }}"
+
+      - name: PHP — score, --split test
+        working-directory: scanner
+        run: npm run bench:sard:php:test-split -- > /tmp/sard-php-test.json
+
+      - name: Merge all three languages into one report
+        working-directory: scanner
+        run: node ../bench/sard/scripts/merge-results.mjs /tmp/sard-java-test.json /tmp/sard-csharp-test.json /tmp/sard-php-test.json > /tmp/sard-merged.json
+
+      - name: Score merged report (writes reports/latest.json)
+        working-directory: scanner
+        run: node ../bench/sard/scripts/macro-score.mjs --input /tmp/sard-merged.json
+
+      - name: Upload full-corpus TEST-split report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sard-full-test-split-${{ github.run_id }}
+          # Per bench/README.md's policy, never committed to the repo —
+          # this artifact is a run-scoped CI download only.
+          path: bench/sard/reports/latest.json
+
+      # Same human-decides, cache-not-commit pattern as sard-blind-smoke
+      # (bench.yml) — see that job's own comments for the full rationale.
+      # A SEPARATE cache key from sard-blind-smoke's: this baseline covers
+      # full-corpus TEST-split numbers, an entirely different (and much
+      # lower, per the PRD's own current-state numbers) scale than the
+      # 5-CWE Java smoke slice.
+      - name: Restore full-corpus TEST-split baseline
+        id: sard-full-baseline-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: bench/sard/reports/baseline.json
+          key: sard-full-test-split-baseline-v1
+      - name: Seed baseline (first run only — cache miss)
+        if: steps.sard-full-baseline-cache.outputs.cache-hit != 'true'
+        working-directory: scanner
+        run: npm run bench:sard:update-baseline -- --reason "CI first-run full-corpus TEST-split baseline seed (sard-full-test-split, automated per this workflow's own design)"
+      - name: Save seeded baseline
+        if: steps.sard-full-baseline-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: bench/sard/reports/baseline.json
+          key: sard-full-test-split-baseline-v1
+      - name: Check regression gate against the persisted baseline
+        if: steps.sard-full-baseline-cache.outputs.cache-hit == 'true'
+        working-directory: scanner
+        run: npm run bench:sard:check-baseline
