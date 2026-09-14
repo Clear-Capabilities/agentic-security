@@ -411,6 +411,28 @@ export const CATALOG = [
   { kind: 'source', id: 'php-symfony-content', language: 'php', framework: 'symfony', match: { type: 'call', callee: 'getContent' },                  label: '$request->getContent() (Symfony)' },
   { kind: 'source', id: 'php-symfony-get',     language: 'php', framework: 'symfony', match: { type: 'call', callee: 'get' },                         label: '$request->get() (Symfony)' },
 
+  // SARD PHP corpus: file/stream/process-output sources. This corpus's
+  // dominant "source" shape is NOT a superglobal at all — it's a value read
+  // from a file or a subprocess's output (fgets on an fopen'd handle is the
+  // single most common first-source shape in the dev split, ahead of every
+  // superglobal combined), matching the real NIST SARD PHP Vulnerability
+  // Test Suite's own generator convention. Receiver-agnostic (`fgets($fh)`
+  // covers stdin, a socket, or an ordinary file — the taint concern is the
+  // same regardless of which handle) and file-content sources are real,
+  // legitimate untrusted input whenever the file/stream itself isn't a
+  // hardcoded, checked-in constant path.
+  { kind: 'source', id: 'php-fgetc',   language: 'php', framework: 'core', match: { type: 'call', callee: 'fgetc' },   label: 'fgetc()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-fscanf',  language: 'php', framework: 'core', match: { type: 'call', callee: 'fscanf' },  label: 'fscanf()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-file-get-contents', language: 'php', framework: 'core', match: { type: 'call', callee: 'file_get_contents' }, label: 'file_get_contents()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-file',              language: 'php', framework: 'core', match: { type: 'call', callee: 'file' },              label: 'file()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-stream-get-contents', language: 'php', framework: 'core', match: { type: 'call', callee: 'stream_get_contents' }, label: 'stream_get_contents()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-readline', language: 'php', framework: 'core', match: { type: 'call', callee: 'readline' }, label: 'readline()', provenance: 'stdin' },
+  // Assigned FROM (the return value of running a command), distinct from the
+  // sink use of the SAME functions (building a command from tainted input,
+  // see php-shell-exec/php-exec/php-system below) — both directions are real.
+  { kind: 'source', id: 'php-shell-exec-output', language: 'php', framework: 'core', match: { type: 'call', callee: 'shell_exec' }, label: 'shell_exec() return value', provenance: 'file-read' },
+  { kind: 'source', id: 'php-getenv', language: 'php', framework: 'core', match: { type: 'call', callee: 'getenv' }, label: 'getenv()', provenance: 'env' },
+
   // ─── SINKS (SQL — Python) ─────────────────────────────────────────────────
   { kind: 'sink', id: 'py-cursor-execute',     language: 'py', framework: 'dbapi',      match: { type: 'call', callee: 'execute' }, argIndex: 0,
     vuln: { name: 'SQL Injection (cursor.execute)', severity: 'critical', cwe: 'CWE-89',
@@ -589,6 +611,17 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-echo-xss', language: 'php', framework: 'core', match: { type: 'call', callee: '__php_echo__' }, argIndex: 'all',
     vuln: { name: 'Reflected XSS (echo)', severity: 'high', cwe: 'CWE-79',
             remediation: 'Escape output with htmlspecialchars() before echoing user-derived content.' } },
+  // SARD PHP corpus: the backtick shell-execution operator is a language
+  // construct like echo/print (parser-php.js now lowers it to a synthetic
+  // `__php_backtick_exec__` call, see that file for why).
+  { kind: 'sink', id: 'php-backtick-exec', language: 'php', framework: 'core', match: { type: 'call', callee: '__php_backtick_exec__' }, argIndex: 'all',
+    vuln: { name: 'OS Command Injection (backtick operator)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Never build a shell command from user input. Use escapeshellarg() on every interpolated value, or avoid shell_exec()/backticks entirely in favor of a fixed argv array passed to proc_open() or symfony/process.' } },
+  // include/require/include_once/require_once are language constructs
+  // (parser-php.js now lowers them to a synthetic `__php_include__` call).
+  { kind: 'sink', id: 'php-include-lfi', language: 'php', framework: 'core', match: { type: 'call', callee: '__php_include__' }, argIndex: 'all',
+    vuln: { name: 'Local/Remote File Inclusion (include/require)', severity: 'critical', cwe: 'CWE-98',
+            remediation: 'Never include() / require() a user-controlled path. Build an explicit whitelist dispatch table instead: `$pages = ["home" => "home.php", ...]; include $pages[$_GET["page"]] ?? "404.php";`.' } },
 
   // ─── SINKS (XSS / template — JS/TS / browser) ─────────────────────────────
   { kind: 'sink', id: 'js-innerHTML-assign', language: 'js', framework: 'dom', match: { type: 'member', object: '_any_', prop: 'innerHTML' }, argIndex: 'rhs',
@@ -1001,22 +1034,60 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'php-htmlentities',     language: 'php', match: { type: 'call', callee: 'htmlentities' },     effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'php-escapeshellarg',   language: 'php', match: { type: 'call', callee: 'escapeshellarg' },   effect: 'strip', appliesTo: ['cmd'] },
   { kind: 'sanitizer', id: 'php-escapeshellcmd',   language: 'php', match: { type: 'call', callee: 'escapeshellcmd' },   effect: 'strip', appliesTo: ['cmd'] },
-  { kind: 'sanitizer', id: 'php-intval',           language: 'php', match: { type: 'call', callee: 'intval' },           effect: 'strip', appliesTo: ['*'] },
-  // php-filter-var was previously unconditionally appliesTo:['*'] — dangerously
-  // overbroad the moment a universal sanitizer actually KILLS taint (see
-  // dataflow/engine.js's _isCoercionCall): `filter_var($x, FILTER_VALIDATE_INT)`
-  // genuinely coerces to int/false, but the SAME bare callee also covers
-  // `filter_var($x, FILTER_SANITIZE_STRING)` (does not stop SQL/command
-  // injection) and a bare `filter_var($x)` (defaults to FILTER_DEFAULT, a
-  // near no-op) — all three are indistinguishable by callee name alone, and
-  // `parser-php.js` currently lowers the filter CONSTANT argument to
-  // `{kind:'unknown'}` (a bare identifier, not a literal `match.requireLiteralArg`
-  // could gate on), so there is no way today to tell them apart from the IR.
-  // Removed rather than left overbroad: a missing catalog entry is a missed
-  // demotion opportunity (recall-safe); a wrongly-universal one would now
-  // delete a real finding. Re-add once the filter-mode argument is visible to
-  // the IR and the FILTER_VALIDATE_INT/FLOAT forms can be told apart from
-  // FILTER_SANITIZE_*/FILTER_VALIDATE_EMAIL/etc.
+  // SARD PHP corpus, sanitizer-semantics precision pass. `effect: 'coerce'`
+  // (distinct from `effect: 'strip'`) marks a value that becomes a genuinely
+  // non-string type — an int/float can never carry a SQL/XSS/command-
+  // injection payload regardless of family, which is why `appliesTo: ['*']`
+  // is honest here in a way it is NOT for `htmlspecialchars`/
+  // `escapeshellarg` above (those only neutralize ONE family's
+  // metacharacters, appliesTo is scoped accordingly). `effect: 'coerce'`
+  // pairs with dataflow/engine.js's `_isCoercionCall`, which actually KILLS
+  // taint (not just demotes) for a universal-appliesTo sanitizer match.
+  { kind: 'sanitizer', id: 'php-intval',   language: 'php', match: { type: 'call', callee: 'intval' },   effect: 'coerce', appliesTo: ['*'] },
+  { kind: 'sanitizer', id: 'php-floatval', language: 'php', match: { type: 'call', callee: 'floatval' }, effect: 'coerce', appliesTo: ['*'] },
+  // filter_var($x, FILTER_VALIDATE_INT|FLOAT) genuinely coerces (returns the
+  // typed value or `false`) — a real sanitizer. Every OTHER filter_var call
+  // shape (no filter arg at all, defaulting to FILTER_DEFAULT which does
+  // nothing; FILTER_SANITIZE_* filters, which strip characters but do not
+  // guarantee the family-relevant metacharacter is gone; FILTER_VALIDATE_*
+  // for anything other than INT/FLOAT) is NOT a sanitizer for any family
+  // this catalog scores, and the corpus's own PHP `good` cases were found
+  // (this session) to use `filter_var` with `FILTER_VALIDATE_INT`/`FLOAT`
+  // specifically for its 288/288 genuinely-safe cases — a single blanket
+  // `appliesTo: ['*']` entry (the previous version of this catalog) would
+  // have silently marked EVERY filter_var call safe regardless of which
+  // filter was actually passed, which is backwards for FILTER_SANITIZE_*
+  // and simply wrong for the no-filter-arg default. `requireLiteralArg`
+  // scopes the match to the two filters that are actually type coercions;
+  // dataflow/engine.js's `_isCoercionCall` consults this same
+  // `match.requireLiteralArg` gate (shared with the sink-side check via
+  // `_literalArgSatisfied`), so a bare/wrong-filter `filter_var` call
+  // correctly does not qualify as a coercion.
+  { kind: 'sanitizer', id: 'php-filter-var-int',   language: 'php',
+    match: { type: 'call', callee: 'filter_var', requireLiteralArg: { index: 1, pattern: '^FILTER_VALIDATE_INT$' } },
+    effect: 'coerce', appliesTo: ['*'] },
+  { kind: 'sanitizer', id: 'php-filter-var-float', language: 'php',
+    match: { type: 'call', callee: 'filter_var', requireLiteralArg: { index: 1, pattern: '^FILTER_VALIDATE_FLOAT$' } },
+    effect: 'coerce', appliesTo: ['*'] },
+  // settype($x, "integer"|"int"|"float"|"double") mutates $x in place to a
+  // non-string type — same coercion argument as intval/floatval above, but
+  // only when the TYPE argument is actually numeric (settype($x, "string")
+  // or ("array") is the opposite of a sanitizer).
+  { kind: 'sanitizer', id: 'php-settype-numeric', language: 'php',
+    match: { type: 'call', callee: 'settype', requireLiteralArg: { index: 1, pattern: '^"(?:int|integer|float|double)"$' } },
+    effect: 'coerce', appliesTo: ['*'] },
+  // Escaping functions, family-scoped and NOT universal: each only
+  // neutralizes ITS OWN sink's metacharacter grammar. mysql(i)_real_escape_string
+  // and pg_escape_string escape SQL string-literal delimiters specifically —
+  // they do nothing for command/LDAP/XSS injection, and (a real, disclosed
+  // limitation, not fixed here) they are only actually safe when the escaped
+  // value is placed INSIDE a quoted SQL string literal, which this catalog
+  // has no mechanism to verify.
+  { kind: 'sanitizer', id: 'php-mysqli-real-escape-string', language: 'php', match: { type: 'call', callee: 'real_escape_string' }, effect: 'strip', appliesTo: ['sql'] },
+  { kind: 'sanitizer', id: 'php-mysql-real-escape-string',  language: 'php', match: { type: 'call', callee: 'mysql_real_escape_string' }, effect: 'strip', appliesTo: ['sql'] },
+  { kind: 'sanitizer', id: 'php-pg-escape-string',          language: 'php', match: { type: 'call', callee: 'pg_escape_string' }, effect: 'strip', appliesTo: ['sql'] },
+  { kind: 'sanitizer', id: 'php-addslashes',                language: 'php', match: { type: 'call', callee: 'addslashes' }, effect: 'strip', appliesTo: ['sql'] },
+  { kind: 'sanitizer', id: 'php-ldap-escape',                language: 'php', match: { type: 'call', callee: 'ldap_escape' }, effect: 'strip', appliesTo: ['ldap'] },
 
   // ─── SANITIZERS (Ruby) ────────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'rb-rails-html-escape', language: 'rb', match: { type: 'call', callee: 'h' },          effect: 'strip', appliesTo: ['xss'] },
@@ -1587,6 +1658,16 @@ export const CATALOG = [
   { kind: 'source', id: 'cpp-read',    language: 'cpp', framework: null, match: { type: 'call', callee: 'read'    }, label: 'read()',    provenance: 'file-read' },
   { kind: 'source', id: 'cpp-fread',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fread'   }, label: 'fread()',   provenance: 'file-read' },
   { kind: 'source', id: 'cpp-fgets',   language: 'cpp', framework: null, match: { type: 'call', callee: 'fgets'   }, label: 'fgets()',   provenance: 'file-read' },
+  // SARD PHP corpus: fgets()/fread() are receiver-agnostic in this
+  // language too (`fgets($fh)` reads from stdin/a socket/a file alike).
+  // Declared AFTER the cpp entries above on purpose: `matchSource`'s
+  // no-file-context callers (test/cpp-integration.test.js's own
+  // "non-colliding" assertion) tiebreak same-named cross-language entries by
+  // declaration order when `_languageAllowed` has no file extension to
+  // filter on; a real scan always has a file path, so `_languageAllowed`
+  // picks the right language regardless of this order.
+  { kind: 'source', id: 'php-fgets', language: 'php', framework: 'core', match: { type: 'call', callee: 'fgets' }, label: 'fgets()', provenance: 'file-read' },
+  { kind: 'source', id: 'php-fread', language: 'php', framework: 'core', match: { type: 'call', callee: 'fread' }, label: 'fread()', provenance: 'file-read' },
   { kind: 'source', id: 'cpp-gets',    language: 'cpp', framework: null, match: { type: 'call', callee: 'gets'    }, label: 'gets()',    provenance: 'stdin' },
   { kind: 'source', id: 'cpp-scanf',   language: 'cpp', framework: null, match: { type: 'call', callee: 'scanf'   }, label: 'scanf()',   provenance: 'stdin' },
 
