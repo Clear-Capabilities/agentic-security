@@ -123,6 +123,18 @@ function _findClassRanges(code) {
   let m;
   while ((m = CLASS_RE.exec(code)) !== null) {
     const name = m[1];
+    // `CLASS_RE`'s leading `(?:^|[\s;{}])` consumes exactly one boundary
+    // character into `m[0]` (or zero, at `^`). When that boundary
+    // character is itself the newline ending the PREVIOUS line — the
+    // common case for a top-level declaration with no leading
+    // indentation — `m.index` points at that newline, and `_lineAt`
+    // (which counts newlines strictly before its offset) undercounts by
+    // one line as a result. Stepping one character past a real boundary
+    // char lands on the declaration's own first character, which is
+    // always on the correct line regardless of which boundary character
+    // matched (a same-line boundary like a space or `{` is unaffected by
+    // the shift).
+    const declStart = m.index + (/^[\s;{}]/.test(m[0][0]) ? 1 : 0);
     // Skip past an optional generic parameter list and/or base/interface
     // list to find the REAL opening brace — `class Foo<T> : Base<T>, IBar`
     // has two `<...>` regions before the body even starts. Track angle-
@@ -130,24 +142,129 @@ function _findClassRanges(code) {
     // generics don't nest with unbalanced `<`/`>` in valid code), and a
     // `{` encountered while depth > 0 (an unlikely default-value-in-
     // generic-constraint edge case) is simply skipped rather than
-    // mis-treated as the class body.
+    // mis-treated as the class body. `colonAt` records where the
+    // base/interface list starts (the FIRST top-level `:`, C# allows only
+    // one) so it can be sliced out once the real body brace is found.
     let i = m.index + m[0].length;
     let angleDepth = 0;
+    let colonAt = -1;
     while (i < code.length) {
       const c = code[i];
       if (c === '<') angleDepth++;
       else if (c === '>') { if (angleDepth > 0) angleDepth--; }
+      else if (c === ':' && angleDepth === 0 && colonAt === -1) colonAt = i;
       else if (c === '{' && angleDepth === 0) break;
       else if ((c === ';') && angleDepth === 0) { i = -1; break; } // forward-declaration-shaped or malformed; bail
       i++;
     }
     if (i < 0 || i >= code.length || code[i] !== '{') continue;
+    let bases = [];
+    if (colonAt !== -1) {
+      // A generic constraint clause (`where T : class`) can follow the
+      // base list before the body brace and would otherwise be read as
+      // more base names; it always starts with a top-level `where` after
+      // the base list, so truncate there first.
+      let baseText = code.slice(colonAt + 1, i);
+      const whereIdx = baseText.search(/\bwhere\b/);
+      if (whereIdx !== -1) baseText = baseText.slice(0, whereIdx);
+      // Each base/interface name, stripped of its own generic argument
+      // list (`BaseRepo<T>` → `BaseRepo`) — `class-hierarchy.js`-style
+      // consumers key allocation/dispatch types by simple name, same as
+      // every other class-metadata producer in this codebase.
+      bases = _splitTopLevelCommas(baseText).map(p => p.trim().split(/[<\s]/)[0]).filter(Boolean);
+    }
     const extracted = _extractBody(code, i);
     if (!extracted) continue;
-    ranges.push({ name, start: i, end: extracted.end });
+    ranges.push({ name, start: i, end: extracted.end, bases, line: _lineAt(code, declStart) });
     CLASS_RE.lastIndex = i + 1; // resume scanning INSIDE the class body too, for nested classes
   }
   return ranges;
+}
+
+// Scan a member statement (as produced by `_splitStatements` over a class
+// body) to decide whether it's method/constructor-SHAPED (a `(` appears at
+// the statement's own top level, before any `=` or `{`) versus a field or
+// auto-property declaration. Attributes (`[Foo] [Bar(...)]`) prefixing the
+// member push `[`/`]` onto the SAME depth counter `{`/`(` use, so they are
+// transparently skipped without any special-casing — by the time a real
+// modifier/type token appears, depth is back to 0.
+function _memberHeadInfo(stmt) {
+  let depth = 0;
+  let inStr = null;
+  let escape = false;
+  for (let i = 0; i < stmt.length; i++) {
+    const c = stmt[i];
+    if (escape) { escape = false; continue; }
+    if (inStr) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; continue; }
+    if (c === '(' && depth === 0) return { isMethodLike: true };
+    if (c === '{' && depth === 0) return { isMethodLike: false, headEnd: i };
+    if (c === '(' || c === '{' || c === '[' || c === '<') { depth++; continue; }
+    if (c === ')' || c === '}' || c === ']' || c === '>') { if (depth > 0) depth--; continue; }
+    // A real assignment `=`, not `==`/`!=`/`<=`/`>=`/`=>`.
+    if (depth === 0 && c === '=' && stmt[i + 1] !== '=' && stmt[i + 1] !== '>' &&
+        !['=', '!', '<', '>'].includes(stmt[i - 1])) {
+      return { isMethodLike: false, headEnd: i };
+    }
+  }
+  return { isMethodLike: false, headEnd: stmt.length };
+}
+
+// The last bare identifier in `text` — used to pull a declared name off
+// the tail of a type/modifier clause (`private static string sf` → `sf`,
+// `public readonly Dictionary<string, T> map` → `map`) without needing to
+// parse the type itself, which can contain internal whitespace (generic
+// argument lists) that a naive whitespace-split would mis-split on.
+function _lastIdent(text) {
+  const m = String(text || '').match(/([A-Za-z_]\w*)\s*$/);
+  return m ? m[1] : null;
+}
+
+const _NESTED_TYPE_RE = /^(?:(?:public|private|protected|internal|static|sealed|abstract|partial|new|readonly)\s+)*(?:class|struct|interface|enum)\s/;
+
+// Declared field/auto-property names for one class range, from the SAME
+// statement split `_buildCfg` uses for method bodies (`_splitStatements`
+// already treats a balanced `{...}` — a method body, or a property's
+// `{ get; set; }` accessor block — as part of ONE flushed statement, so
+// method declarations and multi-statement bodies never need to be
+// specially excluded here: `_memberHeadInfo` rejects anything method-
+// shaped outright). Nested type declarations are recognized and skipped
+// as a whole (their own fields are not modeled — out of scope for the
+// cross-method field-taint use this exists for).
+function _extractClassFields(code, range) {
+  const bodyText = code.slice(range.start + 1, range.end);
+  const fields = [];
+  for (const { text: stmt } of _splitStatements(bodyText)) {
+    if (!stmt || stmt.startsWith('//') || stmt.startsWith('/*')) continue;
+    if (_NESTED_TYPE_RE.test(stmt)) continue;
+    const info = _memberHeadInfo(stmt);
+    if (info.isMethodLike) continue;
+    const head = stmt.slice(0, info.headEnd);
+    if (stmt[info.headEnd] === '{') {
+      // Auto-property: `public string Name { get; set; }` — one name, no
+      // multi-declarator syntax exists for properties.
+      const name = _lastIdent(head);
+      if (name) fields.push(name);
+      continue;
+    }
+    // Field declaration, possibly multiple comma-separated declarators
+    // (`protected int a, b;`), each optionally carrying its own `= init`.
+    // `_splitTopLevelCommas` is already `<`/`(`/`{`/`[`-depth-aware (used
+    // elsewhere in this file for argument lists), so a comma inside a
+    // generic type argument or an initializer's own call/object literal
+    // does not fracture the declarator list.
+    for (const part of _splitTopLevelCommas(stmt)) {
+      const eq = part.indexOf('=');
+      const before = eq === -1 ? part : part.slice(0, eq);
+      const name = _lastIdent(before);
+      if (name) fields.push(name);
+    }
+  }
+  return fields;
 }
 
 // Innermost class whose range contains `pos` (a method declaration's match
@@ -644,11 +761,38 @@ function _lowerStmt(stmt, line) {
   // throw
   if (/^throw\b/.test(s)) return { kind: 'throw', line, value: _lowerExpr(s.replace(/^throw\s*/, '')) };
   // assign:   `var x = …`  `Type x = …`  `x = …`  `x.y = …`
-  const m = s.match(/^(?:(?:var|[A-Za-z_][\w<>?,\s.]*)\s+)?([A-Za-z_][\w.]*?)\s*=\s*(.+)$/s);
+  // The leading type/`var` clause is now its own capture group: when it's
+  // present the regex engine could only have reached a valid overall match
+  // by consuming a real type token before the target (a plain reassignment
+  // like `data = other` never lets that branch match, per the backtracking
+  // this file's other capture-group comments already document — the
+  // optional group fails to close at any point before `=` when the target
+  // itself carries no leading type). That gives a free, correct signal for
+  // `decl` — a local variable's DECLARATION vs. a later reassignment —
+  // needed by cross-method field-taint analysis to tell a genuine field
+  // write (`sf = data;`, no type clause, class field) from a shadowing
+  // local declaration of the same name.
+  const m = s.match(/^(?:((?:var|[A-Za-z_][\w<>?,\s.]*))\s+)?([A-Za-z_][\w.]*?)\s*=\s*(.+)$/s);
   if (m) {
-    const target = m[1];
-    const sourceText = m[2];
-    return { kind: 'assign', line, target, source: _lowerExpr(sourceText) };
+    const typeClause = m[1];
+    const target = m[2];
+    const sourceText = m[3];
+    const node = { kind: 'assign', line, target, source: _lowerExpr(sourceText) };
+    if (typeClause) node.decl = true;
+    return node;
+  }
+  // Bare declaration with no initializer: `string data;`, `int i;`,
+  // `List<T> xs;`. `_splitStatements` has already stripped the trailing
+  // `;`, so a genuine no-initializer declaration is exactly two
+  // whitespace-separated tokens (type, name) with none of `=(){}` anywhere
+  // — no other valid C# statement shape looks like that. Modeled as an
+  // assign with an unknown source (there is nothing to propagate yet) so
+  // `decl:true` on it is visible to the same consumers that read the
+  // initializer-bearing case above, rather than being silently absent as
+  // an `unknown`-kind node.
+  const declOnly = s.match(/^(?:var|[A-Za-z_][\w<>?[\],.]*?)\s+([A-Za-z_]\w*)$/);
+  if (declOnly && !/[=(){}]/.test(s)) {
+    return { kind: 'assign', line, target: declOnly[1], source: { kind: 'unknown' }, decl: true };
   }
   // statement-form call
   const cm = matchBalancedCall(s, /^([A-Za-z_][\w.]*)/);
@@ -1034,5 +1178,11 @@ export function parseCSharpFile(file, code) {
     });
     METHOD_RE.lastIndex = extracted.end + 1;
   }
-  return { file, functions, topLevel: null };
+  const classes = classRanges.map(r => ({
+    name: r.name,
+    line: r.line,
+    bases: r.bases,
+    fields: _extractClassFields(code, r),
+  }));
+  return { file, functions, classes, topLevel: null };
 }

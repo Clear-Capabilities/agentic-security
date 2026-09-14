@@ -82,6 +82,8 @@
     "prefix": {
       "Command Injection": "command-injection",
       "SQL Injection": "sql-injection",
+      "LDAP Injection": "ldap-injection",
+      "XPath Injection": "xpath-injection",
       "Code Injection": "code-injection",
       "VM Sandbox Execution": "code-injection",
       "NoSQL Injection": "sql-injection",

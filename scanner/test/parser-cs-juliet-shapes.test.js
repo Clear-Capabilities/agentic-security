@@ -109,3 +109,72 @@ public class A {
   const assigns = nodesOf(ir, 'Bad').filter(n => n.kind === 'assign' && n.target === 'data');
   assert.ok(assigns.length >= 7, `expected at least 7 data assigns, got ${assigns.length}`);
 });
+
+test('parseCSharpFile: ir.classes carries name, line, bases, and declared fields', () => {
+  const code = `
+using System;
+namespace T {
+public abstract class Base81 { public abstract void Action(string data); }
+public class Impl81 : Base81, IDisposable {
+    private static string sf;
+    public string inst = "";
+    protected int a, b;
+    public string Name { get; set; }
+    public override void Action(string data) { sf = data; }
+    public void Dispose() { }
+}
+public struct Point { public int X; public int Y; }
+}
+`;
+  const ir = parseCSharpFile('A.cs', code);
+  assert.ok(Array.isArray(ir.classes), 'expected ir.classes');
+  const byName = Object.fromEntries(ir.classes.map(c => [c.name, c]));
+  assert.deepEqual(byName.Base81.bases, []);
+  assert.equal(byName.Base81.line, 4);
+  assert.deepEqual(byName.Impl81.bases, ['Base81', 'IDisposable']);
+  assert.deepEqual([...byName.Impl81.fields].sort(), ['Name', 'a', 'b', 'inst', 'sf']);
+  assert.deepEqual([...byName.Point.fields].sort(), ['X', 'Y']);
+});
+
+test('parseCSharpFile: generic base list is recorded by simple name', () => {
+  const code = `
+public class Repo<T> : BaseRepo<T>, IRepo<T> where T : class {
+    private readonly List<T> items = new List<T>();
+    public void Add(T x) { items.Add(x); }
+}
+`;
+  const ir = parseCSharpFile('A.cs', code);
+  const repo = ir.classes.find(c => c.name === 'Repo');
+  assert.deepEqual(repo.bases, ['BaseRepo', 'IRepo']);
+  assert.deepEqual(repo.fields, ['items']);
+});
+
+test('parseCSharpFile: declaration assigns carry decl:true, reassignments do not', () => {
+  const code = `
+public class A {
+    public void Bad() {
+        string data;
+        data = "";
+        string other = Console.ReadLine();
+        var third = other;
+        data = other;
+        using (SqlCommand cmd = new SqlCommand(data, conn)) { cmd.ExecuteNonQuery(); }
+        this.inst = data;
+    }
+}
+`;
+  const ir = parseCSharpFile('A.cs', code);
+  const assigns = nodesOf(ir, 'Bad').filter(n => n.kind === 'assign');
+  const byLine = Object.fromEntries(assigns.map(n => [n.line, n]));
+  assert.equal(byLine[4].target, 'data');
+  assert.equal(byLine[4].decl, true);
+  assert.equal(byLine[4].source.kind, 'unknown');
+  assert.equal(byLine[5].decl, undefined);
+  assert.equal(byLine[6].decl, true);
+  assert.equal(byLine[7].decl, true);
+  assert.equal(byLine[8].decl, undefined);
+  assert.equal(byLine[9].decl, true);
+  assert.equal(byLine[9].target, 'cmd');
+  assert.equal(byLine[10].target, 'this.inst');
+  assert.equal(byLine[10].decl, undefined);
+});
