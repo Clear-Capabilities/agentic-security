@@ -59,14 +59,36 @@ export function buildClassHierarchy(perFileIR) {
         if (!c || !c.name) continue;
         let cls = classes.get(c.name);
         if (!cls) {
-          cls = { name: c.name, file, line: c.line || 0, methods: new Set(), extends: null };
+          cls = { name: c.name, file, line: c.line || 0, methods: new Set(), extends: null, bases: [], fields: new Set() };
           classes.set(c.name, cls);
         }
+        if (!cls.bases) cls.bases = [];
+        if (!cls.fields) cls.fields = new Set();
         // v1 keeps a single base: the CHA walk in resolveMethod follows one
         // chain. Multiple inheritance is flattened to the first base, which is
         // a deliberate over-simplification recorded in PRD §6.8.
         if (!cls.extends && Array.isArray(c.bases) && c.bases.length) {
           cls.extends = c.bases[0];
+        }
+        // Full base/interface list (SARD_80_F1_SCANNER_PRD.md — abstract/
+        // interface-receiver dispatch, Juliet flow variants 81/82): `extends`
+        // above follows exactly one chain for resolveMethod's walk, but a
+        // receiver typed as an INTERFACE (`IAction b = new BadImpl();`) needs
+        // to know every implemented name, not just the first. Purely additive
+        // — nothing previously read `cls.bases`.
+        if (Array.isArray(c.bases)) {
+          for (const b of c.bases) if (b && !cls.bases.includes(b)) cls.bases.push(b);
+        }
+        // Declared field names (SARD_80_F1_SCANNER_PRD.md — cross-method field
+        // taint, Juliet flow variants 45/65-68): lets the taint engine tell a
+        // field write (`sf = data;`, `this.inst = data;`) apart from an
+        // ordinary local variable with the same name in a DIFFERENT method of
+        // the same class, without which a field write in one method could
+        // never be told to taint a read in another. Merged across every file
+        // that contributes to this class (partial classes, or a parser that
+        // emits one `ir.classes` entry per method's enclosing file).
+        if (Array.isArray(c.fields)) {
+          for (const f of c.fields) if (f) cls.fields.add(f);
         }
       }
     }
@@ -113,7 +135,7 @@ export function buildClassHierarchy(perFileIR) {
       methodOwners.set(fn.qid, className);
       let cls = classes.get(className);
       if (!cls) {
-        cls = { name: className, file, line: fn.line || 0, methods: new Set(), extends: null };
+        cls = { name: className, file, line: fn.line || 0, methods: new Set(), extends: null, bases: [], fields: new Set() };
         classes.set(className, cls);
       }
       cls.methods.add(methodName);

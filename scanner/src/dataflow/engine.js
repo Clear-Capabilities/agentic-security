@@ -1206,7 +1206,16 @@ function step(node, stateIn, callContext) {
         // target, so it reaches this rule instead of the assign path. The
         // matching read lowers to `bag.[]`, already covered by the tainted
         // receiver prefix.
-        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|__setitem__)$/;
+        // Case-insensitive: C#/Java collection APIs use PascalCase (`List.Add`,
+        // `Dictionary.Insert`, `Stack.Push`) while JS/Python/Ruby use lowerCamel
+        // (`push`, `append`, `add`) — a case-sensitive regex silently matched
+        // only the latter group, so C#'s `list.Add(data)` (Juliet flow variants
+        // 71-74, container-element taint) never registered as a mutator at all.
+        // Widening to case-insensitive only ADDS matches (recall-preserving);
+        // no existing lowercase mutator name collides with an unrelated,
+        // dangerous PascalCase method by accident (checked against the C#/Java
+        // catalog sink list).
+        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|addrange|enqueue|__setitem__)$/i;
         // Mutate the state Set IN PLACE (the binding is const; the call case
         // returns this same Set ref). Avoids touching the unrelated
         // mutated-param paths in this case, keeping the blast radius to
@@ -1463,6 +1472,13 @@ function analyzeFunction(fn, entryState, callContext) {
   }
 
   const exit = outStates.get(fn.cfg.exit) || new Set();
+  // Real cross-method field taint (SARD_80_F1_SCANNER_PRD.md, Juliet flow
+  // variants 45/65-68): the runTaintEngine pre-pass needs the RAW exit state
+  // (every tainted access path, not just the ones matching a declared param)
+  // to tell whether THIS function's own body genuinely taints a class field —
+  // see the pre-pass loop below for why this must be the real exit state, not
+  // a guess.
+  if (callContext) callContext._exitState = exit;
   // v0.66 — record which params are tainted at function exit so the
   // caller's applyAtCallSite can propagate that mutated taint back. We
   // intersect the exit-state with the function's declared params (only
@@ -1539,6 +1555,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // unbounded blowup). v0.66 — the inner ctx now records mutatedParams
   // via _mutatedParamsOut so cross-function param mutation propagates.
   const MAX_FP_ITERS = 3;
+  // qid -> this function's own exit-state (every tainted access path at
+  // return, from the LAST pre-pass iteration only — see the class-field
+  // cross-taint pass below for why this must be a real, already-observed
+  // exit state rather than a re-derived guess).
+  const exitStateByQid = new Map();
   for (let it = 0; it < MAX_FP_ITERS; it++) {
     if (Date.now() > deadlineMs) break;
     // Tracks whether this iteration actually changed any cached summary's
@@ -1569,6 +1590,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // (sinkId, file, line), so re-discovering the same empty-entry finding
       // multiple times collapses to one reported finding, never a duplicate.
       _collectFindings(fn, ctx._findings);
+      exitStateByQid.set(fn.qid, ctx._exitState || new Set());
       const next = {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
@@ -1602,25 +1624,52 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     // `changedThisIter` tracks actual value changes instead.
     if (!changedThisIter) break;
   }
-  // Class-field cross-taint pass: when a method writes tainted data to _this_.field,
-  // re-analyze other methods of the same class with those fields in the entry state.
-  const classTaintedFields = new Map();
-  for (const fn of fnList) {
-    if (Date.now() > deadlineMs) break;
-    const sum = summaryCache.get(fn.qid, new Set());
-    if (!sum || !sum.mutatedParams) continue;
-    for (const p of sum.mutatedParams) {
-      if (typeof p === 'string' && p.startsWith('_this_.')) {
-        const classPrefix = fn.qid.split('::')[0] + '::';
-        if (!classTaintedFields.has(classPrefix)) classTaintedFields.set(classPrefix, new Set());
-        classTaintedFields.get(classPrefix).add(p);
+  // Class-field cross-taint pass (SARD_80_F1_SCANNER_PRD.md — Juliet flow
+  // variants 45/65-68: a method writes a tainted value to a static or
+  // instance field and a SIBLING method of the same class reads it into a
+  // sink). The mechanism this replaced kept only the JS/Babel `_this_.field`
+  // mutated-PARAM shape — but `_mutatedParamsOut` (above) only ever
+  // intersects a function's own EXIT state against its declared PARAMS, and
+  // a field is never a param, so that map was permanently empty for every
+  // hand-rolled parser (C#, Java, PHP, Go, Ruby, Kotlin) — confirmed by
+  // direct probing, not assumed: none of `sf = data;`, `this.inst = data;`
+  // ever populated it, for any language.
+  //
+  // Real fix: `callContext._exitState` (stamped just above) is EVERY tainted
+  // access path at a function's exit, not just the ones matching a param
+  // name. Cross-reference it against the class's DECLARED FIELD NAMES (from
+  // `ir.classes[].fields`, via `buildClassHierarchy` — only populated by a
+  // parser that emits it; classes with no field list simply contribute
+  // nothing here, which is a missed opportunity, never a wrong edge) to ask
+  // "did this method's own body, taken alone, genuinely taint one of its
+  // class's fields?" — a REAL, observed fact from the empty-entry pre-pass
+  // above, not a guess. Both the bare form (`sf`) and the `this.`-qualified
+  // form (`this.inst`, `_this_.inst`) are checked, since different parsers
+  // lower a field write differently.
+  const cha = opts._cha;
+  const classTaintedFields = new Map(); // className -> Set(bareFieldName)
+  if (cha && cha.methodOwners && cha.classes) {
+    for (const fn of fnList) {
+      if (Date.now() > deadlineMs) break;
+      const className = cha.methodOwners.get(fn.qid);
+      if (!className) continue;
+      const cls = cha.classes.get(className);
+      const declaredFields = cls && cls.fields;
+      if (!declaredFields || !declaredFields.size) continue;
+      const exitState = exitStateByQid.get(fn.qid);
+      if (!exitState || !exitState.size) continue;
+      for (const field of declaredFields) {
+        if (isCoveredBy(exitState, field) || isCoveredBy(exitState, `this.${field}`) || isCoveredBy(exitState, `_this_.${field}`)) {
+          if (!classTaintedFields.has(className)) classTaintedFields.set(className, new Set());
+          classTaintedFields.get(className).add(field);
+        }
       }
     }
   }
-  for (const [classPrefix, fields] of classTaintedFields) {
+  for (const [className, fields] of classTaintedFields) {
     if (Date.now() > deadlineMs) break;
     for (const fn of fnList) {
-      if (!fn.qid.startsWith(classPrefix)) continue;
+      if (cha.methodOwners.get(fn.qid) !== className) continue;
       if (summaryCache.has(fn.qid, fields)) continue;
       const ctx = {
         _findings: [], _taintSources: [], _returnTainted: false,
@@ -1631,15 +1680,22 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _cha: opts._cha,
         _pointsTo: opts._pointsTo,
       };
-      try { analyzeFunction(fn, _unionAnnotationTaint(fn, fields), ctx); } catch {}
-      // `findings` carries the REAL findings from this probe (was hardcoded
-      // `[]`, discarding them) — but this pass is speculative (every field
-      // in `fields` is assumed simultaneously tainted; nothing here confirms
-      // this exact method is ever reached with that state), so it must not
-      // report them itself. They ride on the cached summary and are only
-      // surfaced by _mergeSummaryFindings when a REAL call site (assign,
-      // plain-call, or higher-order) actually consults this qid+entry —
-      // at that point a genuine reachable caller has been established.
+      // Seed BOTH the bare and `this.`-qualified spelling of every tainted
+      // field so a reading method sees the taint regardless of which form it
+      // uses to reference the field — mirrors the write-side check above.
+      const seeded = new Set();
+      for (const f of fields) { seeded.add(f); seeded.add(`this.${f}`); seeded.add(`_this_.${f}`); }
+      try { analyzeFunction(fn, _unionAnnotationTaint(fn, seeded), ctx); } catch {}
+      // Unlike the k=2 pass below, this is NOT speculative: `fields` was
+      // derived from a REAL, already-observed write elsewhere in this exact
+      // class (the loop above), so a sink this re-analysis finds is a real,
+      // reachable flow — report it directly instead of waiting for a call
+      // site that will never come (sibling methods have no caller/callee
+      // relationship for the taint engine to discover on its own).
+      _collectFindings(fn, ctx._findings);
+      // `findings` still rides on the cached summary too, for the (rarer)
+      // case where a real caller ALSO consults this exact qid+entry pair via
+      // _mergeSummaryFindings — dedup in _collectFindings makes this safe.
       summaryCache.set(fn.qid, fields, {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
