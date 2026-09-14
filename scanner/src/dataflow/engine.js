@@ -359,6 +359,17 @@ function exprTaint(expr, state, callContext) {
     case 'object':            return (expr.props || []).some(p => exprTaint(p.value, state, callContext));
     case 'array':             return (expr.elements || []).some(e => exprTaint(e, state, callContext));
     case 'call': {
+      // Sound taint-kill for a coercion sanitizer used INLINE (not assigned
+      // to a variable first) — `sink("x=" . intval($_GET['id']))`,
+      // `if (sink(intval($x)))`. See _isCoercionCall's header comment for why
+      // this specific class of sanitizer is the one exception to "never kill
+      // taint on a sanitizer call": a genuine type coercion makes the VALUE
+      // itself non-injectable, independent of which sink it reaches, so its
+      // own return value is clean regardless of whether its argument was
+      // tainted. Checked first and returns immediately — a coerced value
+      // cannot un-clean itself via its own (nonexistent, since this exits
+      // early) receiver/nested-return taint.
+      if (_isCoercionCall(expr)) return false;
       // The call's own arguments OR — PRD R10 — the resolved callee's own
       // return-taint summary. Taint-recall PRD (80%): this used to
       // short-circuit on args-tainted and SKIP _nestedCallReturnTainted
@@ -684,6 +695,52 @@ function _sanitizersForExpr(expr, callContext) {
   return out;
 }
 
+// Sound taint-kill for TYPE-COERCION sanitizers (SARD_80_F1_SCANNER_PRD.md).
+//
+// Every OTHER sanitizer in this engine only ever DEMOTES (sanitizer-gate.js /
+// proof-gate.js), never kills taint outright — the well-documented reason is
+// that a sanitizer's effect is family-specific (`htmlspecialchars` does
+// nothing for SQLi), so killing taint on ANY sanitizer call would silently
+// drop a real vulnerability whenever an unrelated escaper happened to sit on
+// the path. A catalog entry tagged `appliesTo: ['*']` is categorically
+// different: it is registered specifically because it changes the VALUE'S
+// TYPE (intval, filter_var(..., FILTER_VALIDATE_INT), parseInt, Integer.parseInt,
+// strconv.Atoi, ...), not because it neutralizes one syntax. A value that has
+// gone through a genuine type coercion cannot carry injection syntax for ANY
+// string-based family at once — the same reasoning that forbids a blanket
+// kill for family-specific sanitizers affirmatively REQUIRES one here, or
+// every one of these 17+ catalog entries does nothing but cost confidence
+// point.
+//
+// Scoped tightly: only fires when `expr` IS ITSELF a direct call whose own
+// callee catalog-matches a universal sanitizer — never a guess, never
+// something buried deeper in an unrelated expression tree (that's what
+// `_sanitizersForExpr` already recall-preservingly handles for the DEMOTE
+// path). `data = intval($_GET['x']);` fires this; `data = "x=" . intval($y);`
+// (the coercion is only PART of the value) does not, and correctly still
+// gets full taint tracking on the concatenation.
+// Shared with _sinkFindingsForCall's identical sink-side check (below): a
+// `requireLiteralArg` gate applies equally to a SANITIZER entry whose
+// effectiveness depends on which literal was passed (`filter_var($x,
+// FILTER_VALIDATE_INT)` genuinely coerces; `filter_var($x,
+// FILTER_SANITIZE_STRING)` or a bare `filter_var($x)` does not — both are the
+// SAME callee, distinguished only by this argument). Fails CLOSED: a missing
+// or non-literal arg does not satisfy the requirement, same direction every
+// other precision gate in this file takes when evidence is unavailable.
+function _literalArgSatisfied(argExprs, requireLiteralArg) {
+  const { index, pattern } = requireLiteralArg;
+  const checkArg = (argExprs || [])[index];
+  return !!checkArg && checkArg.kind === 'literal' && new RegExp(pattern).test(String(checkArg.value));
+}
+
+function _isCoercionCall(expr) {
+  if (!expr || expr.kind !== 'call' || !expr.callee) return false;
+  const cat = matchSinkOrSanitizer(expr.callee, _currentFile);
+  if (!Array.isArray(cat)) return false;
+  return cat.some(e => e.kind === 'sanitizer' && Array.isArray(e.appliesTo) && e.appliesTo.includes('*')
+    && (!e.match || !e.match.requireLiteralArg || _literalArgSatisfied(expr.args, e.match.requireLiteralArg)));
+}
+
 // cat / argTaints: the result of _matchCallCatalog (computed by the caller,
 // at whatever point in its case is appropriate for its own state-mutation
 // ordering).
@@ -720,11 +777,7 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         // is NOT satisfied, same direction proof-gate.js and every other
         // precision annotator in this codebase take when evidence is
         // simply unavailable rather than affirmatively clean.
-        if (e.match && e.match.requireLiteralArg) {
-          const { index, pattern } = e.match.requireLiteralArg;
-          const checkArg = (argExprs || [])[index];
-          if (!checkArg || checkArg.kind !== 'literal' || !new RegExp(pattern).test(String(checkArg.value))) continue;
-        }
+        if (e.match && e.match.requireLiteralArg && !_literalArgSatisfied(argExprs, e.match.requireLiteralArg)) continue;
         // `match.requireKeyword` — the KEYWORD-argument analogue of the
         // positional gate above, for languages where the dangerous form is
         // selected by a named argument rather than a positional literal.
@@ -1078,7 +1131,12 @@ function step(node, stateIn, callContext) {
           }
         }
       }
-      if (src && target) {
+      if (target && _isCoercionCall(node.source)) {
+        // See _isCoercionCall's header comment: a real type coercion kills
+        // taint outright, unconditionally of sink family — the one case in
+        // this engine where a sanitizer does more than demote.
+        newState = removePathAndDescendants(newState, target);
+      } else if (src && target) {
         newState = _addPathAliasAware(newState, target, callContext);
         const sourcePath = accessPathOf(node.source);
         if (sourcePath) newState = addPath(newState, sourcePath);

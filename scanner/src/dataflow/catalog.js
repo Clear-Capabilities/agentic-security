@@ -975,7 +975,21 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'php-escapeshellarg',   language: 'php', match: { type: 'call', callee: 'escapeshellarg' },   effect: 'strip', appliesTo: ['cmd'] },
   { kind: 'sanitizer', id: 'php-escapeshellcmd',   language: 'php', match: { type: 'call', callee: 'escapeshellcmd' },   effect: 'strip', appliesTo: ['cmd'] },
   { kind: 'sanitizer', id: 'php-intval',           language: 'php', match: { type: 'call', callee: 'intval' },           effect: 'strip', appliesTo: ['*'] },
-  { kind: 'sanitizer', id: 'php-filter-var',       language: 'php', match: { type: 'call', callee: 'filter_var' },       effect: 'strip', appliesTo: ['*'] },
+  // php-filter-var was previously unconditionally appliesTo:['*'] — dangerously
+  // overbroad the moment a universal sanitizer actually KILLS taint (see
+  // dataflow/engine.js's _isCoercionCall): `filter_var($x, FILTER_VALIDATE_INT)`
+  // genuinely coerces to int/false, but the SAME bare callee also covers
+  // `filter_var($x, FILTER_SANITIZE_STRING)` (does not stop SQL/command
+  // injection) and a bare `filter_var($x)` (defaults to FILTER_DEFAULT, a
+  // near no-op) — all three are indistinguishable by callee name alone, and
+  // `parser-php.js` currently lowers the filter CONSTANT argument to
+  // `{kind:'unknown'}` (a bare identifier, not a literal `match.requireLiteralArg`
+  // could gate on), so there is no way today to tell them apart from the IR.
+  // Removed rather than left overbroad: a missing catalog entry is a missed
+  // demotion opportunity (recall-safe); a wrongly-universal one would now
+  // delete a real finding. Re-add once the filter-mode argument is visible to
+  // the IR and the FILTER_VALIDATE_INT/FLOAT forms can be told apart from
+  // FILTER_SANITIZE_*/FILTER_VALIDATE_EMAIL/etc.
 
   // ─── SANITIZERS (Ruby) ────────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'rb-rails-html-escape', language: 'rb', match: { type: 'call', callee: 'h' },          effect: 'strip', appliesTo: ['xss'] },
@@ -1207,7 +1221,18 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'py-urllib-quote',        language: 'py', match: { type: 'call', callee: 'quote_plus' },     effect: 'strip', appliesTo: ['url'] },
   { kind: 'sanitizer', id: 'py-int-v2',                 language: 'py', match: { type: 'call', callee: 'int' },            effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'py-float-v2',               language: 'py', match: { type: 'call', callee: 'float' },          effect: 'strip', appliesTo: ['*'] },
-  { kind: 'sanitizer', id: 'py-ast-literal-eval',    language: 'py', match: { type: 'call', callee: 'literal_eval' },   effect: 'strip', appliesTo: ['*'] },
+  // NOT a type-coercion sanitizer despite the old appliesTo:['*'] tag:
+  // ast.literal_eval("'; DROP TABLE users;--'") returns that exact STRING
+  // unchanged — a Python string literal evaluates to itself. Its only real
+  // safety property is preventing arbitrary CODE execution (the eval()
+  // replacement it exists for), not neutralizing the resulting value's
+  // content for any other downstream sink. `appliesTo:['*']` was safe only
+  // as long as a sanitizer match merely DEMOTED confidence; now that
+  // dataflow/engine.js's _isCoercionCall treats a universal tag as licence to
+  // KILL taint outright, this entry would silently hide a real SQL/command
+  // injection whose payload happens to parse as a Python literal. appliesTo
+  // left empty (never matches any family) until this is scoped correctly.
+  { kind: 'sanitizer', id: 'py-ast-literal-eval',    language: 'py', match: { type: 'call', callee: 'literal_eval' },   effect: 'strip', appliesTo: [] },
   { kind: 'sanitizer', id: 'py-yaml-safe-load',      language: 'py', match: { type: 'call', callee: 'safe_load' },      effect: 'strip', appliesTo: ['deserial'] },
   { kind: 'sanitizer', id: 'py-pathlib-resolve',     language: 'py', match: { type: 'call', callee: 'resolve' },        effect: 'taintIf-not-pinned', appliesTo: ['path'] },
   { kind: 'sanitizer', id: 'py-defusedxml',          language: 'py', match: { type: 'call', callee: 'fromstring' },     effect: 'strip', appliesTo: ['xxe'] },     // when called from defusedxml namespace
@@ -1337,8 +1362,23 @@ export const CATALOG = [
   { kind: 'sanitizer', id: 'cs-html-encode',    language: 'cs', match: { type: 'call', callee: 'HtmlEncode' },     effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'cs-url-encode',     language: 'cs', match: { type: 'call', callee: 'UrlEncode' },      effect: 'strip', appliesTo: ['url'] },
   { kind: 'sanitizer', id: 'cs-path-getfullpath',language: 'cs', match: { type: 'call', callee: 'GetFullPath' },   effect: 'taintIf-not-pinned', appliesTo: ['path'] },
-  { kind: 'sanitizer', id: 'cs-int-parse',      language: 'cs', match: { type: 'call', callee: 'Parse' },          effect: 'strip', appliesTo: ['*'] },
-  { kind: 'sanitizer', id: 'cs-int-tryparse',   language: 'cs', match: { type: 'call', callee: 'TryParse' },       effect: 'strip', appliesTo: ['*'] },
+  // Receiver-scoped to numeric types (SARD_80_F1_SCANNER_PRD.md): `Parse` and
+  // `TryParse` are extremely common bare method names across .NET — `XDocument
+  // .Parse`, `JObject.Parse`, `DateTime.Parse`, `Uri`-adjacent parsers, and any
+  // custom type's own `Parse` all share the name, and NONE of them coerce to a
+  // non-string-injectable value the way a numeric parse does (a parsed XML/JSON
+  // document's text content round-trips the original characters right back out
+  // through `.ToString()`). Unscoped, this entry was already a precision bug
+  // under the old demote-only semantics; it becomes an active false-negative
+  // risk now that a universal tag can KILL taint outright (engine.js's
+  // _isCoercionCall) — `var doc = XDocument.Parse(tainted); sink(doc.Value);`
+  // would otherwise be reported clean.
+  { kind: 'sanitizer', id: 'cs-int-parse',      language: 'cs',
+    match: { type: 'call', callee: 'Parse', receiver: '^[Uu]?(?:[Ii]nt(?:32|64|16)?|[Ll]ong|[Dd]ouble|[Ff]loat|[Dd]ecimal|[Ss]hort|[Bb]yte|SByte)$' },
+    effect: 'strip', appliesTo: ['*'] },
+  { kind: 'sanitizer', id: 'cs-int-tryparse',   language: 'cs',
+    match: { type: 'call', callee: 'TryParse', receiver: '^[Uu]?(?:[Ii]nt(?:32|64|16)?|[Ll]ong|[Dd]ouble|[Ff]loat|[Dd]ecimal|[Ss]hort|[Bb]yte|SByte)$' },
+    effect: 'strip', appliesTo: ['*'] },
   { kind: 'sanitizer', id: 'cs-regex-escape',   language: 'cs', match: { type: 'call', callee: 'Escape' },         effect: 'strip', appliesTo: ['regex'] },
   { kind: 'sanitizer', id: 'cs-addwithvalue',   language: 'cs', match: { type: 'call', callee: 'AddWithValue' },   effect: 'strip', appliesTo: ['sql'] },
 
