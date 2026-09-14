@@ -8,8 +8,16 @@
 // --json run — one report format for both corpora, not two.
 //
 // Usage:
-//   node bench/sard/scripts/score-php.mjs [--limit N] [--json] [--split train|dev|test]
-//   node bench/sard/scripts/score-php.mjs --json | node bench/sard/scripts/macro-score.mjs
+//   node bench/sard/scripts/score-php.mjs [--deep] [--limit N] [--json] [--split train|dev|test] [--cwe CWE-89,CWE-78]
+//   node bench/sard/scripts/score-php.mjs --deep --json | node bench/sard/scripts/macro-score.mjs
+//
+// --deep enables the IR-taint engine for the run (runScan's own `deep` option,
+// the same thing bench-realworld.js's --deep passes for Java/C#). Without it
+// the run measures only the regex/structural layers, which is NOT what
+// bench:sard:java / bench:sard:csharp measure, so every cross-language
+// comparison must pass it. --cwe restricts scoring to the listed CWEs (both
+// the bad cases with that CWE and, for FP accounting, the good cases whose
+// family set intersects them), mirroring bench-realworld.js's --cwe.
 //
 // Adversarial-premortem remediation (finding F1.2): every PHP number reported
 // anywhere in this ledger to date was fit-and-report on the same undivided
@@ -32,11 +40,14 @@ const WORKSPACE_ROOT = path.join(SARD_ROOT, 'workspace', 'php');
 
 function args() {
   const a = process.argv.slice(2);
-  const out = { limit: null, json: false, split: null };
+  const out = { limit: null, json: false, split: null, deep: false, cwe: null, fpDetail: false };
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '--limit') out.limit = parseInt(a[++i], 10);
     else if (a[i] === '--json') out.json = true;
     else if (a[i] === '--split') out.split = a[++i];
+    else if (a[i] === '--deep') out.deep = true;
+    else if (a[i] === '--cwe') out.cwe = new Set(String(a[++i]).split(',').map(s => s.trim()).filter(Boolean));
+    else if (a[i] === '--fp-detail') out.fpDetail = true;
   }
   if (out.split && !['train', 'dev', 'test'].includes(out.split)) {
     console.error(`✗ --split must be train|dev|test, got: ${out.split}`);
@@ -89,11 +100,37 @@ async function main() {
       (noSplitField ? ` (${noSplitField} of the excluded cases have no split field at all — re-ingest to backfill)` : ''));
   }
 
+  if (opts.cwe) {
+    // A good case carries no CWE of its own (state=good has no ruleId), so the
+    // CWE filter keeps every good case whose FAMILY is one of the requested
+    // CWEs' families: those are the safe variants of exactly the vulnerability
+    // classes being scored, which is where the FPs that matter come from.
+    const wantedFamilies = new Set(gold.filter(g => g.cwe && opts.cwe.has(g.cwe)).map(g => g.family).filter(Boolean));
+    const before = gold.length;
+    gold = gold.filter(g => g.state === 'bad' ? opts.cwe.has(g.cwe) : (g.family ? wantedFamilies.has(g.family) : true));
+    console.error(`  --cwe ${[...opts.cwe].join(',')}: ${gold.length}/${before} cases kept`);
+  }
+
   if (opts.limit) gold = gold.slice(0, opts.limit);
+
+  // Families this corpus actually exercises: a good case's finding only counts
+  // as an FP when it belongs to one of them, so an unrelated detector (e.g.
+  // hardcoded-secret firing on an incidental literal) doesn't inflate FP for a
+  // family this case was never testing.
+  const coveredFamilies = new Set(gold.map(x => x.family).filter(Boolean));
 
   const perCwe = {};
   const bump = (cwe, k) => { if (!cwe) return; (perCwe[cwe] ??= { tp: 0, fp: 0, fn: 0 })[k]++; };
   let tp = 0, fp = 0, fn = 0;
+  // FP attribution: which detector produced the spurious finding, and what
+  // sanitizer (if any) the taint walk saw on the path. A good case in this
+  // corpus is almost always a sanitized variant of a bad one, so the
+  // sanitizer-on-path breakdown says exactly which sanitizer semantics the
+  // engine is getting wrong.
+  const fpByParser = {};
+  const fpBySanitizer = {};
+  const fpDetail = [];
+  let deepTierSeen = false;
   const t0 = Date.now();
 
   for (const g of gold) {
@@ -101,8 +138,9 @@ async function main() {
     if (!fs.existsSync(caseDir)) continue;
     let findings = [];
     try {
-      const { scan } = await runScan(caseDir);
+      const { scan } = await runScan(caseDir, opts.deep ? { deep: true } : {});
       findings = scan.findings || [];
+      if (opts.deep && scan.analysisTier && scan.analysisTier.irTaint) deepTierSeen = true;
     } catch (e) {
       console.error(`  ⚠ ${g.caseId}: scan failed (${e.message})`);
       continue;
@@ -113,13 +151,24 @@ async function main() {
       else { fn++; bump(g.cwe, 'fn'); }
     } else {
       // 'good' case: any covered-family finding at all is a false positive.
-      // Only count families this corpus actually exercises so an unrelated
-      // detector (e.g. hardcoded-secret firing on an incidental literal)
-      // doesn't inflate FP for a family this case was never testing.
-      const coveredFamilies = new Set(gold.map(x => x.family).filter(Boolean));
-      const spurious = [...fams].filter(f => coveredFamilies.has(f));
-      fp += spurious.length;
+      const spurious = findings.filter(f => coveredFamilies.has(familyOf(f)));
+      const spuriousFams = new Set(spurious.map(familyOf));
+      fp += spuriousFams.size;
+      for (const fam of spuriousFams) {
+        const first = spurious.find(f => familyOf(f) === fam);
+        const parser = first.parser || 'unknown';
+        fpByParser[parser] = (fpByParser[parser] || 0) + 1;
+        const san = Array.isArray(first._sanitizersOnPath) && first._sanitizersOnPath.length
+          ? first._sanitizersOnPath.join('+')
+          : (first.sanitized ? 'sanitized-unnamed' : '(none)');
+        fpBySanitizer[san] = (fpBySanitizer[san] || 0) + 1;
+        if (opts.fpDetail) fpDetail.push({ caseId: g.caseId, family: fam, parser, id: first.id, line: first.line, sanitizers: first._sanitizersOnPath || [], sanitized: !!first.sanitized, proof: first.proof && first.proof.verdict });
+      }
     }
+  }
+
+  if (opts.deep && !deepTierSeen) {
+    console.error('  ⚠ --deep was requested but no scan reported analysisTier.irTaint: the taint engine did not run.');
   }
 
   const elapsedSec = ((Date.now() - t0) / 1000).toFixed(1);
@@ -130,15 +179,18 @@ async function main() {
   const result = {
     name: 'sard-php-strict', language: 'php', scanned: gold.length,
     tp, fp, fn, precision, recall, f1: f1v, elapsedSec: parseFloat(elapsedSec), peakRssMb: null,
-    perCwe,
+    perCwe, deep: opts.deep, fpByParser, fpBySanitizer,
+    ...(opts.fpDetail ? { fpDetail } : {}),
   };
 
   if (opts.json) {
     console.log(JSON.stringify({ results: [result] }, null, 2));
   } else {
-    console.error(`\nSARD PHP scoring: ${gold.length} cases, ${elapsedSec}s`);
+    console.error(`\nSARD PHP scoring: ${gold.length} cases, ${elapsedSec}s${opts.deep ? ' (deep)' : ''}`);
     console.error(`  TP=${tp} FP=${fp} FN=${fn}  P=${(precision * 100).toFixed(1)}%  R=${(recall * 100).toFixed(1)}%  F1=${(f1v * 100).toFixed(1)}%`);
     console.error(`  per-CWE: ${JSON.stringify(perCwe)}`);
+    console.error(`  FP by parser: ${JSON.stringify(fpByParser)}`);
+    console.error(`  FP by sanitizer on path: ${JSON.stringify(fpBySanitizer)}`);
   }
 }
 
