@@ -264,12 +264,15 @@ public class D {
     `expected Command Injection to propagate across the method call, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
-test('cs-interproc-basic precision control: lowercase "request" (not matching any cataloged Request.* source) must not spuriously fire IR-TAINT', async () => {
-  // Guards against the exact confound the retraction above describes
-  // recurring silently: a lowercase `request` parameter name must never be
-  // treated as though it matched a real cataloged source. A structural
-  // detector MAY still fire (that's a different, legitimate detection
-  // layer) — this only asserts the IR-TAINT layer specifically stays quiet.
+test('cs-interproc-basic: lowercase "request"/"req" (SARD_80_F1: the dominant real-world naming convention, mirroring JS\'s own req/request sources) now propagates through IR-TAINT too', async () => {
+  // The retraction above documents that lowercase `request` matched no
+  // real catalog source AT THE TIME — a fact this test used to pin as a
+  // precision guarantee, not a permanent design decision. Real-world (and
+  // Juliet's own) C# overwhelmingly parameter-names an HttpRequest `req`/
+  // `request`, exactly like JS's `req.query`/`request.body`; the SARD 80%
+  // F1 push added `cs-req-*`/`cs-request-lc-*` catalog entries for that
+  // convention, so this fixture now correctly fires via IR-TAINT — a
+  // deliberate recall widening, not a regression of the lesson above.
   const dir = mkTmp('cmdi-interproc-lowercase-control', `
 using System.Diagnostics;
 public class E {
@@ -283,8 +286,8 @@ public class E {
 }
 `);
   const taint = await taintFindings(dir);
-  assert.equal(taint.length, 0,
-    `lowercase "request" must not match the Request.* catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ')}`);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected lowercase "request" to match the cs-req-params catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
 // Found via the SARD C# benchmark investigation (macro-F1 8.4%, 26/32 CWEs

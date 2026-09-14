@@ -200,10 +200,44 @@ test('detector: clean SQL with parameterized query does NOT fire', () => {
   assert.ok(!findings.some(f => f.family === 'sql-injection'), 'parameterized SQL ignored');
 });
 
-test('detector: BinaryFormatter is always critical', () => {
-  const src = 'class T { void M() { var bf = new BinaryFormatter(); } }';
+test('detector: BinaryFormatter.Deserialize of tainted data is critical', () => {
+  const src = `
+    public class C {
+      [HttpGet] public object M(HttpRequest req) {
+        var stream = req.Body;
+        var bf = new BinaryFormatter();
+        return bf.Deserialize(stream);
+      }
+    }`;
   const findings = scanCSharp('t.cs', src);
   assert.ok(findings.some(f => f.family === 'insecure-deserialization' && f.severity === 'critical'));
+});
+
+// A bare `new BinaryFormatter()` with no `.Deserialize()` call at all
+// (common shared network/file helper boilerplate reused across many
+// unrelated files) must not fire — flagging usage alone, independent of
+// what it actually deserializes, was measured causing 417 false positives
+// on the SARD/Juliet C# corpus, almost all in directories unrelated to
+// CWE-502. See detectInsecureDeserialization's own comment.
+test('detector: a bare BinaryFormatter declaration with no Deserialize call does NOT fire', () => {
+  const src = 'class T { void M() { var bf = new BinaryFormatter(); } }';
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'insecure-deserialization'));
+});
+
+// Deserializing a LOCAL/hardcoded stream (never touched by network, file,
+// or request input) is not the exploitable shape this rule targets.
+test('detector: BinaryFormatter.Deserialize of an untainted local stream does NOT fire', () => {
+  const src = `
+    class T {
+      void M() {
+        var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var bf = new BinaryFormatter();
+        var obj = bf.Deserialize(stream);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'insecure-deserialization'));
 });
 
 test('detector: weak crypto MD5CryptoServiceProvider', () => {

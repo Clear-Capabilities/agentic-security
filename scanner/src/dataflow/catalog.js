@@ -1300,7 +1300,46 @@ export const CATALOG = [
   { kind: 'source', id: 'cs-request-headers',  language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'Request', prop: 'Headers' },     label: 'Request.Headers',     provenance: 'header' },
   { kind: 'source', id: 'cs-request-params',   language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'Request', prop: 'Params' },      label: 'Request.Params' },
   { kind: 'source', id: 'cs-request-body',     language: 'cs', framework: 'aspnet-core', match: { type: 'member', object: 'Request', prop: 'Body' },   label: 'Request.Body',        provenance: 'http-body' },
+  // SARD_80_F1: the entries above only match a receiver literally named
+  // `Request` (the ASP.NET-Core-controller convention, `this.Request.…`
+  // stripped to its bare member). Juliet's own dominant local-variable
+  // naming (`req`/`request` params, exactly as JS's `req.query`/
+  // `request.body` entries already cover) never matched at all — same
+  // gap, same fix, mirrored per property.
+  { kind: 'source', id: 'cs-req-form',         language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Form' },        label: 'req.Form',        provenance: 'http-body' },
+  { kind: 'source', id: 'cs-req-query',        language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'QueryString' }, label: 'req.QueryString', provenance: 'url-param' },
+  { kind: 'source', id: 'cs-req-cookies',      language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Cookies' },     label: 'req.Cookies',     provenance: 'cookie' },
+  { kind: 'source', id: 'cs-req-headers',      language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Headers' },     label: 'req.Headers',     provenance: 'header' },
+  { kind: 'source', id: 'cs-req-params',       language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'req',     prop: 'Params' },      label: 'req.Params' },
+  { kind: 'source', id: 'cs-request-lc-form',    language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Form' },        label: 'request.Form',        provenance: 'http-body' },
+  { kind: 'source', id: 'cs-request-lc-query',   language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'QueryString' }, label: 'request.QueryString', provenance: 'url-param' },
+  { kind: 'source', id: 'cs-request-lc-cookies', language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Cookies' },     label: 'request.Cookies',     provenance: 'cookie' },
+  { kind: 'source', id: 'cs-request-lc-headers', language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Headers' },     label: 'request.Headers',     provenance: 'header' },
+  { kind: 'source', id: 'cs-request-lc-params',  language: 'cs', framework: 'aspnet', match: { type: 'member', object: 'request', prop: 'Params' },      label: 'request.Params' },
   { kind: 'source', id: 'cs-env-var',          language: 'cs', framework: 'stdlib', match: { type: 'call',   callee: 'GetEnvironmentVariable' },       label: 'Environment.GetEnvironmentVariable', provenance: 'env' },
+  { kind: 'source', id: 'cs-env-args',         language: 'cs', framework: 'stdlib', match: { type: 'call',   callee: 'GetCommandLineArgs' },           label: 'Environment.GetCommandLineArgs', provenance: 'env' },
+  // Console/stream/socket console-style reads — Juliet's other dominant
+  // source family (`Console.ReadLine()`, `IO.StreamReader/TextReader/
+  // BinaryReader.ReadLine()/ReadToEnd()`). Bare (receiver-unscoped): the
+  // last-segment index match already makes `Console.ReadLine()` and
+  // `sr.ReadLine()` share this one entry, exactly the "receiver-agnostic"
+  // shape `cs-directorysearcher-filter`'s own comment documents for reads.
+  { kind: 'source', id: 'cs-console-readline', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadLine' },   label: 'Console/TextReader.ReadLine', provenance: 'io-read' },
+  { kind: 'source', id: 'cs-reader-readtoend', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadToEnd' }, label: 'TextReader.ReadToEnd',        provenance: 'io-read' },
+  { kind: 'source', id: 'cs-console-read',     language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Read', receiver: '^Console$' }, label: 'Console.Read', provenance: 'io-read' },
+  { kind: 'source', id: 'cs-tcpclient-getstream',  language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetStream' }, label: 'TcpClient/TcpListener.GetStream', provenance: 'network' },
+  { kind: 'source', id: 'cs-registry-getvalue',    language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetValue', receiver: '[Rr]egistry' }, label: 'Registry(Key).GetValue', provenance: 'env' },
+  { kind: 'source', id: 'cs-datareader-getstring', language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetString', receiver: '[Rr]eader' }, label: 'SqlDataReader.GetString', provenance: 'database' },
+  { kind: 'source', id: 'cs-datareader-getvalue',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetValue',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetValue',  provenance: 'database' },
+  { kind: 'source', id: 'cs-datareader-getint32',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetInt32',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetInt32',  provenance: 'database' },
+  // File-read variants: the CONTENTS of a file are untrusted data (a
+  // taint SOURCE) independent of whether the PATH argument to the same
+  // call is itself tainted (`cs-file-readall` below still checks that,
+  // on the same call, for the path-traversal family — a call can be both
+  // a source and a sink argument at once, same as every other language's
+  // `open(path).read()` shape in this catalog).
+  { kind: 'source', id: 'cs-file-readalltext-src', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadAllText',  receiver: '^File$' }, label: 'File.ReadAllText',  provenance: 'file-read' },
+  { kind: 'source', id: 'cs-file-readalllines-src', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'ReadAllLines', receiver: '^File$' }, label: 'File.ReadAllLines', provenance: 'file-read' },
 
   // ─── SINKS (C#) ──────────────────────────────────────────────────────────
   { kind: 'sink', id: 'cs-sqlcommand',         language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'SqlCommand' },     argIndex: 0,
@@ -1414,6 +1453,65 @@ export const CATALOG = [
     vuln: { name: 'LDAP Injection (DirectorySearcher.Filter assigned a concatenated value)', severity: 'high', cwe: 'CWE-90',
             remediation: 'Escape LDAP special characters in filter components, or build the filter with a parameterized helper.' } },
 
+  // `CommandText = tainted` — Juliet's dominant real-world SQLi shape,
+  // even more common than the `new SqlCommand(tainted, conn)` constructor
+  // form `cs-sqlcommand` already covers: build the command with a fixed
+  // (often parameterless) constructor, then assign the query text to the
+  // property afterward. `match.object: '_any_'` is required for any
+  // member-WRITE sink (see dataflow/CLAUDE.md's gotcha on this) — object
+  // specificity is applied afterward via `receiverTypeIn`.
+  { kind: 'sink', id: 'cs-commandtext-write', language: 'cs', framework: 'ado', match: { type: 'member', object: '_any_', prop: 'CommandText', receiverTypeIn: ['^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)Command$'] }, argIndex: 'rhs',
+    vuln: { name: 'SQL Injection (CommandText assigned a concatenated/tainted value)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use a parameterized query: keep `CommandText` a fixed string with `@name` placeholders and bind values via `cmd.Parameters.AddWithValue(...)`.' } },
+  { kind: 'sink', id: 'cs-sqldataadapter', language: 'cs', framework: 'ado', match: { type: 'call', callee: 'SqlDataAdapter' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (new SqlDataAdapter with concatenated query text)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Pass a parameterized SqlCommand to the adapter instead of a raw query string.' } },
+  { kind: 'sink', id: 'cs-oledbcommand', language: 'cs', framework: 'ado', match: { type: 'call', callee: 'OleDbCommand' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (new OleDbCommand with concatenated query text)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use parameterized OleDbCommand: bind values via `cmd.Parameters.AddWithValue(...)` rather than concatenating into the command text.' } },
+  { kind: 'sink', id: 'cs-odbccommand', language: 'cs', framework: 'ado', match: { type: 'call', callee: 'OdbcCommand' }, argIndex: 0,
+    vuln: { name: 'SQL Injection (new OdbcCommand with concatenated query text)', severity: 'critical', cwe: 'CWE-89',
+            remediation: 'Use parameterized OdbcCommand: bind values via `cmd.Parameters.AddWithValue(...)` rather than concatenating into the command text.' } },
+  // Reflection-based dynamic type loading (CWE-470, "Unsafe Reflection") —
+  // resolving/instantiating a type by a tainted name lets the caller pick
+  // ANY loadable type, which is exactly what CWE-502-adjacent deserializer
+  // gadget chains need.
+  { kind: 'sink', id: 'cs-type-gettype', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetType', receiver: '^Type$' }, argIndex: 0,
+    vuln: { name: 'Unsafe Reflection (Type.GetType with tainted type name)', severity: 'high', cwe: 'CWE-470',
+            remediation: 'Resolve against an explicit allow-list of known-safe type names before calling Type.GetType/Activator.CreateInstance.' } },
+  { kind: 'sink', id: 'cs-assembly-load', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Load', receiver: '^Assembly$' }, argIndex: 0,
+    vuln: { name: 'Unsafe Reflection (Assembly.Load with tainted assembly name)', severity: 'high', cwe: 'CWE-470',
+            remediation: 'Never load an assembly by a user-controlled name or path; resolve against an explicit allow-list.' } },
+  { kind: 'sink', id: 'cs-activator-createinstance', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'CreateInstance', receiver: '^Activator$' }, argIndex: 'all',
+    vuln: { name: 'Unsafe Reflection (Activator.CreateInstance with a tainted type)', severity: 'high', cwe: 'CWE-470',
+            remediation: 'Resolve the target type against an explicit allow-list before instantiating it dynamically.' } },
+  // CWE-134 — an attacker-controlled FORMAT string (not just an
+  // interpolated argument) can inject its own `{n}`/`%` directives.
+  // Scoped to arg0 ONLY, deliberately: `String.Format`'s substitution
+  // arguments (index 1+) are DATA, not format directives, so a tainted
+  // substitution argument reaching an otherwise-literal format string
+  // (`String.Format("Hello, {0}!", name)`) is not this vulnerability —
+  // only the FORMAT STRING itself being attacker-controlled is. A bare
+  // `Console.WriteLine(tainted)` single-argument sink was deliberately
+  // NOT added alongside this: with only one argument there is no `{n}`
+  // substitution happening at all (that overload does not treat its sole
+  // argument as a format string), so it would have no real CWE-134
+  // shape to detect — confirmed by a nested-call precision fixture where
+  // such a sink fired on a value that was already-formatted output text
+  // wrapping a merely-tainted substitution argument.
+  { kind: 'sink', id: 'cs-string-format', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Format', receiver: '^String$' }, argIndex: 0,
+    vuln: { name: 'Externally-Controlled Format String (String.Format)', severity: 'medium', cwe: 'CWE-134',
+            remediation: 'Never build the FORMAT string itself from user input; keep the format literal and pass user data only as substitution arguments.' } },
+  // CWE-643 — XPath built from concatenated/tainted text.
+  { kind: 'sink', id: 'cs-xpathnavigator-select', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Select', receiver: '[Nn]av(?:igator)?' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XPathNavigator.Select with concatenated expression)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPath variables (`XsltArgumentList`/`XPathExpression.SetContext`) instead of concatenating user input into the expression text.' } },
+  { kind: 'sink', id: 'cs-xpathnavigator-evaluate', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Evaluate', receiver: '[Nn]av(?:igator)?' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XPathNavigator.Evaluate with concatenated expression)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPath variables instead of concatenating user input into the expression text.' } },
+  { kind: 'sink', id: 'cs-selectsinglenode', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'SelectSingleNode' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (XmlNode.SelectSingleNode with concatenated expression)', severity: 'high', cwe: 'CWE-643',
+            remediation: 'Use XPath variables instead of concatenating user input into the expression text.' } },
   // ─── SANITIZERS (C#) ─────────────────────────────────────────────────────
   { kind: 'sanitizer', id: 'cs-html-encode',    language: 'cs', match: { type: 'call', callee: 'HtmlEncode' },     effect: 'strip', appliesTo: ['xss'] },
   { kind: 'sanitizer', id: 'cs-url-encode',     language: 'cs', match: { type: 'call', callee: 'UrlEncode' },      effect: 'strip', appliesTo: ['url'] },
