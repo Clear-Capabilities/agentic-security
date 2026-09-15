@@ -541,3 +541,48 @@ public class C {
   assert.ok(taint.some(f => /command injection/i.test(`${f.vuln} ${f.cwe}`)),
     `a bare foreach over a tainted ArrayList must still see the taint, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// SARD_80_F1 W2.3 follow-up: `List<T>` — C#'s dominant MODERN collection
+// idiom (unlike the non-generic `ArrayList` above) — previously lowered
+// its constructor call to `{kind:'unknown'}` entirely (see
+// `parser-cs-kt.test.js`'s IR-level test for the exact cause), so
+// `list.Add(data)` never even reached the collection-taint mutator rule.
+// Fixed by teaching `matchBalancedCall` (shared by all four hand-rolled
+// regex IR parsers) to optionally skip a balanced `<...>` generic
+// type-argument list before requiring the constructor's own `(`.
+test('cs-collection-foreach (generic List<T>): taint survives List<string>.Add() -> foreach over the container itself', async () => {
+  const dir = mkTmp('collection-foreach-generic', `
+using System.Collections.Generic;
+public class C {
+    public void Bad(HttpRequest Request) {
+        string data = Request.QueryString["name"];
+        List<string> list = new List<string>();
+        list.Add(data);
+        foreach (string s in list) {
+            Process.Start("cmd.exe", "/c " + s);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln} ${f.cwe}`)),
+    `a bare foreach over a tainted List<string> must still see the taint, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-collection-foreach (generic List<T>) precision: a constant value does not fire', async () => {
+  const dir = mkTmp('collection-foreach-generic-clean', `
+using System.Collections.Generic;
+public class C {
+    public void Good() {
+        List<string> list = new List<string>();
+        list.Add("safe-constant-value");
+        foreach (string s in list) {
+            Process.Start("cmd.exe", "/c " + s);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.filter(f => /command injection/i.test(`${f.vuln} ${f.cwe}`)).length, 0,
+    `a constant value passed through List<T> must not fire, got: ${taint.map(f => f.vuln).join(', ')}`);
+});

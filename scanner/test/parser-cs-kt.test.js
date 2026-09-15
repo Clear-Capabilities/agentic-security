@@ -128,6 +128,36 @@ test('cs: `new Type(args)` lowers to a call so taint can flow into it', async ()
   assert.equal(assign.source.args.length, 2);
 });
 
+// SARD_80_F1 W2.3 follow-up: `new List<string>()` — C#'s dominant MODERN
+// collection idiom — previously lowered to `{kind:'unknown'}` entirely.
+// `matchBalancedCall`'s callee regex (`^new\s+([\w.]+)`) matches only
+// "List", and the character immediately after ("<") is neither a space
+// nor "(", so the match failed outright before this fix. Without a real
+// `isNew:true` call node, `list.Add(data)` never entered the collection-
+// taint mutator rule at all — a strictly worse gap than the non-generic
+// `ArrayList` desync bug fixed alongside this (that one at least LOST
+// taint after tracking it; this one never tracked the constructor call
+// in the first place).
+test('cs: `new List<string>(args)` (generic constructor) lowers to a proper isNew call, not unknown', async () => {
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const out = parseCSharpFile('A.cs',
+    'public class A { public void F() { var list = new List<string>(); } }');
+  const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
+  assert.equal(assign.source.kind, 'call', `got ${assign.source.kind}`);
+  assert.equal(assign.source.callee, 'List');
+  assert.equal(assign.source.isNew, true);
+});
+
+test('cs: `new Dictionary<string, List<string>>()` (nested generics) still lowers correctly', async () => {
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const out = parseCSharpFile('A.cs',
+    'public class A { public void F() { var d = new Dictionary<string, List<string>>(); } }');
+  const assign = Object.values(out.functions[0].cfg.nodes).find(n => n.kind === 'assign');
+  assert.equal(assign.source.kind, 'call', `got ${assign.source.kind}`);
+  assert.equal(assign.source.callee, 'Dictionary');
+  assert.equal(assign.source.isNew, true);
+});
+
 test('cs: a top-level concat still lowers to a tpl', async () => {
   // Guard: the recursion fix must not disable concatenation lowering, which is
   // what carries taint through `"a" + tainted`.

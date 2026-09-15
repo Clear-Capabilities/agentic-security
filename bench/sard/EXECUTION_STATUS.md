@@ -578,7 +578,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp), see session log | IN_PROGRESS |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp); C# generic-constructor lowering gap (`List<T>`) also fixed, real capability, byte-identical zero SARD movement, see session log | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
@@ -1413,6 +1413,62 @@ even trigger this bug, so only Juliet C# test files using the
 older-style non-generic collections benefit — but a genuine,
 corpus-verified, favorable improvement (more TPs than FPs added), kept
 regardless of size for the same reason as every other fix this session.
+
+### W2.3 follow-up — C# generic-constructor lowering fix (2026-09-15)
+
+Acted on the flagged follow-up from the C# port above: `new List<string>()`
+(and any other BCL generic collection constructor) was lowering to
+`{kind:'unknown'}` entirely — not merely a taint-tracking gap like the
+`ArrayList` desync, but the constructor call never entering the IR at
+all. Root cause: `balanced-call.js`'s shared `matchBalancedCall` helper
+(used by all 4 hand-rolled regex parsers) required the character right
+after the matched callee name to be `(` — for `new List<string>()`, that
+character is `<` (the generic type-argument list), so the whole match
+failed and `_lowerExpr` fell through to `unknown`.
+
+Fixed generically in the shared helper via an opt-in `{skipGenerics:
+true}` option (default off, so Go/PHP/Ruby — this helper's other three
+callers, none of which have this C#-specific generic-constructor syntax
+— are provably unaffected): scans for a balanced `<...>` immediately
+after the callee name (handling nested generics like
+`Dictionary<string, List<string>>`) before requiring the constructor's
+own `(`. Wired into both of `parser-cs.js`'s `new`-matching call sites
+(expression-form and statement-form chained calls). Verified linear-time
+via a stress test (10,000 levels of nesting, 200,000-char non-matching
+input — both sub-millisecond, no ReDoS). 4 new tests (2 IR-level in
+`parser-cs-kt.test.js` pinning the exact fix, 2 end-to-end in
+`catalog-cs-p1.test.js` proving taint survives `List<string>.Add()` +
+`foreach` and staying silent on a constant). Full C# suite (46/46), `test:
+dataflow` (1222/1222 — includes Go/PHP/Ruby's own test files, confirming
+zero cross-parser impact), `test:sast` (750/750), self-scan (zero drift),
+`bench:mutation:check` (35/35), `bench:cve-replay:check` (220/220),
+`test:smoke` (30/30) all green.
+
+**Real-corpus measurement: byte-identical to the pre-fix baseline** (tp=339
+fp=432 fn=2263, matching the immediately-prior C# measurement exactly,
+down to the per-CWE breakdown). One measurement moment caused a scare
+worth recording as a methodology note: the STDERR progress line for the
+CWE-113 batch, read WHILE the scan was still running, showed `tp=0
+fp=346 fn=613` — a seemingly serious new false-positive burst. Waiting
+for the FULL run to finish and reading the correctly-merged JSON output
+resolved it: `merge-results.mjs`/`batch-scan.mjs`'s per-CWE reconciliation
+re-buckets each finding by its OWN claimed CWE, not by which single-CWE-
+scoped batch surfaced it (the exact same "Object.assign per-CWE
+aggregation" nuance documented earlier this session) — findings of OTHER
+families that happen to live in the CWE-113 test directory count as
+"fp" for THAT BATCH's own isolated scoring pass, but get correctly
+reassigned once every batch is merged. The final CWE-113 number was
+`tp=0 fp=0 fn=613`, IDENTICAL to before this fix. Lesson: never trust a
+mid-run per-batch progress line as a final number — this file's own
+"Verification discipline" section already says this in general terms,
+and this is a concrete instance of it applying to this specific
+harness's own two-phase (per-batch, then merged) scoring design.
+
+Zero movement is consistent with C# generics simply not being the shape
+Juliet's actual test files use for this CWE family — kept the fix
+anyway (real, tested, zero-regression capability: any C# codebase using
+modern generic collections benefits, and it's a strict IR-completeness
+improvement independent of this corpus).
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

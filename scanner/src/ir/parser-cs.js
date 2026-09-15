@@ -656,7 +656,7 @@ function _lowerExpr(text) {
   // per-file, so the crash surfaced only as "this file has no IR" — 12 of 21 C#
   // corpus entries, and the catalog's own `cs-sqlcommand` rule ("SQL Injection
   // (new SqlCommand with concatenated user input)") could never fire.
-  const newMatch = matchBalancedCall(s, /^new\s+([\w.]+)/);
+  const newMatch = matchBalancedCall(s, /^new\s+([\w.]+)/, { skipGenerics: true });
   if (newMatch) {
     const callee = newMatch.callee.split('.').pop();
     const args = _splitTopLevelCommas(newMatch.argsText).map(_lowerExpr);
@@ -847,7 +847,7 @@ function _lowerStmt(stmt, line) {
   // has (this statement-form path is otherwise a strict subset of that
   // one), and inherits `classMethods`'s cross-class resolution for free
   // once the chain's callee dot-joins to `ClassName.method`.
-  const nm = matchBalancedCall(s, /^new\s+([\w.]+)/);
+  const nm = matchBalancedCall(s, /^new\s+([\w.]+)/, { skipGenerics: true });
   if (nm) {
     const ctorArgs = _splitTopLevelCommas(nm.argsText).map(_lowerExpr);
     const chained = _followChain(s, nm.endIdx, nm.callee.split('.').pop(), ctorArgs, true);
