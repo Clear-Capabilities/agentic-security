@@ -482,11 +482,34 @@ export const CATALOG = [
   // response-write idiom, `HttpServletResponse.getWriter()`) is the
   // dominant shape. Receiver-scoped to the `getWriter` chain segment (both
   // `write` and `print` collide with countless unrelated APIs bare).
-  { kind: 'sink', id: 'java-writer-write', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'write', receiver: '^getWriter$' }, argIndex: 0,
+  //
+  // SARD_80_F1 W4: the chained one-liner (`response.getWriter().write(x)`)
+  // was the ONLY shape these three entries could ever match — Java's more
+  // common idiom splits it in two (`PrintWriter out = response.getWriter();
+  // out.println(x);`), a completely different receiver (the local variable
+  // NAME, not the literal `getWriter` chain segment) that was invisible.
+  // Fixed via `receiverTypeIn` (ADDITIVE — confirms a match a failing name
+  // check missed, never replaces the name check), backed by
+  // `class-hierarchy.js`'s `typeOfVar` now also being seeded from a local's
+  // DECLARED type, not just `paramTypes`/`isNew` constructor calls (see its
+  // own comment). Deliberately NOT done via `parser-java.js`'s
+  // `_localVarConstructedTypes`/`_rewriteVarTypeCallees` string-rewrite
+  // mechanism — a first attempt did that and broke an EXISTING, unrelated
+  // catalog entry keyed on a short variable-name convention (`XPath xp = …;
+  // xp.evaluate(...)` — the rewrite mutated `xp.evaluate` to
+  // `XPath.evaluate`, and the xpath sink's `receiver: '^(?:xp|xpath)$'`
+  // stopped matching); confirmed by direct regression in
+  // `test/java-taint-flow.test.js`, then reverted. `println` was also
+  // completely absent from this list despite being the single most common
+  // of the three methods in real servlet code.
+  { kind: 'sink', id: 'java-writer-write', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'write', receiver: '^getWriter$', receiverTypeIn: ['^PrintWriter$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (PrintWriter.write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
-  { kind: 'sink', id: 'java-writer-print', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'print', receiver: '^getWriter$' }, argIndex: 0,
+  { kind: 'sink', id: 'java-writer-print', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'print', receiver: '^getWriter$', receiverTypeIn: ['^PrintWriter$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (PrintWriter.print)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
+  { kind: 'sink', id: 'java-writer-println', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'println', receiver: '^getWriter$', receiverTypeIn: ['^PrintWriter$'] }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (PrintWriter.println)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
 
   // ─── SINKS (SQL — Go) ──────────────────────────────────────────────────────

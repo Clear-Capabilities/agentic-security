@@ -382,6 +382,35 @@ function _classRecord(node, name) {
   return { name, line: _lineOf(node), bases, fields };
 }
 
+// W2 (SARD_80_F1_EXECUTION_PRD.md) — exception-message taint (was the
+// documented-but-deferred "Try/catch -> exception-flow scaffolding (P3.4
+// will model)" gap at the top of this file). Juliet's CWE-81 "XSS Error
+// Message" idiom throws a `new Exception(tainted)` inside a `try` and
+// reflects it back via `catch (Exception e) { ...e.getMessage()... }` —
+// completely invisible without this, since `throw`/`catch` is pure
+// control flow in this IR with no data link between the thrown value and
+// the caught variable. Recursively collects every `throwStatement`'s
+// expression anywhere within a CST subtree (permissive: does not match
+// the thrown type against the catch clause's declared type, since
+// Juliet's dominant shape is one throw + one matching catch per method,
+// and a wrong-type over-match only widens recall, it can't fabricate a
+// source that wasn't already tainted). Does not descend into a nested
+// class or lambda body (a distinct scope with its own catch semantics).
+function _collectThrowExprs(node, out, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 40) return;
+  if (node.name === 'throwStatement') {
+    const expr = node.children?.expression?.[0];
+    if (expr) out.push(exprFromCst(expr));
+    return;
+  }
+  if (node.name === 'classDeclaration' || node.name === 'lambdaExpression') return;
+  for (const k of Object.keys(node.children || {})) {
+    const arr = node.children[k];
+    if (!Array.isArray(arr)) continue;
+    for (const child of arr) _collectThrowExprs(child, out, depth + 1);
+  }
+}
+
 // The simple class name of a `new X(...)` expression. A fully-qualified
 // instantiation (`new java.util.LinkedList<String>()`) carries one Identifier
 // token per package segment plus the class, so taking the FIRST token
@@ -415,6 +444,21 @@ function _localVarConstructedTypes(nodes) {
       varTypes.set(varName, src.callee);
     }
   }
+  // A local's DECLARED type (`PrintWriter out = response.getWriter();`) is
+  // deliberately NOT folded into this rewrite. This function's rewrite is a
+  // destructive STRING REPLACEMENT of the callee (`out.println` -> literally
+  // `PrintWriter.println`) applied everywhere the call appears — and MANY
+  // existing catalog entries key `match.receiver` on the ORIGINAL variable
+  // NAME convention (e.g. an XPath sink scoped to `receiver: '^(?:xp|xpath)$'`
+  // for `XPath xp = XPathFactory.newInstance().newXPath(); xp.evaluate(...)`).
+  // A first attempt folded declared types in here and broke that exact case
+  // (`test/java-taint-flow.test.js`'s cast-wrapped XPath test went from firing
+  // to silent) — confirmed by direct regression, not theorized. Declared-type
+  // resolution belongs in `class-hierarchy.js`'s `typeOfVar` instead (see its
+  // `fn.paramTypes` seeding below `buildClassHierarchy`), which is consulted
+  // ADDITIVELY via `match.receiverTypeIn`/`_receiverTypeConfirms` — a type
+  // match there can only ADD a finding a name-based entry missed, never
+  // replace the string a name-based entry still needs to see.
   return varTypes;
 }
 
@@ -597,11 +641,30 @@ function buildCfgFromBody(bodyNode) {
         const vdecl = lv.children?.localVariableDeclaration?.[0];
         const declarators = vdecl?.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator;
         if (declarators) {
+          // Declared TYPE (not just name) — same PRD W2.5 rationale and CST
+          // path as `paramTypes` above, one level down (`localVariableType`
+          // instead of a `formalParameter`'s `variableParaRegularParameter`).
+          // A local declared as an INTERFACE/supertype (`PrintWriter out =
+          // response.getWriter();`) is exactly Java's dominant "get a writer,
+          // then use it" idiom — `_localVarConstructedTypes` below only ever
+          // sees an `isNew` constructor call, so this shape's receiver type
+          // (needed for `writer.println(x)` to resolve against a catalog
+          // sink keyed on the PrintWriter type) was completely invisible.
+          // `var` (Java 10+ inference) is not a real type name and is
+          // skipped, same as the `isVar` guard the hand-rolled parsers use
+          // elsewhere in this codebase.
+          const declTypeIds = vdecl?.children?.localVariableType?.[0]?.children?.unannType?.[0]
+            ?.children?.unannReferenceType?.[0]?.children?.unannClassOrInterfaceType?.[0]
+            ?.children?.unannClassType?.[0]?.children?.Identifier;
+          const rawDeclType = Array.isArray(declTypeIds) && declTypeIds.length ? declTypeIds[declTypeIds.length - 1]?.image : undefined;
+          const declType = rawDeclType && rawDeclType !== 'var' ? rawDeclType : undefined;
           for (const d of declarators) {
             const target = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
             const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0];
             if (target) {
-              emit({ kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(lv), succ: [], decl: true });
+              const node = { kind: 'assign', target, source: initExpr ? exprFromCst(initExpr) : { kind: 'unknown' }, line: _lineOf(lv), succ: [], decl: true };
+              if (declType) node.declaredType = declType;
+              emit(node);
             }
           }
         }
@@ -778,8 +841,35 @@ function buildCfgFromBody(bodyNode) {
       }
       const bodyBlock = container.children?.block?.[0];
       if (bodyBlock) walkStmts(bodyBlock);
+      const throwExprs = [];
+      if (bodyBlock) _collectThrowExprs(bodyBlock, throwExprs);
       const catches = container.children?.catches?.[0]?.children?.catchClause || [];
       for (const cc of catches) {
+        // Exception-message taint: bind the catch variable to whatever was
+        // thrown in the try body BEFORE walking the catch block, so a
+        // read of it inside (e.g. `e.getMessage()`) sees real taint via the
+        // engine's existing generic tainted-call-argument/receiver-taint
+        // mechanism — no catalog or engine change needed, since a `new
+        // Exception(x)` constructor call is already lowered to an ordinary
+        // `call` node and `exprTaint`'s case 'call' already treats a
+        // tainted arg as tainting the call's own result. `isNew` is
+        // stripped from each cloned expr: left as `true`, `_localVarConstructedTypes`
+        // (W2.5's abstract-dispatch fix, above) treats this assign as
+        // establishing `exceptCWE81`'s "constructed type" as `Exception`
+        // and rewrites every later `exceptCWE81.getMessage()` call to the
+        // class-qualified `Exception.getMessage` — which is correct for
+        // dispatch resolution but destroys the variable-name receiver this
+        // fix needs `_calleeReceiverTainted` to see. Confirmed via direct
+        // CFG dump: without stripping `isNew`, the rewrite fires and the
+        // probe fixture stays at zero findings even with the assign in place.
+        if (throwExprs.length) {
+          const paramName = cc.children?.catchFormalParameter?.[0]?.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
+          if (paramName) {
+            const cloned = throwExprs.map(e => ({ ...e, isNew: false }));
+            const source = cloned.length === 1 ? cloned[0] : { kind: 'union', branches: cloned };
+            emit({ kind: 'assign', target: paramName, source, line: _lineOf(cc), succ: [] });
+          }
+        }
         const cblock = cc.children?.block?.[0];
         if (cblock) walkStmts(cblock);
       }

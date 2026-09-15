@@ -63,6 +63,102 @@ public class SearchServlet extends HttpServlet {
     `expected Reflected XSS, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
+// SARD_80_F1 W4: the two-step form (`PrintWriter out = response.getWriter();
+// out.println(x);`) is Java's more common servlet idiom in practice, and a
+// COMPLETELY different receiver shape than the chained one-liner above (a
+// local variable name, not the literal `getWriter` call). Requires
+// `parser-java.js` to resolve `out`'s DECLARED type (not just an `isNew`
+// constructor call) so `out.println` rewrites to the class-qualified
+// `PrintWriter.println`, which these catalog entries also now match.
+test('java-writer-println (two-step, declared-type PrintWriter): out.println(tainted) fires Reflected XSS via IR-TAINT', async () => {
+  const dir = mkTmp('java', 'SearchServlet2.java', `
+import java.io.IOException;
+import java.io.PrintWriter;
+import javax.servlet.http.*;
+public class SearchServlet2 extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String q = req.getParameter("q");
+        PrintWriter out = resp.getWriter();
+        out.println("<h1>Results for " + q + "</h1>");
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss/i.test(f.vuln)),
+    `expected Reflected XSS, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('java-writer-println: a PrintWriter over an ordinary file does NOT fire on an untainted literal', async () => {
+  const dir = mkTmp('java', 'FileLogger.java', `
+import java.io.PrintWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+public class FileLogger {
+    public void log() throws IOException {
+        PrintWriter out = new PrintWriter(new FileWriter("log.txt"));
+        out.println("server started");
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /xss/i.test(f.vuln)),
+    `expected no XSS finding on an untainted literal, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
+// SARD_80_F1 W4 (CWE-81, "XSS Error Message"): Juliet's error-message
+// reflection idiom throws a `new Exception(tainted)` inside a `try`, then
+// reflects it back via `catch (Exception e) { ...e.getMessage()... }` — was
+// completely invisible (0 findings) since `throw`/`catch` carried no data
+// link between the thrown constructor argument and the caught variable.
+// `parser-java.js` now binds the catch parameter to the try body's thrown
+// expression(s) as a synthetic assign, so the existing generic
+// tainted-call-argument / receiver-taint mechanism (no catalog/engine
+// change) sees `e.getMessage()` as tainted.
+test('exception-message taint (CWE-81 shape): catch(e).getMessage() of a tainted throw fires XSS', async () => {
+  const dir = mkTmp('java', 'ErrorServlet.java', `
+import java.io.IOException;
+import java.io.PrintWriter;
+import javax.servlet.http.*;
+public class ErrorServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String data = req.getParameter("q");
+        PrintWriter out = resp.getWriter();
+        try {
+            if (data != null) {
+                throw new Exception(data);
+            }
+        } catch (Exception exceptCWE81) {
+            out.println(exceptCWE81.getMessage());
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss/i.test(f.vuln)),
+    `expected Reflected XSS from the caught exception's message, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('exception-message taint: catch(e).getMessage() of an UNTAINTED throw does not fire', async () => {
+  const dir = mkTmp('java', 'SafeErrorServlet.java', `
+import java.io.IOException;
+import java.io.PrintWriter;
+import javax.servlet.http.*;
+public class SafeErrorServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        PrintWriter out = resp.getWriter();
+        try {
+            throw new Exception("a constant, non-attacker-controlled message");
+        } catch (Exception e) {
+            out.println(e.getMessage());
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /xss/i.test(f.vuln)),
+    `expected no XSS finding for a constant exception message, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
 test('py-flask-render-template-string: render_template_string(tainted) fires Reflected XSS via IR-TAINT', async () => {
   const dir = mkTmp('py', 'app.py', `
 from flask import Flask, request, render_template_string

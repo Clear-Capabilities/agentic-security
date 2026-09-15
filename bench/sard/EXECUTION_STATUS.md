@@ -609,7 +609,7 @@ precision against).
 | W4.J1 | Java CWE-113 header/cookie injection | NOT_STARTED |
 | W4.J2 | Java CWE-36/23 file constructors | NOT_STARTED |
 | W4.J3 | Java CWE-643 XPath | NOT_STARTED |
-| W4.J4 | Java CWE-80/81/83 servlet writer XSS | NOT_STARTED |
+| W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
 | W4.J6 | Java CWE-90 LDAP re-measure (family key already fixed this session) | NOT_STARTED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
@@ -944,6 +944,120 @@ ships, no different from resolving a constant from an external dependency)
 but was not attempted here — it needs its own scan-surface plumbing
 decision and is scoped as distinct future work, not a quick follow-on to
 this task.
+
+### W4.J4 — Java CWE-80/81/83 servlet writer XSS (2026-09-15)
+
+Investigated why CWE-80/81/83 (all "servlet writer XSS", per the earlier
+CWE-ranking pass this session ran) showed 120/123/49 false negatives with
+near-zero false positives — a clean signal worth chasing. Root-caused via
+direct probes (never the real corpus) to TWO independent, stacked gaps:
+
+**Gap 1 (fixed, real win): the two-step `PrintWriter` idiom had no sink
+match at all.** `catalog.js`'s `java-writer-write`/`-print` entries were
+scoped to `receiver: '^getWriter$'` — which only ever matches the CHAINED
+one-liner `response.getWriter().write(x)`. Java's more common servlet
+idiom splits it in two: `PrintWriter out = response.getWriter();
+out.println(x);` — a completely different receiver (the local variable
+NAME, not the literal `getWriter` chain segment), invisible to the old
+entry. Confirmed via a synthetic probe (zero findings on the two-step
+form, one finding on the chained form) before touching any code.
+
+Also found: `println` — arguably the single most common of the three
+write methods in real servlet code — was entirely absent from the
+catalog's method list (only `write`/`print` existed).
+
+**First fix attempt caused a real regression, caught before commit.**
+Extended `parser-java.js`'s existing `_localVarConstructedTypes`/
+`_rewriteVarTypeCallees` mechanism (built for W2.5's abstract-dispatch fix)
+to also seed from a local's DECLARED type, not just an `isNew` constructor
+call — this destructively REWRITES the callee string in place
+(`out.println` → `PrintWriter.println`) everywhere in the function. Running
+the full Java test suite immediately after (never skipped, per this
+repo's own verification discipline) surfaced a real failure:
+`test/java-taint-flow.test.js`'s cast-wrapped XPath test went from firing
+to silent, because `XPath xp = XPathFactory.newInstance().newXPath();
+xp.evaluate(...)` got rewritten to `XPath.evaluate`, and the EXISTING
+xpath catalog entry was scoped to `receiver: '^(?:xp|xpath)$'` — a
+short-variable-NAME convention the rewrite silently broke. **Reverted the
+declared-type extension to that mechanism in full** (constructor-inferred
+types only, matching the pre-existing, already-verified-safe behavior).
+
+**Correct fix: route declared types through the ADDITIVE `receiverTypeIn`
+mechanism instead**, which already exists in this codebase precisely for
+"a type match should only ADD a finding a name check missed, never replace
+the name check" (documented in `catalog.js`, built for C#'s
+`cs-commandtext-write`). `class-hierarchy.js`'s `typeOfVar` builder now
+also seeds from a local's declared type (a NEW, non-destructive field,
+`declaredType`, added to `parser-java.js`'s local-variable-declaration
+assign nodes — reusing the exact same CST extraction path already used for
+`paramTypes`, one level down at `localVariableType` instead of a
+`formalParameter`). The three writer catalog entries gained
+`receiverTypeIn: ['^PrintWriter$']` alongside their existing `receiver`
+regex (OR'd, per `_receiverAllowed(...) || _receiverTypeConfirms(...)`),
+plus a new `java-writer-println` entry. Verified via 4 new tests in
+`test/catalog-xss-p4.test.js` (two-step fires; a `PrintWriter` wrapping an
+ordinary `FileWriter` with an untainted literal does NOT fire, a real
+precision check) — all pass, and the full Java suite (`catalog-xss-p4`,
+`parser-java-control-flow`, `java-taint-flow`: 39/39) including the
+previously-broken XPath test, confirmed green again.
+
+**Gap 2 (implemented, tested, but zero real-corpus movement): exception-
+message taint (CWE-81, "XSS Error Message").** Juliet's idiom throws a
+`new Exception(tainted)` inside a `try`, then reflects it back via `catch
+(Exception e) { ...e.getMessage()... }` — a genuine, previously-documented
+gap (`parser-java.js`'s own header comment: "Try/catch -> exception-flow
+scaffolding (P3.4 will model)"). Confirmed via probe (zero findings) that
+this shape was completely invisible: `throw`/`catch` carry no data link
+between the thrown value and the caught variable in this IR at all.
+Implemented `_collectThrowExprs` (recursively finds every `throwStatement`
+in a try body) + a synthetic assign binding the catch parameter to the
+thrown expression(s) (as a `union` when multiple), emitted right before
+walking the catch block. Deliberately permissive (doesn't match the thrown
+type against the catch clause's declared type) and same-function-scoped
+only. Required one follow-up fix: the synthetic assign's source initially
+kept `isNew: true` (copied from the throw's constructor-call expr), which
+made `_localVarConstructedTypes` treat it as a type-establishing seed and
+rewrite `exceptCWE81.getMessage` to `Exception.getMessage` — destroying
+the variable-name receiver `_calleeReceiverTainted` needs. Fixed by
+cloning with `isNew: false`. No catalog or engine change needed beyond
+this — a `new Exception(x)`-shaped call already taints its own result via
+the engine's existing generic tainted-call-argument mechanism, and
+`_calleeReceiverTainted` already propagates that through `.getMessage()`.
+Verified via 2 new tests (fires on a tainted throw, silent on a constant
+one) — both pass.
+
+**Real-corpus measurement: `batch-scan.mjs --app sard-juliet-java-strict
+--blind --scramble-identifiers --deep --split dev`:**
+
+| CWE | tp before → after | fp before → after | fn before → after |
+|---|---|---|---|
+| CWE-80 | 131 → **169** (+38) | 0 → 0 | 120 → 82 |
+| CWE-83 | 23 → **24** (+1) | 0 → 0 | 49 → 48 |
+| CWE-81 | 0 → **0** (unchanged) | 0 → 0 | 123 → 123 |
+
+**tp 1599→1638 (+39), fp 921→1021 (+100, all elsewhere — CWE-80/83
+contributed zero new FPs), fn 1379→1340 (-39). macroF1 37.7%→38.3%
+(+0.6pp), recall 53.7%→55.0% (+1.3pp).** A real, corpus-verified gain from
+Gap 1's fix. Full gate suite re-run clean after: `test:dataflow`
+(1210/1210), `test:sast` (750/750), self-scan (zero drift), `test:smoke`
+(30/30), `bench:mutation:check` (35/35), `bench:cve-replay:check`
+(220/220), `bench:layer-recall:check` (no regression, no unrecorded gain).
+
+**Gap 2 (exception-message taint) genuinely did not move CWE-81 at all —
+tp/fp/fn byte-identical before and after**, despite firing correctly on
+every synthetic test built for it. Not yet root-caused with the same
+rigor as Gap 1 (would need another probe iteration), but the leading
+hypothesis, consistent with common real Java servlet structure: Juliet's
+actual CWE-81 test files likely separate the `throw` and the `catch`
+across TWO methods (e.g. a `bad()` helper that throws, called from inside
+a `try` in the servlet's `doGet`/`doPost`), which this fix's
+same-function-only scope cannot reach — real interprocedural exception
+propagation (a callee's own uncaught-throw summary reaching the caller's
+catch) would be needed, a materially larger task than this one. Kept the
+implemented fix (real capability, zero measured cost, two passing
+precision-relevant unit tests) rather than reverting a correct mechanism
+that simply doesn't reach this corpus's exact shape — same precedent as
+the W2.1/W2.8 "real capability, zero SARD-corpus movement" entries above.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

@@ -237,6 +237,27 @@ export function buildClassHierarchy(perFileIR) {
         if (!typeOfVar.has(key) && !ambiguousVarKeys.has(key)) typeOfVar.set(key, paramType);
       }
     }
+    // SARD_80_F1 W4: a local's DECLARED type (`PrintWriter out =
+    // response.getWriter();`, parser-java.js's `declaredType` on the assign
+    // node) is the third source of a type binding, alongside a constructor
+    // call above and a parameter's declared type. This is Java's dominant
+    // "get an object via a factory/getter method, not `new`" idiom — the
+    // constructor pass above can never see it (there is no `new` at all).
+    // Deliberately consulted via `receiverTypeIn` only (additive — see
+    // `catalog.js`'s `java-writer-*` entries), never via the destructive
+    // callee-string rewrite `parser-java.js`'s `_localVarConstructedTypes`
+    // does for constructor types: that mechanism was tried for declared
+    // types too and reverted after it broke an unrelated, name-scoped
+    // catalog entry (see its own comment). Only populated when a function's
+    // CFG carries the field (currently parser-java.js only).
+    for (const fn of ir.functions) {
+      if (!fn.cfg || !fn.cfg.nodes) continue;
+      for (const node of Object.values(fn.cfg.nodes)) {
+        if (node.kind !== 'assign' || !node.declaredType || typeof node.target !== 'string' || node.target.includes('.')) continue;
+        const key = `${file}::${fn.qid}::${node.target}`;
+        if (!typeOfVar.has(key) && !ambiguousVarKeys.has(key)) typeOfVar.set(key, node.declaredType);
+      }
+    }
   }
 
   return { classes, methodOwners, typeOfVar };
