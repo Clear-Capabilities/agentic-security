@@ -1189,6 +1189,40 @@ produce ANY findings of ANY family at all (not just xss), which would
 distinguish "these files never parse usefully" from "these files parse
 fine but XSS specifically never matches."
 
+**Follow-up same-day, one level deeper: the "zero total actual findings"
+claim is stronger than it first looked.** Re-read `bench-realworld.js`'s
+own scoring pipeline: `actual` (line ~1784) is built from `scan.findings
++ scan.logicVulns + scan.secrets + scan.supplyChain` — ALL categories,
+not just the scored CWE's family — and the `--split dev: 0/0 actual
+findings kept` log line fires on `actual.length` BEFORE any per-family
+filtering. **0/0 means the scan of these 1084 files produced literally
+zero findings of ANY kind whatsoever** (not zero XSS findings specifically
+— zero SQLi, zero secrets, zero path traversal, zero everything),
+confirmed via the `cwe80_direct_out.json`'s own `"scanned": 0` field
+(this file's own comment: "`scanned` … is findings kept after --split
+filtering, not a file count"). This rules out "wrong XSS shape" as even
+a well-formed hypothesis — the question is now "why does this specific
+1084-file scan surface produce absolutely nothing", which is a
+parse/scan-surface question, not a detector-coverage one.
+
+Two more parser-crash-style hypotheses tested and ruled out (both a
+plausible match for "some C# syntax construct specific to Web-Forms-style
+XSS code breaks the hand-rolled parser silently"): a `partial class ... :
+System.Web.UI.Page` code-behind file (ASP.NET Web Forms' near-universal
+real-world shape) parses and fires correctly; a verbatim string
+(`@"<html>..." + data + @"</html>"`) used to build HTML output — chosen
+because `ir/CLAUDE.md` already documents a known, deliberately-unfixed
+verbatim-string escape bug in this exact parser — also parses fine, with
+a SECOND method later in the same file firing correctly too (no
+whole-file corruption). Exhausted the single-construct hypothesis space
+reasonably available without corpus access; a combination of several
+factors, or something in the scan-surface/glob-matching layer specific
+to how these three directories are named or nested, remains the leading
+open theory. Genuinely stopping here for now — this has consumed
+disproportionate effort across three separate sub-investigations today
+relative to its payoff, and continuing to guess single C# constructs in
+isolation has a clearly diminishing hit rate.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
