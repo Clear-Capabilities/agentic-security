@@ -401,6 +401,75 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   branch+join fix + deadBranchRanges case-label fix) — current verified
   baseline.**
 
+### 2026-09-15 — chasing multi-file variant 51-54: works in isolation, fails at scale
+
+- Sampled real CWE-89 FNs after the if/else + switch fixes: 337 remaining,
+  concentrated exactly where expected — 51-54 (multi-file, ~105 of them),
+  61-75 (collection, ~85), 81 (dispatch, 36). No new shape category; these
+  are the already-identified W2.2/W2.3/(81's own gap) families.
+- Picked variant 54 (largest bucket) and read a REAL 5-file family
+  end-to-end: a 4-hop interprocedural chain across 5 separate classes/files,
+  each hop calling `(new NextClass()).method(data)` DIRECTLY — constructor
+  and method call chained inline, never assigned to a local variable first
+  (a shape distinct from every dispatch pattern investigated so far this
+  session). Built an isolated synthetic probe of the same shape (4 hops,
+  5 files) — **it fires correctly, real IR-TAINT finding, real interprocedural
+  resolution through all 4 hops.**
+- Copied the REAL 5 files (not a synthetic replica) into an isolated
+  directory and scanned them ALONE — **also fires correctly.**
+- Bisected by copying progressively more of the real corpus into a scratch
+  dir: s01 alone (978 files) — fires. s01+s02 (1956) — fires. s01+s02+s03
+  (2934) — fires. **All four subdirectories copied flat (3668 files,
+  matching the real CWE-89 file count exactly) — STILL fires.** This
+  falsifies the "scale-dependent" hypothesis entirely: it is not file count.
+- **Pivoted**: the one thing every scratch-dir test had in common that the
+  real `batch-scan.mjs`/`--cwe 89` invocation does NOT: a scratch copy
+  contains ONLY the target CWE's files, physically absent everything else.
+  The real invocation scans the FULL, untouched Juliet repo (112 CWE
+  directories in place) and EXCLUDES the other 111 via a generated
+  `.agentic-security/rules.yml#ignorePaths` file (see bench-realworld.js's
+  own `--cwe` mechanism). Re-running the EXACT real invocation (`node
+  test/benchmark/realworld/bench-realworld.js --app sard-juliet-java-strict
+  --blind --scramble-identifiers --deep --cwe 89 --json`) to see whether
+  the failure reproduces there — if it does, the `ignorePaths` exclusion
+  mechanism itself (not scan scale) is the real suspect.
+- **First attempt was a false alarm from my own test setup**: ran
+  `bench-realworld.js --cwe 89` directly (not through `batch-scan.mjs`),
+  which uses the DEFAULT `AGENTIC_SECURITY_DEEP_FN_LIMIT=5000` since I forgot
+  to set the raised limit manually — `truncated: true, fnLimitExceeded:
+  true`. Not a real finding; re-ran with the correct `AGENTIC_SECURITY_DEEP_FN_LIMIT=50000`
+  (matching `batch-scan.mjs` exactly) to remove the confound.
+- **With the confound removed, the real explanation appeared — and it is
+  NOT a detection gap.** The corrected run: `truncated: false`. Per-file
+  breakdown for this exact 5-file family: `54a.java` (the source/driver)
+  → **TP**. `54e.java` (the actual SQL sink) → **TP**. `54b.java`,
+  `54c.java`, `54d.java` (the three INTERMEDIATE relay files — each is
+  purely `public void op0_293a2c(String data) { (new NextClass())
+  .op0_293a2c(data); }`, no sink, no source, no vulnerable code of their
+  own) → **FN, all three**. Juliet's own gold set creates one expected
+  "badSink" entry PER FILE in a multi-file chain, including pure
+  pass-through relay files that have nothing wrong with them on their own
+  — a sound scanner correctly attributes the ONE real vulnerability to its
+  source and sink (both caught here), and has no principled reason to
+  also flag a file that neither introduces nor uses tainted data itself.
+  **This means variant 51-54's achievable recall has a mathematical
+  ceiling well under 100% by the gold's own construction** (a 5-file chain
+  can score at best 2/5 "per-file" credit no matter how correct the
+  scanner is), not a missing capability — correcting the earlier framing
+  of this as an unexplained gap.
+- **What WOULD close it (a real, implementable, but substantial
+  enhancement, matching the PRD's own W2.2 description)**: have the
+  interprocedural engine additionally emit a finding AT EACH intermediate
+  call site that relays a tainted parameter into another tainted call —
+  something like the engine's existing "Multi-Sink Taint Chain" finding
+  type, extended to fire per-hop, not just at the ultimate source/sink.
+  Not attempted this session: designing it to avoid a false-positive
+  explosion on ordinary real-world pass-through code (nearly every
+  multi-layer real codebase has functions that just forward a parameter)
+  needs real care, not a quick patch — flagged as W2.2's actual scope, to
+  be picked up as its own focused task rather than rushed at the end of an
+  already-long investigation.
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |
