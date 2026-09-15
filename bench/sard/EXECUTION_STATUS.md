@@ -579,7 +579,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
 | W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp); C# generic-constructor lowering gap (`List<T>`) also fixed, real capability, byte-identical zero SARD movement; chained-mutator desync (`sb.append(a).append(b)`) fixed, language-agnostic engine fix, byte-identical zero SARD movement — see session log for the emerging pattern | IN_PROGRESS |
-| W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
+| W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names — verified all working via direct probes, no code change needed (was blocked on W1, now substantially fixed), see session log | VERIFIED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
 | W2.7 | Java switch/case real branch+join CFG + fix `deadBranchRanges` case-label key bug (was: matching case marked "dead", default exempted — exactly backwards) — not in the original PRD task list, found this session | VERIFIED |
@@ -1526,6 +1526,42 @@ number specifically should weight investigations toward SIMPLER,
 single-step shape variations (closer to what a mechanical generator
 would emit) over complex real-world idioms, which are better motivated
 by general product quality than by this particular benchmark.
+
+### W2.4 — verified, no code change needed (2026-09-15)
+
+Acted on this iteration's own strategy shift: instead of hunting another
+"realistic idiom" gap, checked a task that was NOT_STARTED but explicitly
+noted as "blocked only by W1" — and W1 (structural class resolution) is
+now substantially fixed this session (W1.2/W1.3 VERIFIED). Built the
+SIMPLEST possible probes for each named variant, deliberately mechanical
+(one hop, no chaining, no generics — the opposite of every "realistic
+idiom" fix above):
+
+- **41** (tainted data passed as a PARAMETER to a private helper, sink
+  inside the helper) — fires.
+- **42** (tainted data RETURNED from a private helper, sink in the
+  caller using the return value) — fires.
+- **44/45-style** (tainted data stored in an instance field / static
+  field via one method, read via a different method) — both fire.
+- **61/62** (a helper's RETURN VALUE stored into a field, and into a
+  collection via `.add()`, each read from a THIRD method) — both fire.
+
+**All six re-tested with fully opaque, hash-style method names**
+(`op0_a1b2c3`, `op1_j1k2l3` — exactly what `--scramble-identifiers`
+produces) to directly confirm the "under scrambled names" qualifier in
+this task's own title: resolution is structural (real IR call-graph
+edges), not name-pattern-based, so scrambling has no effect — confirmed
+empirically, not just architecturally assumed. **All six also verified
+for precision**: a constant (non-attacker-controlled) value through the
+identical shapes stays silent, zero false positives.
+
+**No code change.** This is a verification task, not a fix — the
+underlying mechanism (interprocedural summaries, field taint, and this
+session's own collection-taint fixes for the 61/62 case) already
+handles every variant. Marking VERIFIED rather than leaving it
+NOT_STARTED, since the PRD's own acceptance criterion for this task
+("confirm...") is now met with real evidence. No corpus re-measurement
+needed (no code changed to measure).
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
