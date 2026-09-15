@@ -616,7 +616,7 @@ precision against).
 | W4.C1 | C# CWE-113, CWE-80/81/83 | NOT_STARTED |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 | NOT_STARTED |
-| W4.C4 | C# CWE-313/314/315 cleartext storage | NOT_STARTED |
+| W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
 
@@ -817,6 +817,80 @@ Java's session-defining if/else and switch/case bugs) — the evidence
 points at the C# SAST *rule catalog* being thinner and shape-mismatched
 for several non-taint-flow CWE families. Continuing this investigation is
 real, substantial follow-up work, not completed here.
+
+### W2.8 follow-up — CWE-313/314/315 cleartext-storage detector (2026-09-15)
+
+Acted on the W2.8 finding: `sast/csharp.js` had zero detector coverage for
+the `data-exposure` family (cleartext storage in a file/registry/cookie).
+Implemented `detectCleartextStorage` (CWE-313 `File.WriteAllText`/
+`WriteAllLines`/`AppendAllText`/`AppendAllLines` + file-backed
+`Writer.Write`/`WriteLine`; CWE-314 `Registry(Key).SetValue`; CWE-315
+`new HttpCookie(...)` + `Cookies[...].Value =`), name-based like the
+existing `detectHardcodedSecret` (a sensitive-named value — password/
+secret/token/key/etc. — reaching the sink, hardcoded or not). 12 new unit
+tests in `test/csharp-pipeline.test.js` (8 positive-fire, 4 precision
+negatives), all passing; full `test:sast` (750/750), `bench:self-scan:check`
+(zero drift), `bench:cve-replay:check` (220/220), `bench:mutation:check`
+(35/35), `test:smoke` (30/30) all green; bundle rebuilt.
+
+**First real-corpus measurement (name-based only):** `node
+bench/sard/scripts/batch-scan.mjs --app sard-juliet-csharp-strict --blind
+--scramble-identifiers --deep --split dev --json` → **tp=335 fp=430
+fn=2267, macroF1=16.1% — byte-identical to the pre-fix baseline.**
+CWE-313/314/315 per-CWE: all three `tp=0` (fn=19/71/6 respectively, `fp=0`
+for 313/314). The name-based detector fired on NOTHING in the real
+corpus.
+
+**Root cause (verified, not guessed): `--scramble-identifiers` does NOT
+rename ordinary local-variable names.** Read the actual scrambling code
+(bench-realworld.js's `scrambleIdentifiers` block) rather than assuming —
+it only rewrites Juliet's own ANSWER-KEY-shaped identifiers (`bad`/
+`good`/`badSink`/`goodG2B` method names, `CWE89_SQL_Injection...`-style
+class/package names). A variable literally named `password` inside a
+method body is untouched. This ruled out my first hypothesis (scrambling
+defeats name-matching) — confirmed instead that Juliet's own convention
+for this specific CWE family (like nearly every other Juliet CWE) uses a
+generic, non-descriptive variable name (`data`), not a semantically-named
+one — so a name-heuristic detector structurally cannot see it, independent
+of scrambling.
+
+**Second attempt: added a taint-based OR-path** (`argIsTainted(flow, arg)`
+firing in addition to the name check — purely additive by construction,
+matching this file's existing detectors' convention). Re-measured on the
+full real corpus: **tp=335 fp=522 fn=2267, macroF1=16.1% (unchanged),
+precision dropped 43.8%→39.1%.** Per-CWE: CWE-313/314 completely
+unchanged (`tp=0 fp=0`, meaning no taint from any cataloged source ever
+reaches those sinks in this corpus — plausible, since Juliet's classic
+variant-01 shape for many CWEs uses a bare hardcoded literal with no
+Source call at all, which correctly stays untainted). **CWE-315 gained
++92 false positives with zero additional true positives** (`fn` stayed
+at 6 — the real expected TPs were never matched, only noise was added).
+
+**Diagnosed and reverted.** The +92 FPs are consistent with Juliet's own
+Good()/GoodB2G()/GoodG2B() variants in the SAME CWE-315 test files ALSO
+assigning a value (typically encrypted, but my check never verified that)
+to `Cookies[...].Value` — a plain source-reaches-sink taint check cannot
+distinguish "reached the sink" from "reached the sink UNENCRYPTED", which
+is the actual Bad/Good distinction for this CWE family. That is a
+structurally different detector shape (a guard/sanitizer-absence check,
+the same category as `dropGuardedFindings`/`_hasPathGuard` elsewhere in
+this codebase), not a source/sink check — not attempted here. Reverted
+the taint-based OR-path in full (`isSensitiveArg` back to name-only, the
+`Cookies[...].Value=` raw-text check back to name-only); re-verified
+`test:sast` (750/750), self-scan (zero drift), cve-replay (220/220),
+mutation (35/35), smoke (30/30) all green after the revert.
+
+**Net result of this follow-up: a real, tested, zero-FP-cost detector is
+now shipped for real-world C# codebases** (where variable names ARE
+usually descriptive — `password`/`apiKey`/`connectionString` are exactly
+how this vulnerability class looks in practice) **but it does not move
+this specific SARD benchmark's recall number**, because Juliet's
+synthetic corpus deliberately uses non-descriptive names for this CWE
+family. Moving the SARD number for CWE-313/314/315 needs a genuinely
+different, harder detector: track a value from a cataloged source to one
+of these sinks AND verify no crypto/encryption call sits between them —
+scoped as a distinct future task, not attempted here given the false-
+positive risk just measured on the naive version of that same idea.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

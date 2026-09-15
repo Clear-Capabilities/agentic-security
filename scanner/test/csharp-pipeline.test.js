@@ -468,3 +468,83 @@ test('analysis: IO.readLine() does NOT taint under blind mode', () => {
     delete process.env.AGENTIC_SECURITY_BLIND_BENCH;
   }
 });
+
+// ── Cleartext storage of sensitive data — CWE-313/314/315 ──────────────────
+
+test('detector: CWE-313 File.WriteAllText with a sensitive-named value', () => {
+  const src = 'class T { void M() { string password = "hunter2longenough"; File.WriteAllText("/tmp/out.txt", password); } }';
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-file:'));
+  assert.ok(f, 'expected csharp-cleartext-file finding');
+  assert.equal(f.family, 'data-exposure');
+  assert.equal(f.cwe, 'CWE-313');
+});
+
+test('detector: CWE-313 File.WriteAllText with a non-sensitive value does NOT fire', () => {
+  const src = 'class T { void M() { string greeting = "hello"; File.WriteAllText("/tmp/out.txt", greeting); } }';
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-file:')));
+});
+
+test('detector: CWE-313 StreamWriter.Write with a sensitive-named value', () => {
+  const src = `
+    class T {
+      void M() {
+        string password = "hunter2longenough";
+        StreamWriter sw = new StreamWriter("/tmp/out.txt");
+        sw.Write(password);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-file-writer:'));
+  assert.ok(f, 'expected csharp-cleartext-file-writer finding');
+  assert.equal(f.cwe, 'CWE-313');
+});
+
+test('detector: CWE-313 does NOT fire on Response writer (that is XSS territory, not file storage)', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get() {
+        string password = "hunter2longenough";
+        Response.Output.Write(password);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-file-writer:')));
+});
+
+test('detector: CWE-314 Registry.SetValue with a sensitive-named value', () => {
+  const src = 'class T { void M() { string password = "hunter2longenough"; Registry.SetValue(@"HKEY_CURRENT_USER\\\\Software\\\\App", "pw", password); } }';
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-registry:'));
+  assert.ok(f, 'expected csharp-cleartext-registry finding');
+  assert.equal(f.cwe, 'CWE-314');
+});
+
+test('detector: CWE-315 new HttpCookie with a sensitive-named value', () => {
+  const src = 'class T { void M() { string password = "hunter2longenough"; HttpCookie c = new HttpCookie("auth", password); } }';
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-cookie:'));
+  assert.ok(f, 'expected csharp-cleartext-cookie finding');
+  assert.equal(f.cwe, 'CWE-315');
+});
+
+test('detector: CWE-315 Response.Cookies[...].Value = sensitive value', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get() {
+        string password = "hunter2longenough";
+        Response.Cookies["auth"].Value = password;
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-cookie-assign:'));
+  assert.ok(f, 'expected csharp-cleartext-cookie-assign finding');
+  assert.equal(f.cwe, 'CWE-315');
+});
+
+test('detector: CWE-315 new HttpCookie with a non-sensitive value does NOT fire', () => {
+  const src = 'class T { void M() { string label = "welcome-banner-seen"; HttpCookie c = new HttpCookie("ui", label); } }';
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-cookie:')));
+});

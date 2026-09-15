@@ -28,6 +28,9 @@
 //   CWE-502 insecure-deserialization  BinaryFormatter.Deserialize / NetDataContractSerializer / Newtonsoft TypeNameHandling != None
 //   CWE-611 xxe                  XmlDocument w/o XmlResolver=null; XmlReaderSettings w/o DtdProcessing=Prohibit
 //   CWE-798 hardcoded-secret     Field/local with name matching password/token/secret/apiKey + non-empty string literal initializer
+//   CWE-313 data-exposure        File.WriteAllText/AppendAllText/writer.Write with a sensitive-named value (name-based, not taint-based)
+//   CWE-314 data-exposure        Registry.SetValue / RegistryKey.SetValue with a sensitive-named value
+//   CWE-315 data-exposure        new HttpCookie(...) / Cookies[...].Value = with a sensitive-named value
 //   CWE-1004 header-hardening    new HttpCookie missing Secure/HttpOnly
 //   CWE-22  validate-input-false [ValidateInput(false)] attribute
 //
@@ -95,6 +98,9 @@ function makeFinding({ ruleId, file, line, raw, ir, family, severity, cwe, vuln,
                : cwe === 'CWE-798' ? 'Information Disclosure'
                : cwe === 'CWE-1004'? 'Information Disclosure'
                : cwe === 'CWE-90'  ? 'Tampering'
+               : cwe === 'CWE-313' ? 'Information Disclosure'
+               : cwe === 'CWE-314' ? 'Information Disclosure'
+               : cwe === 'CWE-315' ? 'Information Disclosure'
                : 'Tampering');
   return {
     id: `${ruleId}:${file}:${line}`, file, line,
@@ -369,6 +375,145 @@ function detectHardcodedSecret(file, raw, ir, analysis, out, seen) {
       remediation: 'Load secrets from environment variables (`Environment.GetEnvironmentVariable`), Azure Key Vault, AWS Secrets Manager, or .NET `Configuration` with user-secrets in development. Never commit literal credentials.',
       confidence: 0.7,
     }));
+  }
+}
+
+// Cleartext storage of sensitive data — CWE-313 (file), CWE-314
+// (registry), CWE-315 (cookie). All three share one shape in Juliet: a
+// value carrying a sensitive NAME (password/secret/token/…) — regardless
+// of whether it's hardcoded or externally sourced, since the defect is
+// persisting it in the clear, not where it came from — is written to a
+// durable, unencrypted store with no encryption step in between. This is
+// deliberately name-based like `detectHardcodedSecret` above, not
+// taint-based.
+//
+// A taint-based variant (`argIsTainted` firing this detector for ANY
+// value reaching the sink, regardless of name) was tried and reverted:
+// measured on the real corpus (`--blind --scramble-identifiers --deep
+// --split dev`), it added +92 false positives on CWE-315 alone with ZERO
+// additional true positives anywhere (313/314/315 all stayed at tp=0).
+// Root cause: this CWE family's Bad/Good distinction is "was the value
+// ENCRYPTED before storage", not "did a value reach the sink at all" — a
+// plain source-reaches-sink taint check fires identically on Juliet's own
+// Good() variants (which also assign a — usually encrypted — value to the
+// same sink) as it does on Bad(), which is a structurally different
+// detector shape (a guard/sanitizer check, not a source/sink check) that
+// was not attempted here. See bench/sard/EXECUTION_STATUS.md's W2.8 log
+// for the measured numbers.
+const CLEARTEXT_FILE_SINKS = /^File\.(?:WriteAllText|WriteAllLines|AppendAllText|AppendAllLines)$/;
+const CLEARTEXT_REGISTRY_SINK = /SetValue$/;
+
+function isSensitiveArg(arg) {
+  return !!arg && (arg.idents || []).some(i => SECRET_NAME_PATTERN.test(i));
+}
+
+function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
+  for (const m of ir.methods) {
+    const flow = analysis.methodFlow.get(m);
+    for (const call of m.calls) {
+      const fp = call.fullPath || ((call.receiver ? call.receiver + '.' : '') + call.method);
+      // CWE-313: File.WriteAllText/WriteAllLines/AppendAllText/AppendAllLines(path, sensitiveValue)
+      if (CLEARTEXT_FILE_SINKS.test(fp)) {
+        const hit = call.args.slice(1).find(isSensitiveArg);
+        if (hit) {
+          const id = `csharp-cleartext-file:${file}:${call.line}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            out.push(makeFinding({
+              ruleId: 'csharp-cleartext-file', file, line: call.line, raw, ir,
+              family: 'data-exposure', severity: 'high', cwe: 'CWE-313',
+              vuln: `Cleartext Storage in a File — ${fp} writes an unencrypted sensitive value`,
+              remediation: 'Encrypt the value (e.g. with `System.Security.Cryptography.ProtectedData` / AES-GCM) before writing it to disk. Never persist a password, key, or token as plaintext.',
+            }));
+          }
+        }
+      }
+      // CWE-313: writer.Write(sensitiveValue) / writer.WriteLine(sensitiveValue)
+      // when the receiver is a text writer over a file (StreamWriter/TextWriter),
+      // not an arbitrary Writer (Response writers are XSS, handled elsewhere).
+      if (/^Write(?:Line)?$/.test(call.method) && call.receiver) {
+        const t = flow ? flow.typeMap.get(call.receiver) : null;
+        const looksFileWriter = (t && /^(?:StreamWriter|TextWriter|StringWriter)$/.test(t))
+          || /writer/i.test(call.receiver);
+        const looksResponseWriter = /Response|Output|Html/i.test(call.receiver);
+        if (looksFileWriter && !looksResponseWriter) {
+          const hit = call.args.find(isSensitiveArg);
+          if (hit) {
+            const id = `csharp-cleartext-file-writer:${file}:${call.line}`;
+            if (!seen.has(id)) {
+              seen.add(id);
+              out.push(makeFinding({
+                ruleId: 'csharp-cleartext-file-writer', file, line: call.line, raw, ir,
+                family: 'data-exposure', severity: 'high', cwe: 'CWE-313',
+                vuln: `Cleartext Storage in a File — ${call.receiver}.${call.method} writes an unencrypted sensitive value`,
+                remediation: 'Encrypt the value before writing it to a file-backed writer. Never persist a password, key, or token as plaintext.',
+              }));
+            }
+          }
+        }
+      }
+      // CWE-314: Registry.SetValue(...) / RegistryKey.SetValue(...) with a
+      // sensitive value among the arguments.
+      if (CLEARTEXT_REGISTRY_SINK.test(call.method) && call.receiver && /[Rr]egistry/.test(call.receiver)) {
+        const hit = call.args.find(isSensitiveArg);
+        if (hit) {
+          const id = `csharp-cleartext-registry:${file}:${call.line}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            out.push(makeFinding({
+              ruleId: 'csharp-cleartext-registry', file, line: call.line, raw, ir,
+              family: 'data-exposure', severity: 'high', cwe: 'CWE-314',
+              vuln: `Cleartext Storage in the Registry — ${fp} writes an unencrypted sensitive value`,
+              remediation: 'Encrypt the value before storing it in the registry, or use a dedicated secret store (DPAPI / Windows Credential Manager) instead of a raw registry value.',
+            }));
+          }
+        }
+      }
+    }
+    // CWE-315: new HttpCookie(name, sensitiveValue)
+    for (const ctor of m.ctors) {
+      if (ctor.type !== 'HttpCookie') continue;
+      const hit = ctor.args.find(isSensitiveArg);
+      if (!hit) continue;
+      const id = `csharp-cleartext-cookie:${file}:${ctor.line}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(makeFinding({
+        ruleId: 'csharp-cleartext-cookie', file, line: ctor.line, raw, ir,
+        family: 'data-exposure', severity: 'high', cwe: 'CWE-315',
+        vuln: 'Cleartext Storage of Sensitive Information in a Cookie — HttpCookie constructed with an unencrypted sensitive value',
+        remediation: 'Never store a password, key, or token directly in a cookie. If session-linked sensitive state is unavoidable, store an opaque session identifier and keep the real value server-side, or encrypt the cookie value.',
+      }));
+    }
+    // CWE-315: Response.Cookies["name"].Value = sensitiveValue
+    //
+    // Deliberately a raw-text scan, not `m.assignments`: the assignment-IR
+    // builder's dotted-target walk (csharp-ir.js) does not handle an
+    // indexer inside the target chain (`Cookies["auth"].Value`) — it stops
+    // at the `[`, so the parsed assignment silently loses the `Cookies[...]`
+    // receiver and comes back as a bare `target: "Value", isMember: false`,
+    // indistinguishable from an unrelated local variable named `Value`. A
+    // real IR fix belongs in csharp-ir.js's assignment-target walker (it
+    // would also fix any other `x[i].member = ...` shape); this is a
+    // narrow, self-contained workaround scoped to the one shape this rule
+    // needs, following this file's own precedent of small text checks for
+    // shapes the structured IR doesn't yet cover.
+    const bodyText = (raw || '').split('\n').slice((m.line || 1) - 1, m.endLine || undefined).join('\n');
+    const cookieValueRe = /\bCookies\s*\[[^\]]*\]\s*\.\s*Value\s*=\s*([A-Za-z_]\w*)\s*;/g;
+    let cm;
+    while ((cm = cookieValueRe.exec(bodyText))) {
+      if (!SECRET_NAME_PATTERN.test(cm[1])) continue;
+      const line = (m.line || 1) + bodyText.slice(0, cm.index).split('\n').length - 1;
+      const id = `csharp-cleartext-cookie-assign:${file}:${line}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(makeFinding({
+        ruleId: 'csharp-cleartext-cookie-assign', file, line, raw, ir,
+        family: 'data-exposure', severity: 'high', cwe: 'CWE-315',
+        vuln: 'Cleartext Storage of Sensitive Information in a Cookie — .Value assigned an unencrypted sensitive value',
+        remediation: 'Never store a password, key, or token directly in a cookie value. Store an opaque session identifier instead, or encrypt the value.',
+      }));
+    }
   }
 }
 
@@ -938,6 +1083,7 @@ export function scanCSharp(fp, raw) {
   try { detectWeakCrypto(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectWeakRng(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectHardcodedSecret(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectCleartextStorage(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectInsecureCookies(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectXss(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectXssExpanded(fp, raw, ir, analysis, out, seen); } catch {}
