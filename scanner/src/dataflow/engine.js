@@ -1826,6 +1826,58 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     }
   }
 
+  // Cross-class static-field taint (SARD_80_F1_EXECUTION_PRD.md — Juliet flow
+  // variant 68: a driver class writes a tainted value to its OWN static
+  // field, then a COMPLETELY DIFFERENT class reads it back via a qualified
+  // reference — `String data = OtherClass.field;` — with no parameter
+  // passed at all. The same-class pass just above is deliberately scoped to
+  // "a sibling method of the SAME class" (see its own header comment); this
+  // is the same mechanism widened one hop further, to any function anywhere
+  // that references `<taintedClassName>.<taintedField>` by name.
+  //
+  // Bounded by a cheap TEXT pre-filter rather than re-analyzing every
+  // function in the project for every tainted class: only a function whose
+  // OWN source text contains the literal `<ClassName>.` substring is a
+  // candidate at all (Juliet's own per-test-case files reference at most a
+  // couple of sibling classes each, so this stays cheap even across a
+  // 17000+ function corpus). `opts.fileContents` is the same map already
+  // threaded through for incremental-cache hashing; falls back to
+  // no-op when absent (in-process callers that don't pass it), same
+  // graceful-degradation convention as this file's other opt-in passes.
+  const fileContents = opts.fileContents;
+  if (cha && fileContents && classTaintedFields.size) {
+    for (const [className, fields] of classTaintedFields) {
+      if (Date.now() > deadlineMs) break;
+      const qualifiedSeeds = new Set();
+      for (const f of fields) qualifiedSeeds.add(`${className}.${f}`);
+      const needle = `${className}.`;
+      for (const fn of fnList) {
+        if (Date.now() > deadlineMs) break;
+        if (cha.methodOwners.get(fn.qid) === className) continue; // already covered above
+        const src = fileContents[fn.file];
+        if (typeof src !== 'string' || !src.includes(needle)) continue;
+        if (summaryCache.has(fn.qid, qualifiedSeeds)) continue;
+        const ctx = {
+          _findings: [], _taintSources: [], _returnTainted: false,
+          _stack: new Set(), deadlineMs,
+          _summaryCache: summaryCache, _callGraph: callGraph,
+          _mutatedParamsOut: new Set(),
+          _currentFnQid: fn.qid,
+          _cha: opts._cha,
+          _pointsTo: opts._pointsTo,
+        };
+        try { analyzeFunction(fn, _unionAnnotationTaint(fn, qualifiedSeeds), ctx); } catch {}
+        _collectFindings(fn, ctx._findings);
+        summaryCache.set(fn.qid, qualifiedSeeds, {
+          returnTainted: !!ctx._returnTainted,
+          mutatedParams: ctx._mutatedParamsOut || new Set(),
+          taintedGlobals: new Set(),
+          findings: ctx._findings,
+        });
+      }
+    }
+  }
+
   // k=2 pass: compute tainted-entry-state summaries for functions with params
   // AND at least one caller in the call graph. This catches "safe when called
   // clean, dangerous when called with tainted input" wrapper patterns.

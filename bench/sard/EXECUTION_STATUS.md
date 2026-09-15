@@ -512,12 +512,72 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   36.5% (W1) → 37.3% (if/else) → 37.6% (switch) → **37.8% (+ object-field
   widen) — current verified baseline.**
 
+### 2026-09-15 — variant 68: cross-class static field taint
+
+- Investigated the remaining variant 68 (unaffected by the variant-67 fix).
+  Real shape, confirmed by reading both files: a driver class writes a
+  tainted value to its OWN `public static String data;` field, then a
+  COMPLETELY DIFFERENT class reads it back via `String data =
+  OtherClass.data;` — no parameter, no shared object, just a qualified
+  static-field reference across classes. Isolated probe: zero findings.
+- **Found the exact scope boundary**: this codebase already has a
+  "class-field cross-taint pass" (landed earlier this session, targeting
+  Juliet variants 45/65-68 per its own header comment) — but its own
+  comment explicitly scopes it to "a SIBLING method of the SAME class"; the
+  re-analysis loop only re-checks functions where `cha.methodOwners.get(fn.qid)
+  === className` (the SAME class whose field was tainted). Variant 68 needs
+  one hop further: ANY class, referencing the tainted class's field by a
+  QUALIFIED name.
+- **Fixed** by extending the same mechanism one hop: for each class with a
+  known-tainted field, additionally re-analyze functions in OTHER classes
+  that reference `<ClassName>.<field>` by name, seeding that qualified
+  string as a tainted access path. Bounded by a cheap TEXT pre-filter
+  (does the candidate function's own source contain the literal
+  `<ClassName>.` substring) rather than re-analyzing every function in the
+  project for every tainted class — necessary since Juliet's own corpus
+  has thousands of functions and this pass would otherwise multiply cost
+  by the number of classes with tainted fields.
+- Verified: probe fires end-to-end (2 findings, correct chain). Full
+  dataflow suite (1203/1203), mutation (35/35), layer-recall (122/220 exact
+  baseline), cve-replay (220/220 no drift), smoke (30/30), self-scan (no
+  drift). No performance regression: CWE-89's own batch (17604 functions,
+  the largest) ran in 187.4s, comfortably under budget; total wall time
+  across all 18 batches 584.2s (up from 526s pre-fix, a real but modest
+  cost for the added pass).
+- **Real SARD measurement — genuine capability added, roughly NEUTRAL net
+  effect on the aggregate metric.** tp 1580→1599 (+19), recall
+  53.1%→**53.7%** (+0.6pp) — but fp ALSO rose 871→921 (+50), precision
+  64.5%→63.5%, netting **macroF1 37.8%→37.7%** (a hair below noise floor,
+  not a real regression but not a clear win either at the macro level).
+  Per-CWE: CWE-89 tp+5/fp+10, CWE-113 tp+9/fp+18 — both CWEs gained more
+  FPs than TPs from this specific fix.
+- **Traced the FP cost, not just measured it**: the SAME-CLASS field-taint
+  pass this extends already has this exact tradeoff — it marks a class's
+  field "tainted" as a single boolean once ANY method writes a real source
+  into it, then every sibling method reading that field is treated as
+  tainted too, INCLUDING a "good" control-flow method in the same class
+  that only reads the field after a SAFE write (Juliet's own bad/good
+  siblings frequently share one field). This is a pre-existing,
+  deliberately recall-preserving design choice in the mechanism this fix
+  widens, not a new problem introduced by widening it across classes — the
+  cross-class extension inherits the same tradeoff at a larger radius.
+  Precision work here belongs to W3 (taint authority + guards), not this
+  recall-focused workstream; kept the fix (net-neutral, not a regression,
+  and the underlying capability is real and verified) rather than
+  reverting a correct mechanism over an already-known, already-accepted
+  imprecision class.
+- **Session-cumulative Java dev-split trajectory**: 33.5% → 36.4% (W0.3) →
+  36.5% (W1) → 37.3% (if/else) → 37.6% (switch) → 37.8% (object-field
+  widen) → **37.7% (+ cross-class static field) — current, within noise of
+  the previous point; recall genuinely improved (53.1%→53.7%), precision
+  cost is the open item for W3.**
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold static/instance final fields + trivially-constant helper returns | NOT_STARTED |
-| W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | NOT_STARTED |
+| W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
 | W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
