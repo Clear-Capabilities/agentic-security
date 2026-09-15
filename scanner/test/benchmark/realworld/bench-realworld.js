@@ -193,6 +193,14 @@ const MEM_TRACE = flag('--mem-trace');
 // general, reusable capability (any --app can use it), not a SARD-specific
 // flag: runScan()'s own `deep` option already exists for exactly this.
 const DEEP = flag('--deep');
+// PRD W0.1 (measurement integrity) — a truncated scan (files skipped for
+// size, dense-content skipped, per-file analysis timeout, or the deep
+// engine's own global budget exceeded) produces an F1 number that is not a
+// measurement of detection capability, it's a measurement of how much of the
+// corpus got looked at. Default is fail-closed (non-zero exit) so a
+// truncated run can never silently become a milestone-gate pass; this flag
+// is the explicit, named opt-out for exploratory/local runs.
+const ALLOW_TRUNCATION = flag('--allow-truncation');
 
 function memTrace(label) {
   if (!MEM_TRACE) return;
@@ -1692,6 +1700,22 @@ async function runOne(name, app, vulnFamilyMap) {
   memTrace('after scan');
   if (rulesPath) { try { await fs.rm(path.dirname(rulesPath), { recursive: true, force: true }); } catch {} }
 
+  // PRD W0.1 — truncation signals from the scan itself. `_scanMeta` counts
+  // are the pattern-layer per-file loop (engine.js: files skipped for size,
+  // dense-content skipped, or individually timed out); `ir-taint-timeout:`
+  // is the deep engine's OWN global-budget-exceeded marker (a real finding it
+  // pushes into `scan.findings` when `runDeepAnalysis` overran
+  // AGENTIC_SECURITY_DEEP_TIMEOUT_MS). Any of these means some part of the
+  // corpus was not actually analyzed, so the resulting P/R/F1 understates
+  // recall for a reason that has nothing to do with detection quality.
+  const _sm = scan._scanMeta || {};
+  const filesTimedOut = _sm.filesTimedOut || 0;
+  const filesSkipped = _sm.filesSkipped || 0;
+  const filesDenseSkipped = _sm.filesDenseSkipped || 0;
+  const deepBudgetExceeded = (scan.findings || []).some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
+  const truncated = filesTimedOut > 0 || filesSkipped > 0 || filesDenseSkipped > 0 || deepBudgetExceeded;
+  const truncationDetail = { filesTimedOut, filesSkipped, filesDenseSkipped, deepBudgetExceeded };
+
   let actual = [
     ...(scan.findings || []),
     ...(scan.logicVulns || []),
@@ -1825,6 +1849,7 @@ async function runOne(name, app, vulnFamilyMap) {
     expectedTotal: expected.length,
     auditorVerifiedSource,
     requiresReAudit: reAuditFlag,
+    truncated, truncationDetail,
   };
 }
 
@@ -1841,6 +1866,10 @@ function printResult(r) {
   }
   const rssTag = r.peakRssMb != null ? `, peak RSS ${r.peakRssMb} MB` : '';
   console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}, ${r.elapsedSec}s${rssTag})`);
+  if (r.truncated) {
+    const d = r.truncationDetail || {};
+    console.log(`  ⚠ TRUNCATED — scan did not cover the full corpus (filesSkipped:${d.filesSkipped||0} filesDenseSkipped:${d.filesDenseSkipped||0} filesTimedOut:${d.filesTimedOut||0} deepBudgetExceeded:${!!d.deepBudgetExceeded}). P/R/F1 above understate recall — see PRD W0.1.`);
+  }
   if (Object.keys(r.perFamily).length) {
     console.log(`  per-family:`);
     for (const [fam, s] of Object.entries(r.perFamily).sort()) {
@@ -1930,6 +1959,16 @@ async function runOneIsolated(name, tmpDir) {
     ({ status, signal } = await new Promise((resolve, reject) => {
       const child = cp.spawn(process.execPath, [SELF_PATH, ...childArgsFor(name)], {
         stdio: ['ignore', fh.fd, 'pipe'],
+        // PRD W0.1's fail-closed truncation check must be decided by whoever
+        // owns the FINAL aggregated result, not by a per-app leaf process:
+        // the isolated-child harness below (a few lines up) treats ANY
+        // non-zero child exit as a crash and discards its JSON entirely, so
+        // if a truncated child also set exitCode=1 its (perfectly readable,
+        // truncated-and-labeled) result would vanish instead of reaching the
+        // parent's aggregate check below. The child still reports
+        // `truncated`/`truncationDetail` in its JSON; it just doesn't act on
+        // it itself.
+        env: { ...process.env, AGENTIC_SECURITY_BENCH_CHILD: '1' },
       });
       child.stderr.on('data', (chunk) => {
         process.stderr.write(chunk);
@@ -2033,6 +2072,15 @@ async function main() {
   // exceptions. A crash must show up as a failing app, never as an absent one.
   if (results.length !== targets.length) {
     throw new Error(`internal: ${results.length} results for ${targets.length} targets`);
+  }
+  // PRD W0.1 — fail closed on truncation. A truncated run's F1 is not a
+  // measurement of detection capability; letting it exit 0 is exactly how a
+  // milestone gate could pass on an incomplete scan without anyone noticing.
+  const truncatedApps = results.filter(r => r.truncated);
+  if (truncatedApps.length && !ALLOW_TRUNCATION && !process.env.AGENTIC_SECURITY_BENCH_CHILD) {
+    console.error(`\n✗ ${truncatedApps.length} app(s) truncated (${truncatedApps.map(r => r.name).join(', ')}) — refusing to report this as a valid measurement.`);
+    console.error(`  Re-run with a larger AGENTIC_SECURITY_DEEP_TIMEOUT_MS / per-file limits, or pass --allow-truncation to report anyway (exploratory runs only — never for a milestone gate).`);
+    process.exitCode = 1;
   }
   // Persist per-CWE precision/recall to .agentic-security/validator-metrics.json
   // so /security-trend and /report-card can show benchmark trajectory.

@@ -43,6 +43,15 @@ function readInput() {
   catch (e) { throw new Error(`no --input file and stdin unreadable: ${e.message}`); }
 }
 
+// PRD W0.1 — fail closed here too, not just in the upstream harness. This is
+// the layer a milestone gate actually reads (`bench-realworld.js --json |
+// macro-score.mjs`), and a shell pipeline's exit code is the LAST command's
+// by default (no `pipefail`) — so an upstream truncated-and-exit-1 producer
+// would otherwise still let this consumer report a clean pass. Checked
+// against the raw per-app `r.truncated` from the input, not the copy on
+// `report.apps`, so it can't be defeated by a shape change downstream.
+const ALLOW_TRUNCATION = process.argv.includes('--allow-truncation');
+
 export function f1(p, r) { return (p + r) === 0 ? 0 : (2 * p * r) / (p + r); }
 
 // A "strict" app (empty wildcardFamilies + preciseMethodScoring) gives
@@ -233,6 +242,8 @@ function main() {
       perCwe: rows,
       cweConfusion: confusion,
       localization,
+      truncated: !!r.truncated,
+      truncationDetail: r.truncationDetail || null,
     });
 
     mdLines.push(`## ${r.name} (${r.language})${strict ? '' : '  ⚠ non-strict (wildcardFamilies — see caveat below)'}`);
@@ -311,9 +322,16 @@ function main() {
     const msupNote = msup && msup.excludedCwes.length
       ? `  macroF1(support>=${MIN_SUPPORT_FOR_MACRO})=${msup.value === null ? 'n/a' : (msup.value * 100).toFixed(1) + '%'} [${msup.excludedCwes.length} low-support CWE(s) excluded]`
       : '';
-    console.log(`${app.name}: macroF1=${(app.macroF1 * 100).toFixed(1)}%  microF1=${(app.aggregate.microF1 * 100).toFixed(1)}%  P=${(app.aggregate.precision * 100).toFixed(1)}%  R=${(app.aggregate.recall * 100).toFixed(1)}%  CWEs=${app.cweCount}${app.strict ? '' : '  [non-strict]'}${msupNote}`);
+    const truncTag = app.truncated ? '  ⚠ TRUNCATED' : '';
+    console.log(`${app.name}: macroF1=${(app.macroF1 * 100).toFixed(1)}%  microF1=${(app.aggregate.microF1 * 100).toFixed(1)}%  P=${(app.aggregate.precision * 100).toFixed(1)}%  R=${(app.aggregate.recall * 100).toFixed(1)}%  CWEs=${app.cweCount}${app.strict ? '' : '  [non-strict]'}${msupNote}${truncTag}`);
   }
   console.log(`\nWritten: ${path.relative(process.cwd(), path.join(REPORTS_DIR, 'latest.json'))}, ${path.relative(process.cwd(), path.join(REPORTS_DIR, 'latest.md'))}`);
+
+  const truncatedApps = report.apps.filter(a => a.truncated);
+  if (truncatedApps.length && !ALLOW_TRUNCATION) {
+    console.error(`\n✗ ${truncatedApps.length} app(s) truncated (${truncatedApps.map(a => a.name).join(', ')}) — this report is NOT a valid milestone-gate measurement. Pass --allow-truncation to accept anyway (exploratory runs only).`);
+    process.exitCode = 1;
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

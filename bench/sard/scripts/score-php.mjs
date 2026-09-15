@@ -40,7 +40,7 @@ const WORKSPACE_ROOT = path.join(SARD_ROOT, 'workspace', 'php');
 
 function args() {
   const a = process.argv.slice(2);
-  const out = { limit: null, json: false, split: null, deep: false, cwe: null, fpDetail: false };
+  const out = { limit: null, json: false, split: null, deep: false, cwe: null, fpDetail: false, allowTruncation: false };
   for (let i = 0; i < a.length; i++) {
     if (a[i] === '--limit') out.limit = parseInt(a[++i], 10);
     else if (a[i] === '--json') out.json = true;
@@ -48,6 +48,8 @@ function args() {
     else if (a[i] === '--deep') out.deep = true;
     else if (a[i] === '--cwe') out.cwe = new Set(String(a[++i]).split(',').map(s => s.trim()).filter(Boolean));
     else if (a[i] === '--fp-detail') out.fpDetail = true;
+    // PRD W0.1 — see bench-realworld.js's identical flag for the rationale.
+    else if (a[i] === '--allow-truncation') out.allowTruncation = true;
   }
   if (out.split && !['train', 'dev', 'test'].includes(out.split)) {
     console.error(`✗ --split must be train|dev|test, got: ${out.split}`);
@@ -132,6 +134,11 @@ async function main() {
   const fpDetail = [];
   let deepTierSeen = false;
   const t0 = Date.now();
+  // PRD W0.1 — same truncation signals as bench-realworld.js, accumulated
+  // across every per-case scan rather than per-app (this harness scans one
+  // Juliet case directory at a time, not the whole corpus in one runScan).
+  let truncatedCases = 0;
+  const truncationDetail = { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: 0 };
 
   for (const g of gold) {
     const caseDir = path.join(WORKSPACE_ROOT, g.caseId);
@@ -141,6 +148,13 @@ async function main() {
       const { scan } = await runScan(caseDir, opts.deep ? { deep: true } : {});
       findings = scan.findings || [];
       if (opts.deep && scan._scanMeta && scan._scanMeta.analysisTier && scan._scanMeta.analysisTier.irTaint && scan._scanMeta.analysisTier.irTaint.php) deepTierSeen = true;
+      const sm = scan._scanMeta || {};
+      const deepBudgetExceeded = findings.some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
+      if (sm.filesTimedOut) truncationDetail.filesTimedOut += sm.filesTimedOut;
+      if (sm.filesSkipped) truncationDetail.filesSkipped += sm.filesSkipped;
+      if (sm.filesDenseSkipped) truncationDetail.filesDenseSkipped += sm.filesDenseSkipped;
+      if (deepBudgetExceeded) truncationDetail.deepBudgetExceeded += 1;
+      if ((sm.filesTimedOut || sm.filesSkipped || sm.filesDenseSkipped || deepBudgetExceeded)) truncatedCases++;
     } catch (e) {
       console.error(`  ⚠ ${g.caseId}: scan failed (${e.message})`);
       continue;
@@ -176,12 +190,19 @@ async function main() {
   const recall = (tp + fn) > 0 ? tp / (tp + fn) : (tp === 0 ? 1 : 0);
   const f1v = (precision + recall) > 0 ? (2 * precision * recall) / (precision + recall) : 0;
 
+  const truncated = truncatedCases > 0;
   const result = {
     name: 'sard-php-strict', language: 'php', scanned: gold.length,
     tp, fp, fn, precision, recall, f1: f1v, elapsedSec: parseFloat(elapsedSec), peakRssMb: null,
     perCwe, deep: opts.deep, fpByParser, fpBySanitizer,
+    truncated, truncationDetail: { ...truncationDetail, truncatedCases },
     ...(opts.fpDetail ? { fpDetail } : {}),
   };
+
+  if (truncated && !opts.allowTruncation) {
+    console.error(`\n✗ ${truncatedCases}/${gold.length} case(s) truncated (filesSkipped:${truncationDetail.filesSkipped} filesDenseSkipped:${truncationDetail.filesDenseSkipped} filesTimedOut:${truncationDetail.filesTimedOut} deepBudgetExceeded:${truncationDetail.deepBudgetExceeded}) — refusing to report this as a valid measurement. Pass --allow-truncation to report anyway (exploratory runs only — never for a milestone gate).`);
+    process.exitCode = 1;
+  }
 
   if (opts.json) {
     console.log(JSON.stringify({ results: [result] }, null, 2));

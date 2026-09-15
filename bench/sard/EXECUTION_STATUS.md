@@ -32,7 +32,7 @@ once per milestone, by the harness — see the PRD Section 6.
 
 | # | Task | Status |
 |---|---|---|
-| W0.1 | Truncation fail-closed in `bench-realworld.js` + `score-php.mjs` | NOT_STARTED |
+| W0.1 | Truncation fail-closed in `bench-realworld.js` + `score-php.mjs` | VERIFIED |
 | W0.2 | `scannedFiles`/`expectedFiles` added to `results[0]` | NOT_STARTED |
 | W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | NOT_STARTED |
 | W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | NOT_STARTED |
@@ -153,3 +153,38 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
   URL — recorded in the loop's own session notes, not duplicated here since
   URLs are not durable ledger content).
 - Beginning W0.1 (truncation fail-closed).
+
+### 2026-09-15 — W0.1 implemented, verification in progress
+
+- `bench-realworld.js`: added `truncated`/`truncationDetail` to the per-app
+  result (from `scan._scanMeta.{filesTimedOut,filesSkipped,filesDenseSkipped}`
+  plus a scan for the deep engine's own `ir-taint-timeout:` finding id — none
+  of these read any answer-key signal, only the scan's own execution-coverage
+  metadata). Added `--allow-truncation` opt-out; default is
+  `process.exitCode = 1` when any app truncated, computed only in the process
+  that owns the FINAL aggregated result (guarded off in isolated per-app
+  children via `AGENTIC_SECURITY_BENCH_CHILD=1`, since the isolation harness
+  treats any non-zero child exit as a crash and would otherwise discard the
+  truncated-but-informative result instead of surfacing it).
+- `score-php.mjs`: same signals, accumulated per-case (this harness scans one
+  Juliet case dir at a time, not the whole corpus in one call). Same
+  `--allow-truncation` opt-out and fail-closed default.
+- `macro-score.mjs`: also fails closed independently on `r.truncated` in its
+  input, because a shell pipeline's exit code is the LAST command's by
+  default (no `pipefail`) — this is the layer a milestone-gate command
+  actually reads, so it can't rely on the upstream producer's exit code alone.
+  Verified this turn with synthetic `--input` JSON:
+  `node bench/sard/scripts/macro-score.mjs --input /tmp/fake-truncated.json`
+  → exit 1, prints `✗ 1 app(s) truncated`; same input + `--allow-truncation`
+  → exit 0. Real command run, output read, this session.
+- VERIFIED: `node test/benchmark/realworld/bench-realworld.js --app
+  sard-juliet-java-strict --blind --scramble-identifiers --split dev --json`
+  (non-deep, from `scanner/`) completed exit 0, no leftover process (`ps aux`
+  clean afterward), and its JSON result carries `"truncated": false,
+  "truncationDetail": {"filesTimedOut": 0, "filesSkipped": 0,
+  "filesDenseSkipped": 0, "deepBudgetExceeded": false}` — a real, untruncated
+  scan correctly reports itself as such (F1=47.0% P=76.5% R=33.9% on this
+  non-deep dev run, not itself a milestone number). Combined with the
+  synthetic-input `macro-score.mjs` exit-1/exit-0 check above, both directions
+  of W0.1's fail-closed behavior are now real-command-verified this session.
+  W0.1 → VERIFIED.
