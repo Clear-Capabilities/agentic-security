@@ -583,6 +583,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
 | W2.7 | Java switch/case real branch+join CFG + fix `deadBranchRanges` case-label key bug (was: matching case marked "dead", default exempted — exactly backwards) — not in the original PRD task list, found this session | VERIFIED |
+| W2.8 | C# zero-recall CWE investigation (78,80,81,83,134,261,313,314,315,321,523,643) — root-caused 313/314/315/523/321 to missing/mis-shaped detector coverage, not a taint-engine defect; ruled out C#'s CFG/call-resolution as the cause via direct probes; 78/80/81/83/134/261/643 remain open | IN_PROGRESS |
 
 **W2 acceptance:** no flow-variant class below 70% recall on dev for Java and
 C#. Status: NOT_STARTED. Blocked on W1.
@@ -730,6 +731,92 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
   15.1% figure in the Baseline table below as the reference point for
   future C# work — the old figure is retired as invalid, not superseded
   by a comparable delta.
+
+### W2.8 — C# zero-recall CWE investigation (2026-09-15)
+
+Investigated whether C#'s zero-recall CWEs (78, 80, 81, 83, 134, 261, 313,
+314, 315, 321, 523, 643) share Java's root causes. Methodology: synthetic
+probe fixtures run directly through `runScan()` with `AGENTIC_SECURITY_DEEP=1`
+(never the real corpus content — `.bench-cache/**` stays under the repo's
+own no-cheating read-deny list) plus reading the C# detector source
+(`sast/csharp.js`, `sast/csharp-structural.js`) and cross-referencing it
+against the *public* CWE definitions for each zero-recall number (not the
+corpus's own answer-key signals).
+
+**Ruled out** (both would have been Java-class defects, neither is present
+in C#):
+- **Same-class interprocedural call resolution.** A probe with `bad()` →
+  `badSink(data)` (bare call) and a second `bad()` → `this.badSink2(data)`
+  (this-qualified call), both landing on a `Process.Start("cmd.exe", …)`
+  sink, fired correctly in BOTH forms (findings at both call sites). C#
+  does NOT have the bare/`this.`-qualified same-class resolution gap
+  `ir/CLAUDE.md` documents for Java.
+- **CWE-number exact-match scoring.** `score()` in bench-realworld.js
+  matches on `meta.fam !== e.family` (line ~1459) — family match only, no
+  CWE-number requirement for a TP (confirmed by reading the function
+  directly, and its own inline comment: "a family match doesn't require an
+  exact CWE match"). So CWE-80/81/83 (Juliet's XSS sub-variants, all
+  scored as family `xss`) firing a `CWE-79`-tagged finding would still
+  count as TP — ruling out a CWE-label mismatch as the reason those three
+  show zero recall.
+- **Basic single-file and simple interprocedural CWE-78 taint flow.** A
+  synthetic `Console.ReadLine()` → concat → `Process.Start("cmd.exe", "/c
+  " + cmd)` fixture fired the expected `cs-process-start` finding on the
+  `bad()` path and correctly stayed silent on the `good()` (untainted)
+  path. The core taint mechanism works for this shape.
+
+**Noted, not yet confirmed as recall-relevant:** C#'s `_buildCfg`
+(`parser-cs.js`) walks an `if` body and any following bare `else`/`else
+if` body onto ONE shared linear chain via a single `prev` cursor — the
+same structural shape Java had before the W2.6 fix — rather than a real
+two-successor branch + join. Unlike Java's case, this looks like it is an
+OVER-approximation (both branches' statements land on one sequential
+taint-state chain, so an else-branch statement sees the then-branch's
+taint state as already applied) rather than an under-approximation, so it
+plausibly does not explain a recall gap the way Java's did — but this is
+reasoning from the code, not confirmed by a probe that isolates the exact
+failure mode. Left open.
+
+**Root-caused (detector-coverage gaps, not taint-engine defects):**
+- **CWE-313/314/315 (data-exposure — cleartext storage in a file/GUI/
+  registry): NO detector exists for this family in C# at all.** Grepped
+  `sast/csharp.js` + `sast/csharp-structural.js` for `cleartext`/
+  `plaintext`/`data-exposure` — the only "cleartext" hits are the
+  `insecure-http` rule (literal `http://` URLs), a different family
+  entirely. There is no rule that flags writing sensitive data to a file,
+  a GUI control, or the registry in the clear. This alone accounts for 3
+  of the 12 zero-recall CWEs and is a clean, additive, well-scoped future
+  fix (new detector, no risk to existing rules).
+- **CWE-523 (insecure-http — "Unprotected Transport of Credentials"):
+  likely a shape mismatch, not a missing rule.** The existing
+  `csharp-insecure-http`/`csharp-insecure-http-call` rules key off a
+  literal `http://` scheme in a URL/URI construction. Juliet's CWE-523
+  test suite is conventionally a raw-socket/StreamWriter credential send
+  with no TLS — a structurally different shape the current rule was never
+  aimed at. Plausible, not proven (would need a probe fixture matching
+  that exact shape to confirm).
+- **CWE-321 (Use of Hard-coded Cryptographic Key): likely a literal-type
+  mismatch.** `SECRET_NAME_PATTERN` in `csharp.js` matches on variable
+  *name* (`password`/`secret`/`priv(?:ate)?[_-]?key`/etc.) but the
+  detector additionally requires "a non-empty **string literal**
+  initializer" (per its own header comment). Juliet's CWE-321 convention
+  hardcodes crypto keys as **byte-array** literals (`byte[] key = { 0x00,
+  0x01, … }`), which a string-literal-only check would never match.
+  Plausible, not proven.
+- **CWE-261, 78, 80, 81, 83, 134, 643 remain genuinely unexplained** — no
+  root cause identified this iteration. These need either real (but
+  still blind/scrambled, non-answer-key) probe fixtures built from the
+  public CWE definitions for each, or a `--cwe`-scoped FN-count-only
+  measurement (file+line only, never reading the matched source) to see
+  whether the miss rate is total (0 detections at all) or partial
+  (findings landing outside the expected method's line range).
+
+This narrows future C# work materially: the taint-engine/CFG layer is
+very likely NOT the primary driver of C#'s zero-recall CWEs (unlike
+Java's session-defining if/else and switch/case bugs) — the evidence
+points at the C# SAST *rule catalog* being thinner and shape-mismatched
+for several non-taint-flow CWE families. Continuing this investigation is
+real, substantial follow-up work, not completed here.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
