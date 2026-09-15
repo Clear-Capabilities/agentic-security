@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-14T16:57:04.231Z",
-  "commit": "89ab5bc2318d22fa3ea3a077667bb326d00c2e89",
+  "generatedAt": "2026-09-15T06:33:17.027Z",
+  "commit": "77e2d42ba35e644c8704888eae3075c3f1b64eef",
   "targets": {
     "hooks": {
       "total": 21,
@@ -34,8 +34,9 @@
       }
     },
     "scanner/src": {
-      "total": 482,
+      "total": 483,
       "byFile": {
+        "(deep-engine)": 1,
         "badge.js": 3,
         "dataflow/cross-service-taint.js": 5,
         "dataflow/exploit-prover.js": 1,

@@ -636,9 +636,52 @@ function buildCfgFromBody(bodyNode) {
       const i = kids.ifStatement[0];
       const cond = i.children?.expression?.[0];
       emitCondAssignments(cond, _lineOf(i));
-      emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(i), succ: [] });
-      // Then branch body falls through linearly; v1 simplification.
-      for (const sub of (i.children?.statement || [])) walkStmts(sub);
+      const ifNodeId = emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(i), succ: [] });
+      // PRD W2 (SARD_80_F1_EXECUTION_PRD.md) — real branch + join, not a
+      // linear fall-through. The "v1 simplification" this replaces walked
+      // BOTH the then- and else-statement children (java-parser's
+      // ifStatement.children.statement is [thenStmt, elseStmt] in source
+      // order, confirmed via direct CST inspection) onto the SAME shared
+      // chain — so an else branch's assignment unconditionally overwrote
+      // whatever the then branch had just tainted, with no notion that the
+      // two are ALTERNATIVES. Found investigating why a real, verified
+      // taint chain (System.getenv/BufferedReader.readLine() -> concat ->
+      // sink) produced zero findings the instant it was wrapped in
+      // Juliet's own `if (true) { <tainted> } else { data = null; }`
+      // idiom — used throughout the ENTIRE corpus for control-flow-gated
+      // flow variants, so this was silently destroying an unknown but
+      // likely large fraction of Java's real recall, not a narrow gap.
+      // The then-branch starts right after the if-node (already linked by
+      // the emit() above); the else-branch is a SEPARATE second edge off
+      // the SAME if-node, not a continuation of the then-branch's tail.
+      // Both (and the no-else "condition false" case) converge on one
+      // synthetic join node, so a downstream read sees the union of what
+      // either branch could have left tainted — the same recall-preserving
+      // over-approximation every other control-flow join in this codebase
+      // relies on (case/when arms, try/catch/finally).
+      const stmts = i.children?.statement || [];
+      const thenStmt = stmts[0];
+      const elseStmt = stmts[1];
+      prev = ifNodeId;
+      if (thenStmt) walkStmts(thenStmt);
+      const thenExit = prev;
+      let elseExit = ifNodeId;
+      if (elseStmt) {
+        prev = ifNodeId;
+        walkStmts(elseStmt);
+        elseExit = prev;
+      }
+      const joinId = nextNodeId();
+      nodes[joinId] = { id: joinId, kind: 'noop', succ: [] };
+      const linkToJoin = (fromId) => {
+        if (!nodes[fromId]) return;
+        nodes[fromId].succ = nodes[fromId].succ || [];
+        if (!nodes[fromId].succ.includes(joinId)) nodes[fromId].succ.push(joinId);
+      };
+      linkToJoin(thenExit);
+      if (elseStmt) linkToJoin(elseExit);
+      else linkToJoin(ifNodeId); // no else: condition-false falls straight to the join
+      prev = joinId;
     }
     if (kids.whileStatement) {
       const w = kids.whileStatement[0];

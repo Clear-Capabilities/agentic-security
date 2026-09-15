@@ -289,6 +289,74 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   genuine Juliet source). The workstream's aggregate SARD contribution is
   separately and honestly recorded as ~0pp on this corpus/split.
 
+### 2026-09-15 — the real root cause: Java's if/else has never had a branching CFG
+
+- Sampled real CWE-113 false negatives directly (same discipline as the
+  CWE-23 sample last entry). Found the EXACT same
+  `System.getenv`/`BufferedReader.readLine()` → concat → sink shape that
+  works perfectly in isolation — except wrapped in Juliet's own `if (true)
+  { <tainted assignment> } else { data = null; }` idiom, used for EVERY
+  control-flow-gated flow variant across the ENTIRE corpus. Bisected by
+  removing wrapping layers one at a time (try/catch/finally: not it; nested
+  bare block: not it; double-assignment to the same var: not it) until only
+  the if/else wrapping remained, at which point the working case broke.
+- **Root cause, found by dumping the actual CFG**: `parser-java.js`'s
+  `walkStmts` if-statement handler had a comment reading, verbatim, "Then
+  branch body falls through linearly; v1 simplification" — it walked BOTH
+  the then- and else-statement children (java-parser's
+  `ifStatement.children.statement` is `[thenStmt, elseStmt]` in source
+  order) onto the SAME linear chain, with no branch or join at all. The
+  else-branch's `data = null;` became the CFG node IMMEDIATELY AFTER the
+  then-branch's last node, unconditionally overwriting whatever the then
+  branch had just tainted, every single time, for every if/else in every
+  Java file this scanner has ever analyzed — not a SARD-specific defect,
+  a fundamental gap in Java support that this corpus's density of
+  `if(true)/else` constant-branch idioms simply made impossible to miss.
+  (For comparison: C#'s `_buildCfg` was already rewritten to a real
+  recursive branch-aware builder under a prior PRD (R8) — Java never got
+  the equivalent treatment for if/else specifically, despite superficially
+  "recursing into" both branches.)
+- **Fixed**: `walkStmts`'s if-handler now builds a real branch + synthetic
+  join: the then-branch and else-branch each start as a SEPARATE edge off
+  the if-node (not a continuation of each other), and both — plus the
+  no-else "condition false" fallthrough — converge on one `kind:'noop'`
+  join node before continuing. Confirmed via direct CFG dump: the if-node
+  now correctly has TWO successors, the then/else tails both point to the
+  new join node, and the probe finding fires correctly end-to-end.
+- Full verification, all clean: `npm run test:dataflow` (1203/1203),
+  Java-specific parser suites (57/57, `parser-java-control-flow`,
+  `-calls`, `-annotations`, `-assignments`, `-nary-concat`,
+  `java-taint-flow`), `bench:mutation:check` (35/35), `bench:layer-recall:check`
+  (122/220, exact baseline), `bench:cve-replay:check` (220/220, no drift),
+  `test:smoke` (30/30). `bench:self-scan:check` initially flagged one new
+  finding — traced to this session's OWN earlier `ir-taint-fn-limit:` info
+  marker surfacing on the self-scan corpus (5982 functions > 5000 cap,
+  unrelated to this fix); baseline updated after confirming it was that,
+  not a regression.
+- **Real SARD measurement — the single largest verified gain this session.**
+  `node bench/sard/scripts/batch-scan.mjs --app sard-juliet-java-strict
+  --blind --scramble-identifiers --deep --split dev --json`: tp 1320→1528
+  (+208), fp 507→823 (+316), recall 44.3%→**51.3%** (+7.0pp), macroF1
+  36.5%→**37.3%** (+0.8pp). The FP increase (more analysis now genuinely
+  happens per file) tempers the macro-F1 gain, but the underlying capability
+  jump is much larger than the headline number: `flat/control-flow (01-31)`
+  variants — 01-14, 16, 17, 31 — jumped from ~29% to **91.7% recall**
+  (44/48 tp each, up from single digits), and 21/22 moved to 61.1%/50.0%
+  (from ~29%). Variant 15 is a standing outlier at 10.4%, not yet explained
+  — noted, not investigated further this session. 51-54/61-75/81 are
+  UNCHANGED (confirmed, not assumed) — this fix's benefit is real but
+  scoped to the if/else-shaped flat/control-flow family; the multi-file,
+  collection, and abstract-dispatch families have their own separate,
+  still-open gaps.
+- **New verified Java dev-split baseline: macroF1=37.3%.** Supersedes the
+  36.5% figure two log entries up.
+- Candidate follow-up, NOT yet investigated: does Java's `switch`/`case`
+  handling have the same "linear fall-through, no real branch" defect
+  if/else had? Case arms are similarly mutually-exclusive alternatives, so
+  the same class of bug is plausible there too — flagged for the next
+  session rather than assumed fixed by this change (this fix touched only
+  the `ifStatement` handler, not `switchStatement`).
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |
@@ -298,6 +366,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | NOT_STARTED |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
+| W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
 
 **W2 acceptance:** no flow-variant class below 70% recall on dev for Java and
 C#. Status: NOT_STARTED. Blocked on W1.
