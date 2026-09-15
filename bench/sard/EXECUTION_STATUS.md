@@ -34,15 +34,20 @@ once per milestone, by the harness — see the PRD Section 6.
 |---|---|---|
 | W0.1 | Truncation fail-closed in `bench-realworld.js` + `score-php.mjs` | VERIFIED |
 | W0.2 | `scannedFiles`/`expectedFiles` added to `results[0]` | VERIFIED |
-| W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | NOT_STARTED |
+| W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | VERIFIED |
 | W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | VERIFIED |
-| W0.5 | Performance profiling pass (index-based catalog matching for every match.type) | NOT_STARTED |
+| W0.5 | Performance profiling pass (index-based catalog matching for every match.type) | IN_PROGRESS |
 | W0.6 | Per-CWE key hygiene self-test (no tp=fp=fn=0 rows) | VERIFIED |
 | W0.7 | Variant-class breakdown in `macro-score.mjs` report | VERIFIED |
 
 **W0 acceptance:** full dev run per language completes with zero truncation,
 report shows per-variant recall, reported P/R match a hand-checked 100-entry
-sample. Status: NOT_STARTED.
+sample. Status: IN_PROGRESS — zero-truncation + per-variant recall both real
+and verified for Java (`batch-scan.mjs`, see W0.3 log below); C# not yet
+independently re-verified with batching (same code path, expected to work
+identically, not yet run); the 100-entry hand-check is still a manual
+spot-check that has not been done. Not blocking W1 — the measurement
+instrument is real and trustworthy for the work ahead.
 
 ## W1 — Structural class resolution
 
@@ -264,3 +269,72 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
   (0.33948959032907994 both times) — confirms the fix removes FPs from
   unscored directories without touching real recall. `truncated: false`,
   exit 0. SARD unit suite (55 tests) still green. W0.4 → VERIFIED.
+
+### 2026-09-15 — W0.3 in progress: batch-scan.mjs built, one real bug found and fixed
+
+- Confirmed W0.4 alone is NOT sufficient: `--app sard-juliet-java-strict
+  --blind --scramble-identifiers --deep --split dev --json` (the real
+  milestone-gate shape) still hit `truncated: true, deepBudgetExceeded: true`
+  at 530.7s elapsed against the 300s budget, even after W0.4 cut the scan
+  surface to 18/112 CWE directories. W0.3 is genuinely still needed.
+- Added `--list-cwes` to `bench-realworld.js` (gold-construction only, no
+  scan — prints the distinct CWEs the FULL, possibly `--split`-filtered gold
+  set covers) and built `bench/sard/scripts/batch-scan.mjs`, which calls it
+  once to discover the CWE list, then runs `bench-realworld.js --cwe <n>`
+  once per CWE (its existing `--cwe` flag already scopes both GT and the scan
+  surface to one directory), aggregating every batch's result into ONE
+  combined result with bench-realworld.js's own result shape.
+- **Bug found during verification**: the first aggregation pass used
+  `Object.assign(combined.perCwe, r.perCwe)`. `bench-realworld.js` bumps an
+  FP's per-CWE row under the FINDING's own claimed CWE (`reportedCwe`), not
+  the directory being scanned, so a batch scoped to CWE-643 can still
+  contribute FPs under spillover keys like CWE-79/CWE-918/CWE-22 — and more
+  than one batch can touch the same spillover key. `Object.assign` silently
+  drops every batch's contribution but the last for any shared key, which
+  would have corrupted `perCwe` (and therefore macro-F1, which is computed
+  from it) while leaving the aggregate tp/fp/fn totals looking fine. Fixed to
+  sum `{tp,fp,fn}` per key across batches instead of overwriting.
+  Caught by comparing a batch's own logged tp/fp/fn against its perCwe
+  breakdown — never shipped as VERIFIED with the bug present.
+- Verified: re-ran the non-deep, all-18-CWE batched run with the fix applied.
+  `node bench/sard/scripts/macro-score.mjs --input
+  /tmp/batch-check-nondeep2.json` → macroF1=35.0%, microF1=48.0%, P=81.7%,
+  R=33.9%, CWEs=23 — IDENTICAL to running `macro-score.mjs` against the
+  single-shot 18-dir W0.4 baseline (`/tmp/w04-check.json`, same command).
+  Aggregate tp/fp/fn (1011/227/1967) also unchanged from the pre-fix run
+  (confirming the fix only touched the previously-corrupted perCwe
+  breakdown, not the aggregate totals, which were already correct).
+  Batched-and-aggregated results are now provably indistinguishable from a
+  single-shot scan of the same scope.
+- **The actual point of W0.3, verified**: `node bench/sard/scripts/batch-scan.mjs
+  --app sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+  dev --json` (the real milestone-gate shape, batched) — ALL 18 batches
+  completed with `truncated: false` (longest single batch, CWE-89: 154.5s,
+  comfortably under the 300s budget; total wall time 517.2s across all 18,
+  similar to the single-shot run's 530.7s, but now correctly zero-truncated
+  since no INDIVIDUAL batch exceeded its own budget). Real deep-mode numbers
+  (first time this session deep mode has run to completion, untruncated, on
+  the gold-scoped surface): tp=1304, fp=491, fn=1674, precision=72.6%,
+  recall=43.8% (up from 33.9% non-deep — a genuine gain from deep mode
+  actually finishing), f1=54.6%. `node bench/sard/scripts/macro-score.mjs
+  --input <that file>` → **macroF1=36.4%**, microF1=54.6%, CWEs=24,
+  macroF1(support>=5)=55.6%. Per-variant recall table (W0.7) shows real
+  signal: variant 15 at 10.4%, 61-75 collection variants at 25%, 51-54
+  multi-file at 25-30%, 41/42/45 at 30% — exactly the flow-variant wall
+  W1 exists to close. SARD unit suite (55 tests) green. W0.3 → VERIFIED.
+- **New fresh Java dev-split macro-F1 baseline (deep, batched, zero
+  truncation, commit at time of this run): 36.4%** — supersedes the earlier
+  33.5% non-deep/pre-W0.4/pre-W0.3 baseline recorded above. This is the
+  number future W1+ work should be measured against for Java.
+- W0.5 (performance profiling) downgraded from a hard blocker: W0.3+W0.4
+  together already eliminate truncation for the real milestone-gate command
+  without any engine-level optimization. A genuine perf win would still cut
+  total wall-clock (517s across 18 sequential batches is not fast), but it is
+  no longer required for W0's core acceptance. Left IN_PROGRESS/optional
+  rather than NOT_STARTED to record that this session's investigation showed
+  catalog matching is ALREADY index-based for every match.type (call/member/
+  global/annotation all have their own Map-backed index in catalog.js,
+  contrary to the PRD's own text at time of writing) — so the PRD's
+  suggested lever does not apply; any future perf work here should look
+  elsewhere (per-batch IR/deep-engine setup overhead, parallelizing batches)
+  rather than re-attempting catalog indexing.

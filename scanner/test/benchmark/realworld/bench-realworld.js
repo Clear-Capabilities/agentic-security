@@ -175,6 +175,12 @@ const MATERIALIZE_ONLY = flag('--materialize-only');
 // exit before scanning. Much cheaper than a full ~15-minute corpus scan when
 // only verifying the GT builder itself changed.
 const GT_DRY_RUN = flag('--gt-dry-run');
+// PRD W0.3 — lets a batch runner (batch-scan.mjs) discover exactly which
+// CWEs the FULL, un-split gold set covers WITHOUT paying for a scan (gold
+// construction alone, same cost as --gt-dry-run), so it knows which --cwe
+// values to iterate one at a time instead of guessing or duplicating this
+// file's own gold-building logic.
+const LIST_CWES = flag('--list-cwes');
 // --in-process: run every --all target inside THIS process, the way the bench
 // worked before per-app isolation. Kept so the memory characteristics of the
 // two modes can be compared directly; not for CI.
@@ -1629,6 +1635,12 @@ async function runOne(name, app, vulnFamilyMap) {
     const withMethod = expected.filter(e => e.method).length;
     console.error(`  --gt-dry-run: ${expected.length} expected entries (${withMethod} with a precise method span, ${expected.length - withMethod} file-level fallback)`);
     console.error(JSON.stringify(expected.slice(0, 3), null, 2));
+    process.exit(0);
+  }
+
+  if (LIST_CWES) {
+    const cwes = [...new Set(expected.map(e => String(e.cwe || '').replace(/^CWE-?/i, '')).filter(Boolean))].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    console.log(JSON.stringify({ cwes, expectedTotal: expected.length }));
     process.exit(0);
   }
 
