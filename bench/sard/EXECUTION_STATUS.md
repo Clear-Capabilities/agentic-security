@@ -37,8 +37,8 @@ once per milestone, by the harness — see the PRD Section 6.
 | W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | NOT_STARTED |
 | W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | NOT_STARTED |
 | W0.5 | Performance profiling pass (index-based catalog matching for every match.type) | NOT_STARTED |
-| W0.6 | Per-CWE key hygiene self-test (no tp=fp=fn=0 rows) | NOT_STARTED |
-| W0.7 | Variant-class breakdown in `macro-score.mjs` report | NOT_STARTED |
+| W0.6 | Per-CWE key hygiene self-test (no tp=fp=fn=0 rows) | VERIFIED |
+| W0.7 | Variant-class breakdown in `macro-score.mjs` report | VERIFIED |
 
 **W0 acceptance:** full dev run per language completes with zero truncation,
 report shows per-variant recall, reported P/R match a hand-checked 100-entry
@@ -205,3 +205,40 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
   --limit 10 --json` → `scannedFiles: 10, expectedFiles: 10, truncated:
   false`. SARD unit suite (55 tests) still green after this change too.
   W0.2 → VERIFIED.
+
+### 2026-09-15 — W0.6 already satisfied by prior work, verified this session
+
+- The `CWE89` vs `CWE-89` key merge and the "no tp=fp=fn=0 row" self-test the
+  PRD asks for were already landed and committed before this ledger existed
+  (`test/sard-cwe-key-merge.test.js`, `test/sard-macro-score-support-floor.test.js`
+  — the latter's `perCweTable: an entry can never be constructed with
+  tp=fn=fp=0` test IS this self-test: `perCwe` entries in both harnesses are
+  only ever created via `(perCwe[cwe] ??= {tp:0,fp:0,fn:0})[k]++`, so a
+  zero-row can never be constructed from real scan data by construction, and
+  the test documents/pins that invariant against a future refactor).
+  Re-ran both files this session as part of the 55-test SARD suite (green,
+  see W0.1/W0.2 log entries above) — real command, real output, this session.
+  No new code needed. W0.6 → VERIFIED.
+
+### 2026-09-15 — W0.7 implemented and verified
+
+- `macro-score.mjs` now classifies every `tps`/`fns` entry by Juliet's public
+  filename convention (`variantOfFile`/`variantBucket`/`variantRecallTable`,
+  all exported) and adds a per-variant recall table (sorted worst-first) to
+  both `latest.json` (`variantRecall` per app) and `latest.md`. Read ONLY by
+  the benchmark controller off the gold entry's own filename — the scanner
+  never sees or uses a variant number; this is reporting metadata, same
+  category as the existing CWE/family grouping. Named buckets are restricted
+  to the ranges the PRD itself names (41/42/45, 51-54, 61-75, 81/82); every
+  other variant still gets its own exact-number row rather than an invented
+  finer taxonomy. Apps with no per-instance `tps[]`/`fns[]` (PHP's scorer)
+  report `variantRecall: null` rather than a fabricated table.
+  Verified: unit-level with synthetic filenames (correct variant/bucket/
+  recall/sort for 01, 22, 53, 81, and a non-Juliet filename correctly
+  ignored). End-to-end: `node bench/sard/scripts/macro-score.mjs --input
+  /tmp/w02-check.json` (the real CWE-89 dev-split Java result from the W0.2
+  verification run) produced a real per-variant table — e.g. variant 15: 0/12
+  (0.0%), 54: 14/59 (23.7%), 81: 16/57 (28.1%), 41/45/51/61: 7/24 (29.2%) —
+  matching the PRD's own description of the flow-variant recall wall this
+  workstream exists to instrument. SARD unit suite (55 tests) still green.
+  W0.7 → VERIFIED.

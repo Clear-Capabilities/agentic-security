@@ -165,6 +165,59 @@ function localizationAccuracy(tps) {
   return { withPreciseSpan: withSpan, total, rate: total > 0 ? withSpan / total : null };
 }
 
+// PRD W0.7 — flow-variant recall breakdown, "the instrument the rest of the
+// plan is steered by" (W1's own acceptance gate is phrased in terms of it:
+// "Java variants 41/42/45/51-54/61-68/81 each move from current 0-28% recall
+// to >=60%"). Read ONLY here, by the benchmark CONTROLLER, off the gold
+// entry's OWN filename — never by the scanner, which never sees a variant
+// number and cannot use it to answer. This is the same category of thing
+// this script already does with CWE numbers and family names: reporting
+// metadata, not a detection signal.
+//
+// Juliet's public naming convention: CWE<n>_<Name>__<source>_<sink>_<variant>
+// [<letter>][_<subtype>].<ext> — e.g. `..._executeUpdate_22a.java` (variant
+// 22, part a of a paired file), `..._executeBatch_81_goodG2B.java` (variant
+// 81, subtype goodG2B). Bucket labels below are restricted to the ranges the
+// PRD itself names (41/42/45, 51-54, 61-75, 81/82) rather than guessing at a
+// finer taxonomy for the rest — every other variant still gets its own exact
+// two-digit row, just without an invented category label.
+function variantOfFile(file) {
+  const base = String(file || '').replace(/\\/g, '/').split('/').pop() || '';
+  const m = base.match(/_(\d{2})([a-e])?(?:_(bad|good\w*|base))?\.\w+$/i);
+  if (!m) return null;
+  return { num: m[1], part: m[2] || null, subtype: m[3] || null };
+}
+
+function variantBucket(num) {
+  const n = parseInt(num, 10);
+  if (n === 41 || n === 42 || n === 45) return 'param/return/static-field (41/42/45)';
+  if (n >= 51 && n <= 54) return 'multi-file (51-54)';
+  if (n >= 61 && n <= 75) return 'return/field/collection (61-75)';
+  if (n === 81 || n === 82) return 'abstract dispatch (81/82)';
+  if (n >= 1 && n <= 31) return 'flat/control-flow (01-31)';
+  return `other (${num})`;
+}
+
+export function variantRecallTable(tps, fns) {
+  const byVariant = new Map();
+  const bump = (arr, key) => {
+    for (const e of arr || []) {
+      const v = variantOfFile(e.file);
+      if (!v) continue;
+      const rec = byVariant.get(v.num) || { variant: v.num, bucket: variantBucket(v.num), tp: 0, fn: 0 };
+      rec[key]++;
+      byVariant.set(v.num, rec);
+    }
+  };
+  bump(tps, 'tp');
+  bump(fns, 'fn');
+  const rows = [...byVariant.values()].map(r => ({
+    ...r, support: r.tp + r.fn, recall: (r.tp + r.fn) > 0 ? r.tp / (r.tp + r.fn) : null,
+  }));
+  rows.sort((a, b) => (a.recall ?? 1) - (b.recall ?? 1) || b.support - a.support || a.variant.localeCompare(b.variant));
+  return rows;
+}
+
 function gitSha() {
   try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path.join(SARD_ROOT, '..', '..'), encoding: 'utf8' }).trim(); }
   catch { return null; }
@@ -204,6 +257,10 @@ function main() {
     const macroMinSupport = macroF1MinSupport(rows);
     const confusion = confusionMatrix(r.tps, r.fps);
     const localization = localizationAccuracy(r.tps);
+    // Only apps whose result carries real tps[]/fns[] (Juliet-style
+    // file-level entries) support this — score-php.mjs's PHP scorer reports
+    // aggregate counts only, no per-instance file arrays.
+    const variantRecall = (Array.isArray(r.tps) && Array.isArray(r.fns)) ? variantRecallTable(r.tps, r.fns) : null;
 
     // PRD §9.4 — "Separate score-only delta from scanner delta". Computed
     // from bench-realworld.js's scoreLegacy() output: the SAME actual[]/
@@ -242,6 +299,7 @@ function main() {
       perCwe: rows,
       cweConfusion: confusion,
       localization,
+      variantRecall,
       truncated: !!r.truncated,
       truncationDetail: r.truncationDetail || null,
     });
@@ -275,6 +333,23 @@ function main() {
     mdLines.push('|---|---|---|---|---|---|---|');
     for (const row of rows) {
       mdLines.push(`| ${row.cwe} | ${row.tp} | ${row.fp} | ${row.fn} | ${(row.precision * 100).toFixed(1)}% | ${(row.recall * 100).toFixed(1)}% | ${(row.f1 * 100).toFixed(1)}% |`);
+    }
+    mdLines.push('');
+
+    mdLines.push('**Recall by flow-variant class** (PRD W0.7 — the instrument the rest of');
+    mdLines.push('SARD_80_F1_EXECUTION_PRD.md is steered by; read from the gold entry\'s own filename by');
+    mdLines.push('this harness, never by the scanner):');
+    mdLines.push('');
+    if (!variantRecall) {
+      mdLines.push('_Not available for this app (no per-instance tps[]/fns[] in its result)._');
+    } else if (!variantRecall.length) {
+      mdLines.push('_No filenames matched the Juliet variant-suffix convention._');
+    } else {
+      mdLines.push('| Variant | Bucket | TP | FN | Support | Recall |');
+      mdLines.push('|---|---|---|---|---|---|');
+      for (const v of variantRecall) {
+        mdLines.push(`| ${v.variant} | ${v.bucket} | ${v.tp} | ${v.fn} | ${v.support} | ${v.recall === null ? 'n/a' : (v.recall * 100).toFixed(1) + '%'} |`);
+      }
     }
     mdLines.push('');
 
