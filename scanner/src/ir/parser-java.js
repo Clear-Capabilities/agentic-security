@@ -793,13 +793,34 @@ function buildCfgFromBody(bodyNode) {
     if (kids.switchStatement) {
       const sw = kids.switchStatement[0];
       const cond = sw.children?.expression?.[0];
-      emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(sw), succ: [] });
+      const swHeaderId = emit({ kind: 'if', cond: cond ? exprFromCst(cond) : null, line: _lineOf(sw), succ: [] });
       const swBlock = sw.children?.switchBlock?.[0];
+      // PRD W2 (SARD_80_F1_EXECUTION_PRD.md) — same defect class as the
+      // if/else fix directly above: each case group was walked onto the
+      // SAME shared linear chain, so `case 6: <tainted>; break;` and a
+      // later `default: data = null; break;` (Juliet's own constant-switch
+      // idiom, `switch(6){case 6:...break;default:...break;}`) fell
+      // through into each other exactly like if/else's then/else did.
+      // Every case group now starts as its OWN edge off the switch-header
+      // node (mirroring this codebase's existing case/when convention —
+      // see parser-rb.js/parser-py-cst.js's own case-arm handling, "every
+      // arm reachable directly from the construct's own entry point") and
+      // converges on one shared join node. Deliberately does not model
+      // fall-through-without-break between adjacent cases (rare in
+      // practice, and no other switch/case/when handling in this codebase
+      // models it either) — every case is treated as an independent
+      // alternative, which is recall-preserving even for the (uncommon)
+      // real fall-through case: the taint that WOULD have carried over is
+      // simply also visible via that case's own reachability from the
+      // header, just not chained through its neighbor.
+      const caseExits = [];
       // Classic colon-form (`case 1: ...; break;`).
       const groups = swBlock?.children?.switchBlockStatementGroup || [];
       for (const g of groups) {
         const bss = g.children?.blockStatements?.[0];
+        prev = swHeaderId;
         if (bss) walkStmts(bss);
+        caseExits.push(prev);
       }
       // R8 Task 1 fix round 1: arrow-form (`case 1 -> ...;`, Java 14+) is a
       // structurally distinct grammar rule — confirmed via direct CST
@@ -816,12 +837,16 @@ function buildCfgFromBody(bodyNode) {
       // confirmed 0 IR-TAINT findings for the idiomatic modern-Java shape.
       const rules = swBlock?.children?.switchRule || [];
       for (const r of rules) {
+        prev = swHeaderId;
         const rblock = r.children?.block?.[0];
-        if (rblock) { walkStmts(rblock); continue; }
+        if (rblock) { walkStmts(rblock); caseExits.push(prev); continue; }
         const rthrow = r.children?.throwStatement?.[0];
         if (rthrow) {
           const texpr = rthrow.children?.expression?.[0];
           emit({ kind: 'throw', value: texpr ? exprFromCst(texpr) : null, line: _lineOf(rthrow), succ: [] });
+          // A throw never falls through to the join — matches this
+          // codebase's existing (elsewhere-tolerated) convention of not
+          // adding a successor after a return/throw node.
           continue;
         }
         const rexpr = r.children?.expression?.[0];
@@ -832,7 +857,21 @@ function buildCfgFromBody(bodyNode) {
             emit({ kind: 'assign', target: expr.left?.name || null, source: expr.right, line: _lineOf(r), succ: [] });
           }
         }
+        caseExits.push(prev);
       }
+      // Join: every case's exit (colon- or arrow-form) converges here,
+      // same as if/else's join above. A switch with zero case groups at
+      // all falls the header straight through to the join.
+      const swJoinId = nextNodeId();
+      nodes[swJoinId] = { id: swJoinId, kind: 'noop', succ: [] };
+      const linkSwToJoin = (fromId) => {
+        if (!nodes[fromId]) return;
+        nodes[fromId].succ = nodes[fromId].succ || [];
+        if (!nodes[fromId].succ.includes(swJoinId)) nodes[fromId].succ.push(swJoinId);
+      };
+      if (caseExits.length) { for (const ex of caseExits) linkSwToJoin(ex); }
+      else linkSwToJoin(swHeaderId);
+      prev = swJoinId;
     }
     // Bare nested block `{ ... }` with no leading keyword. The
     // `statementWithoutTrailingSubstatement` branch above already recurses

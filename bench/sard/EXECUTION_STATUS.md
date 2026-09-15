@@ -350,12 +350,56 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   still-open gaps.
 - **New verified Java dev-split baseline: macroF1=37.3%.** Supersedes the
   36.5% figure two log entries up.
-- Candidate follow-up, NOT yet investigated: does Java's `switch`/`case`
-  handling have the same "linear fall-through, no real branch" defect
-  if/else had? Case arms are similarly mutually-exclusive alternatives, so
-  the same class of bug is plausible there too — flagged for the next
-  session rather than assumed fixed by this change (this fix touched only
-  the `ifStatement` handler, not `switchStatement`).
+- **Immediately followed up on the switch/case hypothesis flagged above —
+  found something even more surprising.** `walkStmts`'s `switchStatement`
+  handler DID have the identical linear-fall-through defect (fixed the same
+  way: each case group starts as its own edge off the switch-header,
+  converging on a join node) — but fixing the CFG alone still produced ZERO
+  findings for Juliet's `switch(6){case 6:<tainted>;break;default:safe;
+  break;}` idiom. Dug further and found a SECOND, independent, more severe
+  bug in a completely different module.
+- **Second bug, `sast/java-ast-folding.js`'s `deadBranchRanges`**: this
+  module does its OWN source-text-level "is this switch/if branch
+  provably dead" analysis, used by `applyJavaBenchSuppressions` to
+  suppress findings whose SOURCE OR SINK line falls in a dead range — and
+  it is NOT a benchmark-only heuristic, it runs "always... real in any
+  codebase" per its own header comment (blind mode does not disable it).
+  Its switch-handling read `caseConstant.children.expression` to get a
+  case label's constant value — but direct CST inspection shows
+  `caseConstant`'s real child key is `conditionalExpression`, not
+  `expression`. The stale key made the case label's value ALWAYS
+  evaluate to `undefined`, so a real, MATCHING case (`case 6` under
+  `switch(6)`) was treated as "does not match" and marked UNREACHABLE —
+  while `default` (genuinely dead) was explicitly exempted by a separate
+  code path and never marked at all. Exactly backwards: the live,
+  tainted branch was suppressed as dead code, and the actually-dead
+  branch survived. This is a real, standing bug independent of SARD —
+  any real Java codebase with a constant/enum switch whose matching case
+  contains a genuine vulnerability would have had it silently suppressed.
+  Fixed the one-line key name; `evalExpr` already dispatches on a bare
+  `conditionalExpression` node, so no other change was needed. Verified:
+  `deadBranchRanges` on a minimal repro now correctly returns `[]` (no
+  longer marks the matching case dead), and the switch-based probe
+  fixture fires end-to-end. Full verification clean: dataflow suite
+  (1203/1203), full `test:sast` (742/742), mutation (35/35), layer-recall
+  (122/220 exact baseline), cve-replay (220/220 no drift), smoke (30/30),
+  self-scan (no drift).
+- **Real SARD measurement**: `node bench/sard/scripts/batch-scan.mjs --app
+  sard-juliet-java-strict --blind --scramble-identifiers --deep --split dev
+  --json`: tp 1528→1556 (+28), recall 51.3%→**52.2%** (+0.9pp), **macroF1
+  37.3%→37.6%** (+0.3pp) — smaller than the if/else fix (fewer Juliet
+  variants use switch as their primary mechanism) but real and additive.
+  Confirms exactly where it landed: variant 15 (the one standing outlier
+  from the if/else measurement, unexplained at the time) jumped from 10.4%
+  to **68.75% recall** (33/48 tp, up from 5/48) — variant 15 is Juliet's
+  switch-based control-flow variant, so this result is not a coincidence,
+  it is the predicted effect of the fix landing exactly where expected.
+- **Session-cumulative Java dev-split trajectory, every number from a real
+  command this session**: 33.5% (stale, non-deep, pre-W0) → 36.4% (W0.3,
+  first zero-truncation deep measurement) → 36.5% (W1 class-resolution +
+  fn-limit fix) → 37.3% (if/else branch+join fix) → **37.6% (+ switch
+  branch+join fix + deadBranchRanges case-label fix) — current verified
+  baseline.**
 
 ## W2 — Interprocedural completeness
 
@@ -367,6 +411,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
+| W2.7 | Java switch/case real branch+join CFG + fix `deadBranchRanges` case-label key bug (was: matching case marked "dead", default exempted — exactly backwards) — not in the original PRD task list, found this session | VERIFIED |
 
 **W2 acceptance:** no flow-variant class below 70% recall on dev for Java and
 C#. Status: NOT_STARTED. Blocked on W1.

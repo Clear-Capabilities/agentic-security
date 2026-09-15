@@ -433,7 +433,24 @@ function walkSwitch(switchNode, scope, out) {
         // default — matches if nothing else does (decided after)
         continue;
       }
-      const labelExpr = lblCh.caseConstant?.[0]?.children?.expression?.[0]
+      // PRD W2 (SARD_80_F1_EXECUTION_PRD.md) — `caseConstant`'s own CST
+      // child is `conditionalExpression`, not `expression` (confirmed via
+      // direct java-parser CST inspection: `caseConstant.children` is
+      // exactly `{conditionalExpression: [...]}`). The stale `expression`
+      // key made `labelExpr` undefined for EVERY colon-form case label,
+      // which made `groupMatches` false for every real case — including
+      // ones that DO match the scrutinee — so `walkSwitch` marked the
+      // LIVE, matching case as "unreachable" and left the genuinely-dead
+      // `default` untouched: exactly backwards. Found investigating why a
+      // real, verified taint chain reaching a sink AFTER a
+      // `switch(6){case 6:<tainted>;break;default:safe;break;}` (Juliet's
+      // own constant-switch idiom) produced zero findings — the tainted
+      // assignment's own line was being reported as "dead code" and
+      // suppressed via `applyJavaBenchSuppressions`'s source-line check.
+      // `evalExpr` already handles a bare `conditionalExpression` node
+      // directly (see its own dispatch above), so no other change is
+      // needed once the correct child key is read.
+      const labelExpr = lblCh.caseConstant?.[0]?.children?.conditionalExpression?.[0]
         || lblCh.caseLabelElement?.[0]?.children?.expression?.[0];
       if (!labelExpr) continue;
       const lv = evalExpr(labelExpr, scope);
