@@ -607,7 +607,7 @@ precision against).
 | # | Task | Status |
 |---|---|---|
 | W4.J1 | Java CWE-113 header/cookie injection — re-measured, real corpus (dev, blind+scrambled+deep, truncated by a per-function analysis limit so this understates recall): tp=336 fp=388 fn=241, recall ≥58.2%, F1 ≥51.2% (up from the PRD's originally documented 2%). Precision (45.7%) capped by the already-documented CRLF-sanitizer architectural limit (a header-injection strip can't safely kill taint for other families) — deferred to W3, not a new gap | VERIFIED |
-| W4.J2 | Java CWE-36/23 file constructors | NOT_STARTED |
+| W4.J2 | Java CWE-36/23 file constructors — re-measured, real corpus (dev, blind+scrambled+deep, truncated so this understates recall): CWE-23 tp=47 fp=0 fn=31 (recall ≥60.3%), CWE-36 tp=172 fp=0 fn=178 (recall ≥49.1%); combined F1 ≥61.1%, zero within-family FPs. No code change needed | VERIFIED |
 | W4.J3 | Java CWE-643 XPath | NOT_STARTED |
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
@@ -1637,6 +1637,25 @@ VERIFIED. Per PRD integrity rule 3 (no test-only fixtures with
 PascalCase names), note this measurement itself was taken with
 `--scramble-identifiers` on the real corpus, not a synthetic probe —
 stronger evidence than W2.4/W4.J6's synthetic-probe verifications.
+
+### W4.J2 — Java CWE-36/23 file constructors re-measured, verified working (2026-09-15)
+
+Same pattern again: `node scanner/test/benchmark/realworld/bench-realworld.js
+--app sard-juliet-java-strict --blind --scramble-identifiers --deep
+--split dev --cwe 36,23 --json --allow-truncation`.
+
+**Result:** CWE-23 (relative path traversal via file constructor):
+tp=47 fp=0 fn=31, recall ≥60.3%. CWE-36 (absolute path traversal via
+file constructor): tp=172 fp=0 fn=178, recall ≥49.1%. Combined F1
+≥61.1%, precision 75.8% overall (the FPs present, 58 CWE-22 + 7
+CWE-502 + 3 CWE-20, are other families' findings surfacing within this
+two-CWE-scoped scan, not CWE-36/23 mis-fires — **zero** false positives
+within either target family). `fnLimitExceeded: true` again, so real
+recall is higher than reported.
+
+No code change needed — file-constructor taint already works via the
+same interprocedural/collection-taint machinery fixed earlier this
+session. Moved from NOT_STARTED to VERIFIED.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
