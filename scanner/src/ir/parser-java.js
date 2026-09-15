@@ -430,12 +430,34 @@ function _collectThrowExprs(node, out, depth = 0) {
 // Refuses to guess when a variable is (re)assigned two distinct constructed
 // types in the same function, matching this file's own `bareTailInFile`
 // ambiguity-refusal convention elsewhere.
+// SARD_80_F1 W2.3 — JDK collection/container types are NEVER entries in
+// `callgraph.js`'s `classMethods` index (that index is built from this
+// PROJECT's own `ir.classes`, never JDK builtins), so class-qualifying a
+// call to one of these buys the dispatch-resolution mechanism nothing —
+// while actively BREAKING collection-element taint tracking. Found via a
+// direct CFG dump: `ArrayList<String> list = new ArrayList<>(); list.add(data);
+// for (String s : list) { sink(s); }` rewrites `list.add` to `ArrayList.add`
+// (mutating the callee string in place, so the taint engine's mutator rule
+// — engine.js's `_MUTATORS` — records the taint under the FAKE receiver key
+// "ArrayList" instead of the real variable "list"), but the for-each's own
+// synthesized loop-variable binding (`s = list`, a bare IDENTIFIER
+// reference, never itself a `call` node) is NEVER touched by this rewrite —
+// there is no callee to rewrite on a bare ident. The write and the read end
+// up keyed on two DIFFERENT names ("ArrayList" vs "list"), and the taint is
+// silently lost. `map.values()`-style for-each reads happened to keep
+// working by accident: that read is ALSO a call (`map.values()` also gets
+// rewritten to `LinkedHashMap.values()`), so write and read stay
+// consistently (if wrongly) keyed on the same class name — a coincidence
+// that does not hold for the far more common bare-variable for-each shape.
+const _JDK_CONTAINER_TYPES = /^(?:List|ArrayList|LinkedList|Vector|Stack|CopyOnWriteArrayList|Map|HashMap|LinkedHashMap|TreeMap|Hashtable|ConcurrentHashMap|Properties|Set|HashSet|LinkedHashSet|TreeSet|CopyOnWriteArraySet|Queue|Deque|ArrayDeque|PriorityQueue|ConcurrentLinkedQueue|ConcurrentLinkedDeque|BlockingQueue|LinkedBlockingQueue|Collection)$/;
+
 function _localVarConstructedTypes(nodes) {
   const varTypes = new Map(); // varName -> className | null (ambiguous)
   for (const node of Object.values(nodes)) {
     if (node.kind !== 'assign') continue;
     const src = node.source;
     if (!src || src.kind !== 'call' || !src.isNew || typeof src.callee !== 'string') continue;
+    if (_JDK_CONTAINER_TYPES.test(src.callee)) continue;
     const varName = node.target;
     if (!varName || varName.includes('.')) continue; // only a bare local, never a field-write target
     if (varTypes.has(varName)) {

@@ -161,6 +161,38 @@ public class Probe2 {
     `Queue/Deque.offer is the interface's own mutator, same shape as the already-working Stack.push. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
 });
 
+// SARD_80_F1 W2.3: the real bug behind the addElement/offer gap above was
+// bigger than a missing mutator name — a constructed JDK collection
+// (`ArrayList<String> list = new ArrayList<>();`) had its mutator call
+// (`list.add(data)`) class-qualified to `ArrayList.add(data)` by
+// parser-java.js's abstract-dispatch rewrite (built for W2.5's `b.action(data)`
+// shape), which desynchronizes the WRITE (now keyed on the fake receiver
+// "ArrayList") from a for-each READ over the container itself (`for (String s
+// : list)`, a bare identifier reference the rewrite never touches, staying
+// keyed on the real name "list") — the taint is silently lost. `map.values()`
+// for-each reads happened to keep working by accident (both write and read
+// are calls, so both get rewritten consistently); the far more common
+// bare-container for-each did not. Fixed by exempting JDK collection types
+// from the rewrite entirely (they are never in callgraph.js's classMethods
+// index, so the rewrite bought dispatch resolution nothing for them anyway).
+test('java: taint survives ArrayList.add() -> for-each over the container itself (not map.values())', async () => {
+  const findings = await scanSource('ProbeForEach.java', `import java.util.ArrayList;
+import javax.servlet.http.HttpServletRequest;
+public class ProbeForEach {
+    public void bad(HttpServletRequest request) {
+        String data = request.getParameter("name");
+        ArrayList<String> list = new ArrayList<String>();
+        list.add(data);
+        for (String s : list) {
+            Runtime.getRuntime().exec(s);
+        }
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(t.some((f) => /Command Injection/i.test(f.vuln)),
+    `a bare for-each over a tainted ArrayList must still see the taint. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
 // ── precision: widening the mutator rule must not make every container tainted
 test('a clean value written into a container does not taint it', async () => {
   const findings = await scanSource('clean.js', `const { exec } = require('child_process');

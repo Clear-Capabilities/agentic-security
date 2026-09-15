@@ -578,7 +578,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (real capability, zero SARD movement — see session log) | IN_PROGRESS |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain (+84 tp across SQLi/header-injection/LDAP/cmdi/redirect/file-constructor CWEs, not just collection variants), see session log | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
@@ -1314,6 +1314,69 @@ collection APIs that are exactly as dangerous as their already-working
 siblings), consistent with this session's standing practice of shipping
 correct capability additions independent of whether this specific
 synthetic corpus happens to exercise them.
+
+### W2.3 follow-up — the real bug: class-qualification rewrite desyncs container taint (2026-09-15)
+
+Followed the addElement/offer null result with a broader probe — six
+Java collection APIs, but this time including a for-each/iterator READ
+side, not just indexed reads: `for (x : list)` over the container
+itself, `for (x : map.values())`, an explicit `Iterator`/`while
+(it.hasNext())` loop, `PriorityQueue`, `ConcurrentHashMap`. Five of six
+fired correctly; **`for (String s : list)` directly over a
+`list.add(data)`-populated `ArrayList` — arguably the single most
+common Java collection idiom in existence — did not.**
+
+Root-caused via a direct CFG dump, and it is NOT a missing mutator name.
+`parser-java.js`'s abstract-dispatch rewrite (`_localVarConstructedTypes`/
+`_rewriteVarTypeCallees`, built earlier this session for W2.5's `A_81_base
+b = new A_81_bad(); b.action(data);` shape) class-qualifies `list.add(data)`
+to `ArrayList.add(data)` **in place** — so `engine.js`'s mutator rule
+(`_MUTATORS`) records the taint under the FAKE receiver key `"ArrayList"`
+(the class name), not the real variable `"list"`. The for-each's own
+synthesized loop-variable binding (`s = list`) is a bare IDENTIFIER
+reference — it has no callee, so the rewrite never touches it, and it
+stays correctly keyed on `"list"`. Write and read end up on two
+different keys; the taint is silently lost. `map.values()` for-each
+survived by ACCIDENT: that read is also a call (`map.values()`), so it
+gets rewritten too, and write+read stay consistently (if wrongly) keyed
+on the same class name — a coincidence that only holds for the less
+common "read via a method call on the container" shape, not the far
+more common bare-container for-each.
+
+**Fix:** exempt JDK collection/container types (`List`, `ArrayList`,
+`Map`, `HashMap`, `Set`, `Queue`, `Deque`, and 20-odd siblings) from the
+class-qualification rewrite entirely. These types are never entries in
+`callgraph.js`'s `classMethods` index — that index is built exclusively
+from this PROJECT's own `ir.classes`, never JDK builtins — so the
+rewrite bought dispatch resolution nothing for them in the first place;
+it only ever had a downside for this class of type. Verified the
+original W2.5 abstract-dispatch mechanism is untouched (its own test,
+`catalog-java-sard.test.js`'s "abstract-dispatch (Juliet variant 81/82
+shape)", still passes). 2 new tests added (`parser-java-assignments.test.js`
+pinning the IR-level cause; `container-taint.test.js` proving the
+end-to-end for-each-over-container shape now works). Full `test:dataflow`
+(1217/1217), `test:sast` (750/750), self-scan (zero drift),
+`bench:mutation:check` (35/35), `bench:cve-replay:check` (220/220),
+`bench:layer-recall:check` (no regression, no unrecorded gain),
+`test:smoke` (30/30) all green.
+
+**Real-corpus measurement: a genuine, broad win.** `batch-scan.mjs --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+dev`: **tp 1638→1722 (+84), fp 1021→1057 (+36), fn 1340→1256 (-84).
+macroF1 38.3%→39.1% (+0.8pp), recall 55.0%→57.8% (+2.8pp).** Unlike
+every other fix this session, this one moved MANY CWE families at
+once, not just one — confirming the bug's real scope was never
+"collection variants 71-75" specifically, but any Juliet test file
+where a value is routed through a constructed `ArrayList`/`HashMap`/etc.
+before reaching ANY sink: CWE-89 SQLi (tp +18), CWE-113 header
+injection (tp +27), CWE-36 file constructors (tp +12), CWE-90 LDAP
+(tp +6), CWE-78 cmdi (tp +6), CWE-601 redirect (tp +3). The FP increase
+(+36) is real but proportionally much smaller than the TP gain — a
+genuinely favorable trade, not a wash. This is the single largest
+verified recall gain of this session's Java work, found only because a
+"missing mutator name" investigation was pushed one level deeper into
+"why does the SIMPLEST possible collection shape still fail" instead of
+stopping at the first plausible-looking gap.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

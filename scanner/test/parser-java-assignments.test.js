@@ -249,6 +249,28 @@ public class A {
   assert.ok(c.includes('b.action'), `ambiguous var must stay unrewritten, got ${c}`);
 });
 
+// SARD_80_F1 W2.3: a JDK collection type is never an entry in
+// `callgraph.js`'s classMethods index (built only from this project's own
+// `ir.classes`), so class-qualifying `list.add` to `ArrayList.add` gains
+// nothing for dispatch resolution — while breaking `engine.js`'s mutator
+// rule, which needs the REAL variable name to attribute taint correctly.
+// Found via a direct CFG dump showing a for-each-over-the-container-itself
+// read (`s = list`, a bare identifier, never rewritten since it has no
+// callee) desynchronized from the rewritten write (`list.add` ->
+// `ArrayList.add`), silently losing the taint. Verified end-to-end in
+// `test/container-taint.test.js`; this test pins the IR-level cause.
+test('a constructed JDK collection type (ArrayList) is NOT class-qualified — the rewrite only helps dispatch on THIS project\'s own classes', async () => {
+  const nodes = await fnNodes(`
+public class A {
+  void m(String data) {
+    ArrayList<String> list = new ArrayList<String>();
+    list.add(data);
+  }
+}`, 'm');
+  const c = calls(nodes).map(n => n.callee);
+  assert.ok(c.includes('list.add'), `a JDK collection type must stay unrewritten (mutator taint needs the real variable name), got ${c}`);
+});
+
 test('Juliet-shaped source reads all lower to assigns with a call source', async () => {
   const nodes = await fnNodes(`
 public class A {
