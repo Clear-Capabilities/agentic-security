@@ -702,8 +702,34 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
   command to confirm the shared code path wasn't broken by the fix:
   unchanged (`scannedFiles: 3669`, matching every prior Java measurement
   this session). SARD unit suite (55 tests) green.
-- Running the FIRST-EVER correctly-scoped full C# dev-split
-  `batch-scan.mjs` measurement now.
+- **The first-ever correctly-scoped full C# dev-split measurement**:
+  `node bench/sard/scripts/batch-scan.mjs --app sard-juliet-csharp-strict
+  --blind --scramble-identifiers --deep --split dev --json` → tp=335,
+  fp=430, fn=2267, precision=43.8%, recall=12.9%, **macroF1=16.1%**
+  (macroF1 support≥5: 17.4%), 289.8s total, zero truncation across all 24
+  CWE batches. Coincidentally close to the OLD, invalid 15.1% figure in
+  headline terms, but NOT the same measurement and not comparable to it —
+  the old number was averaged over a scan surface roughly 77x larger
+  (~46,600 vs ~600 files per CWE) with wildly inflated, largely-irrelevant
+  FP noise; this is the first number that actually reflects C#'s real
+  detection capability against its own correctly-scoped gold surface.
+- **Half the scored CWEs show zero recall** (78, 80, 81, 83, 134, 261,
+  313, 314, 315, 321, 523, 643 all `tp=0`) — C# received NONE of this
+  session's Java-specific fixes (the if/else and switch branch+join
+  rewrites are `parser-java.js`-only string/CST manipulation; only the
+  engine-level fixes — fn-limit, W1 class resolution, object-field widen,
+  cross-class static field — are shared). Whether C#'s OWN CFG builder
+  has an if/else-class defect is UNKNOWN and NOT YET INVESTIGATED — its
+  `_buildCfg` was already described as a "recursive builder" rewrite in
+  an earlier session (ir/CLAUDE.md), which may mean it never had Java's
+  exact bug, or may mean it has a different one. This is real, substantial,
+  separate follow-up work for a future iteration, not attempted here given
+  this iteration's length.
+- **New verified C# dev-split baseline (deep, batched, zero truncation,
+  first trustworthy measurement): macroF1=16.1%.** This REPLACES the
+  15.1% figure in the Baseline table below as the reference point for
+  future C# work — the old figure is retired as invalid, not superseded
+  by a comparable delta.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
@@ -712,8 +738,18 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
 | Language | macro-F1 | micro-F1 | P | R |
 |---|---|---|---|---|
 | Java | 33.5% | 50.3% | 71.7% | 38.8% |
-| C# | 15.1% | 17.1% | 39.9% | 10.9% |
+| C# | ~~15.1%~~ **INVALID — see 2026-09-15 log entry** | ~~17.1%~~ | ~~39.9%~~ | ~~10.9%~~ |
 | PHP | 21.2% | 17.2% | 24.2% | 13.4% |
+
+**C# retraction**: the row above was measured while `--cwe`/gold-surface
+scoping was silently broken for C# (a manifest `scanRoot` mismatch meant
+the exclude-path pattern could never match anything — see the 2026-09-15
+session log for the full root-cause). Every pre-fix C# number in this
+document, including this one, was scored against ~46,600 files (the ENTIRE
+105-CWE-directory corpus) instead of the ~600 actually gold-covered per CWE.
+Not a comparable baseline — the first trustworthy C# number is the
+**16.1% macroF1** figure in the 2026-09-15 log entry below, measured after
+the fix.
 
 ## Session log
 
