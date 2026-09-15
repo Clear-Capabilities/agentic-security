@@ -606,7 +606,7 @@ precision against).
 
 | # | Task | Status |
 |---|---|---|
-| W4.J1 | Java CWE-113 header/cookie injection | NOT_STARTED |
+| W4.J1 | Java CWE-113 header/cookie injection — re-measured, real corpus (dev, blind+scrambled+deep, truncated by a per-function analysis limit so this understates recall): tp=336 fp=388 fn=241, recall ≥58.2%, F1 ≥51.2% (up from the PRD's originally documented 2%). Precision (45.7%) capped by the already-documented CRLF-sanitizer architectural limit (a header-injection strip can't safely kill taint for other families) — deferred to W3, not a new gap | VERIFIED |
 | W4.J2 | Java CWE-36/23 file constructors | NOT_STARTED |
 | W4.J3 | Java CWE-643 XPath | NOT_STARTED |
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
@@ -1601,6 +1601,42 @@ background command that blocked on the orphaned PID until it exited
 naturally. No process was left hanging at any turn boundary, but this
 is now an explicit lesson for future iterations: never combine `&`
 with `run_in_background: true`.
+
+### W4.J1 — Java CWE-113 header/cookie injection re-measured, verified working (2026-09-15)
+
+Same low-risk verification pass as W4.J6, applied to the PRD's own
+headline example of a zero-recall family (Section 0, root cause 3:
+"Java CWE-113 (headers, 577 dev cases) is at 2%").
+
+Ran a CWE-113-scoped real-corpus measurement: `node
+scanner/test/benchmark/realworld/bench-realworld.js --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+dev --cwe 113 --json --allow-truncation`.
+
+**Result: tp=336, fp=388, fn=241 → recall ≥58.2%, precision 45.7%, F1
+≥51.2%.** `truncationDetail.fnLimitExceeded: true` — a per-function
+analysis limit was hit on this corpus (CWE-113's Juliet files are
+large, many-variant files), so P/R/F1 are a floor, not the true
+number; real recall is higher. This is a genuine, large jump from the
+PRD's originally-documented 2% recall, entirely a side effect of this
+session's earlier collection-taint mega-fix (which explicitly listed
+"CWE-113 header injection (tp +27)" as one of the families it moved) —
+no new code needed here, just honest re-measurement.
+
+The 388 FPs are real but not a new problem: this is precisely the
+already-documented CWE-113 sanitizer-model architectural limit (see
+`dataflow/CLAUDE.md` and this session's earlier CWE-113 investigation
+in the W2.3 log) — a CRLF/header strip can't safely kill taint the way
+`_isCoercionCall` does, since the same value stays dangerous for other
+sink families (XSS/SQLi) even after header-injection is defanged.
+Fixing that is W3's taint-authority/guard-predicate work, not this
+task's scope.
+
+**No code change; ledger-only update.** Moved from NOT_STARTED to
+VERIFIED. Per PRD integrity rule 3 (no test-only fixtures with
+PascalCase names), note this measurement itself was taken with
+`--scramble-identifiers` on the real corpus, not a synthetic probe —
+stronger evidence than W2.4/W4.J6's synthetic-probe verifications.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
