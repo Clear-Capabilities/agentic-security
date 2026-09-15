@@ -608,7 +608,7 @@ precision against).
 |---|---|---|
 | W4.J1 | Java CWE-113 header/cookie injection — re-measured, real corpus (dev, blind+scrambled+deep, truncated by a per-function analysis limit so this understates recall): tp=336 fp=388 fn=241, recall ≥58.2%, F1 ≥51.2% (up from the PRD's originally documented 2%). Precision (45.7%) capped by the already-documented CRLF-sanitizer architectural limit (a header-injection strip can't safely kill taint for other families) — deferred to W3, not a new gap | VERIFIED |
 | W4.J2 | Java CWE-36/23 file constructors — re-measured, real corpus (dev, blind+scrambled+deep, truncated so this understates recall): CWE-23 tp=47 fp=0 fn=31 (recall ≥60.3%), CWE-36 tp=172 fp=0 fn=178 (recall ≥49.1%); combined F1 ≥61.1%, zero within-family FPs. No code change needed | VERIFIED |
-| W4.J3 | Java CWE-643 XPath | NOT_STARTED |
+| W4.J3 | Java CWE-643 XPath — re-measured, real corpus (dev, blind+scrambled+deep, NOT truncated): tp=182 fp=2 fn=121, recall 60.1%, within-family precision 98.9% (F1 70.8% overall). No code change needed | VERIFIED |
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
@@ -1656,6 +1656,18 @@ recall is higher than reported.
 No code change needed — file-constructor taint already works via the
 same interprocedural/collection-taint machinery fixed earlier this
 session. Moved from NOT_STARTED to VERIFIED.
+
+### W4.J3 — Java CWE-643 XPath re-measured, verified working (2026-09-15)
+
+`node scanner/test/benchmark/realworld/bench-realworld.js --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+dev --cwe 643 --json --allow-truncation`.
+
+**Result: tp=182, fp=2, fn=121 → recall 60.1%, within-family precision
+98.9% (2/184), F1 70.8% overall.** `truncated: false` this time — this
+is a clean, complete-scan number, not a floor. The strongest precision
+of any family re-measured so far this session. No code change needed.
+Moved from NOT_STARTED to VERIFIED.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
