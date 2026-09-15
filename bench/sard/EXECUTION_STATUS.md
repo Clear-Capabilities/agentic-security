@@ -35,7 +35,7 @@ once per milestone, by the harness — see the PRD Section 6.
 | W0.1 | Truncation fail-closed in `bench-realworld.js` + `score-php.mjs` | VERIFIED |
 | W0.2 | `scannedFiles`/`expectedFiles` added to `results[0]` | VERIFIED |
 | W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | NOT_STARTED |
-| W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | NOT_STARTED |
+| W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | VERIFIED |
 | W0.5 | Performance profiling pass (index-based catalog matching for every match.type) | NOT_STARTED |
 | W0.6 | Per-CWE key hygiene self-test (no tp=fp=fn=0 rows) | VERIFIED |
 | W0.7 | Variant-class breakdown in `macro-score.mjs` report | VERIFIED |
@@ -242,3 +242,25 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
   matching the PRD's own description of the flow-variant recall wall this
   workstream exists to instrument. SARD unit suite (55 tests) still green.
   W0.7 → VERIFIED.
+
+### 2026-09-15 — W0.4 implemented and verified
+
+- `bench-realworld.js`: for Juliet/Juliet-C# apps, the CWE-directory
+  exclusion mechanism `--cwe` already used (excludes from BOTH the scan
+  surface and GT — see that flag's own header comment) now runs by default,
+  keyed off which CWEs the (possibly `--split`-filtered) gold set actually
+  covers, not just an explicit `--cwe` list. `--full-corpus` opts out for
+  exploratory/W4 work. Findings in a directory with zero gold entries are
+  never produced at all, so they can no longer be miscounted as FPs.
+  Verified: `node test/benchmark/realworld/bench-realworld.js --app
+  sard-juliet-java-strict --blind --scramble-identifiers --split dev --json`
+  (same exact command as W0.1/W0.2's baseline, no `--cwe`) now logs
+  `gold-surface scoping (PRD W0.4, --full-corpus to disable): excluding
+  94/112 CWE directories from the scan itself` and produces `scannedFiles:
+  13274, expectedFiles: 2814, tp: 1011, fp: 227, fn: 1967, precision:
+  81.66%, recall: 33.95% (unchanged, as expected), f1: 47.96%`. Compared
+  against the IDENTICAL command run for W0.1 (before this fix): precision
+  76.5% → 81.7% (+5.2pp), F1 47.0% → 48.0%, recall bit-for-bit identical
+  (0.33948959032907994 both times) — confirms the fix removes FPs from
+  unscored directories without touching real recall. `truncated: false`,
+  exit 0. SARD unit suite (55 tests) still green. W0.4 → VERIFIED.

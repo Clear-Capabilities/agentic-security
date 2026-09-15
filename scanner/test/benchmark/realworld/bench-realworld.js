@@ -201,6 +201,18 @@ const DEEP = flag('--deep');
 // truncated run can never silently become a milestone-gate pass; this flag
 // is the explicit, named opt-out for exploratory/local runs.
 const ALLOW_TRUNCATION = flag('--allow-truncation');
+// PRD W0.4 (measurement integrity) — Java Juliet has 112 CWE directories;
+// gold scores 25 of them. Left unscoped, every finding in the other 87 is
+// counted as a false positive for a reason that has nothing to do with
+// detection quality (same story for C#'s numeric/quality CWE directories,
+// which produced 417 unscored deserialization FPs). Default behavior below
+// is now scan-surface = gold-surface: excluded the same way `--cwe` already
+// excludes directories (both GT construction and the scan itself — see that
+// flag's own comment), just driven by which CWEs the FULL, un-split gold
+// set actually covers instead of a user-supplied list. `--full-corpus` is
+// the named opt-out for exploratory/W4 work that wants to see findings in
+// still-unscored directories before deciding whether to add real gold there.
+const FULL_CORPUS = flag('--full-corpus');
 
 function memTrace(label) {
   if (!MEM_TRACE) return;
@@ -1627,7 +1639,19 @@ async function runOne(name, app, vulnFamilyMap) {
   // corpus's own top-level CWE dirs at runtime rather than requiring the
   // caller to know the full CWE list in advance.
   let cweFilterExcludes = [];
-  if (CWE_FILTER && (app.groundTruth.kind === 'juliet' || app.groundTruth.kind === 'juliet-csharp')) {
+  const isJulietKind = app.groundTruth.kind === 'juliet' || app.groundTruth.kind === 'juliet-csharp';
+  // PRD W0.4 — the keep-set is the explicit `--cwe` list when given;
+  // otherwise (the new default) every CWE the gold set (after any --split
+  // filtering above) actually covers, so a directory with zero gold entries
+  // is never even scanned, let alone counted toward false positives. This is
+  // the SAME mechanism `--cwe` already uses (see this block's header
+  // comment) — only the source of the keep-set changes. `--full-corpus`
+  // disables it for exploratory/W4 work that wants to see findings in
+  // still-unscored directories before deciding whether to add real gold.
+  const cweKeepSet = CWE_FILTER || (isJulietKind && !FULL_CORPUS
+    ? new Set(expected.map(e => String(e.cwe || '').replace(/^CWE-?/i, '')).filter(Boolean))
+    : null);
+  if (cweKeepSet && isJulietKind) {
     const isJava = app.groundTruth.kind === 'juliet';
     const dirRoot = isJava ? repoRoot : path.join(repoRoot, 'src', 'testcases');
     let dirEntries = [];
@@ -1637,9 +1661,10 @@ async function runOne(name, app, vulnFamilyMap) {
       if (!e.isDirectory()) continue;
       const m = e.name.match(re);
       if (!m) continue;
-      if (!CWE_FILTER.has(m[1])) cweFilterExcludes.push(isJava ? `${e.name}/**` : `src/testcases/${e.name}/**`);
+      if (!cweKeepSet.has(m[1])) cweFilterExcludes.push(isJava ? `${e.name}/**` : `src/testcases/${e.name}/**`);
     }
-    console.error(`  --cwe ${[...CWE_FILTER].join(',')}: excluding ${cweFilterExcludes.length}/${dirEntries.filter(e => re.test(e.name)).length} CWE directories from the scan itself`);
+    const label = CWE_FILTER ? `--cwe ${[...CWE_FILTER].join(',')}` : 'gold-surface scoping (PRD W0.4, --full-corpus to disable)';
+    console.error(`  ${label}: excluding ${cweFilterExcludes.length}/${dirEntries.filter(e => re.test(e.name)).length} CWE directories from the scan itself`);
   }
 
   // Apply per-app excludePaths via a generated rules.yml under the scan root.
