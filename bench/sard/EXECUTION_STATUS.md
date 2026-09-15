@@ -33,7 +33,7 @@ once per milestone, by the harness — see the PRD Section 6.
 | # | Task | Status |
 |---|---|---|
 | W0.1 | Truncation fail-closed in `bench-realworld.js` + `score-php.mjs` | VERIFIED |
-| W0.2 | `scannedFiles`/`expectedFiles` added to `results[0]` | NOT_STARTED |
+| W0.2 | `scannedFiles`/`expectedFiles` added to `results[0]` | VERIFIED |
 | W0.3 | Batch corpus scanning per-CWE-dir / fixed-size, merge via `merge-results.mjs` | NOT_STARTED |
 | W0.4 | Scan surface = gold surface (exclude unscored CWE dirs from scan for scoring) | NOT_STARTED |
 | W0.5 | Performance profiling pass (index-based catalog matching for every match.type) | NOT_STARTED |
@@ -188,3 +188,20 @@ Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{ja
   synthetic-input `macro-score.mjs` exit-1/exit-0 check above, both directions
   of W0.1's fail-closed behavior are now real-command-verified this session.
   W0.1 → VERIFIED.
+
+### 2026-09-15 — W0.2 verified
+
+- Added `scannedFiles` (engine's own `scan.filesScanned`) and `expectedFiles`
+  (distinct files in the gold set for the current split) to both harnesses'
+  result objects — `scanned` stays as-is (findings-kept, in bench-realworld.js;
+  case count in score-php.mjs) rather than renamed, to avoid breaking every
+  consumer of the existing field; the new fields exist specifically so a file
+  count is never again misread from it.
+  Verified: `node test/benchmark/realworld/bench-realworld.js --app
+  sard-juliet-java-strict --blind --scramble-identifiers --cwe CWE-89 --split
+  dev --json` → `scannedFiles: 3669, expectedFiles: 732, scanned: 334,
+  expectedTotal: 780` — four visibly different numbers, confirming `scanned`
+  was never a file count. `node bench/sard/scripts/score-php.mjs --split dev
+  --limit 10 --json` → `scannedFiles: 10, expectedFiles: 10, truncated:
+  false`. SARD unit suite (55 tests) still green after this change too.
+  W0.2 → VERIFIED.

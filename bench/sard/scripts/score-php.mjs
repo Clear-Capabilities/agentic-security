@@ -139,6 +139,12 @@ async function main() {
   // Juliet case directory at a time, not the whole corpus in one runScan).
   let truncatedCases = 0;
   const truncationDetail = { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: 0 };
+  // PRD W0.2 — `scanned` on the result below is `gold.length` (case count,
+  // already a reasonable name here since PHP scores one case dir at a time),
+  // but `expectedFiles`/`scannedFiles` are added anyway so this harness's
+  // result shape matches bench-realworld.js's and a caller never has to know
+  // which harness produced a given `results[]` entry to read file coverage.
+  let casesScanned = 0;
 
   for (const g of gold) {
     const caseDir = path.join(WORKSPACE_ROOT, g.caseId);
@@ -147,6 +153,7 @@ async function main() {
     try {
       const { scan } = await runScan(caseDir, opts.deep ? { deep: true } : {});
       findings = scan.findings || [];
+      casesScanned++;
       if (opts.deep && scan._scanMeta && scan._scanMeta.analysisTier && scan._scanMeta.analysisTier.irTaint && scan._scanMeta.analysisTier.irTaint.php) deepTierSeen = true;
       const sm = scan._scanMeta || {};
       const deepBudgetExceeded = findings.some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
@@ -196,6 +203,7 @@ async function main() {
     tp, fp, fn, precision, recall, f1: f1v, elapsedSec: parseFloat(elapsedSec), peakRssMb: null,
     perCwe, deep: opts.deep, fpByParser, fpBySanitizer,
     truncated, truncationDetail: { ...truncationDetail, truncatedCases },
+    scannedFiles: casesScanned, expectedFiles: gold.length,
     ...(opts.fpDetail ? { fpDetail } : {}),
   };
 

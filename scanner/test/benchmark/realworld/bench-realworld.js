@@ -1715,6 +1715,13 @@ async function runOne(name, app, vulnFamilyMap) {
   const deepBudgetExceeded = (scan.findings || []).some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
   const truncated = filesTimedOut > 0 || filesSkipped > 0 || filesDenseSkipped > 0 || deepBudgetExceeded;
   const truncationDetail = { filesTimedOut, filesSkipped, filesDenseSkipped, deepBudgetExceeded };
+  // PRD W0.2 — `scanned` below is findings kept after --split filtering, not
+  // a file count; it has been misread as one before. `scannedFiles` is the
+  // engine's own file tally (same field _scanMeta's counters above are
+  // derived from); `expectedFiles` is the number of DISTINCT files the gold
+  // set actually expects a vulnerability in, for this split.
+  const scannedFiles = scan.filesScanned;
+  const expectedFiles = new Set(expected.map(fileOf).filter(Boolean)).size;
 
   let actual = [
     ...(scan.findings || []),
@@ -1850,6 +1857,7 @@ async function runOne(name, app, vulnFamilyMap) {
     auditorVerifiedSource,
     requiresReAudit: reAuditFlag,
     truncated, truncationDetail,
+    scannedFiles, expectedFiles,
   };
 }
 
@@ -1865,7 +1873,8 @@ function printResult(r) {
     console.log(`  Youden Index: n/a (no declared negative class in this corpus)`);
   }
   const rssTag = r.peakRssMb != null ? `, peak RSS ${r.peakRssMb} MB` : '';
-  console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}, ${r.elapsedSec}s${rssTag})`);
+  const filesTag = r.scannedFiles != null ? `, files scanned: ${r.scannedFiles} (expected in ${r.expectedFiles})` : '';
+  console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}${filesTag}, ${r.elapsedSec}s${rssTag})`);
   if (r.truncated) {
     const d = r.truncationDetail || {};
     console.log(`  ⚠ TRUNCATED — scan did not cover the full corpus (filesSkipped:${d.filesSkipped||0} filesDenseSkipped:${d.filesDenseSkipped||0} filesTimedOut:${d.filesTimedOut||0} deepBudgetExceeded:${!!d.deepBudgetExceeded}). P/R/F1 above understate recall — see PRD W0.1.`);
