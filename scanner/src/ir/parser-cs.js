@@ -297,12 +297,33 @@ function _enclosingClassName(ranges, pos) {
 // is (re)assigned to more than one distinct constructed type in the same
 // function — ambiguous, same "refuse rather than fabricate an edge"
 // convention `bareTailInFile` already uses.
+// SARD_80_F1 W2.3 — ported from the identical fix in parser-java.js (see
+// its own comment for the full story, found first for Java): a BCL
+// collection type (`List`, `Dictionary`, `Stack`, `Queue`, `HashSet`, …)
+// is never an entry in `callgraph.js`'s `classMethods` index (built only
+// from THIS project's own `ir.classes`), so class-qualifying
+// `list.Add(data)` to `List.Add(data)` buys dispatch resolution nothing —
+// while breaking `engine.js`'s mutator rule, which needs the REAL
+// variable name to attribute taint correctly. A `foreach (var s in list)`
+// read over the container itself lowers to a bare-identifier assign
+// (`s = list`, no callee to rewrite), so it stays keyed on "list" while
+// the (rewritten) write lands on the fake receiver "List" — the taint is
+// silently lost. Confirmed via a direct CFG dump: `List<string> list =
+// new List<string>(); list.Add(data);` didn't even trigger the bug (this
+// parser's generic-constructor lowering produces `{kind:'unknown'}` for
+// `new List<string>()`, so it's never added to `varTypes` at all) — but
+// the non-generic `ArrayList`/`Hashtable`-style BCL collections DO lower
+// to a proper `isNew:true` call and DO exhibit the exact same desync as
+// Java's `ArrayList`.
+const _BCL_CONTAINER_TYPES = /^(?:List|ArrayList|LinkedList|Stack|Queue|Dictionary|Hashtable|SortedList|SortedDictionary|HashSet|SortedSet|ArrayDeque|ConcurrentBag|ConcurrentQueue|ConcurrentStack|ConcurrentDictionary|BlockingCollection|ObservableCollection|Collection|CollectionBase)$/;
+
 function _localVarConstructedTypes(nodes) {
   const varTypes = new Map(); // varName -> className | null (ambiguous)
   for (const node of Object.values(nodes)) {
     if (node.kind !== 'assign') continue;
     const src = node.source;
     if (!src || src.kind !== 'call' || !src.isNew || typeof src.callee !== 'string') continue;
+    if (_BCL_CONTAINER_TYPES.test(src.callee)) continue;
     const varName = node.target;
     if (!varName || varName.includes('.')) continue; // only a bare local, never a member-write target
     if (varTypes.has(varName)) {

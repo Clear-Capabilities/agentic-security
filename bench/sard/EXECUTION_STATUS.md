@@ -578,7 +578,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain (+84 tp across SQLi/header-injection/LDAP/cmdi/redirect/file-constructor CWEs, not just collection variants), see session log | IN_PROGRESS |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp), see session log | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
@@ -1377,6 +1377,42 @@ verified recall gain of this session's Java work, found only because a
 "missing mutator name" investigation was pushed one level deeper into
 "why does the SIMPLEST possible collection shape still fail" instead of
 stopping at the first plausible-looking gap.
+
+### W2.3 ported to C# — same shared rewrite mechanism, same bug (2026-09-15)
+
+`parser-cs.js`'s `_localVarConstructedTypes`/`_rewriteVarTypeCallees` is
+the ORIGINAL version of this mechanism (Java's was explicitly ported
+from it, per that file's own header comment) — checked whether it had
+the identical collection-desync bug before assuming Java-only. Probed
+`List<string> list = new List<string>(); list.Add(data); foreach (...)`
+first: no bug, because this parser's generic-constructor lowering
+produces `{kind:'unknown'}` for `new List<string>()` (never reaches
+`isNew:true`, so `varTypes` never seeds it — a separate, pre-existing
+generic-constructor gap, not investigated further here). The
+NON-generic BCL collection form (`ArrayList list = new ArrayList();`)
+DOES lower to a proper `isNew:true` call and DOES exhibit the exact
+same desync: `list.Add(data)` rewritten to `ArrayList.Add(data)`, the
+`foreach`'s bare-identifier binding (`s = list`) left keyed on the real
+name — confirmed via direct CFG dump and an end-to-end probe (zero
+findings before the fix). Applied the identical fix: exempt BCL
+collection types (`List`, `ArrayList`, `Dictionary`, `Hashtable`,
+`Stack`, `Queue`, `HashSet`, and siblings) from the rewrite. 1 new test
+in `test/catalog-cs-p1.test.js`; full C# suite (26/26 including the
+`cs-cross-class` abstract-dispatch tests this rewrite exists for),
+`test:dataflow` (1218/1218), `test:sast` (750/750), self-scan (zero
+drift), `bench:mutation:check` (35/35), `bench:cve-replay:check`
+(220/220), `test:smoke` (30/30) all green.
+
+**Real-corpus measurement: a small, real, favorable gain.** `batch-scan.mjs
+--app sard-juliet-csharp-strict --blind --scramble-identifiers --deep
+--split dev`: tp 335→339 (+4), fp 430→432 (+2), fn 2267→2263 (-4).
+macroF1 16.1%→16.2%, recall 12.9%→13.0%. CWE-89 SQLi tp 72→74, CWE-90
+LDAP tp 46→47. Smaller than Java's +84 gain — plausible given C#'s
+generic-collection form (the more idiomatic modern `List<T>`) doesn't
+even trigger this bug, so only Juliet C# test files using the
+older-style non-generic collections benefit — but a genuine,
+corpus-verified, favorable improvement (more TPs than FPs added), kept
+regardless of size for the same reason as every other fix this session.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

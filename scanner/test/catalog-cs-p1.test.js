@@ -513,3 +513,31 @@ public class L {
   assert.equal(taint.length, 0,
     `an ambiguously-typed variable must not resolve to either class's method (no guessed edge), got: ${taint.map(f => f.vuln).join(', ')}`);
 });
+
+// SARD_80_F1 W2.3 — ported from the identical Java bug/fix (see
+// parser-java.js's own comment): the class-qualification rewrite was
+// class-qualifying `list.Add(data)` to `ArrayList.Add(data)`, desyncing
+// engine.js's mutator taint rule (keyed on the fake receiver "ArrayList")
+// from a `foreach` read over the container itself (`s = list`, a bare
+// identifier the rewrite never touches, staying keyed on "list"). Fixed
+// by exempting BCL collection types from the rewrite — they are never
+// entries in callgraph.js's classMethods index, so the rewrite bought
+// dispatch resolution nothing for them.
+test('cs-collection-foreach: taint survives ArrayList.Add() -> foreach over the container itself', async () => {
+  const dir = mkTmp('collection-foreach', `
+using System.Collections;
+public class C {
+    public void Bad(HttpRequest Request) {
+        string data = Request.QueryString["name"];
+        ArrayList list = new ArrayList();
+        list.Add(data);
+        foreach (string s in list) {
+            Process.Start("cmd.exe", "/c " + s);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln} ${f.cwe}`)),
+    `a bare foreach over a tainted ArrayList must still see the taint, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
