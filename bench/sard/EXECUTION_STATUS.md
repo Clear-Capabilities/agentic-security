@@ -1059,6 +1059,62 @@ precision-relevant unit tests) rather than reverting a correct mechanism
 that simply doesn't reach this corpus's exact shape — same precedent as
 the W2.1/W2.8 "real capability, zero SARD-corpus movement" entries above.
 
+### CWE-113 investigation (2026-09-15) — no code changed, architectural finding only
+
+Investigated Java's CWE-113 (header/cookie injection), the largest single
+false-negative/false-positive pool measured this session (fn=268, fp=385
+on the pre-W4.J4 baseline). Two hypotheses tested via synthetic probes
+(never the real corpus); one ruled out, one confirmed but NOT fixed
+(genuine architectural limit, not a quick bug).
+
+**Ruled out: cross-detector double-counting.** Both the deep engine
+(`java-servlet-addheader`/`setHeader`/`new Cookie` catalog entries) and
+the regex-based `response-splitting.js` structural detector cover
+overlapping shapes, and a probe confirmed both fire on the same line for
+an inline case. Checked whether Juliet's `preciseMethodScoring` GT
+entries could double-penalize this as two separate FPs: confirmed
+`matchAny: true` IS set on every per-method expected entry
+(`buildJulietExpected`, `bench-realworld.js`), so `score()`'s matchAny
+semantics correctly consume BOTH duplicate actuals into the SAME one TP
+as long as both land within the `bad()` method's line range. Not the
+cause of the high FP count (at least not for in-range duplicates).
+
+**Confirmed, NOT fixed: a value that undergoes a REAL, complete CRLF
+strip (`data.replace('\n','_').replace('\r','_')`) still fires a
+CWE-113 finding.** Built a realistic "good" fixture (Juliet-shaped:
+socket-read source, boilerplate try/finally, then an actual char-level
+CRLF strip before the sink) — it fired. Root cause is NOT a missing
+catalog sanitizer entry; it's architectural: this codebase's sanitizer
+model (`dataflow/CLAUDE.md`'s own documented design) NEVER kills taint on
+a sanitizer call — "Sanitizer entries are RECORDED, never trusted to kill
+taint... Taint itself still dies only on clean re-assignment" — and
+`sanitizer-gate.js`'s demotion (confidence/exploitability, never
+`severity`) does not remove the finding from `scan.findings`, which
+`bench-realworld.js` scores unfiltered. The ONE existing exception
+(`_isCoercionCall`, e.g. `parseInt`) is a UNIVERSAL kill (`appliesTo:
+['*']`) because a genuinely coerced integer cannot carry ANY family's
+injection payload — safe to hard-kill unconditionally. A CRLF strip is
+NOT like that: it only defangs the header-injection family specifically:
+the SAME value remains exactly as dangerous for XSS/SQLi purposes as
+before. This engine's taint state is a per-variable BOOLEAN, not
+family-scoped, so there is no existing mechanism to say "clean for
+header-injection, still dirty for everything else" — building one is a
+real architecture addition (per-family taint bits, or a family-scoped
+hard-kill list consulted only at header-injection sink-matching time),
+not a quick catalog entry. Attempting a UNIVERSAL kill for this pattern
+would be an unsound shortcut (introduces real false negatives on other
+families for the same value) and was deliberately not done.
+
+**Disposition:** no code changed. This is real, scoped, precision-relevant
+future work — most naturally as part of W3 (precision: taint authority
+and validation guards), which already anticipates exactly this class of
+problem in its "guard-predicate narrowing" task (W3.2) and its stated
+acceptance bar (dev precision ≥85% Java). Whether Juliet's ACTUAL CWE-113
+`good()` methods use this exact CRLF-strip idiom (vs. some other
+sanitizer or simply not calling the sink) is unconfirmed — the corpus's
+own read-deny list means this can only be resolved by another synthetic
+probe iteration or by implementing family-scoped taint and re-measuring.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
