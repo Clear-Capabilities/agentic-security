@@ -628,7 +628,7 @@ Status: NOT_STARTED. Blocked on W1/W2/W3.
 | # | Task | Status |
 |---|---|---|
 | W5.1 | Sources: nested fgets/fopen, fread, file_get_contents, shell output, unserialize, $_SERVER, class getters | NOT_STARTED |
-| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95) | NOT_STARTED |
+| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95 partially works, tp=3) — CWE-90/91/98/862 all show tp=0 fp=0 on the real corpus despite verified-working detection mechanisms on every synthetic variant tried; root cause unresolved, see session log | IN_PROGRESS |
 | W5.3 | CWE-862 detector design (post-W3, needs guard-predicate distinction) | NOT_STARTED |
 | W5.4 | Guard matrix (sanitizer x sink x quote-context) test file + FP triage | NOT_STARTED |
 
@@ -1222,6 +1222,60 @@ open theory. Genuinely stopping here for now — this has consumed
 disproportionate effort across three separate sub-investigations today
 relative to its payoff, and continuing to guess single C# constructs in
 isolation has a clearly diminishing hit rate.
+
+### W5.2 — PHP CWE-90/91/98/862 investigation: the same pattern in a different corpus (2026-09-15)
+
+Pivoted away from the C# mystery to fresh territory: PHP has not been
+touched at all this session (baseline 21.2% macroF1, unchanged since
+2026-09-14). Ran `node bench/sard/scripts/score-php.mjs --deep --split
+dev --json` (PHP uses its own scorer, NOT `bench-realworld.js` — a
+different corpus, NIST SARD PHP Vulnerability Test Suite #103, ingested
+by `ingest-php.mjs`, not Juliet). Per-CWE breakdown showed a clean
+split: CWE-89 SQLi (tp=16), CWE-78 cmdi (tp=11), CWE-95 eval (tp=3) all
+have SOME real recall, while **CWE-90 LDAP (fn=65), CWE-91 XPath
+(fn=35), CWE-98 file-inclusion (fn=21), CWE-862 missing-authz (fn=19)
+all show tp=0 AND fp=0** — matching the exact "clean zero, not just low
+recall" signature the C# XSS investigation found, in a completely
+different language, parser, and corpus.
+
+Focused on CWE-90 (LDAP) as the largest and most concretely testable.
+Read `sast/ldap-injection.js`'s PHP regex (Path A inline-concat, Path B
+variable-form) directly — confirmed via standalone regex tests AND a
+full `runScan` probe that BOTH the structural detector and the deep
+engine's `ldap_search` catalog entry correctly fire on: inline
+concatenation (`ldap_search($ds, $base, "(uid=" . $name . ")")`),
+variable-form concatenation, and — testing the deep engine's generic
+taint propagation independent of any concat-specific regex — a
+`sprintf("(uid=%s)", $name)`-built filter (IR-TAINT catches this via
+plain tainted-argument propagation, no LDAP-specific catalog change
+needed). A precision check also confirmed the structural detector is
+taint-blind by design (fires on a hardcoded-constant value passed
+through the identical shape) — expected given its recall-preserving,
+non-taint architecture, not a bug.
+
+Every constructed variant fires correctly. The real 836-file corpus
+(one `ldap_connect`+`ldap_search`-shaped case per file, all
+single-file per `ingest-php.mjs`'s own documented ingestion — no
+multi-file split to lose a sink in) produces **zero LDAP-family
+findings of any kind** across all 836 files, matching `truncated: false`
+and clean `truncationDetail`. Considered and could not rule out (without
+reading the corpus, which stays off-limits) that the actual SARD
+generator template for this CWE differs from every shape tried in some
+way not yet guessed — the NIST SARD PHP suite is a machine-generated
+corpus with its own template conventions, distinct from Juliet's, and
+general public knowledge of Juliet's shapes (which served well for the
+Java/C# work this session) doesn't transfer here as reliably.
+
+**Disposition:** no code changed — every fix attempt would be
+speculative without a confirmed root cause, and this session's
+established discipline is not to ship unverified guesses. Two
+consecutive "clean zero across a real corpus despite verified-working
+synthetic reproduction" results (C# XSS, now PHP LDAP/XPath/file-
+inclusion/authz) in ONE session is itself worth flagging as a pattern:
+future work on either should consider whether the shared root cause is
+methodological (something about how these specific corpora were
+ingested/scanned) rather than continuing to hunt language-specific
+shape variations one at a time.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
