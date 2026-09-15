@@ -2,7 +2,7 @@
 import { runTaintEngine } from './engine.js';
 import { annotateProvenClean } from './proven-clean.js';
 import { CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize } from './catalog.js';
-import { applyPathFeasibility } from './path-feasibility.js';
+import { applyPathFeasibility, buildConstantFnMap } from './path-feasibility.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { rhsReachableFunctions, shouldAnalyzeUnderRhs } from './tabulation.js';
 import { annotateBackwardSlices } from './backward.js';
@@ -22,9 +22,13 @@ import { runPrivacyTaintEngine } from './privacy-deep-walker.js';
 
 export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // Path-feasibility pass over every function before the taint walk.
+  // W2.1: build the trivially-constant-helper map ONCE, from every function
+  // in the scan, before folding any single function's conditions — a
+  // constant helper in file A must resolve when called from file B.
+  const constFns = buildConstantFnMap(callGraph.functions.values());
   let totalPruned = 0;
   for (const fn of callGraph.functions.values()) {
-    const r = applyPathFeasibility(fn);
+    const r = applyPathFeasibility(fn, constFns);
     totalPruned += r.pruned;
   }
   // P2.1 — RHS-lite reachability slice. When AGENTIC_SECURITY_RHS=1 the
@@ -246,4 +250,4 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   return findings;
 }
 
-export { runTaintEngine, CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize, applyPathFeasibility, SummaryCache, entryStateFromCall, rhsReachableFunctions, shouldAnalyzeUnderRhs, annotateBackwardSlices };
+export { runTaintEngine, CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize, applyPathFeasibility, buildConstantFnMap, SummaryCache, entryStateFromCall, rhsReachableFunctions, shouldAnalyzeUnderRhs, annotateBackwardSlices };

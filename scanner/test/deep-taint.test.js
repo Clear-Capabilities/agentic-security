@@ -133,3 +133,73 @@ test('Path-feasibility: if(false) prunes the consequent', async () => {
   const r = applyPathFeasibility(fn);
   assert.ok(r.pruned >= 1, `expected ≥1 pruned edge, got ${r.pruned}`);
 });
+
+// W2.1: control-flow gating via a trivially-constant helper — Juliet's
+// `if (privateReturnsTrue())` / `if (IO.staticReturnsTrueOrFalse())` shape.
+// Generic mechanism (any function whose whole body is `return <literal>;`),
+// not a Juliet-specific name check — verified with an arbitrarily-named
+// helper, not Juliet's own vocabulary.
+test('Path-feasibility: constant-returning helper call folds like a literal', async () => {
+  const { parseJsFile } = await import('../src/ir/parser-js.js');
+  const { applyPathFeasibility, buildConstantFnMap } = await import('../src/dataflow/index.js');
+  const ir = parseJsFile('t.js', `
+    function alwaysTrueHelper() {
+      return true;
+    }
+    function f() {
+      if (alwaysTrueHelper()) {
+        return 1;
+      } else {
+        return 2;
+      }
+    }
+  `);
+  const helper = ir.functions.find(f => f.name === 'alwaysTrueHelper');
+  const fn = ir.functions.find(f => f.name === 'f');
+  const constFns = buildConstantFnMap([helper, fn]);
+  const r = applyPathFeasibility(fn, constFns);
+  assert.ok(r.pruned >= 1, `expected the else-branch to be pruned, got ${r.pruned} prunes`);
+});
+
+test('Path-feasibility: a helper with real logic is never folded (recall-preserving)', async () => {
+  const { parseJsFile } = await import('../src/ir/parser-js.js');
+  const { applyPathFeasibility, buildConstantFnMap } = await import('../src/dataflow/index.js');
+  const ir = parseJsFile('t.js', `
+    function notTriviallyConstant(x) {
+      if (x) { return true; }
+      return false;
+    }
+    function f() {
+      if (notTriviallyConstant(1)) {
+        return 1;
+      } else {
+        return 2;
+      }
+    }
+  `);
+  const helper = ir.functions.find(f => f.name === 'notTriviallyConstant');
+  const fn = ir.functions.find(f => f.name === 'f');
+  const constFns = buildConstantFnMap([helper, fn]);
+  const r = applyPathFeasibility(fn, constFns);
+  assert.equal(r.pruned, 0, 'a helper with a real branch must not be treated as constant');
+});
+
+test('Path-feasibility: two different-named-but-colliding-bare-name constant helpers refuse to resolve', async () => {
+  const { parseJsFile } = await import('../src/ir/parser-js.js');
+  const { applyPathFeasibility, buildConstantFnMap } = await import('../src/dataflow/index.js');
+  const irA = parseJsFile('a.js', `
+    class Foo { helper() { return true; } }
+  `);
+  const irB = parseJsFile('b.js', `
+    class Bar { helper() { return false; } }
+    function f() {
+      if (helper()) { return 1; } else { return 2; }
+    }
+  `);
+  const helperA = irA.functions.find(f => f.name.endsWith('helper'));
+  const helperB = irB.functions.find(f => f.name.endsWith('helper'));
+  const fn = irB.functions.find(f => f.name === 'f');
+  const constFns = buildConstantFnMap([helperA, helperB, fn]);
+  const r = applyPathFeasibility(fn, constFns);
+  assert.equal(r.pruned, 0, 'a bare-name collision between differently-valued helpers must not resolve');
+});

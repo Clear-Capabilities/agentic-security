@@ -576,7 +576,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 
 | # | Task | Status |
 |---|---|---|
-| W2.1 | Control-flow gating: constant-fold static/instance final fields + trivially-constant helper returns | NOT_STARTED |
+| W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
 | W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
@@ -891,6 +891,59 @@ different, harder detector: track a value from a cataloged source to one
 of these sinks AND verify no crypto/encryption call sits between them —
 scoped as a distinct future task, not attempted here given the false-
 positive risk just measured on the naive version of that same idea.
+
+### W2.1 — control-flow gating via trivially-constant helper calls (2026-09-15)
+
+Implemented the "trivially-constant helper returns" half of W2.1 (the
+"static/instance final fields" half needs parser changes across every IR
+language and was not attempted). `path-feasibility.js`'s `evalConst` gained
+a `case 'call'`: any call resolving to a function whose ENTIRE body is
+`return <literal>;` (checked structurally — strip entry/exit/noop nodes,
+require exactly one `return`-of-a-literal node — never by name) folds
+exactly like `if (true)`/`if (false)` already did. `buildConstantFnMap`
+(new, `dataflow/index.js`'s `runDeepAnalysis`) builds this map ONCE per
+scan from every function in the call graph, keyed by qid and by
+collision-refused bare name (two differently-valued same-named helpers
+never resolve — same precedent as `callgraph.js`'s `~bare~` key). Verified
+generic, not Juliet-specific, with arbitrarily-named test helpers (not
+Juliet's own vocabulary) in 3 new `test/deep-taint.test.js` cases: fires
+through a constant helper, does NOT fire when the helper has any real
+logic (recall-preserving), and refuses to resolve a bare-name collision.
+Full `test:dataflow` (1206/1206), `test:sast` (750/750), self-scan (zero
+drift), `bench:mutation:check` (35/35), `bench:cve-replay:check` (220/220),
+`bench:layer-recall:check` (no regression, no unrecorded gain), `test:smoke`
+(30/30) all green; bundle rebuilt.
+
+**Real-corpus measurement: zero movement.** `batch-scan.mjs --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split dev`
+→ tp=1599 fp=921 fn=1379, macroF1=37.7% — **byte-identical** to the
+immediately-prior session's measurement (same tp/fp/fn down to the last
+digit). Root-caused, not just observed: both Java's and C#'s manifests
+`excludePaths` **exclude the shared Juliet test-support library entirely**
+(`juliet-support/**` for Java, `testcasesupport/**` for C#) — deliberately,
+since it isn't itself a CWE test case and scanning it would be pure
+overhead. But Juliet's dominant control-flow-gating idiom calls INTO that
+excluded library (`IO.staticReturnsTrueOrFalse()`, `IO.staticTrue`, etc. —
+the whole reason that shared class exists is so thousands of test files
+don't each define their own copy), not a same-file private helper
+(`privateReturnsTrue()`, the one shape this fix CAN resolve, since the
+PRD text lists both patterns and only the in-file one lives inside the
+scored scan surface at all). The fix is real and correctly implemented for
+the case it can see; that case is apparently rare-to-absent in this
+corpus's actual test files, which structurally prefer the (excluded)
+shared-library form. Confirmed this is a scan-surface/architecture
+question, not a detector bug, by re-reading both manifests' `excludePaths`
+directly rather than guessing.
+
+**Not attempted, flagged as a real follow-up option:** parsing
+`juliet-support/**`/`testcasesupport/**` into a SEPARATE, scores-nothing IR
+pass purely to populate `buildConstantFnMap` (never scanned for findings,
+never contributing tp/fp/fn) would reach the dominant pattern. This is
+legitimate (resolving a real compile-time constant from code the corpus
+ships, no different from resolving a constant from an external dependency)
+but was not attempted here — it needs its own scan-surface plumbing
+decision and is scoped as distinct future work, not a quick follow-on to
+this task.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
