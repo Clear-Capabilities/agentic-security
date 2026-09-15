@@ -1673,7 +1673,23 @@ async function runOne(name, app, vulnFamilyMap) {
       if (!e.isDirectory()) continue;
       const m = e.name.match(re);
       if (!m) continue;
-      if (!cweKeepSet.has(m[1])) cweFilterExcludes.push(isJava ? `${e.name}/**` : `src/testcases/${e.name}/**`);
+      // PRD W0.4 follow-up — the exclude pattern is matched against
+      // `_isPathIgnored`'s `file` argument, which is always relative to
+      // `scanRoot` (engine.js), NOT `repoRoot`. Java's app.scanRoot is `.`
+      // (scanRoot === repoRoot === dirRoot), so a bare `${e.name}/**`
+      // happened to be correct there. C#'s app.scanRoot is `src/testcases`
+      // (already the same directory `dirRoot` lists from) — the previous
+      // `src/testcases/${e.name}/**` re-prepended a path segment that's
+      // already baked into scanRoot, producing a pattern that could never
+      // match any real scanned-file path. Confirmed via direct probe: every
+      // `--cwe` C# run silently scanned the ENTIRE 105-CWE, ~46,600-file
+      // corpus regardless of which CWE was requested (`scannedFiles: 46586`
+      // for a `--cwe 23` run) — the W0.4 gold-surface default, and every
+      // `--cwe`-scoped C# batch this whole session, has been a no-op.
+      // `dirRoot` already equals `scanRoot` for BOTH languages (Java's is
+      // `.`-relative, C#'s is `src/testcases`-relative), so the correct
+      // pattern is the SAME bare form for both.
+      if (!cweKeepSet.has(m[1])) cweFilterExcludes.push(`${e.name}/**`);
     }
     const label = CWE_FILTER ? `--cwe ${[...CWE_FILTER].join(',')}` : 'gold-surface scoping (PRD W0.4, --full-corpus to disable)';
     console.error(`  ${label}: excluding ${cweFilterExcludes.length}/${dirEntries.filter(e => re.test(e.name)).length} CWE directories from the scan itself`);

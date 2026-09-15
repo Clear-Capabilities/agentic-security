@@ -651,6 +651,60 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
 
 ---
 
+### 2026-09-15 — C# re-measurement attempt found a real problem, stopped and investigating
+
+- Attempted a fresh full C# dev-split `batch-scan.mjs` run to see whether
+  this session's engine-level fixes (fn-limit, W1 class resolution,
+  object-field widen, cross-class static field) improved C# for free,
+  since none of them are Java-specific.
+- **Stopped it partway through — the run was producing unreliable data,
+  not just slow.** Every batch reported `TRUNCATED` at ~465s each
+  (`AGENTIC_SECURITY_DEEP_TIMEOUT_MS` was never raised for `batch-scan.mjs`
+  the way the function-count limit was — only `AGENTIC_SECURITY_DEEP_FN_LIMIT`
+  got the `??= '50000'` treatment), and — more concerning — FIVE
+  DIFFERENT CWEs (23, 36, 78, 80, 81) all reported the exact same
+  `fp=811`, with CWE-78/80/81 additionally reporting `tp=0`. Identical FP
+  counts across unrelated CWEs is not a truncation artifact on its own;
+  it looks like either the scan surface isn't actually narrowing per-CWE
+  for C# the way it does for Java, or something else is wrong that hasn't
+  been diagnosed yet. Killed the process rather than let it run
+  ~3 hours (24 batches × ~465s) toward numbers that can't be trusted
+  either way.
+- Ran a single, isolated `--cwe 23` C# check with `AGENTIC_SECURITY_DEEP_FN_LIMIT=50000`
+  and `AGENTIC_SECURITY_DEEP_TIMEOUT_MS=900000`: `scannedFiles: 46586,
+  truncated: true (deepBudgetExceeded AND fnLimitExceeded), fp: 2993,
+  precision: 3.3%`. 46,586 files for a request scoped to ONE CWE — the
+  exclusion of the other 104 directories was not happening at all.
+- **Root-caused, not just observed.** C#'s app manifest entry sets
+  `"scanRoot": "src/testcases"` (Java's is `"."` — the repo root). The
+  `--cwe`/W0.4 exclude-path generator built the pattern
+  `src/testcases/${cweDir}/**` for C# — but `_isPathIgnored` (engine.js)
+  matches against file paths that are already relative to `scanRoot`,
+  which for C# IS `src/testcases`. The generated pattern therefore asked
+  to exclude `src/testcases/src/testcases/CWE23_.../**` — a path that can
+  never exist — so the exclusion silently matched NOTHING, every single
+  time, for every C# `--cwe` invocation this entire session (and, very
+  likely, since this benchmark harness was first built). Java's identical
+  `${cweDir}/**` pattern only ever worked because Java's `scanRoot` happens
+  to equal `repoRoot`.
+- **This means every C# number from before this fix — including the
+  15.1% baseline this whole PRD started from — was measured against the
+  WRONG scan surface (all 105 CWE directories, ~46,600 files, instead of
+  the ~25-30 actually scored).** Not comparable to anything measured
+  after this fix; a genuinely fresh C# baseline is needed, not a
+  before/after delta.
+- **Fixed**: the exclude pattern is now the same bare `${cweDir}/**` form
+  for both languages (both `dirRoot`s already equal their own `scanRoot`,
+  just via different manifest settings). Verified directly:
+  `--cwe 23 --allow-truncation` (non-deep) now reports `scannedFiles: 602`
+  (not 46586), `elapsedSec: 12.3` (not 1064.4), `fp: 0`, `precision:
+  100%`, `truncated: false`. Java re-checked on the identical `--cwe 89`
+  command to confirm the shared code path wasn't broken by the fix:
+  unchanged (`scannedFiles: 3669`, matching every prior Java measurement
+  this session). SARD unit suite (55 tests) green.
+- Running the FIRST-EVER correctly-scoped full C# dev-split
+  `batch-scan.mjs` measurement now.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
