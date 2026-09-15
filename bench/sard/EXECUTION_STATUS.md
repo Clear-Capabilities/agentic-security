@@ -54,14 +54,98 @@ instrument is real and trustworthy for the work ahead.
 | # | Task | Status |
 |---|---|---|
 | W1.1 | `ir.classes` emission for PHP/Python/Ruby/Go/Kotlin parsers (Java/C#/Rust already emit it) | NOT_STARTED |
-| W1.2 | `callgraph.js` `classMethods` from structural class facts, not `[A-Z]` regex | NOT_STARTED |
-| W1.3 | `class-hierarchy.js` `methodOwners`/`typeOfVar` from structural facts | NOT_STARTED |
-| W1.4 | `dataflow/engine.js` `_resolveMemberCalleeViaCHA` handles flat dotted-string callees | NOT_STARTED |
+| W1.2 | `callgraph.js` `classMethods` from structural class facts, not `[A-Z]` regex | VERIFIED |
+| W1.3 | `class-hierarchy.js` `methodOwners`/`typeOfVar` from structural facts | VERIFIED |
+| W1.4 | `dataflow/engine.js` `_resolveMemberCalleeViaCHA` handles flat dotted-string callees | NOT_STARTED (analysis below: not on the critical path for Java/C#) |
 | W1.5 | Scrambled-name regression suite for every session-landed field/collection/dispatch fix | NOT_STARTED |
 
 **W1 acceptance:** on dev, Java variants 41/42/45/51-54/61-68/81 each move
 from current 0-28% recall to >=60%, measured by the W0 variant report; C#
 equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTED.
+
+### 2026-09-15 — W1.2/W1.3 implemented, anti-overfit gates clean, SARD verification in progress
+
+- **The root-cause fix**: `callgraph.js`'s `classMethods` index and
+  `class-hierarchy.js`'s `methodOwners` both gated on `/^[A-Z]/` over a
+  qid segment or class name to decide "is this a real class" — under
+  `--scramble-identifiers`, every Juliet class becomes a lowercase
+  `case_<hash>` token, so this NEVER matched and both indexes stayed empty
+  for the entire scrambled corpus, even though the parser's own `ir.classes`
+  structural output (built independently, from parsing `class X {}`
+  declarations, not from capitalization) was correct the whole time.
+- Fixed both to check `ir.classes`-derived real class-name sets FIRST
+  (`knownClassNamesByFile` in callgraph.js; the pre-existing `classes` Map in
+  class-hierarchy.js, which was already built from `ir.classes` earlier in
+  the same function) and fall back to the old `/^[A-Z]/` heuristic only for
+  languages that don't emit `ir.classes` yet (JS/Python/PHP/Ruby/Go/Kotlin —
+  W1.1, still not started) — so nothing regresses ahead of that work.
+- **Verified NOT needed (analysis, not a fix)**: W1.4's target,
+  `_resolveMemberCalleeViaCHA`, only ever handles the Babel `{kind:'member'}`
+  callee shape (JS-only) — hand-rolled parsers (Java/C#) emit a flat
+  dotted-string callee instead, which `_resolvableCalleeName` returns
+  UNCHANGED before `_resolveMemberCalleeViaCHA` is ever reached. For Java/C#,
+  a local-variable-qualified callee like `b.action` is rewritten to
+  `RealClass.action` (or, under scrambling, `case_xyz.action`) by
+  `_localVarConstructedTypes`/`_rewriteVarTypeCallees` — present in BOTH
+  `parser-java.js` and `parser-cs.js`, confirmed to key SOLELY on
+  `src.isNew`, no capitalization test anywhere in either. That rewritten
+  string then resolves via `classMethods` — the SAME index W1.2 just fixed.
+  So W1.4 is real but JS-scoped and not on the Java/C# critical path this
+  PRD is measuring; left NOT_STARTED, not blocking.
+- Anti-overfit gates, all run this session, all clean: `npm run
+  test:dataflow` (1203/1203 pass), `npm run bench:mutation:check` (35/35
+  verdict-flip correct), `npm run bench:layer-recall:check` (122/220 taint,
+  EXACTLY at baseline — no regression, no unrecorded gain), `npm run
+  bench:cve-replay:check` (220/220 baselined entries, no drift).
+- Real SARD verification: `node bench/sard/scripts/batch-scan.mjs --app
+  sard-juliet-java-strict --blind --scramble-identifiers --deep --split dev
+  --json` → tp=1320 (+16), fp=507 (+16), recall=44.3% (+0.5pp), macroF1=36.5%
+  (+0.1pp vs the W0.3 baseline). Real but SMALL aggregate movement — far
+  short of the PRD's own "variants 41/42/45/51-54/61-68/81 each move to
+  >=60% recall" expectation for this workstream alone.
+- **Investigated the shortfall directly rather than accepting a
+  disappointing number at face value.** Per-variant table showed only
+  variant 45 moved (30.4%→47.8% recall, +16 tp — accounting for the ENTIRE
+  aggregate delta); every other named variant (41/42/51-54/61-68/81) was
+  bit-for-bit identical before and after. Built an isolated, controlled
+  fixture reproducing Juliet's exact abstract-dispatch shape (`case_base b =
+  new case_bad(); b.action(data);`, scrambled-style names) — **the fix
+  correctly resolves it and produces the finding**, confirmed via direct IR/
+  callgraph inspection (`case_bad.action` correctly rewritten and present in
+  `classMethods`) AND an end-to-end scan. Re-confirmed on ACTUAL, unmodified
+  scrambled Juliet source copied out of the corpus cache (a real CWE-90
+  variant-81 LDAP file, then a real CWE-89 variant-81 SQLi file that IS in
+  the dev split) — **both fire correctly in isolation.**
+- **So why doesn't the fix show up in the full-corpus aggregate?** Found the
+  real cause: `runTaintEngine`'s per-function analysis loop silently
+  `break`s once it has processed `AGENTIC_SECURITY_DEEP_FN_LIMIT` functions
+  (default 5000) — and Java CWE-89 ALONE has 3668 files / **17604
+  functions**, ~3.5x the cap. Roughly 70% of that one CWE directory's
+  functions are never analyzed by the deep engine at all, in either
+  direction (pre- or post-W1-fix), regardless of whether resolution would
+  succeed. This was completely invisible to every existing truncation signal
+  (W0.1 only checked wall-clock budget + per-file skip/timeout counts) — a
+  real gap in W0.1's own coverage, found by refusing to accept "the fix
+  didn't move the number" without tracing why.
+- **Fixed the blind spot**: `dataflow/engine.js`'s `runTaintEngine` now
+  pushes an `ir-taint-fn-limit:` info finding (same convention as the
+  existing `ir-taint-timeout:` marker) whenever `fnList.length > fnLimit`.
+  Threaded into `truncated`/`truncationDetail.fnLimitExceeded` in
+  `bench-realworld.js`, `score-php.mjs`, and `batch-scan.mjs`'s aggregation —
+  extends W0.1, doesn't replace it. Verified: forcing
+  `AGENTIC_SECURITY_DEEP_FN_LIMIT=1` on the real dev-split fixture produces
+  the finding (`"analyzed only 1/6 functions"`); real dataflow suite
+  (1203/1203), mutation (35/35), layer-recall (122/220, exact baseline), and
+  cve-replay (220/220, no drift) all re-run clean after this engine change.
+- **W1.2/W1.3 → VERIFIED** (the class-resolution fix itself is real, correct,
+  and independently proven on genuine Juliet content — that is what these
+  ledger items asked for). **Not yet VERIFIED: the PRD's own >=60%-recall
+  target for this workstream** — reaching it requires re-measuring with a
+  function limit that doesn't truncate 70% of a large CWE directory, which
+  is real follow-up work (raise `AGENTIC_SECURITY_DEEP_FN_LIMIT` for SARD
+  runs and/or extend W0.3's batching to sub-split large CWE directories by
+  source/sink combination, not just by CWE number) — tracked as the
+  immediate next task, not assumed away.
 
 ## W2 — Interprocedural completeness
 

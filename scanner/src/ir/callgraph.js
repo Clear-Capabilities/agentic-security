@@ -59,16 +59,40 @@ export function buildCallGraph(perFileIR, fileContents) {
   // missing one.
   const bareTailInFile = new Map(); // file -> Map<bareTail, qid|null>
 
+  // PRD W1 (SARD_80_F1_EXECUTION_PRD.md) — `--scramble-identifiers` renames
+  // every class to a lowercase `case_<hash>` token, so the qid's middle
+  // `::ClassName::` segment no longer starts with an uppercase letter even
+  // though it IS still a real, structurally-declared class. Wherever a
+  // file's own parser emits real `ir.classes` facts (Java/C#, today —
+  // Python/PHP/Ruby/Go/Kotlin don't yet, tracked as W1.1), trust THAT
+  // instead of a capitalization guess: a name is a real class if and only
+  // if it was independently parsed as a class declaration, which is exactly
+  // as true under scrambled names as under real ones (the class-declaration
+  // parser doesn't care about capitalization either). Falls back to the old
+  // PascalCase heuristic for files whose language doesn't emit ir.classes
+  // yet, so nothing regresses ahead of W1.1 landing per-language.
+  const knownClassNamesByFile = new Map();
+  for (const file of Object.keys(perFileIR || {})) {
+    const ir = perFileIR[file];
+    if (ir && Array.isArray(ir.classes) && ir.classes.length) {
+      knownClassNamesByFile.set(file, new Set(ir.classes.map(c => c.name)));
+    }
+  }
+
   for (const file of Object.keys(perFileIR || {})) {
     const ir = perFileIR[file];
     if (!ir || !ir.functions) continue;
     byNameInFile.set(file, new Map());
     bareTailInFile.set(file, new Map());
+    const knownClasses = knownClassNamesByFile.get(file);
     for (const fn of ir.functions) {
       functions.set(fn.qid, fn);
       byNameInFile.get(file).set(fn.name, fn.qid);
-      const m = fn.qid.match(/::([A-Z]\w*)::(\w+)@/);
-      if (m) classMethods.set(`${m[1]}.${m[2]}`, fn.qid);
+      const m = fn.qid.match(/::(\w+)::(\w+)@/);
+      if (m) {
+        const isRealClass = knownClasses ? knownClasses.has(m[1]) : /^[A-Z]/.test(m[1]);
+        if (isRealClass) classMethods.set(`${m[1]}.${m[2]}`, fn.qid);
+      }
       if (fn.name && fn.name.includes('.')) {
         const tail = fn.name.split('.').pop();
         const fileMap = bareTailInFile.get(file);

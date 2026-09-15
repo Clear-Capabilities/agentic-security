@@ -1599,6 +1599,29 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   const fnList = [...callGraph.functions.values()].sort((a, b) =>
     a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0
   );
+  // PRD W0.1 (SARD_80_F1_EXECUTION_PRD.md) — the main per-function loop below
+  // silently `break`s once `n > fnLimit` (default 5000), which for a single
+  // large SARD CWE directory (Java CWE-89 alone: 3668 files, 17604
+  // functions) means roughly 70% of the corpus is never analyzed at all, no
+  // matter how correct the resolution logic is for the functions it DOES
+  // reach. This was completely invisible to every existing truncation
+  // signal (wall-clock budget, per-file timeout/skip counts) — found while
+  // investigating why a real, verified class-resolution fix (W1) showed
+  // almost no aggregate SARD recall movement despite fixing individual
+  // fixtures in isolation. Surfaced the same way the wall-clock budget
+  // already is: a single info finding, not a return-shape change (this
+  // function's return type — a flat array — is a wide, load-bearing
+  // contract; changing it would touch every caller).
+  if (fnList.length > fnLimit) {
+    all.push({
+      id: `ir-taint-fn-limit:${fnList[0] ? fnList[0].qid.split('::')[0] : ''}`,
+      file: '(deep-engine)', line: 0,
+      vuln: `IR-TAINT deep mode analyzed only ${fnLimit}/${fnList.length} functions (AGENTIC_SECURITY_DEEP_FN_LIMIT) — results are incomplete`,
+      severity: 'info',
+      parser: 'IR-TAINT',
+      confidence: 0.5,
+    });
+  }
   // Pre-pass + fixed-point: compute empty-entry-state summaries for every
   // function, then re-run the pre-pass until the summary cache stabilizes
   // (capped at MAX_FP_ITERS so recursion and chains converge without

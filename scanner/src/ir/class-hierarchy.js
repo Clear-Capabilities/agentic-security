@@ -116,9 +116,15 @@ export function buildClassHierarchy(perFileIR) {
       if (dotIdx > 0) {
         className = tail.slice(0, dotIdx);
         methodName = tail.slice(dotIdx + 1).replace(/@\d+#[0-9a-f]+$/, '');
-      } else if (segs.length >= 3 && /^[A-Z]/.test(segs[segs.length - 2])) {
-        // Gated on the second-to-last segment being PascalCase so this
-        // doesn't misfire on an ordinary nested-function scope segment.
+      } else if (segs.length >= 3 && (classes.has(segs[segs.length - 2]) || /^[A-Z]/.test(segs[segs.length - 2]))) {
+        // PRD W1 (SARD_80_F1_EXECUTION_PRD.md) — `classes` was already
+        // populated from this file's real `ir.classes` structural facts
+        // above (lines 57-94), so `classes.has(...)` recognizes a scrambled
+        // class name (`case_<hash>`, no longer PascalCase) exactly as
+        // reliably as a real one. The `/^[A-Z]/` fallback stays for
+        // languages that don't emit `ir.classes` yet (JS/Python/PHP/Ruby/Go/
+        // Kotlin — W1.1) so an ordinary nested-function scope segment still
+        // doesn't misfire there, same as before this change.
         className = segs[segs.length - 2];
         // Two sequential strips, not one `(#[0-9a-f]+)?` optional group: the
         // combined form is flagged by this project's own self-scan gate

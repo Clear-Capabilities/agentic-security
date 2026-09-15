@@ -126,7 +126,7 @@ function main() {
     scannedFiles: 0, expectedFiles: 0, elapsedSec: 0, peakRssMb: 0,
     perCwe: {}, tps: [], fps: [], fns: [],
     truncated: failedBatches > 0,
-    truncationDetail: { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: false, failedBatches },
+    truncationDetail: { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: false, fnLimitExceeded: false, failedBatches },
   };
   for (const r of batches) {
     combined.tp += r.tp || 0; combined.fp += r.fp || 0; combined.fn += r.fn || 0;
@@ -156,6 +156,7 @@ function main() {
       combined.truncationDetail.filesSkipped += d.filesSkipped || 0;
       combined.truncationDetail.filesDenseSkipped += d.filesDenseSkipped || 0;
       combined.truncationDetail.deepBudgetExceeded = combined.truncationDetail.deepBudgetExceeded || !!d.deepBudgetExceeded;
+      combined.truncationDetail.fnLimitExceeded = combined.truncationDetail.fnLimitExceeded || !!d.fnLimitExceeded;
     }
   }
   combined.precision = (combined.tp + combined.fp) === 0 ? 1 : combined.tp / (combined.tp + combined.fp);

@@ -138,7 +138,7 @@ async function main() {
   // across every per-case scan rather than per-app (this harness scans one
   // Juliet case directory at a time, not the whole corpus in one runScan).
   let truncatedCases = 0;
-  const truncationDetail = { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: 0 };
+  const truncationDetail = { filesTimedOut: 0, filesSkipped: 0, filesDenseSkipped: 0, deepBudgetExceeded: 0, fnLimitExceeded: 0 };
   // PRD W0.2 — `scanned` on the result below is `gold.length` (case count,
   // already a reasonable name here since PHP scores one case dir at a time),
   // but `expectedFiles`/`scannedFiles` are added anyway so this harness's
@@ -157,11 +157,13 @@ async function main() {
       if (opts.deep && scan._scanMeta && scan._scanMeta.analysisTier && scan._scanMeta.analysisTier.irTaint && scan._scanMeta.analysisTier.irTaint.php) deepTierSeen = true;
       const sm = scan._scanMeta || {};
       const deepBudgetExceeded = findings.some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
+      const fnLimitExceeded = findings.some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-fn-limit:'));
       if (sm.filesTimedOut) truncationDetail.filesTimedOut += sm.filesTimedOut;
       if (sm.filesSkipped) truncationDetail.filesSkipped += sm.filesSkipped;
       if (sm.filesDenseSkipped) truncationDetail.filesDenseSkipped += sm.filesDenseSkipped;
       if (deepBudgetExceeded) truncationDetail.deepBudgetExceeded += 1;
-      if ((sm.filesTimedOut || sm.filesSkipped || sm.filesDenseSkipped || deepBudgetExceeded)) truncatedCases++;
+      if (fnLimitExceeded) truncationDetail.fnLimitExceeded += 1;
+      if ((sm.filesTimedOut || sm.filesSkipped || sm.filesDenseSkipped || deepBudgetExceeded || fnLimitExceeded)) truncatedCases++;
     } catch (e) {
       console.error(`  ⚠ ${g.caseId}: scan failed (${e.message})`);
       continue;

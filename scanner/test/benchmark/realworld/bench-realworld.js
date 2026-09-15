@@ -1740,18 +1740,23 @@ async function runOne(name, app, vulnFamilyMap) {
   // PRD W0.1 — truncation signals from the scan itself. `_scanMeta` counts
   // are the pattern-layer per-file loop (engine.js: files skipped for size,
   // dense-content skipped, or individually timed out); `ir-taint-timeout:`
-  // is the deep engine's OWN global-budget-exceeded marker (a real finding it
-  // pushes into `scan.findings` when `runDeepAnalysis` overran
-  // AGENTIC_SECURITY_DEEP_TIMEOUT_MS). Any of these means some part of the
-  // corpus was not actually analyzed, so the resulting P/R/F1 understates
-  // recall for a reason that has nothing to do with detection quality.
+  // is the deep engine's OWN global-budget-exceeded marker; `ir-taint-fn-limit:`
+  // is its function-COUNT budget marker (AGENTIC_SECURITY_DEEP_FN_LIMIT,
+  // default 5000 — found while investigating why a verified W1 class-
+  // resolution fix barely moved aggregate SARD recall: a single large CWE
+  // directory, Java CWE-89, has 17604 functions, so ~70% of it was silently
+  // never analyzed regardless of resolution correctness). Any of these means
+  // some part of the corpus was not actually analyzed, so the resulting
+  // P/R/F1 understates recall for a reason that has nothing to do with
+  // detection quality.
   const _sm = scan._scanMeta || {};
   const filesTimedOut = _sm.filesTimedOut || 0;
   const filesSkipped = _sm.filesSkipped || 0;
   const filesDenseSkipped = _sm.filesDenseSkipped || 0;
   const deepBudgetExceeded = (scan.findings || []).some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-timeout:'));
-  const truncated = filesTimedOut > 0 || filesSkipped > 0 || filesDenseSkipped > 0 || deepBudgetExceeded;
-  const truncationDetail = { filesTimedOut, filesSkipped, filesDenseSkipped, deepBudgetExceeded };
+  const fnLimitExceeded = (scan.findings || []).some(f => typeof f.id === 'string' && f.id.startsWith('ir-taint-fn-limit:'));
+  const truncated = filesTimedOut > 0 || filesSkipped > 0 || filesDenseSkipped > 0 || deepBudgetExceeded || fnLimitExceeded;
+  const truncationDetail = { filesTimedOut, filesSkipped, filesDenseSkipped, deepBudgetExceeded, fnLimitExceeded };
   // PRD W0.2 — `scanned` below is findings kept after --split filtering, not
   // a file count; it has been misread as one before. `scannedFiles` is the
   // engine's own file tally (same field _scanMeta's counters above are
@@ -1914,7 +1919,7 @@ function printResult(r) {
   console.log(`  TP: ${r.tp} / FP: ${r.fp} / FN: ${r.fn}   (expected: ${r.expectedTotal}, scan emitted: ${r.scanned}${filesTag}, ${r.elapsedSec}s${rssTag})`);
   if (r.truncated) {
     const d = r.truncationDetail || {};
-    console.log(`  ⚠ TRUNCATED — scan did not cover the full corpus (filesSkipped:${d.filesSkipped||0} filesDenseSkipped:${d.filesDenseSkipped||0} filesTimedOut:${d.filesTimedOut||0} deepBudgetExceeded:${!!d.deepBudgetExceeded}). P/R/F1 above understate recall — see PRD W0.1.`);
+    console.log(`  ⚠ TRUNCATED — scan did not cover the full corpus (filesSkipped:${d.filesSkipped||0} filesDenseSkipped:${d.filesDenseSkipped||0} filesTimedOut:${d.filesTimedOut||0} deepBudgetExceeded:${!!d.deepBudgetExceeded} fnLimitExceeded:${!!d.fnLimitExceeded}). P/R/F1 above understate recall — see PRD W0.1.`);
   }
   if (Object.keys(r.perFamily).length) {
     console.log(`  per-family:`);
