@@ -1,0 +1,201 @@
+<title>SARD 80% F1 Progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    /* Light: warm instrument-panel neutral, not cream; a rust/signal-amber
+       accent (this tool tracks security findings, not a generic product). */
+    --bg: #f2efe9; --card: #fffefb; --border: #ddd7ca; --text: #211f1a;
+    --muted: #6f6a5e; --accent: #b5501f; --accent-soft: #f4e2d3;
+    --done: #1f7a4d; --done-soft: #e2f1e8; --blocked: #ae2c1e; --blocked-soft: #f7e3e0;
+    --progress: #b5501f; --progress-soft: #f4e2d3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --card: #1b1e23; --border: #2d3138; --text: #e9e6dd;
+      --muted: #9a978c; --accent: #e2914f; --accent-soft: #3a2a17;
+      --done: #45b07c; --done-soft: #163527; --blocked: #e8695a; --blocked-soft: #3a1e1a;
+      --progress: #e2914f; --progress-soft: #3a2a17;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --card: #1b1e23; --border: #2d3138; --text: #e9e6dd;
+    --muted: #9a978c; --accent: #e2914f; --accent-soft: #3a2a17;
+    --done: #45b07c; --done-soft: #163527; --blocked: #e8695a; --blocked-soft: #3a1e1a;
+    --progress: #e2914f; --progress-soft: #3a2a17;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0; padding-block: 28px;
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.55;
+  }
+  .mono, .tid, .overall-pct, .ws-pct, code {
+    font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding-inline: 20px; }
+  header.page { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 6px;
+  }
+  h1 { font-size: 22px; margin: 0; text-wrap: balance; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 13px; text-align: right; }
+  .sub .stale { color: var(--blocked); font-weight: 600; }
+  .overall {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 18px;
+  }
+  .overall-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .overall-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .overall-pct { font-size: 30px; font-weight: 600; }
+  .barTrack { background: var(--border); border-radius: 999px; height: 10px; overflow: hidden; }
+  .barFill { background: var(--progress); height: 100%; border-radius: 999px; transition: width .5s ease; }
+  .milestones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .mcard {
+    background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .mcard.st-VERIFIED { border-left-color: var(--done); }
+  .mcard.st-IN_PROGRESS, .mcard.st-IMPLEMENTED_UNVERIFIED { border-left-color: var(--progress); }
+  .mcard.st-BLOCKED { border-left-color: var(--blocked); }
+  .mcard h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .mcard .targets { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    letter-spacing: .01em;
+  }
+  .badge.NOT_STARTED { background: var(--border); color: var(--muted); }
+  .badge.IN_PROGRESS { background: var(--progress-soft); color: var(--progress); }
+  .badge.IMPLEMENTED_UNVERIFIED { background: var(--progress-soft); color: var(--progress); }
+  .badge.VERIFIED { background: var(--done-soft); color: var(--done); }
+  .badge.BLOCKED { background: var(--blocked-soft); color: var(--blocked); }
+  .ws {
+    background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--border);
+    border-radius: 8px; padding: 14px 16px 14px 14px; margin-bottom: 10px;
+  }
+  .ws.st-VERIFIED { border-left-color: var(--done); }
+  .ws.st-IN_PROGRESS, .ws.st-IMPLEMENTED_UNVERIFIED { border-left-color: var(--progress); }
+  .ws.st-BLOCKED { border-left-color: var(--blocked); }
+  .ws-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .ws-head h2 { font-size: 15px; margin: 0; font-weight: 600; }
+  .ws-head-right { display: flex; align-items: center; gap: 10px; }
+  .ws-pct { font-size: 13px; color: var(--muted); min-width: 34px; text-align: right; }
+  .ws-bar { width: 90px; }
+  .chevron { color: var(--muted); transition: transform .2s; font-size: 11px; }
+  .ws.open .chevron { transform: rotate(90deg); }
+  .tasks { display: none; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .ws.open .tasks { display: block; }
+  .task { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; }
+  .task .tid { color: var(--muted); font-size: 11px; min-width: 56px; }
+  .task .tname { flex: 1; }
+  .accept { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  a { color: var(--accent); }
+  @media (max-width: 480px) {
+    header.page { flex-direction: column; align-items: flex-start; }
+    .sub { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .barFill, .chevron { transition: none; }
+  }
+</style>
+<div class="wrap">
+  <header class="page">
+    <div>
+      <p class="eyebrow">agentic-security &middot; bench/sard</p>
+      <h1>SARD 80% F1 Execution</h1>
+    </div>
+    <div class="sub" id="sub">Connecting&hellip;</div>
+  </header>
+
+  <div class="overall">
+    <div class="overall-top">
+      <span class="overall-label">Overall completion</span>
+      <span class="overall-pct" id="overallPct">&mdash;</span>
+    </div>
+    <div class="barTrack"><div class="barFill" id="overallBar" style="width:0%"></div></div>
+  </div>
+
+  <div class="milestones" id="milestones"></div>
+  <div id="workstreams"></div>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+  const $ = (sel) => document.querySelector(sel);
+
+  function badge(status) {
+    return '<span class="badge ' + status + '">' + status.replace(/_/g, ' ') + '</span>';
+  }
+
+  function render(state) {
+    if (!state) {
+      $('#sub').textContent = 'Waiting for the first status update…';
+      return;
+    }
+    const ts = new Date(state.generatedAt);
+    const ageMs = Date.now() - ts.getTime();
+    const staleHtml = ageMs > 1000 * 60 * 60 * 6 ? ' <span class="stale">(stale — last update was over 6h ago)</span>' : '';
+    $('#sub').innerHTML = 'Last updated ' + ts.toLocaleString() + staleHtml;
+
+    $('#overallPct').textContent = state.overallPct + '%';
+    $('#overallBar').style.width = state.overallPct + '%';
+
+    const mHtml = (state.milestones || []).map((m) => (
+      '<div class="mcard st-' + m.status + '"><h3>' + m.id + '</h3>' +
+      '<div class="targets">Java &ge;' + m.java.replace(/^>=/, '') + '% &middot; C# &ge;' + m.csharp.replace(/^>=/, '') + '% &middot; PHP &ge;' + m.php.replace(/^>=/, '') + '%</div>' +
+      badge(m.status) + '</div>'
+    )).join('');
+    $('#milestones').innerHTML = mHtml;
+
+    const wHtml = (state.workstreams || []).map((w, i) => {
+      const taskHtml = (w.tasks || []).map((t) => (
+        '<div class="task"><span class="tid mono">' + t.id + '</span>' +
+        '<span class="tname">' + t.name + '</span>' + badge(t.status) + '</div>'
+      )).join('');
+      const acceptHtml = w.acceptance
+        ? '<div class="accept"><strong>Acceptance:</strong> ' + w.acceptance + ' ' + badge(w.acceptanceStatus || 'NOT_STARTED') + '</div>'
+        : '';
+      return (
+        '<div class="ws st-' + (w.acceptanceStatus || 'NOT_STARTED') + '" data-idx="' + i + '">' +
+        '<div class="ws-head" onclick="this.parentElement.classList.toggle(\'open\')">' +
+        '<h2>' + w.id + ' ' + w.name + '</h2>' +
+        '<div class="ws-head-right">' +
+        '<div class="ws-bar barTrack"><div class="barFill" style="width:' + w.pct + '%"></div></div>' +
+        '<span class="ws-pct">' + w.pct + '%</span>' +
+        '<span class="chevron">&#9656;</span>' +
+        '</div></div>' +
+        '<div class="tasks">' + taskHtml + acceptHtml + '</div>' +
+        '</div>'
+      );
+    }).join('');
+    $('#workstreams').innerHTML = wHtml || '<div class="empty">No workstreams yet.</div>';
+
+    $('#footer').textContent = 'Source: bench/sard/EXECUTION_STATUS.md, updated by an autonomous engineering loop.';
+  }
+
+  async function init() {
+    try {
+      const db = await claude.use('db');
+      if (!db) {
+        $('#sub').textContent = 'Live updates unavailable in this view.';
+        return;
+      }
+      const ref = db.doc('status/current');
+      ref.onSnapshot((snap) => {
+        render(snap && snap.exists ? snap.data() : null);
+      }, (err) => {
+        $('#sub').textContent = 'Live status error: ' + (err && err.message ? err.message : 'unknown');
+      });
+    } catch (e) {
+      $('#sub').textContent = 'Could not connect to live status.';
+    }
+  }
+  init();
+</script>
