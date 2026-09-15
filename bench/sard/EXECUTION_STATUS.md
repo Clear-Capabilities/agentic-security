@@ -56,7 +56,7 @@ instrument is real and trustworthy for the work ahead.
 | W1.1 | `ir.classes` emission for PHP/Python/Ruby/Go/Kotlin parsers (Java/C#/Rust already emit it) | NOT_STARTED |
 | W1.2 | `callgraph.js` `classMethods` from structural class facts, not `[A-Z]` regex | VERIFIED |
 | W1.3 | `class-hierarchy.js` `methodOwners`/`typeOfVar` from structural facts | VERIFIED |
-| W1.4 | `dataflow/engine.js` `_resolveMemberCalleeViaCHA` handles flat dotted-string callees | NOT_STARTED (analysis below: not on the critical path for Java/C#) |
+| W1.4 | `dataflow/engine.js` `_resolveMemberCalleeViaCHA` handles flat dotted-string callees (analysis below: JS-only, not on the Java/C# critical path) | NOT_STARTED |
 | W1.5 | Scrambled-name regression suite for every session-landed field/collection/dispatch fix | NOT_STARTED |
 
 **W1 acceptance:** on dev, Java variants 41/42/45/51-54/61-68/81 each move
