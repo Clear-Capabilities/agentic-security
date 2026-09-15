@@ -120,6 +120,47 @@ def handler():
     `dict subscript writes lower to __setitem__ and must taint the dict. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
 });
 
+// SARD_80_F1 W2.3: two Java collection-mutator method names found missing
+// via direct probes, alongside their already-working siblings —
+// `Vector.addElement` (the pre-Collections-Framework API, still idiomatic
+// in code Juliet's age) and `Queue`/`Deque`'s `offer` (implemented by
+// `ArrayDeque`/`LinkedList`/`PriorityQueue`). No principled reason these
+// should differ from `Vector.add`/`Stack.push`/`Hashtable.put`, which
+// already worked before this fix.
+test('java Vector.addElement propagates taint through the container', async () => {
+  const findings = await scanSource('Probe.java', `import java.util.Vector;
+import javax.servlet.http.HttpServletRequest;
+public class Probe {
+    public void bad(HttpServletRequest request) {
+        String data = request.getParameter("name");
+        Vector<String> v = new Vector<String>();
+        v.addElement(data);
+        String result = v.elementAt(0);
+        Runtime.getRuntime().exec(result);
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(t.some((f) => /Command Injection/i.test(f.vuln)),
+    `Vector.addElement is a mutating write, same shape as the already-working Vector.add/Stack.push. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
+test('java ArrayDeque.offer propagates taint through the container', async () => {
+  const findings = await scanSource('Probe2.java', `import java.util.ArrayDeque;
+import javax.servlet.http.HttpServletRequest;
+public class Probe2 {
+    public void bad(HttpServletRequest request) {
+        String data = request.getParameter("name");
+        ArrayDeque<String> ad = new ArrayDeque<String>();
+        ad.offer(data);
+        String result = ad.poll();
+        Runtime.getRuntime().exec(result);
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(t.some((f) => /Command Injection/i.test(f.vuln)),
+    `Queue/Deque.offer is the interface's own mutator, same shape as the already-working Stack.push. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
 // ── precision: widening the mutator rule must not make every container tainted
 test('a clean value written into a container does not taint it', async () => {
   const findings = await scanSource('clean.js', `const { exec } = require('child_process');

@@ -1314,7 +1314,17 @@ function step(node, stateIn, callContext) {
         // catalog sink list). `push_str`/`extend_from_slice` are Rust's
         // String/Vec appenders (`push`/`extend`/`insert` already cover the
         // other languages and apply to Rust unchanged).
-        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|append|extend|insert|update|addAll|putAll|put|addrange|enqueue|__setitem__|push_str|extend_from_slice)$/i;
+        // SARD_80_F1 W2.3: `addElement` (java.util.Vector's pre-Collections-
+        // Framework method, still idiomatic in older code — Juliet's own age)
+        // and `offer`/`offerFirst`/`offerLast` (the Queue/Deque interface's
+        // mutator, implemented by ArrayDeque/LinkedList/PriorityQueue) were
+        // both missing — found via direct probes showing `Vector.addElement`/
+        // `ArrayDeque.offer` silently failed to taint their receiver while
+        // every sibling API (`Vector`'s modern `add`, `Stack.push`,
+        // `Hashtable.put`, `Properties.setProperty`, `TreeMap.put`) already
+        // worked, an inconsistency with no principled reason — all six are
+        // the same "write one element into a collection" shape.
+        const _MUTATORS = /^(?:push|unshift|splice|fill|copyWithin|set|add|addElement|append|extend|insert|update|addAll|putAll|put|addrange|enqueue|offer|offerFirst|offerLast|__setitem__|push_str|extend_from_slice)$/i;
         // Mutate the state Set IN PLACE (the binding is const; the call case
         // returns this same Set ref). Avoids touching the unrelated
         // mutated-param paths in this case, keeping the blast radius to

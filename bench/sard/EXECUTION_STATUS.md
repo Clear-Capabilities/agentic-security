@@ -578,7 +578,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | IN_PROGRESS |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (real capability, zero SARD movement — see session log) | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
@@ -1276,6 +1276,44 @@ future work on either should consider whether the shared root cause is
 methodological (something about how these specific corpora were
 ingested/scanned) rather than continuing to hunt language-specific
 shape variations one at a time.
+
+### W2.3 — Java collection-mutator gap: Vector.addElement / Queue.offer (2026-09-15)
+
+Pivoted to a cleaner, previously-flagged target after the PHP dead end:
+W2.3's remaining collection-element taint gaps (variants 71-75, only
+variant 67 fixed earlier this session). Probed six Java collection APIs
+side by side in one fixture — `Vector.addElement`/`.elementAt`,
+`Hashtable.put`/`.get`, `Stack.push`/`.pop`, `ArrayDeque.offer`/`.poll`,
+`Properties.setProperty`/`.getProperty`, `TreeMap.put`/`.get` — all six
+are the identical "write one element, read it back, reach a sink" shape.
+Four fired correctly; two (`Vector.addElement`, `ArrayDeque.offer`) did
+not. Root cause: `engine.js`'s container-mutator regex (`_MUTATORS`)
+simply never listed either method name, despite listing their siblings
+(`add`, `put`, `push`) — no principled reason for the gap, just an
+incomplete enumeration. Added `addElement`/`offer`/`offerFirst`/
+`offerLast` to the list (`Vector.addElement` is the pre-Collections-
+Framework API, still idiomatic in code Juliet's age; `offer` is the
+`Queue`/`Deque` interface's own mutator, implemented by
+`ArrayDeque`/`LinkedList`/`PriorityQueue`). Verified via 2 new tests in
+`test/container-taint.test.js` (both fire correctly with the fix); full
+`test:dataflow` (1215/1215), `test:sast` (750/750), self-scan (zero
+drift), `bench:mutation:check` (35/35), `bench:cve-replay:check`
+(220/220), `bench:layer-recall:check` (no regression, no unrecorded
+gain), `test:smoke` (30/30) all green.
+
+**Real-corpus measurement: zero movement.** `batch-scan.mjs --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+dev` → tp=1638 fp=1021 fn=1340, macroF1=38.3% — byte-identical to the
+immediately-prior (W4.J4) measurement. Juliet's actual variants 71-75
+evidently use collection types/methods other than the six tried here
+(candidates not yet tested: `LinkedHashMap`, `PriorityQueue`,
+`ConcurrentHashMap`, plain arrays, or a for-each/iterator-based read
+shape rather than a direct indexed read). Kept the fix regardless — it
+is a real, verified, zero-regression capability gap closure (two
+collection APIs that are exactly as dangerous as their already-working
+siblings), consistent with this session's standing practice of shipping
+correct capability additions independent of whether this specific
+synthetic corpus happens to exercise them.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
