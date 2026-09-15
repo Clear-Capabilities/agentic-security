@@ -12,7 +12,7 @@ import {
   serializeSummaries, commitIncrementalState,
 } from './incremental.js';
 import { buildPointsTo } from './points-to.js';
-import { buildClassHierarchy } from '../ir/class-hierarchy.js';
+import { buildClassHierarchy, annotateRTA } from '../ir/class-hierarchy.js';
 import { annotateSoftTaint } from './soft-taint.js';
 import { runIfdsTaintEngine } from './ifds.js';
 import { proveExploits } from './exploit-prover.js';
@@ -93,7 +93,16 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // (a single walk of the already-parsed IR, no fixed-point iteration) and
   // every consumer degrades to today's behavior when it finds no useful type.
   let classHierarchy = null;
-  try { classHierarchy = buildClassHierarchy(perFileIR); } catch { classHierarchy = null; }
+  try {
+    classHierarchy = buildClassHierarchy(perFileIR);
+    // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — RTA-annotate so
+    // `engine.js`'s `_resolveMemberCalleeViaCHA` can resolve a
+    // parameter-typed (or otherwise non-`new`-tracked) receiver against
+    // whichever subclasses are ACTUALLY instantiated somewhere in this
+    // scan, not just the receiver's own declared/abstract type (which
+    // typically has no method BODY of its own to resolve to at all).
+    if (classHierarchy) annotateRTA(classHierarchy, perFileIR);
+  } catch { classHierarchy = null; }
   // v0.70 #2 — Steensgaard points-to / alias analysis. Built once before
   // the worklist, passed via opts so the engine can resolve aliased
   // mutations (`let a = obj; a.x = tainted; sink(obj.x)`).

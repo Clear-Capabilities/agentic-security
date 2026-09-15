@@ -56,7 +56,7 @@ import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, mark
 // file's _receiverTypeFor comment describes. Its other exports are still used
 // (summaries.js imports hashReceiverType for cache keying); only this call
 // site is gone.
-import { resolveMethod, classOfVar } from '../ir/class-hierarchy.js';
+import { resolveMethod, resolveMethodRTA, classOfVar } from '../ir/class-hierarchy.js';
 
 // v0.70 #2 — addPath that also taints every alias of the variable.
 // When `target` is a dotted path like "a.x" and the root `a` has aliases
@@ -238,14 +238,52 @@ function _resolvableCalleeName(calleeExpr) {
 // expression) and R11's extra `resolveMethod` step means it can still refuse
 // where R6 does not.
 function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
-  if (!calleeExpr || calleeExpr.kind !== 'member' || typeof calleeExpr.prop !== 'string') return null;
   if (!callContext || !callContext._cha) return null;
-  if (!calleeExpr.object || calleeExpr.object.kind !== 'ident' || calleeExpr.object.name === '_this_') return null;
-  const className = classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, calleeExpr.object.name);
+  let receiverName, methodName;
+  if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string') {
+    if (!calleeExpr.object || calleeExpr.object.kind !== 'ident' || calleeExpr.object.name === '_this_') return null;
+    receiverName = calleeExpr.object.name;
+    methodName = calleeExpr.prop;
+  } else if (typeof calleeExpr === 'string') {
+    // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — the hand-rolled parsers
+    // (Java/C#/Go/PHP/Ruby/Kotlin) emit a FLAT dotted-string callee
+    // ("b.action"), never the Babel `{kind:'member'}` shape above. This
+    // function previously only ever handled the latter, so this whole
+    // CHA-gated path was silently JS-only. Only a simple `receiver.method`
+    // (exactly one dot) is handled — a longer chain (`a.b.c`) is a member
+    // chain this function has no way to walk without an AST, and guessing
+    // would risk exactly the fabricated-edge failure mode this function's
+    // own header comment warns about; refuse rather than guess.
+    const dot = calleeExpr.indexOf('.');
+    if (dot <= 0 || calleeExpr.indexOf('.', dot + 1) !== -1) return null;
+    receiverName = calleeExpr.slice(0, dot);
+    methodName = calleeExpr.slice(dot + 1);
+    if (receiverName === '_this_' || receiverName === 'this') return null;
+  } else {
+    return null;
+  }
+  const className = classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, receiverName);
   if (!className) return null;
-  const found = resolveMethod(callContext._cha, className, calleeExpr.prop);
-  if (!found) return null;
-  return `${found.className}.${found.methodName}`;
+  const direct = resolveMethod(callContext._cha, className, methodName);
+  if (direct) return `${direct.className}.${direct.methodName}`;
+  // Direct/inherited resolution failed — this is expected when `className`
+  // is an ABSTRACT class or interface with no body of its own (Juliet's
+  // dominant idiom: `abstract void action(String d);` is never emitted as a
+  // function at all, so it's never added to any class's `methods` set).
+  // Fall back to RTA: which LIVE (actually `new`'d somewhere in this scan)
+  // subclasses of `className` implement `methodName`. Deliberately
+  // single-candidate-only for this landing — refuse rather than guess when
+  // more than one live subclass implements the method (e.g. a bad/good
+  // variant pair both alive in the same scan), matching this codebase's
+  // dominant ambiguity-refusal convention. Known, accepted limitation: this
+  // means the fix does nothing when Juliet's own bad+good siblings are
+  // scanned together, which is the common case — see the ledger for the
+  // measured impact and whether that limitation is worth lifting next.
+  const cha = callContext._cha;
+  if (!cha.liveClasses) return null;
+  const candidates = resolveMethodRTA(cha, methodName, cha.liveClasses, className);
+  if (candidates.length !== 1) return null;
+  return `${candidates[0].className}.${candidates[0].methodName}`;
 }
 
 // Resolve calleeExpr to { qid, fn } via the call graph — the shared
@@ -259,14 +297,24 @@ function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
 function _resolveCalleeForSummary(calleeExpr, callContext) {
   if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
   const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
-  let _resolvableName = _resolvableCalleeName(calleeExpr);
-  // PRD R11: _resolvableCalleeName refuses every member-expression callee.
-  // When that's the reason we have nothing, try the CHA-gated path before
-  // giving up — but ONLY then, so the existing exact/bare-name behavior is
-  // completely unchanged for every case it already handled.
-  if (!_resolvableName) _resolvableName = _resolveMemberCalleeViaCHA(calleeExpr, callContext);
-  if (!_resolvableName) return null;
-  const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
+  const _resolvableName = _resolvableCalleeName(calleeExpr);
+  if (_resolvableName) {
+    const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
+    const fn = functionRecord(callContext._callGraph, resolved);
+    const qid = resolved && (resolved.qid || resolved);
+    if (typeof qid === 'string') return { qid, fn };
+  }
+  // PRD R11 / W2.5: reached either because `_resolvableCalleeName` refused
+  // outright (a Babel member-expression callee), or because it handed back
+  // a name (a flat dotted string like "b.action" — the hand-rolled parsers'
+  // shape) that `resolveKnownCallee` could NOT resolve by name (`b` isn't a
+  // class name, it's a local/parameter). Try the CHA-gated path ONLY as a
+  // fallback after ordinary name resolution has already failed, so a callee
+  // that resolves correctly by name is never second-guessed by a coarser,
+  // over-approximating CHA/RTA lookup.
+  const _chaName = _resolveMemberCalleeViaCHA(calleeExpr, callContext);
+  if (!_chaName) return null;
+  const resolved = callContext._callGraph.resolveKnownCallee(_chaName, _callerFile);
   const fn = functionRecord(callContext._callGraph, resolved);
   const qid = resolved && (resolved.qid || resolved);
   return typeof qid === 'string' ? { qid, fn } : null;

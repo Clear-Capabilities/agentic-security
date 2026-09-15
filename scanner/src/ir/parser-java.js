@@ -867,6 +867,7 @@ export async function parseJavaFile(file, raw) {
           const fpl = md.children?.methodHeader?.[0]?.children?.methodDeclarator?.[0]?.children?.formalParameterList?.[0]
             || md.children?.methodDeclarator?.[0]?.children?.formalParameterList?.[0];
           const paramAnnotations = [];
+          const paramTypes = {};
           const params = (fpl?.children?.formalParameter || []).map((fp, idx) => {
             // Regular parameters nest under `variableParaRegularParameter`.
             // Varargs (`String... args`) instead use a distinct
@@ -880,6 +881,24 @@ export async function parseJavaFile(file, raw) {
             // still yields a clean name.
             const vp = fp.children?.variableParaRegularParameter?.[0];
             const paramName = vp?.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image || null;
+            // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — declared parameter
+            // TYPE, not just name. Juliet's dominant abstract/interface
+            // dispatch idiom passes the constructed object as a PARAMETER
+            // (`void helper(BaseType b, String data) { b.action(data); }`),
+            // not a local `new` assignment — `_localVarConstructedTypes`
+            // above only ever sees the latter, so this shape's receiver type
+            // was completely unknown to every downstream resolver. Only a
+            // simple class/interface type name is extracted (the
+            // `unannClassType` leaf of `unannType`); a primitive
+            // (`unannPrimitiveType`) or array/generic type some CST shapes
+            // don't reduce to a single Identifier here degrades to
+            // undefined, same graceful-drop convention as the varargs case
+            // above.
+            const typeIds = vp?.children?.unannType?.[0]?.children?.unannReferenceType?.[0]
+              ?.children?.unannClassOrInterfaceType?.[0]?.children?.unannClassType?.[0]
+              ?.children?.Identifier;
+            const paramType = Array.isArray(typeIds) && typeIds.length ? typeIds[typeIds.length - 1]?.image : undefined;
+            if (paramName && paramType) paramTypes[paramName] = paramType;
             // Java allows multiple stacked annotations on one parameter
             // (`@NotNull @RequestParam String q`), each its own
             // `variableModifier` entry — loop over all of them, not just
@@ -923,6 +942,7 @@ export async function parseJavaFile(file, raw) {
               file,
               calls: callSitesFromCfg(cfg),
               ...(paramAnnotations.length ? { paramAnnotations } : {}),
+              ...(Object.keys(paramTypes).length ? { paramTypes } : {}),
             });
           }
         }

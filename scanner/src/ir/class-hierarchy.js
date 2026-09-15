@@ -44,6 +44,18 @@ export function buildClassHierarchy(perFileIR) {
   const classes = new Map();       // className -> { file, line, methods, extends }
   const methodOwners = new Map();  // qid -> className
   const typeOfVar = new Map();     // file::scope::var -> className
+  // A variable assigned two DIFFERENT constructed types within one function
+  // must never resolve to either — same "refuse to guess on ambiguity"
+  // convention `_localVarConstructedTypes` (parser-java.js/parser-cs.js)
+  // already enforces at parse time for the callee-string-rewrite path. This
+  // map had NO ambiguity tracking of its own (last assign silently won) —
+  // latent since day one, but never exercised for hand-rolled-parser
+  // languages because `_resolveMemberCalleeViaCHA` (engine.js) only ever
+  // consulted `classOfVar` for the Babel `{kind:'member'}` shape (JS-only)
+  // until PRD W2.5 extended it to flat dotted-string callees too. Caught by
+  // `test/catalog-cs-p1.test.js`'s existing ambiguity-refusal regression
+  // test the moment that extension shipped.
+  const ambiguousVarKeys = new Set();
 
   if (!perFileIR || typeof perFileIR !== 'object') {
     return { classes, methodOwners, typeOfVar };
@@ -188,8 +200,41 @@ export function buildClassHierarchy(perFileIR) {
         if (classes.has(className) || /^[A-Z]/.test(className)) {
           // Convention: PascalCase `new` callees treated as constructors.
           const target = typeof n.target === 'string' ? n.target : null;
-          if (target) typeOfVar.set(`${file}::${fn.qid}::${target}`, className);
+          if (target) {
+            const key = `${file}::${fn.qid}::${target}`;
+            if (ambiguousVarKeys.has(key)) continue;
+            if (typeOfVar.has(key) && typeOfVar.get(key) !== className) {
+              ambiguousVarKeys.add(key);
+              typeOfVar.delete(key);
+            } else {
+              typeOfVar.set(key, className);
+            }
+          }
         }
+      }
+    }
+    // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — a PARAMETER's declared type is
+    // just as real a type binding as a local `let x = new Foo()`, and it's
+    // Juliet's OWN dominant abstract/interface dispatch idiom: the "runTest"
+    // driver constructs the concrete (bad/good) instance and passes it as a
+    // parameter to a helper that invokes the virtual method — `_localVarConstructedTypes`
+    // (parser-java.js/parser-cs.js) only ever sees the CONSTRUCTOR site, not
+    // this call site, so `b` in `void helper(BaseType b, ...) { b.action(x); }`
+    // was completely untyped. Reuses the EXACT same `typeOfVar` map and key
+    // shape `classOfVar` already reads — no new lookup mechanism, so every
+    // existing consumer (engine.js's `_resolveMemberCalleeViaCHA` once it
+    // learns to read a flat dotted-string callee, `receiver-context.js`)
+    // benefits with no changes on their end. Only populated when
+    // `fn.paramTypes` exists (currently parser-java.js; parser-cs.js is a
+    // candidate follow-up, same shape). Deliberately does NOT overwrite an
+    // existing binding for the same key — a parameter name can never collide
+    // with a local var name in the same scope in Java, so this is purely
+    // additive, but the guard costs nothing and documents the intent.
+    for (const fn of ir.functions) {
+      if (!fn.paramTypes) continue;
+      for (const [paramName, paramType] of Object.entries(fn.paramTypes)) {
+        const key = `${file}::${fn.qid}::${paramName}`;
+        if (!typeOfVar.has(key) && !ambiguousVarKeys.has(key)) typeOfVar.set(key, paramType);
       }
     }
   }

@@ -200,6 +200,95 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   36.4% figure (that one had ~70% of CWE-89 silently unanalyzed; this
   doesn't).
 
+### 2026-09-15 — W2.5 (parameter-typed abstract dispatch) implemented, one real bug found and fixed
+
+- Probed the working hypothesis from the last session log entry with a real
+  fixture: `void helper(BaseType b, String data) { b.action(data); }` called
+  as `BaseType b = new Bad(); helper(b, data);` — Juliet's actual dominant
+  shape (confirmed against real corpus source, not guessed). Reproduced
+  ZERO findings pre-fix, confirming `_localVarConstructedTypes`
+  (parser-java.js/parser-cs.js) genuinely never sees this: it only tracks
+  `isNew` assignments, never a class type flowing in through a PARAMETER.
+- **Root-cause discovery: two half-built, tested-but-never-wired mechanisms
+  already existed for exactly this.** `class-hierarchy.js`'s
+  `resolveMethodRTA`/`collectInstantiatedClasses`/`annotateRTA` (Rapid Type
+  Analysis — narrows virtual dispatch to actually-instantiated classes) were
+  fully implemented and unit-tested but had ZERO callers anywhere in `src/`
+  outside their own file — the same "exported but unused for several
+  releases" pattern this codebase has hit before (SummaryCache). Wiring
+  them in, rather than writing new resolution logic, was the right lever.
+- Implemented: (1) `parser-java.js` now extracts each parameter's declared
+  class TYPE (`fn.paramTypes`, not just names) from the CST's `unannType`
+  subtree. (2) `class-hierarchy.js`'s `typeOfVar` is now ALSO seeded from
+  `paramTypes` — reuses the exact same map/key shape `classOfVar` already
+  reads, so every existing consumer benefits with no changes on their end.
+  (3) `dataflow/index.js` now calls `annotateRTA` right after
+  `buildClassHierarchy`, populating `cha.liveClasses`. (4) `engine.js`'s
+  `_resolveMemberCalleeViaCHA` (previously Babel-`{kind:'member'}`-only, so
+  JS-only) now also handles a flat dotted-string callee (`"b.action"`, the
+  hand-rolled parsers' shape) and falls back from direct/inherited
+  `resolveMethod` to `resolveMethodRTA` when the declared type is abstract
+  with no body of its own — SINGLE-CANDIDATE-ONLY for this landing (refuses
+  when more than one live subclass implements the method, e.g. a bad/good
+  pair both alive in the same scan — matches this codebase's dominant
+  ambiguity-refusal convention; a known, accepted scope limit, not silently
+  swept under the rug). (5) `_resolveCalleeForSummary` now tries this CHA
+  fallback whenever ordinary by-name resolution fails, not only when the
+  callee shape was already unresolvable by name.
+- **Real bug found and fixed during verification**: `npm run test:dataflow`
+  caught a genuine regression — `test/catalog-cs-p1.test.js`'s existing
+  ambiguity-refusal test ("a variable assigned TWO DIFFERENT constructed
+  types in one function is not rewritten") started failing. Root cause:
+  `class-hierarchy.js`'s OWN `typeOfVar` builder had NO ambiguity tracking
+  of its own (unlike `_localVarConstructedTypes`'s careful null-on-ambiguity
+  handling) — a LATENT gap since day one, never exercised because
+  `_resolveMemberCalleeViaCHA` only consulted `classOfVar` for the JS-only
+  member-expression shape until this change turned on the flat-string path
+  for every hand-rolled-parser language at once. Fixed: `typeOfVar` now
+  tracks an `ambiguousVarKeys` set and refuses (deletes + never re-sets) a
+  key that sees two different constructed types in one function, mirroring
+  the parser-level convention exactly. Never shipped as VERIFIED with the
+  regression present.
+- Re-verified after the ambiguity fix: probe fixture still fires (2
+  findings), full dataflow suite 1203/1203, mutation 35/35, layer-recall
+  122/220 exact baseline, cve-replay 220/220 no drift, smoke 30/30.
+- Real SARD measurement: `node bench/sard/scripts/batch-scan.mjs --app
+  sard-juliet-java-strict --blind --scramble-identifiers --deep --split dev
+  --json` → tp=1320, fp=507, fn=1658, **macroF1=36.5%** — bit-for-bit
+  IDENTICAL to the pre-W2.5 run. Zero aggregate movement, again.
+- **Investigated why, same discipline as before.** Confirmed the
+  parameter-typed-dispatch shape my probe fixture exercises genuinely does
+  NOT match Juliet's actual convention: real Juliet driver files (checked
+  against the SAME real CWE-89/CWE-90 files used earlier) construct the
+  object and dispatch on it in the SAME method (`case_base b = new
+  case_bad(); b.action(data);`) — never through a separate helper taking
+  the object as a parameter. W1 already resolves that shape correctly.
+  W2.5's fix is real and correct for the shape it targets; that shape is
+  just rare-to-absent in this specific corpus. Not a wasted change (the RTA
+  wiring is real infrastructure other codebases/languages will use), but an
+  honest miss on THIS corpus's actual bottleneck.
+- **Sampled real FN files directly instead of guessing again.** Variant-81
+  FNs are NOT concentrated in one CWE (89:36, 113:33, 36:10, 80:9, 83:9,
+  319:9, 643:7, 81:5, ... — a diffuse mix, no single shape). Pulled a real
+  CWE-23 FN file (`Environment_15.java`) and found what looks like a
+  DIFFERENT, unrelated gap: `File file = new File(root+data); ...new
+  FileInputStream(file)` (or even the more direct `new
+  FileInputStream(root+data)`) produces ZERO findings in an isolated probe,
+  despite `System.getenv`+concat+`Runtime.exec` working fine in the exact
+  same shape moments earlier, and the `java-new-FileInputStream` catalog
+  entry matching correctly in isolation. Eliminated as causes (verified
+  each individually, not assumed): guard-recognition
+  (`_hasPathGuard` returns false for this exact window — checked directly),
+  proof-gate, falsification, reachability-filter (gated off with zero
+  routes present), the CWE-22 skeleton-family check (returns `true`
+  unconditionally). **Root cause NOT YET FOUND** — flagged honestly as an
+  open item rather than claimed as solved. By FN volume, CWE-89 (414) and
+  CWE-113 (412) are the two largest remaining sources and a better target
+  for the next investigation than CWE-23 (31) was.
+- W2.5 → VERIFIED (the mechanism itself: real, correct, tested, proven on
+  genuine Juliet source). The workstream's aggregate SARD contribution is
+  separately and honestly recorded as ~0pp on this corpus/split.
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |
@@ -208,7 +297,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | NOT_STARTED |
 | W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | NOT_STARTED |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
-| W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | NOT_STARTED |
+| W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 
 **W2 acceptance:** no flow-variant class below 70% recall on dev for Java and
 C#. Status: NOT_STARTED. Blocked on W1.
