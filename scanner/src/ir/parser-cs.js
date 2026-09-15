@@ -778,7 +778,23 @@ function _lowerStmt(stmt, line) {
     const target = m[2];
     const sourceText = m[3];
     const node = { kind: 'assign', line, target, source: _lowerExpr(sourceText) };
-    if (typeClause) node.decl = true;
+    if (typeClause) {
+      node.decl = true;
+      // SARD_80_F1 W4 — mirrors parser-java.js's identical `declaredType`
+      // field (see its own comment for the full rationale): the declared
+      // TYPE of a local, not just the fact that this is a declaration.
+      // Consumed by class-hierarchy.js's `typeOfVar` (ADDITIVE only, via
+      // `receiverTypeIn` — never a destructive callee rewrite, per the
+      // regression that mechanism caused for Java and was reverted).
+      // Strips generics (`List<string>` -> `List`), array brackets
+      // (`Foo[]` -> `Foo`), and a namespace-qualified prefix (last dot
+      // segment); `var` is not a real type name and yields undefined.
+      const bare = typeClause.replace(/<.*$/, '').replace(/\[\]$/, '').trim();
+      if (bare && bare !== 'var') {
+        const segs = bare.split('.');
+        node.declaredType = segs[segs.length - 1];
+      }
+    }
     return node;
   }
   // Bare declaration with no initializer: `string data;`, `int i;`,
@@ -1081,6 +1097,7 @@ export function parseCSharpFile(file, code) {
     const className = _enclosingClassName(classRanges, m.index);
     const paramsText = m[3] || '';
     const paramAnnotations = [];
+    const paramTypes = {};
     // `keptIdx` tracks the parameter's position in the FILTERED array — the
     // same array `fn.params` ends up being — not the raw pre-filter split
     // position (`idx` below). It only advances when a fragment actually
@@ -1127,8 +1144,28 @@ export function parseCSharpFile(file, code) {
         remaining = remaining.slice(match[0].length).trim();
       }
       // "Type name" → name. "Type<T> name" → name. "Type[] name = default" → name.
-      const last = remaining.replace(/=.*$/, '').trim().split(/\s+/).pop();
+      const beforeDefault = remaining.replace(/=.*$/, '').trim();
+      const nameTokens = beforeDefault.split(/\s+/);
+      const last = nameTokens.pop();
       const paramName = last && /^[A-Za-z_][\w]*$/.test(last) ? last : null;
+      // Declared TYPE (SARD_80_F1 W4 — same rationale as parser-java.js's
+      // `paramTypes`/parser-cs.js's own local-var `declaredType` above):
+      // Web Forms' dominant `Render(HtmlTextWriter writer)` override idiom
+      // is a PARAMETER, not a local declaration, and a param's type was
+      // never captured before this. `nameTokens` (everything before the
+      // param name, after stripping attributes and a default value) is
+      // the type clause — `ref`/`out`/`params`/`in` modifiers are stripped
+      // as bare keywords, generics/arrays reduced to the base name, same
+      // normalization as the local-variable case.
+      let paramType;
+      if (paramName && nameTokens.length) {
+        const typeText = nameTokens.filter(w => !/^(?:ref|out|params|in|this)$/.test(w)).join(' ');
+        const bare = typeText.replace(/<.*$/, '').replace(/\[\]$/, '').trim();
+        if (bare && bare !== 'var') {
+          const segs = bare.split('.');
+          paramType = segs[segs.length - 1];
+        }
+      }
       // Add an entry for each decorator found, indexed by position in the
       // FILTERED params array (see `keptIdx` comment above) — not `idx`,
       // the raw pre-filter split position.
@@ -1136,6 +1173,7 @@ export function parseCSharpFile(file, code) {
         for (const decorator of decorators) {
           paramAnnotations.push({ index: keptIdx, name: paramName, decorator });
         }
+        if (paramType) paramTypes[paramName] = paramType;
         keptIdx++;
       }
       return paramName;
@@ -1175,6 +1213,7 @@ export function parseCSharpFile(file, code) {
       cfg,
       calls: callSitesFromCfg(cfg),
       ...(paramAnnotations.length ? { paramAnnotations } : {}),
+      ...(Object.keys(paramTypes).length ? { paramTypes } : {}),
     });
     METHOD_RE.lastIndex = extracted.end + 1;
   }

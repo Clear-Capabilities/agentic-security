@@ -613,7 +613,7 @@ precision against).
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
 | W4.J6 | Java CWE-90 LDAP re-measure (family key already fixed this session) | NOT_STARTED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
-| W4.C1 | C# CWE-113, CWE-80/81/83 | NOT_STARTED |
+| W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 | NOT_STARTED |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
@@ -1114,6 +1114,80 @@ acceptance bar (dev precision ≥85% Java). Whether Juliet's ACTUAL CWE-113
 sanitizer or simply not calling the sink) is unconfirmed — the corpus's
 own read-deny list means this can only be resolved by another synthetic
 probe iteration or by implementing family-scoped taint and re-measuring.
+
+### W4.C1 — C# CWE-80/81/83 investigation: a total blackout, not a shape gap (2026-09-15)
+
+Applied the SAME technique that fixed Java's CWE-80 (declared/parameter
+TYPE resolution via `receiverTypeIn`, see W4.J4 above) to C#'s named W4
+target, `HtmlTextWriter` (495 dev cases per the PRD, zero prior catalog
+coverage). Two real, tested, zero-regression capability additions:
+
+1. **`cs-htmltextwriter-write`/`-writeline` catalog entries** —
+   `receiver: '(?:[Ww]riter|output)'` (name fallback, matching the
+   pre-existing structural detector's own convention) OR'd with
+   `receiverTypeIn: ['^HtmlTextWriter$']` (type-confirmed, additive).
+   **A real bug was caught before shipping**: a first draft set
+   `receiverTypeIn` alone with no `receiver` pattern — re-reading
+   `_receiverAllowed`'s own short-circuit (`if (!pat && !basePat &&
+   !excludePat) return true`) showed this would have matched `Write`/
+   `WriteLine` on **any** receiver whatsoever (`Console.Write`, a logger,
+   literally anything), not narrowed the match at all. Fixed before any
+   test was even run, by re-reading the matching code rather than
+   discovering it via a failing precision test.
+2. **`parser-cs.js` now extracts `fn.paramTypes`** (previously C#-only
+   gap; Java already had this) — Web Forms' dominant
+   `Render(HtmlTextWriter writer)` override idiom is a PARAMETER, not a
+   local declaration, and needs this to resolve via the same
+   `class-hierarchy.js` `typeOfVar` mechanism.
+
+Both verified end-to-end via direct probes with a deliberately
+NON-conventional variable/parameter name (`htw`, not `writer`/`output`)
+to isolate the type-based path from the name-based fallback — confirmed
+firing on tainted input, silent on a constant. 25/25 C# catalog tests,
+full `test:dataflow` (1213/1213), `test:sast` (750/750), self-scan (zero
+drift), smoke/mutation/cve-replay all green.
+
+**Real-corpus measurement: zero movement across THREE separate
+verification rounds** (`batch-scan.mjs --app sard-juliet-csharp-strict
+--blind --scramble-identifiers --deep --split dev`) — tp=335 fp=430
+fn=2267, byte-identical to the original 16.1% baseline, before AND after
+each fix. CWE-80/81/83 stayed at `tp=0 fp=0` throughout.
+
+**The more important finding is not "wrong shape guessed" — it's what a
+DIRECT single-CWE scan revealed:** `node bench-realworld.js --cwe 80
+--json` shows `scannedFiles: 1084`, `truncated: false`, every
+`truncationDetail` field clean (no timeouts, no skips, no budget
+exceeded) — **and `perFamily: {xss: {tp:0, fp:0, fn:198}}`. Zero XSS
+findings of ANY kind, correct or wrong, fired across all 1084 real
+files.** This is categorically different from every other investigation
+this session: it isn't "the sink shape doesn't match my guess", it's
+"nothing in the xss family fires on this scan surface AT ALL" — ruling
+out truncation, crash, and scan-surface-exclusion as causes (all
+independently confirmed clean). For comparison, CWE-79 (plain XSS, a
+different CWE directory in the same corpus) shows `tp=0 fp=22 fn=0` —
+XSS findings DO fire somewhere in the C# corpus, just seemingly never
+inside CWE-80/81/83's own files.
+
+**Shapes tried and confirmed working in isolation (none moved the real
+corpus):** `Response.Write` (pre-existing), `HtmlTextWriter` local
+variable (this session), `HtmlTextWriter` parameter via `Render()` (this
+session), `Label/Control.Text = tainted` (pre-existing structural
+detector `csharp-control-text`). All four fire correctly on a synthetic
+Juliet-shaped fixture with a bare `Request.QueryString[...]` source. None
+of them is what the real corpus's CWE-80/81/83 files actually contain, or
+some OTHER factor entirely (a parse failure silently reducing extracted
+functions to zero for these specific files, without throwing) is
+suppressing every detector at once — genuinely unresolved.
+
+**Disposition:** shipped the two real capability additions (HtmlTextWriter
+coverage, C# paramTypes) since they are correct, tested, zero-regression,
+and will help both real-world C# scans and future SARD work regardless of
+this specific null result. The CWE-80/81/83 "total blackout" question is
+left explicitly open and flagged as needing a fundamentally different
+diagnostic approach next time — e.g., checking whether these 1084 files
+produce ANY findings of ANY family at all (not just xss), which would
+distinguish "these files never parse usefully" from "these files parse
+fine but XSS specifically never matches."
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

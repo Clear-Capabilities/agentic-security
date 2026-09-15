@@ -248,8 +248,9 @@ export function buildClassHierarchy(perFileIR) {
     // callee-string rewrite `parser-java.js`'s `_localVarConstructedTypes`
     // does for constructor types: that mechanism was tried for declared
     // types too and reverted after it broke an unrelated, name-scoped
-    // catalog entry (see its own comment). Only populated when a function's
-    // CFG carries the field (currently parser-java.js only).
+    // catalog entry (see its own comment). Populated by both
+    // parser-java.js and parser-cs.js (C#'s `Type x = expr;` decl-typeClause
+    // capture, same field name and rationale).
     for (const fn of ir.functions) {
       if (!fn.cfg || !fn.cfg.nodes) continue;
       for (const node of Object.values(fn.cfg.nodes)) {

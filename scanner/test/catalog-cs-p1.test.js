@@ -76,6 +76,60 @@ public class C {
     `Console.Write must not trigger the Response.Write sink, got: ${taint.map(f => f.vuln).join(', ')}`);
 });
 
+// SARD_80_F1 W4: `HtmlTextWriter` (ASP.NET Web Forms' dominant XSS-sink
+// shape, 495 dev cases per the PRD) had NO catalog coverage at all before
+// this. Declared-type resolution (`class-hierarchy.js`'s `typeOfVar`,
+// seeded by `parser-cs.js`'s new `declaredType` field) lets this fire
+// even on a NON-conventionally-named variable, via `receiverTypeIn` —
+// the `htw` name below deliberately does NOT match the entry's
+// name-based `receiver` fallback, isolating the type-based path.
+test('cs-htmltextwriter-write: a declared-type HtmlTextWriter (non-conventional name) fires XSS via IR-TAINT', async () => {
+  const dir = mkTmp('htmltextwriter', `
+public class C {
+    public void Handler([FromQuery] string data) {
+        HtmlTextWriter htw = new HtmlTextWriter(Console.Out);
+        htw.Write(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss|cross.site/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected XSS, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// ASP.NET Web Forms' DOMINANT HtmlTextWriter idiom: a PARAMETER, not a
+// local declaration (`protected override void Render(HtmlTextWriter w)`).
+// parser-cs.js now also extracts `fn.paramTypes` (mirroring parser-java.js),
+// consumed by the SAME `class-hierarchy.js` `typeOfVar` mechanism as the
+// declared-local-variable case above. Non-conventional param name (`htw`)
+// isolates the type-based path from the name-based `receiver` fallback.
+test('cs-htmltextwriter-write (parameter form): Render(HtmlTextWriter htw) fires XSS via IR-TAINT', async () => {
+  const dir = mkTmp('htmltextwriter-param', `
+public class MyControl {
+    protected override void Render(HtmlTextWriter htw) {
+        string data = Request.QueryString["name"];
+        htw.Write(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss|cross.site/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected XSS, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-htmltextwriter-write precision: an unrelated .Write(...) (Console) does not fire this sink', async () => {
+  const dir = mkTmp('htmltextwriter-clean', `
+public class C {
+    public void Handler([FromQuery] string data) {
+        Console.Write(data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.equal(taint.filter(f => /HtmlTextWriter/i.test(f.vuln)).length, 0,
+    `Console.Write must not trigger the HtmlTextWriter sink, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
 test('cs-response-addheader: Response.AddHeader(name, userInput) fires header injection via IR-TAINT', async () => {
   const dir = mkTmp('addheader', `
 public class C {

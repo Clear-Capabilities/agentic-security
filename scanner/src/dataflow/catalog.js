@@ -1522,6 +1522,37 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-response-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '^Response$' }, argIndex: 0,
     vuln: { name: 'Reflected XSS (Response.Write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to the response.' } },
+  // SARD_80_F1 W4: `HtmlTextWriter` (ASP.NET Web Forms' `Render(HtmlTextWriter
+  // writer)` override, and its declared-local-variable form
+  // `HtmlTextWriter writer = ...; writer.Write(x);`) is a named W4 target
+  // (495 dev cases) with NO prior catalog coverage at all — only the
+  // structural `csharp.js` detector's name-based heuristic
+  // (`/Writer|writer|output/i.test(call.receiver)`) could ever catch it,
+  // and only when the variable happens to be named with "writer"/"output"
+  // in it. `receiverTypeIn` (additive, never replaces a name check) lets
+  // this ALSO fire off `class-hierarchy.js`'s `typeOfVar`, populated from
+  // either a declared-type local (`parser-cs.js`'s `declaredType`) or a
+  // parameter's declared type — same mechanism proven for Java's
+  // `PrintWriter` two-step gap (see `java-writer-*` above).
+  //
+  // `receiver` is still REQUIRED here, not optional: `_receiverAllowed`
+  // (catalog.js) returns `true` UNCONDITIONALLY when an entry sets neither
+  // `receiver` nor `receiverBase` — so a `receiverTypeIn`-only entry would
+  // match `Write`/`WriteLine` on ANY receiver whatsoever (Console, a
+  // StreamWriter, a logger, literally anything), not narrow the match at
+  // all. Caught before shipping by re-reading `_receiverAllowed`'s own
+  // short-circuit, not by a failing test — `Write`/`WriteLine` are far too
+  // generic a method name for `receiverTypeIn` to safely stand alone the
+  // way the single-purpose `getString`/`fromString`-style entries
+  // elsewhere in this file do. The name pattern mirrors the pre-existing
+  // structural detector's own convention (`csharp.js`'s
+  // `/Writer|writer|output/i`) so the two stay aligned.
+  { kind: 'sink', id: 'cs-htmltextwriter-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '(?:[Ww]riter|output)', receiverTypeIn: ['^HtmlTextWriter$'] }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (HtmlTextWriter.Write)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to an HtmlTextWriter.' } },
+  { kind: 'sink', id: 'cs-htmltextwriter-writeline', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'WriteLine', receiver: '(?:[Ww]riter|output)', receiverTypeIn: ['^HtmlTextWriter$'] }, argIndex: 0,
+    vuln: { name: 'Reflected XSS (HtmlTextWriter.WriteLine)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to an HtmlTextWriter.' } },
   { kind: 'sink', id: 'cs-response-addheader', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'AddHeader', receiver: '^Response$' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (Response.AddHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip CR/LF from header values, or use a framework API that rejects them automatically.' } },
