@@ -244,10 +244,31 @@ export function entryStateFromCall(paramNames, callArgs, callerTaintedVars, isAr
     // ASSIGNED locals, not raw globals) took the member branch, found
     // nothing, and — being an else-if — never reached isArgTaintedExpr at
     // all. Confirmed via a real corpus fixture.
+    // PRD W2 (SARD_80_F1_EXECUTION_PRD.md) — an object argument whose FIELD
+    // was tainted before the call (`c.field = tainted; step(c);`) is a
+    // documented scope gap: entry-state granularity here is param-level,
+    // not per-access-path, so `c` itself was never marked tainted even
+    // though `c.field` genuinely is in the caller's field-sensitive lattice
+    // — the callee then reads `c.field` back out with no provenance at all.
+    // Found sampling real Juliet variant 67 false negatives (a tainted
+    // value stored into a `Container` object's field, the object passed
+    // whole to another function, the field read back out there). Widens
+    // the SAME direction this codebase already takes for "unknown-key
+    // container writes" and collection taint (dataflow/CLAUDE.md's own
+    // documented precedent): if ANY access path prefixed by this
+    // identifier is tainted, treat the whole object as tainted when it
+    // crosses a call boundary — over-approximating (a clean sibling field
+    // read downstream may falsely inherit taint) is the accepted direction
+    // for a security scanner, the same tradeoff every other "widen to the
+    // container" rule in this codebase already makes.
     let tainted = false;
     if (arg.kind === 'ident' && callerTaintedVars.has(arg.name)) {
       tainted = true;
-    } else if (arg.kind === 'member' && arg.object?.kind === 'ident') {
+    } else if (arg.kind === 'ident') {
+      const prefix = `${arg.name}.`;
+      for (const v of callerTaintedVars) { if (v.startsWith(prefix)) { tainted = true; break; } }
+    }
+    if (!tainted && arg.kind === 'member' && arg.object?.kind === 'ident') {
       const base = arg.object.name;
       if (callerTaintedVars.has(base) || callerTaintedVars.has(`${base}.${arg.prop}`)) tainted = true;
     }

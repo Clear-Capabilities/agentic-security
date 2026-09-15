@@ -470,13 +470,55 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   be picked up as its own focused task rather than rushed at the end of an
   already-long investigation.
 
+### 2026-09-15 — variant 61-75 (collection/field): a real gap, found and fixed
+
+- Checked whether collection/field variants had the same "scoring ceiling"
+  explanation as 51-54. They do NOT — this one is a genuine capability gap.
+  Read a real variant-67 family end-to-end: caller stores tainted data into
+  a `Container` object's field (`c.field = data;`), passes the WHOLE OBJECT
+  to another function (`(new B()).step(c);`), callee reads the field back
+  out (`String data = c.field;`) and uses it in a sink. Confirmed via a
+  synthetic isolated probe of the same shape: zero findings.
+- **Root cause matches a scope boundary already documented in this
+  codebase**: `dataflow/CLAUDE.md` states "Entry-state granularity is also
+  param-level, not arbitrary access paths (`f(obj)` with `obj.a` tainted ≡
+  `obj.b` tainted)" — `entryStateFromCall` (summaries.js) checked only
+  whether the BARE argument identifier (`c`) was itself in the caller's
+  tainted-vars set, never whether any access path PREFIXED by it (`c.field`)
+  was. The intraprocedural field-sensitive lattice already tracked
+  `c.field` correctly; it just never crossed the call boundary as "the
+  whole object might be tainted."
+- **Fixed**: `entryStateFromCall` now also treats an identifier argument as
+  tainted when ANY tracked access path starts with `<name>.` — the same
+  "widen to the container" direction this codebase already takes for
+  unknown-key container writes and collection taint (documented precedent
+  in the same CLAUDE.md file). Over-approximates when an object has one
+  tainted field and one clean field passed together; accepted, matches
+  every other "widen" rule here.
+- Verified: full dataflow suite (1203/1203), mutation (35/35), layer-recall
+  (122/220 exact baseline), cve-replay (220/220 no drift), smoke (30/30),
+  self-scan (no drift).
+- **Real SARD measurement**: tp 1556→1580 (+24), recall 52.2%→**53.1%**
+  (+0.9pp), **macroF1 37.6%→37.8%** (+0.2pp). Precisely targeted, confirmed
+  by the per-variant table: variant 67 (the exact object-field-as-parameter
+  shape this fix addresses) moved 25.0%→51.1% recall (+24 tp — accounting
+  for the ENTIRE aggregate delta, not a coincidence). Variants 61/66/71
+  (48.9%) and 68/72-75 (25.0%) are UNCHANGED — confirmed, not assumed —
+  meaning Juliet's variant 61-75 range covers SEVERAL DISTINCT container
+  mechanisms (arrays, ArrayList, Hashtable, different getter shapes), and
+  this fix closed exactly one of them. The others are real, separate,
+  not-yet-investigated gaps — W2.3 is genuinely partial, not done.
+- **Session-cumulative Java dev-split trajectory**: 33.5% → 36.4% (W0.3) →
+  36.5% (W1) → 37.3% (if/else) → 37.6% (switch) → **37.8% (+ object-field
+  widen) — current verified baseline.**
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold static/instance final fields + trivially-constant helper returns | NOT_STARTED |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | NOT_STARTED |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | NOT_STARTED |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
