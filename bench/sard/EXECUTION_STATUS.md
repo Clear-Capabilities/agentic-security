@@ -147,6 +147,59 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
   source/sink combination, not just by CWE number) — tracked as the
   immediate next task, not assumed away.
 
+### 2026-09-15 — chasing the real W1 impact: fn-limit workaround in progress
+
+- CWE-89's own corpus tree has exactly 4 sub-directories (`s01`-`s04`), so a
+  future finer-grained batch-scan.mjs extension (sub-batch by `sNN`, not just
+  by CWE number) would cut ~17604 functions to ~4400/batch — comfortably
+  under the existing 5000 default without touching any engine default. Noted
+  as the more representative fix (customers won't be setting
+  `AGENTIC_SECURITY_DEEP_FN_LIMIT`, so a benchmark that only passes by
+  raising it further from the corpus's true recall under real-world
+  defaults). Not yet built — sizable (bench-realworld.js's `--cwe` exclusion
+  is CWE-directory-level only; sub-directory-level scoping needs both the
+  scan-surface exclusion AND `buildJulietExpected`'s GT construction to
+  agree on the same sub-path filter).
+- Tested the simpler option first: re-ran the CWE-89 batch alone with
+  `AGENTIC_SECURITY_DEEP_FN_LIMIT=20000` (comfortably above its 17604) and
+  `AGENTIC_SECURITY_DEEP_TIMEOUT_MS=900000`. Result: **151.6s, truncated:
+  false** — actually FASTER than the capped 154.5s run. The function-count
+  budget was never protecting wall-clock time for this corpus; it was pure
+  lost coverage. Sub-batching by `sNN` is unnecessary — raising the limit is
+  free here.
+- Applied generously (`AGENTIC_SECURITY_DEEP_FN_LIMIT ??= '50000'`) inside
+  `batch-scan.mjs` itself, not the global engine default — this is the
+  SARD-benchmark-scoped entry point; a real customer's production scan
+  should keep the conservative default that protects ITS scan-time SLA.
+  `??=` so an operator's own env var always wins. SARD unit suite (55 tests)
+  still green after this change.
+- Re-ran the full 18-CWE deep batched Java dev-split scan with this applied
+  — the first genuinely COMPLETE, untruncated measurement (confirmed:
+  `truncated: false` across all 18 batches, `fnLimitExceeded: false`
+  everywhere). Result: tp=1320, fp=507, fn=1658, precision=72.2%,
+  recall=44.3%, **macroF1=36.5%** (macroF1 support>=5: 55.7%), 526.5s total.
+- **Honest conclusion**: both fixes this session (W1 class-resolution +
+  fn-limit truncation) are real and independently verified correct in
+  isolation, but the AGGREGATE macroF1 gain over the W0.3 baseline (36.4%)
+  is only +0.1pp — far short of the PRD's own trajectory table ("W0+W1:
+  45-55% for Java"), which the PRD itself flagged as "honest ranges, not
+  promises." The per-variant table (W0.7) explains where the ceiling still
+  is, and it is UNCHANGED by either fix this session: 51-54 (multi-file) at
+  25-34% recall, 61-68 (collection/field) at 25-49%, 81 (abstract dispatch,
+  support=212) at 36.8% — all identical, tp-for-tp, to the pre-fix run.
+  These are squarely W2's territory (interprocedural completeness), not W1's
+  — W2.5 in particular ("abstract/interface dispatch via declared base WHEN
+  RECEIVER IS A PARAMETER") is a real, distinct gap from what W1 fixed
+  (receiver as a local variable): `_localVarConstructedTypes` only tracks
+  `isNew` assignments to LOCAL variables, never a class type flowing in
+  through a PARAMETER. NOT yet verified with a real probe (the same method
+  that found the fn-limit bug) — a candidate next target, not confirmed as
+  THE blocker.
+- **New verified Java dev-split baseline (deep, batched, zero truncation —
+  genuinely complete this time): macroF1=36.5%.** Supersedes the W0.3-era
+  36.4% figure (that one had ~70% of CWE-89 silently unanalyzed; this
+  doesn't).
+
 ## W2 — Interprocedural completeness
 
 | # | Task | Status |

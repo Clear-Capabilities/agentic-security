@@ -53,6 +53,20 @@ if (!APP) {
   process.exit(2);
 }
 
+// PRD W0.3/W0.5 — the deep engine's default AGENTIC_SECURITY_DEEP_FN_LIMIT
+// (5000) exists to protect scan-time SLA on a real customer codebase; it is
+// NOT a meaningful cap for a SARD benchmark run, where a single Juliet CWE
+// directory (Java CWE-89: 3668 files) can hold far more functions than that
+// (17604, confirmed) — silently truncating ~70% of it regardless of
+// resolution correctness elsewhere, with NO measurable wall-clock cost to
+// removing the cap (CWE-89 alone: 154.5s capped at 5000 functions vs 151.6s
+// analyzing all 17604 — the function-count budget was never the thing
+// making this slow). Raised here, not in the global default, because
+// batch-scan.mjs IS the SARD-benchmark-scoped entry point — a production
+// scan of a large enterprise codebase should keep the conservative default.
+// `??=` so an operator's own explicit env var always wins.
+process.env.AGENTIC_SECURITY_DEEP_FN_LIMIT ??= '50000';
+
 // Forwarded verbatim to every child (both the --list-cwes discovery call and
 // each per-CWE batch) — everything the caller passed except --app and this
 // script's own --json (every child always runs --json so its output is
