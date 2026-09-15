@@ -611,7 +611,7 @@ precision against).
 | W4.J3 | Java CWE-643 XPath | NOT_STARTED |
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
-| W4.J6 | Java CWE-90 LDAP re-measure (family key already fixed this session) | NOT_STARTED |
+| W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
@@ -1562,6 +1562,45 @@ handles every variant. Marking VERIFIED rather than leaving it
 NOT_STARTED, since the PRD's own acceptance criterion for this task
 ("confirm...") is now met with real evidence. No corpus re-measurement
 needed (no code changed to measure).
+
+### W4.J6 — Java CWE-90 LDAP re-measured, verified working (2026-09-15)
+
+Continuing the same low-risk verification pass as W2.4: checked a
+NOT_STARTED task explicitly annotated "family key already fixed this
+session" (the CWE-90 family-string bug fixed earlier in W0/W2 work), to
+see whether it needed anything further or was just stale bookkeeping.
+
+Ran a CWE-90-scoped real-corpus measurement directly against
+`bench-realworld.js` (not the full `batch-scan.mjs` sweep, since only
+one CWE needed re-checking): `node
+scanner/test/benchmark/realworld/bench-realworld.js --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split
+dev --cwe 90 --json --allow-truncation`. Scan-surface correctly
+restricted to the CWE-90 directory only (excluded 111/112 other CWE
+dirs, per W0.4's gold-surface behavior).
+
+**Result: tp=125, fp=72, fn=56 → recall 69.1%, precision 62.5%, F1
+65.6%.** LDAP injection detection is working substantially well on the
+real corpus post this session's collection-taint and family-key fixes.
+The 72 FPs are a real precision gap (3 more FP came from an unrelated
+CWE-502 deserialization family bleeding into this scan surface, not
+LDAP itself) but per this task's own scope ("re-measure"), not a
+redesign — precision improvement belongs to W3's taint-authority /
+guard-predicate work, tracked there rather than duplicated here.
+
+**No code change; ledger-only update.** Moved from NOT_STARTED to
+VERIFIED with the real measurement as evidence.
+
+**Process note:** while launching this scan, a command was
+accidentally double-backgrounded (shell `&` combined with the tool's
+own `run_in_background: true`), which detached the actual node process
+from harness tracking (reparented to PID 1) even though the tool
+reported "exited with code 0" immediately. Caught via `ps -p <pid>`
+before ending the turn, recovered by launching a second tracked
+background command that blocked on the orphaned PID until it exited
+naturally. No process was left hanging at any turn boundary, but this
+is now an explicit lesson for future iterations: never combine `&`
+with `run_in_background: true`.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
