@@ -1334,9 +1334,28 @@ function step(node, stateIn, callContext) {
             && _MUTATORS.test(node.callee.prop)) {
           _recv = accessPathOf(node.callee.object);
         } else if (typeof _plainCallCalleeName === 'string') {
-          const _dot = _plainCallCalleeName.lastIndexOf('.');
-          if (_dot > 0 && _MUTATORS.test(_plainCallCalleeName.slice(_dot + 1))) {
-            _recv = _plainCallCalleeName.slice(0, _dot);
+          // SARD_80_F1 W2.3 follow-up: a REPEATED-method fluent chain
+          // (`sb.append(a).append(b).append(c)`, StringBuilder/StringBuffer's
+          // own idiomatic multi-line-SQL-building shape) dot-joins to
+          // "StringBuilder.append.append.append" via the hand-rolled/CST
+          // chain-flattening convention every frontend in this codebase
+          // uses (correct for a chain ending in a DIFFERENT terminal method,
+          // e.g. `DocumentBuilderFactory.newInstance().newDocumentBuilder()`
+          // — wrong here, since `.append()` returning `this` means every
+          // segment is really the SAME receiver, not a new one). Naively
+          // taking everything before the LAST dot recovers
+          // "StringBuilder.append.append" as the "receiver" — an
+          // ever-growing, never-matching key that silently drops the
+          // mutator's own taint tracking for every chained-append call.
+          // Strip ALL trailing segments that repeat the SAME mutator method
+          // name first, so `X.append.append.append` and plain `X.append`
+          // resolve to the identical, real receiver "X".
+          const _segs = _plainCallCalleeName.split('.');
+          let _end = _segs.length - 1;
+          const _lastSeg = _segs[_end];
+          if (_end > 0 && _MUTATORS.test(_lastSeg)) {
+            while (_end > 0 && _segs[_end] === _lastSeg) _end--;
+            if (_end >= 0) _recv = _segs.slice(0, _end + 1).join('.');
           }
         }
         if (_recv) state.add(_recv);

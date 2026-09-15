@@ -193,6 +193,56 @@ public class ProbeForEach {
     `a bare for-each over a tainted ArrayList must still see the taint. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
 });
 
+// SARD_80_F1 W2.3 follow-up: `sb.append(a).append(b).append(c)` — Java's
+// dominant SQL-building idiom (StringBuilder/StringBuffer, arguably more
+// common in real code than a single `+=`-style concat) — dot-joins to a
+// single flat callee string via this codebase's chain-flattening
+// convention: "StringBuilder.append.append.append" (correct for a chain
+// ending in a genuinely DIFFERENT terminal method; wrong here, since
+// `.append()` returning `this` means every segment is really the SAME
+// receiver). `engine.js`'s mutator rule naively took everything before
+// the LAST dot as the "receiver", recovering the nonsensical, ever-
+// growing "StringBuilder.append.append" — silently dropping the taint.
+// The SEPARATE-STATEMENT form (`sb.append(a); sb.append(b);`) already
+// worked; only the chained form was broken. Fixed by stripping ALL
+// trailing segments that repeat the SAME mutator method name before
+// taking the receiver, so a chain of N `.append()`s and a single
+// `.append()` resolve to the identical real receiver.
+test('java: taint survives a CHAINED sb.append(a).append(b).append(c) StringBuilder call', async () => {
+  const findings = await scanSource('ProbeChainedAppend.java', `import javax.servlet.http.HttpServletRequest;
+import java.sql.Connection;
+import java.sql.Statement;
+public class ProbeChainedAppend {
+    public void bad(HttpServletRequest request, Connection conn) throws Exception {
+        String data = request.getParameter("name");
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM users WHERE name = '").append(data).append("'");
+        Statement stmt = conn.createStatement();
+        stmt.executeQuery(sb.toString());
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(t.some((f) => /SQL Injection/i.test(f.vuln)),
+    `a chained sb.append().append().append() must still see the taint. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
+test('java: a constant value through a chained StringBuilder.append() chain does not fire', async () => {
+  const findings = await scanSource('ProbeChainedAppendClean.java', `import java.sql.Connection;
+import java.sql.Statement;
+public class ProbeChainedAppendClean {
+    public void good(Connection conn) throws Exception {
+        String data = "safe-constant-value";
+        StringBuilder sb = new StringBuilder();
+        sb.append("SELECT * FROM users WHERE name = '").append(data).append("'");
+        Statement stmt = conn.createStatement();
+        stmt.executeQuery(sb.toString());
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.deepEqual(t.map((f) => f.vuln), [],
+    `a constant value through a chained append() must stay clean. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
 // ── precision: widening the mutator rule must not make every container tainted
 test('a clean value written into a container does not taint it', async () => {
   const findings = await scanSource('clean.js', `const { exec } = require('child_process');

@@ -578,7 +578,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 |---|---|---|
 | W2.1 | Control-flow gating: constant-fold trivially-constant helper returns (shipped, generic, zero SARD impact — support-library methods excluded from scan surface, see session log); static/instance final field folding not attempted | IN_PROGRESS |
 | W2.2 | Multi-file field/chain taint (51-54, 61, 66-68) depth-aware fixed point | IN_PROGRESS |
-| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp); C# generic-constructor lowering gap (`List<T>`) also fixed, real capability, byte-identical zero SARD movement, see session log | IN_PROGRESS |
+| W2.3 | Collection element taint verification (71-74) — typed reads, for-each binding. `Vector.addElement`/`Queue.offer` mutator gap fixed (zero SARD movement); the deeper class-qualification-rewrite/for-each desync bug fixed after it — real, substantial, corpus-verified recall gain for Java (+84 tp) AND ported to C# (same shared mechanism, +4 tp); C# generic-constructor lowering gap (`List<T>`) also fixed, real capability, byte-identical zero SARD movement; chained-mutator desync (`sb.append(a).append(b)`) fixed, language-agnostic engine fix, byte-identical zero SARD movement — see session log for the emerging pattern | IN_PROGRESS |
 | W2.4 | Return-value/parameter variants (41, 42, 61, 62) under scrambled names | NOT_STARTED |
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
@@ -1469,6 +1469,63 @@ Juliet's actual test files use for this CWE family — kept the fix
 anyway (real, tested, zero-regression capability: any C# codebase using
 modern generic collections benefits, and it's a strict IR-completeness
 improvement independent of this corpus).
+
+### W2.3 follow-up — chained-mutator desync (2026-09-15)
+
+Investigated Java's remaining largest gap (CWE-89, fn=308) with a fresh
+probe battery: `StringBuilder`/`StringBuffer`-built SQL via separate
+`.append()` statements, a CHAINED `.append(a).append(b).append(c)`, and
+`String.format`/`PreparedStatement`-via-concat as comparison points. All
+but the chained form fired correctly. Root-caused via a CFG dump: the
+chain-flattening convention every frontend in this codebase uses (dot-
+joining segments in source order — correct for a chain ending in a
+genuinely different terminal method, e.g.
+`Factory.newInstance().newBuilder()`) produces
+`"StringBuilder.append.append.append"` for a REPEATED-method fluent
+chain, since `.append()` returns `this` and every segment is really the
+SAME receiver, not a new one. `engine.js`'s mutator rule then took
+everything before the LAST dot as the "receiver", recovering the
+nonsensical, ever-growing `"StringBuilder.append.append"` — silently
+losing the taint on every chained append. Args were also visibly
+reordered in the dump (a related but distinct symptom of the same
+chain-flattening mechanism), though not what broke this specific case.
+
+**Fixed language-agnostically in `engine.js`** (not a per-parser fix,
+since every hand-rolled frontend AND Java's CST-based one funnel through
+this same mutator-detection code): strip ALL trailing callee-string
+segments that repeat the SAME mutator method name before taking the
+receiver, so `X.append`, `X.append.append`, and `X.append.append.append`
+all resolve to the identical real receiver `X`. 2 new tests in
+`test/container-taint.test.js` (chained append fires; a constant value
+through the identical chain stays clean). Full `test:dataflow`
+(1222/1222), `test:sast` (750/750), self-scan (zero drift),
+`bench:mutation:check` (35/35), `bench:cve-replay:check` (220/220),
+`test:smoke` (30/30) all green.
+
+**Real-corpus measurement: byte-identical to the pre-fix baseline**
+(tp=1722 fp=1057 fn=1256, CWE-89 unchanged at tp=472 fp=286 fn=308).
+Zero movement, same as the C# generics fix immediately before it.
+
+**A pattern worth naming plainly, now that it has recurred five times
+in one session** (W2.1's helper-return folding, C#'s taint-based
+cleartext-storage extension, C#'s HtmlTextWriter coverage ×2, C#'s
+generic-constructor fix, and now this): **fixes that model realistic,
+idiomatic, "how a human actually writes this" code shapes keep landing
+as real, tested, zero-regression capability improvements that measure
+ZERO impact on this specific corpus.** Juliet/SARD's test generators
+produce deliberately MINIMAL, mechanical code — one flow pattern per
+variant, isolated from confounding complexity — which is exactly why
+chained fluent calls, generic collections, and multi-step declared-type
+indirection tend not to appear in it. This is not a reason to stop
+fixing these gaps (they are real bugs with real external value, and the
+verification discipline this repo requires means each one is honestly
+measured, not assumed) — but it IS a signal that continuing to hunt
+"realistic idiom" gaps specifically FOR THIS corpus's sake has a
+demonstrated low hit rate. Future iterations chasing SARD's own F1
+number specifically should weight investigations toward SIMPLER,
+single-step shape variations (closer to what a mechanical generator
+would emit) over complex real-world idioms, which are better motivated
+by general product quality than by this particular benchmark.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
