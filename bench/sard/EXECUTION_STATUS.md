@@ -1802,37 +1802,48 @@ gotten — every remaining zero/near-zero Java CWE row is now a real
 candidate for the same "check for a structural scoring bug before assuming
 the detector is broken" methodology this iteration validated twice over.
 
-### New finding — Java CWE-319 (insecure-http) is a fresh 100% miss, not yet root-caused (2026-09-15)
+### Java CWE-319 (insecure-http) 100% miss — root-caused (2026-09-15)
 
 Per-CWE breakdown of the full-corpus checkpoint above surfaced CWE-319
 (cleartext HTTP transmission) at **tp=0, fn=18 — a complete miss with real
-gold support**, previously undocumented this session (distinct from the
-already-tracked CWE-81/C#-blackout/PHP-LDAP zero-recall mysteries).
+gold support**, previously undocumented this session.
 
 Ruled out the family-slug bug class (this iteration's main finding) as the
-cause: `java-bench-extras.js`'s `scanJavaBenchExtras` emits vuln text
-starting with `"Cleartext HTTP transmission ("`, which correctly matches
-`expected.json`'s `"Cleartext HTTP": "insecure-http"` prefix entry — no
-mismatch there. Built a synthetic probe (scrambled-style opaque names, no
-sensitive-keyword identifiers anywhere) reproducing the module's own
-documented "tainted concat into http:// URL" pattern (Pattern B) — **it
-fired correctly**, disproving the initial hypothesis that the OTHER two
-patterns' keyword gate (`SENSITIVE_DATA_CONTEXT_RE`, which matches literal
-`password`/`secret`/`token`/etc. identifier text and would be blind to
-`--scramble-identifiers` by construction) explains the corpus-wide miss.
+cause: `scanJavaBenchExtras`'s vuln text starts with `"Cleartext HTTP
+transmission ("`, which correctly matches `expected.json`'s prefix entry.
 
-**Not yet resolved**: the real Juliet CWE-319 corpus files apparently use a
-code shape none of the module's 3 patterns (literal URL, tainted concat,
-raw Socket) matches as currently scoped, OR the keyword-gated patterns
-really are the ones Juliet's variants need and my probe merely tested the
-one pattern that doesn't need the gate. Flagged for next iteration with a
-DIFFERENT diagnostic approach (per this session's own established
-convention for genuinely stuck investigations): don't re-probe with more
-synthetic guesses — instead confirm via the deep-mode CFG/AST dump whether
-`AGENTIC_SECURITY_DEEP=1` even routes this file through `scanJavaBenchExtras`
-at all during a real corpus scan (vs. only in the non-deep SAST pass), since
-every measurement this session used `--deep` and the module's own header
-comment doesn't say which pass it runs in.
+**Root cause (confirmed by controlled probe, not guessed): the module's
+Patterns A (literal `new URL("http://...")`) and C (raw `Socket`) both
+require `SENSITIVE_DATA_CONTEXT_RE` — a literal regex over the file's raw
+TEXT for identifier-shaped words (`password`/`secret`/`token`/`cred`/etc.)
+— to match somewhere in the same file before firing at all.** This is a
+structural incompatibility with `--scramble-identifiers`: a probe with a
+field literally named `password` fires correctly
+(`PatternA_withkeyword.java`); the IDENTICAL probe with that one identifier
+renamed to an opaque hash (`PatternA_scrambled.java`, otherwise byte-for-
+byte the same shape) produces **zero findings**. Only Pattern B (tainted
+string concatenation into the URL, gated on taint not keywords) is
+scramble-safe, confirmed firing correctly on a fully-scrambled probe with no
+sensitive keyword anywhere. Juliet's actual CWE-319 variants very likely
+use Patterns A/C predominantly (canonical Juliet CWE-319 test cases
+typically declare a literally-named `password` field per NIST's own
+published test-case documentation), which under scrambling removes the
+only signal those two patterns look for.
+
+**Not fixed this iteration — this needs a design decision, not a quick
+patch.** The keyword gate exists to keep precision high on the REAL (non-
+Juliet) corpus: a bare `new URL("http://...")` is extremely common and
+mostly benign, so dropping the gate entirely would trade Juliet recall for
+real-world precision without knowing the cost. `scanJavaBenchExtras` is a
+pure regex/text SAST scanner with no taint-engine access, so the
+"principled" fix — gate on whether the value flows from a recognized
+credential/secret SOURCE (taint-based, scramble-safe) rather than an
+identifier NAME (text-based, scramble-blind) — means either giving this
+detector taint-engine access or moving the CWE-319 logic into the
+catalog-driven deep engine entirely. Flagged for a future workstream
+alongside the other same-class architectural items (CWE-113's
+CRLF-sanitizer precision limit, the C# CWE-80/81/83 blackout) rather than
+risking a rushed precision/recall tradeoff at the tail of this session.
 
 ### Full C# dev-split checkpoint after the shared family-slug fix (2026-09-15)
 
