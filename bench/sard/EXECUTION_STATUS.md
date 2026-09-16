@@ -1906,6 +1906,51 @@ CWE-90/91/98/862's actual root cause remains unresolved and still needs the
 different diagnostic approach already flagged (confirm whether ANY detector
 fires on these PHP shapes at all before assuming a scoring bug).
 
+### W5.2 — five hypotheses ruled out for CWE-90/91/98/862; genuinely stuck without corpus access (2026-09-15)
+
+Continued the PHP zero-recall investigation systematically rather than
+guessing further. Each of the following was checked directly, not assumed:
+
+1. **Family-string mismatch** — already ruled out for CWE-90/91/98 (exact
+   match between `_CWE_FAMILY` and `ingest-php.mjs`'s gold family); CWE-862's
+   real mismatch was found and fixed (see above) but produced zero movement.
+2. **Identifier scrambling breaking builtin/sink function names** —
+   `ingest-php.mjs`'s own `neutralizeIdentifiers` function is explicitly
+   documented in its own header comment as a NO-OP for this corpus: "a real
+   run of the leakage-audit found ZERO hits across all 5000 already-ingested
+   cases" because Stivalet & Delaitre's SARD PHP suite (this corpus's actual
+   generator) doesn't use Juliet's bad()/good() naming convention at all.
+   PHP function/identifier names are NOT rewritten here the way Java/C#'s
+   `--scramble-identifiers` rewrites theirs. This rules out an entire
+   hypothesis class this session initially suspected.
+3. **Detection mechanism failure** — built and ran 3 synthetic PHP probes
+   directly through `runScan(dir, {deep:true})` (the exact function
+   `score-php.mjs` itself calls): a simple function, a cross-file
+   `require_once` + class-method call (matching this corpus's more complex,
+   Stivalet/Delaitre-style flow shapes rather than Juliet's flat pattern),
+   and confirmed both the structural `LDAP-INJECTION` detector AND the
+   `IR-TAINT` deep engine fire correctly on every shape tried, tagged
+   `CWE-90` correctly.
+4. **Silent scan exceptions** — `score-php.mjs`'s per-case loop logs
+   `⚠ <caseId>: scan failed` on any exception; the full corpus log has
+   ZERO such lines. Every gold case for all 4 CWEs scanned without error.
+5. **Deep engine not actually running** — the script also warns if
+   `--deep` was requested but no scan ever reported `analysisTier.irTaint`;
+   that warning never fired either. `fpByParser` in the same run shows
+   `IR-TAINT: 81` findings elsewhere in the PHP corpus, confirming the deep
+   engine executes successfully on PHP generally.
+
+**Genuinely stuck, honestly:** every mechanism-level and pipeline-level
+hypothesis reachable without reading actual corpus file content has now
+been checked and ruled out. The remaining explanation is that the real
+Stivalet/Delaitre SARD PHP source for these 4 families uses a code shape
+none of my synthetic probes replicated — which cannot be further narrowed
+without either reading the ingested corpus (blocked, correctly, by both
+the deny-list and this session's own ethical commitment) or consulting the
+test suite's own PUBLISHED, external methodology documentation (a
+legitimate, non-corpus source not yet tried). Flagged for that specific
+next step rather than more synthetic guessing.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
