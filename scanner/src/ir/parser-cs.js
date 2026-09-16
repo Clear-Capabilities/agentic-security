@@ -798,6 +798,33 @@ function _lowerStmt(stmt, line) {
   }
   // throw
   if (/^throw\b/.test(s)) return { kind: 'throw', line, value: _lowerExpr(s.replace(/^throw\s*/, '')) };
+  // compound assign: `x += y`  `x.y -= z`  etc. SARD_80_F1 W4.C11 — this
+  // was previously unrecognized entirely (the plain-assign regex below
+  // requires a literal `=` with nothing but `[\w.]` before it, which a
+  // compound operator's own leading char, e.g. `+`, never satisfies), so
+  // the whole statement fell through every branch in this function and
+  // was silently dropped from the CFG — no assign, no call, nothing.
+  // Juliet's C# corpus builds `CommandText` this way UNIVERSALLY
+  // (`cmd.CommandText += "..." + tainted + "...";`), so this was a
+  // total blackout for that shape, not a rare corner case.
+  // Modeled as `x = x <op-without-'='> y` (a self-referencing binary),
+  // NOT as a plain `x = y` reassignment — `case 'assign'` in engine.js
+  // calls `removePathAndDescendants` on a clean RHS, and a naive
+  // "just treat it like `=`" lowering would WRONGLY clear x's own
+  // pre-existing taint whenever this particular append happens to be
+  // clean (e.g. a literal SQL fragment appended after an earlier
+  // tainted append). The self-reference makes taint the OR of "x was
+  // already tainted" and "this RHS is tainted", which is what `+=`
+  // actually means.
+  const cm2 = s.match(/^([A-Za-z_][\w.]*)\s*(\+=|-=|\*=|\/=|%=|&=|\|=|\^=|<<=|>>=|\?\?=)\s*(.+)$/s);
+  if (cm2) {
+    const target = cm2[1];
+    const rhs = _lowerExpr(cm2[3]);
+    return {
+      kind: 'assign', line, target,
+      source: { kind: 'binary', op: cm2[2].slice(0, -1), left: { kind: 'ident', name: target }, right: rhs },
+    };
+  }
   // assign:   `var x = …`  `Type x = …`  `x = …`  `x.y = …`
   // The leading type/`var` clause is now its own capture group: when it's
   // present the regex engine could only have reached a valid overall match

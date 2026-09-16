@@ -47,6 +47,10 @@ const TYPE_MODIFIERS = new Set(['readonly', 'const', 'static', 'public', 'privat
 
 const BUILTIN_TYPES = new Set(['void', 'bool', 'byte', 'sbyte', 'char', 'short', 'ushort', 'int', 'uint', 'long', 'ulong', 'float', 'double', 'decimal', 'string', 'object', 'var', 'dynamic']);
 
+// SARD_80_F1 W4.C11 — compound assignment operators, tokenized as single
+// 'op' tokens by csharp-tokenizer.js but previously never checked for here.
+const CS_COMPOUND_ASSIGN_OPS = new Set(['+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '??=']);
+
 function isType(tok) {
   if (!tok) return false;
   if (tok.kind === 'kw' && BUILTIN_TYPES.has(tok.value)) return true;
@@ -329,7 +333,20 @@ function walkMethodBody(method) {
         targetParts.push(tokens[j + 1].value);
         j += 2;
       }
-      if (tokens[j] && tokens[j].kind === 'op' && tokens[j].value === '=') {
+      // SARD_80_F1 W4.C11 — compound assignment (`+=`, `-=`, …) was
+      // previously invisible here (only bare `=` matched), so a statement
+      // like `cmd.CommandText += "..." + tainted + "...";` — Juliet's own
+      // universal convention for building CommandText — produced NO
+      // assignment record at all, silently dropping it from this
+      // detector's taint model. This model (`analyzeMethodFlow`, see
+      // csharp-analysis.js) has no un-taint step — a taintMap entry is
+      // only ever set true, never cleared — so treating the compound RHS
+      // exactly like a plain assign's RHS is already correct: if the
+      // target was tainted before, that status is never touched (no
+      // clearing branch exists); if this RHS is tainted, it becomes
+      // tainted now, same as a `+=` should.
+      if (tokens[j] && tokens[j].kind === 'op' &&
+          (tokens[j].value === '=' || CS_COMPOUND_ASSIGN_OPS.has(tokens[j].value))) {
         let k = j + 1;
         let depth = 0;
         while (k < tokens.length && (depth > 0 || tokens[k].kind !== 'semi')) {
