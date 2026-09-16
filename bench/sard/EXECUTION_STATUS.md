@@ -1834,6 +1834,31 @@ at all during a real corpus scan (vs. only in the non-deep SAST pass), since
 every measurement this session used `--deep` and the module's own header
 comment doesn't say which pass it runs in.
 
+### Full C# dev-split checkpoint after the shared family-slug fix (2026-09-15)
+
+`node bench/sard/scripts/batch-scan.mjs --app sard-juliet-csharp-strict --blind
+--scramble-identifiers --deep --split dev --json | node
+bench/sard/scripts/macro-score.mjs`:
+
+**macroF1=17.0%, microF1=21.1%, P=46.2%, R=13.7%, CWEs=28,
+macroF1(support>=5)=18.6%.** Up from **16.2%** (last recorded checkpoint) —
+a modest **+0.8pp**, consistent with CWE-470's partial recovery
+(tp=17/123, recall 13.8%, confirmed again in this full-corpus context,
+not a batch-scan artifact).
+
+Per-CWE breakdown confirms the already-documented C# "total blackout"
+families are unchanged and still zero: **CWE-113 (support=613, the single
+largest lever in the whole C# corpus if ever resolved), CWE-80/81/83,
+CWE-643, CWE-78, CWE-314/313/261/523/539/319/315 all still f1=0.0%.**
+CWE-134 also confirmed zero again (tp=0/34) in this less-truncated
+context — two consistent zero readings now, raising confidence this is a
+real remaining gap (likely needing the same cross-method taint
+propagation already flagged for CWE-81's exception-message case) rather
+than a truncation artifact. None of this is new information — it
+corroborates, rather than extends, the already-flagged W4.C1/C8 blackout
+investigation, which remains explicitly deferred pending a different
+diagnostic approach.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
