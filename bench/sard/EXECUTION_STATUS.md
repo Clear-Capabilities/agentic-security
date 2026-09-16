@@ -2026,6 +2026,35 @@ class variants from the same public generator repo, not more guessing.
 CWE-862 remains a distinct, separate gap (confirmed: no PHP detector for
 this family exists at all — `fp=0` proves zero findings of any kind).
 
+### W5.2 clarification — this corpus's CWE-862 is "XPath IDOR", not generic missing-authz (2026-09-15)
+
+Checked the generator's `sanitize.xml` for LDAP/XPath-adjacent flaw types
+while chasing CWE-91's remaining zero, and found `CWE_862_XPath_IDOR` as
+its OWN distinct flaw type — separate from plain `CWE_91_Injection`. This
+corpus's CWE-862 cases are specifically an **XPath query combined with an
+IDOR-style authorization bypass**, not a generic "missing an authz check"
+shape. This explains, more precisely than the earlier finding, why no
+generic authz/RBAC detector was ever going to match: the vulnerability
+needs a bespoke XPath+IDOR detector, not a broadened generic one. Scoped
+correctly now for whoever picks this up: it's a missing-detector-class
+problem (new detector work), not a scoring or family-mapping bug, and not
+something the family-prefix fix above could ever have reached.
+
+Also confirmed (`input.xml`, the generator's own source-construction
+templates): every injection family shares the SAME ~10 source-construction
+variants (`$_GET['UserData']`, backticks, `exec()`+array-index, `fopen()`,
+`popen()`, etc.) feeding into whichever sink template. LDAP's partial
+recovery (18/65, not full) is consistent with only some of these ~10
+source shapes propagating taint correctly through to the sink — the same
+per-source-shape gap likely explains why XPath (already confirmed to fire
+on the simplest `$_GET` shape) still shows zero on the full case set:
+either XPath's other source-shape combinations fail differently, or a
+residual issue distinct from the ones already ruled out remains. Not
+chased further this iteration — flagged as the concrete next diagnostic
+(test each of the ~10 source shapes against the XPath sink individually,
+now that the family/catalog blocker is gone) rather than another
+open-ended guess.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
