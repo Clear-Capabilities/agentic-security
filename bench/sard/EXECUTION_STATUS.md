@@ -1749,6 +1749,37 @@ existing test that consumes `expected.json`'s `_familyMap` directly) — all
 green. No detector code changed; this was purely a ground-truth/taxonomy
 data-completeness bug.
 
+### W4.J5 follow-up — systematic sweep found 5 more family-slug mismatches (2026-09-15)
+
+Having root-caused the CWE-470/134 blackout to a general MECHANISM (a
+finding's vuln-name slug not matching its gold family), wrote a one-off
+script cross-referencing every Java/C# sink catalog entry's `vuln.name`
+against `expected.json`'s `_familyMap` and each manifest's `cweToFamily`,
+to check for other latent instances of the same bug class before moving
+on. Found 5 more, all Java, none C#:
+
+- `java-hibernate-createQuery` (HQL Injection) and
+  `java-hibernate-createSqlQuery` / `java-jpa-createNativeQuery` (Native SQL
+  Injection) — CWE-89, slugged to `hql-injection-...`/`native-sql-...`
+  instead of matching `sql-injection`.
+- `java-ois-readObject` (CWE-502, ObjectInputStream) and
+  `java-DocumentBuilder-parse` (CWE-611, XXE) — same pattern.
+
+Fixed with 4 more `_familyMap` prefix entries ("HQL Injection", "Native SQL
+Injection", "XXE (", "Insecure Deserialization ("). Re-ran the sweep script
+afterward: **zero remaining mismatches** across every Java/C# gold-mapped
+CWE. CWE-502 and CWE-611 have no actual gold cases in this Juliet Java
+module set regardless (confirmed via `--list-cwes`, and via the upstream
+repo's `settings.gradle.kts` — no `cwe502`/`cwe611` module), so those two
+fixes are correctness-only, not corpus-impactful; the 3 CWE-89 ORM-sink
+fixes DO fold into gold-covered territory.
+
+**Re-measured Java CWE-89 (not isolated to just this fix, since CWE-89 has
+many sinks and was already largely working from this session's earlier
+collection-taint fix): tp=472 fp=212 fn=308 → recall 60.5%, F1 64.0%.**
+Full regression re-run after this second round: `test:smoke` (30/30),
+`sard-cwe-key-merge.test.js` (3/3), both green.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
