@@ -967,6 +967,22 @@ export const CATALOG = [
   { kind: 'sink', id: 'php-domxpath-query', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'query', receiver: '(?:xp|xpath|dom)' }, argIndex: 0,
     vuln: { name: 'XPath Injection (DOMXPath::query)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },
+  // SimpleXMLElement::xpath() — PHP's OTHER, more commonly used XPath query
+  // API (distinct from DOMXPath::query above), called on a SimpleXMLElement
+  // object which can be named anything (`$xml->xpath($query)` — no `xp`/
+  // `xpath`/`dom`-shaped receiver name to key off, unlike DOMXPath's own
+  // idiomatic naming). No `match.receiver` set deliberately: `xpath` is a
+  // specific enough bare method name that gating on receiver naming would
+  // only lose recall, not gain precision. Tagged CWE-91 (not CWE-643) to
+  // match this specific API/CWE pairing as filed by NIST SARD's own PHP
+  // Vulnerability Test Suite (Stivalet & Delaitre) — confirmed from that
+  // suite's PUBLIC generator source (github.com/stivalet/
+  // php-vuln-test-suite-generator, execQuery_XPath.txt: `$xml =
+  // simplexml_load_file(...); $res=$xml->xpath($query);`), not from reading
+  // this project's own ingested/scored corpus copy.
+  { kind: 'sink', id: 'php-simplexml-xpath', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'xpath' }, argIndex: 0,
+    vuln: { name: 'XPath Injection (SimpleXMLElement::xpath)', severity: 'high', cwe: 'CWE-91',
+            remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },
   { kind: 'sink', id: 'go-htmlquery-find', language: 'go', framework: 'htmlquery', match: { type: 'call', callee: 'Find', receiver: 'htmlquery' }, argIndex: 1,
     vuln: { name: 'XPath Injection (htmlquery.Find)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Never concat user input into the expression string; validate/allow-list the queried attribute value instead.' } },

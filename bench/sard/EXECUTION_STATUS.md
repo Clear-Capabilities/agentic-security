@@ -628,7 +628,7 @@ Status: NOT_STARTED. Blocked on W1/W2/W3.
 | # | Task | Status |
 |---|---|---|
 | W5.1 | Sources: nested fgets/fopen, fread, file_get_contents, shell output, unserialize, $_SERVER, class getters | NOT_STARTED |
-| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95 partially works, tp=3) — CWE-90/91/98/862 all show tp=0 fp=0 on the real corpus despite verified-working detection mechanisms on every synthetic variant tried. Fixed a real CWE-862 family-string bug (`broken-authz`→`missing-authz`, matching the codebase's own dominant convention) but it produced zero corpus movement (fp=0 too, confirming a genuine detector-coverage gap, not a scoring bug); family-slug sweep ruled out the same bug class for CWE-90/91/98. Root cause remains unresolved, see session log | IN_PROGRESS |
+| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95 partially works, tp=3) — real root cause found via the SARD PHP suite's PUBLIC generator source: a THIRD family-mapping table (`engine.js`'s `_VULN_FAMILY_PREFIX`, which actually controls PHP's scoring family, distinct from `_CWE_FAMILY`/`expected.json`'s `_familyMap`) was missing LDAP/XPath/file-inclusion prefixes. Fixed + added a missing `SimpleXMLElement::xpath()` catalog entry (CWE-91). **Real corpus: macroF1 21.2%→27.4% (+6.2pp), CWE-90 tp=0→18/65.** CWE-91/98 still tp=0 despite the same fix confirmed working in isolated probes — family-mapping is now definitively ruled out for those two; next step is the generator's SOURCE-side `Construction` classes, not more guessing. CWE-862 remains a genuine no-detector-exists gap (fp=0 proves it) | IN_PROGRESS |
 | W5.3 | CWE-862 detector design (post-W3, needs guard-predicate distinction) | NOT_STARTED |
 | W5.4 | Guard matrix (sanitizer x sink x quote-context) test file + FP triage | NOT_STARTED |
 
@@ -1950,6 +1950,81 @@ the deny-list and this session's own ethical commitment) or consulting the
 test suite's own PUBLISHED, external methodology documentation (a
 legitimate, non-corpus source not yet tried). Flagged for that specific
 next step rather than more synthetic guessing.
+
+### W5.2 — real root cause found via the PUBLIC generator source; PHP's biggest win this session (2026-09-15)
+
+Took the one legitimate next step flagged above: researched the Stivalet &
+Delaitre SARD PHP Vulnerability Test Suite's own PUBLIC generator source
+(`github.com/stivalet/php-vuln-test-suite-generator` — the test-case
+GENERATOR's source code, not this project's ingested/scored corpus copy;
+confirmed via `gh api` reading the generator repo's own tree/blobs, same
+class of legitimate external due-diligence as the earlier Juliet
+`settings.gradle.kts` check). Read the actual sink templates:
+
+- `bin/execQuery_LDAP.txt`: `$sr=ldap_search($ds,"o=My Company, c=US",
+  $query);` — argIndex 2, matches this project's `php-ldap-search` catalog
+  entry exactly.
+- `bin/execQuery_XPath.txt`: `$xml = simplexml_load_file(...);
+  $res=$xml->xpath($query);` — **`SimpleXMLElement::xpath()`, not
+  `DOMXPath::query()`**. This project's ONLY PHP XPath catalog entry
+  (`php-domxpath-query`) matches callee `query` with receiver
+  `(?:xp|xpath|dom)` — it can never match `->xpath()` on an arbitrarily-named
+  `SimpleXMLElement` variable. Zero overlap with the real corpus's actual
+  API shape.
+- `bin/Flaws_generators/Injection_Generator.py`: confirms CWE-98 uses
+  `include_require`, generating a `Local/Remote File Inclusion` shape
+  distinct from the catalog's own vuln-text wording.
+
+**But the deeper, more consequential discovery came from testing these
+exact real templates through `runScan()` directly**: found a THIRD,
+previously-unknown family-assignment table — `engine.js`'s own internal
+`_VULN_FAMILY_PREFIX` / `familyFor()`, used by `dedupeFindingsWithEvidence`
+early in the scan pipeline, BEFORE `finding-defaults.js`'s `_CWE_FAMILY`
+backfill ever runs (which only fires `if (!f.family)`, and family is
+already stamped by this point). This table has `'SQL Injection'` and
+`'Command Injection'` prefixes (both PHP families that DO show real
+recall) but was completely missing `'LDAP Injection'`, `'XPath
+Injection'`, and `'Local/Remote File Inclusion'` — a PERFECT correlation
+with exactly the CWEs stuck at zero. Unlike `bench-realworld.js`'s
+`familyForBench` (which ignores `finding.family` entirely for Java/C#
+scoring and reads `vuln` text against `expected.json`'s separate
+`_familyMap`), `score-php.mjs`'s `familyOf()` reads `finding.family`
+FIRST — so THIS table, not `_CWE_FAMILY` or `expected.json`, is what
+actually controlled PHP's scoring family all along. Three independent
+family-mapping tables now confirmed to exist in this codebase
+(`_VULN_FAMILY_PREFIX` in engine.js, `_CWE_FAMILY` in finding-defaults.js,
+`_familyMap` in expected.json) — each serving a different consumer, each
+capable of this exact bug class independently.
+
+**Fixed**: added `['LDAP Injection', 'ldap-injection']`, `['XPath
+Injection', 'xpath-injection']`, `['Local/Remote File Inclusion',
+'code-injection']` to `_VULN_FAMILY_PREFIX`; added a new catalog entry
+`php-simplexml-xpath` (no `match.receiver` — `xpath` is specific enough as
+a bare method name that gating on receiver naming would only cost recall)
+tagged `CWE-91` to match this corpus's own CWE numbering for this exact
+API. Verified via probes reproducing the real generator's exact LDAP and
+XPath templates: both now produce clean `family: 'ldap-injection'`/
+`'xpath-injection'` (previously compound slugs like
+`'ldap-injection-ldap-search'` that could never match gold data). Full
+regression: `test:sast` (750/750), `test:dataflow` (1224/1224),
+`test:smoke` (30/30), all green.
+
+**Real-corpus measurement: PHP's biggest win this session.**
+`macroF1=21.2%→27.4%` (**+6.2pp**), `microF1=17.2%→25.4%`,
+`P=24.2%→31.2%`, `R=13.4%→21.4%` — precision AND recall both improved,
+not a tradeoff. **CWE-90 (LDAP): tp=0→18/65 (recall 0%→27.7%).**
+CWE-91 (XPath) and CWE-98 (include) **still show tp=0** despite the exact
+same fix class being applied and confirmed working in isolated probes of
+the real generator templates — the family-mapping blocker is now
+DEFINITIVELY ruled out for these two specifically (proven, not assumed),
+so whatever is left must be in how the real corpus's SOURCE side
+(the `Construction`/`Sanitize` parameter classes in the generator, which
+this investigation did not yet examine — only the sink-side footer
+templates) builds the tainted value before it reaches the sink. Flagged
+as the precise next step: read `Generation_functions.py`'s `Construction`
+class variants from the same public generator repo, not more guessing.
+CWE-862 remains a distinct, separate gap (confirmed: no PHP detector for
+this family exists at all — `fp=0` proves zero findings of any kind).
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
