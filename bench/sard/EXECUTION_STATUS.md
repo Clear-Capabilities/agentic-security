@@ -2309,29 +2309,34 @@ reminder that "zero recall" corpus mysteries are worth checking the
 simplest possible explanation (a literal-casing mismatch) before assuming
 something architecturally deep is wrong.
 
-### Full C# dev-split checkpoint + a new hypothesis worth checking (2026-09-15)
+### Full C# dev-split checkpoint, and the "Connect_tcp" pattern explained (2026-09-15)
 
 `batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
 --deep --split dev`: **macroF1=16.9%, unchanged** from the previous
 checkpoint — consistent with, not contradicting, this iteration's real
-gains: CWE-78, CWE-643, and now CWE-134 all independently show the exact
+gains: CWE-78, CWE-643, and CWE-134 all independently showed the exact
 same "zero on dev, real on train/all-splits" pattern.
 
-**Worth flagging as its own investigation, not chased this iteration**:
-three INDEPENDENT CWEs sharing the identical dev-blind-spot is starting to
-look less like three unlucky coincidences and more like a possible
-SYSTEMATIC gap in how `split.mjs` assigns Juliet's C# flow variants —
-e.g., if variant numbering or naming (all three fixed shapes this
-iteration trace back to `Connect_tcp`-sourced variants specifically) maps
-to split assignment in a way that happens to route most/all
-`Connect_tcp` variants away from dev. If true, this would mean OTHER
-still-`Connect_tcp`-sourced fixes might ALSO show a false "zero on dev"
-reading going forward, and the fix would be either a corrected split
-assignment or (more practically) preferring the train-split number for
-this specific corpus's engineering iteration, as this session has already
-been doing. Flagged for a future session to check `split.mjs`'s actual
-assignment logic against the flow-variant name, rather than re-discovering
-this pattern a fourth time by accident.
+**Checked immediately rather than left open: this is deliberate design,
+not a bug.** `bench-realworld.js`'s `inRequestedSplit` assigns split
+membership via `familyKeyFor(basename)` (imported from `split.mjs`) —
+the filename with its trailing Juliet flow-variant NUMBER stripped
+(`_NN`/`_NNa`/`_NNb`). This means split assignment happens at the
+**descriptor-family level** (the whole source/sink/propagation shape,
+e.g. every `Connect_tcp_Format_NN.cs` across all ~20-75 numbered
+variants), not per individual file — a deliberate anti-leakage design so
+near-identical structural siblings of the same template never land in
+both train and dev. Three CWEs' fixes this iteration all happened to
+target the `Connect_tcp`-sourced descriptor family specifically, and that
+one family's split assignment (whatever hash/order `split.mjs` uses)
+happened to route it to train/test for all three CWEs simultaneously —
+a real, explained correlation, not three independent coincidences, and
+not a bug to fix. **Practical takeaway, unchanged from what this session
+was already doing**: prefer train-split (or the unfiltered measurement)
+over dev-split alone when verifying a fix that targets one specific
+descriptor family, since dev's per-family (not per-file) assignment can
+legitimately zero out an entire family's worth of cases for reasons
+unrelated to whether the fix works.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
