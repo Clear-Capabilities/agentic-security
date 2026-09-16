@@ -5011,7 +5011,17 @@ function scanJavaSAST(fp, raw) {
     // Per-family file-level predicate (custom logic). Returns truthy to suppress.
     if (typeof rule.fileSafePredicate === 'function' && rule.fileSafePredicate(cleaned, raw)) continue;
 
-    const sinkLine = cleaned.substring(0, sinkMatch.index).split('\n').length;
+    // Use the match's END, not its start: every sinkRe here terminates
+    // right at the sink call's own opening `(`, but a few (ldap-injection's
+    // `\bjavax.naming...\b[\s\S]{0,12000}?\w+\.search\(`) anchor on an EARLIER
+    // token (an import statement, or the first `DirContext` mention) and lazily
+    // span forward to the real call, which can be dozens of lines later. Using
+    // the start position reported the anchor's line (e.g. an `import` line) as
+    // the "vulnerable line" — a wrong, misleading finding location/snippet, and
+    // it also broke `dedupeFindingsWithEvidence`'s per-sink-line collapse with
+    // other detectors (ldap-injection.js, the IR-TAINT engine) that correctly
+    // report the real call site, since a stale anchor line never matches it.
+    const sinkLine = cleaned.substring(0, sinkMatch.index + sinkMatch[0].length).split('\n').length;
 
     // Optional precision filter: when the rule is taint-aware, extract the
     // sink call's argument expression and check whether a tainted variable
