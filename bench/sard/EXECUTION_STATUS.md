@@ -2055,6 +2055,51 @@ chased further this iteration — flagged as the concrete next diagnostic
 now that the family/catalog blocker is gone) rather than another
 open-ended guess.
 
+### W5.2 — CWE-91 narrowed further, plus a separate tooling bug found (2026-09-15)
+
+Systematically tested all 14 of the generator's own published source-
+construction shapes (`input.xml`: backticks, exec, fopen, GET, popen,
+POST, proc_open, SESSION, shell_exec, system, unserialize, and 3
+object/array-indirection variants) against the now-fixed XPath sink,
+individually, via `runScan()` on 14 isolated single-file probes.
+
+**8 of 14 fire correctly**, including the three most common real-world
+shapes — `$_GET`, `$_POST`, `$_SESSION` — plus `fopen`/`popen`/
+`proc_open`/`shell_exec`/`unserialize`. **6 do not**: `backticks`,
+`exec`+array-index, `system()`'s return value, and all 3 object-method-
+indirection shapes (`$obj->getInput()` wrapping a private/returned
+property). This is a genuine, separate, and interesting recall gap in its
+own right (object-method return-value taint specifically), but does not
+by itself explain a full 0/35 on the real corpus, since GET/POST/SESSION
+— presumably the most-used shapes — already work.
+
+**Separately found a real tooling bug while re-verifying**: `score-php.mjs
+--cwe <N>` (a single-CWE-scoped run, used earlier for the W4.J6-style
+isolated-CWE re-measurement pattern that worked reliably for Java) produces
+a **degenerate, vacuous result** for PHP — `tp=0 fp=0 fn=0, perCwe={},
+precision=1, recall=1` — regardless of which CWE is requested (reproduced
+for both `--cwe 91` and, earlier, `--cwe 862`). This is NOT a detection
+signal; it means the PHP harness's own `--cwe` filter path is broken and
+must not be trusted for isolated per-CWE numbers — **only the full,
+unfiltered `score-php.mjs --deep --split dev` run's `perCwe` breakdown is
+trustworthy for PHP.** (This differs from Java/C#'s `bench-realworld.js
+--cwe`, which was used correctly and reliably throughout this session's
+other isolated re-measurements — the bug is specific to `score-php.mjs`.)
+Flagged for a future fix; not chased this iteration since the full-corpus
+path already gives a trustworthy number.
+
+**Still unresolved**: why the full, trustworthy corpus run shows CWE-91 at
+tp=0/35 despite GET/POST/SESSION all confirmed working on isolated probes.
+Possible remaining explanations, not yet checked: (a) the generator's
+`Construction` wrapping step (concatenation/sprintf/etc. applied to the
+tainted value before the sink, distinct from the `Sanitize` step already
+partially examined) breaks XPath specifically but not LDAP; (b) something
+about how `score-php.mjs` scans a `caseDir` (a real per-case directory,
+possibly with more than the one file this session's probes used) differs
+from a from-scratch single-file probe. Genuinely narrowed, not solved —
+the next session should start from these two specific hypotheses rather
+than re-deriving them.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
