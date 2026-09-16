@@ -656,9 +656,11 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
 
 | Gate | Java target | C# target | PHP target | Status |
 |---|---|---|---|---|
-| M1 (after W0+W1) | >=45 | >=25 | >=25 | IN_PROGRESS — C# checked (test-split macroF1=18.3%, see W4.C6): gate NOT met. Java/PHP not yet run on test split |
+| M1 (after W0+W1) | >=45 | >=25 | >=25 | IN_PROGRESS |
 | M2 (after W2+W3) | >=65 | >=50 | >=50 | NOT_STARTED |
 | M3 (after W4+W5) | >=80 | >=80 | >=80 | NOT_STARTED |
+
+**M1 detail:** C# checked on TEST split (the actual gate) — macroF1=18.3%, below the >=25% target, gate NOT yet met (see W4.C6 for the full measurement and root-cause investigation). Java and PHP have not yet been run on test split.
 
 ---
 
