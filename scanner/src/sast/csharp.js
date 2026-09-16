@@ -1108,6 +1108,37 @@ function detectUnprotectedCredTransport(file, raw, ir, analysis, out, seen) {
   }
 }
 
+// CWE-539 (Information Exposure Through Persistent Cookie) — another
+// "point flaw", same shape class as CWE-523 above: Juliet's real C#
+// example (confirmed via the public Juliet mirror this project's
+// manifest pins, CWE539_..._Web_01.cs) sets `cookie.Expires =
+// DateTime.Now.AddDays(1825.00);` (any future/computed expiration makes
+// the cookie PERSISTENT — written to disk, surviving browser restarts)
+// vs. the safe form `cookie.Expires = DateTime.MinValue;` (a session-only
+// cookie, never persisted). No source, no sink, no taint — the RHS
+// EXPRESSION ITSELF is the finding, and (like CWE-523) this is immune to
+// `--scramble-identifiers` by construction: `DateTime.MinValue` is a real
+// BCL member reference, not a user identifier, so it is never rewritten.
+const EXPIRES_SAFE_RHS = /^DateTime\s*\.\s*MinValue$/;
+function detectPersistentCookie(file, raw, ir, analysis, out, seen) {
+  for (const m of ir.methods) {
+    for (const a of m.assignments || []) {
+      if (a.memberPath !== 'Expires') continue;
+      const rhs = (a.rhsText || '').trim();
+      if (!rhs || EXPIRES_SAFE_RHS.test(rhs)) continue;
+      const id = `csharp-persistent-cookie:${file}:${a.line}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(makeFinding({
+        ruleId: 'csharp-persistent-cookie', file, line: a.line, raw, ir,
+        family: 'header-hardening', severity: 'medium', cwe: 'CWE-539',
+        vuln: 'Information Exposure Through Persistent Cookie — .Expires set to a future/computed date',
+        remediation: 'Set `Expires = DateTime.MinValue` (or omit it) to keep the cookie session-only. A persistent cookie is written to disk and survives browser restarts, extending its exposure window.',
+      }));
+    }
+  }
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────
 
 export function scanCSharp(fp, raw) {
@@ -1144,6 +1175,7 @@ export function scanCSharp(fp, raw) {
   try { detectXpathInjection(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectInsecureHttp(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectUnprotectedCredTransport(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectPersistentCookie(fp, raw, ir, analysis, out, seen); } catch {}
   // Stamp route + auth context on every finding for downstream exploitability.
   for (const f of out) {
     f._routes = analysis.routes.map(r => ({ http: r.http, path: r.path, line: r.line, requiresAuth: r.requiresAuth, methodName: r.methodName }));

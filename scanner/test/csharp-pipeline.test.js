@@ -600,3 +600,34 @@ test('detector: CWE-523 a non-credential http:// form does NOT fire (requires a 
   const findings = scanCSharp('t.cs', src);
   assert.ok(!findings.some(x => x.id.startsWith('csharp-unprotected-cred-transport:')));
 });
+
+// CWE-539 (Information Exposure Through Persistent Cookie) — another
+// "point flaw", same shape class as CWE-523: Juliet's real C# example
+// (confirmed via the public Juliet mirror this project's manifest pins,
+// CWE539_..._Web_01.cs) sets a future/computed expiration (persistent)
+// vs. DateTime.MinValue (session-only, safe). No taint at all.
+test('detector: CWE-539 cookie.Expires set to a future date fires', () => {
+  const src = `
+    public class C {
+      public void Bad(HttpRequest req, HttpResponse resp) {
+        HttpCookie cookie = new HttpCookie("SecretMessage", "test");
+        cookie.Expires = DateTime.Now.AddDays(1825.00);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-persistent-cookie:'));
+  assert.ok(f, 'expected csharp-persistent-cookie finding');
+  assert.equal(f.cwe, 'CWE-539');
+});
+
+test('detector: CWE-539 cookie.Expires = DateTime.MinValue does NOT fire', () => {
+  const src = `
+    public class C {
+      public void Good(HttpRequest req, HttpResponse resp) {
+        HttpCookie cookie = new HttpCookie("SecretMessage", "test");
+        cookie.Expires = DateTime.MinValue;
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-persistent-cookie:')));
+});

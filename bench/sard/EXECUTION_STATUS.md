@@ -617,7 +617,7 @@ precision against).
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
-| W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials — **CWE-523 built from scratch and VERIFIED PERFECT: tp=17 fp=0 fn=0 (100% precision AND recall) on the real corpus.** Genuinely new capability: CWE-523 is a "point flaw" (hardcoded `<form action='http://...'>` submitting a password field, no data flow at all) with zero prior coverage — a structural, scramble-safe detector (string literal content, immune to `--scramble-identifiers`). CWE-539/259/321/256/261 not yet checked | IN_PROGRESS |
+| W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials — **CWE-523 AND CWE-539 both built from scratch and VERIFIED PERFECT: tp=17 fp=0 fn=0 (100% precision AND recall) EACH on the real corpus — two new detectors, two perfect scores.** CWE-523 is a "point flaw" (hardcoded `<form action='http://...'>` submitting a password field). CWE-539 is the same shape class: `cookie.Expires` set to a future/computed date (persistent) vs. `DateTime.MinValue` (session-only, safe). Both are string/expression-literal checks with zero data flow, and both are immune to `--scramble-identifiers` by construction. Both also needed a `_familyMap` fix (same recurring bug class this session). CWE-259/321/256/261 not yet checked | IN_PROGRESS |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
 
 **W4 acceptance:** no scored CWE with support >=20 below 50% F1 on dev.
@@ -2490,6 +2490,31 @@ Session-total C# progress: macroF1 16.2%→24.5% (**+8.3pp**), almost
 entirely from this session's systematic CWE-by-CWE investigation using
 the public Juliet C# mirror. The next zero/low-support CWE fixed this
 cleanly could plausibly clear the M1 threshold for C# outright.
+
+### W4.C5 — CWE-539 built, second perfect score in a row (2026-09-15)
+
+Fetched the real Juliet C# CWE-539 test case
+(`CWE539_..._Web_01.cs`): another point flaw, same shape class as
+CWE-523 — `cookie.Expires = DateTime.Now.AddDays(1825.00);` (a future/
+computed date, making the cookie PERSISTENT) vs. `cookie.Expires =
+DateTime.MinValue;` (session-only, safe). Built `detectPersistentCookie`
+(`sast/csharp.js`): any `.Expires` assignment whose RHS is not literally
+`DateTime.MinValue`. 2 new tests added. Full regression: `test:sast`
+(755/755), `test:smoke` (30/30), self-scan (no drift).
+
+**Same `_familyMap` bug hit again, immediately, on the first
+measurement**: `fp=34, fn=17` (not even a clean 1:1 mismatch, since a
+pre-existing, unrelated CWE-1004 detector's own vuln text was ALSO
+unmatched and got swept into the same fix). The manifest expects
+`header-hardening` for CWE-539 (grouped with CWE-1004's cookie-hardening
+family, not `data-exposure` as first guessed) — corrected the finding's
+`family` field to match, and added TWO new `_familyMap` prefix entries
+(mine, plus the pre-existing CWE-1004 detector's, found as a drive-by
+fix since it shared the identical unmatched-slug symptom).
+
+**Real-corpus measurement after the fix: tp=17, fp=0, fn=0 — 100%
+precision AND recall, identical to CWE-523.** Two brand-new detectors,
+back to back, both perfect on their first real corpus measurement.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

@@ -123,6 +123,8 @@
       "Weak Randomness": "weak-rng",
       "Template Autoescape Disabled": "ssti",
       "Session Cookie Without": "header-hardening",
+      "Information Exposure Through Persistent Cookie": "header-hardening",
+      "Insecure Cookie — HttpCookie missing": "header-hardening",
       "XXE:": "xxe",
       "XXE (": "xxe",
       "Unsafe XML Parsing": "xxe",
