@@ -6413,6 +6413,22 @@ const _VULN_FAMILY_PREFIX = [
   ['OpenSSH Private Key', 'hardcoded-secret'],
   ['Password in URL', 'hardcoded-secret'],
   ['OAuth Authorization Code Theft', 'open-redirect'],
+  // SARD_80_F1 W4: every IR-TAINT open-redirect catalog sink names its own
+  // API in the vuln string ("Open Redirect (Controller.Redirect)",
+  // "Open Redirect (response.sendRedirect)", "Open Redirect (flask.redirect)",
+  // "Open Redirect (Rails redirect_to)", ...) — with no prefix entry here,
+  // each one fell through to the generic auto-slug fallback and got its OWN
+  // unique family string, distinct from open-redirect.js's/csharp.js's
+  // explicit `family: 'open-redirect'`. Two detectors correctly finding the
+  // SAME real vulnerability at the SAME line then failed to collapse via
+  // dedupeFindingsWithEvidence's (file, sink-line, family) key, producing an
+  // extra unmatched/scored FP — the exact bug class found in W4.J15 for
+  // Java's LDAP rule, here caused by family-string divergence instead of a
+  // wrong line. Found via the C# public mirror: CWE601_Open_Redirect__Web_
+  // QueryString_Web_01.cs's resp.Redirect(data) produced both a `CSHARP`
+  // finding (family 'open-redirect') and an `IR-TAINT` finding (family
+  // 'open-redirect-controller-redirect') at the identical line.
+  ['Open Redirect', 'open-redirect'],
   ['Synchronous Blocking I/O', 'dos-sync-io'],
   ['Missing Timeout', 'dos-no-timeout'],
   ['GraphQL Missing Query', 'graphql-dos'],
