@@ -1704,10 +1704,26 @@ export const CATALOG = [
     vuln: { name: 'Externally-Controlled Format String (String.Format)', severity: 'medium', cwe: 'CWE-134',
             remediation: 'Never build the FORMAT string itself from user input; keep the format literal and pass user data only as substitution arguments.' } },
   // CWE-643 — XPath built from concatenated/tainted text.
-  { kind: 'sink', id: 'cs-xpathnavigator-select', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Select', receiver: '[Nn]av(?:igator)?' }, argIndex: 0,
+  //
+  // `receiverTypeIn` added: Juliet's OWN canonical C# CWE-643 shape
+  // (confirmed via the public Juliet C# mirror this project's SARD
+  // manifest pins, `CWE643_Xpath_Injection__Connect_tcp_01.cs`) names its
+  // `XPathNavigator` variable `xPath` — matching neither `[Nn]av` nor
+  // `[Nn]avigator`. Worse than a one-off naming miss: under
+  // `--scramble-identifiers` (the ONLY mode this benchmark ever scores
+  // from), EVERY local variable name becomes an opaque hash regardless of
+  // what it was originally called, so a receiver match keyed purely on
+  // NAME can never fire on this benchmark at all, independent of Juliet's
+  // own naming choice. `receiverTypeIn` is additive (OR'd with the name
+  // check, never replacing it — see `_receiverTypeConfirms`), seeded here
+  // from the declared-type annotation on `XPathNavigator xPath =
+  // inputXml.CreateNavigator();` (parser-cs.js's `declaredType` capture on
+  // assign nodes, landed earlier this session for an unrelated task,
+  // needed no changes to support this).
+  { kind: 'sink', id: 'cs-xpathnavigator-select', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Select', receiver: '[Nn]av(?:igator)?', receiverTypeIn: ['^XPathNavigator$'] }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPathNavigator.Select with concatenated expression)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPath variables (`XsltArgumentList`/`XPathExpression.SetContext`) instead of concatenating user input into the expression text.' } },
-  { kind: 'sink', id: 'cs-xpathnavigator-evaluate', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Evaluate', receiver: '[Nn]av(?:igator)?' }, argIndex: 0,
+  { kind: 'sink', id: 'cs-xpathnavigator-evaluate', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Evaluate', receiver: '[Nn]av(?:igator)?', receiverTypeIn: ['^XPathNavigator$'] }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPathNavigator.Evaluate with concatenated expression)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPath variables instead of concatenating user input into the expression text.' } },
   { kind: 'sink', id: 'cs-selectsinglenode', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'SelectSingleNode' }, argIndex: 0,

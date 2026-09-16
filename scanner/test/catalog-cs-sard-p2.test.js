@@ -349,3 +349,31 @@ public class C {
   assert.equal(ret.value.parts.length, 2);
   assert.notEqual(ret.value.kind, 'unknown');
 });
+
+// Juliet's OWN canonical C# CWE-643 shape (confirmed via the public
+// Juliet C# mirror this project's SARD manifest pins,
+// CWE643_Xpath_Injection__Connect_tcp_01.cs): the XPathNavigator variable
+// is named `xPath`, which matches neither `[Nn]av` nor `[Nn]avigator` —
+// and under `--scramble-identifiers` (the only mode the real benchmark
+// scores from) NO variable name could ever match a name-based receiver
+// regex. This test deliberately uses fully opaque, scramble-style names
+// (no "nav" substring anywhere) to pin the `receiverTypeIn` fallback
+// rather than relying on a name that happens to still match.
+test('cs-xpathnavigator-evaluate: fires via receiverTypeIn even when the receiver name contains no "nav" substring (scramble-safe)', async () => {
+  const dir = mkTmp('xpath-scrambled', `
+using System;
+using System.Xml.XPath;
+public class C {
+    public void op0_a1b2c3() {
+        string op1_x9y8z7 = Console.ReadLine();
+        XPathDocument op2_j1k2l3 = new XPathDocument("helper.xml");
+        XPathNavigator op3_m4n5o6 = op2_j1k2l3.CreateNavigator();
+        string op4_p7q8r9 = "//users/user[name/text()='" + op1_x9y8z7 + "']/secret/text()";
+        string op5_s1t2u3 = (string)op3_m4n5o6.Evaluate(op4_p7q8r9);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xpath|CWE-643/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected XPath Injection via receiverTypeIn fallback, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});

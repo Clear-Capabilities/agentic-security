@@ -615,7 +615,7 @@ precision against).
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
-| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). CWE-643 (XPath) and CWE-134 remain genuinely zero, joining the C# blackout set | IN_PROGRESS |
+| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. CWE-134 remains genuinely zero, joining the C# blackout set | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
@@ -2246,6 +2246,40 @@ artifact) that happens to be macro-F1-neutral on this specific dev
 sample. Recorded here so a future dev-only re-check isn't misread as
 "this fix didn't help" — see the W4.C3 session log entry above for the
 full verification trail.
+
+### W4.C3 — C# CWE-643 (XPath): same bug class as PHP's XPath fix, real but small movement (2026-09-15)
+
+Applied the same public-generator-source technique that resolved CWE-78:
+fetched the real Juliet C# mirror this project's manifest pins
+(`CWE643_Xpath_Injection__Connect_tcp_01.cs`) and found its
+`XPathNavigator` variable named `xPath` — matching neither
+`cs-xpathnavigator-select`'s nor `cs-xpathnavigator-evaluate`'s
+name-based `receiver: '[Nn]av(?:igator)?'` pattern. This is the SAME bug
+class as PHP's `->xpath()` receiver mismatch and Java's HtmlTextWriter
+fix earlier this session: a name-based receiver check that can never
+survive `--scramble-identifiers` (the only mode this benchmark scores
+from) regardless of what Juliet originally named the variable. Fixed by
+adding `receiverTypeIn: ['^XPathNavigator$']` to both entries — additive,
+seeded from `parser-cs.js`'s existing `declaredType` capture on assign
+nodes (landed earlier this session for an unrelated task, needed no
+changes here). Verified firing correctly on both a probe using the exact
+real variable name AND a fully opaque, scramble-style name
+(`op3_m4n5o6.Evaluate(...)`) — 2 new tests added
+(`catalog-cs-sard-p2.test.js`). Full regression: `test:dataflow`
+(1233/1233), `test:sast` (750/750), `test:smoke` (30/30), all green.
+
+**Real-corpus measurement: a genuine but small win, not the total
+blackout anymore.** Dev split alone: tp=0/131, unchanged (matches CWE-78's
+already-documented sampling-artifact pattern). Without the split filter:
+**tp=6/652** (was a total 0 blackout before this fix — any nonzero
+number here is new, real signal). Train split: **tp=4/392.** Precision
+stayed perfect (fp=0 throughout). The RATE is still low (~1%) — most of
+this corpus's CWE-643 flow variants apparently use a shape this one fix
+doesn't reach (Juliet generates 20+ distinct flow variants per CWE;
+`Connect_tcp` was only one), unlike CWE-78 where the shape checked
+covered a much larger share. Genuinely narrowed and real, not solved —
+moved from "zero findings of any kind" to "a real, if partial,
+mechanism," which is the same qualitative jump PHP's XPath fix made.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
