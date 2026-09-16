@@ -58,6 +58,21 @@ const ALLOWLIST = new Set([
     reason: 'NON-FUNCTIONAL against the current fixture layout: discoverFixtures() only recognises family-named dirs (sql-injection, xss, ssrf, …) with a vulnerable/ subfolder, and scanner/test/fixtures/ uses different names throughout (xss-dom-sink, ssrf-static-url, …) — a real run finds 0 fixtures and would exit 0 as a silent, vacuous pass. Its own header says it was designed to run on every release as a CI gate; wiring it before fixing discovery would ship exactly the silent-pass defect class this repo has been hardened against elsewhere. Needs repair, not wiring, as its own item.' },
   { glob: /^scripts\/validator\/(history|junit|refusal-classes|run-test)\.mjs$/,
     reason: 'agents/security-poc-generator.md wires detect-framework.mjs and risk-context.mjs (both now correctly referenced — see the .js→.mjs fix in the same commit) but never references run-test.mjs, junit.mjs, history.mjs or refusal-classes.mjs. This looks like an incompletely-wired PoC-verification pipeline, not four accidental leftovers: the directory name and the four files together imply a designed flow (run the generated PoC, classify a refusal, emit JUnit, record history) that the agent doc never invokes. Real gap for a dedicated remediation-pipeline pass.' },
+
+  // SARD_80_F1_EXECUTION_PRD operator tooling. Genuinely, heavily used —
+  // hundreds of invocations across the PRD's own session logs in
+  // bench/sard/EXECUTION_STATUS.md — but not wired into package.json,
+  // because both take CLI flags (--app, --split, --cwe / no flags at all)
+  // meant for ad-hoc, interactive use during the PRD's own iterative
+  // per-CWE investigation loop, not a fixed npm script. This checker's
+  // haystack does not scan bench/sard/EXECUTION_STATUS.md (only
+  // package.json, .github/workflows/*.yaml, and agents|commands/*.md), so
+  // real usage there is invisible to it — same shape as the other
+  // operator-CLI entries above, not a wiring gap.
+  { glob: /^bench\/sard\/scripts\/batch-scan\.mjs$/,
+    reason: 'operator CLI tool for the SARD_80_F1_EXECUTION_PRD per-CWE-batch corpus scan (--app/--split/--cwe flags); invoked directly throughout bench/sard/EXECUTION_STATUS.md, not via an npm script' },
+  { glob: /^bench\/sard\/scripts\/execution-status\.mjs$/,
+    reason: 'operator CLI status reporter for the SARD_80_F1_EXECUTION_PRD ledger (bench/sard/EXECUTION_STATUS.md); invoked directly (text and --json) to drive the published progress dashboard, not via an npm script' },
 ]);
 
 function listScripts(dir, scanRoot) {

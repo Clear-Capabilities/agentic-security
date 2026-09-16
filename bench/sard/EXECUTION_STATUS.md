@@ -618,6 +618,7 @@ precision against).
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials — **CWE-523 AND CWE-539 both built from scratch and VERIFIED PERFECT: tp=17 fp=0 fn=0 (100% precision AND recall) EACH on the real corpus — two new detectors, two perfect scores.** CWE-523 is a "point flaw" (hardcoded `<form action='http://...'>` submitting a password field). CWE-539 is the same shape class: `cookie.Expires` set to a future/computed date (persistent) vs. `DateTime.MinValue` (session-only, safe). Both are string/expression-literal checks with zero data flow, and both are immune to `--scramble-identifiers` by construction. Both also needed a `_familyMap` fix (same recurring bug class this session). CWE-259/321/256/261 not yet checked | IN_PROGRESS |
+| W4.J8 | **Engine-level bug, not per-CWE work — `java-ast-folding.js`'s constant-folding dead-branch detector silently deleted real findings.** Investigating CWE-83's stuck-at-33% recall (F1=50%, tp=24/72 dev) found `deadBranchRanges` mis-evaluated `if (data != null)` as constant-false whenever `data` was reassigned inside a preceding try/catch/loop block it "descends but doesn't bind constants" for — it never invalidated the STALE pre-block value, so a canonical Java idiom (`T x = null; try { x = source(); } catch(...) {} if (x != null) { sink(x); }`) got its sink-bearing branch marked "constant-false-if dead-then" and the finding inside silently deleted by `applyJavaBenchSuppressions`. This is a GENERAL correctness bug (not Juliet-specific — any real Java codebase using this idiom hits it), confirmed via CWE-83's own corpus: all 25 URLConnection flow variants use a `null` initializer and were 100% affected; File-sourced variants happen to initialize with `""` instead, which accidentally sidesteps the bug (`"" != null` folds constant-TRUE, marking the absent else dead instead). Fixed by invalidating (`scope.delete`) any variable reassigned anywhere inside such a block before continuing. 6 new unit tests (`test/java-ast-folding.test.js`), verified the genuinely-dead `if(false)`/`if(true)` cases still fold correctly (no regression). **Real corpus (train split — dev split unaffected, since URLConnection's whole descriptor family falls entirely in train/test, same pattern as W4.J7's CWE-329): CWE-83 tp=164/380 (recall 43.2%, F1 54.9%).** Also fixed 2 unrelated pre-existing `test:lifecycle` failures found while verifying (an orphan-script false-positive on 2 heavily-used SARD operator scripts not referenced in any haystack this checker scans) | VERIFIED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
 
 **W4 acceptance:** no scored CWE with support >=20 below 50% F1 on dev.
@@ -2787,6 +2788,107 @@ separate `support===0` exclusion) become the PRIMARY reported number
 instead of a secondary diagnostic, with a corresponding re-baseline and
 threshold review? If yes, this alone may already put Java past M1 on
 dev-split evidence.
+
+### W4.J8 — the CWE-83 investigation that found an engine-level bug, not a per-CWE gap (2026-09-16)
+
+Continuing the per-CWE sweep, picked CWE-83 next (F1=50%, tp=24/72 dev,
+the same "servlet writer XSS" family as the just-closed CWE-81). Fetched
+the public Juliet mirror's baseline file first (this session's now-
+standard practice): the sink is `response.getWriter().println("<img
+src=\"" + data + "\">")` — already covered by the `java-writer-println`
+catalog entry fixed earlier this session, so the sink itself wasn't the
+suspect this time. Pulled the fn (false-negative) file list from a
+`--cwe 83`-scoped dev-split run instead: 25 of 48 fns were
+`..._URLConnection_*.java` — one entire source-construction shape,
+systematically failing across every listed flow variant.
+
+Fetched `CWE83_XSS_Attribute__Servlet_URLConnection_15.java` from the
+public mirror: the source is `URLConnection.getInputStream()` wrapped in
+`InputStreamReader`/`BufferedReader`, then `.readLine()` — structurally
+identical to the ALREADY-WORKING "File" source variant's wrapping chain,
+so this wasn't a missing-source-catalog-entry problem either. Built a
+synthetic probe reproducing the exact real shape and bisected it
+statement-by-statement (10+ probe variants): the taint-producing
+`readLine()` call, the sink call, and the taint STATE reaching the sink
+all traced correctly through the whole pipeline (confirmed via temporary
+tracing in `dataflow/engine.js`'s `case 'assign'`/`case 'if'`/`case
+'call'` steps, `_sinkFindingsForCall`, `_collectFindings`, the
+integration point in `engine.js`, and post-dedup — the finding survived
+every one of those checkpoints) — the "0 hits" result only appeared
+after the fully-assembled pipeline ran end to end, meaning something
+downstream of dedup was deleting an already-correct finding.
+
+**Root cause, found by calling `deadBranchRanges` directly on the probe
+file**: `[{"startLine":14,"endLine":16,"reason":"constant-false-if
+dead-then"}]` — the AST-based constant-folder in `sast/java-ast-
+folding.js` (consumed by `java-bench-extras.js`'s
+`applyJavaBenchSuppressions`, which runs on EVERY `.java` finding,
+unconditionally) was convinced `if (data != null)` was always false. Its
+`walkStatement` explicitly comments "Loop bodies, try, etc. — descend
+but don't bind constants" for try/loop/switch bodies — correct as far as
+it goes (it can't PROVE what a nested block does to a tracked variable,
+so it rightly declines to track NEW values from inside one) — but it
+never INVALIDATED the OLD value either. `data = null;` at declaration
+sets `scope.set('data', null)`; the walker then descends into the `try {
+data = readerBuffered.readLine(); }` generically, never updating
+`scope`; by the time it reaches `if (data != null)` AFTER the try, it
+still believes `data === null` from three statements ago, folds the
+condition to `false`, and marks the entire sink-bearing branch dead —
+deleted before the taint engine's own (entirely correct) finding could
+ever reach a report.
+
+This is a real bug in ANY Java codebase using this idiom (`T x = null;
+try { x = source(); } catch (...) {} if (x != null) { … }` — an
+extremely common null-safe-initialization pattern), not something
+specific to Juliet. It explains the URLConnection/File split exactly:
+File-sourced variants happen to initialize `data = "";` (empty string,
+not `null`) — `"" != null` folds to constant-TRUE, marking the ABSENT
+else-branch dead instead of the sink-bearing then-branch, so those
+variants were never affected. Confirmed this isn't a one-off explanation
+by testing both shapes directly against `deadBranchRanges`.
+
+**Fix**: before generically descending into a try/loop/switch body,
+`walkStatement` now collects every variable reassigned anywhere in that
+subtree (`_collectAssignedNames`, recognizing both `binaryExpression`
+nodes with an `AssignmentOperator` child — java-parser's own grammar
+shape for `=`/`+=`/etc. — and `unaryExpression` nodes with a
+`UnarySuffixOperator`/`UnaryPrefixOperator` child for `x++`/`--x`) and
+deletes each from `scope`, so a later check sees "unknown," never a
+stale value. Conservative in the direction that matters: this can only
+REDUCE how much code gets folded (fewer things marked dead), never
+increase it — exactly the right asymmetry for a suppressor whose failure
+mode is a silently deleted true positive, not a surviving false one.
+
+Added `test/java-ast-folding.test.js` (6 tests, wired into `test:sast`):
+the fixed reassignment-in-try/loop/increment cases, PLUS two regression
+guards confirming genuinely-constant `if(true)`/`if(false)` branches are
+still folded exactly as before. `test:sast` 763/763, `test:dataflow`
+1238/1238, `test:smoke` 30/30, self-scan zero drift,
+`bench:mutation:check` 35/35, `bench:cve-replay:check` 220/220,
+`bench:layer-recall:check` exact baseline match — all clean.
+
+**Real corpus**: CWE-83's dev-split number is unchanged (tp=24/72) — for
+the same reason CWE-329 didn't move M1 (W4.J7 above): the URLConnection
+descriptor family's whole flow-variant set falls in train/test, none in
+dev, per `familyKeyFor`'s split-assignment mechanism. **Train split:
+tp=164/380 (recall 43.2%, F1 54.9%)** — real, substantial, verified
+movement on the same corpus the eventual TEST-split milestone run will
+score.
+
+**Drive-by**: found and fixed 2 PRE-EXISTING, unrelated `test:lifecycle`
+failures while running the full gate suite for this change (neither
+caused by this session): `no-orphan-scripts.test.js` was flagging
+`bench/sard/scripts/batch-scan.mjs` and `execution-status.mjs` — both
+genuinely, heavily used throughout this entire PRD (hundreds of
+invocations logged in this very file) but invisible to the checker,
+since its haystack only scans `package.json`/`.github/workflows/*.yaml`/
+`agents,commands/*.md`, never `bench/sard/EXECUTION_STATUS.md`. Added
+both to that test's own `ALLOWLIST` with an accurate reason. A separate,
+still-open `no-dead-modules.test.js` failure
+(`dataflow/path-feasibility.js::triviallyConstantValue` has no external
+call site) predates this entire session (last touched in an unrelated
+commit) and was left alone — out of scope for this fix, flagged here so
+it isn't mistaken for something this change caused.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

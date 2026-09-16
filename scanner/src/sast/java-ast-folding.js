@@ -363,13 +363,69 @@ function walkStatement(stmtNode, scope, out) {
     return;
   }
 
-  // Loop bodies, try, etc. — descend but don't bind constants.
+  // Loop bodies, try, etc. — descend but don't bind constants. Any variable
+  // REASSIGNED somewhere inside (a try body's `data = readerBuffered.
+  // readLine();` is the canonical case — Juliet's own dominant idiom:
+  // `T x = null; try { x = source(); } catch (...) {} if (x != null) {
+  // sink(x); }`) must be invalidated in `scope` first, or a later `if (x !=
+  // null)` after the block still sees the STALE pre-block value (`null`)
+  // and gets constant-folded to a permanently-dead branch — silently
+  // deleting the taint finding inside it. Confirmed via SARD_80_F1's CWE-83
+  // URLConnection variants: every one of them uses exactly this shape with
+  // a `null` initializer (File-sourced variants happen to initialize with
+  // `""` instead, which sidesteps the bug by accident — `"" != null` folds
+  // to constant-TRUE, marking the absent else-branch dead instead of the
+  // sink-bearing then-branch). Deliberately conservative in the OPPOSITE
+  // direction from the rest of this file's folding: when this walker
+  // cannot prove what happens to a variable, it must NOT keep trusting a
+  // value that may already be stale, since silently marking a live branch
+  // dead is a false negative — far worse than the lost folding opportunity
+  // of a still-cleared-but-actually-unreachable branch.
+  for (const name of _collectAssignedNames(stmtNode)) scope.delete(name);
   for (const key of Object.keys(ch)) {
     const arr = ch[key];
     if (Array.isArray(arr)) for (const child of arr) {
       if (child && child.name) walkStatement(child, scope, out);
     }
   }
+}
+
+/** Bare local-variable name of a `unaryExpression` node used as an
+ *  assignment target, or null when it's not a simple identifier (a member
+ *  write / array-index write can't alias a tracked local, so there is
+ *  nothing in `scope` for it to invalidate). Mirrors evalPrimaryPrefix's
+ *  own bare-identifier extraction but for a WRITE position rather than a
+ *  read, so it does not require the name to already be in scope. */
+function _bareAssignTargetName(unaryNode) {
+  const primary = unaryNode?.children?.primary?.[0];
+  const prefix = primary?.children?.primaryPrefix?.[0];
+  if (!prefix || (primary.children?.primarySuffix?.length || 0) > 0) return null;
+  const fr = prefix.children?.fqnOrRefType?.[0];
+  const parts = fr?.children?.fqnOrRefTypePartFirst || [];
+  if (parts.length !== 1) return null;
+  return parts[0].children?.fqnOrRefTypePartCommon?.[0]?.children?.Identifier?.[0]?.image || null;
+}
+
+/** Recursively collect every local-variable name assigned (`x = …`, `x +=
+ *  …`, `x++`/`x--`/`++x`/`--x`) anywhere in `node`'s subtree. Grammar shapes
+ *  confirmed directly against java-parser's own CST: a `binaryExpression`
+ *  with an `AssignmentOperator` child is `=`/`+=`/`-=`/etc. (LHS in its
+ *  `unaryExpression` child); a `unaryExpression` with a `UnarySuffixOperator`
+ *  or `UnaryPrefixOperator` child is `x++`/`x--`/`++x`/`--x`. */
+function _collectAssignedNames(node, out) {
+  out = out || new Set();
+  if (!node || typeof node !== 'object') return out;
+  if (node.name === 'binaryExpression' && node.children?.AssignmentOperator) {
+    const name = _bareAssignTargetName(node.children.unaryExpression?.[0]);
+    if (name) out.add(name);
+  } else if (node.name === 'unaryExpression'
+    && (node.children?.UnarySuffixOperator || node.children?.UnaryPrefixOperator)) {
+    const name = _bareAssignTargetName(node);
+    if (name) out.add(name);
+  }
+  const ch = node.children;
+  if (ch) for (const key of Object.keys(ch)) for (const child of ch[key]) _collectAssignedNames(child, out);
+  return out;
 }
 
 function captureLocalDecl(lvdNode, scope) {
