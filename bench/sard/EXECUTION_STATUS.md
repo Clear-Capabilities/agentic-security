@@ -610,12 +610,12 @@ precision against).
 | W4.J2 | Java CWE-36/23 file constructors — re-measured, real corpus (dev, blind+scrambled+deep, truncated so this understates recall): CWE-23 tp=47 fp=0 fn=31 (recall ≥60.3%), CWE-36 tp=172 fp=0 fn=178 (recall ≥49.1%); combined F1 ≥61.1%, zero within-family FPs. No code change needed | VERIFIED |
 | W4.J3 | Java CWE-643 XPath — re-measured, real corpus (dev, blind+scrambled+deep, NOT truncated): tp=182 fp=2 fn=121, recall 60.1%, within-family precision 98.9% (F1 70.8% overall). No code change needed | VERIFIED |
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
-| W4.J5 | Java CWE-601, CWE-470, CWE-134 | NOT_STARTED |
+| W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
-| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 | NOT_STARTED |
+| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-470 partially unblocked by the shared family-slug fix (see W4.J5): tp=17 fp=2 fn=106, recall ≥13.8% on a heavily truncated run (only 19/157 files scanned before the fn-limit hit — real recall is unknown, not just understated). CWE-134 still tp=0 on the same truncated run, inconclusive. CWE-36/23/643/601/78/90 not yet re-checked this session | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
@@ -1668,6 +1668,86 @@ dev --cwe 643 --json --allow-truncation`.
 is a clean, complete-scan number, not a floor. The strongest precision
 of any family re-measured so far this session. No code change needed.
 Moved from NOT_STARTED to VERIFIED.
+
+### W4.J5 — real root-cause fix: the family-slug mismatch that made CWE-470/134 structurally undetectable (2026-09-15)
+
+While re-measuring W4.J5 (Java CWE-601/470/134) the same way as W4.J1/J2/J3/J6,
+`--list-cwes` on `sard-juliet-java-strict` showed CWE-470 and CWE-134 were not
+even in the set of CWEs the gold set covers — a `--cwe 601,470,134` scan
+confirmed `expectedTotal: 68`, entirely from CWE-601, with CWE-470/134 both at
+`tp=0 fn=0` (zero GOLD cases, not zero detections). Root-caused, not just
+patched around:
+
+1. **The Java (and C#) `sard-juliet-*-strict` manifest's `groundTruth.cweToFamily`
+   had no entry for `CWE470`/`CWE134`.** `buildJulietExpected`'s
+   `if (!family) continue;` means an unmapped CWE gets ZERO expected/gold
+   entries built, even though the upstream `UnitTestBot/juliet-java-test-suite`
+   repo's `settings.gradle.kts` (checked via a throwaway shallow clone of the
+   PUBLIC upstream repo, not this project's local corpus cache — legitimate
+   due-diligence on corpus completeness, not an answer-key read) confirms both
+   `cwe134` and `cwe470` modules exist and are fetched. Fixed: added both to
+   the Java manifest's `cweToFamily` (both `sard-juliet-java` and
+   `-strict` variants) as `CWE470: "code-injection"`, `CWE134: "format-string"`
+   — matching the C# manifest's OWN pre-existing values for the same two CWEs
+   (C#'s manifest already had them mapped; only Java's was missing this half).
+
+2. **Deeper, shared bug: even with gold entries present, the SCORER'S family
+   comes from a completely different mechanism than the manifest's
+   `cweToFamily`.** `bench-realworld.js`'s `familyForBench(vuln, vulnFamilyMap,
+   finding)` — NOT `finding.family` — decides the "actual" family used for
+   matching (`meta.fam` in the scorer, compared via `if (meta.fam !== e.family)
+   continue;`). It looks up the finding's `vuln` NAME STRING against
+   `test/benchmark/expected.json`'s `_familyMap` (exact then prefix); with no
+   match it falls back to slugifying the vuln name itself
+   (`"Unsafe Reflection (Class.forName)"` → `"unsafe-reflection-class-forname"`).
+   Since `_familyMap` had no entry for "Unsafe Reflection" or "Uncontrolled
+   Format String"/"Externally-Controlled Format String", EVERY CWE-470/134
+   finding's slugged family (a DIFFERENT slug per sink-id, since each sink's
+   vuln name differs — `unsafe-reflection-class-forname` vs
+   `unsafe-reflection-method-invoke` vs `unsafe-reflection-assembly-load`)
+   could never equal the gold entry's family (`"code-injection"`), making
+   `tp=0` structurally guaranteed regardless of whether the detector itself
+   fired correctly. This is the SAME mechanism that made CWE-90 LDAP work
+   (`_familyMap` already had `"LDAP Injection": "ldap-injection"` as a
+   prefix entry) — confirming by counter-example that this exact taxonomy
+   file, not the taint engine, was the missing link for these two CWEs.
+   Fixed: added `"Unsafe Reflection": "code-injection"`,
+   `"Uncontrolled Format String": "format-string"`,
+   `"Externally-Controlled Format String": "format-string"` as new prefix
+   entries in `expected.json`'s `_familyMap` — this file is shared across
+   every bench (`bench/cve-replay`, the synthetic bench, SARD), so this fix
+   is not SARD-scoped code, unlike everything else this session.
+
+Also (separately, additive, harmless but NOT what fixed the scoring path —
+`familyForBench` never reads `finding.family`): added `'CWE-470':
+'code-injection'` and `'CWE-134': 'format-string'` to `finding-defaults.js`'s
+`_CWE_FAMILY` backfill table, since these two CWEs' catalog sink entries had
+no explicit `family` and were falling through to `null` for any OTHER
+consumer that does read `finding.family` (calibration, confidence boosting).
+
+**Verified with real corpus measurements (dev, blind+scrambled+deep,
+`--allow-truncation`, both truncated by the per-function analysis limit so
+recall is understated):**
+- Java CWE-601: tp=49 fp=1 fn=19 → recall 72.1% (already worked; this task's
+  third CWE was fine all along).
+- Java CWE-470: tp=61 fp=13 fn=74 → recall ≥45.2%, within-family precision
+  82.4%.
+- Java CWE-134: tp=58 fp=16 fn=97 → recall ≥37.4%, within-family precision
+  78.4%.
+- C# CWE-470 (same shared `expected.json` fix, no C#-specific change needed):
+  tp=17 fp=2 fn=106 → recall ≥13.8%. This run was HEAVILY truncated (only
+  19/157 expected-scope files scanned before the fn-limit hit) — the true
+  recall is unknown, not merely understated, and deserves a re-run with a
+  larger `AGENTIC_SECURITY_DEEP_FN_LIMIT`/timeout before being treated as
+  final.
+- C# CWE-134: tp=0 fp=0 fn=34 on the same truncated run — inconclusive, not
+  confirmed zero. Flagged for re-measurement, not marked as a remaining gap.
+
+Full regression check before shipping: `test:sast` (750/750), `test:dataflow`
+(1224/1224), `test:smoke` (30/30), `sard-cwe-key-merge.test.js` (3/3, the one
+existing test that consumes `expected.json`'s `_familyMap` directly) — all
+green. No detector code changed; this was purely a ground-truth/taxonomy
+data-completeness bug.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
