@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-15T06:33:17.027Z",
-  "commit": "77e2d42ba35e644c8704888eae3075c3f1b64eef",
+  "generatedAt": "2026-09-16T23:35:01.651Z",
+  "commit": "052314a5a2781d73f34d1d2cad0a87daf7e7d3be",
   "targets": {
     "hooks": {
       "total": 21,
@@ -34,7 +34,7 @@
       }
     },
     "scanner/src": {
-      "total": 483,
+      "total": 485,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -62,7 +62,7 @@
         "ir/parser-cs.js": 2,
         "ir/parser-go.js": 2,
         "ir/parser-kt.js": 1,
-        "ir/parser-php.js": 4,
+        "ir/parser-php.js": 6,
         "ir/parser-py-cst.js": 1,
         "ir/parser-py.helper.py": 1,
         "ir/parser-rb.js": 2,

@@ -1809,7 +1809,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       const exitState = exitStateByQid.get(fn.qid);
       if (!exitState || !exitState.size) continue;
       for (const field of declaredFields) {
-        if (isCoveredBy(exitState, field) || isCoveredBy(exitState, `this.${field}`) || isCoveredBy(exitState, `_this_.${field}`)) {
+        // SARD_80_F1 W5.10 — PHP's own `$this` reference keeps its `$`
+        // sigil in every access path (`$this.field`, never bare `this.` —
+        // parser-php.js's own `->`-to-`.` normalization, W5.9), a fourth
+        // spelling alongside JS's `_this_.`/C#'s and Java's bare `this.`.
+        if (isCoveredBy(exitState, field) || isCoveredBy(exitState, `this.${field}`) || isCoveredBy(exitState, `_this_.${field}`) || isCoveredBy(exitState, `$this.${field}`)) {
           if (!classTaintedFields.has(className)) classTaintedFields.set(className, new Set());
           classTaintedFields.get(className).add(field);
         }
@@ -1830,11 +1834,11 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         _cha: opts._cha,
         _pointsTo: opts._pointsTo,
       };
-      // Seed BOTH the bare and `this.`-qualified spelling of every tainted
-      // field so a reading method sees the taint regardless of which form it
-      // uses to reference the field — mirrors the write-side check above.
+      // Seed every spelling of every tainted field so a reading method sees
+      // the taint regardless of which form it uses to reference the field
+      // — mirrors the write-side check above, `$this.` (PHP, W5.10) included.
       const seeded = new Set();
-      for (const f of fields) { seeded.add(f); seeded.add(`this.${f}`); seeded.add(`_this_.${f}`); }
+      for (const f of fields) { seeded.add(f); seeded.add(`this.${f}`); seeded.add(`_this_.${f}`); seeded.add(`$this.${f}`); }
       try { analyzeFunction(fn, _unionAnnotationTaint(fn, seeded), ctx); } catch {}
       // Unlike the k=2 pass below, this is NOT speculative: `fields` was
       // derived from a REAL, already-observed write elsewhere in this exact

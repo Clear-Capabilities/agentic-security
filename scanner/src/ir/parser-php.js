@@ -404,6 +404,33 @@ function _lowerExpr(text) {
     }
     return cur;
   }
+  // General array/subscript READ: `$var[key]`, `$this->prop[key]`, and
+  // repeated subscripts (`$arr[0][1]`) — anything reaching here is NOT one
+  // of the special-cased superglobals above. SARD_80_F1 W5.9 — before this,
+  // ordinary PHP array/property-array access had NO lowering at all
+  // (fell through every branch to `{kind:'unknown'}`, discarding whatever
+  // taint the subscripted value carried entirely). A literal string/int key
+  // becomes that literal `prop`; a computed key (a variable, an expression)
+  // widens to `'*'`, the SAME "unknown-key writes widen to the container"
+  // convention documented in dataflow/CLAUDE.md — the base object is
+  // marked tainted as a whole rather than guessing which element. Mirrors
+  // `_subscriptTargetPath` below (the WRITE side), including its `.`-not-
+  // `->` separator convention, and its same "no nested brackets inside one
+  // key" scope limit.
+  {
+    const sub = s.match(/^(\$[\w]+(?:->[\w]+)*)((?:\[[^\[\]]*\])+)$/);
+    if (sub) {
+      let cur = _lowerExpr(sub[1]);
+      const segs = sub[2].match(/\[[^\[\]]*\]/g) || [];
+      for (const seg of segs) {
+        const keyText = seg.slice(1, -1).trim();
+        const litKey = keyText.match(/^"([^"]*)"$/) || keyText.match(/^'([^']*)'$/);
+        const prop = litKey ? litKey[1] : (/^\d+$/.test(keyText) ? keyText : '*');
+        cur = { kind: 'member', object: cur, prop };
+      }
+      return cur;
+    }
+  }
   // Variable
   if (/^\$[A-Za-z_]\w*$/.test(s)) return { kind: 'ident', name: s };
   // Object creation: `new ClassName(args)` (namespace-qualified names allowed,
@@ -523,6 +550,28 @@ function _splitTopLevelDot(s) {
   return out;
 }
 
+// SARD_80_F1 W5.9 — converts a PHP subscript-assignment LHS text
+// (`$arr[1]`, `$this->input[1]`, `$arr['key']`) into the same dot-joined
+// access-path string `_lowerExpr`'s general-subscript READ branch (and
+// `accessPathOf`) compute for the equivalent read, so a later read of the
+// same location can find the taint this write recorded. Returns null when
+// `lhs` doesn't match the single-non-nested-bracket-key shape this covers
+// (the caller's own regex already filters most of this, but a defensive
+// re-check here keeps this function safe to call standalone).
+function _subscriptTargetPath(lhs) {
+  const m = lhs.match(/^(\$[\w]+(?:->[\w]+)*)((?:\[[^\[\]]*\])+)$/);
+  if (!m) return null;
+  const base = m[1].replace(/->/g, '.');
+  const segs = (m[2].match(/\[[^\[\]]*\]/g) || []).map((seg) => {
+    const keyText = seg.slice(1, -1).trim();
+    const litKey = keyText.match(/^"([^"]*)"$/) || keyText.match(/^'([^']*)'$/);
+    if (litKey) return litKey[1];
+    if (/^\d+$/.test(keyText)) return keyText;
+    return '*';
+  });
+  return [base, ...segs].join('.');
+}
+
 function _lowerStmt(stmt, line) {
   const s = stmt.trim();
   if (!s || s.startsWith('//') || s.startsWith('#')) return null;
@@ -566,10 +615,51 @@ function _lowerStmt(stmt, line) {
     const call = _lowerExpr(s);
     if (call.kind === 'call') return { kind: 'call', line, callee: call.callee, args: call.args };
   }
+  // Array/subscript WRITE: `$arr[key] = value;`, `$this->prop[key] = value;`,
+  // repeated subscripts (`$arr[0][1] = value;`). SARD_80_F1 W5.9 — before
+  // this, the whole STATEMENT fell through every branch in this function
+  // (the plain-assign regex below requires a target of nothing but
+  // `[\w]`/`->`, which a trailing `[...]` never satisfies) and vanished
+  // from the CFG entirely — not even an `unknown`-kind node, just gone, so
+  // `$arr[1] = $_GET['x'];` had NO observable effect on `$arr` at all. Must
+  // run BEFORE the plain-assign regex (mutually exclusive targets, but this
+  // is the more specific pattern). Builds the SAME dot-joined access-path
+  // string as an equivalent READ (`_lowerExpr`'s general-subscript branch,
+  // and `accessPathOf` for the member-expression form), via
+  // `_subscriptTargetPath` — a literal key becomes that literal path
+  // segment; a computed key widens to `'*'` (dataflow/CLAUDE.md's
+  // "unknown-key writes widen to the container" convention, applied here
+  // at the parser level since there is no other lowering path for this at
+  // all). Scoped to a single non-nested-bracket key per subscript (i.e. not
+  // `$arr[$obj[0]]`) — the overwhelmingly common shape; anything more
+  // exotic simply doesn't match and falls through unchanged.
+  {
+    const subAssign = s.match(/^(\$[\w]+(?:->[\w]+)*(?:\[[^\[\]]*\])+)\s*=\s*(.+)$/s);
+    if (subAssign) {
+      const targetPath = _subscriptTargetPath(subAssign[1]);
+      if (targetPath) return { kind: 'assign', line, target: targetPath, source: _lowerExpr(subAssign[2]) };
+    }
+  }
   // Assignment: $var = expr
+  //
+  // SARD_80_F1 W5.9 — a member-chain target (`$this->input = …`) kept its
+  // literal `->` separator in `target`, but `accessPathOf` (access-paths.js)
+  // computes a READ of the same property as a DOT-joined string
+  // (`${base}.${prop}`) — `member` is the universal IR expression shape
+  // every parser in this tree uses, and `.` is the one separator the whole
+  // engine (isCoveredBy, addPath, removePathAndDescendants) understands.
+  // So `$this->input = $_GET[...]; $x = $this->input;` taints the WRITE
+  // under the key `"$this->input"` but the READ looks up `"$this.input"` —
+  // two different strings that can never match. This made every PHP
+  // object-property taint round-trip fail, even same-scope, same-line-
+  // adjacent ones (found while investigating the SARD PHP corpus's
+  // persistent CWE-91/98 tp=0 — its own generator source uses exactly this
+  // shape, an object wrapping `$_GET` in a property, for a common `input`
+  // source variant). Normalizing `->` to `.` here is the ONLY change
+  // needed: every downstream consumer already speaks dot-paths.
   const assign = s.match(/^(\$[\w]+(?:->[\w]+)*)\s*=\s*(.+)$/s);
   if (assign) {
-    return { kind: 'assign', line, target: assign[1], source: _lowerExpr(assign[2]) };
+    return { kind: 'assign', line, target: assign[1].replace(/->/g, '.'), source: _lowerExpr(assign[2]) };
   }
   // Statement-form call
   const call = matchBalancedCall(s, /^(\$[\w]+(?:->[\w]+)*|[A-Za-z_][\w]*(?:::[\w]+)*)/);
@@ -675,6 +765,36 @@ function _findClassRegions(code) {
     regions.push({ name: cm[1], start: openBrace, end: extracted.end });
   }
   return regions;
+}
+// SARD_80_F1 W5.10 — declared field names for one class region, feeding
+// `ir.classes[].fields` so `dataflow/engine.js`'s cross-method field-taint
+// pass (SARD_80_F1_SCANNER_PRD.md Juliet flow variants 45/65-68) can tell a
+// field write (`$this->input = $_GET[...];` in one method) apart from an
+// ordinary same-named LOCAL in a different method, and taint a sibling
+// method's read of it. That pass is entirely language-agnostic and already
+// explicitly designed to cover PHP (per its own comment: "confirmed by
+// direct probing... none of `sf = data;`, `this.inst = data;` ever
+// populated it, for any language") — the ONLY missing piece for PHP was
+// `ir.classes` itself, never emitted at all before this (W1.1 closed PHP's
+// method-CALL-resolution gap WITHOUT it, via a narrower workaround; this is
+// the real thing, needed for a DIFFERENT consumer). `public`/`private`/
+// `protected`/`var`, each an accessibility keyword that is ONLY valid PHP
+// syntax at class-member-declaration position — never as an ordinary
+// statement inside a method body — so a whole-class-body regex scan is
+// safe without needing to separately exclude nested method bodies.
+const CLASS_FIELD_RE = /\b(?:public|private|protected|var)\s+(?:static\s+)?(?:\?[\w\\]+\s+)?\$(\w+)/g;
+function _extractClassFields(code, region) {
+  const body = code.slice(region.start, region.end);
+  const fields = [];
+  let fm;
+  CLASS_FIELD_RE.lastIndex = 0;
+  // Bare (no `$`) — matches every other language's field-name convention in
+  // `ir.classes[].fields` (C#/Java field names never carry a sigil); the
+  // `$`-sigil is PHP-specific and is instead accounted for on the
+  // consuming side (dataflow/engine.js's `$this.` prefix check), the same
+  // place `_this_.`/`this.` are already handled per-language.
+  while ((fm = CLASS_FIELD_RE.exec(body)) !== null) fields.push(fm[1]);
+  return fields;
 }
 function _classNameAt(regions, idx) {
   // `idx >= r.start`, not `>`: FUNC_RE's own leading boundary alternation
@@ -1212,5 +1332,13 @@ export function parsePhpFile(file, code) {
     topLevel = modQid;
   }
 
-  return functions.length ? { file, functions, topLevel } : null;
+  // SARD_80_F1 W5.10 — `ir.classes` (declared field names only; no
+  // `bases`/`extends` yet — this codepath's one consumer so far,
+  // dataflow/engine.js's cross-method field-taint pass, doesn't need it,
+  // and PHP's inheritance chain isn't otherwise tracked. Purely additive:
+  // `buildClassHierarchy` already merges `ir.classes` across every parser
+  // that emits it, uniformly).
+  const classes = classRegions.map((r) => ({ name: r.name, line: _lineAt(code, r.start), fields: _extractClassFields(code, r) }));
+
+  return functions.length ? { file, functions, topLevel, classes } : null;
 }
