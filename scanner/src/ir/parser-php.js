@@ -294,12 +294,12 @@ function _splitStatements(body) {
 // are kept, outermost-first — see parser-cs.js's twin function for why
 // (a first version that kept only the outermost broke a real chain shape
 // where the tainted value sits on an INNER call).
-function _followChain(s, endIdx, calleeSoFar, argsSoFar) {
+function _followChain(s, endIdx, calleeSoFar, argsSoFar, isNew) {
   const rest = s.slice(endIdx);
   const m = rest.match(/^(?:->|::)(\w+)/);
-  if (!m) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  if (!m) return { kind: 'call', callee: calleeSoFar, args: argsSoFar, isNew };
   const outer = matchBalancedCall(rest, /^(?:->|::)(\w+)/);
-  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar };
+  if (!outer) return { kind: 'call', callee: calleeSoFar, args: argsSoFar, isNew };
   const outerArgs = _splitTopLevelCommas(outer.argsText).map(_lowerExpr);
   return _followChain(rest, outer.endIdx, `${calleeSoFar}.${outer.callee}`, outerArgs.concat(argsSoFar));
 }
@@ -406,6 +406,32 @@ function _lowerExpr(text) {
   }
   // Variable
   if (/^\$[A-Za-z_]\w*$/.test(s)) return { kind: 'ident', name: s };
+  // Object creation: `new ClassName(args)` (namespace-qualified names allowed,
+  // `\` separator) — lowered to a call so a constructor's own args carry
+  // taint AND so `class-hierarchy.js#typeOfVar` can seed `$var`'s declared
+  // type from `isNew:true`, the same mechanism parser-cs.js/parser-java.js
+  // already rely on. Without this, `$temp = new Input(); $temp->getInput()`
+  // lowered `new Input()` to {kind:'unknown'} (this file had NO `new`
+  // recognizer at all before this fix — confirmed by IR dump, not assumed),
+  // so `$temp`'s type was never known and `$temp->getInput()` could never be
+  // resolved to `Input::getInput`'s own return-taint summary — invisible to
+  // every PHP corpus case that reads a tainted value back out through an
+  // object method (`object/directGet`, `object/classicGet`, and any
+  // ARRAY-wrapping variant of the same shape, per the SARD PHP suite's own
+  // published generator source, `input.xml`). Zero-arg `new ClassName` (no
+  // parens at all — valid PHP) is handled too, matching PHP's actual grammar
+  // rather than assuming C#/Java's mandatory-parens convention.
+  const newMatch = matchBalancedCall(s, /^new\s+([\w\\]+)/);
+  if (newMatch) {
+    const callee = newMatch.callee.split(/[\\.]/).pop();
+    const args = _splitTopLevelCommas(newMatch.argsText).map(_lowerExpr);
+    return _followChain(s, newMatch.endIdx, callee, args, true);
+  }
+  const bareNew = s.match(/^new\s+([\w\\]+)\s*$/);
+  if (bareNew) {
+    const callee = bareNew[1].split(/[\\.]/).pop();
+    return { kind: 'call', callee, args: [], isNew: true };
+  }
   // Method call: $obj->method(args) or ClassName::method(args).
   // matchBalancedCall finds the paren that actually balances the FIRST
   // '(' — not the greedy-to-end-of-string match the old `/\((.*)\)\s*$/`
@@ -611,9 +637,55 @@ function _lineAt(src, idx) {
   return line;
 }
 
-function _qid(file, name, line, body) {
+function _qid(file, name, line, body, className) {
   const sha = crypto.createHash('sha256').update(body).digest('hex').slice(0, 8);
-  return `${file}::${name}@${line}#${sha}`;
+  return className ? `${file}::${className}::${name}@${line}#${sha}` : `${file}::${name}@${line}#${sha}`;
+}
+
+// SARD 80% F1 push — this parser had NO class-boundary tracking at all
+// (confirmed: no prior `class` recognizer of any kind existed in this
+// file). Every method's `qid` was a flat `file::name@line#sha`, never the
+// two-segment `file::ClassName::name@line` shape `callgraph.js`'s
+// `classMethods` index looks for (via its own `::(\w+)::(\w+)@` regex) —
+// so a call like `$obj->method()` on a variable whose constructed type IS
+// known (via `new ClassName()`, see `_lowerExpr`'s own `new` fix above)
+// could still never resolve to the actual method's taint summary, because
+// there was no class-qualified qid for it to resolve TO. `ir.classes`
+// itself is deliberately NOT populated here (unlike Java/C#): `callgraph.js`
+// already falls back to an uppercase-first-letter heuristic
+// (`/^[A-Z]/.test(m[1])`) when a file has no `ir.classes`, and ordinary PHP
+// class-naming convention satisfies that trivially — building a full
+// `ir.classes` array (bases/fields/etc.) for a heuristic that already
+// works would be scope creep beyond what this specific gap needs.
+// Deliberately narrow, matching this file's own documented scope
+// boundary: plain `class Name { ... }` only — traits, interfaces, and
+// anonymous classes (already out of scope for this whole parser, per the
+// file header) are not tracked, so a method inside one of those still
+// gets an unqualified qid exactly as before this fix (no regression,
+// simply no new resolution for a shape this parser never modeled).
+const CLASS_RE = /\bclass\s+([A-Za-z_]\w*)(?:\s+extends\s+[A-Za-z_][\w\\]*)?(?:\s+implements\s+[\w\\,\s]+)?\s*\{/g;
+function _findClassRegions(code) {
+  const regions = [];
+  CLASS_RE.lastIndex = 0;
+  let cm;
+  while ((cm = CLASS_RE.exec(code)) !== null) {
+    const openBrace = cm.index + cm[0].length - 1;
+    const extracted = _extractBody(code, openBrace);
+    if (!extracted) continue;
+    regions.push({ name: cm[1], start: openBrace, end: extracted.end });
+  }
+  return regions;
+}
+function _classNameAt(regions, idx) {
+  // `idx >= r.start`, not `>`: FUNC_RE's own leading boundary alternation
+  // (`(?:^|[\n;{}]|<\?php|<\?)`) can match the class's own opening `{`
+  // itself as the function match's boundary token when a method is the
+  // FIRST statement in the class body (no blank line/comment between
+  // `class Foo{` and the method) — confirmed by direct index inspection,
+  // not assumed: `m.index` lands exactly ON `r.start` in that shape, and a
+  // strict `>` silently excluded the very first method of every class.
+  for (const r of regions) if (idx >= r.start && idx < r.end) return r.name;
+  return null;
 }
 
 // FUNC_RE's leading alternation `(?:^|[\n;{}]|<\?php|<\?)` matches a single
@@ -1047,11 +1119,13 @@ export function parsePhpFile(file, code) {
 
   const functions = [];
   const spans = []; // {start, end}: source ranges fully consumed by a matched function (signature through closing brace)
+  const classRegions = _findClassRegions(code);
   FUNC_RE.lastIndex = 0;
   _nid = 0;
   let m;
   while ((m = FUNC_RE.exec(code)) !== null) {
     const name = m[1];
+    const className = _classNameAt(classRegions, m.index);
     const paramsText = m[2] || '';
     const params = paramsText.split(',').map(p => {
       const t = p.trim();
@@ -1089,8 +1163,8 @@ export function parsePhpFile(file, code) {
     _linkNodes(nodes, tail, exit);
     const cfg = { entry, exit, nodes };
     functions.push({
-      qid: _qid(file, name, startLine, extracted.body),
-      name, line: startLine, params, file,
+      qid: _qid(file, name, startLine, extracted.body, className),
+      name: className ? `${className}.${name}` : name, line: startLine, params, file,
       cfg,
       calls: callSitesFromCfg(cfg),
     });

@@ -33,8 +33,70 @@ class UserController {
 `;
   const ir = parsePhpFile('controller.php', code);
   assert.ok(ir);
-  assert.equal(ir.functions[0].name, 'show');
+  // Class-qualified (`ClassName.method`), matching parser-java.js/parser-cs.js's
+  // own convention — this is what lets callgraph.js's classMethods index
+  // resolve `$obj->show()` back to this exact function via its qid
+  // (`controller.php::UserController::show@...`), which a bare, unqualified
+  // name could never do. See parser-php.js's `_findClassRegions`/`_qid` for
+  // the fix this test now pins.
+  assert.equal(ir.functions[0].name, 'UserController.show');
+  assert.match(ir.functions[0].qid, /^controller\.php::UserController::show@2#[0-9a-f]{8}$/);
   assert.deepEqual(ir.functions[0].params, ['$request']);
+});
+
+test('parsePhpFile: lowers `new ClassName(args)` to a call with isNew:true', () => {
+  const code = `<?php
+function makeConn($host) {
+    $conn = new Connection($host);
+    return $conn;
+}
+`;
+  const ir = parsePhpFile('app.php', code);
+  assert.ok(ir);
+  const nodes = Object.values(ir.functions[0].cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === '$conn');
+  assert.ok(assign, 'expected a $conn assignment');
+  assert.equal(assign.source.kind, 'call');
+  assert.equal(assign.source.callee, 'Connection');
+  assert.equal(assign.source.isNew, true);
+  assert.deepEqual(assign.source.args.map(a => a.name), ['$host']);
+});
+
+test('parsePhpFile: bare `new ClassName` with no parens still lowers to a call', () => {
+  const code = `<?php
+function make() {
+    $obj = new Widget;
+    return $obj;
+}
+`;
+  const ir = parsePhpFile('app.php', code);
+  const nodes = Object.values(ir.functions[0].cfg.nodes);
+  const assign = nodes.find(n => n.kind === 'assign' && n.target === '$obj');
+  assert.equal(assign.source.kind, 'call');
+  assert.equal(assign.source.callee, 'Widget');
+  assert.equal(assign.source.isNew, true);
+});
+
+test('parsePhpFile: object-getter method resolves cross-method via a class-qualified qid', () => {
+  const code = `<?php
+class Input {
+  public function getInput() {
+    return $_GET['UserData'];
+  }
+}
+$temp = new Input();
+$tainted = $temp->getInput();
+system($tainted);
+`;
+  const ir = parsePhpFile('probe.php', code);
+  const getInputFn = ir.functions.find(f => f.name === 'Input.getInput');
+  assert.ok(getInputFn, 'expected a class-qualified Input.getInput function');
+  assert.match(getInputFn.qid, /::Input::getInput@/);
+  const modFn = ir.functions.find(f => f.name === '<module>');
+  const nodes = Object.values(modFn.cfg.nodes);
+  const ctorAssign = nodes.find(n => n.kind === 'assign' && n.target === '$temp');
+  assert.equal(ctorAssign.source.isNew, true);
+  assert.equal(ctorAssign.source.callee, 'Input');
 });
 
 test('parsePhpFile: lowers method calls', () => {

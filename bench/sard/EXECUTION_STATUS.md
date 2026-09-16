@@ -53,7 +53,7 @@ instrument is real and trustworthy for the work ahead.
 
 | # | Task | Status |
 |---|---|---|
-| W1.1 | `ir.classes` emission for PHP/Python/Ruby/Go/Kotlin parsers (Java/C#/Rust already emit it) | NOT_STARTED |
+| W1.1 | `ir.classes` emission for PHP/Python/Ruby/Go/Kotlin parsers (Java/C#/Rust already emit it) — PHP's functional gap closed WITHOUT literal `ir.classes` emission: added `new ClassName(args)` lowering (previously entirely absent) + class-qualified method qids (`file::ClassName::method@line`), which is enough for `callgraph.js`'s existing uppercase-heuristic fallback to resolve `$obj->method()` correctly. Python/Ruby/Go/Kotlin untouched | IN_PROGRESS |
 | W1.2 | `callgraph.js` `classMethods` from structural class facts, not `[A-Z]` regex | VERIFIED |
 | W1.3 | `class-hierarchy.js` `methodOwners`/`typeOfVar` from structural facts | VERIFIED |
 | W1.4 | `dataflow/engine.js` `_resolveMemberCalleeViaCHA` handles flat dotted-string callees (analysis below: JS-only, not on the Java/C# critical path) | NOT_STARTED |
@@ -2099,6 +2099,69 @@ possibly with more than the one file this session's probes used) differs
 from a from-scratch single-file probe. Genuinely narrowed, not solved —
 the next session should start from these two specific hypotheses rather
 than re-deriving them.
+
+### W1.1 (partial) — PHP had ZERO `new` expression or cross-class method support at all (2026-09-15)
+
+Root-caused `s12_objdirect.php`'s silent failure (from the 14-shape sweep
+above) by dumping the IR directly: `parser-php.js` had **no `new` keyword
+recognizer whatsoever** — confirmed by grep, not assumed — so `$temp = new
+Input();` always lowered to `{kind: 'unknown'}`. This meant `$temp`'s type
+could never be known, so `$temp->getInput()` could never resolve to
+`Input::getInput`'s own taint summary — invisible for every PHP corpus
+case (any CWE, not just XPath) that reads a tainted value back out through
+an object method.
+
+**Two fixes, same root investigation:**
+1. `_lowerExpr` now recognizes `new ClassName(args)` (namespace-qualified,
+   `\`-separated names allowed) AND bare `new ClassName` with no parens
+   (valid PHP grammar this parser hadn't modeled) — lowered to a call with
+   `isNew: true`, the exact same convention `parser-cs.js`/`parser-java.js`
+   already use, so `class-hierarchy.js#typeOfVar`'s existing, already-
+   generic seeding logic needed zero changes.
+2. **A second, independent gap this same fix uncovered**: even with
+   `$temp`'s type correctly known, `callgraph.js`'s `classMethods` index
+   couldn't resolve `$temp.getInput` to `Input::getInput`'s definition,
+   because `parser-php.js` had never tracked class boundaries at all —
+   every method's `qid` was a flat `file::name@line#sha`, never the
+   two-segment `file::ClassName::name@line` shape `classMethods` looks
+   for. Added `_findClassRegions`/`_classNameAt` (a `class Name { ... }`
+   boundary scanner, reusing the existing `_extractBody` brace-matcher) so
+   a method's `qid` and `name` are now class-qualified exactly like Java's
+   own convention. `ir.classes` itself was deliberately NOT added —
+   `callgraph.js` already falls back to an uppercase-first-letter
+   heuristic when a file has no `ir.classes`, and ordinary PHP class
+   naming satisfies that trivially, so building the fuller structure
+   would have been scope creep past what this specific gap needed.
+   **Caught one boundary bug while verifying**: the class-region check
+   used `idx > r.start`, but FUNC_RE's own leading boundary alternation
+   can match the class's OWN opening `{` as a method's boundary token when
+   the method is the class body's first statement (no blank line/comment
+   between `class Foo{` and the method) — confirmed by direct index
+   inspection, not assumed. Fixed to `idx >= r.start`.
+
+Verified end-to-end: the exact `object/directGet` shape from the SARD PHP
+suite's own published generator now correctly resolves `$temp->getInput()`
+through to its real taint summary and fires a CWE-91 finding on a
+synthetic probe. 3 new tests added (`parser-php-rb.test.js`); one
+PRE-EXISTING test (literally titled "captures class method with
+modifiers") was pinning the OLD, unqualified-name behavior as if it were
+correct — updated to assert the fixed behavior instead of loosened or
+deleted. Full regression: `test:sast` (750/750), `test:dataflow`
+(1227/1227, +3 from the new tests), `test:smoke` (30/30),
+`bench:self-scan:check` (no drift), all green.
+
+**Real-corpus measurement: byte-identical, zero movement** (macroF1 27.4%
+unchanged, every per-CWE tp/fp/fn identical to the pre-fix run). The SARD
+PHP suite's `object/directGet`/`object/classicGet`/array-wrapping source
+variants exist in the generator's published templates (`input.xml`) but
+apparently aren't exercised by the actual cases in THIS ingested corpus
+sample. Joins this session's now-well-established "real, tested,
+zero-SARD-impact" pattern (Java/C#'s generic-constructor and chained-
+mutator fixes earlier this session) — but unlike those, this fix also
+closes a chunk of the PRD's own explicitly-named W1.1 gap ("`ir.classes`
+emission for PHP... parsers... NOT_STARTED") for PHP specifically, so it
+has value beyond this one corpus regardless of the zero measured movement
+here.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
