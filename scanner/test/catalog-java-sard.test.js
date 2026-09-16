@@ -50,6 +50,36 @@ public class A {
   assert.ok(hits.length >= 1, `expected a CWE-22 finding, got ${JSON.stringify(findings.map(f => f.cwe))}`);
 });
 
+// The single largest CWE-89 false-negative cluster this session found:
+// 167 of 308 dev-split fns were Juliet's `*_executeBatch_*` variants, whose
+// real sink is `Statement.addBatch(sql)` — `executeBatch()` itself takes no
+// arguments and just fires whatever was previously queued. Confirmed via
+// the public Juliet Java mirror (CWE89_SQL_Injection's own executeBatch-
+// suffixed source, never this repo's own corpus).
+test('CWE-89: Statement.addBatch(tainted concat) fires; PreparedStatement\'s zero-arg addBatch() does not', async () => {
+  const dir = mkTmp('addbatch', `
+import javax.servlet.http.HttpServletRequest;
+import java.sql.*;
+public class A {
+  public void bad(HttpServletRequest request, Connection dbConnection) throws Exception {
+    String data = request.getParameter("name");
+    Statement sqlStatement = dbConnection.createStatement();
+    sqlStatement.addBatch("update users set hitcount=hitcount+1 where name='" + data + "'");
+    int[] resultsArray = sqlStatement.executeBatch();
+  }
+  public void good(Connection dbConnection) throws Exception {
+    PreparedStatement sqlStatement = dbConnection.prepareStatement("update users set hitcount=hitcount+1 where name=?");
+    sqlStatement.setString(1, "safe");
+    sqlStatement.addBatch();
+    int[] resultsArray = sqlStatement.executeBatch();
+  }
+}`);
+  const findings = await deepScan(dir);
+  const hits = findByCwe(findings, 'CWE-89');
+  assert.ok(hits.length >= 1, `expected a CWE-89 finding on addBatch, got ${JSON.stringify(findings.map(f => f.cwe))}`);
+  assert.ok(hits.every(f => f.line <= 8), `finding should be on bad()'s addBatch line, not good()'s zero-arg one: ${JSON.stringify(hits)}`);
+});
+
 test('CWE-470: Class.forName(tainted) fires', async () => {
   const dir = mkTmp('reflect', `
 import javax.servlet.http.HttpServletRequest;

@@ -461,6 +461,17 @@ export const CATALOG = [
             remediation: 'Use PreparedStatement + setX(N, value).' } },
   { kind: 'sink', id: 'java-stmt-execute',       language: 'java', framework: 'jdbc',     match: { type: 'call', callee: 'execute' },       argIndex: 0,
     vuln: { name: 'SQL Injection (Statement.execute)', severity: 'critical', cwe: 'CWE-89', remediation: 'Use PreparedStatement.' } },
+  // `Statement.addBatch(sql)` — the SQL string, not `executeBatch()` (which
+  // takes no arguments and just fires whatever was previously queued), is
+  // the actual sink: `stmt.addBatch("UPDATE ... WHERE name='" + tainted +
+  // "'"); ... stmt.executeBatch();`. Confirmed via the public Juliet Java
+  // mirror (CWE89_SQL_Injection's own executeBatch-suffixed variants, the
+  // single largest false-negative cluster this session found for CWE-89:
+  // 167 of 308 dev-split fns were this one missing sink). `argIndex: 0`
+  // naturally excludes `PreparedStatement.addBatch()`'s zero-arg safe form
+  // (queuing already-bound parameters) — there is no arg 0 to match.
+  { kind: 'sink', id: 'java-stmt-addbatch',      language: 'java', framework: 'jdbc',     match: { type: 'call', callee: 'addBatch' },      argIndex: 0,
+    vuln: { name: 'SQL Injection (Statement.addBatch)', severity: 'critical', cwe: 'CWE-89', remediation: 'Use PreparedStatement + setX(N, value) + the zero-arg addBatch() form. Never concatenate user input into the SQL string passed to addBatch().' } },
   { kind: 'sink', id: 'java-jdbc-prepareStatement', language: 'java', framework: 'jdbc', match: { type: 'call', callee: 'prepareStatement' }, argIndex: 0,
     vuln: { name: 'SQL Injection (PreparedStatement built via concat)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use placeholders (?) in the SQL string; bind values via setX(N, value).' } },
