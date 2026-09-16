@@ -2121,6 +2121,29 @@ other isolated re-measurements — the bug is specific to `score-php.mjs`.)
 Flagged for a future fix; not chased this iteration since the full-corpus
 path already gives a trustworthy number.
 
+**FIXED (2026-09-16): this was a usage bug, not a code bug — and now
+neither.** `score-php.mjs`'s own usage comment documents `--cwe
+CWE-89,CWE-78` (WITH the prefix), unlike `bench-realworld.js`'s Java/C#
+convention (bare numbers, prefix stripped internally) — this session's
+own investigations consistently used the bare-number form out of habit
+from the Java/C# side, hitting exactly the mismatch every time:
+`gold.json`'s `g.cwe` field is stored as `"CWE-91"`, so
+`opts.cwe.has(g.cwe)` never matched a bare `"91"`, silently filtering out
+every "bad" case (and, via the same mismatch, `wantedFamilies`) down to
+the observed vacuous `tp=0 fp=0 fn=0`. Confirmed by re-running with the
+documented `--cwe CWE-91` syntax: **`806/995 cases kept`, `tp=0 fp=11
+fn=35`** — a real, meaningful, non-degenerate result (matching the
+already-known full-corpus number, so no new detection information, just
+confirmation the isolated path is usable again). Rather than leave this
+as a footgun for the next investigation, normalized `--cwe`'s parsing to
+accept bare numbers, `CWE91`, `CWE-91`, or `cwe-91` interchangeably
+(`/^(?:CWE-?)?\d+$/i`, reconstructed to the `CWE-<digits>` shape
+`gold.json` uses) — verified both spellings now produce byte-identical
+`806/995 cases kept, tp=0 fp=11 fn=35`. No test suite exists for these
+operator-CLI bench scripts (consistent with the other `bench/sard/
+scripts/*` tooling); verified via the real commands above per this
+session's own discipline.
+
 **Still unresolved**: why the full, trustworthy corpus run shows CWE-91 at
 tp=0/35 despite GET/POST/SESSION all confirmed working on isolated probes.
 Possible remaining explanations, not yet checked: (a) the generator's

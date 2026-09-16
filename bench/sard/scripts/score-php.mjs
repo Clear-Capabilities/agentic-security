@@ -46,7 +46,18 @@ function args() {
     else if (a[i] === '--json') out.json = true;
     else if (a[i] === '--split') out.split = a[++i];
     else if (a[i] === '--deep') out.deep = true;
-    else if (a[i] === '--cwe') out.cwe = new Set(String(a[++i]).split(',').map(s => s.trim()).filter(Boolean));
+    // Normalizes to the "CWE-<digits>" shape gold.json's own `g.cwe` field
+    // uses, regardless of how the caller spelled it. Found the hard way:
+    // gold.json stores `"CWE-91"` (with the prefix), and passing a bare
+    // number here (bench-realworld.js's OWN convention for Java/C#, which
+    // this script does NOT mirror) silently filtered every "bad" case out
+    // (`opts.cwe.has(g.cwe)` never matches), producing a vacuous
+    // `tp=0 fp=0 fn=0` result that looks like a detection signal but isn't
+    // one — see EXECUTION_STATUS.md's W5.2 log for the investigation this
+    // cost. Accepting both spellings here removes the footgun instead of
+    // just documenting around it.
+    else if (a[i] === '--cwe') out.cwe = new Set(String(a[++i]).split(',').map(s => s.trim()).filter(Boolean)
+      .map(s => /^(?:CWE-?)?\d+$/i.test(s) ? `CWE-${s.replace(/^CWE-?/i, '')}` : s));
     else if (a[i] === '--fp-detail') out.fpDetail = true;
     // PRD W0.1 — see bench-realworld.js's identical flag for the rationale.
     else if (a[i] === '--allow-truncation') out.allowTruncation = true;
