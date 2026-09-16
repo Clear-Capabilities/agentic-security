@@ -2474,6 +2474,23 @@ new `_familyMap` prefix entry.
 precision AND 100% recall.** A perfect score for a brand-new detector on
 its very first corpus measurement.
 
+### Full C# dev-split checkpoint after CWE-523 — 0.5pp from the M1 gate (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev`: **macroF1=20.9%→24.5% (+3.6pp)**,
+`microF1=28.9%→29.7%`, `P=53.7%→54.5%`, `R=19.8%→20.4%`. A single new,
+low-support CWE hitting a perfect 100% F1 has an outsized effect on the
+macro-average by design (each CWE counts equally regardless of support
+size) — exactly the mechanism the PRD's own root-cause analysis
+identified at the very start of this workstream ("every family at 0%
+costs 3-4 points off the ceiling").
+
+**C# is now at 24.5%, just 0.5pp short of M1's `C#≥25%` gate.**
+Session-total C# progress: macroF1 16.2%→24.5% (**+8.3pp**), almost
+entirely from this session's systematic CWE-by-CWE investigation using
+the public Juliet C# mirror. The next zero/low-support CWE fixed this
+cleanly could plausibly clear the M1 threshold for C# outright.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
