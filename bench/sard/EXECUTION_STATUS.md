@@ -617,7 +617,7 @@ precision against).
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
-| W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
+| W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials — **CWE-523 built from scratch and VERIFIED PERFECT: tp=17 fp=0 fn=0 (100% precision AND recall) on the real corpus.** Genuinely new capability: CWE-523 is a "point flaw" (hardcoded `<form action='http://...'>` submitting a password field, no data flow at all) with zero prior coverage — a structural, scramble-safe detector (string literal content, immune to `--scramble-identifiers`). CWE-539/259/321/256/261 not yet checked | IN_PROGRESS |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
 
 **W4 acceptance:** no scored CWE with support >=20 below 50% F1 on dev.
@@ -2423,6 +2423,56 @@ descriptor family also has dev-split representation (unlike CWE-78/643/
 entire session's work, driven overwhelmingly by the CWE-80/81/83/113
 "total blackout" investigation (W4.C1, now VERIFIED) plus the earlier
 family-slug and concat-lowering fixes. Approaching M1's C#≥25% gate.
+
+### W4.C5 — CWE-313/314/315 correctly left deferred; CWE-523 built new, verified perfect (2026-09-15)
+
+Checked C#'s remaining zero-recall cleartext-storage families
+(CWE-313/314/315) first. Found the existing `detectCleartextStorage`
+detector's own header comment already documents a prior attempt: a
+taint-based variant was tried and REVERTED after measuring +92 FPs on
+CWE-315 alone with zero new TPs anywhere, because this CWE family's
+Bad/Good distinction is "was the value encrypted before storage" (a
+guard-predicate question, W3's explicit scope) not "did a value reach
+the sink" (a plain source/sink question). This is the same architectural
+class as Java's CWE-319 scramble-blind keyword gate, already correctly
+identified and appropriately NOT rushed. Left deferred, consistent with
+that precedent — implementing proper guard-predicate detection needs
+infrastructure that doesn't exist yet (W3.2).
+
+Pivoted to W4.C5's CWE-523 (Unprotected Transport of Credentials),
+unexplored this session. Fetched the real Juliet C# mirror
+(`CWE523_Unprotected_Cred_Transport__Web_01.cs`): a "point flaw", not a
+taint-flow vulnerability at all — a hardcoded HTML `<form
+action='http://...'>` submitting a password field, split across several
+`resp.Write(...)` calls with Bad()/Good() differing ONLY in the literal
+URL scheme. No taint tracking could ever find this (there is no source;
+the constant IS the finding), but it's ALSO immune to
+`--scramble-identifiers` by construction (string literal content is
+never rewritten, only identifier names) — a genuinely new, scramble-safe
+capability, unlike the deferred CWE-313/314/315 case above.
+
+Built `detectUnprotectedCredTransport` (`sast/csharp.js`): scans a
+method's calls for a string-literal argument matching
+`action=['"]http://` AND a separate literal containing "password"
+anywhere in the same method — both conditions required, so a non-
+credential `http://` form doesn't fire. 3 new tests added
+(`csharp-pipeline.test.js`, fire + 2 precision cases). Full regression:
+`test:sast` (753/753), `test:smoke` (30/30), `bench:self-scan:check`
+(no drift).
+
+**Caught the SAME `bench-realworld.js` family-slug mismatch bug this
+session already root-caused for PHP/Java/C#-elsewhere, on the very
+first real-corpus measurement**: despite the finding correctly setting
+`family: 'insecure-http'`, the benchmark's OWN scoring completely
+ignores `finding.family` for Java/C# and re-derives family from the
+`vuln` TEXT via `expected.json`'s `_familyMap` — no entry existed for
+"Unprotected Transport of Credentials", so it fell through to an
+unmatched slug (`fp=17, fn=17`, the classic signature). Fixed with one
+new `_familyMap` prefix entry.
+
+**Real-corpus measurement after the family fix: tp=17, fp=0, fn=0 — 100%
+precision AND 100% recall.** A perfect score for a brand-new detector on
+its very first corpus measurement.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

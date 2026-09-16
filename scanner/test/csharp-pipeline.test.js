@@ -548,3 +548,55 @@ test('detector: CWE-315 new HttpCookie with a non-sensitive value does NOT fire'
   const findings = scanCSharp('t.cs', src);
   assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-cookie:')));
 });
+
+// CWE-523 (Unprotected Transport of Credentials) — a "point flaw", not a
+// taint-flow vulnerability: Juliet's real shape (confirmed via the public
+// Juliet C# mirror this project's manifest pins,
+// CWE523_Unprotected_Cred_Transport__Web_01.cs) is a hardcoded HTML
+// <form> whose action='http://...' submits a password field, split
+// across several resp.Write(...) calls with no data flow at all. This is
+// a genuinely new, scramble-safe capability (string literal content is
+// unaffected by --scramble-identifiers).
+test('detector: CWE-523 a login form action using http:// fires', () => {
+  const src = `
+    public class C {
+      public void Bad(HttpRequest req, HttpResponse resp) {
+        resp.Write("<form action='http://hostname.com/j_security_check' method='post'>");
+        resp.Write("<table>");
+        resp.Write("<tr><td>Password:</td>");
+        resp.Write("<td><input type='password' name='j_password' size='8'></td>");
+        resp.Write("</form>");
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-unprotected-cred-transport:'));
+  assert.ok(f, 'expected csharp-unprotected-cred-transport finding');
+  assert.equal(f.cwe, 'CWE-523');
+});
+
+test('detector: CWE-523 the same form over https:// does NOT fire', () => {
+  const src = `
+    public class C {
+      public void Good(HttpRequest req, HttpResponse resp) {
+        resp.Write("<form action='https://hostname.com/j_security_check' method='post'>");
+        resp.Write("<tr><td>Password:</td>");
+        resp.Write("<td><input type='password' name='j_password' size='8'></td>");
+        resp.Write("</form>");
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-unprotected-cred-transport:')));
+});
+
+test('detector: CWE-523 a non-credential http:// form does NOT fire (requires a password field too)', () => {
+  const src = `
+    public class C {
+      public void M(HttpRequest req, HttpResponse resp) {
+        resp.Write("<form action='http://hostname.com/search' method='get'>");
+        resp.Write("<input type='text' name='q'>");
+        resp.Write("</form>");
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-unprotected-cred-transport:')));
+});

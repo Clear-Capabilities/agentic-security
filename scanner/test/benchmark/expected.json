@@ -161,6 +161,7 @@
       "Weak randomness \u2014 RNG seeded": "weak-rng",
       "Untyped Actix extractor": "input-validation",
       "Cleartext HTTP": "insecure-http",
+      "Unprotected Transport of Credentials": "insecure-http",
       "Sensitive cookie": "data-exposure",
       "Open Redirect (response.sendRedirect": "open-redirect",
       "HTTP Response Splitting": "header-hardening",

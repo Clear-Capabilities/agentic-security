@@ -33,6 +33,7 @@
 //   CWE-315 data-exposure        new HttpCookie(...) / Cookies[...].Value = with a sensitive-named value
 //   CWE-1004 header-hardening    new HttpCookie missing Secure/HttpOnly
 //   CWE-22  validate-input-false [ValidateInput(false)] attribute
+//   CWE-523 insecure-http        hardcoded <form action='http://...'> submitting a password field (point flaw, not taint-based)
 //
 // Findings carry: id, file, line, vuln, severity, cwe, stride, snippet,
 // remediation, confidence, parser, family, and a `_taintEvidence` field
@@ -1062,6 +1063,51 @@ function detectInsecureHttp(file, raw, ir, analysis, out, seen) {
   }
 }
 
+// CWE-523 (Unprotected Transport of Credentials) — a "point flaw", not a
+// taint-flow vulnerability at all: Juliet's real shape (confirmed via the
+// public Juliet C# mirror this project's manifest pins,
+// CWE523_Unprotected_Cred_Transport__Web_01.cs) is a hardcoded HTML
+// `<form>` whose `action='http://...'` (not `https://`) submits a
+// password field, split across several `resp.Write(...)` calls in the
+// same method with no data flow between them at all — Bad() and Good()
+// differ ONLY in the literal URL scheme (`http://` vs `https://`) inside
+// an otherwise byte-identical hardcoded string. No taint tracking can
+// ever find this: there is no source, and the constant IS the finding.
+// Deliberately, UNLIKE `detectCleartextStorage` above, this is immune to
+// `--scramble-identifiers` by construction — the literal `action='http://`
+// text and the word "password" inside a string literal are UNCHANGED by
+// identifier scrambling (only identifier NAMES are rewritten, never
+// string content), so this is a genuinely new, scramble-safe capability,
+// not another instance of that architectural limitation.
+function detectUnprotectedCredTransport(file, raw, ir, analysis, out, seen) {
+  for (const m of ir.methods) {
+    let sawInsecureFormAction = false;
+    let actionLine = null;
+    let sawPasswordField = false;
+    for (const call of m.calls || []) {
+      for (const arg of call.args || []) {
+        const txt = arg.text || '';
+        if (!sawInsecureFormAction && /action\s*=\s*['"]http:\/\/[^'"]*['"]/i.test(txt)) {
+          sawInsecureFormAction = true;
+          actionLine = call.line;
+        }
+        if (!sawPasswordField && /\bpassword\b/i.test(txt)) sawPasswordField = true;
+      }
+      if (sawInsecureFormAction && sawPasswordField) break;
+    }
+    if (!sawInsecureFormAction || !sawPasswordField) continue;
+    const id = `csharp-unprotected-cred-transport:${file}:${actionLine}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(makeFinding({
+      ruleId: 'csharp-unprotected-cred-transport', file, line: actionLine, raw, ir,
+      family: 'insecure-http', severity: 'high', cwe: 'CWE-523',
+      vuln: "Unprotected Transport of Credentials — a login form's action uses http:// instead of https://",
+      remediation: 'Always submit login/credential forms over https:// — a cleartext (http://) form action lets an on-path attacker read the submitted username and password.',
+    }));
+  }
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────
 
 export function scanCSharp(fp, raw) {
@@ -1097,6 +1143,7 @@ export function scanCSharp(fp, raw) {
   try { detectXxe(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectXpathInjection(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectInsecureHttp(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectUnprotectedCredTransport(fp, raw, ir, analysis, out, seen); } catch {}
   // Stamp route + auth context on every finding for downstream exploitability.
   for (const f of out) {
     f._routes = analysis.routes.map(r => ({ http: r.http, path: r.path, line: r.line, requiresAuth: r.requiresAuth, methodName: r.methodName }));
