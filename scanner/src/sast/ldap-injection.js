@@ -46,7 +46,20 @@ const FILTER_INLINE_RE = {
   go:   new RegExp(String.raw`\b(?:NewSearchRequest|SearchRequest|Search)\s*\([^)]*"\(\s*` + ATTR + String.raw`\s*=[^"]*"\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()`, 'g'),
   // C#: DirectorySearcher.Filter assigned a concat ("(uid=" + u) or an
   // interpolated string ($"(uid={u})").
-  cs:   new RegExp(String.raw`\bFilter\s*=\s*\$?@?"[^"]*\(\s*` + ATTR + String.raw`\s*=[^"]*(?:"\s*\+|\{)`, 'g'),
+  //
+  // SARD_80_F1 W4.C13 — this is the shape C#'s REAL Juliet corpus actually
+  // uses (`search.Filter = "(...) " + data + "))";`, a property ASSIGNMENT,
+  // not a call argument), confirmed via the public mirror
+  // (CWE90_LDAP_Injection__Connect_tcp_01.cs) — meaning it's THIS regex,
+  // not FILTER_VAR_RE.cs below, that needs the literal-suppression capture
+  // group: the identical filter line appears verbatim in bad() and
+  // GoodG2B(), only `data`'s source differs, same convention as every
+  // other language's Path B fix. Split into two top-level alternatives
+  // (concat form with a capturing group + trailing lookahead, vs.
+  // interpolation form uncaptured) instead of the previous single regex
+  // with an internal `"\s*\+|\{` alternation, since only the concat form's
+  // trailing identifier is safely checkable this way.
+  cs:   new RegExp(String.raw`\bFilter\s*=\s*\$?@?"[^"]*\(\s*` + ATTR + String.raw`\s*=[^"]*"\s*\+\s*([A-Za-z_][\w.]*)(?![\w.]*\s*\()(?=\s*(?:\+\s*["'][^"'\n]*["']\s*)?[);,])|\bFilter\s*=\s*\$?@?"[^"]*\(\s*` + ATTR + String.raw`\s*=[^"]*\{`, 'g'),
   // Ruby net-ldap: a filter built with #{} interpolation inside a search/
   // construct/filter call.
   rb:   new RegExp(String.raw`\.(?:search|filter|construct|equals)\s*\([^)]*\(\s*` + ATTR + String.raw`\s*=[^)]*#\{`, 'g'),
@@ -75,7 +88,17 @@ const FILTER_VAR_RE = {
   py:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()|[fF]["']\s*\(\s*` + ATTR + String.raw`\s*=\s*\{`, 'g'),
   php:  new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\.\s*\$[A-Za-z_]\w*`, 'g'),
   go:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()`, 'g'),
-  cs:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()|\$"[^"]*\(\s*` + ATTR + String.raw`\s*=\s*\{`, 'g'),
+  // SARD_80_F1 W4.C13 — capture group added to the concat alternative
+  // (mirroring `java`'s) so scanLDAPInjection can run the same
+  // hardcoded-literal check; the C# public mirror confirms Juliet's
+  // identical-line convention holds here too (CWE90_LDAP_Injection__
+  // Connect_tcp_01.cs keeps `search.Filter = "(...employeename=" + data +
+  // "))";` verbatim in both bad() and GoodG2B(), only data's source
+  // differs). The interpolation alternative (`$"...{`) is left uncaptured
+  // (m[1] undefined there is a no-op for `_nearestAssignIsLiteral`, which
+  // returns false on a falsy varName) since Juliet's own corpus uses the
+  // concat form exclusively for this shape.
+  cs:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*([A-Za-z_][\w.]*)(?![\w.]*\s*\()(?=\s*(?:\+\s*["'][^"'\n]*["']\s*)?[);,])|\$"[^"]*\(\s*` + ATTR + String.raw`\s*=\s*\{`, 'g'),
   rb:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=[^"']*#\{`, 'g'),
   kt:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*(?:\+|\$\{)\s*[A-Za-z_$][\w.]*(?![\w.]*\s*\()`, 'g'),
 };
@@ -98,23 +121,51 @@ const LDAP_ESCAPE_RE =
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
-// True when `varName`'s NEAREST assignment before `beforeIdx` (source order)
-// is a plain string-literal RHS. Same "backward nearest-assignment" shape as
-// java-structural.js's `_trailingIdentIsLiteral` (itself modeled on
-// java-bench-extras.js's CWE-259 check) — duplicated rather than imported,
-// matching this codebase's established per-module convention for this small
-// a helper.
+// True when EVERY assignment to `varName` before `beforeIdx` (source order)
+// is a plain string-literal RHS, and at least one such assignment exists.
+// Same "backward assignment scan" shape as java-structural.js's
+// `_trailingIdentIsLiteral` (itself modeled on java-bench-extras.js's
+// CWE-259 check) — duplicated rather than imported, matching this
+// codebase's established per-module convention for this small a helper.
+//
+// SARD_80_F1 W4.C13 — this USED to check only the TEXTUALLY NEAREST
+// assignment, which is wrong for an if/else where each branch assigns the
+// same variable: `if (cond) data = Environment.GetEnvironmentVariable(...);
+// else data = "foo";` has its literal assignment (the else branch) textually
+// LAST, so the old "nearest" check wrongly concluded `data` was provably a
+// literal and suppressed a REAL vulnerability — found via a real corpus
+// regression during THIS EXACT fix's own verification (C# CWE90_LDAP_
+// Injection__Environment_12.cs's Bad() lost its true positive). Checking
+// EVERY preceding assignment (failing closed the moment any one of them is
+// non-literal) fixes that — but naively scanning the WHOLE FILE for prior
+// assignments introduced a SECOND regression the same verification pass
+// caught: Juliet's universal convention re-declares the source variable
+// FRESH in every method (`string data;` in Bad(), a completely separate
+// `string data;` in GoodG2B()), so a same-named variable in an EARLIER
+// method (e.g. Bad()'s own non-literal source assignment) would incorrectly
+// poison GoodG2B()'s own all-literal check. Scoping the scan to start at
+// the variable's most recent DECLARATION before `beforeIdx` (a `Type
+// varName;` or `Type varName = …;` statement) fixes both at once: within
+// one method's scope, every assignment must be literal (catches the
+// if/else case); across method boundaries, each method's own `data` is
+// scanned independently (catches the cross-method case). Falls back to
+// scanning from file-start when no declaration is found — strictly SAFER
+// than before (fewer assignments end up in scope, never more).
 function _nearestAssignIsLiteral(code, varName, beforeIdx) {
   if (!varName || varName.includes('.')) return false;
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
-  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
-  let lastLiteralEnd = -1, m;
-  while ((m = literalRe.exec(code)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
-  if (lastLiteralEnd === -1) return false;
-  let lastAnyEnd = -1;
-  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
-  return lastLiteralEnd === lastAnyEnd;
+  const declRe = new RegExp(`\\b[\\w<>[\\],.?]+\\s+${escaped}\\s*(?:=|;)`, 'g');
+  let scopeStart = 0, dm;
+  while ((dm = declRe.exec(code)) && dm.index < beforeIdx) scopeStart = dm.index;
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
+  anyAssignRe.lastIndex = scopeStart;
+  const literalRhsRe = /^"[^"]*"$/;
+  let sawAny = false, m;
+  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) {
+    sawAny = true;
+    if (!literalRhsRe.test(m[1].trim())) return false;
+  }
+  return sawAny;
 }
 function _lang(fp) {
   if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(fp)) return 'js';
@@ -168,6 +219,10 @@ export function scanLDAPInjection(fp, raw) {
     const re = new RegExp(FILTER_INLINE_RE[lang].source, FILTER_INLINE_RE[lang].flags);
     let m;
     while ((m = re.exec(code))) {
+      // SARD_80_F1 W4.C13 — C#'s DirectorySearcher.Filter shape goes
+      // through THIS path (a property assignment), not FILTER_VAR_RE, so
+      // the hardcoded-literal check belongs here for `cs`.
+      if (lang === 'cs' && _nearestAssignIsLiteral(code, m[1], m.index)) continue;
       const line = lineOf(raw, m.index);
       const key = `inline:${line}`;
       if (seen.has(key)) continue;
@@ -182,7 +237,7 @@ export function scanLDAPInjection(fp, raw) {
     const re = new RegExp(FILTER_VAR_RE[lang].source, FILTER_VAR_RE[lang].flags);
     let m;
     while ((m = re.exec(code))) {
-      if (lang === 'java' && _nearestAssignIsLiteral(code, m[1], m.index)) continue;
+      if ((lang === 'java' || lang === 'cs') && _nearestAssignIsLiteral(code, m[1], m.index)) continue;
       const line = lineOf(raw, m.index);
       const key = `var:${line}`;
       if (seen.has(key)) continue;

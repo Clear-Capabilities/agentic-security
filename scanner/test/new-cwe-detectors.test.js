@@ -101,6 +101,35 @@ public class Auth {
   assert.equal(good.length, 0, 'expected no finding when data is a hardcoded literal');
 });
 
+// SARD_80_F1 W4.C13 — same bug class as the Java test above, found in
+// FILTER_INLINE_RE.cs (not FILTER_VAR_RE.cs): C#'s real Juliet corpus shape
+// is `search.Filter = "..." + data + "...";`, a property ASSIGNMENT that
+// Path A matches directly (confirmed via the public mirror,
+// CWE90_LDAP_Injection__Connect_tcp_01.cs, which keeps this exact line
+// verbatim in bad() and GoodG2B()).
+test('LDAP — C# DirectorySearcher.Filter whose nearest local assignment is a hardcoded literal does NOT fire; a tainted one still does', () => {
+  const bad = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void Bad() {
+    string data = Environment.GetEnvironmentVariable("ADD");
+    DirectorySearcher search = new DirectorySearcher();
+    search.Filter = "(&(objectClass=user)(employeename=" + data + "))";
+  }
+}
+`);
+  assert.ok(bad.length >= 1, 'expected a finding when data comes from an environment variable');
+  const good = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void GoodG2B() {
+    string data = "foo";
+    DirectorySearcher search = new DirectorySearcher();
+    search.Filter = "(&(objectClass=user)(employeename=" + data + "))";
+  }
+}
+`);
+  assert.equal(good.length, 0, 'expected no finding when data is a hardcoded literal');
+});
+
 test('LDAP — unrelated string concat WITHOUT LDAP context does NOT fire', () => {
   const out = scanLDAPInjection('util.js', `
 function key(name) { return "(uid=" + name + ")"; }
