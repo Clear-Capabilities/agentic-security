@@ -2410,6 +2410,20 @@ root causes, three catalog fixes) produced roughly **450 new true
 positives across 4 CWEs** on the C# corpus — the highest-value work of
 this entire session.
 
+### Full C# dev-split checkpoint after closing out CWE-81 (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev`: **macroF1=19.8%→20.9% (+1.1pp)**,
+`microF1=27.3%→28.9%`, `P=52.2%→53.7%`, `R=18.5%→19.8%` — another clean,
+broad improvement, precision and recall both up together. CWE-81's
+descriptor family also has dev-split representation (unlike CWE-78/643/
+134), so this fix's full impact is directly visible here too.
+
+**Session-total C# progress: macroF1 16.2%→20.9% (+4.7pp)** across this
+entire session's work, driven overwhelmingly by the CWE-80/81/83/113
+"total blackout" investigation (W4.C1, now VERIFIED) plus the earlier
+family-slug and concat-lowering fixes. Approaching M1's C#≥25% gate.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
