@@ -377,3 +377,25 @@ public class C {
   assert.ok(taint.some(f => /xpath|CWE-643/i.test(`${f.vuln} ${f.cwe}`)),
     `expected XPath Injection via receiverTypeIn fallback, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// Juliet's OWN canonical C# CWE-134 shape (confirmed via the public
+// Juliet C# mirror this project's SARD manifest pins,
+// CWE134_..._Connect_tcp_Format_01.cs): `Console.Write(string.Format(data))`
+// using the LOWERCASE `string` keyword alias, not `String`. `cs-string-format`
+// previously matched only `receiver: '^String$'` (case-sensitive) — since
+// `string.Format(...)` and `String.Format(...)` compile to the identical
+// call, this silently missed 100% of this corpus's own CWE-134 cases.
+test('cs-string-format: the lowercase `string` alias (not just `String`) fires CWE-134', async () => {
+  const dir = mkTmp('string-format-lowercase', `
+using System;
+public class C {
+    public void Bad() {
+        string data = Console.ReadLine();
+        Console.Write(string.Format(data));
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /format string|CWE-134/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected Format String from lowercase string.Format(...), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});

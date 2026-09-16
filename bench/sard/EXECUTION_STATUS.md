@@ -615,7 +615,7 @@ precision against).
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
-| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. CWE-134 remains genuinely zero, joining the C# blackout set | IN_PROGRESS |
+| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
@@ -2280,6 +2280,34 @@ doesn't reach (Juliet generates 20+ distinct flow variants per CWE;
 covered a much larger share. Genuinely narrowed and real, not solved —
 moved from "zero findings of any kind" to "a real, if partial,
 mechanism," which is the same qualitative jump PHP's XPath fix made.
+
+### W4.C3 — C# CWE-134 (format string): a one-line case-sensitivity bug, biggest C# win this session (2026-09-15)
+
+Fetched the real Juliet C# mirror (`CWE134_..._Connect_tcp_Format_01.cs`):
+`Console.Write(string.Format(data))`, using the LOWERCASE `string`
+keyword — a real, fully interchangeable alias for `System.String` in C#
+(`string.Format(...)` and `String.Format(...)` compile to the identical
+call). `cs-string-format`'s `receiver: '^String$'` was case-sensitive and
+only matched the capitalized class name — confirmed by direct probe:
+`String.Format(data)` fired via IR-TAINT, the byte-identical
+`string.Format(data)` produced zero IR-TAINT findings. A one-character
+regex-class fix (`'^[Ss]tring$'`) resolved it completely, verified against
+the full-fidelity real shape (try/catch + nested `using` TcpClient/
+StreamReader source read, matching Juliet's actual structure exactly —
+this is the SAME source-read pattern already proven robust for CWE-78/643
+this session, confirming the deep engine's handling of it generally, not
+just for this one case). 1 new test added. Full regression: `test:dataflow`
+(1234/1234), `test:sast` (750/750), `test:smoke` (30/30), all green.
+
+**Real-corpus measurement: the biggest single C# win of this session.**
+Dev split alone: tp=0/34 unchanged (the by-now-expected sampling
+artifact — see CWE-78/643 above). Without the split filter: **tp=230/912
+(25.2% recall)**, up from a TOTAL BLACKOUT. Train split: **tp=173/692
+(25.0% recall)**. A single-character fix (`String`→`[Ss]tring`) unlocked
+more real recall than any other individual C# fix this session — a stark
+reminder that "zero recall" corpus mysteries are worth checking the
+simplest possible explanation (a literal-casing mismatch) before assuming
+something architecturally deep is wrong.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

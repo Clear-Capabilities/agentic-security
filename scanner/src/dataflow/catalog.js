@@ -1700,7 +1700,16 @@ export const CATALOG = [
   // shape to detect — confirmed by a nested-call precision fixture where
   // such a sink fired on a value that was already-formatted output text
   // wrapping a merely-tainted substitution argument.
-  { kind: 'sink', id: 'cs-string-format', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Format', receiver: '^String$' }, argIndex: 0,
+  // `^[Ss]tring$`, not `^String$`: C#'s `string` keyword is a real,
+  // interchangeable alias for `System.String` (`string.Format(...)` and
+  // `String.Format(...)` compile to the IDENTICAL call), and Juliet's own
+  // real C# CWE-134 corpus (confirmed via the public Juliet mirror this
+  // project's SARD manifest pins) uses the lowercase form exclusively
+  // (`Console.Write(string.Format(data))`) — the capitalized-only pattern
+  // silently missed 100% of this corpus's own CWE-134 cases, confirmed by
+  // a direct probe (`String.Format` fires via IR-TAINT; the byte-identical
+  // `string.Format` produces zero IR-TAINT findings before this fix).
+  { kind: 'sink', id: 'cs-string-format', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Format', receiver: '^[Ss]tring$' }, argIndex: 0,
     vuln: { name: 'Externally-Controlled Format String (String.Format)', severity: 'medium', cwe: 'CWE-134',
             remediation: 'Never build the FORMAT string itself from user input; keep the format literal and pass user data only as substitution arguments.' } },
   // CWE-643 — XPath built from concatenated/tainted text.
