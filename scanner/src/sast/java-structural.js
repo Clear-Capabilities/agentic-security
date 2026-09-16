@@ -10,11 +10,42 @@
 import { blankComments } from './_comment-strip.js';
 
 // Concat-into-sink families with no guard needed (parameterized form has no
-// string-concat argument, so it auto-clears).
+// string-concat argument, so it auto-clears). Each pattern additionally
+// captures a trailing `+ identifier)` / `+ identifier;` tail — the SINGLE,
+// LAST concatenated term, when the concatenation ends right there — so the
+// caller can check whether that one identifier is PROVABLY a hardcoded
+// literal (see `_trailingIdentIsLiteral` below). Juliet's own convention
+// (confirmed against the public Java mirror's CWE-89 execute()/executeQuery()
+// variants) keeps the IDENTICAL sink code in both bad() and goodG2B(), only
+// swapping the source of one bare local variable (`data = System.getenv(…)`
+// vs. `data = "foo"`) — this taint-independent detector, having no taint
+// model of its own, previously could not tell the two apart and fired on
+// both, a large fraction of this family's real corpus false positives.
 const RE = {
-  sqlInjection: /\b(?:executeQuery|executeUpdate|execute|createQuery|createNativeQuery|prepareStatement|prepareCall)\s*\(\s*"[^"\n]*"\s*\+/g,
-  cmdInjection: /\b(?:Runtime\.getRuntime\(\)\s*\.\s*exec|ProcessBuilder)\s*\(\s*(?:new\s+String\s*\[\s*\]\s*\{\s*)?"[^"\n]*"\s*\+/g,
+  sqlInjection: /\b(?:executeQuery|executeUpdate|execute|createQuery|createNativeQuery|prepareStatement|prepareCall)\s*\(\s*"[^"\n]*"\s*\+(?:\s*([A-Za-z_]\w*)\s*(?=(?:\s*\+\s*"[^"\n]*"\s*)?[);]))?/g,
+  cmdInjection: /\b(?:Runtime\.getRuntime\(\)\s*\.\s*exec|ProcessBuilder)\s*\(\s*(?:new\s+String\s*\[\s*\]\s*\{\s*)?"[^"\n]*"\s*\+(?:\s*([A-Za-z_]\w*)\s*(?=(?:\s*\+\s*"[^"\n]*"\s*)?[);]))?/g,
 };
+
+// True when `varName`'s NEAREST assignment before `beforeIdx` (source order)
+// is a plain string-literal RHS — same "backward nearest-assignment" shape
+// as java-bench-extras.js's `_nearestAssignIsLiteral` (CWE-259), reused here
+// for the opposite purpose: SUPPRESSING a structural finding instead of
+// creating one. Deliberately narrow: only fires when the regex above
+// captured a SINGLE trailing identifier immediately before the sink call's
+// closing `)`/`;` — a concatenation with more terms after it
+// (`"…" + a + b`) is left alone, since a safe `a` says nothing about `b`.
+function _trailingIdentIsLiteral(code, varName, beforeIdx) {
+  if (!varName) return false;
+  const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  let lastLiteralEnd = -1, m;
+  while ((m = literalRe.exec(code)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  if (lastLiteralEnd === -1) return false;
+  let lastAnyEnd = -1;
+  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  return lastLiteralEnd === lastAnyEnd;
+}
 
 const META = {
   sqlInjection: {
@@ -48,7 +79,10 @@ export function scanJavaStructural(fp, raw) {
   for (const [key, re] of Object.entries(RE)) {
     const r = new RegExp(re.source, re.flags);
     let m;
-    while ((m = r.exec(code))) emit(key, lineOf(code, m.index), META[key]);
+    while ((m = r.exec(code))) {
+      if (_trailingIdentIsLiteral(code, m[1], m.index)) continue;
+      emit(key, lineOf(code, m.index), META[key]);
+    }
   }
 
   // Path traversal (CWE-22): a file path built by concatenation, unless the

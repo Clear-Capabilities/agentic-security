@@ -14,6 +14,24 @@ test('Java SQLi — executeQuery with string concat (CWE-89)', () => {
   assert.ok(none(scanJavaStructural('UserDao.java', 'ResultSet find(Connection c, String name){ PreparedStatement p = c.prepareStatement("SELECT * FROM u WHERE name=?"); p.setString(1,name); return p.executeQuery(); }'), 'CWE-89'));
 });
 
+// SARD_80_F1 W4.J12: Juliet's own convention keeps the IDENTICAL sink line
+// in bad() and goodG2B(), only swapping a bare local variable's source
+// (System.getenv(...) vs a hardcoded literal) — this taint-independent
+// detector previously fired on both, since it never examined what the
+// concatenated identifier actually held. Confirmed via the public Juliet
+// mirror (CWE89_SQL_Injection__Environment_execute_01.java).
+test('Java SQLi — a hardcoded-literal local variable is suppressed; a tainted one still fires (CWE-89)', () => {
+  const bad = scanJavaStructural('S.java', 'void bad(){ String data = System.getenv("ADD"); Statement s = null; s.execute("insert into users (status) values (\'updated\') where name=\'"+data+"\'"); }');
+  assert.ok(has(bad, 'CWE-89'), 'expected a finding when data comes from System.getenv');
+  const good = scanJavaStructural('S.java', 'void goodG2B(){ String data = "foo"; Statement s = null; s.execute("insert into users (status) values (\'updated\') where name=\'"+data+"\'"); }');
+  assert.ok(none(good, 'CWE-89'), 'expected no finding when data is a hardcoded literal');
+});
+
+test('Java SQLi — a second tainted term after a suppressible one still fires (CWE-89)', () => {
+  const f = scanJavaStructural('S.java', 'void m(){ String data = "foo"; String other = System.getenv("X"); Statement s = null; s.execute("insert into t (a) values (\'"+data+"\') where name=\'"+other+"\'"); }');
+  assert.ok(has(f, 'CWE-89'), 'a safe FIRST term must not suppress a genuinely tainted second term');
+});
+
 test('Java path traversal — new File concat, guard suppresses (CWE-22)', () => {
   assert.ok(has(scanJavaStructural('F.java', 'byte[] read(String name){ return new FileInputStream(new File("/var/data/" + name)).readAllBytes(); }'), 'CWE-22'));
   assert.ok(none(scanJavaStructural('F.java', 'byte[] read(String name){ Path w = base.resolve(name).normalize().toRealPath(); if(!w.startsWith(base)) throw new Exception(); return Files.readAllBytes(w); }'), 'CWE-22'));
