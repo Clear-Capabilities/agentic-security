@@ -1780,6 +1780,28 @@ collection-taint fix): tp=472 fp=212 fn=308 → recall 60.5%, F1 64.0%.**
 Full regression re-run after this second round: `test:smoke` (30/30),
 `sard-cwe-key-merge.test.js` (3/3), both green.
 
+### Full Java dev-split checkpoint after the family-slug fixes (2026-09-15)
+
+`node bench/sard/scripts/batch-scan.mjs --app sard-juliet-java-strict --blind
+--scramble-identifiers --deep --split dev --json | node
+bench/sard/scripts/macro-score.mjs`:
+
+**macroF1=40.3%, microF1=59.4%, P=62.7%, R=56.3%, CWEs=26,
+macroF1(support>=5)=59.2%.**
+
+Up from **39.1%** (the last full-corpus checkpoint, right after the
+collection-taint mega-fix earlier this session) — a genuine **+1.2pp**
+real-corpus gain, entirely attributable to this iteration's family-slug
+fixes unlocking CWE-470/134 (previously structurally zero) plus the 3
+CWE-89 ORM-sink fixes. `CWEs=26` (up from fewer previously) reflects
+CWE-470/134 now contributing real, non-zero per-CWE F1 to the macro
+average instead of being either absent or a guaranteed-zero row.
+
+**Still short of M1's Java≥45% gate**, but the closest this session has
+gotten — every remaining zero/near-zero Java CWE row is now a real
+candidate for the same "check for a structural scoring bug before assuming
+the detector is broken" methodology this iteration validated twice over.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
