@@ -612,7 +612,7 @@ precision against).
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
-| W4.J7 | Java CWE-329 (static/weak IV) — new detector shape added (declare-then-pass: `byte[] iv = {0x00,...}; ... new IvParameterSpec(iv)`, distinct from the already-covered inline `new IvParameterSpec(new byte[16])` form), plus a MAJOR measurement-methodology fix: `bench-realworld.js` sets `AGENTIC_SECURITY_NO_INTEGRATION=1` by default, which silently disables `crypto-protocol.js`'s ENTIRE detector suite (TLS/JWT/cipher/ECB/static-IV/weak-hash/KDF — every family it owns) in every SARD/Juliet benchmark run to date, regardless of detector correctness — confirmed via `AGENTIC_SECURITY_NO_INTEGRATION=0` override (see session log for the full debugging trail). Also removed an unconditional `_BENCH_FIXTURE_RE` filename gate in `crypto-protocol.js` that separately zeroed the same module on any `CWE\d+_*.java/.c/.cpp/.cs` file (i.e. every Juliet-named file), and fixed a vuln-text→family mapping gap ("Static / zero IV" was unmapped, silently slugging to a family that could never match the manifest's `weak-rng`). **Real corpus (train, blind+scrambled+deep, `AGENTIC_SECURITY_NO_INTEGRATION=0` override): CWE-329 tp=17/19 fp=0 (recall 89.5%, precision 100%, F1 94.4%).** Other CWE-329-adjacent families (321/325/327/328/330/338) not yet re-measured with the override — likely also under-credited to date since several route through the same module; flagged as a high-priority follow-up sweep | IN_PROGRESS |
+| W4.J7 | Java CWE-329 (static/weak IV) — new detector shape added (declare-then-pass: `byte[] iv = {0x00,...}; ... new IvParameterSpec(iv)`, distinct from the already-covered inline `new IvParameterSpec(new byte[16])` form), plus a measurement-methodology fix: `bench-realworld.js` sets `AGENTIC_SECURITY_NO_INTEGRATION=1` by default, which silently disabled `crypto-protocol.js` (and hence CWE-329 detection) in every SARD/Juliet benchmark run to date — confirmed via `AGENTIC_SECURITY_NO_INTEGRATION=0` override (see session log for the full debugging trail, including a separately-removed `_BENCH_FIXTURE_RE` filename gate and a vuln-text→family mapping gap, both stacked on top of the same bug). **Real corpus (train, `AGENTIC_SECURITY_NO_INTEGRATION=0` override): CWE-329 tp=17/19 fp=0 (recall 89.5%, precision 100%, F1 94.4%).** Checked the manifests directly: CWE-330/336/338 are handled by `weak-randomness.js` (ungated, unaffected) and no other Java/C# CWE in this corpus maps to any other crypto-protocol.js family — so CWE-329 is the ONLY corpus CWE this discovery unlocks. **It does not move the tracked dev-split M1 number**: CWE-329 has 0 expected entries in dev split for either language (all 19 fall in train/test), so its value is test-split correctness + a genuine capability gain, not near-term M1 progress. C# CWE-329 checked too: tp=0/19 even with the module active — a real, separate, lower-priority gap (C# already clears M1) | VERIFIED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 — **the ENTIRE "total blackout" now fully resolved.** `cs-response-write`/`cs-response-addheader` required the exact literal identifier `Response`, but Juliet's real code uses the parameter name `resp` — widened receiver + added `receiverTypeIn`. CWE-81 had a SEPARATE root cause (a genuinely missing sink: `resp.StatusDescription = tainted`, a member-write shape no catalog entry covered at all, unrelated to the receiver-name bug) — added `cs-response-statusdescription`. **Real corpus (train): CWE-80 tp=153/750 (20.4%, fp=0), CWE-83 tp=85/428 (19.9%, fp=0), CWE-81 tp=52/324 (16.0%, P=86.7%), CWE-113 tp=157/929 (16.9%, lower precision — fp=348, needs future triage).** Two distinct bugs, three fix commits, the single most valuable investigation of this entire session by raw true-positive count (~450 new TPs across 4 CWEs) | VERIFIED |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
@@ -2629,11 +2629,53 @@ SARD-corpus measurement of a crypto-protocol.js-owned family (TLS,
 JWT-related, weak cipher/hash/KDF CWEs, additional static-IV variants)
 MUST pass `AGENTIC_SECURITY_NO_INTEGRATION=0` explicitly or it will
 silently, incorrectly read as zero recall — exactly as every prior
-session's crypto-family numbers on this corpus have. **High-priority
-follow-up: sweep CWE-321/325/327/328/330/338 (and any TLS/JWT-adjacent
-CWEs) with the override to find out how much of Java's remaining M1 gap
-this alone closes**, since several are plausible candidates for the same
-false-zero pattern.
+session's crypto-family numbers on this corpus have.
+
+**Follow-up sweep done — narrower Java M1 impact than initially hoped.**
+Checked the Java and C# manifests' `cweToFamily` maps directly rather
+than guessing: only CWE-329/330/336/338 map to `weak-rng` (the only
+family crypto-protocol.js and this corpus's gold set share for either
+language); no CWE maps to `weak-cipher`/`weak-hash`/`crypto-ecb`/
+`crypto-kdf-weak`/`crypto-tls-*`/`crypto-jwt-*` in this corpus at all.
+CWE-330/336/338 (general weak RNG, not IV-specific) are handled by
+`weak-randomness.js`, which sits OUTSIDE the Integration block and was
+never affected by this bug — so CWE-329 is the ONLY corpus CWE this
+discovery actually unlocks, for either language. **And CWE-329 has
+ZERO expected entries in dev split** (confirmed both languages: `--split
+dev` → `0/19 expected entries kept`, all 19 fall in train/test per
+`familyKeyFor`'s whole-descriptor-family split assignment) — so this
+fix, while a completely real and now-verified detection capability, does
+**not** move the currently-tracked dev-split M1 macro-F1 number for
+Java at all. Its value is: (a) correctness for the eventual one-time
+official TEST-split milestone run, where CWE-329 DOES contribute to
+Java's score, and (b) removing a structural blocker (the
+`_BENCH_FIXTURE_RE` gate) that was silently zeroing this module on every
+Juliet-named file regardless of language or CWE.
+
+**C# CWE-329 checked too, for completeness — real, separate, smaller
+gap.** Same override, same `--cwe 329 --split train` command against
+`sard-juliet-csharp-strict`: **tp=0, fp=0, fn=19** — the module runs (no
+longer gated) but genuinely does not fire on C#'s corpus shape. Not
+investigated further this session (C# already clears its M1 dev-split
+gate at 29.4%, so this isn't a priority the way Java's gap is), but
+flagged for whoever next works C# crypto coverage: `detectStaticIv`'s C#
+patterns (`aes.IV = new byte[16]`, `CreateEncryptor`) don't match
+whatever shape Juliet's C# CWE-329 testcases actually use — needs the
+same public-mirror-first investigation this session used for Java.
+
+**Recommended, higher-risk follow-up (not done this session — needs its
+own review, not a drive-by change):** move `scanCryptoProtocol`'s call in
+`engine.js` out of the `AGENTIC_SECURITY_NO_INTEGRATION`-gated block
+entirely, since it is a mature, 14-test, already-self-scan-active module
+miscategorized alongside genuinely experimental ones (llm-app, mobile,
+pqc, web3-advanced, dapp-frontend, cloud-iam, k8s-admission,
+ml-supply-chain). This would make it always-on by default (matching its
+real maturity) without touching the other 8 modules' gating, so
+`bench-realworld.js`'s nodegoat/bigvul/cvefixes baselines would stay
+stable for everything except crypto-protocol.js specifically — but even
+that narrower change still needs those three baselines re-measured and
+reviewed before landing, since it's genuinely new signal on corpora this
+session did not touch.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
