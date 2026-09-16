@@ -1487,6 +1487,33 @@ export const CATALOG = [
     match: { type: 'call', callee: 'Start', requireLiteralArg: { index: 0, pattern: '^"cmd(?:\\.exe)?"$|^"(?:/bin/)?(?:sh|bash)"$' } }, argIndex: 'all',
     vuln: { name: 'Command Injection (Process.Start string-form)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use ProcessStartInfo with separated FileName + Arguments; never pass /c with concat.' } },
+  // The SINGLE-argument `Process.Start(commandString)` overload — Juliet's
+  // OWN canonical C# CWE-78 shape (confirmed by reading the real, public
+  // Juliet C# mirror this project's own SARD manifest pins:
+  // `github.com/snyk-schmidtty/juliet-test-suite-csharp`,
+  // `CWE78_OS_Command_Injection__Connect_tcp_01.cs`:
+  // `Process.Start(osCommand + data)`, the interpreter-plus-arguments
+  // ALREADY concatenated into ONE tainted string before the call).
+  // Neither entry above can ever match this: `cs-process-start`'s
+  // `requireLiteralArg` fails CLOSED because arg0 here is a CONCAT
+  // expression, not a literal (there is no separate, provably-shell
+  // literal to check — the whole point of this shape); `cs-process-
+  // start-args` checks argIndex 1, which does not exist on a one-argument
+  // call. Unlike the 2-argument array-execve form (filename, args[]),
+  // there is no safe interpretation of this overload with a tainted
+  // argument — the ENTIRE string IS the thing .NET treats as a shell-
+  // dispatchable command line — so no `requireLiteralArg` gate applies
+  // here at all. Scoped to the `Process` receiver (a real BCL class name,
+  // not scrambled by --scramble-identifiers) to avoid over-matching an
+  // unrelated `.Start()` call (a `Timer`/`Thread`/`Stopwatch`, none of
+  // which take a string command argument at all, but bare `callee:
+  // 'Start'` with no receiver constraint — as the two entries above
+  // already do — would still be a real precision risk for a hypothetical
+  // future scrambled receiver).
+  { kind: 'sink', id: 'cs-process-start-single', language: 'cs', framework: 'stdlib',
+    match: { type: 'call', callee: 'Start', receiver: '^Process$' }, argIndex: 0,
+    vuln: { name: 'Command Injection (Process.Start single-argument command string)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Use ProcessStartInfo with separated FileName + ArgumentList; never build one concatenated command-line string.' } },
   // Companion to the entry above, for the NON-shell-literal filename case
   // that entry deliberately excludes (`Process.Start("ping", tainted)`).
   // This is a real, distinct risk, not a benchmark-only shape:
@@ -1613,6 +1640,30 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-commandtext-write', language: 'cs', framework: 'ado', match: { type: 'member', object: '_any_', prop: 'CommandText', receiverTypeIn: ['^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)Command$'] }, argIndex: 'rhs',
     vuln: { name: 'SQL Injection (CommandText assigned a concatenated/tainted value)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use a parameterized query: keep `CommandText` a fixed string with `@name` placeholders and bind values via `cmd.Parameters.AddWithValue(...)`.' } },
+  // Juliet's canonical C# CWE-78 shape: build a `Process` object with a
+  // parameterless/fixed constructor, then assign the tainted command text
+  // to `.StartInfo.Arguments` (or, less commonly, `.StartInfo.FileName`)
+  // afterward — the exact same "construct-then-assign" idiom
+  // `cs-commandtext-write` above already models for SQL, just never
+  // ported to this sink. Found via direct probing (a synthetic
+  // `Process.Start()`-based Juliet-shaped fixture produced ZERO findings
+  // of ANY kind before this entry existed), not assumed: the two PRE-
+  // EXISTING C# CWE-78 entries (`cs-process-start`/`cs-process-start-args`)
+  // both key off the static `Process.Start(...)` CALL form, which this
+  // idiom never uses at all — `.Start()` is called on the instance with NO
+  // arguments, so neither entry's `argIndex` had anything to check.
+  // `match.object: '_any_'` required for any member-WRITE sink (see
+  // dataflow/CLAUDE.md's gotcha); scoped via a name-based `receiver`
+  // rather than `receiverTypeIn` since `ProcessStartInfo`'s own property
+  // name (`StartInfo`) is a reliable, idiomatic .NET naming convention on
+  // its own, and seeding `typeOfVar` for `new Process()` var was not yet
+  // verified to work for this shape.
+  { kind: 'sink', id: 'cs-processstartinfo-arguments', language: 'cs', framework: 'stdlib', match: { type: 'member', object: '_any_', prop: 'Arguments', receiver: 'StartInfo' }, argIndex: 'rhs',
+    vuln: { name: 'Command Injection (ProcessStartInfo.Arguments assigned a concatenated/tainted value)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Use ProcessStartInfo.ArgumentList (never a single concatenated Arguments string), or validate/allow-list the argument content.' } },
+  { kind: 'sink', id: 'cs-processstartinfo-filename', language: 'cs', framework: 'stdlib', match: { type: 'member', object: '_any_', prop: 'FileName', receiver: 'StartInfo' }, argIndex: 'rhs',
+    vuln: { name: 'Command Injection (ProcessStartInfo.FileName assigned a tainted value)', severity: 'critical', cwe: 'CWE-78',
+            remediation: 'Resolve the executable path against an explicit allow-list before assigning it to ProcessStartInfo.FileName.' } },
   { kind: 'sink', id: 'cs-sqldataadapter', language: 'cs', framework: 'ado', match: { type: 'call', callee: 'SqlDataAdapter' }, argIndex: 0,
     vuln: { name: 'SQL Injection (new SqlDataAdapter with concatenated query text)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Pass a parameterized SqlCommand to the adapter instead of a raw query string.' } },

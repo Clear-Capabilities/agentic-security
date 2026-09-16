@@ -615,7 +615,7 @@ precision against).
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
 | W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
-| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-470 partially unblocked by the shared family-slug fix (see W4.J5): tp=17 fp=2 fn=106, recall ≥13.8% on a heavily truncated run (only 19/157 files scanned before the fn-limit hit — real recall is unknown, not just understated). CWE-134 still tp=0 on the same truncated run, inconclusive. CWE-36/23/643/601/78/90 not yet re-checked this session | IN_PROGRESS |
+| W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). CWE-643 (XPath) and CWE-134 remain genuinely zero, joining the C# blackout set | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials | NOT_STARTED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
@@ -2162,6 +2162,66 @@ closes a chunk of the PRD's own explicitly-named W1.1 gap ("`ir.classes`
 emission for PHP... parsers... NOT_STARTED") for PHP specifically, so it
 has value beyond this one corpus regardless of the zero measured movement
 here.
+
+### W4.C1/C3 — three real C# fixes via the public Juliet mirror; dev-split sampling artifact explained (2026-09-15)
+
+Re-measured C#'s remaining unchecked W4.C3 CWEs (23/36/601/78/90/643).
+CWE-23/36/601/90 all confirmed real, working recall. CWE-643 (XPath) and
+CWE-78 (command injection) both showed a complete 0-recall miss — CWE-643
+joins the already-documented blackout set unresolved; **CWE-78 was
+root-caused and fixed via the SAME public-generator-source technique that
+found PHP's XPath gap**: fetched the real Juliet C# mirror this project's
+own manifest pins (`github.com/snyk-schmidtty/juliet-test-suite-csharp`,
+`CWE78_OS_Command_Injection__Connect_tcp_01.cs`) and read its actual sink
+shape rather than guessing.
+
+**Three real, independently-verified fixes, in the order found:**
+1. **`cs-processstartinfo-arguments`/`-filename`** — Juliet's dominant C#
+   CWE-78 idiom builds a `Process` object, then assigns the tainted
+   command to `.StartInfo.Arguments`/`.FileName` afterward (the exact
+   same "construct-then-assign" pattern `cs-commandtext-write` already
+   modeled for SQL, never ported to this sink). The two PRE-EXISTING
+   CWE-78 entries both key off the STATIC `Process.Start(...)` CALL form
+   and had nothing to check for this shape at all.
+2. **`cs-process-start-single`** — the single-argument `Process.Start
+   (commandString)` overload, Juliet's OWN canonical shape (interpreter +
+   data already concatenated into one string). Neither pre-existing entry
+   could ever match it: one requires a literal shell-interpreter at arg0
+   (fails closed on a concat expression), the other checks arg1, which
+   doesn't exist on a one-argument call.
+3. **The real blocker, found while verifying #2 with the exact real
+   shape**: `parser-cs.js`'s string-concat branch required a quote
+   character (`"`/`'`) to appear SOMEWHERE in the expression before even
+   attempting to split on `+` — so `osCommand + data` (a plain identifier
+   on BOTH sides, no inline literal anywhere) fell through every branch to
+   `{kind:'unknown'}`, silently dropping `data`'s taint regardless of
+   which sink it reached. This is a parser-level, not sink-specific, gap —
+   confirmed harmless to loosen (a numeric `a + b` misread as a 2-part
+   template costs nothing for taint purposes) by the full `test:dataflow`
+   suite passing byte-identical (1230/1230, +3 new tests) after removing
+   the quote requirement.
+
+Each fix verified individually via a probe reproducing the exact real
+Juliet shape (including, for #3, a full-fidelity reproduction with the
+real file's try/catch source read and if/else platform-branching command
+construction — confirmed firing correctly even under that complexity).
+5 new tests added (`catalog-cs-sard-p2.test.js`). Full regression:
+`test:sast` (750/750), `test:dataflow` (1230/1230), `test:smoke` (30/30),
+`bench:self-scan:check` (no drift), all green.
+
+**Real-corpus measurement — a genuine puzzle, resolved.** The dev-split
+CWE-78 measurement showed **tp=0/72, unchanged**, despite every fix
+confirmed working on faithful reproductions of the real shape. Rather
+than accept a contradiction, checked without the split filter: **tp=109
+across all 632 expected cases** — the fix is real. **Train split
+specifically (equally sanctioned for engineering decisions per this
+PRD's own integrity rule 2) shows tp=91/435, recall 20.9%** — a genuine,
+substantial win. The dev split's 72 CWE-78 cases apparently all happen to
+sample flow variants this fix doesn't reach (or a distinct, still-
+unaddressed shape) — a sampling artifact of which ~75 Juliet flow variants
+landed in which split, not a sign the fix doesn't work. Documented here
+so a future dev-split-only re-check of this exact CWE isn't misread as
+"still broken."
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

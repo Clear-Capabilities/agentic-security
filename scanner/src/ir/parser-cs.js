@@ -679,7 +679,24 @@ function _lowerExpr(text) {
   // the input as a single part, and mapping `_lowerExpr` over it recurses on the
   // identical string forever. Any future expression form that reaches here
   // unsplit would otherwise reintroduce the same stack overflow.
-  if (s.includes('+') && /["']/.test(s)) {
+  //
+  // SARD 80% F1 push: this branch previously ALSO required a quote character
+  // (`"`/`'`) to appear SOMEWHERE in `s` before even attempting the split —
+  // meant to avoid misreading plain numeric addition (`a + b`) as string
+  // concatenation, but it silently excluded the equally common shape where
+  // BOTH operands are already-built string variables with no inline literal
+  // (`Process.Start(osCommand + data)`, Juliet's own canonical C# CWE-78
+  // shape — confirmed via the public Juliet C# mirror this project's SARD
+  // manifest pins, not assumed). `osCommand + data` has no quote anywhere,
+  // so the whole expression fell through every later branch to
+  // `{kind:'unknown'}`, silently dropping `data`'s taint. Removed: treating
+  // a numeric `a + b` as a 2-part template is harmless for taint purposes
+  // (the engine only cares whether either operand is tainted, not whether
+  // the runtime operation is numeric addition or string concatenation), and
+  // the `rawParts.length > 1` guard immediately below already fully
+  // prevents the specific stack-overflow this comment documents,
+  // independent of whether a quote was ever present.
+  if (s.includes('+')) {
     const rawParts = _splitTopLevelPlus(s);
     if (rawParts.length > 1) return { kind: 'tpl', parts: rawParts.map(_lowerExpr) };
   }

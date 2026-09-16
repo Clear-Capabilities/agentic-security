@@ -229,3 +229,123 @@ public class C {
   assert.ok(taint.some(f => /xpath|CWE-643/i.test(`${f.vuln} ${f.cwe}`)),
     `expected XPath Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
+
+// Juliet's canonical C# CWE-78 shape: build a Process object with a fixed
+// constructor, then assign the tainted command text to .StartInfo.Arguments
+// (or .StartInfo.FileName) afterward, then call the parameterless instance
+// .Start(). The two PRE-EXISTING C# CWE-78 sinks (cs-process-start /
+// cs-process-start-args) both key off the STATIC Process.Start(...) call
+// form and had nothing to check here — confirmed via a direct probe that
+// produced ZERO findings of any kind before cs-processstartinfo-arguments/
+// -filename existed.
+test('cs-processstartinfo-arguments: ProcessStartInfo.Arguments assigned a tainted value fires Command Injection', async () => {
+  const dir = mkTmp('processstartinfo-arguments', `
+using System;
+using System.Diagnostics;
+public class C {
+    public void Bad() {
+        string data = Console.ReadLine();
+        Process processObj = new Process();
+        processObj.StartInfo.FileName = "cmd.exe";
+        processObj.StartInfo.Arguments = "/c dir " + data;
+        processObj.StartInfo.UseShellExecute = false;
+        processObj.Start();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection|CWE-78/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected Command Injection from ProcessStartInfo.Arguments=, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-processstartinfo-filename: ProcessStartInfo.FileName assigned a tainted value fires Command Injection', async () => {
+  const dir = mkTmp('processstartinfo-filename', `
+using System;
+using System.Diagnostics;
+public class C {
+    public void Bad() {
+        string exe = Console.ReadLine();
+        Process processObj = new Process();
+        processObj.StartInfo.FileName = exe;
+        processObj.StartInfo.Arguments = "/c dir";
+        processObj.Start();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection|CWE-78/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected Command Injection from ProcessStartInfo.FileName=, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-processstartinfo-arguments precision: a FIXED literal Arguments value does not fire', async () => {
+  const dir = mkTmp('processstartinfo-arguments-clean', `
+using System.Diagnostics;
+public class C {
+    public void Good() {
+        Process processObj = new Process();
+        processObj.StartInfo.FileName = "cmd.exe";
+        processObj.StartInfo.Arguments = "/c dir";
+        processObj.Start();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /command injection|CWE-78/i.test(`${f.vuln} ${f.cwe}`)),
+    `a fixed literal Arguments value must not fire, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
+// Juliet's OWN canonical C# CWE-78 shape (confirmed by reading the real
+// public Juliet C# mirror this project's SARD manifest pins:
+// CWE78_OS_Command_Injection__Connect_tcp_01.cs): the single-argument
+// `Process.Start(commandString)` overload, with the interpreter and the
+// tainted data ALREADY concatenated into one string before the call.
+test('cs-process-start-single: Process.Start(commandString) with a tainted concat fires Command Injection', async () => {
+  const dir = mkTmp('process-start-single', `
+using System;
+using System.Diagnostics;
+public class C {
+    public void Bad() {
+        string data = Console.ReadLine();
+        string osCommand = "cmd.exe /c dir ";
+        Process process = Process.Start(osCommand + data);
+        process.WaitForExit();
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection|CWE-78/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected Command Injection from Process.Start(osCommand + data), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// The bug this entry's own real-corpus verification uncovered: `_lowerExpr`'s
+// concat branch required a quote character SOMEWHERE in the expression
+// before even attempting to split on top-level `+` — so `osCommand + data`
+// (both sides plain identifiers, no inline literal) fell through every
+// branch to {kind:'unknown'}, silently dropping `data`'s taint regardless
+// of which sink it reached. This is a parser-level fix, not sink-specific;
+// pinned directly against the IR here rather than only end-to-end, so a
+// future regression is caught even if a sink-side change masked it.
+test('parser-cs: `identifier + identifier` (no literal anywhere) lowers to a 2-part template, not unknown', async () => {
+  const { parseCSharpFile } = await import('../src/ir/parser-cs.js');
+  const code = `
+public class C {
+    public void M() {
+        string osCommand = "cmd.exe ";
+        string result = Combine(osCommand, GetInput());
+    }
+    public string Combine(string a, string b) {
+        return a + b;
+    }
+    public string GetInput() { return ""; }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const combineFn = ir.functions.find(f => f.name === 'C.Combine' || f.name === 'Combine');
+  assert.ok(combineFn, 'expected a Combine function');
+  const nodes = Object.values(combineFn.cfg.nodes);
+  const ret = nodes.find(n => n.kind === 'return');
+  assert.ok(ret, 'expected a return node');
+  assert.equal(ret.value.kind, 'tpl');
+  assert.equal(ret.value.parts.length, 2);
+  assert.notEqual(ret.value.kind, 'unknown');
+});
