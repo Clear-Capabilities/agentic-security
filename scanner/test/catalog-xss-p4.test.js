@@ -159,6 +159,48 @@ public class SafeErrorServlet extends HttpServlet {
     `expected no XSS finding for a constant exception message, got: ${taint.map(f => f.vuln).join(', ')}`);
 });
 
+// SARD_80_F1 W4.J4 follow-up: the earlier exception-message fix above,
+// while a real and correctly-tested capability, turned out to solve a
+// DIFFERENT shape than Juliet's actual CWE-81 corpus tests. Confirmed via
+// the public Juliet Java mirror (CWE81_XSS_Error_Message, 545 files, every
+// one using this exact `response.sendError(404, "..." + data)` shape) that
+// "Error Message" in the CWE's name refers to `sendError`'s HTTP error
+// message ARGUMENT (index 1), not a caught exception's `getMessage()` —
+// a sink this catalog had zero coverage for under any name.
+test('java-response-senderror: response.sendError(code, tainted) fires Reflected XSS via IR-TAINT', async () => {
+  const dir = mkTmp('java', 'ErrorPage.java', `
+import javax.servlet.http.*;
+public class ErrorPage extends HttpServlet {
+    public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+        String data = request.getParameter("name");
+        if (data != null) {
+            response.sendError(404, "<br>bad() - Parameter name has value " + data);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss/i.test(f.vuln)),
+    `expected Reflected XSS from sendError's message argument, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('java-response-senderror precision: response.sendError(code, hardcodedLiteral) does not fire', async () => {
+  const dir = mkTmp('java-clean', 'ErrorPageGood.java', `
+import javax.servlet.http.*;
+public class ErrorPageGood extends HttpServlet {
+    public void goodG2B(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+        String data = "foo";
+        if (data != null) {
+            response.sendError(404, "<br>bad() - Parameter name has value " + data);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /xss/i.test(f.vuln)),
+    `expected no XSS finding for a hardcoded sendError message, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
 test('py-flask-render-template-string: render_template_string(tainted) fires Reflected XSS via IR-TAINT', async () => {
   const dir = mkTmp('py', 'app.py', `
 from flask import Flask, request, render_template_string

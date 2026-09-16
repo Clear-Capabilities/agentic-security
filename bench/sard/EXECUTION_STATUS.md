@@ -609,7 +609,7 @@ precision against).
 | W4.J1 | Java CWE-113 header/cookie injection — re-measured, real corpus (dev, blind+scrambled+deep, truncated by a per-function analysis limit so this understates recall): tp=336 fp=388 fn=241, recall ≥58.2%, F1 ≥51.2% (up from the PRD's originally documented 2%). Precision (45.7%) capped by the already-documented CRLF-sanitizer architectural limit (a header-injection strip can't safely kill taint for other families) — deferred to W3, not a new gap | VERIFIED |
 | W4.J2 | Java CWE-36/23 file constructors — re-measured, real corpus (dev, blind+scrambled+deep, truncated so this understates recall): CWE-23 tp=47 fp=0 fn=31 (recall ≥60.3%), CWE-36 tp=172 fp=0 fn=178 (recall ≥49.1%); combined F1 ≥61.1%, zero within-family FPs. No code change needed | VERIFIED |
 | W4.J3 | Java CWE-643 XPath — re-measured, real corpus (dev, blind+scrambled+deep, NOT truncated): tp=182 fp=2 fn=121, recall 60.1%, within-family precision 98.9% (F1 70.8% overall). No code change needed | VERIFIED |
-| W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
+| W4.J4 | Java CWE-80/81/83 servlet writer XSS — two-step PrintWriter shape fixed (+38 tp on CWE-80, real corpus). **CWE-81 fully closed the same day it was flagged stuck**: the exception-message (`getMessage()`) fix from the prior session was real but solved the WRONG shape — fetched the public Juliet mirror's actual CWE-81 corpus (545 files) and found every one uses `response.sendError(404, "..." + data)`, a sink with zero prior catalog coverage under any name (not the caught-exception idiom the CWE's "Error Message" name suggests). Added `java-response-senderror` (argIndex 1, the message param). **Real corpus (dev split): CWE-81 tp=0→53/123 (recall 43.1%, fp=0 in-family)** — no interprocedural work needed after all, since the actual bottleneck was a missing sink, not the cross-method propagation gap hypothesized previously. `test:dataflow` (1236/1236), `test:smoke` (30/30), self-scan (zero drift), `bench:mutation:check` (35/35), `bench:cve-replay:check` (220/220), `bench:layer-recall:check` (exact baseline match) all clean | VERIFIED |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
 | W4.J7 | Java CWE-329 (static/weak IV) — new detector shape added (declare-then-pass: `byte[] iv = {0x00,...}; ... new IvParameterSpec(iv)`, distinct from the already-covered inline `new IvParameterSpec(new byte[16])` form), plus a measurement-methodology fix: `bench-realworld.js` sets `AGENTIC_SECURITY_NO_INTEGRATION=1` by default, which silently disabled `crypto-protocol.js` (and hence CWE-329 detection) in every SARD/Juliet benchmark run to date — confirmed via `AGENTIC_SECURITY_NO_INTEGRATION=0` override (see session log for the full debugging trail, including a separately-removed `_BENCH_FIXTURE_RE` filename gate and a vuln-text→family mapping gap, both stacked on top of the same bug). **Real corpus (train, `AGENTIC_SECURITY_NO_INTEGRATION=0` override): CWE-329 tp=17/19 fp=0 (recall 89.5%, precision 100%, F1 94.4%).** Checked the manifests directly: CWE-330/336/338 are handled by `weak-randomness.js` (ungated, unaffected) and no other Java/C# CWE in this corpus maps to any other crypto-protocol.js family — so CWE-329 is the ONLY corpus CWE this discovery unlocks. **It does not move the tracked dev-split M1 number**: CWE-329 has 0 expected entries in dev split for either language (all 19 fall in train/test), so its value is test-split correctness + a genuine capability gain, not near-term M1 progress. C# CWE-329 checked too: tp=0/19 even with the module active — a real, separate, lower-priority gap (C# already clears M1) | VERIFIED |
@@ -2676,6 +2676,58 @@ stable for everything except crypto-protocol.js specifically — but even
 that narrower change still needs those three baselines re-measured and
 reviewed before landing, since it's genuinely new signal on corpora this
 session did not touch.
+
+### W4.J4 closed — CWE-81's real bottleneck was a missing sink, not interprocedural exception flow (2026-09-16)
+
+The prior session's W4.J4 entry left CWE-81 explicitly stuck, with a
+specific hypothesis: the exception-message (`throw`/`catch(e).getMessage()`)
+taint mechanism it built fired correctly on every synthetic test but moved
+zero real-corpus findings, and the leading theory was that Juliet splits
+the `throw` and `catch` across two methods (an interprocedural gap, "a
+materially larger task").
+
+Rather than starting on interprocedural exception-flow modeling, checked
+the hypothesis against the public Juliet Java mirror first (this session's
+now-standard practice): fetched `CWE81_XSS_Error_Message__Servlet_File_01
+.java` (and a second source variant, `..._getParameter_Servlet_01.java`,
+to confirm it wasn't a one-off). **Neither file contains a `throw`/`catch`
+anywhere.** The actual, exclusive sink across this CWE's entire 545-file
+corpus is:
+
+```java
+response.sendError(404, "<br>bad() - Parameter name has value " + data);
+```
+
+"XSS Error Message" names `sendError`'s HTTP error-message ARGUMENT, not a
+caught exception's message — a naming-driven misread that sent the prior
+session's investigation toward interprocedural exception modeling, a
+real but entirely unrelated capability gap for a shape this corpus
+happens not to test. `grep` confirmed `sendError` had zero coverage
+anywhere in the codebase, under any catalog id.
+
+**Fix: one new catalog entry**, `java-response-senderror` (`catalog.js`),
+matching `response.sendError(code, message)` with `argIndex: 1` (the
+message, not the code), scoped by `receiver: '^response$'` +
+`receiverTypeIn: ['^HttpServletResponse$']` (the now-standard
+name-plus-type-fallback pairing, seeded from `parser-java.js`'s existing
+`fn.paramTypes` — no parser changes needed). Verified via a synthetic
+probe reproducing the exact corpus shape (fires on `bad()`, silent on
+`goodG2B()`'s hardcoded literal) before writing tests. Added 2 tests to
+`test/catalog-xss-p4.test.js` (fire + precision) — 16/16 pass in that
+file, `test:dataflow` 1236/1236, `test:smoke` 30/30, self-scan zero
+drift, `bench:mutation:check` 35/35, `bench:cve-replay:check` 220/220,
+`bench:layer-recall:check` exact baseline match.
+
+**Real corpus (dev split): CWE-81 tp=0→53/123 (recall 0%→43.1%, fp=0
+in-family — the scan surface's 28 total fp all belong to other CWEs
+bleeding into this `--cwe 81`-scoped run, not this fix).** The
+exception-message mechanism from the prior session is kept (real
+capability, zero cost, two passing tests) — it just isn't what THIS
+corpus's CWE-81 needed. The general lesson, worth carrying into any
+future "implemented + tested but zero corpus movement" investigation:
+check the public mirror's actual test files BEFORE assuming the
+architecture (interprocedural flow, in this case) is the missing piece —
+the CWE's own descriptive name can point at the wrong mechanism entirely.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

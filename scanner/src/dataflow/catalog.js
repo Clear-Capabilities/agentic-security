@@ -511,6 +511,22 @@ export const CATALOG = [
   { kind: 'sink', id: 'java-writer-println', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'println', receiver: '^getWriter$', receiverTypeIn: ['^PrintWriter$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (PrintWriter.println)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-escape user-derived content before writing to the response, or use a templating engine with auto-escaping.' } },
+  // `HttpServletResponse.sendError(int, String)` — the message argument
+  // (argIndex 1, NOT 0) is written verbatim into the generated error page.
+  // Confirmed via the public Juliet Java mirror (CWE81_XSS_Error_Message's
+  // OWN corpus, 545 files, every one of them: `response.sendError(404,
+  // "<br>bad() - Parameter name has value " + data);`) that this — not a
+  // caught exception's `getMessage()`, which the CWE-81 name suggests and
+  // which a prior session-iteration built and verified working in
+  // isolation — is the sink Juliet's CWE-81 ("XSS in Error Message")
+  // actually exercises: "Error Message" names the `sendError` HTTP error
+  // message parameter, not an exception message. That earlier fix is not
+  // wrong (it is a real, separate gap for a shape this corpus just never
+  // happens to test) but it explains why CWE-81 showed zero real-corpus
+  // movement despite passing its own unit tests.
+  { kind: 'sink', id: 'java-response-senderror', language: 'java', framework: 'servlet', match: { type: 'call', callee: 'sendError', receiver: '^response$', receiverTypeIn: ['^HttpServletResponse$'] }, argIndex: 1,
+    vuln: { name: 'Reflected XSS (HttpServletResponse.sendError message)', severity: 'high', cwe: 'CWE-79',
+            remediation: 'HTML-escape user-derived content before passing it as the sendError message, or send a generic, static error message with no user input.' } },
 
   // ─── SINKS (SQL — Go) ──────────────────────────────────────────────────────
   { kind: 'sink', id: 'go-db-query',    language: 'go', framework: 'database/sql', match: { type: 'call', callee: 'Query' },    argIndex: 0,
