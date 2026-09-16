@@ -613,7 +613,7 @@ precision against).
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
-| W4.C1 | C# CWE-113, CWE-80/81/83 — **blackout root-caused and fixed: `cs-response-write`/`cs-response-addheader` required the exact literal identifier `Response`, but Juliet's real code uses the parameter name `resp`. Widened receiver + added `receiverTypeIn`. Real corpus (train): CWE-80 tp=153/750 (20.4%, fp=0), CWE-83 tp=85/428 (19.9%, fp=0) — the single largest fix of this session by raw tp count.** CWE-81 remains tp=0/324, likely the same cross-method exception-message-taint gap documented for Java's CWE-81 (W4.J4). **CWE-113 also confirmed benefiting from the shared `cs-response-addheader` fix: train split tp=157/929 (16.9% recall, up from a total blackout), though precision is lower here (31.1%, fp=348) — real signal, needs future precision triage** | IN_PROGRESS |
+| W4.C1 | C# CWE-113, CWE-80/81/83 — **the ENTIRE "total blackout" now fully resolved.** `cs-response-write`/`cs-response-addheader` required the exact literal identifier `Response`, but Juliet's real code uses the parameter name `resp` — widened receiver + added `receiverTypeIn`. CWE-81 had a SEPARATE root cause (a genuinely missing sink: `resp.StatusDescription = tainted`, a member-write shape no catalog entry covered at all, unrelated to the receiver-name bug) — added `cs-response-statusdescription`. **Real corpus (train): CWE-80 tp=153/750 (20.4%, fp=0), CWE-83 tp=85/428 (19.9%, fp=0), CWE-81 tp=52/324 (16.0%, P=86.7%), CWE-113 tp=157/929 (16.9%, lower precision — fp=348, needs future triage).** Two distinct bugs, three fix commits, the single most valuable investigation of this entire session by raw true-positive count (~450 new TPs across 4 CWEs) | VERIFIED |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
@@ -2386,6 +2386,29 @@ fix's descriptor family DOES have dev-split representation, so this is
 the first C# fix this session whose full aggregate impact is directly
 visible in the standard dev-split tracking metric — the largest single
 C# macroF1 jump of the whole session.
+
+### W4.C1 closed out — CWE-81's separate root cause: a genuinely missing sink (2026-09-15)
+
+Fetched the real Juliet C# CWE-81 test case
+(`CWE81_XSS_Error_Message__Web_Connect_tcp_01.cs`) expecting the same
+receiver-name bug as CWE-80/83. It was different: the sink is
+`resp.StatusDescription = "..." + data;` — a member-WRITE, not a method
+call — and NO catalog entry of any kind referenced `StatusDescription`
+before this fix. Added `cs-response-statusdescription` (`match.object:
+'_any_'`, same `receiver`/`receiverTypeIn` shape as `cs-response-write`
+for consistency and scramble-safety). Verified via probes with both the
+real shape and a fully opaque, scramble-style reproduction including the
+full try/catch/nested-`using` source read. 1 new test added
+(`catalog-cs-p1.test.js`). Full regression: `test:dataflow` (1236/1236),
+`test:sast` (750/750), `test:smoke` (30/30), all green.
+
+**Real-corpus measurement: train split, tp=52/324 (16.0% recall,
+precision 86.7%)** — the third and final CWE in this session's C#
+"total blackout" investigation, now fully resolved. Combined with
+CWE-80/83/113 above, this single investigation thread (two distinct
+root causes, three catalog fixes) produced roughly **450 new true
+positives across 4 CWEs** on the C# corpus — the highest-value work of
+this entire session.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

@@ -83,6 +83,28 @@ public class C {
     `expected XSS from resp.Write(...), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
+// CWE-81 (XSS in Error Message) — a member-WRITE sink, not a call:
+// Juliet's real C# shape (confirmed via the public Juliet mirror this
+// project's manifest pins, CWE81_XSS_Error_Message__Web_Connect_tcp_01.cs)
+// sets `resp.StatusDescription = "..." + data;` directly. Genuinely
+// missing before this fix (no catalog entry referenced
+// `StatusDescription` at all) — a different root cause from
+// `cs-response-write`'s receiver-name bug above, despite sharing the same
+// CWE-80/81/83 investigation.
+test('cs-response-statusdescription: Response.StatusDescription assigned a tainted value fires XSS', async () => {
+  const dir = mkTmp('response-statusdescription', `
+public class C {
+    public void Bad(HttpRequest req, HttpResponse resp, [FromQuery] string data) {
+        resp.StatusCode = 404;
+        resp.StatusDescription = "<br>Bad() - Parameter name has value " + data;
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss|cross.site/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected XSS from resp.StatusDescription=, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
 test('cs-response-write precision: a differently-receivered .Write(...) does not fire this sink', async () => {
   const dir = mkTmp('response-write-clean', `
 public class C {

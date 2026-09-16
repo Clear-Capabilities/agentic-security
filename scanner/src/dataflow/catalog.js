@@ -1582,6 +1582,21 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-response-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '[Rr]esp(?:onse)?', receiverTypeIn: ['^HttpResponse$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (Response.Write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to the response.' } },
+  // CWE-81 (XSS in Error Message) — a member-WRITE sink, not a call at
+  // all: Juliet's real C# shape (confirmed via the public Juliet mirror
+  // this project's manifest pins,
+  // CWE81_XSS_Error_Message__Web_Connect_tcp_01.cs) sets
+  // `resp.StatusDescription = "..." + data;` directly. This was a
+  // genuinely MISSING sink (no catalog entry of any kind referenced
+  // `StatusDescription`), not a receiver-name mismatch like
+  // `cs-response-write`'s bug above — the two gaps happened to share a
+  // CWE-80/81/83 investigation but have different root causes.
+  // `match.object: '_any_'` required for any member-WRITE sink (see
+  // dataflow/CLAUDE.md's gotcha); same receiver/receiverTypeIn shape as
+  // `cs-response-write` for consistency and scramble-safety.
+  { kind: 'sink', id: 'cs-response-statusdescription', language: 'cs', framework: 'aspnet', match: { type: 'member', object: '_any_', prop: 'StatusDescription', receiver: '[Rr]esp(?:onse)?', receiverTypeIn: ['^HttpResponse$'] }, argIndex: 'rhs',
+    vuln: { name: 'Reflected XSS (Response.StatusDescription assigned a tainted value)', severity: 'high', cwe: 'CWE-81',
+            remediation: 'HTML-encode with HttpUtility.HtmlEncode before assigning user input to StatusDescription, or avoid echoing it in a custom error page.' } },
   // SARD_80_F1 W4: `HtmlTextWriter` (ASP.NET Web Forms' `Render(HtmlTextWriter
   // writer)` override, and its declared-local-variable form
   // `HtmlTextWriter writer = ...; writer.Write(x);`) is a named W4 target
