@@ -62,7 +62,16 @@ const FILTER_INLINE_RE = {
 // which is the *escaped* (safe) form — must not match.
 const FILTER_VAR_RE = {
   js:   new RegExp(String.raw`["'` + '`' + String.raw`]\s*\(\s*` + ATTR + String.raw`\s*=\s*["'` + '`' + String.raw`]?\s*(?:\+|\$\{)\s*[A-Za-z_$][\w.]*(?![\w.]*\s*\()`, 'g'),
-  java: new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()`, 'g'),
+  // Captures the trailing identifier (group 1) so scanLdapInjection can check
+  // whether it's PROVABLY a hardcoded literal — Juliet's own convention
+  // (confirmed via the public mirror, CWE90_LDAP_Injection__Environment_01
+  // .java) keeps the IDENTICAL `"(cn=" + data + ")"` filter line in both
+  // bad() and goodG2B(), only swapping `data`'s source. The trailing
+  // lookahead mirrors java-structural.js's CWE-89 fix: only a SINGLE
+  // trailing term (optionally followed by one more literal segment, e.g.
+  // the closing `+ ")"`) is eligible for suppression — a second variable
+  // after it is left alone.
+  java: new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*([A-Za-z_][\w.]*)(?![\w.]*\s*\()(?=\s*(?:\+\s*["'][^"'\n]*["']\s*)?[);,])`, 'g'),
   py:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()|[fF]["']\s*\(\s*` + ATTR + String.raw`\s*=\s*\{`, 'g'),
   php:  new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\.\s*\$[A-Za-z_]\w*`, 'g'),
   go:   new RegExp(String.raw`["']\s*\(\s*` + ATTR + String.raw`\s*=\s*["']?\s*\+\s*[A-Za-z_][\w.]*(?![\w.]*\s*\()`, 'g'),
@@ -88,6 +97,25 @@ const LDAP_ESCAPE_RE =
   /\b(?:ldap_escape|EscapeFilter|escape_filter_chars|escapeForLDAP|encodeForLDAP|escapeLDAPSearchFilter|LDAP_ESCAPE_FILTER)\b|\bNet::LDAP::Filter\b|\bEqualityFilter\b|\bfilters\.\w+\b/;
 
 function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
+
+// True when `varName`'s NEAREST assignment before `beforeIdx` (source order)
+// is a plain string-literal RHS. Same "backward nearest-assignment" shape as
+// java-structural.js's `_trailingIdentIsLiteral` (itself modeled on
+// java-bench-extras.js's CWE-259 check) — duplicated rather than imported,
+// matching this codebase's established per-module convention for this small
+// a helper.
+function _nearestAssignIsLiteral(code, varName, beforeIdx) {
+  if (!varName || varName.includes('.')) return false;
+  const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  let lastLiteralEnd = -1, m;
+  while ((m = literalRe.exec(code)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  if (lastLiteralEnd === -1) return false;
+  let lastAnyEnd = -1;
+  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  return lastLiteralEnd === lastAnyEnd;
+}
 function _lang(fp) {
   if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(fp)) return 'js';
   if (/\.java$/i.test(fp)) return 'java';
@@ -154,6 +182,7 @@ export function scanLDAPInjection(fp, raw) {
     const re = new RegExp(FILTER_VAR_RE[lang].source, FILTER_VAR_RE[lang].flags);
     let m;
     while ((m = re.exec(code))) {
+      if (lang === 'java' && _nearestAssignIsLiteral(code, m[1], m.index)) continue;
       const line = lineOf(raw, m.index);
       const key = `var:${line}`;
       if (seen.has(key)) continue;

@@ -72,6 +72,35 @@ def find(name):
   assert.equal(out[0].cwe, 'CWE-90');
 });
 
+// SARD_80_F1 W4.J13: Juliet's own convention keeps the IDENTICAL
+// `"(cn=" + data + ")"` filter line in bad() and goodG2B(), only swapping
+// `data`'s source (System.getenv(...) vs a hardcoded literal) — confirmed
+// via the public Juliet mirror, CWE90_LDAP_Injection__Environment_01.java.
+test('LDAP — Java local var whose nearest assignment is a hardcoded literal does NOT fire; a tainted one still does', () => {
+  const bad = scanLDAPInjection('Auth.java', `
+import javax.naming.directory.*;
+public class Auth {
+  public void bad(DirContext directoryContext) throws Throwable {
+    String data = System.getenv("ADD");
+    String search = "(cn=" + data + ")";
+    directoryContext.search("", search, null);
+  }
+}
+`);
+  assert.ok(bad.length >= 1, 'expected a finding when data comes from System.getenv');
+  const good = scanLDAPInjection('Auth.java', `
+import javax.naming.directory.*;
+public class Auth {
+  public void goodG2B(DirContext directoryContext) throws Throwable {
+    String data = "foo";
+    String search = "(cn=" + data + ")";
+    directoryContext.search("", search, null);
+  }
+}
+`);
+  assert.equal(good.length, 0, 'expected no finding when data is a hardcoded literal');
+});
+
 test('LDAP — unrelated string concat WITHOUT LDAP context does NOT fire', () => {
   const out = scanLDAPInjection('util.js', `
 function key(name) { return "(uid=" + name + ")"; }
