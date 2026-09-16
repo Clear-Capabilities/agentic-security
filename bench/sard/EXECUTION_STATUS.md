@@ -613,7 +613,7 @@ precision against).
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
 | W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
-| W4.C1 | C# CWE-113, CWE-80/81/83 (HtmlTextWriter + C# paramTypes shipped, real capability, zero SARD movement; discovered CWE-80/81/83 fire ZERO findings of ANY kind across 1084 real files — a total blackout, not a shape mismatch, see session log) | IN_PROGRESS |
+| W4.C1 | C# CWE-113, CWE-80/81/83 — **blackout root-caused and fixed: `cs-response-write`/`cs-response-addheader` required the exact literal identifier `Response`, but Juliet's real code uses the parameter name `resp`. Widened receiver + added `receiverTypeIn`. Real corpus (train): CWE-80 tp=153/750 (20.4%, fp=0), CWE-83 tp=85/428 (19.9%, fp=0) — the single largest fix of this session by raw tp count.** CWE-81 remains tp=0/324, likely the same cross-method exception-message-taint gap documented for Java's CWE-81 (W4.J4). CWE-113 impact from the same fix not yet re-measured | IN_PROGRESS |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
 | W4.C4 | C# CWE-313/314/315 cleartext storage (name-based detector shipped, real capability gap; SARD corpus recall still tp=0 — needs a guard/sanitizer-based redesign, see session log) | IN_PROGRESS |
@@ -2337,6 +2337,42 @@ over dev-split alone when verifying a fix that targets one specific
 descriptor family, since dev's per-family (not per-file) assignment can
 legitimately zero out an entire family's worth of cases for reasons
 unrelated to whether the fix works.
+
+### W4.C1 — the C# "total blackout" resolved: `resp` vs `Response`, the biggest fix of the session (2026-09-15)
+
+Fetched the real Juliet C# mirror (`CWE80_XSS__CWE182_Web_Connect_tcp_01.cs`):
+`public override void Bad(HttpRequest req, HttpResponse resp) { ...
+resp.Write(...); }`. `cs-response-write`'s `receiver: '^Response$'`
+required the EXACT literal identifier `Response` — but the sink's real
+receiver is `resp`, a METHOD PARAMETER name, not the class/type name at
+all. This single-entry bug is very likely what W4.C1's earlier
+investigation logged as "C# CWE-80/81/83 fire ZERO findings of ANY kind
+across 1084 real files" and assumed needed deep architectural work — it
+did not. Widened `receiver` to `[Rr]esp(?:onse)?` (covering the
+overwhelmingly common real parameter names) and added `receiverTypeIn:
+['^HttpResponse$']` as an additive, scramble-safe fallback (seeded from
+`resp`'s declared parameter type — `parser-cs.js`'s existing
+`paramTypes` extraction already captures this correctly, confirmed via
+direct IR dump, no parser changes needed). Applied the identical fix to
+`cs-response-addheader` (CWE-113), which shared the exact same bug.
+Verified via probes with both the real parameter name and fully opaque
+scramble-style names. 1 new test added (`catalog-cs-p1.test.js`, plus
+existing tests using the parameter name `Response` continue to pass
+since the widened pattern still covers that literal form). Full
+regression: `test:dataflow` (1235/1235), `test:sast` (750/750),
+`test:smoke` (30/30), all green.
+
+**Real-corpus measurement: the largest single fix of this entire
+session by raw true-positive count.** Train split, `--cwe 80,81,83`:
+**CWE-80: tp=153/750 (20.4% recall, fp=0)**, **CWE-83: tp=85/428 (19.9%
+recall, fp=0)** — both moved from a confirmed total blackout to
+substantial, PERFECTLY PRECISE real detection (238 total new true
+positives). **CWE-81 remains at tp=0/324** — a separate, still-open gap,
+plausibly the same "exception-message taint needs cross-method
+propagation" limitation already documented for this session's Java
+CWE-81 work (W4.J4), not yet confirmed for C# specifically. Given the
+scale of this fix, `cs-response-addheader`'s CWE-113 impact should also
+be re-measured in a follow-up (not yet done this turn).
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

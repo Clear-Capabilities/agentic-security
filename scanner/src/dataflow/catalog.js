@@ -1562,7 +1562,24 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-localredirect',      language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'LocalRedirect' },   argIndex: 0,
     vuln: { name: 'Open Redirect (Controller.LocalRedirect)', severity: 'medium', cwe: 'CWE-601',
             remediation: 'LocalRedirect rejects absolute URLs, but a crafted relative path can still redirect off-site via scheme-relative (//evil.com) input — validate the path.' } },
-  { kind: 'sink', id: 'cs-response-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '^Response$' }, argIndex: 0,
+  // SARD 80% F1 push — this project's own W4.C1 investigation logged
+  // C# CWE-80/81/83 as a "total blackout... zero findings of ANY kind
+  // across 1084 real files", assumed to need deep architectural work.
+  // Root cause, confirmed via the public Juliet C# mirror this project's
+  // manifest pins (`CWE80_XSS__CWE182_Web_Connect_tcp_01.cs`): the sink is
+  // `resp.Write(...)`, where `resp` is a METHOD PARAMETER
+  // (`Bad(HttpRequest req, HttpResponse resp)`) — never the literal
+  // identifier `Response` this entry's `receiver: '^Response$'` required,
+  // exact-match, with no alternation at all. `receiver` widened to accept
+  // the overwhelmingly common real-world parameter names
+  // (`resp`/`response`, either casing) and `receiverTypeIn` added as an
+  // ADDITIVE fallback (same pattern as `cs-htmltextwriter-write` below —
+  // `receiver` stays required, since `_receiverAllowed` matches ANY
+  // receiver when neither `receiver` nor `receiverBase` is set), seeded
+  // from `resp`'s declared parameter type (`fn.paramTypes`, confirmed via
+  // direct IR dump to already capture `resp: "HttpResponse"` with no
+  // parser changes needed).
+  { kind: 'sink', id: 'cs-response-write',     language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'Write', receiver: '[Rr]esp(?:onse)?', receiverTypeIn: ['^HttpResponse$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (Response.Write)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to the response.' } },
   // SARD_80_F1 W4: `HtmlTextWriter` (ASP.NET Web Forms' `Render(HtmlTextWriter
@@ -1596,7 +1613,9 @@ export const CATALOG = [
   { kind: 'sink', id: 'cs-htmltextwriter-writeline', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'WriteLine', receiver: '(?:[Ww]riter|output)', receiverTypeIn: ['^HtmlTextWriter$'] }, argIndex: 0,
     vuln: { name: 'Reflected XSS (HtmlTextWriter.WriteLine)', severity: 'high', cwe: 'CWE-79',
             remediation: 'HTML-encode with HttpUtility.HtmlEncode before writing user input to an HtmlTextWriter.' } },
-  { kind: 'sink', id: 'cs-response-addheader', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'AddHeader', receiver: '^Response$' }, argIndex: 1,
+  // Same `resp` (parameter name, not the literal identifier `Response`)
+  // root cause as `cs-response-write` above.
+  { kind: 'sink', id: 'cs-response-addheader', language: 'cs', framework: 'aspnet', match: { type: 'call', callee: 'AddHeader', receiver: '[Rr]esp(?:onse)?', receiverTypeIn: ['^HttpResponse$'] }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (Response.AddHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip CR/LF from header values, or use a framework API that rejects them automatically.' } },
   { kind: 'sink', id: 'cs-xmldoc-load',        language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Load', receiver: '^(?:[Xx]ml[Dd]oc(?:ument)?|xmlDoc|doc)$' }, argIndex: 0,

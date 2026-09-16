@@ -63,6 +63,26 @@ public class C {
     `expected XSS, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
+// Juliet's OWN canonical C# CWE-80 shape (confirmed via the public Juliet
+// C# mirror this project's SARD manifest pins,
+// CWE80_XSS__CWE182_Web_Connect_tcp_01.cs): `public override void
+// Bad(HttpRequest req, HttpResponse resp)` — the parameter is named
+// `resp`, never the literal identifier `Response` the OLD `receiver:
+// '^Response$'` exact-match required. This was logged as a "total
+// blackout" (CWE-80/81/83 fire ZERO findings of any kind) before this fix.
+test('cs-response-write: fires on the real parameter name `resp`, not just `Response`', async () => {
+  const dir = mkTmp('response-write-resp-param', `
+public class C {
+    public void Bad(HttpRequest req, HttpResponse resp, [FromQuery] string data) {
+        resp.Write("<br>Bad(): data = " + data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xss|cross.site/i.test(`${f.vuln} ${f.cwe}`)),
+    `expected XSS from resp.Write(...), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
 test('cs-response-write precision: a differently-receivered .Write(...) does not fire this sink', async () => {
   const dir = mkTmp('response-write-clean', `
 public class C {
