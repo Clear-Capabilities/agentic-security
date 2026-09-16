@@ -18,6 +18,7 @@ import {
 import { parseJavaFile } from './parser-java.js';
 import { parseGoFile } from './parser-go.js';
 import { parsePhpFile } from './parser-php.js';
+import { mergePhpIncludes } from './php-include-merge.js';
 import { parseRubyFile } from './parser-rb.js';
 import { parseRustFile } from './parser-rust.js';
 import { parseCppFile, cppExtRe } from './parser-cpp.js';
@@ -179,6 +180,12 @@ export function buildProjectIR(fileContents) {
       if (ir && ir.file) perFile[ir.file] = ir;
     }
   }
+  // SARD_80_F1 W5.7 — merge PHP include/require targets' top-level
+  // assignments into the includer's own scope before anything else touches
+  // the CFGs (SSA numbering included), since PHP's `include` genuinely
+  // executes in the caller's variable namespace. See php-include-merge.js's
+  // module header for the full rationale and scope.
+  try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
       for (const fn of (ir.functions || [])) {
@@ -244,6 +251,12 @@ export async function buildProjectIRAsync(fileContents) {
       if (ir && ir.file) perFile[ir.file] = ir;
     }
   }
+  // SARD_80_F1 W5.7 — merge PHP include/require targets' top-level
+  // assignments into the includer's own scope before anything else touches
+  // the CFGs (SSA numbering included), since PHP's `include` genuinely
+  // executes in the caller's variable namespace. See php-include-merge.js's
+  // module header for the full rationale and scope.
+  try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
       for (const fn of (ir.functions || [])) {

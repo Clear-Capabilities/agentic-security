@@ -19,7 +19,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { phpFamilyKeyFor, PHP_SPLIT_SEED } from '../../bench/sard/scripts/ingest-php.mjs';
+import { phpFamilyKeyFor, PHP_SPLIT_SEED, resolvePrimaryArtifactIndex } from '../../bench/sard/scripts/ingest-php.mjs';
 import { filterBySplit } from '../../bench/sard/scripts/score-php.mjs';
 import { bucketFor } from '../../bench/sard/scripts/split.mjs';
 
@@ -119,4 +119,40 @@ test('phpFamilyKeyFor: empirical distribution over a real corpus sample matches 
   assert.ok(buckets.train > 0 && buckets.test >= 0);
   assert.ok(Object.values(buckets).some(n => n > 0));
   assert.notEqual(buckets.train, sample.length, 'every family landed in train — split is degenerate');
+});
+
+// SARD_80_F1 W5.8 — the generator (confirmed via its own public source,
+// Classes/Manifest.py's addFileToTestCase, called once PER FILE) can emit a
+// test case as multiple physical files. ingest-php.mjs previously hardcoded
+// `artifacts[0]` as THE file for every case, silently dropping every other
+// artifact — so a genuinely multi-file case's companion file (the one an
+// `include_once` in the primary source references) was never copied onto
+// the scan surface at all, independent of the taint engine's own
+// cross-file capability (php-include-merge.js). All shapes below are
+// synthetic, hand-built SARIF fragments — never real corpus content.
+test('resolvePrimaryArtifactIndex: single artifact always resolves to index 0', () => {
+  assert.equal(resolvePrimaryArtifactIndex([{ location: { uri: 'only.php' } }], null), 0);
+});
+
+test('resolvePrimaryArtifactIndex: no result (a "good" case) falls back to index 0', () => {
+  const artifacts = [{ location: { uri: 'main.php' } }, { location: { uri: 'source.php' } }];
+  assert.equal(resolvePrimaryArtifactIndex(artifacts, null), 0);
+});
+
+test('resolvePrimaryArtifactIndex: an explicit artifactLocation.index wins', () => {
+  const artifacts = [{ location: { uri: 'main.php' } }, { location: { uri: 'source.php' } }];
+  const result = { locations: [{ physicalLocation: { artifactLocation: { index: 1 } } }] };
+  assert.equal(resolvePrimaryArtifactIndex(artifacts, result), 1);
+});
+
+test('resolvePrimaryArtifactIndex: a uri-based artifactLocation is matched against each artifact\'s own uri', () => {
+  const artifacts = [{ location: { uri: 'main.php' } }, { location: { uri: 'source.php' } }];
+  const result = { locations: [{ physicalLocation: { artifactLocation: { uri: 'source.php' } } }] };
+  assert.equal(resolvePrimaryArtifactIndex(artifacts, result), 1);
+});
+
+test('resolvePrimaryArtifactIndex: an out-of-range index falls back to index 0 rather than throwing', () => {
+  const artifacts = [{ location: { uri: 'main.php' } }];
+  const result = { locations: [{ physicalLocation: { artifactLocation: { index: 5 } } }] };
+  assert.equal(resolvePrimaryArtifactIndex(artifacts, result), 0);
 });

@@ -109,6 +109,27 @@ function opaqueCaseId(numericId) {
   return 'case_' + crypto.createHash('sha256').update(String(numericId)).digest('hex').slice(0, 10);
 }
 
+// SARD_80_F1 W5.8 — which `run.artifacts[]` entry a multi-artifact case's
+// own flaw finding actually lives in, per the standard SARIF 2.1.0
+// `physicalLocation.artifactLocation` shape (`index` into run.artifacts, or
+// a `uri` matched against each artifact's own location.uri) — the same
+// shape this codebase's own SARIF writer emits (report/index.js). Falls
+// back to index 0 when there's only one artifact, or no result to
+// disambiguate (a "good" case with no finding at all still needs SOME file
+// treated as primary/`src.php`).
+export function resolvePrimaryArtifactIndex(artifacts, result) {
+  if (artifacts.length <= 1) return 0;
+  const loc = result?.locations?.[0]?.physicalLocation?.artifactLocation;
+  if (loc) {
+    if (typeof loc.index === 'number' && artifacts[loc.index]) return loc.index;
+    if (loc.uri) {
+      const idx = artifacts.findIndex((a) => a?.location?.uri === loc.uri);
+      if (idx !== -1) return idx;
+    }
+  }
+  return 0;
+}
+
 // Adversarial-premortem remediation (SARD_80_F1_SCANNER_PRD.md review, Round 1
 // finding F1.2): PHP had no train/dev/test split at all — split.mjs's
 // familyKeyFor only strips Juliet's `.java`/`.cs` extension + `_NN[ab]` flow-
@@ -269,14 +290,32 @@ function main() {
 
     const run = manifest.runs?.[0];
     const state = run?.properties?.state;
-    const artifactUri = run?.artifacts?.[0]?.location?.uri;
-    if (!state || !artifactUri) { malformed++; console.error(`  ⚠ ${numericId}: missing state or artifact URI`); continue; }
+    const artifacts = run?.artifacts || [];
+    if (!state || !artifacts.length) { malformed++; console.error(`  ⚠ ${numericId}: missing state or artifacts`); continue; }
+
+    const result = run.results?.[0];
+    // SARD_80_F1 W5.8 — this generator (confirmed via its own public source,
+    // Classes/Manifest.py's addFileToTestCase, called once PER FILE) can
+    // emit a test case as MULTIPLE physical files — e.g. the taint source
+    // in its own file, connected back via `include_once("<name>.php")`
+    // (Flaws_generators/Generation_functions.py's postOp handling). This
+    // ingester previously hardcoded `artifacts[0]` as THE file, silently
+    // dropping every other artifact for any genuinely multi-file case —
+    // meaning the companion file an `include_once` in the primary source
+    // referenced was never even copied onto the scan surface, independent
+    // of anything the taint engine could do (see php-include-merge.js's own
+    // header for the engine-side half of this fix). `resolvePrimaryArtifactIndex`
+    // finds which artifact the actual flaw's location is IN, falling back
+    // to index 0 when there's only one artifact or no result to disambiguate
+    // (an entirely-safe "good" case with no finding at all).
+    const primaryIdx = resolvePrimaryArtifactIndex(artifacts, result);
+    const artifactUri = artifacts[primaryIdx]?.location?.uri;
+    if (!artifactUri) { malformed++; console.error(`  ⚠ ${numericId}: missing primary artifact URI`); continue; }
 
     let srcText;
     try { srcText = extractText(`${numericId}-v1.0.0/${artifactUri}`); }
     catch (e) { malformed++; console.error(`  ⚠ ${numericId}: source extraction failed (${e.message})`); continue; }
 
-    const result = run.results?.[0];
     const cwe = result?.ruleId || null; // e.g. "CWE-90"; null for a "good" case
     const line = result?.locations?.[0]?.physicalLocation?.region?.startLine ?? null;
     const family = cwe ? (CWE_TO_FAMILY[cwe] || null) : null;
@@ -293,7 +332,27 @@ function main() {
     fs.mkdirSync(caseDir, { recursive: true });
     fs.writeFileSync(path.join(caseDir, 'src.php'), neutralized);
 
+    // Write every OTHER artifact as a sibling file, named by its own
+    // basename, so an `include_once("<name>.php")` in src.php resolves on
+    // the scan surface exactly as it would in the real, unsplit filesystem
+    // layout. Best-effort per companion: a failed extraction degrades that
+    // one case back to the pre-fix (companion-missing) behavior rather than
+    // failing the whole case's ingestion.
+    const companionFiles = [];
+    for (let i = 0; i < artifacts.length; i++) {
+      if (i === primaryIdx) continue;
+      const uri = artifacts[i]?.location?.uri;
+      if (!uri) continue;
+      let text;
+      try { text = extractText(`${numericId}-v1.0.0/${uri}`); }
+      catch (e) { continue; }
+      const basename = path.basename(uri);
+      fs.writeFileSync(path.join(caseDir, basename), neutralizeIdentifiers(stripPhpComments(text)));
+      companionFiles.push(basename);
+    }
+
     const entry = { caseId, state, cwe, family, file: 'src.php', line, originalId: numericId, split };
+    if (companionFiles.length) entry.companionFiles = companionFiles;
     goldByCase.set(caseId, entry);
     ingested++;
   }
