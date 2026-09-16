@@ -93,6 +93,65 @@ const SENSITIVE_COOKIE_RE = /\bnew\s+Cookie\s*\(\s*"(?:session|sess|token|auth|j
 // Match `new Cookie(literal, NON_LITERAL_VAR)` regardless of cookie name.
 const RESPONSE_SPLITTING_COOKIE_RE = /\bnew\s+Cookie\s*\(\s*"[^"]*"\s*,\s*([A-Za-z_]\w*)\s*\)/g;
 
+// CWE-259: hard-coded password reaching a credential parameter. Juliet's
+// canonical shape (confirmed via the public mirror, all three sink variants):
+// a String variable is set to a HARDCODED LITERAL, then used — by NAME, not
+// inline — as the password/credential argument of one of these APIs. This is
+// the inverse of ordinary taint detection: the finding fires when the value
+// is PROVABLY a constant, not when it's tainted, so the taint engine's own
+// sink-matching (which fires on TAINTED args) structurally cannot express it.
+//
+//   DriverManager.getConnection(url, user, data)        — data used bare
+//   new KerberosKey(principal, data.toCharArray(), ...) — data.toCharArray()
+//   new PasswordAuthentication(user, data.toCharArray())— data.toCharArray()
+//
+// Each regex captures the credential identifier (stripping a trailing
+// `.toCharArray()` where present).
+const HARDCODED_PW_DRIVERMANAGER_RE = /\bDriverManager\s*\.\s*getConnection\s*\([^,]+,[^,]+,\s*([A-Za-z_]\w*)\s*\)/g;
+const HARDCODED_PW_KERBEROSKEY_RE = /\bnew\s+KerberosKey\s*\([^,]+,\s*([A-Za-z_]\w*)\s*\.\s*toCharArray\s*\(\s*\)/g;
+const HARDCODED_PW_PASSWORDAUTH_RE = /\bnew\s+PasswordAuthentication\s*\([^,]+,\s*([A-Za-z_]\w*)\s*\.\s*toCharArray\s*\(\s*\)/g;
+
+/**
+ * True when the NEAREST assignment to `varName` before `beforeIdx` (source
+ * order, not lexical scope — see the header comment above `scanJavaBenchExtras`'s
+ * CWE-259 block for why a backward nearest-assignment scan is enough to stay
+ * correctly scoped to the enclosing method without a full method-boundary
+ * parse) is a string-literal assignment, not a call/variable/concat RHS.
+ * Deliberately conservative: a variable never assigned at all (`beforeIdx`
+ * before any assignment) returns false, same direction as every other
+ * evidence-required check in this codebase.
+ */
+function _nearestAssignIsLiteral(content, varName, beforeIdx) {
+  const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  let lastLiteralEnd = -1, m;
+  while ((m = literalRe.exec(content)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  if (lastLiteralEnd === -1) return false;
+  let lastAnyEnd = -1;
+  while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  if (lastLiteralEnd !== lastAnyEnd) return false;
+  // Juliet's "data passed as an argument from one method to another" flow
+  // variants (its own template naming: sources-sink-41+) sink INSIDE A
+  // HELPER method that receives the value as a formal PARAMETER, not a
+  // local assignment — `private void goodG2BSink(String data) { …
+  // DriverManager.getConnection(url, user, data); }`. A backward scan for
+  // "nearest assignment to `data`" then crosses OUT of that helper and into
+  // whichever CALLER happens to have last assigned a same-named `data`
+  // textually earlier in the file — frequently `bad()`'s own hardcoded
+  // literal, even when the ACTUAL call reaching this specific helper came
+  // from the SAFE `goodG2B()` path. A parameter declaration for `varName`
+  // that is MORE RECENT than the literal assignment means we've crossed a
+  // method boundary the assignment can't have followed us through, so the
+  // value here is actually unknown (determined by whichever caller this
+  // is) — fails closed, same direction as every other evidence-required
+  // check in this file.
+  const paramRe = new RegExp(`\\([^()]*\\b[\\w.<>\\[\\]]+\\s+${escaped}\\s*[,)]`, 'g');
+  let lastParamEnd = -1;
+  while ((m = paramRe.exec(content)) && m.index < beforeIdx) lastParamEnd = m.index + m[0].length;
+  return lastParamEnd <= lastLiteralEnd;
+}
+
 // Generic tainted-context indicator: file contains a known source.
 // Includes Juliet's connect_tcp / Environment / Property variants.
 const TAINTED_CONTEXT_RE = /\bSystem\.getenv\s*\(|\bSystem\.getProperty\s*\(|\brequest\s*\.\s*get(?:Parameter|Header|InputStream|Reader|QueryString|Cookies)\b|\bnew\s+Socket\s*\(|\b\w+\s*\.\s*getInputStream\s*\(\s*\)|\.readLine\s*\(\s*\)/;
@@ -651,6 +710,32 @@ export function scanJavaBenchExtras(file, raw) {
         snippet: content.substring(content.lastIndexOf('\n', cm.index)+1, content.indexOf('\n', cm.index)).trim().slice(0, 200),
       });
     }
+  }
+
+  // CWE-259 — hardcoded password reaching a credential parameter. See the
+  // header comment above the regex constants for the three sink shapes and
+  // why this fires on PROVABLE-CONSTANT values rather than tainted ones.
+  const cwe259Lines = new Set();
+  function emitHardcodedPassword(varName, matchIndex) {
+    const L = lineOf(matchIndex);
+    if (cwe259Lines.has(L)) return;
+    if (!_nearestAssignIsLiteral(content, varName, matchIndex)) return;
+    cwe259Lines.add(L);
+    findings.push({
+      id: id('java-extras:hardcoded-password', L, matchIndex),
+      kind: 'sast',
+      severity: 'high',
+      vuln: 'Hardcoded Password used as credential',
+      cwe: 'CWE-259', stride: 'Information Disclosure',
+      file, line: L,
+      snippet: content.substring(content.lastIndexOf('\n', matchIndex)+1, content.indexOf('\n', matchIndex)).trim().slice(0, 200),
+      remediation: 'Never hardcode credentials. Load them from a secrets manager or environment variable at runtime.',
+    });
+  }
+  for (const re of [HARDCODED_PW_DRIVERMANAGER_RE, HARDCODED_PW_KERBEROSKEY_RE, HARDCODED_PW_PASSWORDAUTH_RE]) {
+    re.lastIndex = 0;
+    let hm;
+    while ((hm = re.exec(content))) emitHardcodedPassword(hm[1], hm.index);
   }
 
   return findings;
