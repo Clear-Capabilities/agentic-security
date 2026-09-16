@@ -178,46 +178,54 @@ function analyzeMethodFlow(method, opts = {}) {
     }
   }
 
-  // Forward pass through decls. Method.decls is already in source order.
-  for (const d of method.decls || []) {
-    if (d.type && d.type !== 'var') typeMap.set(d.name, d.type);
-    else if (d.isVar && d.rhsText) {
-      // Best-effort type inference for `var x = new T(...)`.
-      const m = d.rhsText.match(/^\s*new\s+([\w.<>?\[\],\s]+?)\s*\(/);
-      if (m) typeMap.set(d.name, m[1].trim());
-    }
-    if (d.rhsText) {
-      if (isSourceExpr(d.rhsText) && !isSanitizedExpr(d.rhsText)) {
-        taintMap.set(d.name, true);
-        sourceLines.set(d.name, d.line);
-        continue;
+  // Single forward pass, in TRUE source-line order, over decls AND
+  // assignments merged together.
+  //
+  // Previously this ran as two SEPARATE forward passes — all of
+  // method.decls, then all of method.assignments — each individually in
+  // source order, but with no ordering between the two lists. Juliet's own
+  // universal C# convention (confirmed via the public Juliet C# mirror this
+  // project's SARD manifest pins) declares a source variable bare, then
+  // assigns it on the next line: `string data; data = Environment.
+  // GetEnvironmentVariable("ADD");` — a plain decl (no rhsText, doesn't
+  // taint) followed by a SEPARATE ASSIGNMENT (which does). Any LATER
+  // declare-with-initializer that reads that variable (`string[] tokens =
+  // data.Split(...);`) is a decl, processed in the FIRST loop — before the
+  // assignment that actually taints `data` had run in the SECOND loop — so
+  // the propagation check saw `data` as not-yet-tainted and the dependent
+  // variable silently stayed clean, regardless of true source order.
+  // Reproduced down to a minimal 100%-failing case (SARD_80_F1 W4.C8) and
+  // confirmed real (not Juliet-specific): any C# code that separately
+  // assigns a source, then derives a value from it in a later declared
+  // variable, hits this. Fixing it can only ADD correctly-propagated taint
+  // (this model has no un-taint step — a value that starts tainted stays
+  // tainted — so re-ordering never removes a propagation that used to fire).
+  const decls = (method.decls || []).map(d => ({ kind: 'decl', line: d.line, item: d }));
+  const assigns = (method.assignments || []).map(a => ({ kind: 'assign', line: a.line, item: a }));
+  const merged = decls.concat(assigns).sort((x, y) => x.line - y.line);
+  for (const { kind, item } of merged) {
+    const targetKey = kind === 'decl' ? item.name : item.fullTarget;
+    const rhsText = item.rhsText;
+    if (kind === 'decl') {
+      if (item.type && item.type !== 'var') typeMap.set(item.name, item.type);
+      else if (item.isVar && rhsText) {
+        // Best-effort type inference for `var x = new T(...)`.
+        const m = rhsText.match(/^\s*new\s+([\w.<>?\[\],\s]+?)\s*\(/);
+        if (m) typeMap.set(item.name, m[1].trim());
       }
-      // Propagation: rhs references a tainted var → lhs becomes tainted.
-      const refs = (d.rhsText.match(/\b[A-Za-z_]\w*\b/g) || []);
-      for (const ref of refs) {
-        if (taintMap.get(ref)) {
-          taintMap.set(d.name, true);
-          sourceLines.set(d.name, d.line);
-          break;
-        }
-      }
     }
-  }
-
-  // Then assignments — same forward propagation rules.
-  for (const a of method.assignments || []) {
-    if (!a.rhsText) continue;
-    const targetKey = a.fullTarget;
-    if (isSourceExpr(a.rhsText) && !isSanitizedExpr(a.rhsText)) {
+    if (!rhsText) continue;
+    if (isSourceExpr(rhsText) && !isSanitizedExpr(rhsText)) {
       taintMap.set(targetKey, true);
-      sourceLines.set(targetKey, a.line);
+      sourceLines.set(targetKey, item.line);
       continue;
     }
-    const refs = (a.rhsText.match(/\b[A-Za-z_]\w*\b/g) || []);
+    // Propagation: rhs references a tainted var → lhs becomes tainted.
+    const refs = (rhsText.match(/\b[A-Za-z_]\w*\b/g) || []);
     for (const ref of refs) {
       if (taintMap.get(ref)) {
         taintMap.set(targetKey, true);
-        sourceLines.set(targetKey, a.line);
+        sourceLines.set(targetKey, item.line);
         break;
       }
     }
