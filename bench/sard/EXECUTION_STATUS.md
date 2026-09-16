@@ -2309,6 +2309,30 @@ reminder that "zero recall" corpus mysteries are worth checking the
 simplest possible explanation (a literal-casing mismatch) before assuming
 something architecturally deep is wrong.
 
+### Full C# dev-split checkpoint + a new hypothesis worth checking (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev`: **macroF1=16.9%, unchanged** from the previous
+checkpoint — consistent with, not contradicting, this iteration's real
+gains: CWE-78, CWE-643, and now CWE-134 all independently show the exact
+same "zero on dev, real on train/all-splits" pattern.
+
+**Worth flagging as its own investigation, not chased this iteration**:
+three INDEPENDENT CWEs sharing the identical dev-blind-spot is starting to
+look less like three unlucky coincidences and more like a possible
+SYSTEMATIC gap in how `split.mjs` assigns Juliet's C# flow variants —
+e.g., if variant numbering or naming (all three fixed shapes this
+iteration trace back to `Connect_tcp`-sourced variants specifically) maps
+to split assignment in a way that happens to route most/all
+`Connect_tcp` variants away from dev. If true, this would mean OTHER
+still-`Connect_tcp`-sourced fixes might ALSO show a false "zero on dev"
+reading going forward, and the fix would be either a corrected split
+assignment or (more practically) preferring the train-split number for
+this specific corpus's engineering iteration, as this session has already
+been doing. Flagged for a future session to check `split.mjs`'s actual
+assignment logic against the flow-variant name, rather than re-discovering
+this pattern a fourth time by accident.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
