@@ -612,7 +612,7 @@ precision against).
 | W4.J4 | Java CWE-80/81/83 servlet writer XSS (two-step PrintWriter shape fixed, +38 tp on CWE-80 verified on real corpus; CWE-81 exception-message taint implemented + tested but zero real-corpus movement, needs cross-method propagation — see session log) | IN_PROGRESS |
 | W4.J5 | Java CWE-601, CWE-470, CWE-134 — real fix, not just re-measurement: CWE-470/134 findings could NEVER score a TP (a family-slug mismatch between the benchmark's scoring taxonomy and the manifest's ground-truth family made recall=0% structurally impossible regardless of detector quality). Fixed by adding 3 missing prefix entries to `test/benchmark/expected.json`'s `_familyMap` + 2 missing `cweToFamily` entries to the Java manifest. Real corpus (dev, blind+scrambled+deep, truncated): CWE-601 tp=49 fp=1 fn=19 (recall 72.1%); CWE-470 tp=61 fp=13 fn=74 (recall ≥45.2%); CWE-134 tp=58 fp=16 fn=97 (recall ≥37.4%). Same fix ALSO unlocked C# CWE-470 (tp=17, recall ≥13.8% on a heavily truncated run — needs a larger-timeout re-run); C# CWE-134 still tp=0 on this run but the scan only covered 19/157 files before truncating, inconclusive | VERIFIED |
 | W4.J6 | Java CWE-90 LDAP re-measure — real corpus (dev, blind+scrambled+deep): tp=125 fp=72 fn=56, recall 69.1%, F1 65.6% (precision 62.5%, FP triage deferred to W3 taint-authority work) — see session log | VERIFIED |
-| W4.J7 | Java crypto families 319/321/325/327/328/329/330/338 | NOT_STARTED |
+| W4.J7 | Java CWE-329 (static/weak IV) — new detector shape added (declare-then-pass: `byte[] iv = {0x00,...}; ... new IvParameterSpec(iv)`, distinct from the already-covered inline `new IvParameterSpec(new byte[16])` form), plus a MAJOR measurement-methodology fix: `bench-realworld.js` sets `AGENTIC_SECURITY_NO_INTEGRATION=1` by default, which silently disables `crypto-protocol.js`'s ENTIRE detector suite (TLS/JWT/cipher/ECB/static-IV/weak-hash/KDF — every family it owns) in every SARD/Juliet benchmark run to date, regardless of detector correctness — confirmed via `AGENTIC_SECURITY_NO_INTEGRATION=0` override (see session log for the full debugging trail). Also removed an unconditional `_BENCH_FIXTURE_RE` filename gate in `crypto-protocol.js` that separately zeroed the same module on any `CWE\d+_*.java/.c/.cpp/.cs` file (i.e. every Juliet-named file), and fixed a vuln-text→family mapping gap ("Static / zero IV" was unmapped, silently slugging to a family that could never match the manifest's `weak-rng`). **Real corpus (train, blind+scrambled+deep, `AGENTIC_SECURITY_NO_INTEGRATION=0` override): CWE-329 tp=17/19 fp=0 (recall 89.5%, precision 100%, F1 94.4%).** Other CWE-329-adjacent families (321/325/327/328/330/338) not yet re-measured with the override — likely also under-credited to date since several route through the same module; flagged as a high-priority follow-up sweep | IN_PROGRESS |
 | W4.C1 | C# CWE-113, CWE-80/81/83 — **the ENTIRE "total blackout" now fully resolved.** `cs-response-write`/`cs-response-addheader` required the exact literal identifier `Response`, but Juliet's real code uses the parameter name `resp` — widened receiver + added `receiverTypeIn`. CWE-81 had a SEPARATE root cause (a genuinely missing sink: `resp.StatusDescription = tainted`, a member-write shape no catalog entry covered at all, unrelated to the receiver-name bug) — added `cs-response-statusdescription`. **Real corpus (train): CWE-80 tp=153/750 (20.4%, fp=0), CWE-83 tp=85/428 (19.9%, fp=0), CWE-81 tp=52/324 (16.0%, P=86.7%), CWE-113 tp=157/929 (16.9%, lower precision — fp=348, needs future triage).** Two distinct bugs, three fix commits, the single most valuable investigation of this entire session by raw true-positive count (~450 new TPs across 4 CWEs) | VERIFIED |
 | W4.C2 | C# CWE-89 remaining sinks (SqlDataAdapter etc, already partially landed) | NOT_STARTED |
 | W4.C3 | C# CWE-36/23, CWE-643, CWE-470, CWE-134, CWE-601, CWE-78, CWE-90 — CWE-23 tp=18/70 (25.7%), CWE-36 tp=40/233 (17.2%), CWE-601 tp=46/124 (37.1%), CWE-90 tp=47/71 (66.2%) all confirmed real on dev split. **CWE-78 real fix landed (3 bugs: 2 missing Process/ProcessStartInfo catalog sinks + a parser-cs.js concat-lowering gap for identifier-only `a + b` expressions) — dev split coincidentally shows tp=0/72 (sampling artifact, see session log), but train split confirms tp=91/435 (20.9% recall), a genuine win.** CWE-470 partially unblocked earlier (tp=17/123, recall ≥13.8%, heavily truncated). **CWE-643 real fix landed (`receiverTypeIn` fallback for XPathNavigator's scramble-blind name check, same bug class as PHP's XPath fix) — moved from a total blackout to tp=6/652 across all splits (small but real, fp=0)**, though most flow variants still don't fire. **CWE-134 real fix landed (`cs-string-format`'s `receiver` was case-sensitive, missing C#'s equally-valid lowercase `string` alias — Juliet's own corpus uses lowercase exclusively) — moved from a total blackout to tp=230/912 (25.2%) across all splits, tp=173/692 (25.0%) on train, the biggest single C# win this session from a one-line fix.** Every W4.C3 CWE now confirmed either working or genuinely fixed | IN_PROGRESS |
@@ -2540,6 +2540,100 @@ XSS blackout, and two brand-new point-flaw detectors). Given this
 methodology's return on C#, the same approach applied to Java's
 remaining zero/low-recall CWEs is the clearest path to closing the last
 ~5pp gap for M1.
+
+### W4.J7 — Java CWE-329, and a major measurement-methodology bug: `crypto-protocol.js` has never been credited in any SARD benchmark run (2026-09-16)
+
+Built a new CWE-329 (weak/static IV) detection shape for Java: Juliet's
+own canonical form declares a hardcoded byte-array literal as a NAMED
+variable (`byte[] iv = {0x00,...};`) and passes it BY NAME to
+`IvParameterSpec`/`GCMParameterSpec` — structurally different from the
+already-covered inline `new IvParameterSpec(new byte[16])` form, which
+cannot match a declare-then-pass indirection at all. Confirmed the shape
+via the public Juliet Java mirror (pinned SHA, `CWE329_Not_Using_Random_
+IV_with_CBC_Mode__basic_01.java`) before writing the regex, per this
+session's established due-diligence practice.
+
+**Self-inflicted ReDoS, caught and fixed by this project's own gate.**
+The first version of the new regex used an optional group flanked by two
+`\s*` quantifiers (`(?:new\s+byte\s*\[\s*\]\s*)?` between two `\s*`s) —
+this codebase's own repeatedly-documented ReDoS anti-pattern (see `ir/
+CLAUDE.md`'s notes on `parser-kt.js`/`parser-cs.js`), and this time I
+personally reintroduced it. `npm run bench:self-scan:check` failed
+(`sast/crypto-protocol.js: 2 → 3`, then `→ 4` after a second attempt that
+still nested a quantified alternation inside a quantified group). Root
+cause traced to `bench/self-scan/measure.mjs`'s `countByFile` combining
+`scan.findings` AND `scan.logicVulns` — the extra finding was a "Regex
+ReDoS — Catastrophic Backtracking" hit on my own new pattern, not on
+`scan.findings` where I first looked. Fixed by splitting into two
+regexes with a flat `[^}]*` capture, validated afterward by a separate
+flat character-class regex — no nested quantifiers anywhere. Self-scan
+gate now clean (`scanner/src: 483 → 483`); 757/757 SAST tests pass.
+
+**Then: dev split showed 0/19, train split ALSO showed 0/19 — but this
+time the usual "descriptor-family split assignment" explanation was
+wrong.** Investigation (all via the public mirror + this project's own
+tooling, never via reading `.bench-cache` content) found THREE stacked
+causes, only the first two of which are specific to this fix:
+
+1. **Family-mapping gap** (the now-familiar bug class, hit again): the
+   detector's vuln text ("Static / zero IV — ...") had no entry in
+   `expected.json`'s `_familyMap`, so `bench-realworld.js`'s
+   `familyForBench()` slugged it to something that could never equal the
+   manifest's expected family (`weak-rng`) for CWE-329. Fixed by adding
+   `"Static / zero IV": "weak-rng"` to the `prefix` map.
+2. **An unconditional filename gate silencing the entire module on this
+   corpus.** `crypto-protocol.js` had `_BENCH_FIXTURE_RE = /(?:^|\/|\\)
+   (?:BenchmarkTest|JulietTestCase|CWE\d+_)[\w-]*\.(?:java|c|cpp|cs)$/i`
+   which unconditionally returned `[]` for any file matching that name —
+   and Juliet's real files ARE named exactly that way, and `--blind`
+   deliberately does NOT rename file paths (the ground truth keys on
+   path). This gate predates the SARD push (added when the module was
+   first written, "keeps the blind benchmark regression bit-identical")
+   and was never gated behind `AGENTIC_SECURITY_BENCH_SHAPE`/
+   `BLIND_BENCH` the way this codebase's other filename-keyed logic is —
+   no test pinned it. Removed entirely (detection here is content-driven,
+   never filename-driven, so there was no bench-shape signal to isolate).
+3. **The real, session-defining discovery: `bench-realworld.js` sets
+   `AGENTIC_SECURITY_NO_INTEGRATION=1` by default** (line ~51, unless
+   already set), and `engine.js` wraps `scanCryptoProtocol` — along with
+   8 other "scaffolded" modules (llm-app, mobile, pqc, web3-advanced,
+   dapp-frontend, cloud-iam, k8s-admission, ml-supply-chain) — inside a
+   block gated on that exact variable ("Integration block... disables the
+   entire block for CI bench runs that need bit-identical baselines").
+   This means `crypto-protocol.js`'s ENTIRE detector suite — TLS, JWT,
+   weak cipher, ECB, static-IV, weak hash, PBKDF2/bcrypt, every family it
+   owns — has NEVER been credited in ANY SARD/Juliet benchmark run to
+   date, independent of detector correctness. Confirmed by isolating the
+   variable at each layer: a synthetic single-file scan found it (1/1); a
+   direct `runScan()` on the real cached corpus subdirectory, replicating
+   bench-realworld.js's own `--cwe`-scoping `ignorePaths` mechanism by
+   hand, found it (17/19); but the actual `bench-realworld.js` process
+   found 0/19 — until adding `AGENTIC_SECURITY_NO_INTEGRATION=0` as an
+   explicit override before invoking it (setting it beforehand is NOT
+   clobbered, since the script's own default only applies `if (...==
+   null)`), which produced the same 17/19.
+
+**Real corpus (train split, blind+scrambled+deep, with the override):
+CWE-329 tp=17 fp=0 fn=2, recall 89.5%, precision 100%, F1 94.4%.** The
+2 remaining FNs (basic_18/19, not yet investigated) are a separate,
+smaller gap.
+
+**Scope decision — did not change `bench-realworld.js`'s default.**
+Blanket-enabling the Integration block would also activate the other 8
+scaffolded modules against nodegoat/bigvul/cvefixes (the other apps this
+same script benchmarks), which have never been vetted for precision on
+those corpora and whose baselines exist specifically for CI
+bit-identical comparability. That's a real, separate decision needing
+its own review, not a side effect of a CWE-329 fix. For now: any future
+SARD-corpus measurement of a crypto-protocol.js-owned family (TLS,
+JWT-related, weak cipher/hash/KDF CWEs, additional static-IV variants)
+MUST pass `AGENTIC_SECURITY_NO_INTEGRATION=0` explicitly or it will
+silently, incorrectly read as zero recall — exactly as every prior
+session's crypto-family numbers on this corpus have. **High-priority
+follow-up: sweep CWE-321/325/327/328/330/338 (and any TLS/JWT-adjacent
+CWEs) with the override to find out how much of Java's remaining M1 gap
+this alone closes**, since several are plausible candidates for the same
+false-zero pattern.
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

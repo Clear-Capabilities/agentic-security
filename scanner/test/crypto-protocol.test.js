@@ -51,6 +51,43 @@ test('crypto-proto: pyca/cryptography zero IV (iv = b\'\\x00\' * 16) flagged sta
   assert.ok(out.some(f => f.family === 'crypto-static-iv' && f.cwe === 'CWE-329'), 'zero IV flagged');
 });
 
+// Juliet's OWN canonical Java CWE-329 shape (confirmed via the public
+// Juliet Java mirror this project's SARD manifest pins,
+// CWE329_Not_Using_Random_IV_with_CBC_Mode__basic_01.java): a hardcoded
+// byte-array literal declared as a NAMED VARIABLE, then passed to
+// IvParameterSpec BY NAME — a different shape from the already-covered
+// inline `new IvParameterSpec(new byte[16])` form, which structurally
+// cannot match a declare-then-pass indirection at all.
+test('crypto-proto: Java IvParameterSpec fed a named hardcoded byte-array variable flags static-IV', () => {
+  const src = `
+    public class C {
+      public void bad() throws Throwable {
+        byte[] initializationVector = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        IvParameterSpec ivParameterSpec = new IvParameterSpec(initializationVector);
+      }
+    }`;
+  const out = scanCryptoProtocol('C.java', src);
+  assert.ok(out.some(f => f.family === 'crypto-static-iv' && f.cwe === 'CWE-329'),
+    'hardcoded byte-array IV passed by name should be flagged');
+});
+
+test('crypto-proto: Java IvParameterSpec fed a SecureRandom-filled array does NOT fire', () => {
+  const src = `
+    public class C {
+      public void good() throws Throwable {
+        byte[] initializationVector = new byte[16];
+        SecureRandom secureRandom = new SecureRandom();
+        secureRandom.nextBytes(initializationVector);
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        IvParameterSpec ivParameterSpec = new IvParameterSpec(initializationVector);
+      }
+    }`;
+  const out = scanCryptoProtocol('C.java', src);
+  assert.ok(!out.some(f => f.family === 'crypto-static-iv' && f.cwe === 'CWE-329'),
+    'a SecureRandom-filled IV must not fire — no brace-literal initializer to match');
+});
+
 test('crypto-proto: cross-language weak cipher — Go/PHP/Ruby DES/RC4/BF fire; AES clean', () => {
   const fires = (fp, code) => scanCryptoProtocol(fp, code).some(f => f.cwe === 'CWE-327' && f.family === 'crypto-weak-cipher');
   const clean = (fp, code) => scanCryptoProtocol(fp, code).every(f => f.family !== 'crypto-weak-cipher');

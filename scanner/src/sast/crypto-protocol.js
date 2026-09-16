@@ -276,6 +276,53 @@ function detectStaticIv(file, raw, code, out, seen) {
         'IV reuse breaks every standard block-cipher mode. For GCM, two messages with the same (key, IV) leak the authentication key via XOR — the EFAIL email attack used this class of bug.'));
     }
   }
+  // Java/Kotlin: `byte[] iv = {0x00, 0x00, …};` (or `= new byte[]{…}`) declared
+  // as a NAMED VARIABLE, then passed to IvParameterSpec/GCMParameterSpec BY
+  // NAME — Juliet's own canonical CWE-329 shape (confirmed via the public
+  // Juliet Java mirror this project's manifest pins,
+  // CWE329_Not_Using_Random_IV_with_CBC_Mode__basic_01.java), and arguably
+  // the MORE common real-world style than the inline `new byte[16]` the
+  // pattern above already covers. The inline-only pattern structurally
+  // cannot match this: the array literal and the constructor call are two
+  // separate statements. Scoped to an array literal that only contains hex/
+  // decimal byte constants (not an arbitrary expression) to avoid matching
+  // a legitimately-random `byte[] iv = secureRandom.generateSeed(16)`-style
+  // declaration, which never has a brace-literal initializer at all.
+  // Two separate, mutually exclusive patterns (`byte[] x = {...}` and
+  // `byte[] x = new byte[]{...}`) rather than one regex with an optional
+  // `(?:new\s+byte\s*\[\s*\]\s*)?` group — the "optional group flanked by
+  // two `\s*`" shape this codebase's own history (see `ir/CLAUDE.md`'s
+  // repeated ReDoS notes for parser-kt.js/parser-cs.js) treats as an
+  // automatic red flag. Each pattern captures the brace body with a single
+  // flat `[^}]*` rather than a `(...)*`-quantified alternation of `+`-quantified
+  // branches — that nested-quantifier shape is what tripped this project's
+  // OWN ReDoS detector on the file during self-scan (twice, once per branch,
+  // on the first attempt at this fix). The content is then validated against
+  // a separate, equally flat character-class regex.
+  const _IV_LITERAL_DECL_RES = [
+    /\bbyte\s*\[\s*\]\s*(\w+)\s*=\s*\{([^}]*)\}/g,
+    /\bbyte\s*\[\s*\]\s*(\w+)\s*=\s*new\s+byte\s*\[\s*\]\s*\{([^}]*)\}/g,
+  ];
+  const _HEX_OR_DEC_LIST_BODY = /^[\s,0-9a-fA-Fx]+$/;
+  for (const _re of _IV_LITERAL_DECL_RES) {
+    let ivDecl;
+    while ((ivDecl = _re.exec(code))) {
+      const varName = ivDecl[1];
+      const listBody = ivDecl[2];
+      if (!listBody || !_HEX_OR_DEC_LIST_BODY.test(listBody)) continue;
+      const usedAsIv = new RegExp(`\\b(?:Iv|GCM)ParameterSpec\\s*\\(\\s*${varName}\\s*[,)]`).test(code);
+      if (!usedAsIv) continue;
+      const ln = _line(raw, ivDecl.index);
+      const id = `crypto-static-iv:${file}:${ln}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(_shape(file, ln, 'crypto-static-iv',
+        'Static / zero IV — a hardcoded byte-array literal is used as the IV, encrypting identical plaintexts to identical ciphertexts',
+        'crypto-static-iv', 'high', 'CWE-329',
+        'Generate the IV from a CSPRNG (`SecureRandom.nextBytes(iv)`), never a hardcoded byte-array literal. For GCM use a 12-byte random nonce. Never reuse the same (key, nonce) pair — for GCM that is catastrophic (key recovery).',
+        'IV reuse breaks every standard block-cipher mode. For GCM, two messages with the same (key, IV) leak the authentication key via XOR — the EFAIL email attack used this class of bug.'));
+    }
+  }
 }
 
 function detectWeakHash(file, raw, code, out, seen) {
@@ -416,16 +463,27 @@ function detectJwtNoAlgAllowlist(file, raw, code, out, seen) {
 
 // ── Entry point ────────────────────────────────────────────────────────────
 
-// Skip well-known benchmark-test-harness naming. These files contain crypto
-// APIs as test scaffolding, not as deployed-app code. Avoiding them keeps
-// the blind benchmark regression bit-identical without losing real-world
-// signal.
-const _BENCH_FIXTURE_RE = /(?:^|\/|\\)(?:BenchmarkTest|JulietTestCase|CWE\d+_)[\w-]*\.(?:java|c|cpp|cs)$/i;
+// NOTE: a filename-based skip for benchmark-test-harness naming
+// (BenchmarkTestNNNNN.java / CWE\d+_*.java) used to live here. It predates
+// the SARD 80% F1 push and unconditionally silenced every detector in this
+// module on the exact filename convention the real Juliet/OWASP-Benchmark
+// corpus uses (file paths are deliberately NOT renamed by the benchmark's
+// `--blind`/`--scramble-identifiers` transform, since the ground truth keys
+// on path) — a real production file just happening to share that naming
+// convention is vanishingly rare, but every file in this project's own
+// primary benchmark corpus does, so the gate was silently zeroing recall for
+// this entire module across Java/C#/C++ SARD scoring (confirmed via CWE-329:
+// 0/19 TPs with the gate in place, all 19 recovered once removed). It was
+// also never gated behind AGENTIC_SECURITY_BENCH_SHAPE/BLIND_BENCH the way
+// this codebase's other filename-keyed logic is (see root CLAUDE.md's
+// "Bench-shape isolation" convention) and no test pinned its behavior.
+// Removed rather than re-gated: detection here is content-driven (crypto API
+// + literal shape), never filename-driven, so there is no bench-shape signal
+// to isolate in the first place.
 
 export function scanCryptoProtocol(fp, raw) {
   if (process.env.AGENTIC_SECURITY_NO_CRYPTO_PROTO === '1') return [];
   if (!raw || raw.length > 500_000) return [];
-  if (_BENCH_FIXTURE_RE.test(fp)) return [];
   if (!_isCryptoRelevant(raw)) return [];
   const lang = /\.py$/.test(fp) ? 'py' : null;
   const code = blankComments(raw, lang);

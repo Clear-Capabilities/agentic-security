@@ -161,6 +161,7 @@
       "Unchecked low-level call": "unchecked-low-level-call",
       "unsafe block": "unsafe-block",
       "Weak randomness \u2014 RNG seeded": "weak-rng",
+      "Static / zero IV": "weak-rng",
       "Untyped Actix extractor": "input-validation",
       "Cleartext HTTP": "insecure-http",
       "Unprotected Transport of Credentials": "insecure-http",
