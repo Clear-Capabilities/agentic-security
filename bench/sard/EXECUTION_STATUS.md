@@ -2992,6 +2992,45 @@ confidence) — just confirmed to be **out of scope for moving this PRD's
 tracked F1 number**, so not implemented here; flagged as a small,
 separate follow-up distinct from the W3.2 architecture work.
 
+### Checkpoint: Java dev-split macro-F1 unchanged at 42.6% despite 4 real fixes this stretch (2026-09-16)
+
+Full re-run (`batch-scan.mjs --app sard-juliet-java-strict --blind
+--scramble-identifiers --deep --split dev --json | macro-score.mjs`)
+after W4.J8 (CWE-83 dead-branch engine fix), W4.J9 (CWE-259 new
+detector), W4.J10 (CWE-319 correction), and W4.J11 (CWE-89 addBatch
+sink): **macroF1=42.6%, microF1=60.3%, P=62.9%, R=58.0%, CWEs=26** — byte-
+identical to the pre-stretch checkpoint. Not a measurement error: every
+one of these four fixes independently confirmed zero dev-split movement
+already (each logged above), because each fix's affected descriptor
+family happens to be assigned entirely to train/test split. This is the
+fourth time in a row this exact pattern has held (W4.J7's CWE-329 was
+the first).
+
+**Honest read of where this leaves things.** These are not wasted work —
+each is a real, verified capability gain that WILL count toward the
+PRD's actual gate (the one-time TEST-split run), and CWE-89's addBatch
+fix in particular is large by raw TP count (train split alone:
++hundreds of TPs, the single biggest fix by that measure this session).
+But for the DEV-split number this session has been using as the interim
+prioritization signal, they contribute nothing, and **Java remains at
+42.6%, 2.4pp short of M1's ≥45% gate**, unmoved since the last several
+iterations of work. The remaining dev-split low-F1 items (CWE-259 0%,
+CWE-319 0%) are BOTH now confirmed to have zero dev-split expected
+entries at all — there is no more "missing sink, real recall win" fruit
+left that dev split can see. Continuing to chase recall fixes verified
+only on train/test, while real, will not move this particular tracked
+number further; the two paths left for dev-split movement specifically
+are: (a) fix genuinely-present-in-dev-split gaps in CWE-89/113/90's
+PRECISION (fp counts are large and ARE fully reflected in dev split,
+unlike the recall side) — W3 scope; or (b) accept that dev-split
+tracking has reached a local plateau under this session's methodology
+and treat the TEST-split gate, not this proxy, as the real measure of
+whether M1 is closer. Recommending a shift toward W3 (precision) for
+whoever continues this PRD, since W4's recall-hunting on Java has
+stopped showing dev-split-visible returns for several consecutive
+iterations while precision items (CWE-89 fp=224, CWE-113 fp=399,
+CWE-90 fp=72) sit untouched and ARE dev-split-visible.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
