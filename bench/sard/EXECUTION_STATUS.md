@@ -2922,6 +2922,52 @@ call site) predates this entire session (last touched in an unrelated
 commit) and was left alone — out of scope for this fix, flagged here so
 it isn't mistaken for something this change caused.
 
+### CWE-113 precision re-examined once more — confirms the earlier "architectural limit," narrows exactly why (2026-09-16)
+
+Given this session's repeated pattern of "needs a redesign" verdicts
+turning out wrong (W4.J8's dead-branch bug, the CWE-319 correction
+above), re-checked CWE-113's already-diagnosed precision limit (fp=399,
+P=45.7%) once more before accepting it, in case the SAME kind of
+narrower, missed root cause was hiding here too.
+
+Scanned the real corpus's `juliet-cwe113/` directory directly (not
+`bench-realworld.js`'s scored output, which only carries
+file/line/family/vuln — the raw finding objects, to see `sanitized`/
+`_sanitizersOnPath`): of 3179 header-related findings, **0 are marked
+`sanitized: true`, but 1740 recorded a sanitizer callee on the path** —
+overwhelmingly `URLEncoder.encode`, not the `.replace('\n','_')`-style
+raw CRLF strip the earlier probe specifically tested. `URLEncoder.encode`
+percent-encodes CRLF and would be a genuinely effective, safely-
+registerable NAMED-function sanitizer for header-injection (unlike a raw
+`.replace()` call, which is too generic to register unambiguously) — a
+real, catalog-entry-shaped candidate fix, structurally different from
+the "per-family taint bits" architecture change the earlier diagnosis
+called for.
+
+**Checked whether registering it would actually move the benchmark
+number before writing any code — it would not.** `catalog.js` has NO
+Java entry for `URLEncoder.encode` at all (only a Kotlin one, scoped to
+`appliesTo: ['url']`); the "recorded" sanitizer name for Java findings
+comes from a broader, non-catalog name-matching path. Even if a
+Java-scoped entry were added with `appliesTo` correctly covering
+header-injection, `sanitizer-gate.js`'s own documented design (already
+read this session, `dataflow/CLAUDE.md`) sets `sanitized: true` as a
+**demotion** (confidence/exploitability tier), never removes the finding
+from `scan.findings` — and `bench-realworld.js`'s `score()` matches
+purely on family/file/line, never consulting confidence or `sanitized`
+at all. So the finding would keep counting as a raw FP in this
+benchmark's scoring regardless. This confirms the earlier diagnosis was
+right for the right reason: the limiting factor isn't which sanitizer is
+recognized, it's that NO sanitizer, however well-registered, currently
+removes a finding from what this benchmark scores — a benchmark-scorer
+gap (should `sanitized: true` findings be excluded from `actual[]`
+before scoring?) layered on top of the already-real per-family-taint-bit
+gap. Registering `URLEncoder.encode` properly is still a good, low-risk
+production-accuracy improvement (real users would see correctly demoted
+confidence) — just confirmed to be **out of scope for moving this PRD's
+tracked F1 number**, so not implemented here; flagged as a small,
+separate follow-up distinct from the W3.2 architecture work.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
