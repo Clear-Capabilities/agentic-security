@@ -2516,6 +2516,31 @@ fix since it shared the identical unmatched-slug symptom).
 precision AND recall, identical to CWE-523.** Two brand-new detectors,
 back to back, both perfect on their first real corpus measurement.
 
+### C# CLEARS the M1 dev-split threshold — Java is now the sole remaining gap (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev` after CWE-523+539: **macroF1=24.5%→29.4% (+4.9pp)**,
+`microF1=29.7%→40.6%`, `P=54.5%→74.7%`, `R=20.4%→27.9%` — another
+enormous, clean jump (two more perfect-F1 low-support CWEs each pull the
+macro-average up sharply).
+
+**C# is now at 29.4% on dev split — comfortably past M1's `C#≥25%` gate.**
+Combined with PHP already at 27.4% (also past its `PHP≥25%` gate), **Java
+(40.3%, needs ≥45%) is now the ONLY remaining blocker for the M1
+milestone**, on dev-split evidence. This is NOT a claim that M1 is
+passed — per this PRD's own integrity rule 2, the milestone gate itself
+is only ever run ONCE, on the TEST split, by the harness, and that has
+not happened. This is a confidence signal for prioritization, not a
+gate result.
+
+**Session-total C# progress: macroF1 16.2%→29.4% (+13.2pp)** — driven
+almost entirely by this session's systematic per-CWE investigation using
+the public Juliet C# mirror (family-slug fixes, the `resp`/`Response`
+XSS blackout, and two brand-new point-flaw detectors). Given this
+methodology's return on C#, the same approach applied to Java's
+remaining zero/low-recall CWEs is the clearest path to closing the last
+~5pp gap for M1.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
