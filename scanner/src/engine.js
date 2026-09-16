@@ -6429,6 +6429,25 @@ const _VULN_FAMILY_PREFIX = [
   // finding (family 'open-redirect') and an `IR-TAINT` finding (family
   // 'open-redirect-controller-redirect') at the identical line.
   ['Open Redirect', 'open-redirect'],
+  // Same bug, same fix, found by checking every other injection family with
+  // BOTH a structural detector AND IR-TAINT catalog sinks for the identical
+  // divergence: every CWE-113 IR-TAINT sink's vuln string starts with "HTTP
+  // Response Splitting" (12 catalog entries across Java/JS/PHP/Go/C#), with
+  // no prefix entry here — each fell through to its own unique auto-slug
+  // family, distinct from `response-splitting.js`'s explicit
+  // `family: 'response-splitting'`. Verified directly: a Java servlet
+  // `response.setHeader("X-User", request.getParameter(name))` probe produced
+  // both a `RESPONSE-SPLITTING` finding (family 'response-splitting') and an
+  // `IR-TAINT` finding (family 'http-response-splitting-header-injection') at
+  // the identical line. CWE-113 has carried this session's largest persistent
+  // fp counts (399 on Java dev, 348 on C# train, per W4.C1) and this exact
+  // duplicate-detection mechanism was never checked as a contributing cause
+  // during the earlier sanitizer-focused CWE-113 investigation (commit
+  // 4f41daec) — distinct from `test/benchmark/expected.json`'s `_familyMap`
+  // (the SEPARATE table that resolves scoring family from vuln text and
+  // already maps this same prefix to 'header-hardening'; this table only
+  // controls ENGINE-level dedup, not scoring attribution).
+  ['HTTP Response Splitting', 'response-splitting'],
   ['Synchronous Blocking I/O', 'dos-sync-io'],
   ['Missing Timeout', 'dos-no-timeout'],
   ['GraphQL Missing Query', 'graphql-dos'],
