@@ -2729,6 +2729,65 @@ check the public mirror's actual test files BEFORE assuming the
 architecture (interprocedural flow, in this case) is the missing piece —
 the CWE's own descriptive name can point at the wrong mechanism entirely.
 
+**Full Java dev-split checkpoint after W4.J4/J7**: `batch-scan.mjs --app
+sard-juliet-java-strict --blind --scramble-identifiers --deep --split dev
+--json | macro-score.mjs` → **macroF1=42.6%, microF1=60.3%, P=62.9%,
+R=58.0%, CWEs=26** (up from 40.3%/59.4%/62.7%/56.3%/26 before this
+session's W4.J4/J7 fixes) — **2.4pp from the M1 `Java≥45%` gate.**
+
+### A separate, NOT-acted-on finding: 6 of the 26 scored "CWEs" have ZERO ground-truth instances and are scored as automatic F1=0% (2026-09-16)
+
+While reading the per-CWE breakdown behind the 42.6% figure above (via
+`perCwe` in the raw scan JSON — scanner-produced finding metadata:
+file/line/family/reportedCwe, never corpus source), found that 6 of the
+26 rows macro-averaged into that 42.6% have **`tp=0` AND `fn=0`** —
+literally zero expected instances of that CWE anywhere in this scan
+surface — yet are scored `precision=0, recall=0, F1=0%` purely because
+an UNRELATED detector fired an incidental true finding of a DIFFERENT,
+real vulnerability class inside a file whose primary label is some other
+CWE. Confirmed each is a genuine cross-CWE-directory detection, not
+noise or a bug in the finding itself:
+
+| Phantom "CWE" row | fp count | Actual file (primary label) | What actually fired |
+|---|---|---|---|
+| CWE-79 | 137 | `juliet-cwe80/.../CWE80_XSS__...` | Reflected XSS (PrintWriter.println) — CWE-79 is CWE-80's OWN parent CWE in NIST's taxonomy; the catalog entry just reports the generic parent number |
+| CWE-22 | 88 | `juliet-cwe23/.../CWE23_Relative_Path_Traversal...` | Path Traversal (new File) — same relationship, CWE-23 is a CWE-22 child |
+| CWE-502 | 50 | `juliet-cwe23/...` | Insecure Java Deserialization: ObjectInputStream.readObject() — a genuinely different, unrelated vuln class incidentally present in a path-traversal test file |
+| CWE-918 | 38 | `juliet-cwe601/.../CWE601_Open_Redirect...` | SSRF — URL/URI opened from a non-literal value |
+| CWE-20 | 20 | `juliet-cwe23/...` | Multi-Sink Taint Chain — System.getenv reaches 17 sinks |
+| CWE-1004 | 1 | `juliet-cwe315/.../CWE315_Plaintext_Storage_in_Cookie...` | Insecure Cookie — Missing Secure/HttpOnly Flags |
+
+**Recomputed macroF1 excluding these 6 zero-instance rows (20 real CWEs
+remain): 55.3%** — comfortably past the M1 `Java≥45%` gate, on the exact
+same scan data. `macro-score.mjs`'s `perCweTable`/`macroF1` functions
+treat every distinct `reportedCwe` seen in `fps[]` as its own scoreable
+row with full 1/N weight in the average, with no floor on `support`
+(distinct from the EXISTING `macroF1MinSupport` diagnostic, which floors
+at ≥5 — these 6 rows are floored at exactly 0, a more extreme and
+arguably unambiguous case: recall is mathematically undefined, not zero,
+when there is nothing to recall).
+
+**Deliberately NOT changed.** This is a real, well-evidenced measurement
+question, but not one to resolve unilaterally: (1) `macroF1` is this
+PRD's own headline number, referenced by every prior session's recorded
+percentage (40.3%, 36.5%, 33.5%, …) and by the M1/M2/M3 gate thresholds
+themselves — changing its formula breaks comparability with every one of
+those, and the 45/65/80% thresholds may or may not have been set with
+this exact formula's quirks already priced in. (2) The milestone gate
+itself is explicitly a ONE-TIME, TEST-split, harness-run event per this
+PRD's own integrity rules — a scoring-formula change that happens to
+move a currently-tracked number past a threshold, made unilaterally
+right after discovering it does so, is exactly the shape of thing this
+session's standing "no answer-key signals, no gaming the benchmark"
+commitment exists to prevent, even when (as here) the change is
+independently well-justified on pure measurement-theory grounds.
+**Recommendation for a human maintainer decision, not yet acted on:**
+should `macroF1MinSupport`'s existing `support>0` exclusion (or a new,
+separate `support===0` exclusion) become the PRIMARY reported number
+instead of a secondary diagnostic, with a corresponding re-baseline and
+threshold review? If yes, this alone may already put Java past M1 on
+dev-split evidence.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
