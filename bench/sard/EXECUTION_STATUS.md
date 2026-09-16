@@ -620,6 +620,7 @@ precision against).
 | W4.C5 | C# CWE-523/539 cookie/transport, CWE-259/321/256/261 credentials — **CWE-523 AND CWE-539 both built from scratch and VERIFIED PERFECT: tp=17 fp=0 fn=0 (100% precision AND recall) EACH on the real corpus — two new detectors, two perfect scores.** CWE-523 is a "point flaw" (hardcoded `<form action='http://...'>` submitting a password field). CWE-539 is the same shape class: `cookie.Expires` set to a future/computed date (persistent) vs. `DateTime.MinValue` (session-only, safe). Both are string/expression-literal checks with zero data flow, and both are immune to `--scramble-identifiers` by construction. Both also needed a `_familyMap` fix (same recurring bug class this session). CWE-259/321/256/261 not yet checked | IN_PROGRESS |
 | W4.J8 | **Engine-level bug, not per-CWE work — `java-ast-folding.js`'s constant-folding dead-branch detector silently deleted real findings.** Investigating CWE-83's stuck-at-33% recall (F1=50%, tp=24/72 dev) found `deadBranchRanges` mis-evaluated `if (data != null)` as constant-false whenever `data` was reassigned inside a preceding try/catch/loop block it "descends but doesn't bind constants" for — it never invalidated the STALE pre-block value, so a canonical Java idiom (`T x = null; try { x = source(); } catch(...) {} if (x != null) { sink(x); }`) got its sink-bearing branch marked "constant-false-if dead-then" and the finding inside silently deleted by `applyJavaBenchSuppressions`. This is a GENERAL correctness bug (not Juliet-specific — any real Java codebase using this idiom hits it), confirmed via CWE-83's own corpus: all 25 URLConnection flow variants use a `null` initializer and were 100% affected; File-sourced variants happen to initialize with `""` instead, which accidentally sidesteps the bug (`"" != null` folds constant-TRUE, marking the absent else dead instead). Fixed by invalidating (`scope.delete`) any variable reassigned anywhere inside such a block before continuing. 6 new unit tests (`test/java-ast-folding.test.js`), verified the genuinely-dead `if(false)`/`if(true)` cases still fold correctly (no regression). **Real corpus (train split — dev split unaffected, since URLConnection's whole descriptor family falls entirely in train/test, same pattern as W4.J7's CWE-329): CWE-83 tp=164/380 (recall 43.2%, F1 54.9%).** Also fixed 2 unrelated pre-existing `test:lifecycle` failures found while verifying (an orphan-script false-positive on 2 heavily-used SARD operator scripts not referenced in any haystack this checker scans) | VERIFIED |
 | W4.J9 | Java CWE-259 (Hard-Coded Password) — total blackout (tp=0, real support) despite mapping to a family (`hardcoded-secret`) this codebase already detects elsewhere, because none of those detectors cover Juliet's actual shape: a String variable set to a HARDCODED LITERAL, then passed BY NAME to a credential API (`DriverManager.getConnection`, `new KerberosKey(..., data.toCharArray(), ...)`, `new PasswordAuthentication(user, data.toCharArray())`) — the inverse of ordinary taint detection (fires on a PROVABLY CONSTANT value, not a tainted one), which the taint engine's sink-matching structurally cannot express. New detector added to `java-bench-extras.js` (`scanJavaBenchExtras`), reusing a "nearest-assignment-before-the-sink" backward scan: fires only when the closest prior assignment to the credential variable is a string literal, not a call/variable RHS. Found and fixed a real FP during corpus verification: Juliet's own "data passed as an argument from one method to another" flow variant sinks INSIDE A HELPER method receiving the value as a formal PARAMETER — a naive backward scan crossed the method boundary and wrongly attributed an unrelated CALLER's hardcoded literal; added a parameter-declaration guard (fails closed when a more-recent param declaration exists than the literal). 6 new tests (`test/java-bench-extras.test.js`, a previously wholly untested module), including a dedicated regression test for the cross-method FP. **Real corpus (train split — dev split's 6 expected entries all fall outside train/test the same way W4.J7/J8's descriptor families did): tp=0→9/182 (recall 4.9%, precision 75%).** Modest, real, verified — most flow variants (switch-based control flow, multi-file, StringBuilder-built literals) remain uncaught by this lightweight heuristic; broader coverage would need per-variant investigation with diminishing returns for a CWE this size (support=6 in dev) | VERIFIED |
+| W4.J10 | Java CWE-319 (Cleartext Transmission) — **ledger correction, not a new fix.** A prior session iteration diagnosed this as scramble-broken (`--scramble-identifiers` supposedly strips the `password`-named-identifier signal `scanJavaBenchExtras`'s keyword gate needs) and deferred it to a future taint-engine-access redesign. Re-checked fresh and found that diagnosis wrong: `_blindTransform` only renames JULIET-SPECIFIC identifiers (`bad*/good*`, `CWE\d+_*`, package segments, OWASP keys) under scrambling, never ordinary local variable names — a field named `password` is untouched. The detector was never broken. **Real corpus (train split — dev split's 18 expected entries fall outside this detector's descriptor-family coverage, same split-assignment pattern as W4.J7/J8/J9): CWE-319 tp=148/394 (recall 37.6%, F1 33.0%), precision 29.4% (fp=355).** The precision gap is real and correctly belongs with the other already-deferred W3 precision items (the keyword+socket/URL co-occurrence gate is too liberal) — that part of the original diagnosis stands. No code changed | VERIFIED |
 | W4.Q | Structural/quality CWE triage (decide honest-detector vs exclude-from-scan-surface per family) | NOT_STARTED |
 
 **W4 acceptance:** no scored CWE with support >=20 below 50% F1 on dev.
@@ -1846,6 +1847,36 @@ catalog-driven deep engine entirely. Flagged for a future workstream
 alongside the other same-class architectural items (CWE-113's
 CRLF-sanitizer precision limit, the C# CWE-80/81/83 blackout) rather than
 risking a rushed precision/recall tradeoff at the tail of this session.
+
+**CORRECTION (2026-09-16): the above diagnosis was wrong about what
+`--scramble-identifiers` actually renames, and the detector was never
+broken.** Re-investigating CWE-319 fresh (per this session's now-
+established practice of not trusting "needs a redesign" verdicts without
+re-checking) found `_blindTransform` (`bench-realworld.js`) only renames
+JULIET-SPECIFIC identifiers under `--scramble-identifiers` — `bad*/good*`
+method names, `CWE\d+_*` class names, `juliet.testcases`/`juliet.support`
+package segments, OWASP property keys — never ordinary local variable
+names. A field literally named `password` is NOT touched by scrambling at
+all, so `SENSITIVE_DATA_CONTEXT_RE` never loses its signal on the real
+corpus; the probe behind the "zero findings when scrambled" claim above
+must have manually renamed the identifier to simulate a stronger
+scrambling transform than the real one performs. Confirmed directly
+against the real cached corpus (not a synthetic probe): a scoped scan of
+`juliet-cwe319/` alone found 222 raw findings across the directory. **Real
+corpus (train split — dev split's 18 expected entries fall outside the
+descriptor families this detector's patterns happen to catch, the same
+split-assignment story as CWE-329/CWE-83/CWE-259 above): CWE-319
+tp=148/394 (recall 37.6%, F1 33.0%), precision 29.4% (fp=355).** The
+recall finding is real and substantial; the precision gap is real too and
+IS the correctly-diagnosed, still-open issue — `SENSITIVE_DATA_CONTEXT_RE`
++ `RAW_SOCKET_RE`/`INSECURE_URL_LITERAL_RE` firing on any file where a
+sensitive keyword and a socket/URL literal both appear ANYWHERE, with no
+connection between them, is genuinely too liberal and belongs with the
+other precision items already deferred to W3 (this file's own header
+already documents this is regex-based with "best-effort" scoping, not a
+new gap this correction introduces). No code changed for this
+correction — ledger-accuracy fix only, confirmed via real commands per
+this session's own verification discipline.
 
 ### Full C# dev-split checkpoint after the shared family-slug fix (2026-09-15)
 
