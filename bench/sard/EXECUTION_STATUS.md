@@ -2374,6 +2374,19 @@ CWE-81 work (W4.J4), not yet confirmed for C# specifically. Given the
 scale of this fix, `cs-response-addheader`'s CWE-113 impact should also
 be re-measured in a follow-up (not yet done this turn).
 
+### Full C# dev-split checkpoint after the XSS blackout fix — a clean, broad win (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev`: **macroF1=16.9%→19.8% (+2.9pp)**,
+`microF1=21.1%→27.3%`, `P=45.7%→52.2%`, `R=13.7%→18.5%` — precision AND
+recall both improved together, not a tradeoff. Unlike CWE-78/643/134's
+fixes this session (all confirmed real but invisible on this specific
+dev sample due to descriptor-family split assignment), the CWE-80/83
+fix's descriptor family DOES have dev-split representation, so this is
+the first C# fix this session whose full aggregate impact is directly
+visible in the standard dev-split tracking metric — the largest single
+C# macroF1 jump of the whole session.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
