@@ -1802,6 +1802,38 @@ gotten — every remaining zero/near-zero Java CWE row is now a real
 candidate for the same "check for a structural scoring bug before assuming
 the detector is broken" methodology this iteration validated twice over.
 
+### New finding — Java CWE-319 (insecure-http) is a fresh 100% miss, not yet root-caused (2026-09-15)
+
+Per-CWE breakdown of the full-corpus checkpoint above surfaced CWE-319
+(cleartext HTTP transmission) at **tp=0, fn=18 — a complete miss with real
+gold support**, previously undocumented this session (distinct from the
+already-tracked CWE-81/C#-blackout/PHP-LDAP zero-recall mysteries).
+
+Ruled out the family-slug bug class (this iteration's main finding) as the
+cause: `java-bench-extras.js`'s `scanJavaBenchExtras` emits vuln text
+starting with `"Cleartext HTTP transmission ("`, which correctly matches
+`expected.json`'s `"Cleartext HTTP": "insecure-http"` prefix entry — no
+mismatch there. Built a synthetic probe (scrambled-style opaque names, no
+sensitive-keyword identifiers anywhere) reproducing the module's own
+documented "tainted concat into http:// URL" pattern (Pattern B) — **it
+fired correctly**, disproving the initial hypothesis that the OTHER two
+patterns' keyword gate (`SENSITIVE_DATA_CONTEXT_RE`, which matches literal
+`password`/`secret`/`token`/etc. identifier text and would be blind to
+`--scramble-identifiers` by construction) explains the corpus-wide miss.
+
+**Not yet resolved**: the real Juliet CWE-319 corpus files apparently use a
+code shape none of the module's 3 patterns (literal URL, tainted concat,
+raw Socket) matches as currently scoped, OR the keyword-gated patterns
+really are the ones Juliet's variants need and my probe merely tested the
+one pattern that doesn't need the gate. Flagged for next iteration with a
+DIFFERENT diagnostic approach (per this session's own established
+convention for genuinely stuck investigations): don't re-probe with more
+synthetic guesses — instead confirm via the deep-mode CFG/AST dump whether
+`AGENTIC_SECURITY_DEEP=1` even routes this file through `scanJavaBenchExtras`
+at all during a real corpus scan (vs. only in the non-deep SAST pass), since
+every measurement this session used `--deep` and the module's own header
+comment doesn't say which pass it runs in.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
