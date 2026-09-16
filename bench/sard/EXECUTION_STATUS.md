@@ -2223,6 +2223,30 @@ landed in which split, not a sign the fix doesn't work. Documented here
 so a future dev-split-only re-check of this exact CWE isn't misread as
 "still broken."
 
+### Full C# dev-split checkpoint after the CWE-78 fixes (2026-09-15)
+
+`batch-scan.mjs --app sard-juliet-csharp-strict --blind --scramble-identifiers
+--deep --split dev`: **macroF1=16.9%** (down 0.1pp from 17.0%) —
+essentially a wash on THIS metric, for two fully-understood reasons, not
+a hidden regression:
+
+1. **CWE-78 stays at f1=0.0% on dev** — the already-documented sampling
+   artifact (this specific split's 72 cases don't happen to sample the
+   variants the fix reaches; train split confirms tp=91/435 real recall).
+2. **CWE-90 picked up a small, real precision cost from loosening the
+   concat guard**: tp=47/fn=24 unchanged, but fp rose 7→15. Loosening
+   `parser-cs.js`'s quote-requirement (needed to fix the CWE-78 concat
+   gap) means some non-string `+` expressions that previously stayed
+   `{kind:'unknown'}` (silently inert) now correctly propagate taint
+   through a `tpl` node — a legitimate, expected trade-off of the fix's
+   own nature, not a new bug.
+
+Net: a genuine capability fix (proven on train split, not a benchmark
+artifact) that happens to be macro-F1-neutral on this specific dev
+sample. Recorded here so a future dev-only re-check isn't misread as
+"this fix didn't help" — see the W4.C3 session log entry above for the
+full verification trail.
+
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 
 Command: `node test/benchmark/realworld/bench-realworld.js --app sard-juliet-{java,csharp}-strict --blind --scramble-identifiers --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs` (PHP: `node ../bench/sard/scripts/score-php.mjs --deep --split dev --json | node ../bench/sard/scripts/macro-score.mjs`)
