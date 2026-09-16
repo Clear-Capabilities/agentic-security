@@ -54,7 +54,7 @@ const _CWE_FAMILY = {
   'CWE-776': 'xxe',
   'CWE-798': 'hardcoded-secret',
   'CWE-829': 'supply-chain',
-  'CWE-862': 'broken-authz',
+  'CWE-862': 'missing-authz',
   'CWE-863': 'broken-authz',
   'CWE-915': 'mass-assignment',
   'CWE-918': 'ssrf',

@@ -628,7 +628,7 @@ Status: NOT_STARTED. Blocked on W1/W2/W3.
 | # | Task | Status |
 |---|---|---|
 | W5.1 | Sources: nested fgets/fopen, fread, file_get_contents, shell output, unserialize, $_SERVER, class getters | NOT_STARTED |
-| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95 partially works, tp=3) — CWE-90/91/98/862 all show tp=0 fp=0 on the real corpus despite verified-working detection mechanisms on every synthetic variant tried; root cause unresolved, see session log | IN_PROGRESS |
+| W5.2 | Sinks: ldap_search/list (CWE-90), ->xpath()/DOMXPath (CWE-91), include/require scoring (CWE-98), eval family (CWE-95 partially works, tp=3) — CWE-90/91/98/862 all show tp=0 fp=0 on the real corpus despite verified-working detection mechanisms on every synthetic variant tried. Fixed a real CWE-862 family-string bug (`broken-authz`→`missing-authz`, matching the codebase's own dominant convention) but it produced zero corpus movement (fp=0 too, confirming a genuine detector-coverage gap, not a scoring bug); family-slug sweep ruled out the same bug class for CWE-90/91/98. Root cause remains unresolved, see session log | IN_PROGRESS |
 | W5.3 | CWE-862 detector design (post-W3, needs guard-predicate distinction) | NOT_STARTED |
 | W5.4 | Guard matrix (sanitizer x sink x quote-context) test file + FP triage | NOT_STARTED |
 
@@ -1869,6 +1869,42 @@ than a truncation artifact. None of this is new information — it
 corroborates, rather than extends, the already-flagged W4.C1/C8 blackout
 investigation, which remains explicitly deferred pending a different
 diagnostic approach.
+
+### W5.2 follow-up — found and fixed a real CWE-862 family-string bug, but it didn't move PHP (2026-09-15)
+
+Applying the same family-slug sweep methodology that fixed Java/C# CWE-470/134
+(this session's biggest win) to PHP's already-flagged CWE-90/91/98/862 mystery:
+cross-checked `finding-defaults.js`'s `_CWE_FAMILY` backfill table against
+`ingest-php.mjs`'s own gold `cweToFamily`-equivalent map. CWE-90/91/98 all
+matched exactly (`ldap-injection`/`xpath-injection`/`code-injection` — ruling
+out this bug class for those three, confirming the earlier session's
+conclusion). **CWE-862 did NOT match**: `_CWE_FAMILY['CWE-862']` said
+`'broken-authz'`; PHP's gold data (and, tellingly, `score-php.mjs`'s OWN
+keyword-fallback family inference, and every other posture module that
+actually reasons about this family — `family-resolve.js`,
+`persona-prioritization.js`, `auth-posture-import.js`, `counterfactual.js`)
+all use `'missing-authz'`. No detector anywhere in the codebase explicitly
+sets `family: 'broken-authz'` — it was a pure backfill-table typo, inconsistent
+with the codebase's own dominant convention. Fixed: `_CWE_FAMILY['CWE-862']`
+→ `'missing-authz'`, plus added `'missing-authz'` alongside the pre-existing
+`'broken-authz'` key in `fix-coverage.js`'s `DECLINED_TO_FIX` and
+`proof-coverage.js`'s `INDETERMINATE_BY_CLASS` (additive, so the existing
+`fix-coverage.test.js` assertion on `'broken-authz'` stays valid unchanged).
+Full regression: `test:posture` (2623/2623, 16 pre-existing skips, 0 fail).
+
+**Real-corpus measurement: byte-identical, zero movement.** Full PHP dev-split
+re-run: `tp=30 fp=94 fn=194, macroF1=21.2%` — identical to the pre-fix
+baseline. **CWE-862 specifically: tp=0 fp=0 fn=19, unchanged.** Since `fp=0`
+too (not just `tp=0`), this proves the scanner emits **zero findings of any
+family** for these 19 gold cases — a genuine detector-coverage gap, not a
+scoring/family mismatch. The fix is real and worth keeping (any OTHER
+CWE-862 finding — from JS, Python, any language's RBAC/authz detector —
+would previously have silently failed to match a `missing-authz`-keyed gold
+set the same way), but it does not explain PHP's zero recall here. Joins
+this session's now-familiar "real, tested, zero-corpus-impact" pattern.
+CWE-90/91/98/862's actual root cause remains unresolved and still needs the
+different diagnostic approach already flagged (confirm whether ANY detector
+fires on these PHP shapes at all before assuming a scoring bug).
 
 ## Baseline (measured 2026-09-14, dev split, commit 4ce6c09e)
 

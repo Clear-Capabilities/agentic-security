@@ -30,6 +30,7 @@ export const DECLINED_TO_FIX = Object.freeze({
   'broken-access-control': 'the correct authorisation rule is a product decision — a scanner that invents one is guessing at intent, and a wrong authz patch fails open.',
   'idor': 'same as broken-access-control: which identity may read which record is not recoverable from the code.',
   'broken-authz': 'the rule that was checked wrongly is a product decision; patching it from the code alone guesses at which roles may do what, and guessing fails open.',
+  'missing-authz': 'the rule that was checked wrongly is a product decision; patching it from the code alone guesses at which roles may do what, and guessing fails open.',
   'business-logic': 'by definition the defect is a mismatch with intent, and intent is not in the file.',
   'concurrency-bug': 'the correct lock discipline depends on the whole call graph; a local patch can deadlock rather than fix.',
   'license-graph': 'a licence conflict is resolved by a policy or a dependency decision, not by editing code.',

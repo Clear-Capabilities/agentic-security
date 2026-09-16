@@ -41,6 +41,7 @@ export const INDETERMINATE_BY_CLASS = Object.freeze({
   'idor': 'proving it means showing user A read user B\'s record, which needs two authenticated identities and a populated data store. A single-shot harness would invent both, and a PoC built on invented state proves something about the invention.',
   'broken-access-control': 'same as idor — requires two identities and real state.',
   'broken-authz': 'same as idor — requires two identities and real state.',
+  'missing-authz': 'same as idor — requires two identities and real state.',
   'ssrf': 'the proof is that the server fetched an attacker-named host. The sandbox denies egress by design, so a failed fetch is confinement talking, not the finding.',
   'xss': 'needs a browser to say whether the payload executed; a marker file cannot observe a DOM.',
   'mutation-xss': 'needs a DOM and a parser round-trip — same limit as xss.',
