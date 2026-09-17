@@ -75,6 +75,18 @@ const SEND_REDIRECT_RE = /\b(?:response|resp|res)\s*\.\s*sendRedirect\s*\(\s*([^
 const INSECURE_URL_LITERAL_RE = /\bnew\s+URL\s*\(\s*"http:\/\/[^"]*"\s*\)/g;
 const INSECURE_URL_CONCAT_RE = /\bnew\s+URL\s*\(\s*"http:\/\/[^"]*"\s*\+\s*\w/g;
 const RAW_SOCKET_RE = /\bnew\s+Socket\s*\(\s*[^)]+\)/g;
+// SARD_80_F1 W4.J29 — `RAW_SOCKET_RE` only matches the CLIENT side
+// (`new Socket(host, port)`); Juliet's `listen_tcp_*` descriptor family
+// (confirmed against the public mirror,
+// `CWE319_Cleartext_Tx_Sensitive_Info__listen_tcp_driverManager_01.java`)
+// is the SERVER side instead — `ServerSocket listener = new
+// ServerSocket(port); Socket socket = listener.accept();` — which never
+// constructs a `Socket` directly at all, so it was a total blackout for
+// this whole descriptor family (82 of 176 CWE-319 test-split entries,
+// confirmed by grouping the false negatives by descriptor base name).
+// `.accept()` always returns a `Socket`, the identical "got a raw,
+// unencrypted socket" moment `new Socket(...)` already fires on.
+const SERVERSOCKET_ACCEPT_RE = /\.accept\s*\(\s*\)/g;
 
 // "Sensitive-data context" — file contains any of these identifiers.
 // Variable names like `password`, `passwd`, `secret`, `token`, `cred`, etc.
@@ -637,11 +649,17 @@ export function scanJavaBenchExtras(file, raw) {
   }
 
   // Pattern C: raw outbound Socket reading sensitive data. Matches Juliet's
-  // connect_tcp_* / listen_tcp_* / send_* CWE-319 variants.
+  // connect_tcp_* / send_* CWE-319 variants.
   if (fileHasSensitiveContext && fileHasSocketRead) {
     RAW_SOCKET_RE.lastIndex = 0;
     while ((m = RAW_SOCKET_RE.exec(content))) {
       emitCwe319(lineOf(m.index), m.index, 'cleartext Socket with sensitive-data context');
+    }
+    // Pattern C2: server-side ServerSocket.accept() — Juliet's listen_tcp_*
+    // variants (see SERVERSOCKET_ACCEPT_RE's header comment).
+    SERVERSOCKET_ACCEPT_RE.lastIndex = 0;
+    while ((m = SERVERSOCKET_ACCEPT_RE.exec(content))) {
+      emitCwe319(lineOf(m.index), m.index, 'cleartext ServerSocket.accept() with sensitive-data context');
     }
   }
 

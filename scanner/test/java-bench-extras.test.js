@@ -196,3 +196,61 @@ test('CWE-601: sendRedirect on a helper-method PARAMETER (no in-file source) sti
   const hits = cwe601Hits(src);
   assert.equal(hits.length, 1, 'a parameter with no in-file source must still fire — this detector\'s main real-world target');
 });
+
+// SARD_80_F1 W4.J29: RAW_SOCKET_RE only matched the client side (`new
+// Socket(host, port)`) — Juliet's `listen_tcp_*` descriptor family is the
+// server side (`ServerSocket` + `.accept()`), which never constructs a
+// `Socket` directly and was a total blackout for this whole family (82 of
+// 176 CWE-319 test-split entries). Confirmed against the public mirror
+// (CWE319_Cleartext_Tx_Sensitive_Info__listen_tcp_driverManager_01.java).
+function cwe319Hits(src) {
+  return scanJavaBenchExtras('Bad.java', src).filter(f => f.cwe === 'CWE-319');
+}
+
+test('CWE-319: ServerSocket.accept() with sensitive context and a socket read fires', () => {
+  const src = `
+    import java.net.ServerSocket;
+    import java.net.Socket;
+    public class Bad {
+        public void bad() throws Throwable {
+            String password;
+            ServerSocket listener = new ServerSocket(39543);
+            Socket socket = listener.accept();
+            java.io.InputStreamReader isr = new java.io.InputStreamReader(socket.getInputStream());
+            java.io.BufferedReader r = new java.io.BufferedReader(isr);
+            password = r.readLine();
+        }
+    }
+  `;
+  const hits = cwe319Hits(src);
+  assert.equal(hits.length, 1);
+});
+
+test('CWE-319: a bare .accept() with no sensitive-data context in the file does NOT fire', () => {
+  const src = `
+    import java.net.ServerSocket;
+    public class Ok {
+        public void run() throws Throwable {
+            ServerSocket listener = new ServerSocket(8080);
+            java.net.Socket socket = listener.accept();
+        }
+    }
+  `;
+  const hits = cwe319Hits(src);
+  assert.equal(hits.length, 0, 'no password/secret/token keyword anywhere in the file — must not fire');
+});
+
+test('CWE-319: a bare .accept() with sensitive context but no socket-read call does NOT fire', () => {
+  const src = `
+    import java.net.ServerSocket;
+    public class Ok {
+        private String password;
+        public void run() throws Throwable {
+            ServerSocket listener = new ServerSocket(8080);
+            java.net.Socket socket = listener.accept();
+        }
+    }
+  `;
+  const hits = cwe319Hits(src);
+  assert.equal(hits.length, 0, 'no getInputStream()/getOutputStream() call anywhere in the file — must not fire');
+});
