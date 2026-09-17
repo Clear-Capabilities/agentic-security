@@ -130,6 +130,36 @@ class Auth {
   assert.equal(good.length, 0, 'expected no finding when data is a hardcoded literal');
 });
 
+// SARD_80_F1 W4.C17 — Juliet's "make a copy of data within the same
+// method" flow variant (confirmed via the public mirror,
+// CWE90_LDAP_Injection__Environment_31.cs): the literal source is copied to
+// a second variable, then copied BACK into a fresh same-named redeclaration
+// before the sink — a one-hop bare-identifier RHS that the old
+// `_nearestAssignIsLiteral` (only recognizing a direct `"literal"` string)
+// could not resolve, so GoodG2B() wrongly fired.
+test('LDAP — C# copy-of-a-copy: a literal reaching the sink through an intermediate variable does NOT fire; a tainted one still does', () => {
+  const bad = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void Bad() {
+    string dataCopy;
+    { string data; data = Environment.GetEnvironmentVariable("ADD"); dataCopy = data; }
+    { string data = dataCopy; DirectorySearcher search = new DirectorySearcher(); search.Filter = "(&(objectClass=user)(employeename=" + data + "))"; }
+  }
+}
+`);
+  assert.ok(bad.length >= 1, 'expected a finding when the copied value ultimately comes from an environment variable');
+  const good = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void GoodG2B() {
+    string dataCopy;
+    { string data; data = "foo"; dataCopy = data; }
+    { string data = dataCopy; DirectorySearcher search = new DirectorySearcher(); search.Filter = "(&(objectClass=user)(employeename=" + data + "))"; }
+  }
+}
+`);
+  assert.equal(good.length, 0, 'expected no finding when the copied value ultimately traces back to a hardcoded literal');
+});
+
 test('LDAP — unrelated string concat WITHOUT LDAP context does NOT fire', () => {
   const out = scanLDAPInjection('util.js', `
 function key(name) { return "(uid=" + name + ")"; }

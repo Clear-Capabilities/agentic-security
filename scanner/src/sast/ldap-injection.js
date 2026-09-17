@@ -151,8 +151,24 @@ function lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 // scanned independently (catches the cross-method case). Falls back to
 // scanning from file-start when no declaration is found — strictly SAFER
 // than before (fewer assignments end up in scope, never more).
-function _nearestAssignIsLiteral(code, varName, beforeIdx) {
+// SARD_80_F1 W4.C17 — a bare-identifier RHS (`data = dataCopy;`) previously
+// failed this check outright, even when `dataCopy` was itself provably a
+// literal at that point — confirmed on the real corpus (C# Juliet's own
+// "make a copy of data within the same method" flow variant,
+// CWE90_LDAP_Injection__Environment_31.cs: GoodG2B() sets `data = "foo"` in
+// one block, copies it to `dataCopy`, then re-declares `data = dataCopy` in
+// a SECOND block before the sink — the one-hop copy defeated the
+// literal-RHS check, which only recognized a DIRECT `"literal"` string).
+// Now recurses ONE LEVEL (capped, cycle-guarded via `rhs !== varName`) into
+// a bare-identifier RHS, applying the exact same fail-closed "every
+// assignment must be literal" policy to the copied-from variable — this can
+// only ADD suppression where the old code returned false, never introduce a
+// new false negative the old code didn't already risk (a genuinely tainted
+// `dataCopy` still fails its own scan and propagates the non-literal verdict
+// back up).
+function _nearestAssignIsLiteral(code, varName, beforeIdx, _depth) {
   if (!varName || varName.includes('.')) return false;
+  const depth = _depth || 0;
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const declRe = new RegExp(`\\b[\\w<>[\\],.?]+\\s+${escaped}\\s*(?:=|;)`, 'g');
   let scopeStart = 0, dm;
@@ -160,10 +176,14 @@ function _nearestAssignIsLiteral(code, varName, beforeIdx) {
   const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
   anyAssignRe.lastIndex = scopeStart;
   const literalRhsRe = /^"[^"]*"$/;
+  const bareIdentRe = /^[A-Za-z_]\w*$/;
   let sawAny = false, m;
   while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) {
     sawAny = true;
-    if (!literalRhsRe.test(m[1].trim())) return false;
+    const rhs = m[1].trim();
+    if (literalRhsRe.test(rhs)) continue;
+    if (depth < 3 && rhs !== varName && bareIdentRe.test(rhs) && _nearestAssignIsLiteral(code, rhs, m.index, depth + 1)) continue;
+    return false;
   }
   return sawAny;
 }
