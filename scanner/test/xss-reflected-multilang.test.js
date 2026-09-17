@@ -55,6 +55,24 @@ test('Java — servlet getWriter/out concat fires; literal / OWASP-encoded clean
   assert.ok(clean(['S.java', 'import org.owasp.encoder.Encode;\nclass S { void h(String q, javax.servlet.http.HttpServletResponse resp) throws Exception { resp.getWriter().write("<h1>" + Encode.forHtml(q) + "</h1>"); } }']));
 });
 
+// SARD_80_F1 W3.x — Java's real corpus (Juliet CWE80_XSS__CWE182_Servlet)
+// keeps the IDENTICAL sink line in bad()/goodG2B(), only swapping the
+// local variable's SOURCE — this taint-independent detector had no way to
+// tell them apart until now. See the LANGS.java sink regex's own header
+// comment for the full incident writeup.
+test('Java — a hardcoded-literal local var reaching the sink does NOT fire (bare identifier)', () => {
+  assert.ok(clean(['S.java', 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; data = "foo"; resp.getWriter().println("<br>" + data); } }']));
+});
+test('Java — a hardcoded-literal local var reaching the sink does NOT fire, even through a chained method call', () => {
+  assert.ok(clean(['S.java', 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; data = "foo"; resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } }']));
+});
+test('Java — the SAME shape with a genuinely tainted local var still fires', () => {
+  assert.ok(fires(['S.java', 'class S { void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception { String data; data = r.readLine(); resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } }']));
+});
+test('Java — a param (no local assignment to find) still fires through a chained method call', () => {
+  assert.ok(fires(['S.java', 'class S { void h(String data, javax.servlet.http.HttpServletResponse resp) throws Exception { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } }']));
+});
+
 test('non-matching languages / files produce nothing', () => {
   assert.deepEqual(x('a.js', 'res.send("<h1>" + req.query.q + "</h1>")'), []);
   assert.deepEqual(x('ok.go', 'func add(a, b int) int { return a + b }'), []);
