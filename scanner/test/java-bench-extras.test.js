@@ -137,3 +137,62 @@ test('CWE-259: a variable reassigned AFTER its hardcoded literal but before the 
   const hits = cwe259Hits(src);
   assert.equal(hits.length, 0, `expected no finding (most recent assignment is not a literal), got: ${JSON.stringify(hits)}`);
 });
+
+// SARD_80_F1 W4.J27: the same literal-blindness bug class already fixed for
+// SQLi/LDAP/XSS (W4.J12/J13/J21), never ported to this CWE-601 Open Redirect
+// detector — confirmed against the public mirror
+// (CWE601_Open_Redirect__Servlet_PropertiesFile_01.java).
+function cwe601Hits(src) {
+  return scanJavaBenchExtras('Bad.java', src).filter(f => f.cwe === 'CWE-601');
+}
+
+test('CWE-601: sendRedirect on a tainted variable fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = request.getParameter("data");
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1);
+});
+
+test('CWE-601: sendRedirect on a variable whose nearest assignment is a hardcoded literal does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void goodG2B(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            data = "foo";
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, `expected no finding (data is a provably-literal local), got: ${JSON.stringify(hits)}`);
+});
+
+test('CWE-601: sendRedirect with a direct inline literal still does not fire (pre-existing behavior unaffected)', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            response.sendRedirect("http://example.com/");
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0);
+});
+
+test('CWE-601: sendRedirect on a helper-method PARAMETER (no in-file source) still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void sink(String data, HttpServletResponse response) throws Throwable {
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'a parameter with no in-file source must still fire — this detector\'s main real-world target');
+});

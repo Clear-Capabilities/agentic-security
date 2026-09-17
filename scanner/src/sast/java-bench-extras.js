@@ -582,6 +582,13 @@ export function scanJavaBenchExtras(file, raw) {
     const arg = (m[1] || '').trim();
     // Literal-only arg: suppress. Tainted-looking arg: flag.
     if (/^"[^"]*"$/.test(arg)) continue;  // pure literal — safe
+    // Same literal-blindness class already fixed for SQLi/LDAP/XSS
+    // (W4.J12/J13/J21), never ported here: Juliet's own convention keeps the
+    // IDENTICAL `response.sendRedirect(data)` sink line in both `bad()` and
+    // `goodG2B()`, only swapping `data`'s source — confirmed against the
+    // public mirror (`CWE601_Open_Redirect__Servlet_PropertiesFile_01.java`:
+    // `data = "foo";` in `goodG2B()`, then `response.sendRedirect(data);`).
+    if (/^[A-Za-z_]\w*$/.test(arg) && _nearestAssignIsLiteral(content, arg, m.index)) continue;
     findings.push({
       id: id('java-extras:open-redirect', lineOf(m.index), m.index),
       kind: 'sast',
