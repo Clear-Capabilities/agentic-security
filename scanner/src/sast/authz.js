@@ -84,6 +84,18 @@ const MT_RAW_SQL_RE = /\b(?:select|update|delete)\b[\s\S]{0,200}?\bwhere\s+(?:[\
 // inspect the matched span itself (unlike `MT_RAW_SQL_RE` above, where a
 // single ORM call is fully self-contained).
 const PHP_IDOR_WHERE_ID_RE = /\bwhere\b[\s\S]{0,80}?\bid\s*=\s*[^$\n]{0,10}\$(\w+)/i;
+// A second, structurally distinct sub-family from the SAME generator
+// (stivalet/PHP-Vuln-test-suite-generator, construction.xml's "fopen"
+// sample): `$var = fopen($tainted, "r")` — opening a FILE by a raw
+// request-supplied id/path, with no ownership check, is a separate flaw
+// type (`CWE_862_Fopen_IDOR`) from the SQL where-by-id shape above and has
+// no "where"/"id=" text at all, so `PHP_IDOR_WHERE_ID_RE` can never match
+// it. Confirmed via the generator's own construction.xml: this specific
+// suite classifies "read an arbitrary resource by an unauthenticated,
+// unverified identifier" as a missing-authorization issue in its own
+// right (distinct from, and can legitimately coexist with, a path-
+// traversal finding on the same line from `php.js`'s structural rule).
+const PHP_FOPEN_IDOR_RE = /\bfopen\s*\(\s*\$(\w+)\s*,/i;
 const PHP_SUPERGLOBAL_SOURCE_RE = /\$_(?:GET|POST|REQUEST|COOKIE)\b/;
 const PHP_SESSION_CHECK_RE = /\$_SESSION\b/;
 // Two more safe paths from the SAME generator (sanitize.xml), both real
@@ -309,6 +321,26 @@ export function scanAuthZ(fp, raw) {
         'AuthZ: raw SQL where-by-id from request input without an ownership check',
         'high', 'CWE-862', lines[line - 1] || raw.slice(pm.index, pm.index + 120),
         'The query selects a row by an id taken directly from the request with no check that the row belongs to the current session\'s user. Add a filter on the authenticated user\'s identity (e.g. `AND owner_id = $_SESSION[\'userid\']`) so a guessed or enumerated id cannot read another user\'s data.'));
+    }
+
+    // 9. PHP: fopen() on a request-derived path/id, no ownership check
+    // anywhere in a window around the call. Same file-wide co-occurrence and
+    // suppression conventions as the SQL IDOR check above (#8) — see that
+    // block's own comments for why each guard exists.
+    let fm;
+    const phpFopenIdorRe = new RegExp(PHP_FOPEN_IDOR_RE.source, 'gi');
+    while ((fm = phpFopenIdorRe.exec(raw))) {
+      if (!PHP_SUPERGLOBAL_SOURCE_RE.test(raw)) continue;
+      const windowEnd = Math.min(raw.length, fm.index + 300);
+      const window = raw.slice(Math.max(0, fm.index - 100), windowEnd);
+      if (PHP_SESSION_CHECK_RE.test(window)) continue;
+      if (_phpVarIsWhitelisted(raw, fm[1])) continue;
+      if (PHP_ESAPI_VALIDATOR_RE.test(raw)) continue;
+      const line = raw.substring(0, fm.index).split('\n').length;
+      push(_emit(fp, line,
+        'AuthZ: fopen() on request-supplied path/id without an ownership check',
+        'high', 'CWE-862', lines[line - 1] || raw.slice(fm.index, fm.index + 120),
+        'The file is opened using an identifier taken directly from the request with no check that the resource belongs to the current session\'s user. Verify ownership (e.g. against `$_SESSION[\'userid\']`) or resolve through a per-user allow-list before opening the file, so a guessed or enumerated id cannot read another user\'s data.'));
     }
   }
 

@@ -148,3 +148,42 @@ test('PHP IDOR — an ESAPI validator call suppresses the finding', () => {
   const findings = scanAuthZ('lookup.php', src);
   assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
 });
+
+// SARD_80_F1 W5.14 — a structurally distinct sibling of the SQL where-by-id
+// shape, from the SAME generator (construction.xml's "fopen" sample):
+// `$var = fopen($tainted, "r")` has no "where"/"id=" text at all, so
+// PHP_IDOR_WHERE_ID_RE could never match it — CWE-862's test-split fn bucket
+// showed a total blackout (0 tp) even after W5.13's fix, traced to this gap.
+test('PHP IDOR — fopen() on a request-supplied id/path with no ownership check fires', () => {
+  const src = "<?php\n$fileId = $_GET['id'];\n$var = fopen($fileId, \"r\");\n";
+  const findings = scanAuthZ('lookup.php', src);
+  const f = findings.find(x => x.cwe === 'CWE-862');
+  assert.ok(f, 'expected a CWE-862 finding');
+  assert.equal(f.vuln, 'AuthZ: fopen() on request-supplied path/id without an ownership check');
+});
+
+test('PHP IDOR — fopen() with a $_SESSION ownership check nearby does not fire', () => {
+  const src = "<?php\n$fileId = $_GET['id'];\nif ($_SESSION['userid'] == $fileId) {\n  $var = fopen($fileId, \"r\");\n}\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — fopen() on a non-tainted (no superglobal in file) path does not fire', () => {
+  const src = "<?php\n$path = \"/var/data/fixed.txt\";\n$var = fopen($path, \"r\");\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — fopen() finding scores family missing-authz, not the generic idor catch-all', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'authz-fopen-idor-family-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'lookup.php'),
+      "<?php\n$fileId = $_GET['id'];\n$var = fopen($fileId, \"r\");\n");
+    const { scan } = await runScan(dir, {});
+    const f = (scan.findings || []).find(x => x.cwe === 'CWE-862');
+    assert.ok(f, 'expected a CWE-862 finding from the full scan pipeline');
+    assert.equal(f.family, 'missing-authz');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
