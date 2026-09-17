@@ -461,31 +461,15 @@ function f($conn) {
   assert.ok(calls.some(c => c.callee === 'sink3'), 'expected the finally-body sink — a `/* */` comment between `}` and `finally` must not defeat the continuation-keyword lookahead. This test uses `finally` rather than `else` for the `/* */` case because `_scanTryCatchFinally`\'s balanced-brace scanning (fix round 1) has no greedy-capture issue, cleanly isolating THIS fix from the separate, pre-existing, explicitly out-of-scope `ifMatch` greedy-capture bug documented below.');
 });
 
-test('parsePhpFile: a /* */ comment between an if-body\'s closing brace and `else` does not cause the `}`-flush to fire early (scoped assertion — see note)', () => {
-  // NOTE on scope: this does NOT assert the else-body's own sink is
-  // captured. `ifMatch`'s regex (`^if...\{([\s\S]*)\}(?:\s*else\s*\{
-  // ([\s\S]*)\})?\s*$`) has a SEPARATE, pre-existing, already-reviewed-
-  // and-explicitly-out-of-scope bug: its then-body capture group is
-  // greedy and unconditionally swallows through to the LAST `}` in the
-  // statement, leaving the optional else-group unmatched — this drops an
-  // else-body's content regardless of whether a comment is present (
-  // confirmed by direct regex tracing AND by testing commit `735ef63`,
-  // the state before this task started, with the IDENTICAL comment-free
-  // fixture: the else body was already dropped then, for the same
-  // structural reason). Round 1 fixed the analogous bug for try/catch/
-  // finally by replacing its regex with a balanced-brace scanner (see the
-  // `finally` test above, which DOES assert its sink); `ifMatch` itself
-  // was never touched by this task and fixing its greedy-capture bug is
-  // out of this fix round's scope per the reviewer's explicit instruction
-  // in an earlier round. What THIS test verifies is narrower and fully
-  // within this fix round's actual scope: the comment must not defeat
-  // `_continuationKeywordAhead`'s lookahead and cause the `}`-flush to
-  // fire early — which would fragment the if/else into two orphaned
-  // pieces and silently drop a TRAILING statement's sink too (verified:
-  // before this fix round, `_continuationKeywordAhead` was whitespace-
-  // only, but — separately confirmed — the trailing statement survived
-  // regardless in this exact shape; this test still pins the composition
-  // as a whole staying well-formed under the comment-aware lookahead).
+test('parsePhpFile: a /* */ comment between an if-body\'s closing brace and `else` does not cause the `}`-flush to fire early, AND the else-body sink is now captured', () => {
+  // UPDATE (SARD_80_F1 W3.2): this test's assertion was previously scoped
+  // narrower than this because `ifMatch`'s regex had a separate greedy-
+  // capture bug that swallowed the else body regardless of whether a
+  // comment was present — that bug is now fixed (`_scanIfElse`, a
+  // balanced-brace scanner mirroring `_scanTryCatchFinally`'s own
+  // technique; see its header comment for the full incident writeup), so
+  // this test now also asserts the else-body sink IS captured, matching
+  // the `finally` test's own level of proof above.
   const code = `<?php
 function f($x, $conn) {
     if ($x) {
@@ -499,6 +483,7 @@ function f($x, $conn) {
   const ir = parsePhpFile('f.php', code);
   const calls = callNodes(ir, 'f');
   assert.ok(calls.some(c => c.callee === 'sink_a'), 'expected the if-body sink to still be captured');
+  assert.ok(calls.some(c => c.callee === 'sink_b'), 'expected the else-body sink to now be captured (was previously dropped by the ifMatch greedy-capture bug)');
   assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'expected the statement AFTER the if/else to still be captured as its own node, proving the comment did not corrupt subsequent parsing');
   const fn = ir.functions.find(f => f.name === 'f');
   const ifNodes = Object.values(fn.cfg.nodes).filter(n => n.kind === 'if');
@@ -619,4 +604,147 @@ function handler($conn) {
   const taint = (scan.findings || []).filter(fd => fd.parser === 'IR-TAINT');
   assert.ok(taint.some(fd => /sql injection/i.test(fd.vuln)),
     `expected a SQL Injection finding, got: ${taint.map(fd => fd.vuln).join(', ') || '(none)'}`);
+});
+
+// SARD_80_F1 W3.2 — `_scanIfElse` (a balanced-brace scanner replacing
+// `ifMatch`'s greedy regex) dedicated coverage.
+test('parsePhpFile: else-body with multiple statements is fully captured, not just the first one', () => {
+  const code = `<?php
+function f() {
+    if (true) {
+        sink_then();
+    } else {
+        sink_else_1();
+        sink_else_2();
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink_then'), 'then-body sink missing');
+  assert.ok(calls.some(c => c.callee === 'sink_else_1'), 'else-body FIRST statement missing (the previously-documented drop)');
+  assert.ok(calls.some(c => c.callee === 'sink_else_2'), 'else-body SECOND statement missing');
+});
+
+test('parsePhpFile: the then-branch and else-branch are independent CFG paths, not a single sequential chain', () => {
+  const code = `<?php
+function f($x) {
+    if ($x) {
+        $a = 1;
+    } else {
+        $b = 2;
+        $c = 3;
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const fn = ir.functions.find(f => f.name === 'f');
+  const assigns = Object.values(fn.cfg.nodes).filter(n => n.kind === 'assign');
+  const aNode = assigns.find(n => n.target === '$a');
+  const cNode = assigns.find(n => n.target === '$c');
+  assert.ok(aNode && cNode, 'expected both $a and $c assign nodes to exist');
+  // $c (the LAST else-body statement) must NOT be reachable from $a (the
+  // then-body's own tail) — if it were, the else body would still be
+  // spliced onto the then-branch as a sequential continuation instead of
+  // an independent branch (the exact bug this fix corrects).
+  assert.notDeepEqual(aNode.succ, [cNode.id], 'the then-branch tail must not link directly into the else-branch (branches must be independent, not chained)');
+});
+
+test('parsePhpFile: a nested if/else inside a then-body does not confuse the balanced-brace scan', () => {
+  const code = `<?php
+function f($x, $y) {
+    if ($x) {
+        if ($y) {
+            sink_nested_then();
+        } else {
+            sink_nested_else();
+        }
+    } else {
+        sink_outer_else();
+    }
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink_nested_then'), 'nested then-body sink missing');
+  assert.ok(calls.some(c => c.callee === 'sink_nested_else'), 'nested else-body sink missing');
+  assert.ok(calls.some(c => c.callee === 'sink_outer_else'), 'outer else-body sink missing');
+});
+
+test('parsePhpFile: an if with no else still parses correctly (no regression)', () => {
+  const code = `<?php
+function f($x, $conn) {
+    if ($x) {
+        sink_then();
+    }
+    mysqli_query($conn, 'x');
+}
+`;
+  const ir = parsePhpFile('f.php', code);
+  const calls = callNodes(ir, 'f');
+  assert.ok(calls.some(c => c.callee === 'sink_then'), 'then-body sink missing');
+  assert.ok(calls.some(c => c.callee === 'mysqli_query'), 'trailing statement missing');
+});
+
+// SARD_80_F1 W3.2 — guard-predicate narrowing end-to-end (dataflow/engine.js
+// `case 'if'` + `_guardNarrowsVar`/`GUARD_PREDICATES`).
+test('runScan: is_numeric($id) guard suppresses a SQLi finding on the guard-passed branch only', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const dir = mkTmp({
+    'run.php': `<?php
+function handler() {
+    $id = $_GET['id'];
+    $pdo = new PDO('sqlite::memory:');
+    if (is_numeric($id)) {
+        $res = $pdo->query("SELECT 1");
+    } else {
+        $noop = 0;
+        $res = $pdo->query("SELECT * FROM t WHERE id = " . $id);
+    }
+}
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const taint = (scan.findings || []).filter(fd => fd.parser === 'IR-TAINT');
+  assert.ok(taint.some(fd => fd.cwe === 'CWE-89'),
+    `expected a SQL Injection finding via the UNGUARDED else-branch, got: ${taint.map(fd => `${fd.cwe}:${fd.vuln}`).join(', ') || '(none)'}`);
+});
+
+test('runScan: is_numeric($id) guard suppresses a SQLi finding when the sink is directly inside the guarded branch', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const dir = mkTmp({
+    'run.php': `<?php
+function handler() {
+    $id = $_GET['id'];
+    if (is_numeric($id)) {
+        $pdo = new PDO('sqlite::memory:');
+        $res = $pdo->query("SELECT * FROM t WHERE id = " . $id);
+    }
+}
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const taint = (scan.findings || []).filter(fd => fd.parser === 'IR-TAINT');
+  assert.ok(!taint.some(fd => fd.cwe === 'CWE-89'),
+    `expected NO SQL Injection finding (the branch is provably numeric-only), got: ${taint.map(fd => `${fd.cwe}:${fd.vuln}`).join(', ')}`);
+});
+
+test('runScan: an UNRELATED guard (checking a different variable) does not suppress the real sink', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const dir = mkTmp({
+    'run.php': `<?php
+function handler() {
+    $id = $_GET['id'];
+    $flag = $_GET['flag'];
+    if (is_numeric($flag)) {
+        $pdo = new PDO('sqlite::memory:');
+        $res = $pdo->query("SELECT * FROM t WHERE id = " . $id);
+    }
+}
+`,
+  });
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  const taint = (scan.findings || []).filter(fd => fd.parser === 'IR-TAINT');
+  assert.ok(taint.some(fd => fd.cwe === 'CWE-89'),
+    `expected a SQL Injection finding (the guard checks a DIFFERENT variable, $id itself is unguarded), got: ${taint.map(fd => `${fd.cwe}:${fd.vuln}`).join(', ') || '(none)'}`);
 });

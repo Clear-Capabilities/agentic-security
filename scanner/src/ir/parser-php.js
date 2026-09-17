@@ -86,18 +86,19 @@ const FUNC_RE = new RegExp(
 // fix (see the `catch`/`finally` regression tests in
 // `test/parser-php-control-flow.test.js`, which fail without this change
 // and pass with it) — `_scanTryCatchFinally`'s balanced-brace scanning has
-// no competing bug to interact with. For `else` specifically, this
-// lookahead fix is still correct and necessary, but its OUTCOME is masked
-// in practice by `ifMatch`'s own separate, pre-existing, out-of-scope
-// greedy-capture bug (the then-body group unconditionally swallows
-// through to the else-body's own closing `}`, dropping the else body
-// regardless of whether a comment was ever involved — confirmed by
-// testing commit `735ef63`, before this task started, with an identical
-// comment-free else fixture: already broken then, for an unrelated
-// reason). `ifMatch` and `_scanTryCatchFinally` both already tolerate an
-// ordinary `\s*`/whitespace gap between `}` and the keyword; skipping
-// comments here too keeps this lookahead in sync with what those
-// recognizers can actually parse once the flush is correctly suppressed.
+// no competing bug to interact with. For `else`, this lookahead fix was
+// ORIGINALLY still correct but its outcome was masked by `ifMatch`'s own
+// separate greedy-capture bug — SARD_80_F1 W3.2 replaced that regex with
+// `_scanIfElse`, a balanced-brace scanner mirroring `_scanTryCatchFinally`'s
+// own technique (see that function's header comment for the full incident:
+// the old regex's then-body group unconditionally swallowed through to the
+// else-body's own closing `}`, which was worse than "drops the else body's
+// first statement" — it silently spliced the else body's REMAINING
+// statements onto the then-branch's own CFG chain with no real branch at
+// all, a correctness hazard once branch-scoped taint narrowing existed).
+// `else`/`catch`/`finally` now all parse via balanced-brace scanners with
+// no competing greedy-capture bug; this lookahead's comment-skip fix
+// applies uniformly to all three.
 function _continuationKeywordAhead(body, i) {
   let j = i + 1;
   let moved = true;
@@ -215,13 +216,12 @@ function _splitStatements(body) {
       //
       // EXCEPTION: do not flush when the next non-whitespace token is
       // `else`, `catch`, or `finally` — those must stay glued onto the
-      // SAME statement as the preceding `}` for `ifMatch` and the
+      // SAME statement as the preceding `}` for `_scanIfElse` and the
       // try/catch/finally recognizer in `_buildCfg` to see
       // `if (...) { ... } else { ... }` or
       // `try { ... } catch (...) { ... } finally { ... }` as one
-      // contiguous blob (`ifMatch` is anchored end-to-end with `$` and
-      // spans the whole construct; the try/catch/finally recognizer scans
-      // the whole construct by hand for the same reason). A blind
+      // contiguous blob (both scan the whole construct by hand, requiring
+      // it to arrive as a single, unsplit statement string). A blind
       // flush-on-every-`}` here would silently split `if`/`else` and
       // multi-clause `try` into two statements each, which is a strictly
       // WORSE regression than the "must be last statement in scope" bug
@@ -1068,6 +1068,69 @@ function _findMatchingParen(s, openIdx) {
 // with the bare target variable so the boolean test itself still lowers
 // normally (`$value == false`), and returns the extracted assignments to be
 // emitted as real CFG nodes immediately before the if/while node.
+// SARD_80_F1 W3.2 — `ifMatch`'s regex-based then/else split
+// (`\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?`) has a genuine, previously
+// UNDERSTATED greedy-capture bug, already documented in ir/CLAUDE.md as
+// "drops the else-body's first statement" — but the real behavior is worse
+// than that description: `[\s\S]*` being greedy with no brace-depth
+// awareness means the THEN group ALWAYS swallows the ENTIRE remaining text
+// (including the literal `} else {` text and the whole else body) whenever
+// such an all-consuming parse is grammatically valid, which it always is
+// (the else-clause is optional). The else body's statements don't just lose
+// their first line — they get lowered as a plain SEQUENTIAL CONTINUATION of
+// the then-branch's own CFG chain, with NO independent branch at all. This
+// was invisible as long as both branches always carried the SAME taint
+// state (the common case before branch-scoped narrowing existed), but
+// becomes a genuine false-negative hazard once a branch CAN carry a
+// narrower state than its sibling (guard-predicate narrowing, `case 'if'`
+// in dataflow/engine.js): the else-branch's own sink would incorrectly
+// inherit the THEN branch's narrowed (guard-passed) taint state instead of
+// the real, unnarrowed one. Fixed with a balanced-brace scanner mirroring
+// `_scanTryCatchFinally`'s already-correct technique (that function's own
+// comment notes it "has no greedy-capture issue" for exactly this reason).
+// Deliberately does NOT handle `else if (...) { ... }` (no braces around a
+// chained if) — same pre-existing, documented scope boundary the old regex
+// never covered either (elseif/else-if chains stay unsupported).
+function _scanIfElse(s) {
+  const head = /^if\s*\(/.exec(s);
+  if (!head) return null;
+  const parenStart = head[0].length - 1;
+  const parenEnd = _findMatchingParen(s, parenStart);
+  if (parenEnd < 0) return null;
+  const condText = s.slice(parenStart + 1, parenEnd);
+  let i = parenEnd + 1;
+  i += (/^\s*/.exec(s.slice(i)) || [''])[0].length;
+  if (s[i] !== '{') return null;
+  const thenBodyOffset = i + 1;
+  const thenEnd = _matchBraceBlock(s, i);
+  if (thenEnd < 0) return null;
+  const thenBody = s.slice(thenBodyOffset, thenEnd - 1);
+  i = thenEnd;
+
+  let elseBody = null;
+  let elseBodyOffset = -1;
+  {
+    let j = i + (/^\s*/.exec(s.slice(i)) || [''])[0].length;
+    const em = /^else\s*/.exec(s.slice(j));
+    if (em) {
+      const afterElse = j + em[0].length;
+      if (s[afterElse] === '{') {
+        const bodyOffset = afterElse + 1;
+        const bodyEnd = _matchBraceBlock(s, afterElse);
+        if (bodyEnd < 0) return null;
+        elseBody = s.slice(bodyOffset, bodyEnd - 1);
+        elseBodyOffset = bodyOffset;
+        i = bodyEnd;
+      }
+      // else-if (no braces): leave `i` unadvanced — the trailing-content
+      // check below will reject the match and the caller falls back to
+      // whatever the old regex path did for this shape (also unsupported).
+    }
+  }
+  if (s.slice(i).trim() !== '') return null;
+  return { condText, thenBody, thenBodyOffset, elseBody, elseBodyOffset };
+}
+
 function _hoistCondAssign(cond) {
   const assigns = [];
   let s = cond;
@@ -1105,17 +1168,16 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
     // back to `s` (fix round 1 also missed that a comment anywhere inside
     // `s` — not just inside the header — undercounts newlines the same
     // way; that half is fixed by `_splitStatements` now pushing a `\n`
-    // for every newline a skipped comment displaces, above). A `d`-flagged
-    // regex exposes each capture group's real character offset within
-    // `s` via `.indices`, so `_countNewlines(s, offset)` gives the body's
-    // EXACT absolute line regardless of how many lines the header itself
-    // spans or how many comments precede the body — the same precise
-    // per-clause technique the try/catch/finally recognizer below already
-    // uses (there, offsets come from the balanced-brace scanner instead
-    // of regex `.indices`, same principle).
-    const ifMatch = s.match(/^if\s*\((.+?)\)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/ds);
-    if (ifMatch) {
-      const { assigns: ifAssigns, cond: ifCond } = _hoistCondAssign(ifMatch[1]);
+    // for every newline a skipped comment displaces, above). SARD_80_F1
+    // W3.2 replaced the old regex here with `_scanIfElse` (see its own
+    // header comment for the full incident writeup), a balanced-brace
+    // scanner giving REAL character offsets for the then/else bodies —
+    // `_countNewlines(s, offset)` from those offsets gives the EXACT
+    // absolute line regardless of header/comment line-count, same
+    // per-clause technique the try/catch/finally recognizer below uses.
+    const ifElse = _scanIfElse(s);
+    if (ifElse) {
+      const { assigns: ifAssigns, cond: ifCond } = _hoistCondAssign(ifElse.condText);
       let condPrev = prev;
       for (const a of ifAssigns) {
         const aNode = _addNode(nodes, { kind: 'assign', target: a.target, source: a.source, line });
@@ -1125,12 +1187,12 @@ function _buildCfg(bodyText, nodes, prevId, startLine, depth = 0) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(ifCond), line });
       _linkNodes(nodes, condPrev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const thenStartLine = line + _countNewlines(s, ifMatch.indices[2][0]);
-      const thenTail = _buildCfg(ifMatch[2], nodes, ifNode, thenStartLine, depth + 1);
+      const thenStartLine = line + _countNewlines(s, ifElse.thenBodyOffset);
+      const thenTail = _buildCfg(ifElse.thenBody, nodes, ifNode, thenStartLine, depth + 1);
       _linkNodes(nodes, thenTail, join);
-      if (ifMatch[3]) {
-        const elseStartLine = line + _countNewlines(s, ifMatch.indices[3][0]);
-        const elseTail = _buildCfg(ifMatch[3], nodes, ifNode, elseStartLine, depth + 1);
+      if (ifElse.elseBody !== null) {
+        const elseStartLine = line + _countNewlines(s, ifElse.elseBodyOffset);
+        const elseTail = _buildCfg(ifElse.elseBody, nodes, ifNode, elseStartLine, depth + 1);
         _linkNodes(nodes, elseTail, join);
       } else {
         _linkNodes(nodes, ifNode, join);

@@ -663,6 +663,67 @@ function _calleeNames(callee) {
   return [];
 }
 
+// SARD_80_F1 W3.2 — guard-predicate narrowing. `_calleeNames` only handles
+// an OBJECT-shaped callee (Babel's `{kind:'ident'|'member',...}`); the five
+// hand-rolled parsers (C#/Go/Kotlin/PHP/Ruby) plus Java/Python instead emit
+// a flat, dot-joined STRING callee (per ir/CLAUDE.md) — `is_numeric` or
+// `int.TryParse`, never a structured node. This normalizes both shapes to
+// the same {full, bare-leaf} name pair `GUARD_PREDICATES` matches against.
+function _bareCalleeNames(callee) {
+  if (typeof callee === 'string') {
+    const parts = callee.split('.');
+    return [callee, parts[parts.length - 1]];
+  }
+  return _calleeNames(callee);
+}
+
+// A hand-picked, deliberately CONSERVATIVE set of validating predicates
+// that, when used as an if-statement's CONDITION and observed true, prove
+// the checked variable cannot carry injection metacharacters on the TRUE
+// branch specifically — never on the false branch (a guard that FAILS says
+// nothing about the value's safety, so that edge, and any code after an
+// if-with-no-else, keeps the original tainted state unchanged). Each entry
+// names the callees that count as this guard and which argument holds the
+// checked variable. Deliberately narrow for this first landing: a regex-
+// based guard (`preg_match('/^\d+$/', $x)`) needs the PATTERN itself
+// validated as a fully-anchored numeric literal to be sound, and an
+// allow-list guard (`in_array($x, $allow, true)`) needs `$allow` resolved
+// to a literal array — both are real, documented follow-ups, not attempted
+// here to keep this landing's soundness easy to verify.
+const GUARD_PREDICATES = [
+  // PHP: is_numeric/ctype_* — a string that PASSES is provably digits-only
+  // (or alnum), which cannot carry SQL/XPath/shell/LDAP metacharacters.
+  { names: ['is_numeric', 'ctype_digit', 'ctype_alnum'], argIndex: 0 },
+  // Java: Apache Commons / Spring's StringUtils.isNumeric(x).
+  { names: ['StringUtils.isNumeric', 'isNumeric'], argIndex: 0 },
+  // C#: `if (int.TryParse(x, out n))` and its numeric-type siblings. Each
+  // full dotted name is listed explicitly (not a bare 'TryParse' catch-all)
+  // to avoid over-matching an unrelated same-named helper method.
+  {
+    names: [
+      'int.TryParse', 'Int32.TryParse', 'long.TryParse', 'Int64.TryParse',
+      'double.TryParse', 'decimal.TryParse', 'float.TryParse',
+      'uint.TryParse', 'short.TryParse', 'byte.TryParse',
+    ],
+    argIndex: 0,
+  },
+];
+
+// Does `cond` (an if-statement's condition expression) recognizably guard a
+// currently-tainted variable per `GUARD_PREDICATES`? Returns that variable's
+// access path (to narrow on the true-branch edge only) or null.
+function _guardNarrowsVar(cond, state) {
+  if (!cond || cond.kind !== 'call') return null;
+  const names = _bareCalleeNames(cond.callee);
+  for (const g of GUARD_PREDICATES) {
+    if (!g.names.some((n) => names.includes(n))) continue;
+    const arg = cond.args && cond.args[g.argIndex];
+    const path = arg && accessPathOf(arg);
+    if (path && isCoveredBy(state, path)) return path;
+  }
+  return null;
+}
+
 function _unsanitizersInExprTree(expr, out) {
   if (!expr || typeof expr !== 'object') return;
   if (expr.kind === 'call') {
@@ -1420,7 +1481,19 @@ function step(node, stateIn, callContext) {
     case 'if': {
       // Path-feasibility lite: if the condition is a literal false / unreachable,
       // mark the node so the CFG walker can skip the consequent edge.
-      // For now we simply propagate state to both branches.
+      // For now we simply propagate state to both branches — EXCEPT for a
+      // recognized guard-predicate condition (SARD_80_F1 W3.2), where the
+      // TRUE branch specifically gets a narrowed (un-tainted-on-the-guarded-
+      // var) state via `succOverride`; the false branch and any code after
+      // an if-with-no-else still see the original, unnarrowed `state`. Per
+      // this codebase's established CFG convention (path-feasibility.js),
+      // `succ[0]` is the THEN edge and `succ[1+]` are the ELSE/fall-through
+      // edge(s).
+      const narrowedVar = _guardNarrowsVar(node.cond, state);
+      if (narrowedVar && node.succ && node.succ.length > 0) {
+        const thenState = removePathAndDescendants(state, narrowedVar);
+        return { state, findings, succOverride: new Map([[node.succ[0], thenState]]) };
+      }
       return { state, findings };
     }
 
@@ -1511,15 +1584,23 @@ function analyzeFunction(fn, entryState, callContext) {
     const node = nodes[nid];
     if (!node) continue;
     const incoming = inStates.get(nid) || new Set();
-    const { state: out, findings } = step(node, incoming, callContext);
+    const { state: out, findings, succOverride } = step(node, incoming, callContext);
     callContext._findings.push(...findings.map(f => ({ ...f, _funcQid: fn.qid })));
     const prevOut = outStates.get(nid);
     const merged = mergeStates(prevOut, out);
     if (!prevOut || !stateEq(prevOut, merged)) {
       outStates.set(nid, merged);
       for (const s of (node.succ || [])) {
+        // SARD_80_F1 W3.2 — guard-predicate narrowing (case 'if' above): a
+        // specific successor edge (the guard's TRUE branch) can carry a
+        // NARROWER state than every other edge out of this node. `out` (not
+        // `merged`) is what `succOverride` was derived from, and `out` is a
+        // pure function of `incoming`, so gating this on `merged`'s own
+        // convergence check above is sound — an unchanged `merged` means an
+        // unchanged `incoming` means an unchanged override too.
+        const edgeState = (succOverride && succOverride.has(s)) ? succOverride.get(s) : merged;
         const succIn = inStates.get(s);
-        const newIn = mergeStates(succIn, merged);
+        const newIn = mergeStates(succIn, edgeState);
         if (!succIn || !stateEq(succIn, newIn)) {
           inStates.set(s, newIn);
           work.push(s);
