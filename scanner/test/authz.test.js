@@ -1,8 +1,12 @@
 // Auth/AuthZ deep-analysis detector — F1 over labelled fixtures.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { evaluateF1 } from './helpers/f1.js';
 import { scanAuthZ } from '../src/sast/authz.js';
+import { runScan } from '../src/runScan.js';
 
 const LABELS = [
   { file: 'vuln-jwt-alg-none.js',           positive: true,  matcher: /JWT alg:none/i },
@@ -52,4 +56,95 @@ test('hardcoded-JWT-secret still flags well-known placeholder values (changeme/s
   const findings = scanAuthZ('app.js', src);
   assert.equal(findings.filter(f => /hardcoded JWT secret/i.test(f.vuln)).length, 1,
     'well-known bad placeholders must still be flagged per the module\'s own stated intent');
+});
+
+// SARD_80_F1 W5.13 — PHP IDOR/missing-authorization (CWE-862), confirmed
+// against the public generator source (stivalet/PHP-Vuln-test-suite-
+// generator, pinned 84b4cccf05598c74b052111804954eac19f259b6): the "safe"
+// fix appends the ownership check as a SEPARATE, subsequent `.=` statement,
+// never inside the same string literal as the WHERE clause.
+test('PHP IDOR — raw SQL where-by-id from $_GET with no ownership check fires (CWE-862)', () => {
+  const src = "<?php\n$tainted = $_GET['id'];\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 1);
+});
+
+test('PHP IDOR — dot-concatenation form also fires (CWE-862)', () => {
+  const src = "<?php\n$tainted = $_GET['id'];\n$query = \"SELECT * FROM student where id='\" . $tainted . \"'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 1);
+});
+
+test('PHP IDOR — a $_SESSION ownership check appended as a later statement suppresses the finding', () => {
+  const src = "<?php\n$tainted = $_GET['id'];\n$query = \"SELECT * FROM COURSE, USER WHERE courseID='$tainted'\";\n$query .= \"AND course.allowed=$_SESSION[userid]\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — no request superglobal anywhere in the file (e.g. a plain function parameter with no $_GET/$_POST/etc in sight) does not fire', () => {
+  const src = "<?php\nfunction lookup($tainted) {\n  $query = \"SELECT * FROM student where id='$tainted'\";\n  return mysql_query($query);\n}\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+// The public generator's own combinatorics route the same $_GET read through
+// many indirections a single-line "$var = $_GET[...]" trace could never
+// enumerate (a getter method, an array element, an object property set in
+// the constructor — confirmed via input.xml). The check is deliberately
+// file-scoped co-occurrence, not a traced assignment, so this must still fire.
+test('PHP IDOR — a $_GET read reaching the query through an object getter (not a direct assignment) still fires (CWE-862)', () => {
+  const src = "<?php\nclass Input{\n  public function getInput(){\n    return $_GET['UserData'];\n  }\n}\n$temp = new Input();\n$tainted = $temp->getInput();\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 1);
+});
+
+// SARD_80_F1 W5.13, second bug found while verifying against the real corpus:
+// the detector fired with the correct CWE-862, but scored ZERO tp on the real
+// corpus anyway — every OTHER authz.js finding's vuln text also starts with
+// "AuthZ:", and engine.js's `_VULN_FAMILY_PREFIX` table (a THIRD, separate
+// family map from finding-defaults.js's own CWE-862 -> 'missing-authz' entry)
+// had a blanket `['AuthZ:', 'idor']` catch-all that ran FIRST (dedup runs
+// before the finding-defaults backfill) and swept this finding into 'idor'
+// too, so it could never match a CWE-862 gold entry's 'missing-authz' family.
+// This is an end-to-end pipeline test, not a `scanAuthZ`-only unit test,
+// because the bug lived entirely in a LATER annotation stage this file's
+// other tests never exercise.
+test('PHP IDOR — the finding\'s scoring family is missing-authz, not the generic authz.js idor catch-all', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'authz-idor-family-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'lookup.php'),
+      "<?php\n$tainted = $_GET['id'];\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n");
+    const { scan } = await runScan(dir, {});
+    const f = (scan.findings || []).find(x => x.cwe === 'CWE-862');
+    assert.ok(f, 'expected a CWE-862 finding from the full scan pipeline');
+    assert.equal(f.family, 'missing-authz');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// SARD_80_F1 W5.13, third bug found while verifying against the real corpus:
+// once the family bug was fixed, the real corpus scan showed 10 NEW false
+// positives — the generator's OTHER safe path never touches $_SESSION at
+// all. It instead constrains the tainted value to a fixed allow-list BEFORE
+// the query (sanitize.xml's "ternary_white_list" / "whitelist_using_array"
+// samples), which the $_SESSION-only suppression window could never see.
+test('PHP IDOR — a ternary compare-and-substitute allow-list suppresses the finding', () => {
+  const src = "<?php\n$tainted = $_GET['UserData'];\n$tainted = $tainted == 'safe1' ? 'safe1' : 'safe2';\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — an in_array() allow-list guard suppresses the finding', () => {
+  const src = "<?php\n$tainted = $_GET['UserData'];\n$legal_table = array('safe1', 'safe2');\nif (in_array($tainted, $legal_table, true)) {\n  $tainted = $tainted;\n} else {\n  $tainted = $legal_table[0];\n}\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+// A residual real-corpus false-positive family, per the same generator's
+// sanitize.xml: an OWASP ESAPI validator call.
+test('PHP IDOR — an ESAPI validator call suppresses the finding', () => {
+  const src = "<?php\n$tainted = $_GET['UserData'];\n$ESAPI = new ESAPI();\nif ($ESAPI->validator->isValidNumber('Course ID', $tainted, 18, 25, false)) {\n  $tainted = $tainted;\n} else {\n  $tainted = 0;\n}\n$query = \"SELECT * FROM student where id='$tainted'\";\nmysql_query($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
 });

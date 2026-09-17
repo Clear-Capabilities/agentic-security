@@ -18,7 +18,7 @@
 //   contexts (allow-list present, tenant filter present, PKCE generation
 //   present in the same module) suppress the finding.
 
-const _SCAN_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py)$/i;
+const _SCAN_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|php)$/i;
 const _NONPROD_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|examples?|docs?|stories|codefixes|node_modules)\//i;
 
 // --- JWT patterns ---
@@ -67,6 +67,51 @@ const MT_TENANT_KEY_RE = /\b(?:tenantId|tenant_id|orgId|org_id|workspaceId|works
 // — those are the safe pattern. Only flag string-concatenation or template-
 // literal interpolation that pulls from req/request.
 const MT_RAW_SQL_RE = /\b(?:select|update|delete)\b[\s\S]{0,200}?\bwhere\s+(?:[\w_.]*\.)?id\s*=\s*\$?\{?\s*(?:req|request)\.(?:params|body|query)\.[A-Za-z_]\w*/i;
+
+// --- PHP: missing-authorization / IDOR (CWE-862/639) ---
+//
+// PHP's own idiom for the identical shape: a raw SQL/XPath query selects a
+// row by a request-supplied id with no accompanying check that the row
+// belongs to the CURRENT session's user. Unlike the JS pattern above (a
+// single ORM call-site expression), PHP's own convention (confirmed against
+// the public generator source, stivalet/PHP-Vuln-test-suite-generator,
+// pinned 84b4cccf05598c74b052111804954eac19f259b6, construction.xml's
+// "right_verification" sample) fixes this by APPENDING the ownership check
+// as a SEPARATE, SUBSEQUENT `.=` statement (`$query .= "AND
+// course.allowed=$_SESSION[userid]";`) — the check never appears inside the
+// same string literal as the WHERE clause, so the suppression window must
+// extend forward past the initial query-building statement, not just
+// inspect the matched span itself (unlike `MT_RAW_SQL_RE` above, where a
+// single ORM call is fully self-contained).
+const PHP_IDOR_WHERE_ID_RE = /\bwhere\b[\s\S]{0,80}?\bid\s*=\s*[^$\n]{0,10}\$(\w+)/i;
+const PHP_SUPERGLOBAL_SOURCE_RE = /\$_(?:GET|POST|REQUEST|COOKIE)\b/;
+const PHP_SESSION_CHECK_RE = /\$_SESSION\b/;
+// Two more safe paths from the SAME generator (sanitize.xml), both real
+// corpus false positives this rule needs to stay silent on: an OWASP ESAPI
+// validator call, and an "indirect reference" pattern that resolves the id
+// through a $_SESSION-scoped allow-list array built earlier in the request
+// (`$course_array = $_SESSION['course_array']; ... $tainted =
+// $course_array[$tainted];`) — the $_SESSION reference there can be far
+// enough from the WHERE clause that a narrow window around the match misses
+// it, so this check is deliberately file-scoped like the superglobal-source
+// check above, not windowed like PHP_SESSION_CHECK_RE.
+const PHP_ESAPI_VALIDATOR_RE = /\bESAPI\b/;
+// The generator's OTHER safe path (construction.xml/sanitize.xml, confirmed
+// via real corpus false positives, not reasoning alone — the first version
+// of this rule fired on both): the tainted value never reaches a
+// session-scoped ownership check at all, because it was constrained to a
+// fixed allow-list BEFORE the query — a ternary compare-and-substitute
+// (`$tainted = $tainted == 'safe1' ? 'safe1' : 'safe2';`) or an
+// `in_array($tainted, $whitelist)` guard. Either makes the value provably
+// one of a small known-safe set regardless of what the attacker supplied,
+// which is the actual reason it's safe (the generator's own `testSafety`
+// treats a safe SANITIZER as equally sufficient to a safe CONSTRUCTION).
+function _phpVarIsWhitelisted(raw, varName) {
+  const esc = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ternaryRe = new RegExp(`\\$${esc}\\s*==\\s*['"][^'"]*['"]\\s*\\?`);
+  const inArrayRe = new RegExp(`\\bin_array\\s*\\(\\s*\\$${esc}\\b`, 'i');
+  return ternaryRe.test(raw) || inArrayRe.test(raw);
+}
 
 function _emit(fp, line, vuln, severity, cwe, snippet, fix, confidence=0.85) {
   return {
@@ -231,6 +276,39 @@ export function scanAuthZ(fp, raw) {
         'AuthZ: raw SQL where-by-id without tenant scope',
         'high', 'CWE-639', lines[line - 1] || block.slice(0, 120),
         'The query selects a row by id without scoping to the caller\'s tenant. Append `AND tenant_id = $tenantId` (and pass it from the authenticated session, never the request body).'));
+    }
+  }
+
+  // 8. PHP: raw SQL where-by-id built from a request superglobal, no
+  // $_SESSION-based ownership check anywhere in a window around the query
+  // (see PHP_IDOR_WHERE_ID_RE above for why the window must extend forward,
+  // not just cover the matched span). Uses `raw`, not `rawForShape`: PHP
+  // double-quoted strings interpolate `$var` directly, so blanking string
+  // content (as `_stripStrings` does for JS template-literal shape matching)
+  // would erase the very `$id`/`$_SESSION` references this pattern needs.
+  if (/\.php$/i.test(fp)) {
+    let pm;
+    const phpIdorRe = new RegExp(PHP_IDOR_WHERE_ID_RE.source, 'gi');
+    while ((pm = phpIdorRe.exec(raw))) {
+      // File-level co-occurrence, not a traced direct assignment: the public
+      // generator's own combinatorics route the same superglobal read through
+      // many indirections (a getter method, an array element, an object
+      // property set in the constructor — confirmed via input.xml) that a
+      // single-line "$var = $_GET[...]" regex can never enumerate. The same
+      // looser, file-scoped co-occurrence bar is already how this file's own
+      // OAuth/crypto-context checks work elsewhere (see `looksCrypto` in
+      // csharp.js for the cross-language precedent).
+      if (!PHP_SUPERGLOBAL_SOURCE_RE.test(raw)) continue;
+      const windowEnd = Math.min(raw.length, pm.index + 300);
+      const window = raw.slice(Math.max(0, pm.index - 100), windowEnd);
+      if (PHP_SESSION_CHECK_RE.test(window)) continue;
+      if (_phpVarIsWhitelisted(raw, pm[1])) continue;
+      if (PHP_ESAPI_VALIDATOR_RE.test(raw)) continue;
+      const line = raw.substring(0, pm.index).split('\n').length;
+      push(_emit(fp, line,
+        'AuthZ: raw SQL where-by-id from request input without an ownership check',
+        'high', 'CWE-862', lines[line - 1] || raw.slice(pm.index, pm.index + 120),
+        'The query selects a row by an id taken directly from the request with no check that the row belongs to the current session\'s user. Add a filter on the authenticated user\'s identity (e.g. `AND owner_id = $_SESSION[\'userid\']`) so a guessed or enumerated id cannot read another user\'s data.'));
     }
   }
 

@@ -6400,6 +6400,16 @@ const _VULN_FAMILY_PREFIX = [
   ['Prototype Pollution', 'prototype-pollution'],
   ['IDOR', 'idor'],
   ['Potential IDOR', 'idor'],
+  // SARD_80_F1 W5.13 — must precede the generic 'AuthZ:' catch-all below: a
+  // CWE-862 (Missing Authorization) finding from authz.js's PHP IDOR
+  // detector also starts with "AuthZ:", and this array's first-match-wins
+  // iteration would otherwise sweep it into the SAME 'idor' family as every
+  // OTHER authz.js pattern (JWT/OAuth/session-fixation/CWE-639), overriding
+  // finding-defaults.js's own correct CWE-862 -> 'missing-authz' mapping —
+  // confirmed as the exact reason a genuinely firing, correctly-CWE-tagged
+  // finding never scored a tp (dedupeFindingsWithEvidence runs before the
+  // finding-defaults backfill and stamps `f.family` first).
+  ['AuthZ: raw SQL where-by-id from request input without an ownership check', 'missing-authz'],
   ['AuthZ:', 'idor'],
   ['MD5/SHA1', 'weak-crypto'],
   ['Weak Cryptographic Hash', 'weak-crypto'],
