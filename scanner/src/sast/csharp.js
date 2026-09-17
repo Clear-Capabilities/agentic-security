@@ -82,7 +82,21 @@ const SQL_EXEC_METHODS  = /^(?:Execute(?:Reader|Scalar|NonQuery|DbDataReader|Rea
 const LDAP_SEARCH_TYPES = /^(?:DirectorySearcher|LdapConnection)$/;
 const LDAP_SEARCH_METHODS = /^(?:Search|FindOne|FindAll|SendRequest)$/;
 const WEAK_CRYPTO_TYPES = /^(?:DESCryptoServiceProvider|TripleDESCryptoServiceProvider|RC2CryptoServiceProvider|MD5CryptoServiceProvider|MD5Cng|SHA1CryptoServiceProvider|SHA1Managed|SHA1Cng|HMACSHA1|HMACMD5|DES|TripleDES|RC2|MD5|SHA1)$/;
-const WEAK_CRYPTO_FACTORY_PATTERN = /\b(?:DES|TripleDES|RC2|MD5|SHA1)\.Create\b/;
+const WEAK_CRYPTO_FACTORY_PATTERN = /\b(DES|TripleDES|RC2|MD5|SHA1)\.Create\b/;
+// SARD_80_F1 W4.C15 — `WEAK_CRYPTO_TYPES`/`WEAK_CRYPTO_FACTORY_PATTERN` bundle
+// two distinct CWEs under one hardcoded 'CWE-327' tag: CWE-327 is the general
+// "risky crypto algorithm" (ciphers — DES/3DES/RC2), CWE-328 is specifically
+// "Use of a Weak Hash" (MD5/SHA1 and their CryptoServiceProvider/Cng/Managed/
+// HMAC variants). Real corpus verification (the C# Juliet suite's own
+// CWE-327 vs CWE-328 directories, each with distinct gold expectations)
+// confirmed every hash-shaped finding here was scored as a miss against
+// BOTH directories: fp against CWE-327 (wrong tag), fn against CWE-328
+// (never emitted). `_weakCryptoCwe(name)` decides the correct CWE per
+// matched algorithm name so a single detector can emit both correctly.
+const WEAK_HASH_NAMES = /^(?:MD5CryptoServiceProvider|MD5Cng|SHA1CryptoServiceProvider|SHA1Managed|SHA1Cng|HMACSHA1|HMACMD5|MD5|SHA1)$/;
+function _weakCryptoCwe(name) {
+  return WEAK_HASH_NAMES.test(name) ? 'CWE-328' : 'CWE-327';
+}
 const SECRET_NAME_PATTERN = /^(?:password|passwd|pw|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|priv(?:ate)?[_-]?key|cred(?:ential)?s?|connection[_-]?string|conn[_-]?str)$/i;
 const PATH_TRAVERSAL_BASES_SANITIZER = /\bPath\.GetFullPath\b/;
 const XSS_SAFE_SINK_PATTERN = /\bHtmlEncode\b|\bHtmlEncoder\b|\bAntiXss/;
@@ -95,6 +109,7 @@ function makeFinding({ ruleId, file, line, raw, ir, family, severity, cwe, vuln,
                : cwe === 'CWE-502' ? 'Elevation of Privilege'
                : cwe === 'CWE-22'  ? 'Tampering'
                : cwe === 'CWE-327' ? 'Information Disclosure'
+               : cwe === 'CWE-328' ? 'Information Disclosure'
                : cwe === 'CWE-330' ? 'Spoofing'
                : cwe === 'CWE-798' ? 'Information Disclosure'
                : cwe === 'CWE-1004'? 'Information Disclosure'
@@ -304,14 +319,16 @@ function detectInsecureDeserialization(file, raw, ir, analysis, out, seen) {
 function detectWeakCrypto(file, raw, ir, analysis, out, seen) {
   // 1. new DES/MD5/SHA1/RC2/TripleDESCryptoServiceProvider() / new MD5Managed()
   for (const decl of ir.decls) {
-    if (decl.rhsText && WEAK_CRYPTO_FACTORY_PATTERN.test(decl.rhsText)) {
+    const factoryMatch = decl.rhsText && decl.rhsText.match(WEAK_CRYPTO_FACTORY_PATTERN);
+    if (factoryMatch) {
       const id = `csharp-weak-crypto-factory:${file}:${decl.line}`;
       if (seen.has(id)) continue;
       seen.add(id);
+      const cwe = _weakCryptoCwe(factoryMatch[1]);
       out.push(makeFinding({
         ruleId: 'csharp-weak-crypto-factory', file, line: decl.line, raw, ir,
-        family: 'weak-crypto', severity: 'high', cwe: 'CWE-327',
-        vuln: 'Weak Cryptography — MD5/SHA1/DES/3DES/RC2 factory method',
+        family: 'weak-crypto', severity: 'high', cwe,
+        vuln: cwe === 'CWE-328' ? 'Weak Hash — MD5/SHA1 factory method' : 'Weak Cryptography — DES/3DES/RC2 factory method',
         remediation: 'Use AES-GCM for symmetric encryption, SHA-256 or BLAKE2b for hashing, and a KDF (PBKDF2/Argon2) for password derivation. The legacy CryptoServiceProvider and `.Create()` factory shapes return broken-by-design primitives.',
       }));
     }
@@ -320,10 +337,11 @@ function detectWeakCrypto(file, raw, ir, analysis, out, seen) {
       const id = `csharp-weak-crypto-ctor:${file}:${decl.line}`;
       if (seen.has(id)) continue;
       seen.add(id);
+      const cwe = _weakCryptoCwe(ctorMatch[1]);
       out.push(makeFinding({
         ruleId: 'csharp-weak-crypto-ctor', file, line: decl.line, raw, ir,
-        family: 'weak-crypto', severity: 'high', cwe: 'CWE-327',
-        vuln: `Weak Cryptography — \`new ${ctorMatch[1]}()\``,
+        family: 'weak-crypto', severity: 'high', cwe,
+        vuln: `${cwe === 'CWE-328' ? 'Weak Hash' : 'Weak Cryptography'} — \`new ${ctorMatch[1]}()\``,
         remediation: 'Replace with the modern primitive: AES (preferably AES-GCM via `AesGcm`) for encryption, SHA-256 / SHA-3 for general hashing, PBKDF2 / Argon2 for password derivation, HMAC-SHA-256 for MAC.',
       }));
     }

@@ -136,6 +136,8 @@
       "Host Header Attack": "host-header",
       "Weak bcrypt cost": "weak-crypto",
       "bcrypt Rounds Below": "weak-crypto",
+      "Weak Cryptography —": "weak-crypto",
+      "Weak Hash —": "weak-crypto",
       "Eternal Token": "jwt-no-exp",
       "XXE \u2014": "xxe",
       "Insecure Deserialization \u2014": "insecure-deserialization",

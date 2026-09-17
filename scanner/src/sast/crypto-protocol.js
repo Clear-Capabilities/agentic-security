@@ -354,7 +354,7 @@ function detectWeakHash(file, raw, code, out, seen) {
       seen.add(id);
       out.push(_shape(file, ln, 'crypto-weak-hash',
         'Weak hash algorithm (MD5 / SHA-1 / MD2 / MD4) used',
-        'crypto-weak-hash', 'medium', 'CWE-327',
+        'crypto-weak-hash', 'medium', 'CWE-328',
         'Replace MD5/SHA-1 with SHA-256 (general purpose), SHA-3 / BLAKE3 (modern), or SHA-512 (preferred for large inputs). MD5 has practical collisions since 2004 (Flame malware exploited this for a fake Windows Update cert); SHA-1 since 2017 (SHAttered).',
         'Cryptographic hashes (signing, integrity, password derivation) must use SHA-256+. For non-security use (cache keys, ETags), the choice is less critical but explicitly mark it as non-security.'));
     }
