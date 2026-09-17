@@ -73,6 +73,27 @@ test('Java — a param (no local assignment to find) still fires through a chain
   assert.ok(fires(['S.java', 'class S { void h(String data, javax.servlet.http.HttpServletResponse resp) throws Exception { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } }']));
 });
 
+// SARD_80_F1 W4.J28 — Juliet's own "Control flow: if(true) and if(false)"
+// flow variant (confirmed against the public mirror,
+// CWE80_XSS__CWE182_Servlet_getCookies_Servlet_02.java): the literal
+// assignment sits in the ALWAYS-reachable branch of a CONSTANT-CONDITION
+// if/else, but the textually-LAST assignment is the branch's own
+// deliberately-dead "CWE 561 Dead Code" counterpart — a plain nearest-
+// assignment scan sees only the dead branch and wrongly concludes the
+// value isn't provably a literal.
+test('Java — if(true)/else dead-branch: the literal in the reachable if-branch suppresses the finding', () => {
+  const src = 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (true) { data = "foo"; } else { data = null; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  assert.ok(clean(['S.java', src]), 'the else branch is provably dead; data is always "foo"');
+});
+test('Java — if(false)/else dead-branch (the mirror image): the literal in the reachable else-branch suppresses the finding', () => {
+  const src = 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (false) { data = null; } else { data = "foo"; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  assert.ok(clean(['S.java', src]), 'the if branch is provably dead; data is always "foo"');
+});
+test('Java — if(true)/else where the REACHABLE branch is genuinely tainted still fires', () => {
+  const src = 'class S { void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (true) { data = r.readLine(); } else { data = "foo"; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  assert.ok(fires(['S.java', src]), 'the reachable if-branch is tainted; the dead else-branch literal must not suppress it');
+});
+
 test('non-matching languages / files produce nothing', () => {
   assert.deepEqual(x('a.js', 'res.send("<h1>" + req.query.q + "</h1>")'), []);
   assert.deepEqual(x('ok.go', 'func add(a, b int) int { return a + b }'), []);

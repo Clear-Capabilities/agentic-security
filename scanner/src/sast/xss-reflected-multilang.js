@@ -103,6 +103,57 @@ const LANGS = {
   },
 };
 
+// SARD_80_F1 W4.J28 — Juliet's own "Control flow: if(true) and if(false)"
+// flow variant (its own file header names this explicitly) writes
+// `if (true) { data = "foo"; } else { /* CWE 561 Dead Code */ data = null; }`
+// (or the mirror image for `if (false)`) — the ELSE branch is PROVABLY
+// unreachable (a constant-condition, not a genuine runtime-dependent
+// branch), but `_trailingIdentIsLiteral`'s plain backward-scan just finds
+// "the textually nearest assignment", which is the DEAD branch's `data =
+// null;` here (textually last), so it never recognizes `data` as the
+// literal it always actually is. This is a DIFFERENT shape from W4.C13's
+// if/else fix (a genuine two-way runtime branch, where BOTH sides can
+// execute depending on an environment value) — constant-folding the
+// PROVABLY-dead side is sound unconditionally, unlike that fix's own
+// fail-closed "every assignment must be literal" policy, which would still
+// (correctly) refuse to suppress here if `null` reached the sink. Blanks
+// the dead branch's own `{ … }` body to whitespace (preserving every line
+// break and character offset, matching `blankComments`'s own convention)
+// so the existing backward-scan below simply never sees it — a purely
+// input-transforming preprocessing step, not a new suppression rule.
+function _blankDeadConstantBranches(code) {
+  const IF_RE = /\bif\s*\(\s*(true|false)\s*\)\s*\{/g;
+  let out = code, m;
+  IF_RE.lastIndex = 0;
+  while ((m = IF_RE.exec(out))) {
+    const cond = m[1];
+    const ifBodyStart = m.index + m[0].length;
+    const ifBodyEnd = _matchingBrace(out, ifBodyStart - 1);
+    if (ifBodyEnd === -1) continue;
+    const afterIf = out.slice(ifBodyEnd + 1);
+    const elseMatch = afterIf.match(/^\s*else\s*\{/);
+    if (!elseMatch) { IF_RE.lastIndex = ifBodyEnd + 1; continue; }
+    const elseBodyStart = ifBodyEnd + 1 + elseMatch[0].length;
+    const elseBodyEnd = _matchingBrace(out, elseBodyStart - 1);
+    if (elseBodyEnd === -1) { IF_RE.lastIndex = ifBodyEnd + 1; continue; }
+    const [deadStart, deadEnd] = cond === 'true'
+      ? [elseBodyStart, elseBodyEnd]
+      : [ifBodyStart, ifBodyEnd];
+    out = out.slice(0, deadStart) + out.slice(deadStart, deadEnd).replace(/[^\n]/g, ' ') + out.slice(deadEnd);
+    IF_RE.lastIndex = elseBodyEnd + 1;
+  }
+  return out;
+}
+// Index of the `}` matching the `{` at `openIdx`, or -1 if unbalanced.
+function _matchingBrace(code, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
 // True when `varName`'s NEAREST assignment before `beforeIdx` (source order)
 // is a plain string-literal RHS. Same "backward nearest-assignment" shape as
 // java-structural.js's `_trailingIdentIsLiteral` (SARD_80_F1 W3.x — Java's
@@ -133,6 +184,10 @@ export function scanXssReflectedMultilang(fp, raw) {
 
   const code = blankComments(raw, /\.rb$/i.test(fp) ? 'py' : (/\.(?:php|phtml)$/i.test(fp) ? 'php' : undefined));
   const lines = code.split('\n');
+  // Same length/line/offset as `code` — only used for the literal-check
+  // below, never for sink-matching, so blanking a dead branch can't shift
+  // any reported line number.
+  const codeForLiteralCheck = lang === LANGS.java ? _blankDeadConstantBranches(code) : code;
   const findings = [];
   const seen = new Set();
 
@@ -151,7 +206,7 @@ export function scanXssReflectedMultilang(fp, raw) {
     // SARD_80_F1 W3.x — a captured trailing identifier (Java's sink patterns
     // only) that's provably a hardcoded literal at this point is not a real
     // XSS flow; see `_trailingIdentIsLiteral`'s header comment.
-    if (lang === LANGS.java && sinkMatch[1] && _trailingIdentIsLiteral(code, sinkMatch[1], thisLineStart + sinkMatch.index)) continue;
+    if (lang === LANGS.java && sinkMatch[1] && _trailingIdentIsLiteral(codeForLiteralCheck, sinkMatch[1], thisLineStart + sinkMatch.index)) continue;
     const ln = i + 1;
     const id = `xss-reflected:${fp}:${ln}`;
     if (seen.has(id)) continue;
