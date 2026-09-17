@@ -100,9 +100,28 @@ export function scanJavaStructural(fp, raw) {
 
   // SSRF (CWE-918): new URL/URI opened from a non-literal/templated value,
   // unless a host allow/deny guard is present.
+  //
+  // SARD_80_F1 W4.J22/W4.J24 — SSRF_SINK previously matched the mere
+  // CONSTRUCTION of a URL/URI object, with no check that it's ever actually
+  // used to open an outbound connection. `new URI(data)` is a completely
+  // ordinary way to VALIDATE a string's syntax (catch URISyntaxException)
+  // before doing something else entirely with it — e.g. Juliet's own
+  // CWE-601 (Open Redirect) test cases build a `URI` purely to reject a
+  // malformed redirect target, then call `response.sendRedirect(data)`,
+  // never opening any connection — confirmed directly against the public
+  // mirror (UnitTestBot/juliet-java-test-suite,
+  // CWE601_Open_Redirect__Servlet_File_53d.java). That construction-only
+  // shape was scoring as unrelated-CWE noise on every Juliet CWE-601 file
+  // that validates a URI this way. Now requires evidence of an outbound
+  // connection call somewhere in the file — file-scoped (like SSRF_GUARD
+  // already is) rather than proximity-scoped, since a real SSRF sink and
+  // its `new URL(...)` construction are frequently on the very same line
+  // anyway (`new URL(url).openStream()...`, this detector's own positive
+  // test fixture).
   const SSRF_SINK = /\bnew\s+(?:URL|URI)\s*\(\s*(?:[A-Za-z_]\w*\s*\)|"[^"\n]*"\s*\+)/;
+  const SSRF_CONNECT = /\.\s*openConnection\s*\(|\.\s*openStream\s*\(|\.\s*getContent\s*\(|\.\s*connect\s*\(\s*\)|\bHttpURLConnection\b|\bHttpClient\b/;
   const SSRF_GUARD = /169\.254\.169\.254|getHost\s*\(\s*\)|allow(?:ed)?Hosts?|isLoopback|isSiteLocal|isLinkLocal|InetAddress|\bDENY\b|deny(?:list)?|block(?:list|ed)/i;
-  if (SSRF_SINK.test(code) && !SSRF_GUARD.test(code)) {
+  if (SSRF_SINK.test(code) && SSRF_CONNECT.test(code) && !SSRF_GUARD.test(code)) {
     const line = lineOf(code, code.search(SSRF_SINK));
     emit('ssrf', line, {
       vuln: 'SSRF — URL/URI opened from a non-literal value (Java)',

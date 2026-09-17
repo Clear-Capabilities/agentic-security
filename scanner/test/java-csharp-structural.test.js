@@ -42,6 +42,17 @@ test('Java SSRF — new URL(var), host guard suppresses (CWE-918)', () => {
   assert.ok(none(scanJavaStructural('P.java', 'String fetch(String url){ URL u = new URL(url); if(DENY.contains(u.getHost())) throw new Exception(); return read(u); }'), 'CWE-918'));
 });
 
+// SARD_80_F1 W4.J24: `new URI(data)` used ONLY to validate syntax before
+// doing something else entirely (e.g. Juliet's own CWE-601 Open Redirect
+// test cases: reject a malformed redirect target, then
+// response.sendRedirect(data), never opening a connection) is not SSRF —
+// confirmed against the public Juliet mirror
+// (CWE601_Open_Redirect__Servlet_File_53d.java).
+test('Java SSRF — new URI(var) with no outbound connection call anywhere in the file does not fire (CWE-918)', () => {
+  const f = scanJavaStructural('R.java', 'void badSink(String data, HttpServletResponse response) throws Throwable { if (data != null) { URI uri; try { uri = new URI(data); } catch (URISyntaxException e) { return; } response.sendRedirect(data); } }');
+  assert.ok(none(f, 'CWE-918'), 'a URI built purely to validate syntax, never connected to, is not SSRF');
+});
+
 test('C# hardcoded secret — split-concat literals in a credential field (CWE-798)', () => {
   assert.ok(has(scanCsharpStructural('Config.cs', 'public const string ApiKey = "sk_" + "live_1234567890abcdef1234567890abcdef";'), 'CWE-798'));
   // env-var lookup → clean
