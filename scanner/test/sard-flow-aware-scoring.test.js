@@ -24,6 +24,8 @@ import {
   buildSameFileCallGraph,
   reachableFrom,
   findCsharpMethodSpans,
+  findJavaMethodSpans,
+  _isDelegateOnlyBadMethod,
   score,
   scoreLegacy,
 } from './benchmark/realworld/bench-realworld.js';
@@ -36,6 +38,157 @@ test('findEnclosingMethod: picks the smallest containing span', () => {
   assert.equal(findEnclosingMethod(methods, 7)?.name, 'Inner');
   assert.equal(findEnclosingMethod(methods, 15)?.name, 'Outer');
   assert.equal(findEnclosingMethod(methods, 100), null);
+});
+
+// SARD_80_F1 W4.C22 (fix for the regression found and reverted at W4.C21):
+// a "bad"-shaped method whose entire body is a delegating call to another
+// bad-shaped method (Juliet's own multi-file flow-variant convention) has
+// no sink of its own, so buildJulietExpected/buildJulietCsExpected must not
+// emit an unsatisfiable expected entry for it — see _isDelegateOnlyBadMethod's
+// header comment for the full incident writeup.
+// NOTE: `delegateTargetRe` below is deliberately NARROWER than the
+// `isBad`-style pattern used to decide which methods get their own
+// expected entry (see _isDelegateOnlyBadMethod's header comment,
+// incident (2)) — it must EXCLUDE `*Source`-shaped names, since a call to
+// a same-class `BadSource()`/`badSource()` helper only supplies data and
+// never completes the flaw.
+const CS_DELEGATE_TARGET_RE = /^Bad(?:Sink)?\d*$/;
+const JAVA_DELEGATE_TARGET_RE = /^(?:bad|badSink|bad\d+)$/;
+
+test('_isDelegateOnlyBadMethod: a C# Bad() that only calls a sibling BadSink is a delegate', () => {
+  const src = `
+class Caller : AbstractTestCaseWeb {
+    public override void Bad(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = "";
+        if (req.QueryString["id"] != null) { data = req.QueryString["id"]; }
+        Sink.BadSink(data , req, resp );
+    }
+}
+`;
+  const methods = findCsharpMethodSpans(src);
+  const bad = methods.find((m) => m.name === 'Bad');
+  assert.ok(bad, 'expected to find the Bad() method span');
+  assert.ok(_isDelegateOnlyBadMethod(bad, CS_DELEGATE_TARGET_RE), 'a method that only calls Sink.BadSink(...) must be recognized as a delegate');
+});
+
+test('_isDelegateOnlyBadMethod: a C# BadSink that directly contains the sink is NOT a delegate', () => {
+  const src = `
+class Sink {
+    public static void BadSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+            resp.Redirect(data);
+        }
+    }
+}
+`;
+  const methods = findCsharpMethodSpans(src);
+  const badSink = methods.find((m) => m.name === 'BadSink');
+  assert.ok(badSink, 'expected to find the BadSink() method span');
+  assert.equal(_isDelegateOnlyBadMethod(badSink, CS_DELEGATE_TARGET_RE), false, 'a method with its own direct sink call must NOT be flagged as a delegate');
+});
+
+// Regression test for a real bug this fix's OWN first attempt introduced
+// (found via a real corpus A/B before landing, see W4.C22's ledger entry):
+// Juliet's generated sink lines embed a diagnostic STRING LITERAL that
+// unconditionally labels itself "Bad()" regardless of the enclosing
+// method's real name (`resp.Write("<br>Bad(): data = " + data);`) — a raw
+// text scan for "Bad(" matches THIS literal exactly as readily as a real
+// delegate call, wrongly flagging a BadSink()/BadSource() method (whose own
+// name differs from "Bad", so the anti-recursion guard doesn't protect it)
+// as a delegate even though it directly contains the real sink.
+test('_isDelegateOnlyBadMethod: a diagnostic string literal naming "Bad()" inside a DIFFERENT method must NOT be mistaken for a delegate call', () => {
+  const src = `
+class C : AbstractTestCaseWeb {
+    public override void BadSink(HttpRequest req, HttpResponse resp) {
+        string data = req.QueryString["id"];
+        if (data != null) {
+            resp.Write("<br>Bad(): data = " + data);
+        }
+    }
+}
+`;
+  const methods = findCsharpMethodSpans(src);
+  const badSink = methods.find((m) => m.name === 'BadSink');
+  assert.ok(badSink, 'expected to find the BadSink() method span');
+  assert.equal(_isDelegateOnlyBadMethod(badSink, CS_DELEGATE_TARGET_RE), false,
+    'a "Bad():" diagnostic label embedded in a string literal must not be mistaken for a delegate call to a method literally named Bad');
+});
+
+// Second regression test (found via the SAME real corpus A/B, a second,
+// distinct false positive after fix (1) landed): Juliet's "data returned
+// from one method to another in the SAME CLASS" flow variant (confirmed
+// via the public mirror, CWE90_LDAP_Injection__Environment_42.cs) has
+// Bad() call a private, same-file `BadSource()` helper purely to fetch
+// tainted data, then directly build and reach the real sink itself. A
+// call to a `*Source`-shaped name must never count as delegation.
+test('_isDelegateOnlyBadMethod: a C# Bad() that calls a same-class BadSource() helper (but has its own sink) is NOT a delegate', () => {
+  const src = `
+class C : AbstractTestCase {
+    private static string BadSource() {
+        string data;
+        data = Environment.GetEnvironmentVariable("ADD");
+        return data;
+    }
+    public override void Bad() {
+        string data = BadSource();
+        using (DirectoryEntry de = new DirectoryEntry()) {
+            using (DirectorySearcher search = new DirectorySearcher(de)) {
+                search.Filter = "(&(objectClass=user)(employeename=" + data + "))";
+            }
+        }
+    }
+}
+`;
+  const methods = findCsharpMethodSpans(src);
+  const bad = methods.find((m) => m.name === 'Bad');
+  assert.ok(bad, 'expected to find the Bad() method span');
+  assert.equal(_isDelegateOnlyBadMethod(bad, CS_DELEGATE_TARGET_RE), false,
+    'a call to a same-class BadSource() data helper must not be mistaken for delegating the flaw — Bad() here directly contains the real sink');
+});
+
+test('_isDelegateOnlyBadMethod: a Java bad() that only calls badSink is a delegate; recursion into itself does not count', () => {
+  const delegating = findJavaMethodSpans(`
+class Caller {
+    public void bad(String data) throws Throwable {
+        data = System.getenv("ADD");
+        (new Sink()).badSink(data);
+    }
+}
+`).find((m) => m.name === 'bad');
+  assert.ok(delegating);
+  assert.ok(_isDelegateOnlyBadMethod(delegating, JAVA_DELEGATE_TARGET_RE));
+
+  const direct = findJavaMethodSpans(`
+class Sink {
+    public void badSink(String data) throws Throwable {
+        if (data != null) {
+            Runtime.getRuntime().exec(data);
+        }
+    }
+}
+`).find((m) => m.name === 'badSink');
+  assert.ok(direct);
+  assert.equal(_isDelegateOnlyBadMethod(direct, JAVA_DELEGATE_TARGET_RE), false);
+});
+
+test('_isDelegateOnlyBadMethod: a Java bad() that calls a same-class badSource() helper (but has its own sink) is NOT a delegate', () => {
+  const bad = findJavaMethodSpans(`
+class C {
+    private static String badSource() throws Throwable {
+        String data;
+        data = System.getenv("ADD");
+        return data;
+    }
+    public void bad() throws Throwable {
+        String data = badSource();
+        Runtime.getRuntime().exec(data);
+    }
+}
+`).find((m) => m.name === 'bad');
+  assert.ok(bad, 'expected to find the bad() method span');
+  assert.equal(_isDelegateOnlyBadMethod(bad, JAVA_DELEGATE_TARGET_RE), false,
+    'a call to a same-class badSource() data helper must not be mistaken for delegating the flaw');
 });
 
 test('buildSameFileCallGraph + reachableFrom: resolves a same-file call edge', () => {

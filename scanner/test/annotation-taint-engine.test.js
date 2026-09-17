@@ -402,12 +402,18 @@ test('R14(a) site isolation: nested-call-in-sink-argument interprocedural summar
   // revert, which is a false signal in the opposite direction from what a
   // regression test must never produce.)
   //
-  // Per the fix-round-2 coordinator note: there is a known, pre-existing,
-  // unrelated bug where a merged cross-file finding is reported under the
-  // CALLER's file but the CALLEE's line. That bug is out of scope here —
-  // this assertion only checks for the PRESENCE of an AMain.java-attributed
-  // finding (the caller-side merge channel), not its exact line, so it is
-  // unaffected by that bug either way.
+  // SARD_80_F1 W4.C21/C22 — the "known, pre-existing, unrelated bug" this
+  // comment used to name (a merged cross-file finding reported under the
+  // CALLER's file but the CALLEE's line) is now FIXED: `analyzeFunction`
+  // stamps each finding's `file` at the moment of discovery (the function
+  // that actually produced it), and `_collectFindings` prefers that stamped
+  // `file` over whichever function it's currently attributing OTHER
+  // findings to. A finding merged in via `_mergeSummaryFindings` now
+  // correctly shows the CALLEE's own file (`ZHelper.java` here, not
+  // `AMain.java`) — `file` is no longer a usable proxy for "did this
+  // specific merge channel fire." `_funcQid`, which `_mergeSummaryFindings`
+  // deliberately DOES still rewrite to the caller's qid (by design — see
+  // that function's own header comment), is the correct signal instead.
   const helperFn = {
     qid: 'ZHelper.java::ZHelper::helper@2',
     name: 'helper',
@@ -459,12 +465,12 @@ test('R14(a) site isolation: nested-call-in-sink-argument interprocedural summar
   };
   const callGraph = buildCallGraph(perFileIR);
   const findings = runTaintEngine(perFileIR, callGraph, {});
-  const hasCallerSideFinding = findings.some(f => f.file === 'AMain.java');
   const hasCalleeSideFinding = findings.some(f => f.file === 'ZHelper.java');
+  const hasMergedIntoCaller = findings.some(f => f._funcQid === callerFn.qid);
   assert.ok(hasCalleeSideFinding,
-    `sanity check: ZHelper.java's own direct annotation-sourced flow must still be reported (base/k=1 pass, unrelated to this site) — got: ${JSON.stringify(findings.map(f => ({ file: f.file, line: f.line, vuln: f.vuln })))}`);
-  assert.ok(hasCallerSideFinding,
-    `expected the nested-call-in-sink-argument interprocedural summary to merge ZHelper.helper's own annotation-sourced finding into AMain.run's finding set, got: ${JSON.stringify(findings.map(f => ({ file: f.file, line: f.line, vuln: f.vuln })))}`);
+    `sanity check: ZHelper.java's own direct annotation-sourced flow must still be reported (base/k=1 pass, unrelated to this site) — got: ${JSON.stringify(findings.map(f => ({ file: f.file, line: f.line, vuln: f.vuln, _funcQid: f._funcQid })))}`);
+  assert.ok(hasMergedIntoCaller,
+    `expected the nested-call-in-sink-argument interprocedural summary to merge ZHelper.helper's own annotation-sourced finding into AMain.run's finding set (signalled by _funcQid, now that file correctly follows the callee post-W4.C21), got: ${JSON.stringify(findings.map(f => ({ file: f.file, line: f.line, vuln: f.vuln, _funcQid: f._funcQid })))}`);
 });
 
 test('R14(a) site isolation: higher-order callback interprocedural summary (site ~line 1395) merges the callback\'s OWN findings into the caller independent of the base pass', () => {

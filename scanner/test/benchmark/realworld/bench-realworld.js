@@ -717,9 +717,87 @@ export function findJavaMethodSpans(content) {
     }
     const startLine = content.substring(0, m.index).split('\n').length + (content.substring(m.index).match(/^\s*\n/) ? 1 : 0);
     const endLine = content.substring(0, i).split('\n').length;
-    methods.push({ name, startLine, endLine });
+    // W4.C22: body text (from '{' to matching '}') for the delegate-only-
+    // caller check in buildJulietExpected — see that function's comment.
+    methods.push({ name, startLine, endLine, bodyText: content.slice(openIdx, i) });
   }
   return methods;
+}
+
+// SARD_80_F1 W4.C22 (fix for the regression found and reverted at W4.C21):
+// a "bad"-shaped method whose entire body is a DELEGATING CALL to another
+// FLAW-COMPLETING bad-shaped method (Juliet's own multi-file flow-variant
+// convention — "data passed as an argument from one method to another in
+// a different class/file") contains no sink of its own; the real flaw
+// lives in the callee, which gets its OWN separate expected entry when
+// buildJulietExpected/buildJulietCsExpected later walks THAT file. Before
+// this fix, the delegating caller's own expected entry was, by
+// construction, unsatisfiable by any scanner that correctly attributes
+// the sink to its real (callee) location — PRD §9.1's same-file
+// reachability fallback is deliberately scoped to same-file only, so it
+// can never rescue a cross-file case like this one. Confirmed via W4.C21's
+// real dev-split A/B: a taint-engine fix that made C# correctly relocate
+// these findings to their real (callee) file showed a clean, 1:1
+// relocation pattern in `tps`-list diffs (a "lost" caller-file entry always
+// paired with a "gained" callee-file entry for the identical vulnerability)
+// — i.e. this expected entry was never earning real recall credit for a
+// scanner that reports the truth, only for one that reproduces the SAME
+// mislocation bug.
+//
+// `badNameRe` decides which methods get checked at all (matches the
+// caller's own `isBad` test, so it INCLUDES `*Source` helper names).
+// `delegateTargetRe` is deliberately NARROWER — it decides which CALLEE
+// names count as a genuine flaw-completing delegate — and must EXCLUDE any
+// `*Source`-shaped name. A call to the METHOD'S OWN NAME (recursion) never
+// counts as delegation either way.
+//
+// Two real false-positive sources were found and fixed while landing this,
+// both via a real corpus A/B (see W4.C22's ledger entry), not by reasoning
+// alone:
+//
+// (1) A first attempt scanned `bodyText` raw. Juliet's own generated sink
+// lines embed a diagnostic STRING LITERAL that names the method
+// unconditionally as "Bad()" regardless of the enclosing method's real
+// name — e.g. `resp.Write("<br>Bad(): data = " + data);` appears verbatim
+// inside `BadSink()`/`GoodG2B1()`/etc, not just inside a literal `Bad()`.
+// `/\b(\w+)\s*\(/` matches "Bad(" INSIDE that string exactly as readily as
+// a real call expression, and — since the matched name ("Bad") differs
+// from the enclosing method's own name whenever that method is anything
+// OTHER than literally "Bad" — the anti-recursion guard (`callee !==
+// meth.name`) does not protect against it. A `BadSink()` method with this
+// diagnostic string was wrongly flagged as "delegates to Bad()", stripping
+// its own genuine expected entry even though it directly contains the real
+// sink. Fixed by blanking string/char literals before scanning — the same
+// "don't match inside a string" discipline this codebase's own detectors
+// (`sast/_comment-strip.js`) already apply everywhere else.
+//
+// (2) Even after fix (1), a SECOND, distinct false positive remained:
+// Juliet's "data returned from one method to another IN THE SAME CLASS"
+// flow variant (confirmed via the public mirror,
+// CWE90_LDAP_Injection__Environment_42.cs) has `Bad()` call a PRIVATE,
+// SAME-FILE helper named `BadSource()` purely to fetch tainted data —
+// `Bad()` itself then directly builds and reaches the real sink in its own
+// body. `BadSource`/`badSource` (Java) matches the SAME bad-name pattern
+// used to decide which methods get an expected entry at all, so the
+// original single-pattern check wrongly read "Bad() calls BadSource()" as
+// "Bad() delegates its flaw elsewhere" and stripped a genuinely correct,
+// directly-satisfiable expected entry. A `*Source`-shaped callee is BY
+// JULIET'S OWN NAMING CONVENTION always a data supplier, never a
+// flaw-completing sink — so it must never trigger this check, which is why
+// `delegateTargetRe` (below) is a stricter, separate pattern than
+// `badNameRe` rather than reusing it.
+function _blankStringLiterals(text) {
+  return text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, (m) => '"' + ' '.repeat(Math.max(0, m.length - 2)) + '"');
+}
+export function _isDelegateOnlyBadMethod(meth, delegateTargetRe) {
+  const calleeRe = /\b(\w+)\s*\(/g;
+  const scanText = _blankStringLiterals(meth.bodyText || '');
+  let cm;
+  while ((cm = calleeRe.exec(scanText))) {
+    const callee = cm[1];
+    if (callee !== meth.name && delegateTargetRe.test(callee)) return true;
+  }
+  return false;
 }
 
 // Minimal RFC-4180-ish CSV reader. Handles quoted fields with embedded
@@ -990,7 +1068,9 @@ export function findCsharpMethodSpans(content) {
     }
     const startLine = content.substring(0, m.index).split('\n').length + (content.substring(m.index).match(/^\s*\n/) ? 1 : 0);
     const endLine = content.substring(0, i).split('\n').length;
-    methods.push({ name, startLine, endLine });
+    // W4.C22: body text for the delegate-only-caller check — see
+    // buildJulietCsExpected's comment.
+    methods.push({ name, startLine, endLine, bodyText: content.slice(openIdx, i) });
   }
   return methods;
 }
@@ -1048,14 +1128,26 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
           try { content = await fs.readFile(contentPath, 'utf8'); } catch { /* skip */ }
           if (!content) continue;
           const methods = findCsharpMethodSpans(content);
+          const csBadNameRe = /^Bad(?:Sink|Source)?\d*$/;
+          // W4.C22 — deliberately EXCLUDES `*Source` (see
+          // _isDelegateOnlyBadMethod's header comment, incident (2)): a
+          // call to a same-class `BadSource()` helper only supplies data,
+          // it never completes the flaw, so it must not trigger the
+          // delegate-only skip below.
+          const csDelegateTargetRe = /^Bad(?:Sink)?\d*$/;
           let anyEmitted = false;
           for (const meth of methods) {
             // Only Bad()/BadSink()/BadSource() are TP-eligible — see the
             // Java builder's comment for why GoodG2B() (and every other
             // good*() variant) is deliberately excluded, not merely
             // renamed: it's Juliet's safe half, not a legitimate firing.
-            const isBad = /^Bad(?:Sink|Source)?\d*$/.test(meth.name);
+            const isBad = csBadNameRe.test(meth.name);
             if (isBad) {
+              anyEmitted = true;
+              // W4.C22 — see the Java builder's identical comment: a
+              // delegate-only Bad()/BadSink() method has no sink of its
+              // own, so its own entry is skipped in favor of the callee's.
+              if (_isDelegateOnlyBadMethod(meth, csDelegateTargetRe)) continue;
               expected.push({
                 file: rel,
                 line: meth.startLine,
@@ -1066,7 +1158,6 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
                 cwe,
                 method: meth.name,
               });
-              anyEmitted = true;
             }
           }
           if (!anyEmitted) {
@@ -1155,10 +1246,24 @@ async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
           try { content = await fs.readFile(contentPath, 'utf8'); } catch { /* skip */ }
           if (!content) continue;
           const methods = findJavaMethodSpans(content);
+          const javaBadNameRe = /^(?:bad|badSink|badSource|bad\d+)$/;
+          // W4.C22 — deliberately EXCLUDES `badSource` (see
+          // _isDelegateOnlyBadMethod's header comment, incident (2)): a
+          // call to a same-class `badSource()` helper only supplies data,
+          // it never completes the flaw, so it must not trigger the
+          // delegate-only skip below.
+          const javaDelegateTargetRe = /^(?:bad|badSink|bad\d+)$/;
           let anyEmitted = false;
           for (const meth of methods) {
-            const isBad = /^(?:bad|badSink|badSource|bad\d+)$/.test(meth.name);
+            const isBad = javaBadNameRe.test(meth.name);
             if (isBad) {
+              anyEmitted = true;
+              // W4.C22 — a delegate-only "bad" method (its whole body is a
+              // call into another file's own bad-shaped method) has no sink
+              // of its own; skip its own entry so recall is credited once,
+              // at the callee's real location, not required unsatisfiably
+              // here too. See _isDelegateOnlyBadMethod's header comment.
+              if (_isDelegateOnlyBadMethod(meth, javaDelegateTargetRe)) continue;
               expected.push({
                 file: rel,
                 line: meth.startLine,
@@ -1169,7 +1274,6 @@ async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
                 cwe,
                 method: meth.name,
               });
-              anyEmitted = true;
             }
           }
           // Fallback: if no method spans found (unusual file shape), keep the

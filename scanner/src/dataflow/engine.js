@@ -1559,6 +1559,23 @@ function analyzeFunction(fn, entryState, callContext) {
   // No-op for the key unless AGENTIC_SECURITY_KCFA_CALLSTRING=1. Restored below.
   const _prevCallerCtx = (callContext && callContext._summaryCache && callContext._summaryCache.setCallerContext)
     ? callContext._summaryCache.setCallerContext(fn.qid) : undefined;
+  // SARD_80_F1 W4.C21/C22 — `_currentFile` (module-level, set just below) was
+  // never saved/restored around a NESTED analyzeFunction call the way
+  // `_prevCallerCtx` already is on the line above. A cross-FILE call site
+  // (e.g. Bad() in file A calling a summary-computed callee in file B)
+  // recurses into analyzeFunction(calleeFn, ..., inner) to compute the
+  // callee's summary — that inner call sets `_currentFile = calleeFn.file`
+  // (file B) and, until this fix, never set it back, so every subsequent
+  // catalog lookup (`matchSinkOrSanitizer`/`matchSource`/`classOfVar`) in
+  // the OUTER function's own remaining CFG nodes ran against the WRONG
+  // file's language scoping for the rest of that outer function's walk.
+  // Confirmed via a same-file-vs-cross-file A/B reproduction of a real
+  // corpus false positive (see W4.C20/C21/C22) that isolated this leak as
+  // one of two compounding defects. Saving/restoring here — the exact
+  // pattern `_prevCallerCtx` already uses — makes `_currentFile` correctly
+  // scoped to this function's own analysis regardless of what any callee's
+  // nested summary computation does to it in between.
+  const _prevFile = _currentFile;
   const work = [];
   const inStates = new Map();
   const outStates = new Map();
@@ -1585,7 +1602,16 @@ function analyzeFunction(fn, entryState, callContext) {
     if (!node) continue;
     const incoming = inStates.get(nid) || new Set();
     const { state: out, findings, succOverride } = step(node, incoming, callContext);
-    callContext._findings.push(...findings.map(f => ({ ...f, _funcQid: fn.qid })));
+    // SARD_80_F1 W4.C21/C22: stamp the file THIS finding actually belongs to
+    // (fn's own file) at the moment of discovery — see `_collectFindings`'s
+    // header comment for why this matters. `step()`/`_sinkFindingsForCall`
+    // never set `file` themselves (only `line`), so every finding reaching
+    // this line was, until now, implicitly reattributed later to whichever
+    // function `_collectFindings` happened to be called with — correct only
+    // when that's the SAME function, which a cross-file interprocedural
+    // merge (`_mergeSummaryFindings`) is specifically the case where it is
+    // NOT.
+    callContext._findings.push(...findings.map(f => ({ ...f, _funcQid: fn.qid, file: f.file || fn.file })));
     const prevOut = outStates.get(nid);
     const merged = mergeStates(prevOut, out);
     if (!prevOut || !stateEq(prevOut, merged)) {
@@ -1643,7 +1669,7 @@ function analyzeFunction(fn, entryState, callContext) {
         reportedNids.add(nid);
         callContext._findings.push({
           ...createImplicitFinding(node, conditionLabel),
-          _funcQid: fn.qid, sinkId: sink.id,
+          _funcQid: fn.qid, sinkId: sink.id, file: fn.file,
           cwe: (sink.vuln && sink.vuln.cwe) || 'CWE-200',
         });
       };
@@ -1701,6 +1727,8 @@ function analyzeFunction(fn, entryState, callContext) {
   if (_prevCallerCtx !== undefined && callContext && callContext._summaryCache && callContext._summaryCache.setCallerContext) {
     callContext._summaryCache.setCallerContext(_prevCallerCtx);
   }
+  // W4.C21/C22: restore _currentFile — see the save at this function's start.
+  _currentFile = _prevFile;
   return exit;
 }
 
@@ -2167,13 +2195,26 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // genuine caller is established.
   function _collectFindings(attributedFn, srcFindings) {
     for (const f of srcFindings) {
-      const key = `${f.sinkId}:${attributedFn.file}:${f.line}`;
+      // SARD_80_F1 W4.C21/C22 — prefer the finding's OWN `file` (now stamped
+      // at discovery time inside analyzeFunction, using the function that
+      // ACTUALLY produced it) over `attributedFn.file`. `attributedFn` here
+      // is whichever function the CALLER of `_collectFindings` happens to
+      // be processing — correct for a finding discovered directly in that
+      // function's own CFG walk, but WRONG for one merged in from a
+      // callee's summary via `_mergeSummaryFindings` (most commonly a
+      // cross-file interprocedural call): that finding genuinely belongs to
+      // the callee's own file/line, which `f.file` now carries correctly.
+      // The `attributedFn.file` fallback stays for defense-in-depth only —
+      // every path pushing into `_findings` sets `file` explicitly as of
+      // this fix.
+      const file = f.file || attributedFn.file;
+      const key = `${f.sinkId}:${file}:${f.line}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const fn = attributedFn;
       all.push({
-        id: `ir-taint:${fn.file}:${f.line}:${f.sinkId}`,
-        file: fn.file,
+        id: `ir-taint:${file}:${f.line}:${f.sinkId}`,
+        file,
         line: f.line,
         vuln: f.vuln,
         severity: f.severity,
