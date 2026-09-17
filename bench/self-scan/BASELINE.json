@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-16T23:35:01.651Z",
-  "commit": "052314a5a2781d73f34d1d2cad0a87daf7e7d3be",
+  "generatedAt": "2026-09-17T06:04:57.125Z",
+  "commit": "a4d35d460fa9397f80e8075b688475e2f5c31ac7",
   "targets": {
     "hooks": {
       "total": 21,
@@ -34,7 +34,7 @@
       }
     },
     "scanner/src": {
-      "total": 485,
+      "total": 484,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -53,7 +53,7 @@
         "fix/apply-fix-service.js": 3,
         "fix/approver-registry.js": 1,
         "history-scan.js": 1,
-        "integrations/index.js": 11,
+        "integrations/index.js": 10,
         "integrations/tickets.js": 9,
         "ir/chrome-probe.mjs": 1,
         "ir/cpp-preprocessor.js": 1,

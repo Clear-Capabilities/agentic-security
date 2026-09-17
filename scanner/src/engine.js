@@ -10328,7 +10328,27 @@ function _deterministicFileTimings(timings) {
   // SCA-SAST correlation: link SAST findings to SCA vulnerable packages
   try{for(const f of finalFindings){if(!f.chain||!f.chain.length)continue;const src=f.chain[0]?.label||'';for(const sc of supplyChain){if(sc.type!=='vulnerable_dep')continue;if(src.includes(sc.name)||f.vuln?.toLowerCase().includes(sc.name)){f.scaCorrelation={osvId:sc.osvId,package:sc.name,version:sc.version,confirmed:true};sc.sastConfirmed=true;break;}}}}catch(_){}
   // Multi-sink chain detection: group findings by source variable
-  try{const srcGroups=new Map();for(const f of finalFindings){const src=f.chain?.[0]?.label;if(!src)continue;if(!srcGroups.has(src))srcGroups.set(src,[]);srcGroups.get(src).push(f);}for(const[src,group]of srcGroups){if(group.length<2)continue;const groupId=`multi-sink:${src}:${group.length}`;for(const f of group)f._multiSinkGroupId=groupId;finalFindings.push({id:groupId,file:group[0].file,line:group[0].line,vuln:`Multi-Sink Taint Chain — ${src} reaches ${group.length} sinks`,severity:group.some(f=>f.severity==='critical')?'critical':'high',cwe:'CWE-20',parser:'MULTI-SINK',confidence:0.85,sinks:group.map(f=>({file:f.file,line:f.line,vuln:f.vuln})),_aggregated:true});}}catch(_){}
+  // SARD_80_F1 W4.J22/J23: this aggregate previously ALWAYS pushed a brand
+  // new finding hardcoding cwe:'CWE-20' with no `family`, regardless of what
+  // the grouped sinks actually were. When every sink in the group shares one
+  // real family/CWE — the common case: several sinks along the same
+  // injection-class chain, e.g. the same tainted var reaching two
+  // db.query() calls — that new finding duplicated a per-sink finding
+  // ALREADY in `finalFindings` at the identical (file, line, family, cwe):
+  // a first attempt here just relabeled the aggregate to the shared
+  // family/CWE, expecting it to collapse via dedupeFindingsWithEvidence's
+  // (file, sink-line, family) key — but this pass runs AFTER dedupe
+  // (line ~9467), so the relabeled duplicate was never actually removed; a
+  // real corpus A/B confirmed zero net fp movement, only a relabel. Fixed
+  // properly: in the homogeneous case, don't push a second finding at all —
+  // attach the chain metadata (source + full sink list) onto the existing
+  // per-sink finding instead, so the "one source, N sinks" information
+  // survives without a duplicate, separately-scored finding. Only a
+  // genuinely mixed-CWE chain (a real, distinct "multiple vulnerability
+  // classes from one source" finding, not a duplicate of any single
+  // existing finding) still gets its own standalone finding, tagged with
+  // the honest generic CWE-20/'multi-sink-taint-chain' label.
+  try{const srcGroups=new Map();for(const f of finalFindings){const src=f.chain?.[0]?.label;if(!src)continue;if(!srcGroups.has(src))srcGroups.set(src,[]);srcGroups.get(src).push(f);}for(const[src,group]of srcGroups){if(group.length<2)continue;const groupId=`multi-sink:${src}:${group.length}`;for(const f of group)f._multiSinkGroupId=groupId;const sharedFamily=group.every(f=>f.family&&f.family===group[0].family)?group[0].family:null;const sharedCwe=group.every(f=>f.cwe&&f.cwe===group[0].cwe)?group[0].cwe:null;const sinks=group.map(f=>({file:f.file,line:f.line,vuln:f.vuln}));if(sharedFamily&&sharedCwe){for(const f of group)f.multiSinkChain={source:src,sinkCount:group.length,sinks};continue;}finalFindings.push({id:groupId,file:group[0].file,line:group[0].line,vuln:`Multi-Sink Taint Chain — ${src} reaches ${group.length} sinks`,severity:group.some(f=>f.severity==='critical')?'critical':'high',cwe:'CWE-20',family:'multi-sink-taint-chain',parser:'MULTI-SINK',confidence:0.85,sinks,_aggregated:true});}}catch(_){}
   // SCA transitive dedup: collapse duplicate CVEs across dep chains
   try{const osvGroups=new Map();for(const sc of supplyChain){if(sc.type!=='vulnerable_dep'||!sc.osvId)continue;if(!osvGroups.has(sc.osvId))osvGroups.set(sc.osvId,[]);osvGroups.get(sc.osvId).push(sc);}for(const[osvId,group]of osvGroups){if(group.length<=1)continue;const primary=group.find(s=>s.isDirect)||group[0];primary.dependents=group.filter(s=>s!==primary).map(s=>({name:s.name,version:s.version,depChain:s.depChain,isDirect:s.isDirect}));primary._transitiveDeduped=group.length-1;for(const dup of group){if(dup!==primary)dup._deduplicatedInto=primary.osvId;}supplyChain.splice(0,supplyChain.length,...supplyChain.filter(s=>!s._deduplicatedInto));}}catch(_){}
   // ── World-class post-scan artifact emitters ──────────────────────────
