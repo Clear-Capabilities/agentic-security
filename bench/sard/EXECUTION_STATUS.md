@@ -603,8 +603,15 @@ better. Status: IN_PROGRESS (2 of 4 tasks landed — W3.2, W3.4's
 investigation half). Measured dev precision: **C# 78.0%** (CLEARS the
 75% bar, per W4.C16's post-fix state), **PHP 30.1%** (far below 75% —
 root-caused at W3.4, fix deferred as a genuine context-sensitivity gap),
-**Java not freshly re-measured this push**. Still blocked on W3.1/W3.3
-and PHP's actual fix for the acceptance bar itself.
+**Java 65.8%** (up from W4.J21's 64.3%→64.6%, per a fresh clean
+`batch-scan.mjs \| macro-score.mjs` dev-split reading taken after this
+push's W4.J21 (XSS literal-blindness)/W4.J23 (multi-sink dedup)/W4.J24
+(SSRF cross-CWE noise) fix cluster: macroF1=44.2%, microF1=61.6%,
+P=65.8%, R=58.0% — real, incremental movement (+1.2pp over W4.J21's
+64.6%) but still 19.2pp short of the 85% bar; W4.J22's remaining
+documented CWE-22 same-flow item is correctly NOT chased further via
+suppression, per the no-cheating principle (see W4.J22/W4.J25)). Still
+blocked on W3.1/W3.3 and PHP's actual fix for the acceptance bar itself.
 
 ## W4 — Per-CWE coverage sweep
 
