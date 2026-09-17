@@ -256,6 +256,21 @@ test('detector: weak rng in crypto context', () => {
   const src = 'class T { void M() { var token = new Random().Next(); var password = "x12345678901"; } }';
   const findings = scanCSharp('t.cs', src);
   assert.ok(findings.some(f => f.family === 'weak-rng'));
+  // the declared form is caught exactly once, not double-counted by the
+  // new inline-chain scan added for W4.C25 below.
+  assert.equal(findings.filter(f => f.family === 'weak-rng').length, 1);
+});
+
+// SARD_80_F1 W4.C25 — Juliet's own CWE-338 (Weak PRNG) convention never
+// declares the Random object at all: `new Random()` is constructed and
+// chained off INLINE, directly as a call argument
+// (`IO.WriteLine("" + new Random().NextDouble());`) — confirmed against the
+// public C# mirror (CWE338_Weak_PRNG__random_01.cs). The old code only ever
+// scanned `ir.decls`, a total blackout for this whole descriptor family.
+test('detector: weak rng via an INLINE new Random() chained call (no declaration at all)', () => {
+  const src = 'using System.Security.Cryptography;\nclass T { void Bad() { IO.WriteLine("" + new Random().NextDouble()); } }';
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'weak-rng' && f.cwe === 'CWE-330'));
 });
 
 test('detector: path traversal via Path.Combine with tainted segment', () => {

@@ -370,7 +370,29 @@ function detectWeakRng(file, raw, ir, analysis, out, seen) {
       }));
     }
   }
-  // call site: var x = new Random().Next(); — also caught above via decl.
+  // SARD_80_F1 W4.C25 — the loop above only ever sees `ir.decls`, i.e. a
+  // DECLARED `Type x = new Random();`. Juliet's own CWE-338 (Weak PRNG)
+  // convention (confirmed against the public C# mirror,
+  // CWE338_Weak_PRNG__random_01.cs) never declares the object at all:
+  // `IO.WriteLine("" + new Random().NextDouble());` constructs and chains
+  // off `new Random()` INLINE, as a call argument — this never appears in
+  // `ir.decls`, a total blackout for this whole descriptor family. A raw-
+  // text scan for `new Random()` immediately followed by a chained member
+  // call closes it without needing a declaration at all.
+  const inlineRe = /\bnew\s+Random\s*\(\s*\)\s*\.\s*\w+\s*\(/g;
+  let im;
+  while ((im = inlineRe.exec(fileText))) {
+    const line = fileText.slice(0, im.index).split('\n').length;
+    const id = `csharp-weak-rng:${file}:${line}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(makeFinding({
+      ruleId: 'csharp-weak-rng', file, line, raw, ir,
+      family: 'weak-rng', severity: 'high', cwe: 'CWE-330',
+      vuln: 'Weak Randomness — System.Random in cryptographic context',
+      remediation: '`System.Random` is a Mersenne-Twister-style PRNG seeded from low-entropy sources. Use `RandomNumberGenerator.Fill(buffer)` or `RandomNumberGenerator.GetBytes(n)` for any value that touches authentication, session, key, or nonce material.',
+    }));
+  }
 }
 
 function detectHardcodedSecret(file, raw, ir, analysis, out, seen) {
