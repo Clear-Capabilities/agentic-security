@@ -501,3 +501,142 @@ public class C {
   const irFindings = (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
   assert.ok(irFindings.length >= 1, `expected an IR-TAINT finding for the using-wrapped ADO.NET shape, got: ${JSON.stringify((scan.findings || []).map(f => f.parser))}`);
 });
+
+// Juliet's `if (true) { … } else { … }` / `if (false) { … } else { … }`
+// constant-condition idiom (its own "Flow Variant 02" naming convention,
+// used across dozens of CWEs, not just command injection). Before this fix,
+// bare `else` had no `needsCond` match at all, so it was never linked as a
+// real second branch of the `if` node — it fell through to the generic
+// bare-nested-block handling and was recursed into SEQUENTIALLY, straight
+// after the if-body, unconditionally. For a genuine runtime condition that's
+// a deliberate recall-preserving tradeoff (never drop a sink hidden in
+// either arm) — but for a LITERAL true/false condition it actively loses
+// taint: the dead arm's clean/null assignment always ran "after" the live
+// arm and clobbered its variable by the time a later sink read it,
+// regardless of which arm was actually live. Root-caused via the public C#
+// Juliet mirror's own `CWE78_OS_Command_Injection__NetClient_02.cs`.
+test('parseCSharpFile: if(true)/else — the live branch keeps its assignment, the dead else-branch is pruned entirely', () => {
+  const code = `
+public class C {
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (true) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead else-branch\'s `data = null` must not appear anywhere in the CFG, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the live if-branch\'s `data = sr.ReadLine()` must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: if(false)/else — the dead if-branch is pruned, the live else-branch keeps its assignment', () => {
+  const code = `
+public class C {
+    public void Good(System.IO.StreamReader sr) {
+        string data;
+        if (false) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Good');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the dead if-branch\'s `data = sr.ReadLine()` must not appear anywhere in the CFG, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'literal'),
+    'the live else-branch\'s `data = "foo"` must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: end-to-end runScan detects taint through if(true)/else (Juliet NetClient shape), and does NOT fire on the if(false)/else good-source counterpart', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-const-if-'));
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Bad {
+    public void Run(StreamReader sr) {
+        string data;
+        if (true) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const badResult = await runScan(dir, { deep: true, deepInCi: true });
+  const badFindings = (badResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.ok(badFindings.length >= 1,
+    `expected a CWE-78 finding through if(true)/else, got: ${JSON.stringify(badResult.scan.findings)}`);
+
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Good {
+    public void Run(StreamReader sr) {
+        string data;
+        if (false) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const goodResult = await runScan(dir, { deep: true, deepInCi: true });
+  const goodFindings = (goodResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.equal(goodFindings.length, 0,
+    `expected no CWE-78 finding for the if(false)/else good-source counterpart, got: ${JSON.stringify(goodFindings)}`);
+});
+
+test('parseCSharpFile: a genuine (non-constant) runtime if/else condition is unaffected by the constant-condition special case', () => {
+  const code = `
+public class C {
+    public void Run(System.IO.StreamReader sr, bool flag) {
+        string data;
+        if (flag) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Run');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  // Both arms are still present — the general (non-literal) if/else path
+  // must remain the same permissive straight-line shape it was before this
+  // fix; only a literal true/false condition gets the new pruning behavior.
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'expected the if-branch assignment to still be present, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'literal'),
+    'expected the else-branch assignment to still be present, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'if'), 'expected a genuine `if` CFG node for the non-constant condition');
+});

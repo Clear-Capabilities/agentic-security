@@ -1010,7 +1010,9 @@ function _linkNodes(nodes, src, dst) {
 function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, depth = 0) {
   if (depth > 12) return prevId;
   let prev = prevId;
-  for (const { text: s, start } of _splitStatements(bodyText)) {
+  const stmts = _splitStatements(bodyText);
+  for (let stmtIdx = 0; stmtIdx < stmts.length; stmtIdx++) {
+    const { text: s, start } = stmts[stmtIdx];
     if (!s) continue;
     const absStart = baseAbs + start;
     const line = funcStartLine + _lineForOffset(lineStarts, absStart) - 1;
@@ -1072,6 +1074,86 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
             prev = assignId;
           }
         }
+      } else if (kwNorm === 'if' && condRaw !== null && /^(?:true|false)$/.test(condRaw.trim())) {
+        // Juliet's `if (true) { … } else { … }` / `if (false) { … } else
+        // { … }` constant-condition idiom — its OWN "Flow Variant 02"
+        // naming convention, used across dozens of CWEs, not just one —
+        // must be pruned HERE, at IR-build time, not left to the general
+        // if/else handling below. The general path deliberately builds a
+        // STRAIGHT-LINE CFG for if/else (recurse into the if-body, then
+        // — because bare `else` has no `needsCond` match and isn't linked
+        // as a real second branch of the `if` node — treat the following
+        // `else { … }` as an unconditionally-sequential block that runs
+        // AFTER the if-body). That's a deliberate recall-preserving
+        // tradeoff for a REAL runtime condition (never drop a sink hidden
+        // in either arm) — but it is actively WRONG for a LITERAL
+        // true/false condition, where the dead arm provably never runs at
+        // all: a clean/null assignment in the dead arm was overwriting —
+        // "clobbering" at the CFG-sequencing level, not a taint-engine
+        // merge — the live arm's genuine taint by the time a later sink
+        // read the variable. Confirmed via the public C# Juliet mirror's
+        // own `CWE78_..._NetClient_02.cs`: `if (true) { data =
+        // sr.ReadLine(); } else { data = null; }` lost ALL taint on
+        // `data` before this fix, while the same source with no `else`
+        // (or no `if` at all) worked correctly — isolating the defect to
+        // exactly this construct. `_lowerExpr` never models C#'s `true`/
+        // `false` keywords as `{kind:'literal'}` (they fall through to
+        // `{kind:'ident', name:'true'|'false'}`), so `evalConst` in
+        // `dataflow/path-feasibility.js` — which only prunes an already-
+        // built two-successor `if` node — never even gets the chance;
+        // the straight-line shape here never HAD two successors to prune.
+        // No `if` CFG node is emitted at all for a literal condition:
+        // there is no real branch to represent, only dead code to skip.
+        const isTrue = condRaw.trim() === 'true';
+        const restIf = s.slice(afterHeader);
+        const leadIf = restIf.match(/^\s*/)[0].length;
+        let liveText = null, liveBaseAbs = null;
+        if (restIf[leadIf] === '{') {
+          const closeRel = _matchDelim(restIf, leadIf, '{', '}');
+          if (closeRel !== -1) {
+            liveText = restIf.slice(leadIf + 1, closeRel);
+            liveBaseAbs = absStart + afterHeader + leadIf + 1;
+          }
+        } else if (restIf.trim()) {
+          liveText = restIf;
+          liveBaseAbs = absStart + afterHeader;
+        }
+        // Peek at the immediately-following statement: a bare `else` (NOT
+        // `else if`, which is a fresh conditional the general path must
+        // still handle) belongs to THIS if and must be consumed here —
+        // either as the live branch (condition false) or discarded
+        // outright (condition true) — never left for the outer loop to
+        // fall through to the generic bare-`else`-as-sequential-block
+        // handling that IS the bug this branch exists to avoid.
+        let elseText = null, elseBaseAbs = null;
+        const next = stmts[stmtIdx + 1];
+        if (next) {
+          const em = next.text.match(/^else\b(?!\s*if\b)/);
+          if (em) {
+            let ep = em[0].length;
+            while (ep < next.text.length && /\s/.test(next.text[ep])) ep++;
+            const erest = next.text.slice(ep);
+            const elead = erest.match(/^\s*/)[0].length;
+            const eAbsStart = baseAbs + next.start;
+            if (erest[elead] === '{') {
+              const closeRel = _matchDelim(erest, elead, '{', '}');
+              if (closeRel !== -1) {
+                elseText = erest.slice(elead + 1, closeRel);
+                elseBaseAbs = eAbsStart + ep + elead + 1;
+              }
+            } else if (erest.trim()) {
+              elseText = erest;
+              elseBaseAbs = eAbsStart + ep;
+            }
+            stmtIdx++; // consumed — the outer loop must not process it again
+          }
+        }
+        if (isTrue) {
+          if (liveText !== null) prev = _buildCfg(liveText, nodes, prev, funcStartLine, lineStarts, liveBaseAbs, depth + 1);
+        } else if (elseText !== null) {
+          prev = _buildCfg(elseText, nodes, prev, funcStartLine, lineStarts, elseBaseAbs, depth + 1);
+        }
+        continue;
       } else if (kwNorm === 'using' && condRaw !== null) {
         // `using (SqlCommand cmd = new SqlCommand(query, conn)) { … }`: the
         // resource clause is a real declaration, and in ADO.NET it is where
