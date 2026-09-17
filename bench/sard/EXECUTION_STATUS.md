@@ -583,7 +583,7 @@ equivalents likewise; holdout and cve-replay gates unchanged. Status: NOT_STARTE
 | W2.5 | Abstract/interface dispatch via declared base when receiver is a parameter (81, 82) | VERIFIED |
 | W2.6 | Java if/else real branch+join CFG (was: linear fall-through, else silently overwrote then-branch taint) — not in the original PRD task list, found this session | VERIFIED |
 | W2.7 | Java switch/case real branch+join CFG + fix `deadBranchRanges` case-label key bug (was: matching case marked "dead", default exempted — exactly backwards) — not in the original PRD task list, found this session | VERIFIED |
-| W2.8 | C# zero-recall CWE investigation (78,80,81,83,134,261,313,314,315,321,523,643) — root-caused 313/314/315/523/321 to missing/mis-shaped detector coverage, not a taint-engine defect; ruled out C#'s CFG/call-resolution as the cause via direct probes; 78/80/81/83/134/261/643 remain open | IN_PROGRESS |
+| W2.8 | **Documentation staleness fix, no new investigation**: this row's own "remain open" list was stale — most were resolved by LATER entries in this same ledger, never reflected back here. C# zero-recall CWE investigation (78,80,81,83,134,261,313,314,315,321,523,643) originally root-caused 313/314/315/523/321 to missing/mis-shaped detector coverage (not a taint-engine defect). Of the originally-"open" set: **80/81/83 confirmed working (W4.C1)**, **134 fixed (W4.C3, lowercase `string` receiver alias gap)**, **78 fixed (W4.C11, compound-assignment `+=` CFG blindness)**, **643 fixed (W4.C9, two-pass decl/assign ordering bug)** — only **CWE-261 (Weak Cryptography for Passwords) remains genuinely un-investigated** under this session's work, a real, concrete, well-scoped next candidate for a future iteration | IN_PROGRESS |
 
 **W2 acceptance:** no flow-variant class below 70% recall on dev for Java and
 C#. Status: NOT_STARTED. Blocked on W1.
@@ -932,6 +932,73 @@ different, harder detector: track a value from a cataloged source to one
 of these sinks AND verify no crypto/encryption call sits between them —
 scoped as a distinct future task, not attempted here given the false-
 positive risk just measured on the naive version of that same idea.
+
+### W2.8 follow-up 2 — CWE-261 (Weak Cryptography for Passwords) detector (2026-09-16)
+
+Closed the last genuinely-untouched item from W2.8's original CWE list
+(re-audited: 78/80/81/83/134/643 had each already been separately fixed by
+W4.C1/C3/C9/C11 — only CWE-261 was never investigated). Researched the
+real corpus shape via the public C# Juliet mirror
+(`eliftutarr/NIST-Juliet-CSharp-1.3`, pinned
+`948e0bbd41862fde7b1e4ad3a50aba451f92bad1`): a "point flaw" — same class as
+the existing CWE-523/539 detectors, needing zero taint tracking. `Bad()`
+does `Encoding.UTF8.GetString(Convert.FromBase64String(password))` (Base64
+is an ENCODING, not encryption — trivially reversible); `Good()` uses
+`AesCryptoServiceProvider` for real encryption and never calls
+`Convert.FromBase64String`. Implemented `detectWeakPasswordEncoding` in
+`sast/csharp.js`: fires on `Convert.FromBase64String(arg)` when `arg` is a
+password-shaped identifier (`SECRET_NAME_PATTERN`), no taint or guard
+logic needed since the "fix" is a structurally different API. 3 new unit
+tests (positive fire, real-AES negative, unrelated-variable negative);
+`test/csharp-pipeline.test.js` now 64/64.
+
+**Gate suite (full, run twice — see below for why): `npm run test:sast`
+784/784, `bench:self-scan:check` clean (no drift), `bench:mutation:check`
+35/35, `bench:cve-replay:check` 220/220 (no baseline drift).**
+
+**Real corpus measurement found and fixed a SECOND, independent bug.** A
+git-stash A/B on the dev split (`batch-scan.mjs --app
+sard-juliet-csharp-strict --blind --scramble-identifiers --deep --split
+dev --json`) initially showed the new findings firing correctly but
+scoring as **100% false positives** (CWE-261: tp=0→0, fp=0→17, fn=17→17
+unchanged) — a red flag, not a detection failure. Root-caused to
+`bench-realworld.js`'s `familyForBench`, which derives a finding's
+SCORING family from `finding.vuln` TEXT via `expected.json`'s
+`_familyMap` (exact/prefix lookups) — **not** from `finding.family` (the
+same architectural gotcha this session's W4.C15 first uncovered for
+CWE-327/328). The corpus's own taxonomy
+(`test/benchmark/realworld/manifest.json`'s `cweToFamily` for
+`sard-juliet-csharp-strict`) groups CWE256/259/261/321/798 under family
+`"hardcoded-secret"` — my detector's vuln text had no matching
+family-map entry and fell through to a generic slug that can never equal
+`"hardcoded-secret"`, so every finding scored fp with zero credit, and
+gold's fn was never resolved either (matching requires family AND
+cwe/line agreement). Fixed with a single `_familyMap.prefix` addition in
+`expected.json`: `"Weak Cryptography for Passwords —":
+"hardcoded-secret"` — this is a scoring-taxonomy correction to match the
+benchmark's own established convention, not a suppression of any finding,
+so it does not conflict with the no-cheating principle. Verified via a
+targeted `--cwe 261` scan: **tp=17 fp=0 fn=0** for CWE-261 in isolation
+(the 17 "fp" that scan reports are a known, separate, unrelated CWE-22
+StreamReader path-traversal finding on a different line in the same
+files — a scoping artifact of `--cwe 261` alone not loading CWE-22's own
+gold entries, not a real defect).
+
+**Full dev-split re-measurement after both fixes, real numbers:**
+overall **tp 855→872 (+17), fp 241→241 (unchanged), fn 1747→1730 (−17)**.
+Per-CWE: ONLY CWE-261 changed (0/0/17 → 17/0/0); every other CWE's
+tp/fp/fn identical before/after. **F1 0.4624→0.4694** (P 0.7801→0.7835,
+R 0.3286→0.3351). A `tps`-list diff ((file,line,cwe) tuples) confirmed
+**zero lost true positives, exactly 17 gained**, all CWE-261. Full gate
+suite re-run after the `expected.json` change (since a scoring-file edit
+warrants the same discipline as a source edit): `test:sast` 784/784,
+`bench:self-scan:check` clean, `bench:mutation:check` 35/35,
+`bench:cve-replay:check` 220/220 — all green a second time.
+
+W2.8 is now fully closed: every CWE originally flagged as a C# zero-recall
+gap has either been fixed (78/80/81/83/134/261/643) or has a documented,
+scoped root cause for why the naive fix doesn't move the SARD number
+(313/314/315).
 
 ### W2.1 — control-flow gating via trivially-constant helper calls (2026-09-15)
 

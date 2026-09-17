@@ -100,6 +100,7 @@
       "Mass Assignment": "mass-assignment",
       "JWT": "jwt-no-verify",
       "Hardcoded": "hardcoded-secret",
+      "Weak Cryptography for Passwords —": "hardcoded-secret",
       "MCP:": "mcp",
       "Synchronous Blocking I/O": "dos-sync-io",
       "Missing Timeout": "dos-no-timeout",

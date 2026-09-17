@@ -709,3 +709,52 @@ test('IR: a `using (Type x = expr)` declaration is not corrupted by the enclosin
   assert.equal(sr.rhsText, 'new StreamReader("f")', `expected clean rhsText, got: ${JSON.stringify(sr.rhsText)}`);
   assert.ok(m.assignments.some(a => a.target === 'data' && a.rhsText === 'sr.ReadLine()'), `expected data=sr.ReadLine() as its own assignment, got: ${m.assignments.map(a => `${a.target}=${a.rhsText}`).join(' | ')}`);
 });
+
+// SARD_80_F1 W2.8 — CWE-261 (Weak Cryptography for Passwords), a "point
+// flaw" like CWE-523/539: no taint needed. The corpus's real shape
+// (confirmed via the public C# mirror,
+// CWE261_Weak_Cryptography_for_Passwords__NetworkCredential_01.cs) uses
+// Convert.FromBase64String AS IF it were decryption of a stored password.
+test('detector: CWE-261 Convert.FromBase64String on a password-shaped variable fires', () => {
+  const src = `
+    public class C {
+      public void Bad() {
+        string password = "";
+        password = sr.ReadLine();
+        string decPass = Encoding.UTF8.GetString(Convert.FromBase64String(password));
+        NetworkCredential netCred = new NetworkCredential("x", decPass, "");
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.cwe === 'CWE-261');
+  assert.ok(f, 'expected a CWE-261 finding');
+  assert.equal(f.family, 'weak-crypto');
+});
+
+test('detector: CWE-261 does NOT fire when real encryption (AesCryptoServiceProvider) is used instead', () => {
+  const src = `
+    public class C {
+      private void Good1() {
+        byte[] encryptedPassword = File.ReadAllBytes("f.bin");
+        string decPass = null;
+        using (AesCryptoServiceProvider aesAlg = new AesCryptoServiceProvider()) {
+          aesAlg.Key = Encoding.UTF8.GetBytes("ABCDEFGHABCDEFGH");
+        }
+        NetworkCredential netCred = new NetworkCredential("x", decPass, "");
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.cwe === 'CWE-261'), 'expected no CWE-261 finding when Base64 decoding is never used');
+});
+
+test('detector: CWE-261 does NOT fire on Convert.FromBase64String applied to an unrelated (non-password-shaped) variable', () => {
+  const src = `
+    public class C {
+      public void M() {
+        string payload = GetPayload();
+        byte[] bytes = Convert.FromBase64String(payload);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.cwe === 'CWE-261'), 'expected no CWE-261 finding for an unrelated Base64 decode');
+});

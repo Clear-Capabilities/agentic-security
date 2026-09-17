@@ -1157,6 +1157,40 @@ function detectPersistentCookie(file, raw, ir, analysis, out, seen) {
   }
 }
 
+// SARD_80_F1 W2.8 — CWE-261 (Weak Cryptography for Passwords). A genuine
+// "point flaw" like CWE-523/539 (detectPersistentCookie above): no taint
+// needed, no attacker-controlled input involved at all. The vulnerability
+// is `Convert.FromBase64String(password)` used AS IF it were decryption —
+// Base64 is an ENCODING, not encryption; it carries no key and is
+// trivially reversible by anyone who can read the "encrypted" bytes.
+// Confirmed against the C# public mirror's real corpus shape
+// (`CWE261_Weak_Cryptography_for_Passwords__NetworkCredential_01.cs`):
+// `Bad()` reads a password file then calls
+// `Encoding.UTF8.GetString(Convert.FromBase64String(password))`; `Good()`
+// uses a real cipher (`AesCryptoServiceProvider`) instead and never calls
+// `Convert.FromBase64String` at all — so the bare presence of that call on
+// a password-shaped identifier is itself sufficient, matching CWE-523/539's
+// own "presence of the flawed API = the finding" simplicity (no guard
+// check needed, since the fix is a DIFFERENT API entirely, not a guarded
+// variant of the same one).
+function detectWeakPasswordEncoding(file, raw, ir, analysis, out, seen) {
+  for (const call of ir.calls) {
+    if (call.fullPath !== 'Convert.FromBase64String') continue;
+    const arg = call.args && call.args[0];
+    if (!arg) continue;
+    if (!(arg.idents || []).some((i) => SECRET_NAME_PATTERN.test(i))) continue;
+    const id = `csharp-weak-password-encoding:${file}:${call.line}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(makeFinding({
+      ruleId: 'csharp-weak-password-encoding', file, line: call.line, raw, ir,
+      family: 'weak-crypto', severity: 'high', cwe: 'CWE-261',
+      vuln: 'Weak Cryptography for Passwords — Convert.FromBase64String used in place of real decryption',
+      remediation: 'Base64 is an ENCODING, not encryption — it carries no key and is trivially reversible by anyone who can read the encoded bytes. Encrypt stored passwords with a real symmetric cipher (AES-GCM via AesGcm), or better, store only a salted password HASH (PBKDF2/Argon2/bcrypt) and never recover the plaintext at all.',
+    }));
+  }
+}
+
 // ─── Entry point ───────────────────────────────────────────────────────────
 
 export function scanCSharp(fp, raw) {
@@ -1194,6 +1228,7 @@ export function scanCSharp(fp, raw) {
   try { detectInsecureHttp(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectUnprotectedCredTransport(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectPersistentCookie(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectWeakPasswordEncoding(fp, raw, ir, analysis, out, seen); } catch {}
   // Stamp route + auth context on every finding for downstream exploitability.
   for (const f of out) {
     f._routes = analysis.routes.map(r => ({ http: r.http, path: r.path, line: r.line, requiresAuth: r.requiresAuth, methodName: r.methodName }));
