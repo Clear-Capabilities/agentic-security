@@ -6411,6 +6411,7 @@ const _VULN_FAMILY_PREFIX = [
   // finding-defaults backfill and stamps `f.family` first).
   ['AuthZ: raw SQL where-by-id from request input without an ownership check', 'missing-authz'],
   ['AuthZ: fopen() on request-supplied path/id without an ownership check', 'missing-authz'],
+  ['AuthZ: XPath query built from request input without an ownership check', 'missing-authz'],
   ['AuthZ:', 'idor'],
   ['MD5/SHA1', 'weak-crypto'],
   ['Weak Cryptographic Hash', 'weak-crypto'],

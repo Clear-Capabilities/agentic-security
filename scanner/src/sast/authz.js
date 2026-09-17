@@ -96,6 +96,20 @@ const PHP_IDOR_WHERE_ID_RE = /\bwhere\b[\s\S]{0,80}?\bid\s*=\s*[^$\n]{0,10}\$(\w
 // right (distinct from, and can legitimately coexist with, a path-
 // traversal finding on the same line from `php.js`'s structural rule).
 const PHP_FOPEN_IDOR_RE = /\bfopen\s*\(\s*\$(\w+)\s*,/i;
+// A third sub-family from the SAME generator's `getType()` list
+// (`CWE_862_XPath_IDOR`, alongside SQL and Fopen above): an XPath attribute
+// predicate (`[@id=…]`/`[@username=…]`) built by concatenating a raw
+// request-supplied value, with no ownership check — confirmed via
+// construction.xml's two unsafe samples: `"//User[@username='". $tainted .
+// "']"` and `"//Course[@id=". $tainted . "and @allowed=". $_SESSION[userid]
+// . "]"` (the second's own SAFE counterpart appends the `@allowed=` clause
+// inline in the SAME string, which the windowed `$_SESSION` check below
+// still catches since it's within a few characters of the match). Between
+// `=` and the concatenation dot sits 0-10 chars of quote/whitespace
+// punctuation (`'`, `"`, or nothing) depending on which quoting style the
+// sample uses — not the tainted value's actual content, which is what
+// `[^$\n]{0,10}` bounds rather than an unbounded lookahead.
+const PHP_XPATH_ATTR_IDOR_RE = /\[@\w+\s*=\s*[^$\n]{0,10}\.\s*\$(\w+)/;
 const PHP_SUPERGLOBAL_SOURCE_RE = /\$_(?:GET|POST|REQUEST|COOKIE)\b/;
 const PHP_SESSION_CHECK_RE = /\$_SESSION\b/;
 // Two more safe paths from the SAME generator (sanitize.xml), both real
@@ -341,6 +355,25 @@ export function scanAuthZ(fp, raw) {
         'AuthZ: fopen() on request-supplied path/id without an ownership check',
         'high', 'CWE-862', lines[line - 1] || raw.slice(fm.index, fm.index + 120),
         'The file is opened using an identifier taken directly from the request with no check that the resource belongs to the current session\'s user. Verify ownership (e.g. against `$_SESSION[\'userid\']`) or resolve through a per-user allow-list before opening the file, so a guessed or enumerated id cannot read another user\'s data.'));
+    }
+
+    // 10. PHP: an XPath attribute predicate built from a request superglobal,
+    // no ownership check anywhere in a window around the query. Same
+    // suppression conventions as blocks #8/#9 above.
+    let xm;
+    const phpXpathIdorRe = new RegExp(PHP_XPATH_ATTR_IDOR_RE.source, 'gi');
+    while ((xm = phpXpathIdorRe.exec(raw))) {
+      if (!PHP_SUPERGLOBAL_SOURCE_RE.test(raw)) continue;
+      const windowEnd = Math.min(raw.length, xm.index + 300);
+      const window = raw.slice(Math.max(0, xm.index - 100), windowEnd);
+      if (PHP_SESSION_CHECK_RE.test(window)) continue;
+      if (_phpVarIsWhitelisted(raw, xm[1])) continue;
+      if (PHP_ESAPI_VALIDATOR_RE.test(raw)) continue;
+      const line = raw.substring(0, xm.index).split('\n').length;
+      push(_emit(fp, line,
+        'AuthZ: XPath query built from request input without an ownership check',
+        'high', 'CWE-862', lines[line - 1] || raw.slice(xm.index, xm.index + 120),
+        'The XPath query selects a node by an attribute value taken directly from the request with no check that the node belongs to the current session\'s user. Add a predicate scoped to the authenticated user\'s identity (e.g. `and @allowed=$_SESSION[\'userid\']`) so a guessed or enumerated value cannot read another user\'s data.'));
     }
   }
 

@@ -187,3 +187,45 @@ test('PHP IDOR — fopen() finding scores family missing-authz, not the generic 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// SARD_80_F1 W5.15 — a THIRD structurally distinct sibling from the SAME
+// generator's getType() list (SQL/Fopen/XPath): an XPath attribute predicate
+// (`[@username=…]`/`[@id=…]`) built by concatenating a raw request-supplied
+// value. Confirmed via construction.xml's unsafe sample, and that the
+// query is executed via SimpleXMLElement's `->xpath()` method — a
+// different API from the existing xpath-injection.js detector's
+// `->query()`/`->evaluate()`-only PHP pattern, so this shape was invisible
+// to both the CWE-643 and CWE-862 detectors before this fix.
+test('PHP IDOR — an XPath attribute predicate built from a request superglobal fires', () => {
+  const src = "<?php\n$tainted = $_GET['username'];\n$query = \"//User[@username='\". $tainted . \"']\";\n$xml = simplexml_load_file(\"users.xml\");\n$res = $xml->xpath($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  const f = findings.find(x => x.cwe === 'CWE-862');
+  assert.ok(f, 'expected a CWE-862 finding');
+  assert.equal(f.vuln, 'AuthZ: XPath query built from request input without an ownership check');
+});
+
+test('PHP IDOR — an XPath query with an inline @allowed=$_SESSION clause does not fire', () => {
+  const src = "<?php\n$tainted = $_GET['id'];\n$query = \"//Course[@id=\". $tainted . \"and @allowed=\". $_SESSION['userid'] . \"]\";\n$xml = simplexml_load_file(\"courses.xml\");\n$res = $xml->xpath($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — an XPath query built from a non-tainted (no superglobal in file) value does not fire', () => {
+  const src = "<?php\n$fixed = \"Testing.test\";\n$query = \"//User[@username='\". $fixed . \"']\";\n$xml = simplexml_load_file(\"users.xml\");\n$res = $xml->xpath($query);\n";
+  const findings = scanAuthZ('lookup.php', src);
+  assert.equal(findings.filter(f => f.cwe === 'CWE-862').length, 0);
+});
+
+test('PHP IDOR — XPath finding scores family missing-authz, not the generic idor catch-all', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'authz-xpath-idor-family-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'lookup.php'),
+      "<?php\n$tainted = $_GET['username'];\n$query = \"//User[@username='\". $tainted . \"']\";\n$xml = simplexml_load_file(\"users.xml\");\n$res = $xml->xpath($query);\n");
+    const { scan } = await runScan(dir, {});
+    const f = (scan.findings || []).find(x => x.cwe === 'CWE-862');
+    assert.ok(f, 'expected a CWE-862 finding from the full scan pipeline');
+    assert.equal(f.family, 'missing-authz');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
