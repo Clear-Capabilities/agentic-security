@@ -2534,6 +2534,35 @@ export function matchSource(expr, file) {
       const s = hits.find(h => h.kind === 'source');
       if (s) return s;
     }
+    // SARD_80_F1 W4.C27 — a value-accessor method called ON an already-
+    // registered MEMBER source (`req.Params.Get("name")`,
+    // `req.QueryString.Get("id")` — .NET's `NameValueCollection` read API,
+    // equivalent to its own indexer `req.Params["name"]`, which already
+    // matched via the branch above) was invisible here: the callee is a
+    // flat dotted STRING for C#'s hand-rolled parser ("req.Params.Get"),
+    // and `_calleeIndexHits` only ever consults CALLEE_INDEX (call-type
+    // catalog entries) — a MEMBER-type source like `cs-req-params` lives in
+    // MEMBER_INDEX under the key "req.Params" and was never looked up here
+    // at all. Confirmed against the public C# mirror
+    // (CWE78_OS_Command_Injection__Params_Get_Web_01.cs): the indexer form
+    // already fired via IR-TAINT; the `.Get(...)` form produced zero
+    // findings. Strip the callee's last dotted segment and, when it's one
+    // of the small set of known NameValueCollection read accessors, look
+    // that prefix up in MEMBER_INDEX exactly as the plain-member branch
+    // above does.
+    if (typeof expr.callee === 'string' && expr.callee.includes('.')) {
+      const lastDot = expr.callee.lastIndexOf('.');
+      const method = expr.callee.slice(lastDot + 1);
+      if (/^(?:Get|GetValues|GetKey)$/.test(method)) {
+        const prefix = expr.callee.slice(0, lastDot);
+        const raw2 = MEMBER_INDEX.get(prefix);
+        if (raw2) {
+          const hits = filterByProvenance(raw2).filter(h => _languageAllowed(h, file));
+          const s = hits.find(h => h.kind === 'source');
+          if (s) return s;
+        }
+      }
+    }
   }
   return null;
 }

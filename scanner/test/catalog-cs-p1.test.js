@@ -386,6 +386,46 @@ public class E {
     `expected lowercase "request" to match the cs-req-params catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
+// SARD_80_F1 W4.C27 — `req.Params["name"]` (the indexer) already matched
+// `cs-req-params` via the `member` branch above; `req.Params.Get("name")`
+// (.NET's `NameValueCollection` own equivalent read API) did not, because
+// `matchSource`'s `call` branch only ever consulted CALLEE_INDEX
+// (call-type catalog entries) — `cs-req-params` is a MEMBER-type entry
+// living in MEMBER_INDEX under the key "req.Params", never looked up when
+// the source expression was a CALL. Confirmed against the public C#
+// mirror (CWE78_OS_Command_Injection__Params_Get_Web_01.cs: `data =
+// req.Params.Get("name");`).
+test('cs-source-getcall: req.Params.Get("name") (.NET NameValueCollection read API) is recognized as a taint source, same as the indexer form', async () => {
+  const dir = mkTmp('cmdi-params-getcall', `
+using System.Diagnostics;
+public class F {
+    public void Bad(HttpRequest req) {
+        string data = req.Params.Get("name");
+        Process.Start("cmd.exe", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected req.Params.Get("name") to match the cs-req-params catalog source via IR-TAINT, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-source-getcall: an UNRELATED .Get() call on a non-source receiver does not fire (precision check)', async () => {
+  const dir = mkTmp('cmdi-unrelated-getcall', `
+using System.Diagnostics;
+using System.Collections.Generic;
+public class G {
+    public void Ok(Dictionary<string, string> config) {
+        string data = config.Values.Get("name");
+        Process.Start("cmd.exe", "echo hi");
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `an unrelated .Get() call must not be treated as a taint source, got: ${taint.map(f => f.vuln).join(', ')}`);
+});
+
 // Found via the SARD C# benchmark investigation (macro-F1 8.4%, 26/32 CWEs
 // at zero detector coverage): the two tests above use `BadSink(data)` — a
 // BARE same-class call. `this.BadSink(data)` — equally idiomatic, and the
