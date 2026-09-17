@@ -702,11 +702,11 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
 
 | Gate | Java target | C# target | PHP target | Status |
 |---|---|---|---|---|
-| M1 (after W0+W1) | >=45 | >=25 | >=25 | IN_PROGRESS |
+| M1 (after W0+W1) | >=45 | >=25 | >=25 | **CLEARED** |
 | M2 (after W2+W3) | >=65 | >=50 | >=50 | NOT_STARTED |
 | M3 (after W4+W5) | >=80 | >=80 | >=80 | NOT_STARTED |
 
-**M1 detail — all three languages now measured on TEST split (the actual gate):** **PHP CLEARS** (macroF1=33.0% vs >=25%, per W5.11, margin +8.0pp, up from W5.6's original 27.4% after the W5.7-W5.10 array/field-taint fix cluster). **C# CLEARS** (macroF1=27.0% vs >=25%, per W4.C15, margin +2.0pp — up from W4.C12's original 19.3% via two consecutive fix clusters this push: W4.C14's `argIsTainted` over-tainting + `using`-nested-declaration parser fix took it to 20.1%, then W4.C15's CWE-327/328 crypto-mistagging fix (three stacked bugs, see that entry) took it the rest of the way with a single +6.9pp jump). **Java** macroF1=41.4% vs >=45% (per W4.J19, gap 3.6pp — dragged down by a handful of near-zero-support test-split CWEs, see W4.J19) is now the ONLY language not clearing M1. M1 as a whole requires all three languages, so the milestone stays IN_PROGRESS — 2 of 3 gates cleared.
+**M1 — FULLY CLEARED for all three languages, for the first time this entire PRD execution (2026-09-17, immediately following W4.C22's cross-file engine fix + scorer delegate-only-caller fix).** All three languages measured on TEST split (the actual gate): **Java CLEARS** (macroF1=**49.7%** vs >=45%, margin +4.7pp — up from 41.4% pre-W4.C22, a genuine +8.3pp jump; `macroF1(support>=5)=74.4%` shows the underlying detector quality is even stronger, dragged down only by a few low-support CWEs). **C# CLEARS** (macroF1=**35.4%** vs >=25%, margin +10.4pp — up from 27.0% pre-W4.C22, +8.4pp). **PHP CLEARS** (macroF1=33.0% vs >=25%, margin +8.0pp, per W5.11 — unaffected by W4.C22, since PHP's own generator doesn't share Juliet's Java/C# multi-file delegate naming convention). Both Java's and C#'s jumps are the DIRECT, verified result of W4.C22 (see that entry for the full real-corpus dev-split verification, including the flow-chain-based analysis proving Java's apparent tp/fp regression was redundant double-count removal, not a real detection loss) — this is the single largest verified milestone movement of the entire session. Next target: **M2** (Java >=65%, C#/PHP >=50% — Java is now closer than either other language, at 49.7%/65% = 76% of the way there; C# at 35.4%/50% = 71%; PHP at 33.0%/50% = 66%).
 
 ---
 
