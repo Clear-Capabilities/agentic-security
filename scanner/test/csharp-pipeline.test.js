@@ -631,3 +631,81 @@ test('detector: CWE-539 cookie.Expires = DateTime.MinValue does NOT fire', () =>
   const findings = scanCSharp('t.cs', src);
   assert.ok(!findings.some(x => x.id.startsWith('csharp-persistent-cookie:')));
 });
+
+// SARD_80_F1 W4.C14 — same-file callee return-taint resolution (fixes
+// `argIsTainted`'s over-tainting bug: a call like `GoodG2BSource(req, resp)`
+// used to taint its assignment target purely because `req`/`resp` are
+// unconditionally-tainted HTTP-typed params, textually present in the call,
+// regardless of whether the callee's return actually derives from them).
+test('detector: a helper that returns a hardcoded literal does NOT taint its caller, even though it receives already-tainted HTTP params', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get(HttpRequest req, HttpResponse resp) {
+        string data = GoodG2BSource(req, resp);
+        var cmd = new SqlCommand("SELECT * FROM t WHERE x='" + data + "'");
+      }
+      private string GoodG2BSource(HttpRequest req, HttpResponse resp) {
+        return "hardcoded-safe-value";
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'sql-injection'), `expected no SQLi finding, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('detector: a helper that genuinely reads from the request still taints its caller', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get(HttpRequest req, HttpResponse resp) {
+        string data = BadSource(req, resp);
+        var cmd = new SqlCommand("SELECT * FROM t WHERE x='" + data + "'");
+      }
+      private string BadSource(HttpRequest req, HttpResponse resp) {
+        return req.QueryString["x"];
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'sql-injection'), `expected a SQLi finding, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+// SARD_80_F1 W4.C14 — a declaration/assignment/return with no `;` of its
+// own, nested inside an enclosing `using (Type x = expr)` clause. Found
+// while verifying the fix above: `using (StreamReader sr = new
+// StreamReader("f")) { data = sr.ReadLine(); }` used to have its `data =
+// sr.ReadLine()` assignment silently swallowed into `sr`'s own decl
+// rhsText (the depth-tracking RHS scanner mistook the using-clause's own
+// closing paren for one it needed to balance itself, then kept scanning
+// for a `;` clear through the following statement).
+test('a value read via an instance of StreamReader inside `using (...)` still carries taint through a same-file callee', () => {
+  const src = `
+    public class C : Controller {
+      private bool badPrivate = false;
+      [HttpGet] public void Bad(HttpRequest req, HttpResponse resp) {
+        badPrivate = true;
+        string data = Bad_source(req, resp);
+        var cmd = new SqlCommand("SELECT * FROM t WHERE x='" + data + "'");
+      }
+      private string Bad_source(HttpRequest req, HttpResponse resp) {
+        string data;
+        if (badPrivate) {
+          data = "";
+          using (StreamReader sr = new StreamReader("data.txt")) {
+            data = sr.ReadLine();
+          }
+        } else {
+          data = null;
+        }
+        return data;
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'sql-injection'), `expected a SQLi finding via the file-read source, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('IR: a `using (Type x = expr)` declaration is not corrupted by the enclosing clause\'s own closing paren', () => {
+  const src = 'class C { void M() { using (StreamReader sr = new StreamReader("f")) { data = sr.ReadLine(); } } }';
+  const ir = buildCSharpIR(src);
+  const m = ir.methods.find(x => x.name === 'M');
+  const sr = m.decls.find(d => d.name === 'sr');
+  assert.equal(sr.rhsText, 'new StreamReader("f")', `expected clean rhsText, got: ${JSON.stringify(sr.rhsText)}`);
+  assert.ok(m.assignments.some(a => a.target === 'data' && a.rhsText === 'sr.ReadLine()'), `expected data=sr.ReadLine() as its own assignment, got: ${m.assignments.map(a => `${a.target}=${a.rhsText}`).join(' | ')}`);
+});

@@ -101,6 +101,32 @@ function isSanitizedExpr(text) {
   return false;
 }
 
+// SARD_80_F1 W3.x — `TAINT_SOURCE_PATTERNS`'s `StreamReader.ReadLine` /
+// `BinaryReader.ReadString` entries require the LITERAL type name as the
+// receiver, which real code never writes (`StreamReader.ReadLine()` isn't
+// even a static method) — idiomatic C# always calls through an INSTANCE
+// variable (`using (StreamReader sr = …) { sr.ReadLine() }`), so those
+// patterns were effectively dead against this dominant shape. Exposed (not
+// created) by the `resolveCalleeReturnTaint` precision fix above: the old
+// identifier-name fallback used to accidentally re-taint the result via an
+// unrelated already-tainted variable merely appearing in the call text
+// (the exact over-tainting bug this fix removes), which happened to produce
+// the right verdict here for the wrong reason. Mirrors
+// `HTTP_TAINTED_PARAM_TYPES`'s type-based approach: a call through a
+// variable whose DECLARED type is a reader class is a source regardless of
+// the variable's name.
+const READER_SOURCE_TYPES = /^(?:StreamReader|BinaryReader|TextReader)$/;
+const READER_SOURCE_CALL_RE = /\b([A-Za-z_]\w*)\s*\.\s*(?:ReadLine|ReadToEnd|ReadString|ReadAllText|ReadAllLines)\s*\(/g;
+function _typedReaderSourceCall(text, typeMap) {
+  if (!text) return false;
+  READER_SOURCE_CALL_RE.lastIndex = 0;
+  let m;
+  while ((m = READER_SOURCE_CALL_RE.exec(text))) {
+    if (READER_SOURCE_TYPES.test(typeMap.get(m[1]) || '')) return true;
+  }
+  return false;
+}
+
 // For each SANITIZER_PATTERNS match in `text`, find the nearest `(...)` call
 // span after the match and return its [start, end) bounds. Used to tell
 // "the sanitizer call actually wraps the tainted value" (HtmlEncode(x)) apart
@@ -153,6 +179,43 @@ function _refEscapesSanitizers(text, ref, spans) {
 // This is a TYPE-based signal (not bench-shape): if your method accepts an
 // HttpRequest, the data inside it is by definition user-controlled.
 const HTTP_TAINTED_PARAM_TYPES = /^(?:HttpRequest(?:Base|Message)?|HttpListenerRequest|HttpResponseBase|HttpResponse|HttpResponseMessage|HttpContext(?:Base)?|IPrincipal|HttpListenerContext|HttpServletRequest|HttpServletResponse|IFormCollection|IFormFile|IFormFileCollection|Stream|StreamReader|BinaryReader|TextReader|HttpListener)$/;
+
+// SARD_80_F1 W3.x — is `text` (the ENTIRE trimmed expression, not merely a
+// substring) exactly one call `Name(args…)`, with nothing before the name
+// (besides an optional `this.`) and nothing after the matching close-paren?
+// Used to decide when a call-shaped RHS/return can be resolved against its
+// OWN callee's return-taint verdict instead of the identifier-name fallback
+// below (which cannot distinguish "the callee's return derives from this
+// argument" from "this argument's tainted NAME merely appears in the call
+// text", the latter being exactly W4.J17's documented `argIsTainted`
+// over-tainting bug: `data = GoodG2BSource(req, resp);` taints `data`
+// purely because `req`/`resp` are unconditionally-tainted HTTP-typed
+// params, even though `GoodG2BSource` never reads them).
+function _asBareCall(text) {
+  if (!text) return null;
+  const t = text.trim();
+  const m = t.match(/^(?:this\s*\.\s*)?([A-Za-z_]\w*)\s*\(/);
+  if (!m) return null;
+  const openIdx = t.indexOf('(', m[0].length - 1);
+  let depth = 0;
+  for (let i = openIdx; i < t.length; i++) {
+    if (t[i] === '(') depth++;
+    else if (t[i] === ')') {
+      depth--;
+      if (depth === 0) return i === t.length - 1 ? m[1] : null;
+    }
+  }
+  return null;
+}
+
+// The pre-existing "any tainted identifier's name appears in the text"
+// fallback, factored out so both the propagation loop and the return-taint
+// computation below share one definition.
+function _identRefTainted(text, taintMap) {
+  const refs = (text.match(/\b[A-Za-z_]\w*\b/g) || []);
+  for (const ref of refs) if (taintMap.get(ref)) return true;
+  return false;
+}
 
 function analyzeMethodFlow(method, opts = {}) {
   const typeMap = new Map();
@@ -215,22 +278,52 @@ function analyzeMethodFlow(method, opts = {}) {
       }
     }
     if (!rhsText) continue;
-    if (isSourceExpr(rhsText) && !isSanitizedExpr(rhsText)) {
+    if ((isSourceExpr(rhsText) || _typedReaderSourceCall(rhsText, typeMap)) && !isSanitizedExpr(rhsText)) {
       taintMap.set(targetKey, true);
       sourceLines.set(targetKey, item.line);
       continue;
     }
-    // Propagation: rhs references a tainted var → lhs becomes tainted.
-    const refs = (rhsText.match(/\b[A-Za-z_]\w*\b/g) || []);
-    for (const ref of refs) {
-      if (taintMap.get(ref)) {
-        taintMap.set(targetKey, true);
-        sourceLines.set(targetKey, item.line);
-        break;
-      }
+    // Propagation via a resolvable same-file call: consult the callee's OWN
+    // return-taint verdict (SARD_80_F1 W3.x) instead of the identifier-name
+    // fallback, which cannot tell "the callee's return actually derives
+    // from this argument" apart from "this argument's tainted NAME merely
+    // appears in the call text" — see `_asBareCall`'s header comment.
+    const bareCallName = _asBareCall(rhsText);
+    let resolved = null;
+    if (bareCallName && opts.resolveCalleeReturnTaint) {
+      resolved = opts.resolveCalleeReturnTaint(bareCallName);
+    }
+    if (resolved !== null) {
+      if (resolved) { taintMap.set(targetKey, true); sourceLines.set(targetKey, item.line); }
+      continue;
+    }
+    // Fallback: rhs references a tainted var → lhs becomes tainted. Reached
+    // for non-call RHS shapes, and for calls the resolver couldn't resolve
+    // (external/library callee, overload ambiguity, or a dependency cycle)
+    // — recall-preserving: an unresolved call keeps the old, more liberal
+    // behavior rather than silently going quiet.
+    if (_identRefTainted(rhsText, taintMap)) {
+      taintMap.set(targetKey, true);
+      sourceLines.set(targetKey, item.line);
     }
   }
-  return { typeMap, taintMap, sourceLines };
+  // Per-return taint verdict, so a CALLER can resolve a call to THIS method
+  // via the same mechanism (see `resolveCalleeReturnTaint` in
+  // `analyzeCSharpIR`). Same three-way resolution as the propagation loop
+  // above: an explicit source wins, then a resolvable nested call, then the
+  // identifier-name fallback.
+  const returns = (method.returns || []).map((r) => {
+    let tainted;
+    if ((isSourceExpr(r.exprText) || _typedReaderSourceCall(r.exprText, typeMap)) && !isSanitizedExpr(r.exprText)) {
+      tainted = true;
+    } else {
+      const bareCallName = _asBareCall(r.exprText);
+      const resolved = bareCallName && opts.resolveCalleeReturnTaint ? opts.resolveCalleeReturnTaint(bareCallName) : null;
+      tainted = resolved !== null ? resolved : _identRefTainted(r.exprText, taintMap);
+    }
+    return { line: r.line, tainted };
+  });
+  return { typeMap, taintMap, sourceLines, returns };
 }
 
 // Attribute → route classifier. Each entry maps an attribute name to
@@ -286,6 +379,19 @@ export function analyzeCSharpIR(ir) {
   const methodFlow = new Map();
   const methodToClass = new Map();
   for (const c of ir.classes) for (const m of c.methods) methodToClass.set(m, c);
+  // SARD_80_F1 W3.x — resolve a same-file call's return-taint verdict
+  // instead of letting `analyzeMethodFlow`'s identifier-name fallback treat
+  // ANY tainted identifier appearing in the call text (including an
+  // argument the callee never reads) as tainting the result. Bare-name
+  // keyed (this codebase's call sites don't carry receiver/overload info to
+  // disambiguate further); a name with 0 or 2+ candidates is unresolvable
+  // (`null`, meaning "fall back to the old heuristic") rather than guessed.
+  const methodsByName = new Map();
+  for (const m of ir.methods) {
+    if (!methodsByName.has(m.name)) methodsByName.set(m.name, []);
+    methodsByName.get(m.name).push(m);
+  }
+  const treatParamsAsTaintedByMethod = new Map();
   for (const m of ir.methods) {
     const attrNames = (m.attrs || []).map(x => x.name);
     const isRouteAttr = attrNames.some(n => ROUTE_ATTRS[n]);
@@ -293,9 +399,36 @@ export function analyzeCSharpIR(ir) {
     const classIsController = cls ? !!classAuth.get(cls)?.isController : false;
     const classHasApiAttr = cls && (cls.attrs || []).some(a => a.name === 'ApiController' || a.name === 'Route');
     const isPublic = !m.modifiers || m.modifiers.includes('public') || (!m.modifiers.includes('private') && !m.modifiers.includes('protected') && !m.modifiers.includes('internal'));
-    const treatParamsAsTainted = (isRouteAttr || classHasApiAttr || classIsController) && isPublic;
-    methodFlow.set(m, analyzeMethodFlow(m, { treatParamsAsTainted }));
+    treatParamsAsTaintedByMethod.set(m, (isRouteAttr || classHasApiAttr || classIsController) && isPublic);
   }
+  const calleeFlowCache = new Map();
+  const calleeReturnTaintMemo = new Map();
+  const resolvingStack = new Set();
+  function computeFlow(m) {
+    let flow = calleeFlowCache.get(m);
+    if (!flow) {
+      flow = analyzeMethodFlow(m, { treatParamsAsTainted: treatParamsAsTaintedByMethod.get(m), resolveCalleeReturnTaint });
+      calleeFlowCache.set(m, flow);
+    }
+    return flow;
+  }
+  function resolveCalleeReturnTaint(name) {
+    if (calleeReturnTaintMemo.has(name)) return calleeReturnTaintMemo.get(name);
+    const candidates = methodsByName.get(name);
+    if (!candidates || candidates.length !== 1) { calleeReturnTaintMemo.set(name, null); return null; }
+    const callee = candidates[0];
+    // Cycle guard (self- or mutually-recursive calls): unresolvable for
+    // THIS resolution, deliberately not memoized so a later, non-cyclic
+    // call to the same name can still resolve normally.
+    if (resolvingStack.has(callee)) return null;
+    resolvingStack.add(callee);
+    const flow = computeFlow(callee);
+    resolvingStack.delete(callee);
+    const tainted = flow.returns && flow.returns.length ? flow.returns.some(r => r.tainted) : null;
+    calleeReturnTaintMemo.set(name, tainted);
+    return tainted;
+  }
+  for (const m of ir.methods) methodFlow.set(m, computeFlow(m));
   // Route detection.
   const routes = [];
   for (const c of ir.classes) {

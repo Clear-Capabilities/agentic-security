@@ -272,13 +272,52 @@ function readMethodHeader(tokens, i, attachedAttrs) {
 }
 
 function walkMethodBody(method) {
-  const out = { calls: [], ctors: [], assignments: [], decls: [], strings: [] };
+  const out = { calls: [], ctors: [], assignments: [], decls: [], strings: [], returns: [] };
   const tokens = method.bodyTokens;
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     // String literals
     if (t.kind === 'string' || t.kind === 'verbatim' || t.kind === 'interp') {
       out.strings.push({ kind: t.kind, value: t.value || tokenText([t]), line: t.line, parts: t.parts || null });
+      continue;
+    }
+    // `return <expr>;` (bare `return;` produces no expr and is skipped —
+    // interprocedural return-taint resolution has nothing to check there).
+    // SARD_80_F1 W3.x: gives `analyzeMethodFlow` visibility into what a
+    // same-file callee actually returns, so a call-shaped assignment RHS
+    // (`data = GoodG2BSource(req, resp);`) can be resolved against the
+    // callee's OWN return taint instead of blindly matching every
+    // identifier NAME in the call text (which wrongly taints on `req`/
+    // `resp` merely being passed as arguments — see the taintMap loop
+    // below and its `_asBareCall`/`resolveCalleeReturnTaint` usage).
+    if (t.kind === 'kw' && t.value === 'return') {
+      let j = i + 1;
+      let depth = 0;
+      while (j < tokens.length && (depth > 0 || tokens[j].kind !== 'semi')) {
+        const tk = tokens[j];
+        if (tk.kind === 'lparen' || tk.kind === 'lbrace' || tk.kind === 'lbracket') depth++;
+        else if (tk.kind === 'rparen' || tk.kind === 'rbrace' || tk.kind === 'rbracket') {
+          // SARD_80_F1 W3.x — an unbalanced closer (depth already 0) closes
+          // an ENCLOSING construct we didn't open (e.g. this `return` sits
+          // inside a `using (...)`/`if (...)` clause with no `;` of its
+          // own before the surrounding `)`), not part of our own
+          // expression — stop here rather than scanning past it into
+          // whatever follows. See the identical fix on the decl/assign/
+          // field loops below for the full incident writeup.
+          if (depth === 0) break;
+          depth--;
+        }
+        j++;
+      }
+      const exprTokens = tokens.slice(i + 1, j);
+      if (exprTokens.length) {
+        out.returns.push({ line: t.line, exprTokens, exprText: tokenText(exprTokens) });
+      }
+      // Deliberately do NOT skip past the expression tokens (`i = j`): the
+      // main loop's own ident/call/assignment branches below still need to
+      // walk them, so a statement-level call inside the return
+      // (`return string.Format(...)`) is still recorded in `out.calls`
+      // exactly as it was before this branch existed.
       continue;
     }
     // new Type(args)
@@ -305,8 +344,27 @@ function walkMethodBody(method) {
           let j = tr.next + 2;
           let depth = 0;
           while (j < tokens.length && (depth > 0 || tokens[j].kind !== 'semi')) {
-            if (tokens[j].kind === 'lparen' || tokens[j].kind === 'lbrace' || tokens[j].kind === 'lbracket') depth++;
-            if (tokens[j].kind === 'rparen' || tokens[j].kind === 'rbrace' || tokens[j].kind === 'rbracket') depth--;
+            const tk = tokens[j];
+            if (tk.kind === 'lparen' || tk.kind === 'lbrace' || tk.kind === 'lbracket') depth++;
+            else if (tk.kind === 'rparen' || tk.kind === 'rbrace' || tk.kind === 'rbracket') {
+              // SARD_80_F1 W3.x — a declaration with no `;` of its own,
+              // sitting inside an enclosing `using (Type x = expr)` / `for
+              // (Type x = expr; …)` clause: the FIRST `)` we see here is
+              // that outer construct's own close, not one WE opened (depth
+              // is already 0), so stop before consuming it. Previously this
+              // fell through to `depth--` unconditionally, going negative
+              // and then scanning straight through into the following
+              // block body looking for a `;` that could be arbitrarily far
+              // away — corrupting this decl's rhsText with everything up to
+              // that stray semicolon AND silently absorbing whatever real
+              // statement lived in between (found via SARD_80_F1 W4.C14:
+              // `using (StreamReader sr = new StreamReader("f")) { data =
+              // sr.ReadLine(); }` swallowed the `data = sr.ReadLine()`
+              // assignment into `sr`'s own rhsText, deleting it from
+              // `out.assignments` entirely).
+              if (depth === 0) break;
+              depth--;
+            }
             j++;
           }
           const rhs = tokens.slice(tr.next + 2, j);
@@ -350,8 +408,14 @@ function walkMethodBody(method) {
         let k = j + 1;
         let depth = 0;
         while (k < tokens.length && (depth > 0 || tokens[k].kind !== 'semi')) {
-          if (tokens[k].kind === 'lparen' || tokens[k].kind === 'lbrace' || tokens[k].kind === 'lbracket') depth++;
-          if (tokens[k].kind === 'rparen' || tokens[k].kind === 'rbrace' || tokens[k].kind === 'rbracket') depth--;
+          const tk = tokens[k];
+          if (tk.kind === 'lparen' || tk.kind === 'lbrace' || tk.kind === 'lbracket') depth++;
+          else if (tk.kind === 'rparen' || tk.kind === 'rbrace' || tk.kind === 'rbracket') {
+            // SARD_80_F1 W3.x — see the decl "typed init" loop above for the
+            // full incident writeup; same enclosing-construct boundary fix.
+            if (depth === 0) break;
+            depth--;
+          }
           k++;
         }
         const rhs = tokens.slice(j + 1, k);
@@ -436,6 +500,7 @@ function walkMethodBody(method) {
   method.ctors = out.ctors;
   method.assignments = out.assignments;
   method.decls = out.decls;
+  method.returns = out.returns;
   method.strings = out.strings;
   return out;
 }
@@ -572,8 +637,15 @@ export function buildCSharpIR(source) {
             if (tokens[f] && tokens[f].kind === 'op' && tokens[f].value === '=') {
               let fj = f + 1, depth = 0;
               while (fj < tokens.length && (depth > 0 || tokens[fj].kind !== 'semi')) {
-                if (tokens[fj].kind === 'lparen' || tokens[fj].kind === 'lbrace' || tokens[fj].kind === 'lbracket') depth++;
-                if (tokens[fj].kind === 'rparen' || tokens[fj].kind === 'rbrace' || tokens[fj].kind === 'rbracket') depth--;
+                const tk = tokens[fj];
+                if (tk.kind === 'lparen' || tk.kind === 'lbrace' || tk.kind === 'lbracket') depth++;
+                else if (tk.kind === 'rparen' || tk.kind === 'rbrace' || tk.kind === 'rbracket') {
+                  // SARD_80_F1 W3.x — see the decl "typed init" loop's
+                  // header comment for the full incident writeup; same
+                  // enclosing-construct boundary fix.
+                  if (depth === 0) break;
+                  depth--;
+                }
                 fj++;
               }
               ir.decls.push({ name: tokens[tr.next].value, type: tr.type, rhsTokens: tokens.slice(f + 1, fj), rhsText: tokenText(tokens.slice(f + 1, fj)), line: tk.line, isVar: false, isField: true });
