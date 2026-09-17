@@ -232,7 +232,7 @@
           "CWE614": "header-hardening",
           "CWE643": "xpath-injection",
           "CWE759": "weak-crypto",
-          "CWE760": "weak-crypto",
+          "CWE760": "weak-rng",
           "CWE798": "hardcoded-secret"
         },
         "_doc": "Only CWEs the scanner csharp.js (and generic SAST) modules have rules for. Mappings mirror the Java/C-C++ Juliet maps for cross-language consistency.",
@@ -313,7 +313,7 @@
           "CWE614": "header-hardening",
           "CWE643": "xpath-injection",
           "CWE759": "weak-crypto",
-          "CWE760": "weak-crypto",
+          "CWE760": "weak-rng",
           "CWE798": "hardcoded-secret"
         },
         "auditorVerifiedSource": "upstream-juliet-folders",
