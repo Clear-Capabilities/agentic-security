@@ -66,6 +66,56 @@ test('C# SSRF — DownloadString(var), host guard suppresses (CWE-918)', () => {
   assert.ok(none(scanCsharpStructural('Proxy.cs', 'string Fetch(){ var u = new Uri(Request.QueryString["url"]); if(u.Host=="169.254.169.254") throw new Exception(); return new WebClient().DownloadString(u); }'), 'CWE-918'));
 });
 
+// SARD_80_F1 W4.C23: "Password=" appearing as plain TEXT inside an unrelated
+// connection-string literal (Juliet's own `"...;Password=" + password`
+// shape, real BadSink()/GoodG2BSink() code) must not be read as a credential
+// FIELD assignment — confirmed against the public Juliet mirror
+// (CWE256_Unprotected_Storage_of_Credentials__basic_54e.cs and
+// CWE319_Cleartext_Tx_Sensitive_Info__listen_tcp_SqlConnection_52c.cs).
+// Before the fix, the literal's own closing quote was read as this rule's
+// opening quote, and the unbounded capture group spanned across the
+// following newline into unrelated code (a whole try/catch block), which
+// still satisfied the length gate and fired as a fabricated "secret".
+test('C# hardcoded secret — "Password=" as text inside a connection-string literal does not fire (CWE-798)', () => {
+  const src = 'public static void BadSink(string password) { using (SqlConnection c = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + password)) { c.Open(); } }';
+  assert.ok(none(scanCsharpStructural('BadSink.cs', src), 'CWE-798'), '"Password=" inside a literal, concatenated with a variable (not another literal), is not a hardcoded secret');
+});
+
+// SARD_80_F1 W4.C23 (part 2): a literal reaching a credential-labeled sink
+// through a one-hop variable copy — Juliet's own CWE256/259 shape, where the
+// variable is deliberately named generically (`data`, not `password`) to
+// test detection independent of naming convention. Confirmed against the
+// public Juliet mirror (CWE259_Hard_Coded_Password__SqlConnection_01.cs).
+test('C# hardcoded secret — literal reaches a "Password=" sink through a one-hop variable copy (CWE-798/259)', () => {
+  const src = 'class T { public override void Bad() { string data; data = "7e5tc4s3"; using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + data)) { connection.Open(); } } }';
+  assert.ok(has(scanCsharpStructural('Bad.cs', src), 'CWE-798'));
+  // a variable reaching the same sink WITHOUT ever being assigned a literal
+  // (a real parameter/tainted value) must not fire.
+  const clean = 'class T { public static void GoodSink(string data) { using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + data)) { connection.Open(); } } }';
+  assert.ok(none(scanCsharpStructural('Good.cs', clean), 'CWE-798'));
+  // the SAME generic variable name used with an UNRELATED, non-literal
+  // meaning in a sibling method must not borrow the other method's literal
+  // (Juliet's own Bad()/GoodG2B() collision shape, confirmed against the
+  // real corpus — see the method-scoping comment above).
+  const sibling = [
+    'class T {',
+    '  public void Bad() {',
+    '    string data;',
+    '    data = "7e5tc4s3";',
+    '    Sink(data);',
+    '  }',
+    '  public void GoodG2B() {',
+    '    string data;',
+    '    data = Console.ReadLine();',
+    '    using (SqlConnection connection = new SqlConnection(@"User ID=" + "sa" + ";Password=" + data)) {',
+    '      connection.Open();',
+    '    }',
+    '  }',
+    '}',
+  ].join('\n');
+  assert.ok(none(scanCsharpStructural('Sibling.cs', sibling), 'CWE-798'));
+});
+
 test('no false positives on clean Java / C#', () => {
   assert.deepEqual(scanJavaStructural('Ok.java', 'int add(int a, int b){ return a + b; }'), []);
   assert.deepEqual(scanCsharpStructural('Ok.cs', 'int Add(int a, int b){ return a + b; }'), []);
