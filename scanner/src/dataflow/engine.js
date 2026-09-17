@@ -1850,12 +1850,35 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // `findings` still rides on the cached summary too, for the (rarer)
       // case where a real caller ALSO consults this exact qid+entry pair via
       // _mergeSummaryFindings — dedup in _collectFindings makes this safe.
-      summaryCache.set(fn.qid, fields, {
+      const fieldSummary = {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
         taintedGlobals: new Set(),
         findings: ctx._findings,
-      });
+      };
+      summaryCache.set(fn.qid, fields, fieldSummary);
+      // SARD_80_F1 W3.x — the getter+return interprocedural-composition gap
+      // documented at PHP W5.10: an EXTERNAL, no-argument caller of this
+      // method (`$tainted = $obj->getInput();`) never consults the
+      // `fields`-keyed entry above — it looks up the ORDINARY empty-context
+      // summary (`summaryCache.get(fn.qid, new Set())`), which the earlier
+      // fixed-point pre-pass computed WITHOUT knowing the field was tainted
+      // (that fact is only established by the class-scan just above, which
+      // runs once, after the pre-pass). `entryContext = new Set()` means
+      // "no CALLER-supplied parameter is tainted" — true here regardless of
+      // how many params `fn` declares, since this re-analysis seeded ONLY
+      // the class's own already-tainted fields, no parameters — so this
+      // result is exactly the correct value for that key, not a guess.
+      // Safe to overwrite unconditionally: this model has no un-taint step,
+      // so a field-seeded re-analysis can only find a superset of whatever
+      // the plain empty-context pre-pass already found. The final per-
+      // function reporting pass (the `for (const fn of fnList)` loop that
+      // does the REAL, non-speculative analysis of every function,
+      // including whatever caller invokes this getter) runs strictly AFTER
+      // this whole class-field block, so it is guaranteed to see the
+      // corrected summary — no fixed-point re-iteration needed for THIS
+      // specific external-caller shape.
+      summaryCache.set(fn.qid, new Set(), fieldSummary);
     }
   }
 

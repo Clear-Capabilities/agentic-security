@@ -139,3 +139,54 @@ test('a field written only from a literal does not taint a sibling method\'s rea
   const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
   assert.ok(!hit, 'a hardcoded-literal field must not fire the taint sink');
 });
+
+// SARD_80_F1 W3.x — the getter+return interprocedural-composition gap
+// documented (not fixed) at W5.10: a field tainted in the constructor,
+// read through a GETTER method whose RETURN VALUE is then used by an
+// EXTERNAL caller with no arguments. The class-field cross-taint pass in
+// engine.js previously cached its result only under the fields-keyed
+// summary-cache entry, never the plain empty-context entry an ordinary
+// no-arg call site (`$temp->getInput()`) actually consults.
+test('end-to-end: a constructor-tainted field read through a GETTER, then used by an EXTERNAL no-arg caller, still reaches the sink', async () => {
+  const hits = await findings(
+    '<?php\n' +
+    'class Input {\n' +
+    '  private $input;\n' +
+    '  public function __construct(){\n' +
+    '    $this->input = $_GET["UserData"];\n' +
+    '  }\n' +
+    '  public function getInput(){\n' +
+    '    return $this->input;\n' +
+    '  }\n' +
+    '}\n' +
+    '$temp = new Input();\n' +
+    '$tainted = $temp->getInput();\n' +
+    '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
+    '$xml = simplexml_load_file("users.xml");\n' +
+    '$res = $xml->xpath($query);\n'
+  );
+  const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
+  assert.ok(hit, `expected a CWE-91 finding via the getter+return round-trip — got: ${hits.map((f) => `${f.parser}:${f.cwe}`).join(',')}`);
+});
+
+test('a getter returning a field written only from a literal does not taint an external no-arg caller', async () => {
+  const hits = await findings(
+    '<?php\n' +
+    'class Input {\n' +
+    '  private $input;\n' +
+    '  public function __construct(){\n' +
+    '    $this->input = "safe";\n' +
+    '  }\n' +
+    '  public function getInput(){\n' +
+    '    return $this->input;\n' +
+    '  }\n' +
+    '}\n' +
+    '$temp = new Input();\n' +
+    '$tainted = $temp->getInput();\n' +
+    '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
+    '$xml = simplexml_load_file("users.xml");\n' +
+    '$res = $xml->xpath($query);\n'
+  );
+  const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
+  assert.ok(!hit, 'a hardcoded-literal field read through a getter must not fire the taint sink');
+});
