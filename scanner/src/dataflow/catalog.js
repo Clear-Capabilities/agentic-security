@@ -1834,7 +1834,25 @@ export const CATALOG = [
   { kind: 'sink', id: 'kt-jdbc-execute',       language: 'kt', framework: 'jdbc',   match: { type: 'call', callee: 'executeQuery' }, argIndex: 0,
     vuln: { name: 'SQL Injection (JDBC executeQuery from Kotlin)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use PreparedStatement + setX(N, v) — Kotlin string templates concatenated into SQL are still injection.' } },
-  { kind: 'sink', id: 'kt-exposed-exec',       language: 'kt', framework: 'exposed', match: { type: 'call', callee: 'exec' },        argIndex: 0,
+  // SARD_80_F1 W4.J26: `kt-exposed-exec` and `kt-runtime-exec` (below) both
+  // key on the SAME bare callee name `exec` with argIndex 0 — the only real
+  // JVM-runtime overload of that name being ambiguous between Exposed's SQL
+  // `.exec(sql)` and `Runtime.exec(cmd)`. Since `java`/`kt` share one
+  // catalog-scoping family (see `_LANG_FAMILY` above), this ALSO matched
+  // Java's own `Runtime.getRuntime().exec(cmd)` idiom — confirmed on real
+  // corpus data (`sard-juliet-java-strict`'s CWE-78 command-injection test
+  // files): 251 dev-split false positives, ALL misreported as
+  // "SQL Injection (Exposed.exec)" on a plain OS-command-execution call,
+  // with the correct `kt-runtime-exec`/CWE-78 finding never surviving
+  // `dedupeFindingsWithEvidence`'s same-severity tie-break (first-inserted
+  // wins). `receiverExclude` (see below) is the ONLY negative-match form
+  // this catalog supports (`py-compile`'s own precedent) — excludes any
+  // call whose receiver chain contains `Runtime`, `getRuntime`, or
+  // `ProcessBuilder` (Java's `Runtime`/`ProcessBuilder` classes are always
+  // capitalized; a bare, receiver-less `exec(sql)` — Exposed's more common
+  // shape — is untouched, since `receiverExclude` can never match a call
+  // with no receiver segments at all).
+  { kind: 'sink', id: 'kt-exposed-exec',       language: 'kt', framework: 'exposed', match: { type: 'call', callee: 'exec', receiverExclude: 'Runtime|ProcessBuilder' },        argIndex: 0,
     vuln: { name: 'SQL Injection (Exposed.exec with raw string)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use Exposed DSL queries or named-parameter exec with a typed parameter list.' } },
   { kind: 'sink', id: 'kt-runtime-exec',       language: 'kt', framework: 'stdlib', match: { type: 'call', callee: 'exec' },         argIndex: 0,

@@ -188,6 +188,23 @@ test('JVM family: a kt-language sink still matches on a .java file', () => {
     "kt sink 'readText' must match on a .java file — the JVM is one family in both directions");
 });
 
+// SARD_80_F1 W4.J26: `kt-exposed-exec` (bare callee `exec`, CWE-89) and
+// `kt-runtime-exec` (bare callee `exec`, CWE-78) share one callee name —
+// the JVM-family widening above means BOTH matched `Runtime.getRuntime().exec(...)`
+// on a plain .java file, misreporting an ordinary command-injection sink as
+// SQL injection (251 real Java dev-split false positives, confirmed via
+// batch-scan.mjs). `receiverExclude: 'Runtime|ProcessBuilder'` fixes it.
+test('JVM family: Runtime.getRuntime().exec on a .java file matches the command-injection sink, not Exposed SQL', () => {
+  const hits = matchSinkOrSanitizer('Runtime.getRuntime.exec', 'A.java') || [];
+  assert.ok(hits.some(h => h.id === 'kt-runtime-exec'), 'kt-runtime-exec (CWE-78) must still match Runtime.exec');
+  assert.ok(!hits.some(h => h.id === 'kt-exposed-exec'), 'kt-exposed-exec (CWE-89) must NOT match a Runtime.exec receiver');
+});
+
+test('JVM family: a bare exec(sql) call (no receiver) still matches Exposed SQL', () => {
+  const hits = matchSinkOrSanitizer('exec', 'A.kt') || [];
+  assert.ok(hits.some(h => h.id === 'kt-exposed-exec'), 'kt-exposed-exec must still fire on a bare exec() call — receiverExclude never blocks a no-receiver call');
+});
+
 test('JVM family: the family does not leak beyond the JVM', () => {
   for (const file of ['a.py', 'a.go', 'a.js', 'a.rb', 'a.php', 'a.cs']) {
     const hits = matchSinkOrSanitizer('executeUpdate', file) || [];
