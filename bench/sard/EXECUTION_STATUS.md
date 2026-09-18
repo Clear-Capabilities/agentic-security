@@ -734,8 +734,8 @@ No SARD/Juliet suite exists for Rust. Measured via `bench:cve-replay` and
 | Gate | Java target | C# target | PHP target | Status |
 |---|---|---|---|---|
 | M1 (after W0+W1) | >=45 | >=25 | >=25 | **CLEARED** |
-| M2 (after W2+W3) | >=65 | >=50 | >=50 | C# CLEARED (2026-09-17, macroF1=55.9%); Java 54.1%/65%=83%; PHP 48.2%/50%=96% (W5.19, up from 38.3%) |
-| M3 (after W4+W5) | >=80 | >=80 | >=80 | NOT_STARTED |
+| M2 (after W2+W3) | >=65 | >=50 | >=50 | C# CLEARED (2026-09-17, macroF1=56.5% as of W4.C36+C37); Java 54.4%/65%=83.7%; PHP 48.2%/50%=96% (W5.19, up from 38.3%) |
+| M3 (after W4+W5) | >=80 | >=80 | >=80 | IN_PROGRESS: C# 56.5%/80%=71%; Java 54.4%/80%=68%; PHP 48.2%/80%=60% (M2 not yet cleared for Java/PHP, a precondition per this table's own header) |
 
 **M1 — FULLY CLEARED for all three languages, for the first time this entire PRD execution (2026-09-17, immediately following W4.C22's cross-file engine fix + scorer delegate-only-caller fix).** All three languages measured on TEST split (the actual gate): **Java CLEARS** (macroF1=**49.7%** vs >=45%, margin +4.7pp — up from 41.4% pre-W4.C22, a genuine +8.3pp jump; `macroF1(support>=5)=74.4%` shows the underlying detector quality is even stronger, dragged down only by a few low-support CWEs). **C# CLEARS** (macroF1=**35.4%** vs >=25%, margin +10.4pp — up from 27.0% pre-W4.C22, +8.4pp). **PHP CLEARS** (macroF1=33.0% vs >=25%, margin +8.0pp, per W5.11 — unaffected by W4.C22, since PHP's own generator doesn't share Juliet's Java/C# multi-file delegate naming convention). Both Java's and C#'s jumps are the DIRECT, verified result of W4.C22 (see that entry for the full real-corpus dev-split verification, including the flow-chain-based analysis proving Java's apparent tp/fp regression was redundant double-count removal, not a real detection loss) — this is the single largest verified milestone movement of the entire session. Next target: **M2** (Java >=65%, C#/PHP >=50% — Java is now closer than either other language, at 49.7%/65% = 76% of the way there; C# at 35.4%/50% = 71%; PHP at 33.0%/50% = 66%).
 
