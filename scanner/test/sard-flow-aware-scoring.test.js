@@ -26,6 +26,7 @@ import {
   findCsharpMethodSpans,
   findJavaMethodSpans,
   _isDelegateOnlyBadMethod,
+  _isSourceOnlyNamedMethod,
   score,
   scoreLegacy,
 } from './benchmark/realworld/bench-realworld.js';
@@ -38,6 +39,38 @@ test('findEnclosingMethod: picks the smallest containing span', () => {
   assert.equal(findEnclosingMethod(methods, 7)?.name, 'Inner');
   assert.equal(findEnclosingMethod(methods, 15)?.name, 'Outer');
   assert.equal(findEnclosingMethod(methods, 100), null);
+});
+
+// SARD_80_F1 W5.24 — see _isSourceOnlyNamedMethod's own header comment in
+// bench-realworld.js for the full incident writeup: a BadSource()/badSource()
+// method never independently completes the flaw by Juliet's own naming
+// convention alone, so its own expected entry is structurally unsatisfiable
+// and must be skipped entirely, purely by name — no body inspection needed.
+test('_isSourceOnlyNamedMethod: recognizes C# and Java Source-named methods, digit-suffixed or not', () => {
+  assert.ok(_isSourceOnlyNamedMethod('BadSource'));
+  assert.ok(_isSourceOnlyNamedMethod('BadSource1'));
+  assert.ok(_isSourceOnlyNamedMethod('BadSource42'));
+  assert.ok(_isSourceOnlyNamedMethod('badSource'));
+});
+
+test('_isSourceOnlyNamedMethod: does NOT match Bad()/BadSink() or unrelated names', () => {
+  assert.equal(_isSourceOnlyNamedMethod('Bad'), false);
+  assert.equal(_isSourceOnlyNamedMethod('BadSink'), false);
+  assert.equal(_isSourceOnlyNamedMethod('bad'), false);
+  assert.equal(_isSourceOnlyNamedMethod('badSink'), false);
+  assert.equal(_isSourceOnlyNamedMethod('GoodG2BSource'), false);
+  assert.equal(_isSourceOnlyNamedMethod('SourceOfTruth'), false);
+});
+
+// SARD_80_F1 W5.24 follow-up — CWE319's own real-corpus verification found a
+// genuine exception: Cleartext Transmission's flaw IS the network read
+// itself (no separate sink concept), so a BadSource()-named method's own
+// entry must NOT be skipped for this one CWE. See _isSourceOnlyNamedMethod's
+// own header comment for the full real-corpus evidence.
+test('_isSourceOnlyNamedMethod: CWE319 is excluded — BadSource() still gets its own entry there', () => {
+  assert.equal(_isSourceOnlyNamedMethod('BadSource', 'CWE319'), false);
+  assert.equal(_isSourceOnlyNamedMethod('badSource', 'CWE319'), false);
+  assert.ok(_isSourceOnlyNamedMethod('BadSource', 'CWE36'), 'every other CWE keeps the skip');
 });
 
 // SARD_80_F1 W4.C22 (fix for the regression found and reverted at W4.C21):

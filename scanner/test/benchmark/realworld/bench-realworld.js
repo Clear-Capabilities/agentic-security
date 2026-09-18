@@ -826,6 +826,55 @@ export function _isDelegateOnlyBadMethod(meth, delegateTargetRe) {
   return false;
 }
 
+// SARD_80_F1 W5.24 — a FOURTH incident in the same "unsatisfiable expected
+// entry" family as _isDelegateOnlyBadMethod's own three documented cases
+// above, found investigating C# CWE-36's Flow Variant 42 (data returned from
+// one method to another in the same class). `csBadNameRe`/`javaBadNameRe`
+// both deliberately match `*Source`-suffixed names too (`BadSource`/
+// `badSource`) — the comment right above each delegate-target regex already
+// explains WHY: a call to a same-class `BadSource()` helper must not trigger
+// the delegate-only-CALLER skip, since it "only supplies data, it never
+// completes the flaw". That reasoning is correct, but incomplete: it stops a
+// `BadSource()` CALL from being mistaken for a completing delegate, but says
+// nothing about `BadSource()` ITSELF still getting its own expected entry
+// when the loop visits it directly (as every `csBadNameRe`/`javaBadNameRe`
+// match does) — and BY THE SAME NAMING CONVENTION, a `BadSource`-named
+// method NEVER independently contains the sink call that completes the flaw
+// (confirmed via the public C# mirror's `CWE36_..._Params_Get_Web_42.cs`:
+// `BadSource()`'s entire body is a source read + `return data;`, nothing
+// else — the sink lives in `Bad()`, a SEPARATE method, which gets its own,
+// correctly-satisfiable entry). This makes `BadSource()`'s own entry
+// structurally unsatisfiable by ANY correct scanner, for every Flow Variant
+// that uses this same-class return-value idiom, across every CWE that has
+// one — the identical "delegate produces its own bogus entry" shape as the
+// caller-side bug already fixed, just on the SOURCE side instead. Unlike
+// `_isDelegateOnlyBadMethod` (which inspects a method's body for a
+// delegating CALL), this needs no body inspection at all: the naming
+// convention alone is authoritative here, the same way `good*()` variants
+// are excluded entirely by name, not by inspecting what they do.
+//
+// CWE319 is a confirmed, real EXCEPTION to this, found via the first full
+// real-corpus verification of this fix: Cleartext Transmission's own flaw
+// IS the act of reading sensitive data over an unencrypted channel — Juliet's
+// own template for this CWE documents the BadSource step ("connect_tcp Read
+// password using an outbound tcp connection") as the COMPLETE description of
+// the vulnerability, with no separate "sink" concept at all, unlike every
+// other CWE this fix was designed around (path traversal, SQLi, XSS, …,
+// where reading a value is inert until something DANGEROUS is done with it
+// downstream). Confirmed by direct evidence, not guesswork: the full-corpus
+// diff showed exactly 8 CWE319 files lose a TP and gain a same-file FP at
+// this fix's first real-corpus check — in every one, our own detector
+// correctly fires INSIDE the BadSource-shaped method's own span (the network
+// read itself), which used to legitimately satisfy that entry. Excluding
+// CWE319 by name (never inferred from `family`, since a shared per-family
+// exception list would be guessing beyond what's actually been observed)
+// keeps this fix precise to the CWE it was built for and honest about the
+// one it doesn't apply to.
+export function _isSourceOnlyNamedMethod(methName, cwe) {
+  if (cwe === 'CWE319') return false;
+  return /^(?:Bad|bad)Source\d*$/.test(methName);
+}
+
 // Minimal RFC-4180-ish CSV reader. Handles quoted fields with embedded
 // commas, newlines, and "" escapes. Reads the whole file into memory
 // (~54MB for BigVul) — simpler and avoids CR/LF chunk-boundary bugs that
@@ -1170,6 +1219,11 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
             const isBad = csBadNameRe.test(meth.name);
             if (isBad) {
               anyEmitted = true;
+              // W5.24 — see _isSourceOnlyNamedMethod's own header comment: a
+              // BadSource()-named method never completes the flaw itself by
+              // naming convention alone, so its own entry is structurally
+              // unsatisfiable and must be skipped, same as good*() variants.
+              if (_isSourceOnlyNamedMethod(meth.name, cwe)) continue;
               // W4.C22 — see the Java builder's identical comment: a
               // delegate-only Bad()/BadSink() method has no sink of its
               // own, so its own entry is skipped in favor of the callee's.
@@ -1284,6 +1338,11 @@ async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
             const isBad = javaBadNameRe.test(meth.name);
             if (isBad) {
               anyEmitted = true;
+              // W5.24 — see _isSourceOnlyNamedMethod's own header comment: a
+              // badSource()-named method never completes the flaw itself by
+              // naming convention alone, so its own entry is structurally
+              // unsatisfiable and must be skipped, same as good*() variants.
+              if (_isSourceOnlyNamedMethod(meth.name, cwe)) continue;
               // W4.C22 — a delegate-only "bad" method (its whole body is a
               // call into another file's own bad-shaped method) has no sink
               // of its own; skip its own entry so recall is credited once,
