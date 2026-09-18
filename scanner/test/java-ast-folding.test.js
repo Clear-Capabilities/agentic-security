@@ -157,16 +157,40 @@ test('a class-level `private static final boolean` field set to false folds the 
   assert.equal(ranges[0].reason, 'constant-false-if dead-then');
 });
 
-// Precision control: a NON-final field must NEVER be treated as a constant
-// — it could legitimately be reassigned elsewhere (a setter, another
-// method), and folding it would risk marking a genuinely LIVE branch dead.
-test('a class-level field WITHOUT `final` is NOT folded, even with the same name/initializer shape', () => {
+// SARD_80_F1 W4.J36 — a non-final field that is never reassigned anywhere
+// in the file is "effectively final" (the same real Java language concept
+// used for lambda/anonymous-class capture) and just as safe to fold as a
+// real `final` field. Precision control immediately below confirms a
+// GENUINELY reassignable field (the same name, actually written to
+// elsewhere) is still correctly left unfolded.
+test('a class-level field WITHOUT `final`, but never reassigned anywhere (effectively final), IS folded', () => {
   const src = `
     public class Bad {
         private static boolean notActuallyFinal = true;
         public void bad() {
             if (notActuallyFinal) {
-                System.out.println("could be reached if reassigned elsewhere");
+                System.out.println("reachable");
+            } else {
+                System.out.println("unreachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected one dead range for an effectively-final field, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-true-if dead-else');
+});
+
+test('a class-level field WITHOUT `final` that IS reassigned elsewhere is NOT folded', () => {
+  const src = `
+    public class Bad {
+        private static boolean notActuallyFinal = true;
+        public void reset() {
+            notActuallyFinal = false;
+        }
+        public void bad() {
+            if (notActuallyFinal) {
+                System.out.println("could be reached if reset() ran first");
             } else {
                 System.out.println("could also be reached");
             }
@@ -174,7 +198,47 @@ test('a class-level field WITHOUT `final` is NOT folded, even with the same name
     }
   `;
   const ranges = deadBranchRanges(src);
-  assert.equal(ranges.length, 0, `expected no dead ranges for a non-final field, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges.length, 0, `expected no dead ranges for a genuinely reassignable field, got: ${JSON.stringify(ranges)}`);
+});
+
+// SARD_80_F1 W4.J36 — Juliet's own Flow Variant 05 ("if(privateTrue) and
+// if(privateFalse)") and Flow Variant 07 ("if(privateFive==5) and
+// if(privateFive!=5)"), confirmed via the public Java Juliet mirror's own
+// CWE601_Open_Redirect__Servlet_connect_tcp_05.java / _07.java.
+test('an effectively-final `private boolean` instance field (Flow Variant 05 shape) is folded', () => {
+  const src = `
+    public class Bad {
+        private boolean privateTrue = true;
+        public void bad() {
+            if (privateTrue) {
+                System.out.println("reachable");
+            } else {
+                System.out.println("unreachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-true-if dead-else');
+});
+
+test('an effectively-final `private int` field compared with == (Flow Variant 07 shape) is folded', () => {
+  const src = `
+    public class Bad {
+        private int privateFive = 5;
+        public void bad() {
+            if (privateFive == 5) {
+                System.out.println("reachable");
+            } else {
+                System.out.println("unreachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-true-if dead-else');
 });
 
 test('isLineInDeadRange: boundary lines are inclusive, adjacent lines are not', () => {

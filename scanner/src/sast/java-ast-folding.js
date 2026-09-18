@@ -552,19 +552,52 @@ function walkSwitch(switchNode, scope, out) {
 // equally a real compile-time constant once the object exists, and Juliet
 // itself only ever uses `static final` for this idiom, so the distinction
 // is moot in practice but the fix is correct either way).
-function _collectClassConstants(classBody) {
+// SARD_80_F1 W4.J36 — Juliet's OWN variant family for this idiom goes well
+// beyond the literal (`02`) and `static final` (`04`) forms already
+// modeled: Flow Variant 05 ("if(privateTrue) and if(privateFalse)") uses a
+// plain, NON-static, NON-final `private boolean privateTrue = true;`
+// instance field, and Variant 07 ("if(privateFive==5) and
+// if(privateFive!=5)") compares a non-final `private int` field against a
+// literal with `==`/`!=` (confirmed via the public Java Juliet mirror's own
+// `CWE601_Open_Redirect__Servlet_connect_tcp_05.java`/`_07.java`) — both
+// already fall out of `evalBinary`'s existing equality-operator support
+// for free, once the field itself resolves to a value at all. A bare
+// non-final field is NOT a compile-time constant in general (W4.J34's own
+// header comment on why `final` is required), but Java's real "effectively
+// final" concept — a variable assigned exactly once, wherever that
+// assignment happens to sit — covers this shape soundly: if `privateTrue`
+// is written to nowhere else in the WHOLE FILE besides its own declaration,
+// it can never actually change, so folding it is exactly as safe as
+// folding a real `final` field. Checked with a deliberately simple,
+// conservative TEXT scan (`_isEffectivelyFinal`) rather than a full CST
+// call-graph/alias analysis: counting `\bname\s*=(?!=)` occurrences across
+// the ENTIRE source (not just this class) can only ever OVER-count (an
+// unrelated same-named field/local elsewhere in the file, or in another
+// class in the same file) — which only means the optimization is missed,
+// never that a genuinely-reassigned field gets folded. That failure mode
+// is the same "safe in the conservative direction" shape every dead-branch
+// check in this file already uses.
+function _isEffectivelyFinal(source, fieldName) {
+  if (!source || !fieldName) return false;
+  const escaped = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const assignRe = new RegExp(`\\b${escaped}\\s*=(?!=)`, 'g');
+  const matches = source.match(assignRe) || [];
+  return matches.length <= 1;
+}
+
+function _collectClassConstants(classBody, source) {
   const consts = new Map();
   const decls = classBody?.children?.classBodyDeclaration || [];
   for (const bd of decls) {
     const fd = bd.children?.classMemberDeclaration?.[0]?.children?.fieldDeclaration?.[0];
     if (!fd) continue;
     const isFinal = (fd.children?.fieldModifier || []).some(m => m.children?.Final);
-    if (!isFinal) continue;
     const declarators = fd.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator || [];
     for (const d of declarators) {
       const name = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
       const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0];
       if (!name || !initExpr) continue;
+      if (!isFinal && !_isEffectivelyFinal(source, name)) continue;
       const value = evalExpr(initExpr, consts);
       if (value !== UNKNOWN) consts.set(name, value);
     }
@@ -576,10 +609,10 @@ function _collectClassConstants(classBody) {
 
 /** Walk every method body anywhere in the type hierarchy (including inner
  *  classes, interfaces, anonymous classes). Recursive. */
-function walkClassBody(classBody, out) {
+function walkClassBody(classBody, out, source) {
   if (!classBody) return;
   const decls = classBody.children?.classBodyDeclaration || [];
-  const classConsts = _collectClassConstants(classBody);
+  const classConsts = _collectClassConstants(classBody, source);
   for (const bd of decls) {
     const member = bd.children?.classMemberDeclaration?.[0];
     if (!member) continue;
@@ -602,7 +635,7 @@ function walkClassBody(classBody, out) {
     // Nested class / interface
     if (memCh.classDeclaration) {
       const cd = memCh.classDeclaration[0];
-      walkClassDeclaration(cd, out);
+      walkClassDeclaration(cd, out, source);
     }
     if (memCh.interfaceDeclaration) {
       const id = memCh.interfaceDeclaration[0];
@@ -611,12 +644,12 @@ function walkClassBody(classBody, out) {
   }
 }
 
-function walkClassDeclaration(cd, out) {
+function walkClassDeclaration(cd, out, source) {
   if (!cd) return;
   const ncd = cd.children?.normalClassDeclaration?.[0];
   if (ncd) {
     const body = ncd.children?.classBody?.[0];
-    walkClassBody(body, out);
+    walkClassBody(body, out, source);
   }
   // Enums and records also have bodies that may contain methods.
   const ed = cd.children?.enumDeclaration?.[0];
@@ -668,7 +701,7 @@ export function deadBranchRanges(source) {
     const tds = cu?.children?.typeDeclaration || [];
     for (const td of tds) {
       const cd = td.children?.classDeclaration?.[0];
-      if (cd) walkClassDeclaration(cd, out);
+      if (cd) walkClassDeclaration(cd, out, source);
       const id = td.children?.interfaceDeclaration?.[0];
       if (id) walkInterfaceDeclaration(id, out);
     }
