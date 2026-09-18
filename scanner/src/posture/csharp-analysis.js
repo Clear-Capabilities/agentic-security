@@ -10,7 +10,16 @@
 //   are stable enough (Request.Query / Request.Form / Request.Headers /
 //   HttpContext.Request.* / IFormCollection / BinaryReader / etc.) that a
 //   simple forward-pass catches the vast majority. Misses on:
-//     - Aliased sources via method indirection (caller-supplied taint)
+//     - Aliased sources via method indirection (caller-supplied taint) —
+//       SARD_80_F1 W4.C41 closed the SAME-FILE, SINGLE-HOP case (a value
+//       tainted in a caller passed as an argument to a private/same-class
+//       helper — Juliet's own "data passed as an argument from one method
+//       to another in the same class" flow-variant idiom): see
+//       `analyzeCSharpIR`'s post-pass below. Still deliberately NOT
+//       modeled: a second hop (the helper passes it on to a THIRD method)
+//       and any cross-FILE call, both out of scope for this lightweight
+//       analyzer (the real, general interprocedural case is what the deep
+//       taint engine in `dataflow/` exists for).
 //     - Inheritance-resolved property reads
 //     - Generic constraints
 //   The Layer 4 LLM validator stage covers the residue when enabled.
@@ -251,12 +260,21 @@ function analyzeMethodFlow(method, opts = {}) {
   // ADDITIONALLY: any parameter whose TYPE is an HTTP context type
   // (HttpRequest, HttpResponse, IFormCollection, …) is tainted regardless
   // of opts — the data IN those types is by definition user-controlled.
+  // `opts.taintedParamNames` (SARD_80_F1 W4.C41, optional Set<string>) is
+  // the SAME-FILE, single-hop caller-argument-taint case referenced above:
+  // `analyzeCSharpIR`'s post-pass computes, from an ALREADY-computed
+  // caller flow, which of THIS method's own parameter names were passed a
+  // tainted argument at some real call site, and re-invokes this function
+  // with that set so the normal forward pass below propagates it through
+  // this method's body exactly as it would a route-handler-tainted param.
   const paramsTainted = !!opts.treatParamsAsTainted;
+  const taintedParamNames = opts.taintedParamNames || null;
   for (const p of method.params || []) {
     typeMap.set(p.name, p.type);
     const typeBase = String(p.type || '').replace(/\?$/, '').replace(/<.*$/, '');
     const isHttpTaintedType = HTTP_TAINTED_PARAM_TYPES.test(typeBase);
-    if (paramsTainted || isHttpTaintedType) {
+    const isCallerArgTainted = !!(taintedParamNames && taintedParamNames.has(p.name));
+    if (paramsTainted || isHttpTaintedType || isCallerArgTainted) {
       taintMap.set(p.name, true);
       sourceLines.set(p.name, method.line);
     }
@@ -450,6 +468,65 @@ export function analyzeCSharpIR(ir) {
     return tainted;
   }
   for (const m of ir.methods) methodFlow.set(m, computeFlow(m));
+
+  // SARD_80_F1 W4.C41 — same-file, single-hop caller-argument taint.
+  // Every detector in csharp.js reads `analysis.methodFlow.get(m)` and
+  // that flow's own `taintMap` only ever seeds from THIS method's own
+  // params (route-handler convention / HTTP-typed param) — never from
+  // what a CALLER actually passed it. Juliet's own "Flow Variant NN: data
+  // passed as an argument from one method to another in the same class"
+  // idiom (a route handler reads a source, then calls a private static
+  // sink-wrapper helper with it) was therefore invisible to every
+  // per-method detector here, confirmed via a standalone `runScan`
+  // reproduction of the exact real-corpus shape (CWE36's own
+  // `Params_Get_Web_41.cs`): the DIRECT single-method form of the same
+  // sink already fired correctly; the moment the tainted value crossed a
+  // same-file method-call boundary, it vanished with zero findings from
+  // any detector, structural or deep-engine.
+  //
+  // Deliberately conservative, matching this analyzer's own "single
+  // forward pass" simplicity rather than a full fixed point: (1) SINGLE
+  // HOP only — a callee that itself forwards the value to a THIRD method
+  // is not covered (mirrors `resolveCalleeReturnTaint`'s own scope, which
+  // is the established precedent for interprocedural resolution in this
+  // file); (2) SAME-FILE, unambiguous-name resolution only, via the same
+  // `methodsByName` index `resolveCalleeReturnTaint` already uses — a
+  // callee name with zero or 2+ same-named candidates project-wide is
+  // left unresolved (permissive: the finding is simply not gained, never
+  // a false suppression); (3) self-recursive calls are skipped (a
+  // parameter's own taint state within its own body is already handled
+  // by the normal forward pass, and re-seeding it from itself adds
+  // nothing); (4) this recomputes the DIRECT callee's flow only — it does
+  // NOT retroactively fix up `resolveCalleeReturnTaint`'s memo for any
+  // caller further up a chain that already resolved this callee's
+  // pre-this-pass return-taint verdict, an accepted, narrow gap given the
+  // single-hop scope above.
+  const taintedParamNamesByMethod = new Map();
+  for (const caller of ir.methods) {
+    const callerFlow = methodFlow.get(caller);
+    if (!callerFlow) continue;
+    for (const call of caller.calls || []) {
+      if (call.receiver) continue; // same-file helper calls are bare (no receiver)
+      const candidates = methodsByName.get(call.method);
+      if (!candidates || candidates.length !== 1) continue;
+      const callee = candidates[0];
+      if (callee === caller) continue;
+      for (let i = 0; i < (call.args || []).length; i++) {
+        const param = (callee.params || [])[i];
+        if (!param) continue;
+        if (!argIsTainted(callerFlow, call.args[i])) continue;
+        if (!taintedParamNamesByMethod.has(callee)) taintedParamNamesByMethod.set(callee, new Set());
+        taintedParamNamesByMethod.get(callee).add(param.name);
+      }
+    }
+  }
+  for (const [callee, taintedParamNames] of taintedParamNamesByMethod) {
+    methodFlow.set(callee, analyzeMethodFlow(callee, {
+      treatParamsAsTainted: treatParamsAsTaintedByMethod.get(callee),
+      resolveCalleeReturnTaint,
+      taintedParamNames,
+    }));
+  }
   // Route detection.
   const routes = [];
   for (const c of ir.classes) {

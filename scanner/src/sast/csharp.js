@@ -798,6 +798,23 @@ function detectFormatString(file, raw, ir, analysis, out, seen) {
       // Only flag when the FIRST arg (the format string) is tainted; passing
       // a constant format with tainted args is fine.
       if (!argIsTainted(flow, arg)) continue;
+      // SARD_80_F1 W4.C41 bonus fix — a NESTED, literal-first string.Format
+      // call used AS the outer sink's own argument (`Console.Write(string.
+      // Format("{0}{1}", data, Environment.NewLine))`) is the CORRECT, safe
+      // idiom: `data` is a VALUE substituted into a literal format template,
+      // never the format string itself. `argIsTainted`'s own text-scan sees
+      // `data` as an identifier ANYWHERE inside the arg's flattened text and
+      // cannot distinguish its position within a nested call — so this shape
+      // was already misclassified by this check; it was simply unreachable
+      // until a caller-argument-tainted `data` could ever flow into a
+      // private helper's own scope (which W4.C41's same-file taint
+      // extension is what first made possible). Detected via the nested
+      // call's OWN literal first argument — independent of where `data` is
+      // used deeper inside that same nested call — so the genuinely
+      // vulnerable sibling shape (`Console.Write(string.Format(data))`,
+      // where the nested call's own first arg is NOT a literal) is
+      // unaffected and still fires.
+      if (/^\s*(?:string\.Format|String\.Format|System\.String\.Format)\s*\(\s*"/.test(arg.text || '')) continue;
       const id = `csharp-format-string:${file}:${call.line}`;
       if (seen.has(id)) continue;
       seen.add(id);

@@ -398,6 +398,36 @@ test('detector: string.Format with constant format + tainted ARG does NOT fire',
   assert.ok(!findings.some(f => f.family === 'format-string'));
 });
 
+// SARD_80_F1 W4.C41 bonus fix — a sibling of the precision case directly
+// above, but where the constant-format `string.Format(...)` call is itself
+// NESTED as another sink's own argument (`Console.Write(string.Format(
+// "{0}{1}", data, ...))`, the real Juliet Good() shape). The outer sink
+// check previously saw ANY identifier anywhere in its own argument's
+// flattened text as disqualifying — including one used safely as a VALUE
+// deep inside a nested, literal-first `string.Format` call — so this exact
+// safe idiom was misclassified as vulnerable.
+test('detector: Console.Write(string.Format(constant, tainted-VALUE)) does NOT fire — nested literal-first format is safe', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get(string user) {
+        Console.Write(string.Format("hello {0}", user));
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'format-string'), `expected no format-string finding, got: ${findings.map(f => f.vuln).join(',')}`);
+});
+
+test('detector: Console.Write(string.Format(tainted)) still fires — the tainted value IS the format string, just nested one level deeper', () => {
+  const src = `
+    public class C : Controller {
+      [HttpGet] public void Get(string fmt) {
+        Console.Write(string.Format(fmt));
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'format-string' && f.cwe === 'CWE-134'), `expected a format-string finding, got: ${findings.map(f => f.vuln).join(',')}`);
+});
+
 test('detector: Assembly.Load with tainted assembly name = code injection', () => {
   const src = `
     public class C : Controller {
@@ -855,6 +885,97 @@ test('a value read via SqlDataReader.GetString() from a variable whose declared 
     }`;
   const findings = scanCSharp('t.cs', src);
   assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding for a non-DataReader GetString() call, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+// SARD_80_F1 W4.C41 — same-file, single-hop caller-argument taint. This
+// analyzer's `taintMap` seeding previously only ever considered a method's
+// OWN declared params (route-handler convention / HTTP-typed param), never
+// what a CALLER actually passed it — the file's own top-level comment
+// listed "aliased sources via method indirection" as a known miss.
+// Confirmed via the public C# Juliet mirror's own
+// `CWE36_Absolute_Path_Traversal__Params_Get_Web_41.cs` (Flow Variant 41:
+// "data passed as an argument from one method to another in the same
+// class"): a route handler reads `req.Params.Get("name")`, then calls a
+// PRIVATE STATIC sink-wrapper helper with it — the direct single-method
+// form of this exact sink already fired; the moment the value crossed a
+// same-file method-call boundary, it vanished entirely (confirmed: zero
+// findings from any detector, structural or deep-engine).
+test('a tainted value passed as an argument to a same-file private helper method reaches the helper\'s own sink', () => {
+  const src = `
+    public class C : AbstractTestCaseWeb {
+      private static void BadSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+      public override void Bad(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = req.Params.Get("name");
+        BadSink(data, req, resp);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'path-traversal'), `expected a path-traversal finding via the same-file argument-passed source, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('a hardcoded (non-tainted) value passed as an argument to a same-file private helper method does not fire', () => {
+  const src = `
+    public class C : AbstractTestCaseWeb {
+      private static void GoodSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+      public override void Good(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = "foo";
+        GoodSink(data, req, resp);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding for a hardcoded argument, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('an ambiguous same-named helper method (2+ candidates project-wide) is left unresolved, not guessed', () => {
+  const src = `
+    public class Bad1 : AbstractTestCaseWeb {
+      private static void Sink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+      public override void Run(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = "foo";
+        Sink(data, req, resp);
+      }
+    }
+    public class Bad2 : AbstractTestCaseWeb {
+      private static void Sink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+      public override void Run(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = req.Params.Get("name");
+        Sink(data, req, resp);
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding when the callee name is ambiguous across classes, got: ${findings.map(f => f.family).join(',')}`);
 });
 
 test('IR: a `using (Type x = expr)` declaration is not corrupted by the enclosing clause\'s own closing paren', () => {
