@@ -1149,10 +1149,11 @@ function _collectCsMethodConstants(code, consts) {
 
 // Resolves `condRaw` to a boolean when it's a literal `true`/`false`, a bare
 // reference to a known boolean constant, a bare zero-arg call to a known
-// boolean-constant helper (W5.28), or an `==`/`!=` comparison of a known int
-// constant against a literal — Juliet's own Flow Variant 04/08/09/11/13-
-// style idioms. Returns `null` (not `false`) when unresolvable, so callers
-// can distinguish "genuinely false" from "not a constant at all".
+// boolean-constant helper (W5.28), a LITERAL-vs-LITERAL `==`/`!=` comparison
+// (W5.29 — see below), or an `==`/`!=` comparison of a known int constant
+// against a literal — Juliet's own Flow Variant 03/04/08/09/11/13-style
+// idioms. Returns `null` (not `false`) when unresolvable, so callers can
+// distinguish "genuinely false" from "not a constant at all".
 function _resolveConstCondition(condRaw, classConsts) {
   const trimmed = condRaw.trim();
   if (trimmed === 'true') return true;
@@ -1165,6 +1166,23 @@ function _resolveConstCondition(condRaw, classConsts) {
   if (callM && classConsts && classConsts.has(`()${callM[1]}`)) {
     const v = classConsts.get(`()${callM[1]}`);
     return typeof v === 'boolean' ? v : null;
+  }
+  // SARD_80_F1 W5.29 — Juliet's "Flow Variant 03: if(5==5) and if(5!=5)"
+  // (confirmed via the public C# mirror's own
+  // CWE80_XSS__CWE182_Web_Connect_tcp_03.cs): BOTH sides are bare integer
+  // literals, needing no `classConsts` lookup at all — Java's own AST
+  // evaluator (`evalBinary`) already resolves this shape for free (it
+  // evaluates both operands recursively regardless of whether either is a
+  // known identifier), but this hand-rolled regex evaluator's own `cmp`
+  // check two lines below requires the LHS to be an identifier
+  // (`(\w+)`), so a pure literal-vs-literal comparison never matched.
+  // Checked BEFORE the identifier-based `cmp` check since `\d+` is also
+  // valid `\w+` text and would otherwise shadow this branch.
+  const litCmp = trimmed.match(/^(-?\d+)\s*(==|!=)\s*(-?\d+)$/);
+  if (litCmp) {
+    const lhs = parseInt(litCmp[1], 10);
+    const rhs = parseInt(litCmp[3], 10);
+    return litCmp[2] === '==' ? lhs === rhs : lhs !== rhs;
   }
   const cmp = trimmed.match(/^(\w+)\s*(==|!=)\s*(-?\d+)$/);
   if (cmp && classConsts && classConsts.has(cmp[1])) {

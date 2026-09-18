@@ -1025,3 +1025,54 @@ public class Good {
   assert.equal(goodFindings.length, 0,
     `expected no CWE-78 finding for the if(PrivateReturnsFalse())/else good-source counterpart, got: ${JSON.stringify(goodFindings)}`);
 });
+
+// SARD_80_F1 W5.29 — Juliet's "Flow Variant 03: if(5==5) and if(5!=5)"
+// (confirmed via the public C# mirror's own
+// CWE80_XSS__CWE182_Web_Connect_tcp_03.cs): both sides are bare integer
+// literals, needing no `classConsts` lookup — the pre-existing `cmp` regex
+// required the LHS to be an identifier, so a pure literal-vs-literal
+// comparison never resolved even though it needs no interprocedural
+// evidence at all.
+test('parseCSharpFile: if(5==5)/else — a literal-vs-literal int comparison is resolved without any classConsts lookup', () => {
+  const code = `
+public class C {
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (5 == 5) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead else-branch must not appear, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the live if-branch must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: if(5!=5)/else — a literal-vs-literal int comparison that is always false folds the if-branch as dead', () => {
+  const code = `
+public class C {
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (5 != 5) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the dead if-branch must not appear, got: ' + JSON.stringify(nodeList));
+});
