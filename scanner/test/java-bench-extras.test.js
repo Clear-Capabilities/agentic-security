@@ -92,6 +92,21 @@ test('CWE-259: an interprocedural helper receiving `data` as a PARAMETER does no
   // DIFFERENT `data` from `bad()`'s local variable of the same name, even
   // though `bad()`'s hardcoded literal appears earlier in the file. A naive
   // backward-scan-for-nearest-assignment would wrongly attribute it.
+  //
+  // SARD_80_F1 W4.J38 — this test's own expected count changed from 0 to 1,
+  // NOT as a regression fix but as an intentional consequence of a genuine
+  // capability extension (same precedent as W4.J36/W4.C41): before W4.J38,
+  // `badSink`'s OWN genuinely-hardcoded-password call (its literal argument
+  // sits INSIDE `bad()`, which is defined AFTER `badSink` in this exact
+  // Flow-Variant-41 file order) also failed to resolve, for the SAME
+  // "crossed a method boundary via a backward-only scan" reason this test
+  // was written to guard against for `goodG2BSink` — an incidental,
+  // never-intentional double miss, not a deliberate design choice.
+  // `_resolveParamLiteralViaAllCallSites` now correctly resolves BOTH: the
+  // genuinely-hardcoded `badSink` call now correctly fires (a real CWE-259
+  // recall gain), while `goodG2BSink`'s genuinely-non-literal call
+  // (`readerBuffered.readLine()`) still correctly does not — preserving
+  // this test's own original precision guarantee.
   const src = `
     import java.sql.*;
     public class Bad {
@@ -118,8 +133,40 @@ test('CWE-259: an interprocedural helper receiving `data` as a PARAMETER does no
     }
   `;
   const hits = cwe259Hits(src);
-  assert.equal(hits.length, 0,
-    `expected no finding (data is a helper-method PARAMETER in both sinks, not a provably-literal local), got: ${JSON.stringify(hits)}`);
+  assert.equal(hits.length, 1,
+    'badSink\'s own genuinely-hardcoded literal should now correctly fire (W4.J38 capability gain)');
+  assert.equal(hits[0].line, 5, 'the finding must be attributed to badSink\'s own line, not goodG2BSink\'s');
+});
+
+test('CWE-259 W4.J38 precision control (superseded assertion): goodG2BSink\'s genuinely non-literal call must still not fire', () => {
+  const src = `
+    import java.sql.*;
+    public class Bad {
+        private void badSink(String data) throws Throwable {
+            Connection connection = DriverManager.getConnection("data-url", "root", data);
+        }
+        public void bad() throws Throwable {
+            String data;
+            data = "7e5tc4s3";
+            badSink(data);
+        }
+        private void goodG2BSink(String data) throws Throwable {
+            Connection connection = DriverManager.getConnection("data-url", "root", data);
+        }
+        private void goodG2B() throws Throwable {
+            String data;
+            data = "";
+            try {
+                java.io.BufferedReader readerBuffered = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+                data = readerBuffered.readLine();
+            } catch (java.io.IOException e) {}
+            goodG2BSink(data);
+        }
+    }
+  `;
+  const hits = cwe259Hits(src);
+  assert.ok(!hits.some((h) => h.line === 13),
+    `expected no finding attributed to goodG2BSink's own line (13) — its caller's argument is genuinely non-literal, got: ${JSON.stringify(hits)}`);
 });
 
 test('CWE-259: a variable reassigned AFTER its hardcoded literal but before the sink does NOT fire', () => {
@@ -383,4 +430,179 @@ test('CWE-319: a bare .accept() with sensitive context but no socket-read call d
   `;
   const hits = cwe319Hits(src);
   assert.equal(hits.length, 0, 'no getInputStream()/getOutputStream() call anywhere in the file — must not fire');
+});
+
+// SARD_80_F1 W4.J38 — Juliet's "data passed as an ARGUMENT from one method
+// to another" flow variant (confirmed via the public mirror's own
+// `CWE601_Open_Redirect__Servlet_connect_tcp_41.java`): the sink method
+// (`goodG2BSink`) is DEFINED BEFORE its own caller (`goodG2B`, which
+// supplies the literal argument) in raw file text — so the caller's own
+// literal assignment sits AFTER the sink call, invisible to any backward-
+// only scan. `_resolveParamLiteralViaAllCallSites` resolves this by finding
+// the enclosing method, its parameter position, and checking every real
+// call site of that method for a literal (or a literal-resolving bare
+// identifier) at the matching position.
+test('CWE-601: sendRedirect on a helper parameter whose ONLY caller supplies a literal, even when the caller is defined AFTER the sink method, does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void goodG2BSink(String data, HttpServletResponse response) throws Throwable {
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = "foo";
+            goodG2BSink(data, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'the ONLY caller supplies a literal — must not fire, even though it is defined after the sink method');
+});
+
+test('CWE-601: sendRedirect on a helper parameter with a genuinely tainted caller (defined after the sink method) still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void badSink(String data, HttpServletResponse response) throws Throwable {
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = System.getenv("X");
+            badSink(data, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'the only caller supplies a non-literal — must still fire');
+});
+
+test('CWE-601: a helper called from TWO sites, one of which is non-literal, still fires (fails closed)', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void sink(String data, HttpServletResponse response) throws Throwable {
+            response.sendRedirect(data);
+        }
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = "foo";
+            sink(data, response);
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = System.getenv("X");
+            sink(data, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'one of the two callers is non-literal — must still fire, never guessed as safe from the other');
+});
+
+test('CWE-601: the enclosing-method search does not mistake an `if (...) {` control-flow block for a method declaration', () => {
+  // Regression test for a real bug found while building this feature: the
+  // method-declaration regex initially ALSO matched Java's own control-flow
+  // keywords (`if`/`for`/`while`/`switch`/`catch`/`synchronized`/`do`),
+  // which share the identical `keyword (...) {` textual shape — silently
+  // replacing the genuine enclosing method with a fake "if" method and
+  // making the whole resolution inert.
+  const src = `
+    public class Bad extends HttpServlet {
+        private void goodG2BSink(String data, HttpServletResponse response) throws Throwable {
+            if (data != null) {
+                if (true) {
+                    response.sendRedirect(data);
+                }
+            }
+        }
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = "foo";
+            goodG2BSink(data, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'nested if-blocks before the sink must not break enclosing-method resolution');
+});
+
+// SARD_80_F1 W4.J38 — Juliet's "make a copy of data within the same method"
+// flow variant (confirmed via `CWE601_Open_Redirect__Servlet_connect_tcp_31
+// .java`): `data = "foo"; dataCopy = data;` … later `String data =
+// dataCopy;` (a NEW local shadowing the outer one) `response.sendRedirect
+// (data);`. Resolved by recursing through `_nearestAssignIsLiteral` itself
+// when the nearest assignment's own RHS is a bare identifier copy.
+test('CWE-601: sendRedirect on a value copied through an intermediate variable (all literal) does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            data = "foo";
+            String dataCopy = data;
+            String data2 = dataCopy;
+            response.sendRedirect(data2);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'a fully-literal copy chain must not fire');
+});
+
+test('CWE-601: sendRedirect on a value copied through an intermediate variable (genuinely tainted) still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            data = System.getenv("X");
+            String dataCopy = data;
+            String data2 = dataCopy;
+            response.sendRedirect(data2);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'a tainted copy chain must still fire');
+});
+
+// SARD_80_F1 W4.J39 — a confirmed, severe ReDoS regression, caught during
+// this session's OWN real-corpus verification (a live full-corpus scan hung
+// for 30+ minutes on a single small CWE directory before being killed).
+// BOTH `_resolveCalleeReturnIsLiteral`'s `declRe` (W4.J37) and
+// `_resolveParamLiteralViaAllCallSites`'s `methodDeclRe` (W4.J38) originally
+// matched a "return type" prefix via a LAZY character class that itself
+// included `\s` (`[\w.<>[\],\s]+?`) — `scanJavaBenchExtras` always calls
+// these against `blankComments(raw)`, never raw source, and Juliet's own
+// large multi-line header comments blank down to a LONG run of whitespace,
+// which a `\s`-inclusive lazy quantifier backtracks over catastrophically.
+// Fixed by dropping the (never actually read) "return type" prefix match
+// entirely from both regexes. This test constructs the exact pathological
+// shape directly — a large blanked-comment-style whitespace run followed by
+// a real method+sink — and asserts the scan completes near-instantly, so
+// a future regression (reintroducing a `\s`-inclusive lazy quantifier in
+// either function) fails LOUDLY here rather than silently hanging a real
+// corpus scan again.
+test('CWE-259/CWE-601 ReDoS regression: a long comment-blanked whitespace run before a real sink does not hang', () => {
+  const longWhitespaceRun = ' '.repeat(20000) + '\n'.repeat(200);
+  const src = `${longWhitespaceRun}
+    import java.sql.*;
+    public class Bad extends HttpServlet {
+        private void goodG2BSink(String data, HttpServletResponse response) throws Throwable {
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        private String goodG2BSource() {
+            String data;
+            data = "foo";
+            return data;
+        }
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = goodG2BSource();
+            goodG2BSink(data, response);
+        }
+    }
+  `;
+  const t0 = Date.now();
+  const hits = cwe601Hits(src);
+  const elapsed = Date.now() - t0;
+  assert.ok(elapsed < 2000, `expected the scan to complete in well under 2s, took ${elapsed}ms — a ReDoS may have been reintroduced`);
+  assert.equal(hits.length, 0, 'the literal still resolves correctly despite the leading whitespace run');
 });

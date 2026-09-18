@@ -183,7 +183,22 @@ function _resolveCalleeReturnIsLiteral(content, calleeName, deadRanges, _depth) 
   const depth = _depth || 0;
   if (depth >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const escapedCallee = calleeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const declRe = new RegExp(`\\b(?:private|public|protected)?\\s*(?:static\\s+)?[\\w.<>\\[\\],\\s]+?\\s+${escapedCallee}\\s*\\([^)]*\\)\\s*(?:throws\\s+[\\w.,\\s]+)?\\s*\\{`, 'g');
+  // W4.J39 — a confirmed, severe ReDoS: the ORIGINAL pattern here matched a
+  // "return type" prefix via a LAZY character class that itself included
+  // `\s` (`[\w.<>\[\],\s]+?`). Comment-blanked content (`scanJavaBenchExtras`
+  // always calls `_resolveCalleeReturnIsLiteral` — and everything downstream
+  // of it — with `blankComments(raw)`, never `raw`) turns Juliet's own
+  // large header comment blocks into a LONG run of blanked whitespace, and
+  // a lazy quantifier whose OWN character class includes `\s` backtracks
+  // catastrophically trying every possible split point inside that run —
+  // confirmed via direct reproduction (hangs indefinitely on a real, small
+  // 8KB corpus file; the exact same shape hung a live full-corpus scan for
+  // 30+ minutes on a single small CWE before it was caught and killed).
+  // Fixed by dropping the "return type" prefix match ENTIRELY: since the
+  // callee NAME is already known, a bare `\bcalleeName\s*(...)  {` search
+  // is exactly as identifying (a call site is never immediately followed
+  // by `{`) without ever touching a `\s`-inclusive lazy quantifier.
+  const declRe = new RegExp(`\\b${escapedCallee}\\s*\\([^)]*\\)\\s*(?:throws\\s+[\\w.,\\s]+)?\\s*\\{`, 'g');
   const dm = declRe.exec(content);
   if (!dm) return false;
   const bodyStart = dm.index + dm[0].length;
@@ -207,7 +222,121 @@ function _resolveCalleeReturnIsLiteral(content, calleeName, deadRanges, _depth) 
   return false;
 }
 
+// Balanced top-level comma split (paren/bracket/brace-aware, quote-aware —
+// an argument like `"a, b"` or `foo(1, 2)` must not be split on its OWN
+// internal commas). Deliberately simple: no need to track Java generics'
+// `<...>` nesting specifically, since angle brackets never appear in a
+// plain call argument list the way they do in a type declaration.
+function _splitTopLevelCommas(text) {
+  const parts = [];
+  let depth = 0, cur = '', inStr = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      cur += c;
+      if (c === '\\') { cur += text[++i] || ''; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; cur += c; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '' || parts.length) parts.push(cur);
+  return parts;
+}
+
+// SARD_80_F1 W4.J38 — the sibling gap to W4.J33's own parameter-boundary
+// guard (see that guard's own header comment on the "data passed as an
+// argument from one method to another" idiom). That guard assumes the
+// CALLER's own literal assignment appears textually BEFORE the callee
+// method in the file — the common case — but Juliet's own file layout does
+// NOT guarantee this: confirmed via the public mirror's own
+// `CWE601_Open_Redirect__Servlet_connect_tcp_41.java`, where `goodG2BSink`
+// (the method actually containing the sink call) is DEFINED BEFORE its own
+// caller `goodG2B` (which supplies the literal argument) — so `goodG2B`'s
+// `data = "foo";` sits AFTER `goodG2BSink`'s own sink call in raw file
+// text, structurally invisible to ANY backward-only scan, however it's
+// tuned. Rather than trying to special-case "look forward too" inside the
+// backward scan above, this takes a completely different, WHOLE-FILE
+// approach once the backward scan has already failed: find the METHOD that
+// encloses `beforeIdx`, determine `varName`'s own PARAMETER POSITION in
+// that method's signature, then check every real call site of that method
+// (matched by bare name — Juliet's own same-class private-helper
+// convention, mirroring `_resolveCalleeReturnIsLiteral`'s identical same-
+// file-only scope) for a literal at the SAME argument position. Fails
+// closed at every step: zero real call sites found, an arity mismatch, or
+// ANY call site supplying a non-literal at that position all return
+// `false` — this only ever ADDS a positive signal when literally every
+// known caller agrees, never guesses from a single ambiguous data point.
+function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth) {
+  const depth0 = _depth || 0;
+  if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Excludes Java's control-flow keywords, which have the IDENTICAL
+  // `keyword (...) {` textual shape as a method declaration (`if (x) {`,
+  // `for (...) {`, `while (...) {`, `switch (...) {`, `catch (...) {`,
+  // `synchronized (...) {`) and would otherwise be picked up as a fake
+  // "enclosing method" — confirmed the hard way: a bare `if (data != null)
+  // {` immediately inside a real sink method matched this regex FIRST,
+  // silently replacing the genuine enclosing method as `enclosing`.
+  //
+  // W4.J39 — a confirmed, severe ReDoS, the SAME defect class as
+  // `_resolveCalleeReturnIsLiteral`'s own `declRe` (see that function's own
+  // fix comment for the full reproduction): the ORIGINAL pattern here ALSO
+  // matched a "return type" prefix via a LAZY, `\s`-inclusive character
+  // class (`[\w.<>[\],\s]+?`), which backtracks catastrophically over the
+  // long blanked-whitespace runs `blankComments()` leaves where Juliet's
+  // own large header comments used to be. Fixed the same way: the "return
+  // type" prefix is never actually READ by this function (only the
+  // captured NAME and PARAMS matter), so it's dropped entirely — a bare
+  // `\b(?!keyword)IDENT\s*(...) {` search identifies a method declaration
+  // exactly as well, without ever touching a `\s`-inclusive lazy quantifier.
+  const methodDeclRe = /\b(?!if\b|for\b|while\b|switch\b|catch\b|synchronized\b|do\b|else\b|return\b|new\b)([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let enclosing = null, dm;
+  while ((dm = methodDeclRe.exec(content)) && dm.index < beforeIdx) enclosing = dm;
+  if (!enclosing) return false;
+  const methodName = enclosing[1];
+  const params = _splitTopLevelCommas(enclosing[2]).map(p => p.trim()).filter(Boolean);
+  const paramIdx = params.findIndex((p) => new RegExp(`\\b${escapedVar}$`).test(p));
+  if (paramIdx === -1) return false; // varName isn't actually a param of the enclosing method
+  const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+  let cm, sawRealCallSite = false;
+  while ((cm = callRe.exec(content))) {
+    const argsStart = cm.index + cm[0].length;
+    let braceDepth = 1, i = argsStart;
+    while (i < content.length && braceDepth > 0) {
+      if (content[i] === '(') braceDepth++;
+      else if (content[i] === ')') braceDepth--;
+      i++;
+    }
+    const afterClose = content.slice(i).match(/^\s*(\{|throws)/);
+    if (afterClose) continue; // this is the method's OWN declaration, not a call site
+    const args = _splitTopLevelCommas(content.slice(argsStart, i - 1)).map((a) => a.trim());
+    if (paramIdx >= args.length) return false; // arity mismatch — bail conservatively
+    sawRealCallSite = true;
+    const argExpr = args[paramIdx];
+    if (/^"[^"]*"$/.test(argExpr)) continue; // this caller's own argument is a direct literal
+    // The caller's argument is itself a bare identifier (Juliet's own
+    // idiom: `data = "foo"; goodG2BSink(data, ...);` — the LITERAL sits on
+    // the variable one step back from the call site, not at the call site
+    // itself). Resolve it the SAME way any other candidate literal is
+    // resolved in this file — recursing through `_nearestAssignIsLiteral`
+    // itself, scoped to the CALL SITE's own position (where that variable's
+    // own most recent assignment is genuinely visible via a normal
+    // backward scan, since the assignment and the call live in the SAME
+    // caller method). Bounded by the shared recursion-depth guard.
+    if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(content, argExpr, cm.index, deadRanges, depth0 + 1)) continue;
+    return false; // a non-literal (or unresolvable) caller exists
+  }
+  return sawRealCallSite;
+}
+
 function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth) {
+  if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
@@ -218,11 +347,12 @@ function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calle
     if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
     lastLiteralEnd = m.index + m[0].length;
   }
-  let lastAnyEnd = -1, lastAnyRhs = null;
+  let lastAnyEnd = -1, lastAnyRhs = null, lastAnyIdx = -1;
   while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) {
     if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
     lastAnyEnd = m.index + m[0].length;
     lastAnyRhs = m[1].trim();
+    lastAnyIdx = m.index;
   }
   // W4.J37 — the nearest assignment's own RHS is a bare same-file call
   // (`data = goodG2BSource();`, no receiver, no args needing evaluation):
@@ -233,8 +363,28 @@ function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calle
     const calleeName = lastAnyRhs.slice(0, lastAnyRhs.indexOf('(')).trim();
     if (_resolveCalleeReturnIsLiteral(content, calleeName, ranges, _calleeDepth)) return true;
   }
-  if (lastLiteralEnd === -1) return false;
-  if (lastLiteralEnd !== lastAnyEnd) return false;
+  // W4.J38 — the nearest assignment's own RHS is a bare identifier "copy"
+  // of ANOTHER variable (`dataCopy = data;` … later `String data =
+  // dataCopy;`) — Juliet's own "make a copy of data within the same
+  // method" flow variant. Resolve the COPIED-FROM variable the same way,
+  // recursively, at THIS assignment's own position (not `beforeIdx`) so the
+  // recursive scan sees only what was visible AT THE TIME of the copy, not
+  // anything assigned later. Bounded by the shared recursion-depth guard;
+  // excludes `null` explicitly (never a candidate literal — mirrors
+  // ldap-injection.js's own W4.C37 precedent for the identical reasoning).
+  if (lastAnyRhs && lastAnyRhs !== 'null' && /^[A-Za-z_]\w*$/.test(lastAnyRhs) && lastAnyRhs !== varName) {
+    if (_nearestAssignIsLiteral(content, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
+  }
+  if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
+    // W4.J38 — before failing closed, check whether `varName` is a
+    // PARAMETER of the method enclosing `beforeIdx` and, if so, whether
+    // EVERY real call site of that method supplies a literal at the
+    // matching argument position. See _resolveParamLiteralViaAllCallSites's
+    // own header comment for why this is a DIFFERENT idiom than the
+    // paramRe guard below (a caller whose own literal sits AFTER the sink
+    // method in raw file text — invisible to any backward-only scan).
+    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth);
+  }
   // Juliet's "data passed as an argument from one method to another" flow
   // variants (its own template naming: sources-sink-41+) sink INSIDE A
   // HELPER method that receives the value as a formal PARAMETER, not a
