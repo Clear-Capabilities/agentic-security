@@ -525,6 +525,53 @@ function walkSwitch(switchNode, scope, out) {
 }
 
 
+// SARD_80_F1 W4.J34 — `final` FIELD constant propagation (this file's own
+// header comment already scoped "non-final field" as out-of-scope,
+// implying a same-class FINAL field was always intended to be in scope,
+// just not yet implemented). Juliet's own "Flow Variant 04: Control flow:
+// if(PRIVATE_STATIC_FINAL_TRUE) and if(PRIVATE_STATIC_FINAL_FALSE)" (used
+// across dozens of CWEs, confirmed via the public Java Juliet mirror's own
+// `CWE601_Open_Redirect__Servlet_connect_tcp_04.java`) is IDENTICAL to the
+// already-modeled literal `if(true)/if(false)` idiom (Flow Variant 02),
+// except the condition is a reference to a `private static final boolean`
+// FIELD rather than the literal keyword — every method body previously
+// started dead-branch analysis with a fresh EMPTY scope (`new Map()`),
+// so `evalPrimaryPrefix`'s own `scope.has(ident)` check could never
+// resolve the field reference, and the entire Flow-Variant-04 family was
+// invisible to this constant-folding pass, leaving a genuinely dead
+// `else { data = null; }` branch counted as live and (via the SAME
+// mechanism already fixed for Variant 02 at W4.J33) defeating any
+// downstream "nearest assignment" precision heuristic built on top of it.
+// Deliberately scoped to `final` fields ONLY (checked via the field's own
+// `fieldModifier` CST children, never inferred from naming convention) —
+// a NON-final field could legitimately be reassigned elsewhere (a setter,
+// another method), and treating its declared initializer as an eternal
+// constant would risk marking a genuinely LIVE branch as dead, a false
+// NEGATIVE this session has been careful never to introduce. `static` is
+// not required (an instance-level `private final boolean x = true;` is
+// equally a real compile-time constant once the object exists, and Juliet
+// itself only ever uses `static final` for this idiom, so the distinction
+// is moot in practice but the fix is correct either way).
+function _collectClassConstants(classBody) {
+  const consts = new Map();
+  const decls = classBody?.children?.classBodyDeclaration || [];
+  for (const bd of decls) {
+    const fd = bd.children?.classMemberDeclaration?.[0]?.children?.fieldDeclaration?.[0];
+    if (!fd) continue;
+    const isFinal = (fd.children?.fieldModifier || []).some(m => m.children?.Final);
+    if (!isFinal) continue;
+    const declarators = fd.children?.variableDeclaratorList?.[0]?.children?.variableDeclarator || [];
+    for (const d of declarators) {
+      const name = d.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0]?.image;
+      const initExpr = d.children?.variableInitializer?.[0]?.children?.expression?.[0];
+      if (!name || !initExpr) continue;
+      const value = evalExpr(initExpr, consts);
+      if (value !== UNKNOWN) consts.set(name, value);
+    }
+  }
+  return consts;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────
 
 /** Walk every method body anywhere in the type hierarchy (including inner
@@ -532,6 +579,7 @@ function walkSwitch(switchNode, scope, out) {
 function walkClassBody(classBody, out) {
   if (!classBody) return;
   const decls = classBody.children?.classBodyDeclaration || [];
+  const classConsts = _collectClassConstants(classBody);
   for (const bd of decls) {
     const member = bd.children?.classMemberDeclaration?.[0];
     if (!member) continue;
@@ -541,14 +589,14 @@ function walkClassBody(classBody, out) {
     if (memCh.methodDeclaration) {
       const method = memCh.methodDeclaration[0];
       const block = method.children?.methodBody?.[0]?.children?.block?.[0];
-      if (block) walkBlock(block, new Map(), out);
+      if (block) walkBlock(block, new Map(classConsts), out);
     }
 
     // Constructors
     if (memCh.constructorDeclaration) {
       const ctor = memCh.constructorDeclaration[0];
       const block = ctor.children?.constructorBody?.[0];
-      if (block) walkBlock(block, new Map(), out);
+      if (block) walkBlock(block, new Map(classConsts), out);
     }
 
     // Nested class / interface

@@ -114,6 +114,69 @@ test('a genuinely constant if(true) else-branch is still correctly detected as d
   assert.equal(ranges[0].reason, 'constant-true-if dead-else');
 });
 
+// SARD_80_F1 W4.J34 — Juliet's own "Flow Variant 04: Control flow:
+// if(PRIVATE_STATIC_FINAL_TRUE) and if(PRIVATE_STATIC_FINAL_FALSE)" idiom
+// (confirmed via the public Java Juliet mirror's own
+// CWE601_Open_Redirect__Servlet_connect_tcp_04.java) — identical to the
+// already-modeled literal if(true)/if(false) shape, except the condition
+// is a class-level `private static final boolean` FIELD reference rather
+// than the literal keyword.
+test('a class-level `private static final boolean` field used as an if-condition is folded (dead else)', () => {
+  const src = `
+    public class Bad {
+        private static final boolean PRIVATE_STATIC_FINAL_TRUE = true;
+        public void bad() {
+            if (PRIVATE_STATIC_FINAL_TRUE) {
+                System.out.println("reachable");
+            } else {
+                System.out.println("unreachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected exactly one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-true-if dead-else');
+});
+
+test('a class-level `private static final boolean` field set to false folds the if-branch as dead', () => {
+  const src = `
+    public class Bad {
+        private static final boolean PRIVATE_STATIC_FINAL_FALSE = false;
+        public void bad() {
+            if (PRIVATE_STATIC_FINAL_FALSE) {
+                System.out.println("unreachable");
+            } else {
+                System.out.println("reachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected exactly one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-false-if dead-then');
+});
+
+// Precision control: a NON-final field must NEVER be treated as a constant
+// — it could legitimately be reassigned elsewhere (a setter, another
+// method), and folding it would risk marking a genuinely LIVE branch dead.
+test('a class-level field WITHOUT `final` is NOT folded, even with the same name/initializer shape', () => {
+  const src = `
+    public class Bad {
+        private static boolean notActuallyFinal = true;
+        public void bad() {
+            if (notActuallyFinal) {
+                System.out.println("could be reached if reassigned elsewhere");
+            } else {
+                System.out.println("could also be reached");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 0, `expected no dead ranges for a non-final field, got: ${JSON.stringify(ranges)}`);
+});
+
 test('isLineInDeadRange: boundary lines are inclusive, adjacent lines are not', () => {
   const ranges = [{ startLine: 10, endLine: 20 }];
   assert.ok(isLineInDeadRange(10, ranges));
