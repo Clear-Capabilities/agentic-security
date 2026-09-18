@@ -44,7 +44,7 @@
 
 import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
-import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual } from './access-paths.js';
+import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
 import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
@@ -1922,7 +1922,24 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // sigil in every access path (`$this.field`, never bare `this.` —
         // parser-php.js's own `->`-to-`.` normalization, W5.9), a fourth
         // spelling alongside JS's `_this_.`/C#'s and Java's bare `this.`.
-        if (isCoveredBy(exitState, field) || isCoveredBy(exitState, `this.${field}`) || isCoveredBy(exitState, `_this_.${field}`) || isCoveredBy(exitState, `$this.${field}`)) {
+        //
+        // SARD_80_F1 W5.17 — `isCoveredBy` deliberately never propagates UP
+        // (its own doc: `set={"x.y.z"}` does NOT cover "x.y"), which is
+        // correct for ordinary field reads but wrong here: an ARRAY-INDEXED
+        // field write (`$this->input[1] = $_GET[...]`) taints the access
+        // path `this.input.1`, not the bare `this.input`/`input` this loop
+        // queries — so a getter method returning `$this->input[1]` (the
+        // PHP-Vuln-test-suite-generator's own "object/Array" input-
+        // indirection sample, confirmed via direct reproduction, not corpus
+        // access) was invisible to this whole class-field pass, while the
+        // scalar-field form one line below (`$this->input = $_GET[...]`)
+        // already worked. `pathIsCoveredByPrefix(entry, field)` checks the
+        // OPPOSITE direction — does `entry` sit AT OR BELOW `field` — which
+        // is exactly "did the constructor taint SOME sub-path of this
+        // field", independent of which specific index or nesting depth.
+        const hasTaintedSubpath = (prefix) => { for (const p of exitState) { if (pathIsCoveredByPrefix(p, prefix)) return true; } return false; };
+        if (isCoveredBy(exitState, field) || isCoveredBy(exitState, `this.${field}`) || isCoveredBy(exitState, `_this_.${field}`) || isCoveredBy(exitState, `$this.${field}`)
+            || hasTaintedSubpath(field) || hasTaintedSubpath(`this.${field}`) || hasTaintedSubpath(`_this_.${field}`) || hasTaintedSubpath(`$this.${field}`)) {
           if (!classTaintedFields.has(className)) classTaintedFields.set(className, new Set());
           classTaintedFields.get(className).add(field);
         }

@@ -190,3 +190,65 @@ test('a getter returning a field written only from a literal does not taint an e
   const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
   assert.ok(!hit, 'a hardcoded-literal field read through a getter must not fire the taint sink');
 });
+
+// SARD_80_F1 W5.17 — a sibling gap to the getter+return fix above, found
+// investigating PHP's CWE-95 (eval injection) recall: `isCoveredBy`
+// deliberately never propagates UP (a set containing only "x.y.z" does not
+// cover a query for "x.y" — its own documented, correct precision rule for
+// ordinary field reads). But an ARRAY-INDEXED field write
+// (`$this->input[1] = $_GET[...]`) taints the access path
+// `this.input.1`/`$this.input.1`, not the bare field `this.input` this
+// pass's own class-field-taint detection queries — so the getter+return
+// mechanism above, already proven for a SCALAR field, silently never
+// triggered at all for the array-indexed form (the PHP-Vuln-test-suite-
+// generator's own "object/Array" input-indirection sample, confirmed via
+// direct reproduction, not corpus access).
+test('end-to-end: a constructor-tainted ARRAY-INDEXED field read through a getter, then used by an external no-arg caller, still reaches the sink', async () => {
+  const hits = await findings(
+    '<?php\n' +
+    'class Input {\n' +
+    '  private $input;\n' +
+    '  public function __construct(){\n' +
+    '    $this->input = array();\n' +
+    '    $this->input[0] = "safe";\n' +
+    '    $this->input[1] = $_GET["UserData"];\n' +
+    '    $this->input[2] = "safe";\n' +
+    '  }\n' +
+    '  public function getInput(){\n' +
+    '    return $this->input[1];\n' +
+    '  }\n' +
+    '}\n' +
+    '$temp = new Input();\n' +
+    '$tainted = $temp->getInput();\n' +
+    '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
+    '$xml = simplexml_load_file("users.xml");\n' +
+    '$res = $xml->xpath($query);\n'
+  );
+  const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
+  assert.ok(hit, `expected a CWE-91 finding via the array-indexed getter+return round-trip — got: ${hits.map((f) => `${f.parser}:${f.cwe}`).join(',')}`);
+});
+
+test('a getter returning an array-indexed field written only from literals does not taint an external no-arg caller', async () => {
+  const hits = await findings(
+    '<?php\n' +
+    'class Input {\n' +
+    '  private $input;\n' +
+    '  public function __construct(){\n' +
+    '    $this->input = array();\n' +
+    '    $this->input[0] = "safe";\n' +
+    '    $this->input[1] = "safe";\n' +
+    '    $this->input[2] = "safe";\n' +
+    '  }\n' +
+    '  public function getInput(){\n' +
+    '    return $this->input[1];\n' +
+    '  }\n' +
+    '}\n' +
+    '$temp = new Input();\n' +
+    '$tainted = $temp->getInput();\n' +
+    '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
+    '$xml = simplexml_load_file("users.xml");\n' +
+    '$res = $xml->xpath($query);\n'
+  );
+  const hit = hits.find((f) => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
+  assert.ok(!hit, 'an all-literal array-indexed field read through a getter must not fire the taint sink');
+});
