@@ -1109,17 +1109,61 @@ function _collectCsConstants(code) {
   return consts;
 }
 
+// SARD_80_F1 W5.28 — C#'s own counterpart to Java's W5.27 (java-ast-folding
+// .js's `_collectClassMethodConstants`): Juliet's "Flow Variant 08/11:
+// Control flow: if(PrivateReturnsTrue()) and if(PrivateReturnsFalse())"
+// idiom branches on a CALL to a same-class, zero-arg, single-`return true;`
+// /`return false;`-bodied private helper (confirmed via the public C#
+// mirror's own `CWE80_XSS__CWE182_Web_Connect_tcp_08.cs`:
+// `private static bool PrivateReturnsTrue() { return true; }`) — a shape
+// `_resolveConstCondition` never modeled (literal / field / int-comparison
+// only). Namespaced under `()<name>` in the SAME `classConsts` map
+// `_collectCsConstants` already builds, mirroring the Java fix's identical
+// collision-avoidance reasoning (C# also permits a field and a method to
+// share one identifier, since a call always needs its own parens). Fails
+// closed on anything but a body that is EXACTLY one `return <expr>;`
+// statement (2+ statements, or a body with side effects, is ambiguous —
+// `body.match` requires the WHOLE trimmed body to be just that one line);
+// the returned expression resolves through `consts` too, so `return
+// SOME_KNOWN_CONST;` also folds correctly.
+function _collectCsMethodConstants(code, consts) {
+  const declRe = /\b(?:private|public|protected|internal)\s+(?:static\s+)?bool\s+(\w+)\s*\(\s*\)\s*\{/g;
+  let m;
+  while ((m = declRe.exec(code))) {
+    const name = m[1];
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = _matchDelim(code, openIdx, '{', '}');
+    if (closeIdx === -1) continue;
+    const body = code.slice(openIdx + 1, closeIdx).trim();
+    const retM = body.match(/^return\s+([^;]+);$/);
+    if (!retM) continue;
+    const expr = retM[1].trim();
+    if (expr === 'true') consts.set(`()${name}`, true);
+    else if (expr === 'false') consts.set(`()${name}`, false);
+    else if (consts.has(expr)) {
+      const v = consts.get(expr);
+      if (typeof v === 'boolean') consts.set(`()${name}`, v);
+    }
+  }
+}
+
 // Resolves `condRaw` to a boolean when it's a literal `true`/`false`, a bare
-// reference to a known boolean constant, or an `==`/`!=` comparison of a
-// known int constant against a literal — Juliet's own Flow Variant
-// 04/09/13-style idioms. Returns `null` (not `false`) when unresolvable, so
-// callers can distinguish "genuinely false" from "not a constant at all".
+// reference to a known boolean constant, a bare zero-arg call to a known
+// boolean-constant helper (W5.28), or an `==`/`!=` comparison of a known int
+// constant against a literal — Juliet's own Flow Variant 04/08/09/11/13-
+// style idioms. Returns `null` (not `false`) when unresolvable, so callers
+// can distinguish "genuinely false" from "not a constant at all".
 function _resolveConstCondition(condRaw, classConsts) {
   const trimmed = condRaw.trim();
   if (trimmed === 'true') return true;
   if (trimmed === 'false') return false;
   if (classConsts && classConsts.has(trimmed)) {
     const v = classConsts.get(trimmed);
+    return typeof v === 'boolean' ? v : null;
+  }
+  const callM = trimmed.match(/^(\w+)\s*\(\s*\)$/);
+  if (callM && classConsts && classConsts.has(`()${callM[1]}`)) {
+    const v = classConsts.get(`()${callM[1]}`);
     return typeof v === 'boolean' ? v : null;
   }
   const cmp = trimmed.match(/^(\w+)\s*(==|!=)\s*(-?\d+)$/);
@@ -1363,6 +1407,7 @@ export function parseCSharpFile(file, code) {
   const functions = [];
   const classRanges = _findClassRanges(code);
   const classConsts = _collectCsConstants(code);
+  _collectCsMethodConstants(code, classConsts);
   METHOD_RE.lastIndex = 0;
   let m;
   while ((m = METHOD_RE.exec(code)) !== null) {

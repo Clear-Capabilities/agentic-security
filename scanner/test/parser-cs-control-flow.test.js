@@ -887,3 +887,141 @@ public class Bad {
   assert.ok(badFindings.length >= 1,
     `expected a CWE-78 finding through a plain effectively-final private bool field's if-branch, got: ${JSON.stringify(badResult.scan.findings)}`);
 });
+
+// SARD_80_F1 W5.28 — C#'s own counterpart to Java's W5.27. Juliet's "Flow
+// Variant 08/11: Control flow: if(PrivateReturnsTrue()) and
+// if(PrivateReturnsFalse())" (confirmed via the public C# mirror's own
+// CWE80_XSS__CWE182_Web_Connect_tcp_08.cs) branches on a CALL to a
+// same-class, zero-arg, single-`return true;`/`return false;`-bodied
+// private helper — a shape `_resolveConstCondition` never modeled (literal/
+// field/int-comparison only), so this whole flow-variant family fell
+// through to the general if/else path and lost its dead-branch pruning.
+test('parseCSharpFile: if(PrivateHelper())/else — a zero-arg method that always returns true is resolved and folded', () => {
+  const code = `
+public class C {
+    private static bool PrivateReturnsTrue() {
+        return true;
+    }
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (PrivateReturnsTrue()) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead else-branch\'s `data = null` must not appear anywhere in the CFG, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the live if-branch\'s `data = sr.ReadLine()` must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: if(PrivateHelper())/else — a zero-arg method that always returns false folds the if-branch as dead', () => {
+  const code = `
+public class C {
+    private bool PrivateReturnsFalse() {
+        return false;
+    }
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (PrivateReturnsFalse()) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the dead if-branch\'s `data = sr.ReadLine()` must not appear anywhere in the CFG, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: a zero-arg helper with a PARAMETER-influenced or multi-statement body is NOT folded', () => {
+  const code = `
+public class C {
+    private bool Check() {
+        System.Console.WriteLine("side effect");
+        return true;
+    }
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (Check()) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'a multi-statement helper body is ambiguous and must NOT be folded — the else-branch must remain in the CFG');
+});
+
+test('parseCSharpFile: W5.28 end-to-end runScan — Juliet Flow Variant 08/11 (if(PrivateReturnsX())) resolves through the full pipeline (real corpus shape)', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-private-returns-'));
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Bad {
+    private static bool PrivateReturnsTrue() {
+        return true;
+    }
+    public void Run(StreamReader sr) {
+        string data;
+        if (PrivateReturnsTrue()) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const badResult = await runScan(dir, { deep: true, deepInCi: true });
+  const badFindings = (badResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.ok(badFindings.length >= 1,
+    `expected a CWE-78 finding through if(PrivateReturnsTrue())/else, got: ${JSON.stringify(badResult.scan.findings)}`);
+
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Good {
+    private static bool PrivateReturnsFalse() {
+        return false;
+    }
+    public void Run(StreamReader sr) {
+        string data;
+        if (PrivateReturnsFalse()) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const goodResult = await runScan(dir, { deep: true, deepInCi: true });
+  const goodFindings = (goodResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.equal(goodFindings.length, 0,
+    `expected no CWE-78 finding for the if(PrivateReturnsFalse())/else good-source counterpart, got: ${JSON.stringify(goodFindings)}`);
+});
