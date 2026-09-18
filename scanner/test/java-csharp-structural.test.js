@@ -27,6 +27,53 @@ test('Java SQLi — a hardcoded-literal local variable is suppressed; a tainted 
   assert.ok(none(good, 'CWE-89'), 'expected no finding when data is a hardcoded literal');
 });
 
+// SARD_80_F1 W4.J35 — Juliet's own "if(true){data="foo";}else{data=null;}"
+// dead-code idiom (Flow Variant 02, confirmed via the public mirror's
+// CWE89_SQL_Injection__connect_tcp_executeUpdate_02.java's goodG2B2())
+// defeated the SAME literal-check above: the textually-later dead
+// `data = null;` in the else branch made the "nearest assignment" scan
+// land on it instead of the live literal, so this shape was never
+// recognized as safe.
+// deadBranchRanges needs a full, parseable compilation unit (java-parser
+// requires at least one class declaration) — unlike this file's other
+// bare-method-snippet tests above, which only exercise the plain-literal
+// path and never touch dead-branch resolution at all.
+test('Java SQLi — a literal set inside if(true){...} followed by a dead else{ x = null; } branch is suppressed (CWE-89)', () => {
+  const good = scanJavaStructural('S.java', `
+    public class Bad {
+      void goodG2B2() throws Throwable {
+        String data;
+        if (true) {
+          data = "foo";
+        } else {
+          data = null;
+        }
+        Statement s = null;
+        s.execute("insert into users (status) values ('updated') where name='"+data+"'");
+      }
+    }
+  `);
+  assert.ok(none(good, 'CWE-89'), 'expected no finding — the else branch is provably dead, data is always "foo"');
+});
+
+// Precision control: a genuine RUNTIME-conditional reassignment (not a
+// constant-folded dead branch) must still fire.
+test('Java SQLi — a REAL runtime-conditional reassignment (not dead code) still fires (CWE-89)', () => {
+  const f = scanJavaStructural('S.java', `
+    public class Bad {
+      void notActuallyGood(boolean flag) throws Throwable {
+        String data = "foo";
+        if (flag) {
+          data = System.getenv("ADD");
+        }
+        Statement s = null;
+        s.execute("insert into users (status) values ('updated') where name='"+data+"'");
+      }
+    }
+  `);
+  assert.ok(has(f, 'CWE-89'), 'the reassignment is genuinely live, not dead code — must not be suppressed');
+});
+
 test('Java SQLi — a second tainted term after a suppressible one still fires (CWE-89)', () => {
   const f = scanJavaStructural('S.java', 'void m(){ String data = "foo"; String other = System.getenv("X"); Statement s = null; s.execute("insert into t (a) values (\'"+data+"\') where name=\'"+other+"\'"); }');
   assert.ok(has(f, 'CWE-89'), 'a safe FIRST term must not suppress a genuinely tainted second term');

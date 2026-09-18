@@ -8,6 +8,7 @@
 // guarded URLs do not match, keeping this high-precision.
 
 import { blankComments } from './_comment-strip.js';
+import { deadBranchRanges, isLineInDeadRange } from './java-ast-folding.js';
 
 // Concat-into-sink families with no guard needed (parameterized form has no
 // string-concat argument, so it auto-clears). Each pattern additionally
@@ -34,16 +35,46 @@ const RE = {
 // captured a SINGLE trailing identifier immediately before the sink call's
 // closing `)`/`;` — a concatenation with more terms after it
 // (`"…" + a + b`) is left alone, since a safe `a` says nothing about `b`.
-function _trailingIdentIsLiteral(code, varName, beforeIdx) {
+//
+// SARD_80_F1 W4.J35 — the SAME dead-code-blindness bug already fixed twice
+// this session in sibling files (W4.J33's `java-bench-extras.js`
+// `_nearestAssignIsLiteral`; W4.J34's own `deadBranchRanges` extension),
+// found here independently while sweeping Java's largest CWE-89 fp bucket
+// (300+ files, all `_02`..`_51b`-numbered `connect_tcp_executeUpdate_XX`
+// variants sharing this ONE detector). Confirmed via the public Java Juliet
+// mirror's own `CWE89_SQL_Injection__connect_tcp_executeUpdate_02.java`:
+// `goodG2B2()` does `if (true) { data = "foo"; } else { data = null; }`
+// immediately before the identical `executeUpdate("…"+data+"'")` sink line
+// `bad()` also uses — the textually-LATER dead `data = null;` in the else
+// branch made `lastAnyEnd` land there instead of on the live literal
+// assignment, so `lastLiteralEnd === lastAnyEnd` failed and this entire
+// flow-variant family (Juliet's own Flow Variant 02, used across dozens of
+// CWEs per W4.C28's original C#-side discovery of the same idiom) was never
+// recognized as literal-only. Fixed by reusing the ALREADY-EXISTING,
+// AST-based `deadBranchRanges`/`isLineInDeadRange` (the SAME mechanism
+// W4.J33 already wired into `java-bench-extras.js`, and which W4.J34
+// separately extended to also resolve `private static final` field
+// constants — this fix inherits BOTH capabilities for free) to skip an
+// assignment whose line falls inside a provably-dead branch when computing
+// `lastAnyEnd`.
+function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges) {
   if (!varName) return false;
+  const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
   const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  const lineOfIdx = (idx) => code.substring(0, idx).split('\n').length;
   let lastLiteralEnd = -1, m;
-  while ((m = literalRe.exec(code)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  while ((m = literalRe.exec(code)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOfIdx(m.index), ranges)) continue;
+    lastLiteralEnd = m.index + m[0].length;
+  }
   if (lastLiteralEnd === -1) return false;
   let lastAnyEnd = -1;
-  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOfIdx(m.index), ranges)) continue;
+    lastAnyEnd = m.index + m[0].length;
+  }
   return lastLiteralEnd === lastAnyEnd;
 }
 
@@ -75,12 +106,15 @@ export function scanJavaStructural(fp, raw) {
     snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
     remediation: meta.remediation, parser: 'JAVA', confidence: 0.78,
   });
+  // See _trailingIdentIsLiteral's own header comment (W4.J35).
+  let deadRanges = [];
+  try { deadRanges = deadBranchRanges(raw); } catch { /* parse error → no AST info */ }
 
   for (const [key, re] of Object.entries(RE)) {
     const r = new RegExp(re.source, re.flags);
     let m;
     while ((m = r.exec(code))) {
-      if (_trailingIdentIsLiteral(code, m[1], m.index)) continue;
+      if (_trailingIdentIsLiteral(code, m[1], m.index, deadRanges)) continue;
       emit(key, lineOf(code, m.index), META[key]);
     }
   }
