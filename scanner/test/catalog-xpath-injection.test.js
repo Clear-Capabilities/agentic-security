@@ -18,6 +18,14 @@ function mkTmp(name, filename, code) {
   return dir;
 }
 
+function mkTmpMulti(name, files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-xpath-catalog-${name}-`));
+  for (const [rel, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, rel), content);
+  }
+  return dir;
+}
+
 async function taintFindings(dir) {
   const { scan } = await runScan(dir, { deep: true, deepInCi: true });
   return (scan.findings || []).filter(f => f.parser === 'IR-TAINT');
@@ -38,6 +46,64 @@ public class Lookup {
   const taint = await taintFindings(dir);
   assert.ok(taint.some(f => /xpath/i.test(f.vuln)),
     `expected XPath Injection, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// SARD_80_F1 W4.J32 — `xPath` (camelCase) is the idiomatic Java variable
+// name for a `javax.xml.xpath.XPath` object (matching the type name itself,
+// and confirmed as the real public Juliet mirror's own naming convention),
+// but `java-xpath-evaluate`'s receiver check was case-sensitive and only
+// ever matched the all-lowercase `xpath` or the short `xp`/`expr` forms.
+test('java-xpath-evaluate: fires with the idiomatic camelCase `xPath` variable name too', async () => {
+  const dir = mkTmp('java-camelcase', 'Lookup.java', `
+import javax.xml.xpath.*;
+import org.w3c.dom.Document;
+public class Lookup {
+  public String find(Document doc, javax.servlet.http.HttpServletRequest req) throws Exception {
+    XPath xPath = XPathFactory.newInstance().newXPath();
+    String name = req.getParameter("name");
+    return (String) xPath.evaluate("//user[@name='" + name + "']", doc, XPathConstants.STRING);
+  }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xpath/i.test(f.vuln)),
+    `expected XPath Injection with a camelCase xPath receiver, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+// The camelCase fix's real value: it's the ONLY interprocedural mechanism
+// for this sink (structural/regex detectors are single-file), so a
+// cross-file, multi-hop chain (Juliet's own CWE-643 Flow Variant 54 shape:
+// data passed through 5 separate classes) was completely invisible until
+// this fix, regardless of hop count.
+test('java-xpath-evaluate: fires through a 3-file cross-class passthrough chain with the camelCase xPath name', async () => {
+  const dir = mkTmpMulti('java-crossfile', {
+    'A.java': `package testpkg;
+import javax.servlet.http.*;
+public class A extends HttpServlet {
+    public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+        String data = request.getParameter("name");
+        (new B()).badSink(data);
+    }
+}`,
+    'B.java': `package testpkg;
+public class B {
+    public void badSink(String data) throws Throwable {
+        (new C()).badSink(data);
+    }
+}`,
+    'C.java': `package testpkg;
+import javax.xml.xpath.*;
+public class C {
+    public void badSink(String data) throws Throwable {
+        XPath xPath = XPathFactory.newInstance().newXPath();
+        String query = "//user[login='" + data + "']";
+        String secret = (String) xPath.evaluate(query, (Object) null, XPathConstants.STRING);
+    }
+}`,
+  });
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /xpath/i.test(f.vuln)),
+    `expected XPath Injection through a cross-file chain, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
 test('cs-xml-selectnodes: XmlDocument.SelectNodes(concatenated) fires XPath Injection via IR-TAINT', async () => {

@@ -789,13 +789,39 @@ export function findJavaMethodSpans(content) {
 function _blankStringLiterals(text) {
   return text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, (m) => '"' + ' '.repeat(Math.max(0, m.length - 2)) + '"');
 }
+// SARD_80_F1 W4.J32 — a THIRD incident in the same family as (1)/(2) above,
+// found investigating Java CWE-643's Flow Variant 54 (data passed through
+// FIVE separate classes, confirmed via the public mirror's own
+// `_54a`..`_54e` files): the anti-recursion guard (`callee !== meth.name`)
+// compares BARE METHOD NAME ONLY, with no notion of WHICH OBJECT the call
+// targets. Juliet's own convention names every intermediate hop's delegate
+// method identically (`badSink`) across every file in the chain, so
+// `_54c.java`'s own `badSink(String data)` method — whose entire body is
+// `(new CWE643_..._54d()).badSink(data);`, a call on a FRESHLY CONSTRUCTED,
+// DIFFERENT class's instance — has `callee === meth.name` ("badSink" ===
+// "badSink") and was wrongly treated as self-recursion, exempting it from
+// the delegate check and leaving it with its own unsatisfiable expected
+// entry (its body has no sink of its own — the real one lives in `_54e`).
+// Fixed by tracking whether the matched call is RECEIVER-QUALIFIED (preceded
+// by `.`, e.g. `(new X()).badSink(...)` or `obj.badSink(...)`) — only a
+// BARE, unqualified call to the method's own name (`badSink(x);` with no
+// receiver at all) is treated as genuine same-object recursion now; a
+// qualified call to an identically-named method on a different object always
+// counts as delegation, regardless of name equality. (A theoretical
+// `this.badSink(x)` self-recursion would now also be read as delegation —
+// Juliet's own source never uses an explicit `this.` qualifier for a method
+// call, confirmed across every file fetched this session, so this is a
+// documented, deliberately-accepted edge case, not a shape this corpus
+// exercises.)
 export function _isDelegateOnlyBadMethod(meth, delegateTargetRe) {
-  const calleeRe = /\b(\w+)\s*\(/g;
+  const calleeRe = /(\.\s*)?\b(\w+)\s*\(/g;
   const scanText = _blankStringLiterals(meth.bodyText || '');
   let cm;
   while ((cm = calleeRe.exec(scanText))) {
-    const callee = cm[1];
-    if (callee !== meth.name && delegateTargetRe.test(callee)) return true;
+    const hasReceiver = !!cm[1];
+    const callee = cm[2];
+    if (!hasReceiver && callee === meth.name) continue;
+    if (delegateTargetRe.test(callee)) return true;
   }
   return false;
 }

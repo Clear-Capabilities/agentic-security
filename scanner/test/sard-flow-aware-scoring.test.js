@@ -172,6 +172,42 @@ class Sink {
   assert.equal(_isDelegateOnlyBadMethod(direct, JAVA_DELEGATE_TARGET_RE), false);
 });
 
+// SARD_80_F1 W4.J32 — a middle-of-chain hop whose OWN method is named
+// identically to its delegate target (Juliet's Flow Variant 54: `badSink`
+// calling a DIFFERENT class's own `badSink`) must still be recognized as a
+// delegate. Before this fix, the anti-recursion guard's bare name
+// comparison (`callee !== meth.name`) treated this as self-recursion since
+// both the caller and the receiver-qualified callee are named "badSink".
+test('_isDelegateOnlyBadMethod: a Java badSink() that delegates to a DIFFERENT class\'s identically-named badSink() is a delegate, not self-recursion', () => {
+  const midHop = findJavaMethodSpans(`
+class Hop3 {
+    public void badSink(String data) throws Throwable {
+        (new Hop4()).badSink(data);
+    }
+}
+`).find((m) => m.name === 'badSink');
+  assert.ok(midHop);
+  assert.ok(_isDelegateOnlyBadMethod(midHop, JAVA_DELEGATE_TARGET_RE),
+    'a receiver-qualified call to a same-named method on a DIFFERENT object must count as delegation');
+
+  // A genuine BARE self-recursive call (no receiver at all) must still be
+  // exempted — this is real same-object recursion, not delegation.
+  const trueRecursion = findJavaMethodSpans(`
+class Hop3 {
+    public void badSink(String data, int depth) throws Throwable {
+        if (depth > 0) {
+            badSink(data, depth - 1);
+        } else {
+            Runtime.getRuntime().exec(data);
+        }
+    }
+}
+`).find((m) => m.name === 'badSink');
+  assert.ok(trueRecursion);
+  assert.equal(_isDelegateOnlyBadMethod(trueRecursion, JAVA_DELEGATE_TARGET_RE), false,
+    'a bare, unqualified self-recursive call must NOT be mistaken for delegation');
+});
+
 test('_isDelegateOnlyBadMethod: a Java bad() that calls a same-class badSource() helper (but has its own sink) is NOT a delegate', () => {
   const bad = findJavaMethodSpans(`
 class C {

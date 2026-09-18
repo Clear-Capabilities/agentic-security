@@ -958,7 +958,29 @@ export const CATALOG = [
   // Taint-recall PRD (80%) Tier 1: XPath.evaluate() called directly (no
   // .compile() call site to catch it via the entry above) — javax.xml.xpath's
   // other common idiom. Receiver-scoped: "evaluate" is generic elsewhere.
-  { kind: 'sink', id: 'java-xpath-evaluate', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'evaluate', receiver: '^(?:xp|xpath|expr)$' }, argIndex: 0,
+  //
+  // SARD_80_F1 W4.J32 — `xPath` (camelCase, matching the `XPath` type name
+  // exactly as `javax.xml.xpath.XPath`'s own Javadoc examples and the real
+  // public Juliet mirror's own CWE-643 files spell it — confirmed directly
+  // against `CWE643_Xpath_Injection__database_54e.java`'s
+  // `XPath xPath = XPathFactory.newInstance().newXPath();`) NEVER matched
+  // this entry: `_receiverAllowed` builds its regex with `new RegExp(pat)`,
+  // no `i` flag, so the case-sensitive `^(?:xp|xpath|expr)$` only ever
+  // matched the all-lowercase `xpath` or the short `xp`/`expr` — not the
+  // idiomatic camelCase form. This meant `IR-TAINT` could never fire on
+  // this sink for ANY Java file using ordinary naming conventions, in a
+  // single file or across any number of files — CWE-643's real corpus
+  // recall gap traced to cross-file/multi-hop chains (5 separate classes,
+  // confirmed via public-mirror `_54a`..`_54e`) was actually just the
+  // visible SYMPTOM: the structural/regex detectors that fired instead are
+  // inherently single-file, so once IR-TAINT (the only interprocedural
+  // mechanism) couldn't match this sink at all, every cross-file variant
+  // was invisible by construction. Verified directly: a same-file `xPath`
+  // repro fired ZERO `IR-TAINT` findings before this fix (structural/regex
+  // detectors covered it instead) and fired correctly after. `xp`/`xpath`/
+  // `expr` remain matched unchanged (existing `test/java-taint-flow.test.js`
+  // coverage for the `xp` short form is unaffected — purely additive).
+  { kind: 'sink', id: 'java-xpath-evaluate', language: 'java', framework: 'xpath', match: { type: 'call', callee: 'evaluate', receiver: '^(?:xp|xpath|xPath|expr)$' }, argIndex: 0,
     vuln: { name: 'XPath Injection (XPath.evaluate)', severity: 'high', cwe: 'CWE-643',
             remediation: 'Use XPathVariableResolver or setXPathVariableResolver; never concat user input into the expression.' } },
   { kind: 'sink', id: 'cs-xml-selectnodes', language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'SelectNodes' }, argIndex: 0,
