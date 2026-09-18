@@ -157,23 +157,83 @@ const HARDCODED_PW_PASSWORDAUTH_RE = /\bnew\s+PasswordAuthentication\s*\([^,]+,\
 // `deadRanges` is optional (empty array when the caller has none, or on a
 // parse failure) so every existing call site keeps its old, more
 // conservative behavior unless it opts in.
-function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges) {
+// SARD_80_F1 W4.J37 — Juliet's "data returned from one method to another in
+// the same class" flow variants (its own template naming: sources-sink-41+,
+// the exact sibling idiom to the argument-passing one W4.J33's own header
+// comment already documents) route a PROVABLY-literal value through a
+// same-file helper's RETURN value instead of a direct assignment:
+// `private String goodG2BSource() { return "foo"; } ... String data =
+// goodG2BSource(); response.sendRedirect(data);` — confirmed against the
+// public mirror's own `CWE601_Open_Redirect__Servlet_connect_tcp_42.java`.
+// `_nearestAssignIsLiteral`'s own backward scan sees `data = goodG2BSource()`
+// as a NON-literal "any assignment" (the RHS is a call, not a quoted
+// string), so `lastLiteralEnd !== lastAnyEnd` correctly-by-its-own-rules
+// fails closed — except the callee ALWAYS returns a literal, so the value
+// genuinely is safe. Deliberately narrow and bounded, matching this file's
+// existing conservative-evidence-required convention: only a callee with
+// EXACTLY ONE `return` statement in its own body is resolved (multiple
+// returns are ambiguous — fails closed, never guessed); the returned
+// expression must itself be a literal OR a bare identifier that recurses
+// through this SAME resolution (bounded by `_depth`, matching the codebase's
+// established recursion-guard convention elsewhere) — never a call, concat,
+// or ternary, which all fail closed. Same-file only: `content` is always
+// this one file's own text, so there is no cross-file resolution risk here.
+const _CALLEE_RETURN_LITERAL_CACHE_DEPTH = 4;
+function _resolveCalleeReturnIsLiteral(content, calleeName, deadRanges, _depth) {
+  const depth = _depth || 0;
+  if (depth >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedCallee = calleeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declRe = new RegExp(`\\b(?:private|public|protected)?\\s*(?:static\\s+)?[\\w.<>\\[\\],\\s]+?\\s+${escapedCallee}\\s*\\([^)]*\\)\\s*(?:throws\\s+[\\w.,\\s]+)?\\s*\\{`, 'g');
+  const dm = declRe.exec(content);
+  if (!dm) return false;
+  const bodyStart = dm.index + dm[0].length;
+  let braceDepth = 1, i = bodyStart;
+  while (i < content.length && braceDepth > 0) {
+    if (content[i] === '{') braceDepth++;
+    else if (content[i] === '}') braceDepth--;
+    i++;
+  }
+  const body = content.slice(bodyStart, i - 1);
+  const returnRe = /\breturn\s+([^;]+);/g;
+  const returns = [];
+  let rm;
+  while ((rm = returnRe.exec(body))) returns.push({ expr: rm[1].trim(), idx: bodyStart + rm.index });
+  if (returns.length !== 1) return false; // ambiguous (0 or 2+ returns) — fail closed
+  const { expr, idx } = returns[0];
+  if (/^"[^"]*"$/.test(expr)) return true;
+  if (/^[A-Za-z_]\w*$/.test(expr)) {
+    return _nearestAssignIsLiteral(content, expr, idx, deadRanges, depth + 1);
+  }
+  return false;
+}
+
+function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth) {
   const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
-  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
   const lineOf = (idx) => content.substring(0, idx).split('\n').length;
   let lastLiteralEnd = -1, m;
   while ((m = literalRe.exec(content)) && m.index < beforeIdx) {
     if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
     lastLiteralEnd = m.index + m[0].length;
   }
-  if (lastLiteralEnd === -1) return false;
-  let lastAnyEnd = -1;
+  let lastAnyEnd = -1, lastAnyRhs = null;
   while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) {
     if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
     lastAnyEnd = m.index + m[0].length;
+    lastAnyRhs = m[1].trim();
   }
+  // W4.J37 — the nearest assignment's own RHS is a bare same-file call
+  // (`data = goodG2BSource();`, no receiver, no args needing evaluation):
+  // resolve whether that callee ALWAYS returns a literal before falling
+  // through to the stricter "must equal the nearest literal assignment"
+  // check below, which a call-shaped RHS can never satisfy on its own.
+  if (lastAnyRhs && /^[A-Za-z_]\w*\s*\([^()]*\)$/.test(lastAnyRhs)) {
+    const calleeName = lastAnyRhs.slice(0, lastAnyRhs.indexOf('(')).trim();
+    if (_resolveCalleeReturnIsLiteral(content, calleeName, ranges, _calleeDepth)) return true;
+  }
+  if (lastLiteralEnd === -1) return false;
   if (lastLiteralEnd !== lastAnyEnd) return false;
   // Juliet's "data passed as an argument from one method to another" flow
   // variants (its own template naming: sources-sink-41+) sink INSIDE A

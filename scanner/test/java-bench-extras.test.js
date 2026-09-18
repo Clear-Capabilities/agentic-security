@@ -267,6 +267,66 @@ test('CWE-601: sendRedirect on a helper-method PARAMETER (no in-file source) sti
   assert.equal(hits.length, 1, 'a parameter with no in-file source must still fire — this detector\'s main real-world target');
 });
 
+// SARD_80_F1 W4.J37 — Juliet's "data returned from one method to another in
+// the same class" flow variants (confirmed via the public mirror's own
+// `CWE601_Open_Redirect__Servlet_connect_tcp_42.java`): a value assigned via
+// a same-file helper's RETURN value, not a direct literal assignment.
+// `_nearestAssignIsLiteral`'s own backward scan previously saw
+// `data = goodG2BSource();` as a non-literal "any assignment" and failed
+// closed, even though `goodG2BSource()` always returns `"foo"`.
+test('CWE-601: sendRedirect on a value returned from a same-file helper that ALWAYS returns a literal does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String goodG2BSource() {
+            String data;
+            data = "foo";
+            return data;
+        }
+        public void good(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = goodG2BSource();
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'a callee that always returns a literal must not fire');
+});
+
+test('CWE-601: sendRedirect on a value returned from a same-file helper that does NOT always return a literal still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String badSource() {
+            return System.getenv("X");
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = badSource();
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'a callee that does not provably always return a literal must still fire');
+});
+
+test('CWE-601: sendRedirect on a value returned from a helper with AMBIGUOUS (multiple) return statements still fires (fails closed)', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String maybeLiteral(boolean flag) {
+            if (flag) {
+                return "foo";
+            }
+            return System.getenv("X");
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = maybeLiteral(true);
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'a helper with 2+ return statements is ambiguous and must fail closed (still fire), never guessed as literal');
+});
+
 // SARD_80_F1 W4.J29: RAW_SOCKET_RE only matched the client side (`new
 // Socket(host, port)`) — Juliet's `listen_tcp_*` descriptor family is the
 // server side (`ServerSocket` + `.accept()`), which never constructs a
