@@ -501,6 +501,55 @@ test('detector: CWE-313 File.WriteAllText with a non-sensitive value does NOT fi
   assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-file:')));
 });
 
+test('detector: CWE-313 File.WriteAllText with a SecureString-wrapped value and no prior hashing (Juliet shape)', () => {
+  const src = `
+    class T {
+      void Bad() {
+        char[] data = System.Console.ReadLine().ToCharArray();
+        SecureString secureData = new SecureString();
+        for (int i = 0; i < data.Length; i++) {
+          secureData.AppendChar(data[i]);
+        }
+        File.WriteAllText(@"C:\\Users\\Public\\WriteText.txt", secureData.ToString());
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-file:'));
+  assert.ok(f, 'expected csharp-cleartext-file finding for an un-hashed SecureString-wrapped sink value');
+  assert.equal(f.cwe, 'CWE-313');
+});
+
+test('detector: CWE-313 does NOT fire when the value is hashed before the SecureString wrap (Juliet Good() shape)', () => {
+  const src = `
+    class T {
+      void Good() {
+        char[] data = System.Console.ReadLine().ToCharArray();
+        byte[] dataBytes = System.Text.Encoding.UTF8.GetBytes(new string(data));
+        SHA512CryptoServiceProvider provider = new SHA512CryptoServiceProvider();
+        byte[] resultBytes = provider.ComputeHash(dataBytes);
+        SecureString secureData = new SecureString();
+        for (int i = 0; i < resultBytes.Length; i++) {
+          secureData.AppendChar((char)resultBytes[i]);
+        }
+        File.WriteAllText(@"C:\\Users\\Public\\WriteText.txt", secureData.ToString());
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-file:')));
+});
+
+test('detector: a bare .ToString() reaching a cleartext-storage sink does NOT fire when the receiver is not declared SecureString', () => {
+  const src = `
+    class T {
+      void M() {
+        object other = new object();
+        File.WriteAllText("/tmp/out.txt", other.ToString());
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-file:')));
+});
+
 test('detector: CWE-313 StreamWriter.Write with a sensitive-named value', () => {
   const src = `
     class T {
@@ -534,6 +583,52 @@ test('detector: CWE-314 Registry.SetValue with a sensitive-named value', () => {
   const f = findings.find(x => x.id.startsWith('csharp-cleartext-registry:'));
   assert.ok(f, 'expected csharp-cleartext-registry finding');
   assert.equal(f.cwe, 'CWE-314');
+});
+
+test('detector: CWE-314 RegistryKey.SetValue with a bare SecureString-wrapped value, no prior hashing (Juliet shape)', () => {
+  const src = `
+    class T {
+      void Bad() {
+        string data = System.Console.ReadLine();
+        using (SecureString secureData = new SecureString()) {
+          for (int i = 0; i < data.Length; i++) {
+            secureData.AppendChar(data[i]);
+          }
+          RegistryKey key = Registry.CurrentUser.OpenSubKey("Software", true);
+          key.CreateSubKey("CWEparent");
+          key = key.OpenSubKey("CWEparent", true);
+          key.SetValue("CWE", secureData);
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-registry:'));
+  assert.ok(f, 'expected csharp-cleartext-registry finding for a bare SecureString-wrapped sink value');
+  assert.equal(f.cwe, 'CWE-314');
+});
+
+test('detector: CWE-314 does NOT fire when the value is hashed before the SecureString wrap (Juliet GoodB2G shape)', () => {
+  const src = `
+    class T {
+      void GoodB2G() {
+        string data = System.Console.ReadLine();
+        string salt = "ThisIsMySalt";
+        using (SHA512CryptoServiceProvider sha512 = new SHA512CryptoServiceProvider()) {
+          byte[] buffer = System.Text.Encoding.UTF8.GetBytes(string.Concat(salt, data));
+          byte[] hashedCredsAsBytes = sha512.ComputeHash(buffer);
+          data = IO.ToHex(hashedCredsAsBytes);
+        }
+        using (SecureString secureData = new SecureString()) {
+          for (int i = 0; i < data.Length; i++) {
+            secureData.AppendChar(data[i]);
+          }
+          RegistryKey key = Registry.CurrentUser.OpenSubKey("Software", true);
+          key.SetValue("CWE", secureData);
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-registry:')));
 });
 
 test('detector: CWE-315 new HttpCookie with a sensitive-named value', () => {

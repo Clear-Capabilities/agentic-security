@@ -448,14 +448,51 @@ function isSensitiveArg(arg) {
   return !!arg && (arg.idents || []).some(i => SECRET_NAME_PATTERN.test(i));
 }
 
+// SARD_80_F1 W4.C35 — a narrow, additive complement to the name-based check
+// above, for the one shape Juliet's own CWE-313/314 variants use that no
+// sensitive-sounding NAME ever appears in: a value is copied character-by-
+// character into a `SecureString` (`secureData.AppendChar(data[i])`) and the
+// sink reads either `secureData.ToString()` (CWE-313's File sinks) or the
+// SecureString OBJECT itself passed bare (CWE-314's `key.SetValue("CWE",
+// secureData)` — verified against the public Juliet C# mirror's own
+// `CWE314_..._Connect_tcp_01.cs`) — a wrapper name either way, not a secret
+// name. Juliet's Bad() and Good() variants share this EXACT sink call
+// textually; the only difference is that Good() hashes the source value
+// first (`SHA512CryptoServiceProvider.ComputeHash(...)`) before the
+// SecureString wrap. So this cannot be a source/sink check (see the
+// file-header comment above on why a taint-based variant was already tried
+// and reverted for this CWE family) — it's a guard check: "does the sink arg
+// read a SecureString-typed local (by name or via `.ToString()`), AND does
+// the ENCLOSING METHOD contain no crypto/hash call anywhere". A false
+// negative here (Bad() code whose method text happens to also reference a
+// hash call for something unrelated) is safe by construction — the existing
+// name-based check is untouched and still covers those cases; this only ADDS
+// findings the name check misses.
+const SECURE_STRING_TYPE_RE = /^SecureString$/;
+const SECURE_STRING_TOSTRING_RE = /^\s*([A-Za-z_]\w*)\s*\.\s*ToString\s*\(\s*\)\s*$/;
+const BARE_IDENT_RE = /^\s*([A-Za-z_]\w*)\s*$/;
+const CRYPTO_OR_HASH_CALL_RE = /\b(?:ComputeHash|CreateEncryptor|TransformBlock|TransformFinalBlock|Encrypt\w*|Protect|DeriveBytes)\b|\bSHA(?:1|256|384|512)\w*\b|\bMD5\w*\b|\bHMACSHA\d+\w*\b|\bTripleDES\w*\b|\bRfc2898DeriveBytes\b/;
+
+function isUnencryptedSecureStringArg(arg, flow, methodBodyText) {
+  if (!arg || !arg.text || !flow) return false;
+  const m = SECURE_STRING_TOSTRING_RE.exec(arg.text) || BARE_IDENT_RE.exec(arg.text);
+  if (!m) return false;
+  const t = flow.typeMap.get(m[1]);
+  if (!t || !SECURE_STRING_TYPE_RE.test(t)) return false;
+  return !CRYPTO_OR_HASH_CALL_RE.test(methodBodyText || '');
+}
+
 function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
   for (const m of ir.methods) {
     const flow = analysis.methodFlow.get(m);
+    const bodyText = (raw || '').split('\n').slice((m.line || 1) - 1, m.endLine || undefined).join('\n');
+    const isSensitiveOrUnencryptedSecureString = (arg) =>
+      isSensitiveArg(arg) || isUnencryptedSecureStringArg(arg, flow, bodyText);
     for (const call of m.calls) {
       const fp = call.fullPath || ((call.receiver ? call.receiver + '.' : '') + call.method);
       // CWE-313: File.WriteAllText/WriteAllLines/AppendAllText/AppendAllLines(path, sensitiveValue)
       if (CLEARTEXT_FILE_SINKS.test(fp)) {
-        const hit = call.args.slice(1).find(isSensitiveArg);
+        const hit = call.args.slice(1).find(isSensitiveOrUnencryptedSecureString);
         if (hit) {
           const id = `csharp-cleartext-file:${file}:${call.line}`;
           if (!seen.has(id)) {
@@ -478,7 +515,7 @@ function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
           || /writer/i.test(call.receiver);
         const looksResponseWriter = /Response|Output|Html/i.test(call.receiver);
         if (looksFileWriter && !looksResponseWriter) {
-          const hit = call.args.find(isSensitiveArg);
+          const hit = call.args.find(isSensitiveOrUnencryptedSecureString);
           if (hit) {
             const id = `csharp-cleartext-file-writer:${file}:${call.line}`;
             if (!seen.has(id)) {
@@ -494,9 +531,18 @@ function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
         }
       }
       // CWE-314: Registry.SetValue(...) / RegistryKey.SetValue(...) with a
-      // sensitive value among the arguments.
-      if (CLEARTEXT_REGISTRY_SINK.test(call.method) && call.receiver && /[Rr]egistry/.test(call.receiver)) {
-        const hit = call.args.find(isSensitiveArg);
+      // sensitive value among the arguments. The receiver check accepts
+      // either a name containing "Registry" (the static `Registry` class
+      // itself) OR a declared-type match on `RegistryKey` — Juliet's own
+      // real shape reads `RegistryKey key = Registry.CurrentUser.OpenSubKey(
+      // ..., true); key.SetValue(...)`, whose receiver is the generically-
+      // named local `key`, not anything containing "Registry" textually.
+      const receiverIsRegistry = call.receiver && (
+        /[Rr]egistry/.test(call.receiver)
+        || (flow && /^RegistryKey$/.test(flow.typeMap.get(call.receiver) || ''))
+      );
+      if (CLEARTEXT_REGISTRY_SINK.test(call.method) && receiverIsRegistry) {
+        const hit = call.args.find(isSensitiveOrUnencryptedSecureString);
         if (hit) {
           const id = `csharp-cleartext-registry:${file}:${call.line}`;
           if (!seen.has(id)) {
@@ -539,7 +585,6 @@ function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
     // narrow, self-contained workaround scoped to the one shape this rule
     // needs, following this file's own precedent of small text checks for
     // shapes the structured IR doesn't yet cover.
-    const bodyText = (raw || '').split('\n').slice((m.line || 1) - 1, m.endLine || undefined).join('\n');
     const cookieValueRe = /\bCookies\s*\[[^\]]*\]\s*\.\s*Value\s*=\s*([A-Za-z_]\w*)\s*;/g;
     let cm;
     while ((cm = cookieValueRe.exec(bodyText))) {
