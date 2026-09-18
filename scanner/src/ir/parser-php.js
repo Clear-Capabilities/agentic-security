@@ -459,6 +459,35 @@ function _lowerExpr(text) {
     const callee = bareNew[1].split(/[\\.]/).pop();
     return { kind: 'call', callee, args: [], isNew: true };
   }
+  // SARD_80_F1 W5.13 — `include`/`require`(`_once`)? as an EXPRESSION, not a
+  // statement. `_lowerStmt` above already recognizes this construct when it
+  // IS the entire statement, but the real public SARD PHP suite generator's
+  // own CWE-98 (File Inclusion) shape — confirmed via
+  // `stivalet/PHP-Vuln-test-suite-generator`'s own `construction.xml`
+  // (`$var = include("'". $tainted . ".php'");`) — assigns the include
+  // EXPRESSION to a variable, so it's lowered as an ordinary assignment's
+  // RHS through `_lowerExpr`, never through `_lowerStmt`'s statement-form
+  // branch at all. Without this, the generic function-call matcher below
+  // treated `include(...)` as an ordinary call literally named "include" —
+  // never matching the catalog's `__php_include__`-keyed sink
+  // (`php-include-lfi`) — a total, structural blackout for this exact,
+  // real-corpus shape (this benchmark's entire CWE-98 family, tp=0 despite
+  // five prior dedicated investigation cycles this session, none of which
+  // had yet examined this specific "include used as an expression" shape).
+  // Lowered identically to `_lowerStmt`'s own handling so both forms land
+  // on the same synthetic callee.
+  const includeCall = matchBalancedCall(s, /^(?:include|require)(?:_once)?\b/);
+  if (includeCall) {
+    const args = _splitTopLevelCommas(includeCall.argsText).map(_lowerExpr);
+    return { kind: 'call', callee: '__php_include__', args: args.length ? [args[0]] : [] };
+  }
+  // Paren-free form used as an expression (rare but valid PHP, e.g.
+  // `if (include $page . ".php") { … }`) — mirrors `_lowerStmt`'s own
+  // paren-free handling for the statement form.
+  const includeBare = s.match(/^(?:include|require)(?:_once)?\s+(.+)$/);
+  if (includeBare) {
+    return { kind: 'call', callee: '__php_include__', args: [_lowerExpr(includeBare[1])] };
+  }
   // Method call: $obj->method(args) or ClassName::method(args).
   // matchBalancedCall finds the paren that actually balances the FIRST
   // '(' — not the greedy-to-end-of-string match the old `/\((.*)\)\s*$/`
