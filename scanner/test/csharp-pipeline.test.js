@@ -716,6 +716,52 @@ test('a value read via an instance of StreamReader inside `using (...)` still ca
   assert.ok(findings.some(f => f.family === 'sql-injection'), `expected a SQLi finding via the file-read source, got: ${findings.map(f => f.family).join(',')}`);
 });
 
+// SARD_80_F1 W4.C34 — a sibling gap to the StreamReader one above: a database
+// row read via `SqlDataReader.GetString()`/`GetValue()`/etc. is every bit as
+// untrusted a source as a file/stream read, but had no entry at all in
+// `DATAREADER_SOURCE_TYPES`. Confirmed via the public C# Juliet mirror,
+// `CWE23_Relative_Path_Traversal__Database_01.cs`: `SqlDataReader dr =
+// command.ExecuteReader(); data = dr.GetString(1);` — Juliet's own idiomatic
+// variable name (`dr`) contains no "reader" substring, but this detector's
+// type-based lookup doesn't depend on the variable's name at all.
+test('a value read via SqlDataReader.GetString() is a taint source, independent of the variable name', () => {
+  const src = `
+    public class C {
+      public void Bad() {
+        string data;
+        using (SqlDataReader dr = command.ExecuteReader()) {
+          data = dr.GetString(1);
+        }
+        string root = "/home/user/uploads/";
+        if (File.Exists(root + data)) {
+          using (StreamReader sr = new StreamReader(root + data)) {
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'path-traversal'), `expected a path-traversal finding via the SqlDataReader source, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('a value read via SqlDataReader.GetString() from a variable whose declared type is NOT a DataReader does not fire', () => {
+  const src = `
+    public class C {
+      public void Good() {
+        string data;
+        using (SomeUnrelatedType dr = GetSomething()) {
+          data = dr.GetString(1);
+        }
+        string root = "/home/user/uploads/";
+        if (File.Exists(root + data)) {
+          using (StreamReader sr = new StreamReader(root + data)) {
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding for a non-DataReader GetString() call, got: ${findings.map(f => f.family).join(',')}`);
+});
+
 test('IR: a `using (Type x = expr)` declaration is not corrupted by the enclosing clause\'s own closing paren', () => {
   const src = 'class C { void M() { using (StreamReader sr = new StreamReader("f")) { data = sr.ReadLine(); } } }';
   const ir = buildCSharpIR(src);

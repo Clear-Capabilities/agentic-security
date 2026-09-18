@@ -117,12 +117,33 @@ function isSanitizedExpr(text) {
 // the variable's name.
 const READER_SOURCE_TYPES = /^(?:StreamReader|BinaryReader|TextReader)$/;
 const READER_SOURCE_CALL_RE = /\b([A-Za-z_]\w*)\s*\.\s*(?:ReadLine|ReadToEnd|ReadString|ReadAllText|ReadAllLines)\s*\(/g;
+// SARD_80_F1 W4.C34 — a second reader-shaped type/method pair, same class of
+// gap as the StreamReader one above: `SqlDataReader dr = command.ExecuteReader();
+// data = dr.GetString(1);` (Juliet's own idiomatic ADO.NET shape, confirmed
+// via the public C# mirror, `CWE23_Relative_Path_Traversal__Database_01.cs`)
+// is a real database-row read every bit as untrusted as a file/stream read,
+// but `dataflow/catalog.js`'s OWN separate `cs-datareader-*` source entries
+// (a completely different detector, the deep taint engine, not this file's
+// lexical type-flow) require the LITERAL variable-name substring "reader" —
+// investigated and found genuinely inert there too (W4.C32/W4.C33: giving
+// THAT engine receiver-type confirmation is real but doesn't help here,
+// since `classOfVar`'s CHA only resolves `new Foo()` allocations, never a
+// factory-method return like `ExecuteReader()` — a separate, deeper
+// limitation, not this file's concern). THIS detector already has exactly
+// the right mechanism (declared-type lookup via `typeMap`, independent of
+// variable name) — it just never had a DataReader entry.
+const DATAREADER_SOURCE_TYPES = /^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)DataReader$/;
+const DATAREADER_SOURCE_CALL_RE = /\b([A-Za-z_]\w*)\s*\.\s*(?:GetString|GetValue|GetInt16|GetInt32|GetInt64|GetDateTime|GetDecimal|GetDouble|GetFloat|GetBoolean|GetGuid|GetChar|GetByte)\s*\(/g;
 function _typedReaderSourceCall(text, typeMap) {
   if (!text) return false;
   READER_SOURCE_CALL_RE.lastIndex = 0;
   let m;
   while ((m = READER_SOURCE_CALL_RE.exec(text))) {
     if (READER_SOURCE_TYPES.test(typeMap.get(m[1]) || '')) return true;
+  }
+  DATAREADER_SOURCE_CALL_RE.lastIndex = 0;
+  while ((m = DATAREADER_SOURCE_CALL_RE.exec(text))) {
+    if (DATAREADER_SOURCE_TYPES.test(typeMap.get(m[1]) || '')) return true;
   }
   return false;
 }
