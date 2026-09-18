@@ -240,11 +240,38 @@ function evalUnary(node, scope) {
   return value;
 }
 
+// SARD_80_F1 W5.27 — Juliet's own "Control flow: if(privateReturnsTrue())
+// and if(privateReturnsFalse())" idiom (Flow Variant 08/11, confirmed via
+// the public Java mirror's own `CWE601_Open_Redirect__Servlet_connect_tcp_08
+// .java`) branches on a CALL to a same-class, zero-arg, single-`return
+// true;`/`return false;`-bodied private helper, not a literal/field the
+// existing constant evaluator already resolves. A bare method-call suffix
+// used to unconditionally fail evaluation (the comment below explains why
+// that's still correct for anything with arguments or a non-trivial body) —
+// this narrowly recognizes the ONE resolvable shape (a bare, zero-arg call
+// whose target method was pre-folded into `scope` by
+// `_collectClassMethodConstants`, namespaced so a call `f()` can never be
+// confused with a plain variable reference `f`) and falls through to the
+// existing UNKNOWN behavior for everything else — an unresolvable callee,
+// an argument list, or a chained `.field`/`.method()`/`[idx]` continuation.
 function evalPrimary(node, scope) {
   if (!node) return UNKNOWN;
   const ch = node.children || {};
   const prefix = ch.primaryPrefix?.[0];
   if (!prefix) return UNKNOWN;
+  if (ch.primarySuffix && ch.primarySuffix.length === 1) {
+    const invocation = ch.primarySuffix[0].children?.methodInvocationSuffix?.[0];
+    if (invocation && !invocation.children?.argumentList) {
+      const fr = prefix.children?.fqnOrRefType?.[0];
+      const parts = fr?.children?.fqnOrRefTypePartFirst || [];
+      if (parts.length === 1) {
+        const ident = parts[0].children?.fqnOrRefTypePartCommon?.[0]?.children?.Identifier?.[0]?.image;
+        const key = ident && `()${ident}`;
+        if (key && scope.has(key)) return scope.get(key);
+      }
+    }
+    return UNKNOWN;
+  }
   const value = evalPrimaryPrefix(prefix, scope);
   // Suffix chains (.field, .method(), [idx]) make evaluation fail.
   if (ch.primarySuffix && ch.primarySuffix.length > 0) {
@@ -585,6 +612,57 @@ function _isEffectivelyFinal(source, fieldName) {
   return matches.length <= 1;
 }
 
+// Unwraps a `blockStatement` CST node down to a `returnStatement`, following
+// the same `statement` / `statementWithoutTrailingSubstatement` nesting
+// `walkStatement` already unwraps elsewhere in this file — or returns null
+// for anything else (an ambiguous body is left alone, not guessed at).
+function _asReturnStatement(blockStatement) {
+  let node = blockStatement?.children?.statement?.[0]
+    || blockStatement?.children?.statementWithoutTrailingSubstatement?.[0];
+  while (node) {
+    if (node.children?.returnStatement) return node.children.returnStatement[0];
+    node = node.children?.statement?.[0] || node.children?.statementWithoutTrailingSubstatement?.[0];
+  }
+  return null;
+}
+
+// SARD_80_F1 W5.27 — see `evalPrimary`'s own header comment for the full
+// incident writeup. Folds a same-class, zero-parameter method whose ENTIRE
+// body is EXACTLY one `return <expr>;` statement into the SAME class-scoped
+// constants map `_collectClassConstants` already builds for `final`/
+// effectively-final fields — namespaced under `()<name>` so a method call
+// `f()` can never collide with, or be confused with, a plain field/local
+// reference `f`. Deliberately conservative in every dimension already
+// established by this file's sibling folders: a method with ANY parameter
+// is skipped (a caller-supplied argument could change the outcome, breaking
+// "always returns the same value"); a body with more than one statement is
+// ambiguous and skipped (mirrors `_resolveCalleeReturnIsLiteral`'s identical
+// "exactly one return" requirement in `java-bench-extras.js`, the same
+// interprocedural-constant precedent applied here to conditions instead of
+// assignments); the return expression is evaluated through the ALREADY-
+// collected field-constants map, so `return SOME_FINAL_FIELD;` also resolves
+// correctly, but a return of anything else (a call, a computed expression)
+// correctly stays `UNKNOWN` and is not folded.
+function _collectClassMethodConstants(classBody, consts) {
+  const decls = classBody?.children?.classBodyDeclaration || [];
+  for (const bd of decls) {
+    const method = bd.children?.classMemberDeclaration?.[0]?.children?.methodDeclaration?.[0];
+    if (!method) continue;
+    const declarator = method.children?.methodHeader?.[0]?.children?.methodDeclarator?.[0];
+    if (!declarator || declarator.children?.formalParameterList) continue;
+    const name = declarator.children?.Identifier?.[0]?.image;
+    if (!name) continue;
+    const block = method.children?.methodBody?.[0]?.children?.block?.[0];
+    const stmts = block?.children?.blockStatements?.[0]?.children?.blockStatement || [];
+    if (stmts.length !== 1) continue;
+    const returnStmt = _asReturnStatement(stmts[0]);
+    const exprNode = returnStmt?.children?.expression?.[0];
+    if (!exprNode) continue;
+    const value = evalExpr(exprNode, consts);
+    if (value !== UNKNOWN) consts.set(`()${name}`, value);
+  }
+}
+
 function _collectClassConstants(classBody, source) {
   const consts = new Map();
   const decls = classBody?.children?.classBodyDeclaration || [];
@@ -613,6 +691,7 @@ function walkClassBody(classBody, out, source) {
   if (!classBody) return;
   const decls = classBody.children?.classBodyDeclaration || [];
   const classConsts = _collectClassConstants(classBody, source);
+  _collectClassMethodConstants(classBody, classConsts);
   for (const bd of decls) {
     const member = bd.children?.classMemberDeclaration?.[0];
     if (!member) continue;

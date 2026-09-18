@@ -241,6 +241,91 @@ test('an effectively-final `private int` field compared with == (Flow Variant 07
   assert.equal(ranges[0].reason, 'constant-true-if dead-else');
 });
 
+// SARD_80_F1 W5.27 — Juliet's own "Control flow: if(privateReturnsTrue())
+// and if(privateReturnsFalse())" idiom (Flow Variant 08/11, confirmed via
+// the public Java mirror's own CWE601_Open_Redirect__Servlet_connect_tcp_08
+// .java): the if-CONDITION is a call to a same-class, zero-arg, single-
+// `return true;`/`return false;`-bodied private helper, not a literal or
+// field reference the constant evaluator already resolved.
+test('a same-class zero-arg method whose body is exactly `return true;` folds an if-condition call (dead else)', () => {
+  const src = `
+    public class Bad {
+        private boolean privateReturnsTrue() {
+            return true;
+        }
+        public void bad() {
+            if (privateReturnsTrue()) {
+                System.out.println("reachable");
+            } else {
+                System.out.println("unreachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-true-if dead-else');
+});
+
+test('a same-class zero-arg method whose body is exactly `return false;` folds an if-condition call (dead then)', () => {
+  const src = `
+    public class Bad {
+        private boolean privateReturnsFalse() {
+            return false;
+        }
+        public void bad() {
+            if (privateReturnsFalse()) {
+                System.out.println("unreachable");
+            } else {
+                System.out.println("reachable");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected one dead range, got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'constant-false-if dead-then');
+});
+
+test('a same-class method with a PARAMETER is NOT folded (a caller-supplied arg could change the outcome)', () => {
+  const src = `
+    public class Bad {
+        private boolean check(boolean flag) {
+            return flag;
+        }
+        public void bad(boolean runtimeFlag) {
+            if (check(runtimeFlag)) {
+                System.out.println("a");
+            } else {
+                System.out.println("b");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 0, 'a parameterized helper must not be folded to a constant');
+});
+
+test('a same-class method with 2+ statements in its body is NOT folded (ambiguous, fails closed)', () => {
+  const src = `
+    public class Bad {
+        private boolean maybeTrue() {
+            System.out.println("side effect");
+            return true;
+        }
+        public void bad() {
+            if (maybeTrue()) {
+                System.out.println("a");
+            } else {
+                System.out.println("b");
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 0, 'a multi-statement body is ambiguous and must not be folded');
+});
+
 test('isLineInDeadRange: boundary lines are inclusive, adjacent lines are not', () => {
   const ranges = [{ startLine: 10, endLine: 20 }];
   assert.ok(isLineInDeadRange(10, ranges));
