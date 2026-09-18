@@ -1497,9 +1497,15 @@ export const CATALOG = [
   { kind: 'source', id: 'cs-console-read',     language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'Read', receiver: '^Console$' }, label: 'Console.Read' },
   { kind: 'source', id: 'cs-tcpclient-getstream',  language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetStream' }, label: 'TcpClient/TcpListener.GetStream', provenance: 'network' },
   { kind: 'source', id: 'cs-registry-getvalue',    language: 'cs', framework: 'stdlib', match: { type: 'call', callee: 'GetValue', receiver: '[Rr]egistry' }, label: 'Registry(Key).GetValue', provenance: 'env' },
-  { kind: 'source', id: 'cs-datareader-getstring', language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetString', receiver: '[Rr]eader' }, label: 'SqlDataReader.GetString' },
-  { kind: 'source', id: 'cs-datareader-getvalue',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetValue',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetValue' },
-  { kind: 'source', id: 'cs-datareader-getint32',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetInt32',  receiver: '[Rr]eader' }, label: 'SqlDataReader.GetInt32' },
+  // `receiverTypeIn` (SARD_80_F1 W4.C39): additive to the `receiver` name
+  // regex, never a replacement — confirms a match via CHA-resolved declared
+  // type when Juliet's own idiomatic short variable name (`dr`) fails the
+  // name check outright (no "reader" substring). Same
+  // DATAREADER_SOURCE_TYPES list already established for the SEPARATE
+  // lexical structural tracker at posture/csharp-analysis.js (W4.C34).
+  { kind: 'source', id: 'cs-datareader-getstring', language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetString', receiver: '[Rr]eader', receiverTypeIn: ['^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)DataReader$'] }, label: 'SqlDataReader.GetString' },
+  { kind: 'source', id: 'cs-datareader-getvalue',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetValue',  receiver: '[Rr]eader', receiverTypeIn: ['^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)DataReader$'] }, label: 'SqlDataReader.GetValue' },
+  { kind: 'source', id: 'cs-datareader-getint32',  language: 'cs', framework: 'ado',    match: { type: 'call', callee: 'GetInt32',  receiver: '[Rr]eader', receiverTypeIn: ['^(?:Sql|OleDb|Odbc|MySql|Npgsql|Sqlite)DataReader$'] }, label: 'SqlDataReader.GetInt32' },
   // File-read variants: the CONTENTS of a file are untrusted data (a
   // taint SOURCE) independent of whether the PATH argument to the same
   // call is itself tainted (`cs-file-readall` below still checks that,
@@ -2514,7 +2520,25 @@ function _calleeIndexHits(calleeExpr) {
   return raw;
 }
 
-export function matchSource(expr, file) {
+// SARD_80_F1 W4.C39 — `receiverType` (optional 3rd param) is the SOURCE-side
+// counterpart of `matchSinkOrSanitizer`'s existing receiverType param, closing
+// a gap W4.C32 found and explicitly deferred: matchSource's CALL-shaped
+// branch used to filter ONLY via `_receiverAllowed` (a name regex), with no
+// way for a `receiverTypeIn`-bearing source entry (`cs-datareader-*`) to
+// confirm a match via CHA-resolved declared type the way a sink already
+// could. W4.C32 built and verified this exact mechanism once already, then
+// reverted it — at the time, `classOfVar`'s CHA only resolved `new Foo()`
+// allocations, and `SqlDataReader` has no public constructor (always
+// obtained via `command.ExecuteReader()`, a factory method), so the
+// mechanism was correct but had no way to ever actually resolve the type it
+// needed. That blocker is gone: `class-hierarchy.js`'s `typeOfVar` now also
+// captures a local's DECLARED type off `Type x = expr;` (parser-cs.js's
+// `declaredType`, added independently for a different consumer), which
+// covers a factory-returned value exactly as well as a `new` one — verified
+// directly that `classOfVar` now resolves `dr` to `SqlDataReader` for
+// `using (SqlDataReader dr = command.ExecuteReader())`. Re-attempting the
+// SAME mechanism W4.C32 already designed is what actually unlocks it now.
+export function matchSource(expr, file, receiverType) {
   if (!expr) return null;
   // Member sources (req.query): the original path — unchanged.
   if (expr.kind === 'member' && expr.object?.kind === 'ident') {
@@ -2552,7 +2576,7 @@ export function matchSource(expr, file) {
     if (raw.length) {
       const hits = filterByProvenance(raw)
         .filter(h => _languageAllowed(h, file))
-        .filter(h => _receiverAllowed(h, expr.callee));
+        .filter(h => _receiverAllowed(h, expr.callee) || _receiverTypeConfirms(h, receiverType));
       const s = hits.find(h => h.kind === 'source');
       if (s) return s;
     }

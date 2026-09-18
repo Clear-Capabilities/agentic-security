@@ -386,7 +386,7 @@ function _calleeReceiverTainted(callee, state, callContext) {
 }
 
 function exprTaint(expr, state, callContext) {
-  if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr)) return true;
+  if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr, callContext)) return true;
   if (!expr) return false;
   // P1.1 — field-sensitive access path: if the expression is a pure
   // ident/member chain ("x.y.z"), ask the access-path lattice whether any
@@ -515,7 +515,16 @@ function _sourcesReachingExpr(expr, _state, taintSources) {
 }
 
 // Heuristic: does this expression read a registered source?
-function exprIsSource(expr) {
+// `callContext` (SARD_80_F1 W4.C39, optional) lets the CALL-shaped branch
+// resolve a receiver's CHA-declared type (mirroring `_receiverTypeFor`'s use
+// for sinks) and pass it to `matchSource` so a `receiverTypeIn`-bearing
+// source entry can confirm a match even when the receiver's own NAME fails
+// (`dr.GetString(1)` — Juliet's idiomatic short SqlDataReader variable name,
+// no "reader" substring). Every caller that has a callContext in scope now
+// passes it through; callers that don't (none currently) simply get the
+// prior, name-only behavior — `_receiverTypeFor` itself degrades to null
+// when callContext/CHA is absent, so this is purely additive.
+function exprIsSource(expr, callContext) {
   if (!expr) return null;
   if (expr.kind === 'member') {
     const hit = matchSource(expr, _currentFile);
@@ -525,7 +534,8 @@ function exprIsSource(expr) {
   // Previously only member reads were recognized, so Go's call-style sources
   // never tainted the assignment target. matchSource now resolves call sources.
   if (expr.kind === 'call') {
-    const hit = matchSource(expr, _currentFile);
+    const receiverType = _receiverTypeFor(expr.callee, callContext);
+    const hit = matchSource(expr, _currentFile, receiverType);
     if (hit) return hit;
   }
   // Taint-recall PRD (80%): bare-identifier GLOBAL sources — PHP's $_GET/
@@ -547,7 +557,7 @@ function exprIsSource(expr) {
     if (hit) return hit;
   }
   if (expr.kind === 'member' && expr.object) {
-    return exprIsSource(expr.object);
+    return exprIsSource(expr.object, callContext);
   }
   return null;
 }
@@ -1055,7 +1065,7 @@ function step(node, stateIn, callContext) {
       return { state, findings };
 
     case 'assign': {
-      const src = exprIsSource(node.source);
+      const src = exprIsSource(node.source, callContext);
       const target = typeof node.target === 'string' ? node.target : null;
       // Sink matching is additive to this case's existing source/target/taint
       // handling below: an assignment's RHS can itself be a sink call (e.g.

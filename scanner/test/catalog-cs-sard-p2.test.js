@@ -106,6 +106,53 @@ public class C {
     `expected Command Injection from reader.GetString, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
 });
 
+// SARD_80_F1 W4.C39 — Juliet's OWN idiomatic variable name for this exact
+// shape is the bare `dr` (confirmed via the public C# Juliet mirror's
+// `CWE80_XSS__CWE182_Web_Database_01.cs`/`CWE23_..._Database_01.cs`), which
+// contains no "reader" substring at all, so `cs-datareader-getstring`'s
+// name-based `receiver: '[Rr]eader'` regex can never match it — the SAME gap
+// W4.C32/C34 already closed for the SEPARATE structural detector
+// (`posture/csharp-analysis.js`), but the deep taint engine's own catalog
+// (`dataflow/catalog.js`) still missed it entirely, since `matchSource` had
+// no receiver-TYPE confirmation path at all (only `matchSinkOrSanitizer`
+// did). Fixed via `receiverTypeIn` + a new `receiverType` param threaded
+// through `matchSource`/`exprIsSource`, reusing the exact same
+// `_receiverTypeFor`/`classOfVar`/`_receiverTypeConfirms` machinery already
+// proven for sinks.
+test('cs-datareader-getstring: fires via CHA-resolved declared type even when the variable name has no "reader" substring (Juliet\'s own `dr` idiom)', async () => {
+  const dir = mkTmp('datareader-dr-typeconfirm', `
+using System.Diagnostics;
+using System.Data.SqlClient;
+public class C {
+    public void Bad(SqlCommand command) {
+        using (SqlDataReader dr = command.ExecuteReader()) {
+            string data = dr.GetString(1);
+            Process.Start("cmd.exe", data);
+        }
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected Command Injection from dr.GetString via type-confirmed match, got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
+test('cs-datareader-getstring: a same-shaped GetString() call on a variable whose declared type is NOT a DataReader does not spuriously fire via type confirmation', async () => {
+  const dir = mkTmp('datareader-non-reader-type', `
+using System.Diagnostics;
+public class C {
+    public void Bad() {
+        SomeUnrelatedThing dr = GetSomething();
+        string data = dr.GetString(1);
+        Process.Start("cmd.exe", data);
+    }
+}
+`);
+  const taint = await taintFindings(dir);
+  assert.ok(!taint.some(f => /command injection/i.test(`${f.vuln}`)),
+    `expected no Command Injection for a non-DataReader-typed dr.GetString(), got: ${taint.map(f => f.vuln).join(', ') || '(none)'}`);
+});
+
 test('cs-file-readalltext-src: file CONTENTS are a source independent of the path argument', async () => {
   const dir = mkTmp('file-readalltext-content', `
 using System.Diagnostics;
