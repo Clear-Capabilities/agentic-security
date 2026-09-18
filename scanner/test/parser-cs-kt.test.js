@@ -67,6 +67,71 @@ public class UsersController {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// SARD_80_F1 W5.25 — `_lowerExpr`'s indexer branch previously required the
+// WHOLE expression to end at the closing `]` (`Request.Form["name"]`);
+// anything indexed-then-accessed (`cookieSources[0].Value`) fell through to
+// `{kind:'unknown'}`, silently dropping the base's source taint. Confirmed
+// via the public C# Juliet mirror's own ASP.NET cookie-collection idiom
+// (`req.Cookies[0].Value`,
+// CWE113_HTTP_Response_Splitting__Web_Get_Cookies_Web_setHeader_01.cs).
+test('cs: an indexer followed by a property read (req.Cookies[0].Value) still carries source taint', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-scan-'));
+  fs.writeFileSync(path.join(dir, 'CookieHandler.cs'), `
+using System.Web;
+public class CookieHandler : AbstractTestCaseWeb {
+  public override void Bad(HttpRequest req, HttpResponse resp) {
+    string data;
+    data = "";
+    HttpCookieCollection cookieSources = req.Cookies;
+    if (cookieSources != null) {
+      data = cookieSources[0].Value;
+    }
+    if (data != null) {
+      resp.AddHeader("Location", "/author.jsp?lang=" + data);
+    }
+  }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  assert.ok(scan.findings.some(f => f.cwe === 'CWE-113'),
+    'the indexer-then-property chain must still carry the cookie source\'s taint into the header sink');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('cs: an indexer at the very end of the expression (Request.Form["name"]) still lowers correctly (no regression)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-scan-'));
+  fs.writeFileSync(path.join(dir, 'FormHandler.cs'), `
+public class FormHandler {
+  public string Find() {
+    var name = Request.Form["name"];
+    var cmd = new SqlCommand("SELECT * FROM users WHERE name='" + name + "'");
+    return cmd.ExecuteScalar();
+  }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  assert.ok(scan.findings.some(f => f.cwe === 'CWE-89'),
+    'the pre-existing indexer-only-at-the-end shape must keep working');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('cs: an indexer chain on a non-source base does not fabricate taint', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-scan-'));
+  fs.writeFileSync(path.join(dir, 'Clean.cs'), `
+public class Clean {
+  public void Run() {
+    string[] items = new string[] { "a", "b" };
+    var data = items[0].ToUpper();
+    var cmd = new SqlCommand("SELECT * FROM users WHERE name='" + data + "'");
+  }
+}
+`);
+  const { scan } = await runScan(dir, { deep: true, deepInCi: true });
+  assert.ok(!scan.findings.some(f => f.cwe === 'CWE-89'),
+    'an indexed read off a local, non-tainted array must not fire a SQLi finding');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('Kotlin Ktor source → cmd sink fires via dataflow engine', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kt-scan-'));
   fs.writeFileSync(path.join(dir, 'App.kt'), `

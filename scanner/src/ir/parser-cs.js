@@ -634,13 +634,42 @@ function _lowerExpr(text) {
       return inner;
     }
   }
-  // Member access: a.b.c["foo"]
-  if (/^[A-Za-z_][\w.]*\[[^\]]*\]$/.test(s)) {
-    // E.g. Request.Form["name"]. Split on first '[' to isolate index.
-    const lb = s.indexOf('[');
-    const base = s.slice(0, lb);
-    const dots = base.split('.');
-    return _buildMemberChain(dots, /*indexed*/ s.slice(lb));
+  // Member access: a.b.c["foo"], and a.b.c["foo"].d.e — an indexer
+  // followed by further property access. The indexer-only form (E.g.
+  // `Request.Form["name"]`) used to be the only shape recognized, requiring
+  // the bracket to end the whole expression; anything indexed-then-accessed
+  // (`cookieSources[0].Value`) fell through every later branch to
+  // `{kind:'unknown'}`, silently dropping the base's source taint. Confirmed
+  // via the public C# Juliet mirror's own ASP.NET cookie-collection idiom
+  // (`req.Cookies[0].Value`,
+  // `CWE113_HTTP_Response_Splitting__Web_Get_Cookies_Web_setHeader_01.cs`) —
+  // a real, structural recall gap, not a scoring quirk: `runScan` produced
+  // zero findings on this exact shape before this fix. `_matchDelim` (bracket-
+  // depth- and string-aware) replaces the old `[^\]]*` scan, which could not
+  // have handled a nested bracket correctly either.
+  const idxBaseM = s.match(/^([A-Za-z_][\w.]*)\[/);
+  if (idxBaseM) {
+    const lb = idxBaseM[1].length;
+    const rb = _matchDelim(s, lb, '[', ']');
+    if (rb !== -1) {
+      const dots = idxBaseM[1].split('.');
+      let cur = _buildMemberChain(dots, s.slice(lb, rb + 1));
+      let rest = s.slice(rb + 1);
+      // Follow zero or more trailing `.prop` continuations (a bare property
+      // read, no call parens) — a `.Method(...)` continuation is a
+      // genuinely different shape (handled by matchBalancedCall/_followChain
+      // elsewhere) and is deliberately not duplicated here.
+      let restM;
+      while ((restM = rest.match(/^\.([A-Za-z_]\w*)(?!\s*\()/))) {
+        cur = { kind: 'member', object: cur, prop: restM[1] };
+        rest = rest.slice(restM[0].length);
+      }
+      if (rest === '') return cur;
+      // Anything left (a call, another bracket) is out of scope for this
+      // branch — fall through to the rest of `_lowerExpr` below, which will
+      // most likely land on `{kind:'unknown'}` for it, same as before this
+      // fix (recall-preserving: never worse than the pre-fix behavior).
+    }
   }
   // Plain dotted ident: Request.Form / Request.QueryString
   if (/^[A-Za-z_][\w.]*$/.test(s)) {
