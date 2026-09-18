@@ -199,6 +199,7 @@
         "preciseMethodScoring": false,
         "_preciseMethodScoringDoc": "Methodology toggle. When true, GT extracts Bad/GoodG2B spans and scores per-method; default false to keep cross-version detection numbers comparable.",
         "cweToFamily": {
+          "CWE22": "path-traversal",
           "CWE23": "path-traversal",
           "CWE36": "path-traversal",
           "CWE78": "command-injection",
@@ -280,6 +281,7 @@
         "kind": "juliet-csharp",
         "preciseMethodScoring": true,
         "cweToFamily": {
+          "CWE22": "path-traversal",
           "CWE23": "path-traversal",
           "CWE36": "path-traversal",
           "CWE78": "command-injection",
