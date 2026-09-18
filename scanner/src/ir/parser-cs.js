@@ -1028,6 +1028,30 @@ function _linkNodes(nodes, src, dst) {
 // unconditionally safe to fold (it cannot be reassigned by definition,
 // unlike Java's separate "effectively final" extension, which needed a
 // reassignment scan precisely because ordinary fields CAN be reassigned).
+// SARD_80_F1 W4.C38 — the direct C# counterpart of Java's W4.J36 extension.
+// CWE-80 remained BY FAR C#'s worst meaningful-support CWE even after
+// W4.C36 (fn=108 of support=130, tp only 20→22) because W4.C36 covers only
+// the `const`/`readonly` sub-variant (Flow Variant 04); Juliet's own
+// "Flow Variant 05: if(privateTrue) and if(privateFalse)" (confirmed via
+// the public mirror's `CWE80_XSS__CWE182_Web_Connect_tcp_05.cs`) uses a
+// PLAIN, non-const, non-readonly `private bool privateTrue = true;`
+// instance field — not a compile-time constant in the general C# sense,
+// but "effectively final" (written to exactly once, at its own
+// declaration) covers it exactly as soundly as Java's own extension does,
+// for the identical reason: a field that is never reassigned anywhere in
+// the file can never actually change. `_isEffectivelyFinal` is a
+// deliberately simple, conservative TEXT scan (not a full alias/call-graph
+// analysis): counting `\bname\s*=(?!=)` occurrences across the WHOLE file
+// can only ever OVER-count (an unrelated same-named field/local elsewhere)
+// — which only means the optimization is missed, never that a genuinely
+// reassignable field gets folded.
+function _isEffectivelyFinal(code, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const assignRe = new RegExp(`\\b${escaped}\\s*=(?!=)`, 'g');
+  const matches = code.match(assignRe) || [];
+  return matches.length <= 1;
+}
+
 function _collectCsConstants(code) {
   const consts = new Map();
   const re = /\b(?:const\s+(?:static\s+)?|static\s+readonly\s+|readonly\s+static\s+)(?:bool|int)\s+(\w+)\s*=\s*(true|false|-?\d+)\s*;/g;
@@ -1035,6 +1059,23 @@ function _collectCsConstants(code) {
   while ((m = re.exec(code))) {
     const raw = m[2];
     consts.set(m[1], raw === 'true' ? true : raw === 'false' ? false : parseInt(raw, 10));
+  }
+  // Effectively-final plain fields — deliberately a SEPARATE, second pass:
+  // a field already captured as a real const/readonly constant above must
+  // not be re-evaluated here (harmless either way since the value would
+  // match, but scanning only fields NOT already known keeps this pass's
+  // own regex simpler and its intent — "plain fields only" — explicit).
+  // Requires at least one real ACCESS modifier (private/public/protected/
+  // internal) — C# forbids those on a local variable, so this shape can
+  // only ever be a field declaration, never an incidentally-similar local
+  // (`bool ok = true;` inside a method body is deliberately NOT matched).
+  const plainRe = /\b(?:private|public|protected|internal)\s+(?:static\s+)?(?:bool|int)\s+(\w+)\s*=\s*(true|false|-?\d+)\s*;/g;
+  while ((m = plainRe.exec(code))) {
+    const name = m[1];
+    if (consts.has(name)) continue;
+    if (!_isEffectivelyFinal(code, name)) continue;
+    const raw = m[2];
+    consts.set(name, raw === 'true' ? true : raw === 'false' ? false : parseInt(raw, 10));
   }
   return consts;
 }

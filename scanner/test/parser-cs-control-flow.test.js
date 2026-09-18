@@ -782,9 +782,17 @@ public class C {
   assert.ok(!roNodes.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
     'a static readonly field must be folded, dead branch must not appear');
 
+  // A field of this same shape that IS actually reassigned elsewhere in the
+  // file must NOT be folded — this is the precision guarantee W4.C38's
+  // "effectively final" extension must preserve (see the dedicated test
+  // below for the never-reassigned counterpart, which — correctly, as of
+  // W4.C38 — now DOES fold).
   const mutableCode = `
 public class C {
     private static bool notActuallyReadonly = true;
+    public void Toggle() {
+        notActuallyReadonly = false;
+    }
     public void Bad(System.IO.StreamReader sr) {
         string data;
         if (notActuallyReadonly) {
@@ -800,5 +808,82 @@ public class C {
   const mutFn = mutIr.functions.find(f => bareTail(f.name) === 'Bad');
   const mutNodes = Object.values(mutFn.cfg.nodes);
   assert.ok(mutNodes.some(n => n.kind === 'if'),
-    'a plain mutable field must NOT be folded — a genuine `if` CFG node is still expected, got: ' + JSON.stringify(mutNodes));
+    'a genuinely-reassigned field must NOT be folded — a genuine `if` CFG node is still expected, got: ' + JSON.stringify(mutNodes));
+});
+
+test('parseCSharpFile: W4.C38 — a plain (non-const, non-readonly) private bool field that is never reassigned is "effectively final" and folds like a literal (Juliet Flow Variant 05)', () => {
+  const code = `
+public class C {
+    private bool privateTrue = true;
+    private bool privateFalse = false;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (privateTrue) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        if (privateFalse) {
+            data = null;
+        } else {
+            Process.Start(data);
+        }
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodes = Object.values(fn.cfg.nodes);
+  assert.ok(!nodes.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'an effectively-final plain private bool field must be folded, dead branches must not appear');
+});
+
+test('parseCSharpFile: W4.C38 — a plain private int field compared with == is resolved (Juliet Flow Variant 07)', () => {
+  const code = `
+public class C {
+    private int privateFive = 5;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (privateFive == 5) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodes = Object.values(fn.cfg.nodes);
+  assert.ok(!nodes.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'an effectively-final plain private int field compared with == must be folded, dead branch must not appear');
+});
+
+test('parseCSharpFile: W4.C38 end-to-end runScan — Juliet Flow Variant 05 (plain private bool field) resolves through the full pipeline', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-plain-bool-if-'));
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Bad {
+    private bool privateTrue = true;
+    public void Run(StreamReader sr) {
+        string data;
+        if (privateTrue) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const badResult = await runScan(dir, { deep: true, deepInCi: true });
+  const badFindings = (badResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.ok(badFindings.length >= 1,
+    `expected a CWE-78 finding through a plain effectively-final private bool field's if-branch, got: ${JSON.stringify(badResult.scan.findings)}`);
 });
