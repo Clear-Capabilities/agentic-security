@@ -173,6 +173,76 @@ test('CWE-601: sendRedirect on a variable whose nearest assignment is a hardcode
   assert.equal(hits.length, 0, `expected no finding (data is a provably-literal local), got: ${JSON.stringify(hits)}`);
 });
 
+// SARD_80_F1 W4.J33 — Juliet's own "if(true){x=literal;}else{x=null;}" dead-
+// code idiom (confirmed via the public mirror's
+// CWE601_Open_Redirect__Servlet_connect_tcp_02.java's goodG2B2()): the OLD
+// backward "nearest assignment" scan is pure text order with no notion of
+// dead code, so the textually-LATER dead `data = null;` in the else branch
+// defeated the literal check even though it can never actually execute.
+test('CWE-601: sendRedirect on a literal set inside if(true){...} followed by a dead else{ x = null; } branch does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void goodG2B2(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            if (true) {
+                data = "foo";
+            } else {
+                data = null;
+            }
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0,
+    `expected no finding (the else branch is provably dead; data is always "foo"), got: ${JSON.stringify(hits)}`);
+});
+
+// Mirror shape: if(false) makes the IF branch dead instead of the else.
+test('CWE-601: sendRedirect on a literal set inside a live else{...} after a dead if(false){ x = null; } branch does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void goodG2B2(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            if (false) {
+                data = null;
+            } else {
+                data = "foo";
+            }
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0,
+    `expected no finding (the if branch is provably dead; data is always "foo"), got: ${JSON.stringify(hits)}`);
+});
+
+// Precision control: a GENUINE runtime-conditional reassignment (not a
+// constant-folded dead branch) after the literal must still fire — the
+// dead-range fix must not swallow a real live reassignment.
+test('CWE-601: sendRedirect after a REAL runtime-conditional reassignment (not dead code) still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void notActuallyGood(HttpServletRequest request, HttpServletResponse response, boolean flag) throws Throwable {
+            String data;
+            data = "foo";
+            if (flag) {
+                data = request.getParameter("url");
+            }
+            response.sendRedirect(data);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1,
+    `expected a finding (the reassignment is genuinely live, not dead code), got: ${JSON.stringify(hits)}`);
+});
+
 test('CWE-601: sendRedirect with a direct inline literal still does not fire (pre-existing behavior unaffected)', () => {
   const src = `
     public class Bad extends HttpServlet {

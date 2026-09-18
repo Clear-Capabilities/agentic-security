@@ -133,15 +133,47 @@ const HARDCODED_PW_PASSWORDAUTH_RE = /\bnew\s+PasswordAuthentication\s*\([^,]+,\
  * before any assignment) returns false, same direction as every other
  * evidence-required check in this codebase.
  */
-function _nearestAssignIsLiteral(content, varName, beforeIdx) {
+// SARD_80_F1 W4.J33 — Juliet's own "if(true){…} else{ x = null; }" / "if
+// (false){ x = null; } else {…}" dead-code idiom (its own in-source comment:
+// "INCIDENTAL: CWE 561 Dead Code, the code below will never run but ensure
+// [x] is initialized before the Sink to avoid compiler errors") is used
+// across dozens of CWEs and flow variants (confirmed via the public mirror
+// — the SAME idiom this session already fixed for C#'s CFG at W4.C28,
+// manifesting here as a text-scan bug instead of a CFG bug). This backward,
+// text-order-only scan for "the nearest assignment before the sink" has no
+// notion of dead code: `if (true) { data = "foo"; } else { data = null; }`
+// puts the LITERAL assignment first and the DEAD `data = null;` second —
+// textually LATER, so `lastAnyEnd` (computed from ANY assignment) lands on
+// the dead one, `lastLiteralEnd !== lastAnyEnd` fails, and a genuinely safe
+// goodG2B() variant using this exact idiom was never recognized as
+// literal-only, leaving a real false positive uncorrected (confirmed via
+// the public mirror's own `CWE601_Open_Redirect__Servlet_connect_tcp_02
+// .java`'s `goodG2B2()`). Fixed by reusing the ALREADY-EXISTING, real
+// AST-based `deadBranchRanges`/`isLineInDeadRange` (java-ast-folding.js,
+// already used by `applyJavaBenchSuppressions` for a different purpose) to
+// skip any assignment whose line falls inside a provably-dead branch when
+// computing `lastAnyEnd` — the literal assignment inside the LIVE branch is
+// then correctly recognized as the value that actually reaches the sink.
+// `deadRanges` is optional (empty array when the caller has none, or on a
+// parse failure) so every existing call site keeps its old, more
+// conservative behavior unless it opts in.
+function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges) {
+  const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
   const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  const lineOf = (idx) => content.substring(0, idx).split('\n').length;
   let lastLiteralEnd = -1, m;
-  while ((m = literalRe.exec(content)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  while ((m = literalRe.exec(content)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
+    lastLiteralEnd = m.index + m[0].length;
+  }
   if (lastLiteralEnd === -1) return false;
   let lastAnyEnd = -1;
-  while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
+    lastAnyEnd = m.index + m[0].length;
+  }
   if (lastLiteralEnd !== lastAnyEnd) return false;
   // Juliet's "data passed as an argument from one method to another" flow
   // variants (its own template naming: sources-sink-41+) sink INSIDE A
@@ -582,6 +614,11 @@ export function scanJavaBenchExtras(file, raw) {
   if (!JAVA_EXT.test(file) || !raw || raw.length > 500_000) return [];
   const content = blankComments(raw);
   const findings = [];
+  // See _nearestAssignIsLiteral's own header comment (W4.J33): lets that
+  // helper skip an assignment inside a provably-dead if(true)/if(false)
+  // branch when deciding whether the value reaching a sink is literal-only.
+  let deadRanges = [];
+  try { deadRanges = deadBranchRanges(raw); } catch { /* parse error → no AST info */ }
 
   function lineOf(idx) { return content.substring(0, idx).split('\n').length; }
   function isTainted(arg) { return TAINTED_HINT.test(arg); }
@@ -600,7 +637,7 @@ export function scanJavaBenchExtras(file, raw) {
     // `goodG2B()`, only swapping `data`'s source — confirmed against the
     // public mirror (`CWE601_Open_Redirect__Servlet_PropertiesFile_01.java`:
     // `data = "foo";` in `goodG2B()`, then `response.sendRedirect(data);`).
-    if (/^[A-Za-z_]\w*$/.test(arg) && _nearestAssignIsLiteral(content, arg, m.index)) continue;
+    if (/^[A-Za-z_]\w*$/.test(arg) && _nearestAssignIsLiteral(content, arg, m.index, deadRanges)) continue;
     findings.push({
       id: id('java-extras:open-redirect', lineOf(m.index), m.index),
       kind: 'sast',
@@ -744,7 +781,7 @@ export function scanJavaBenchExtras(file, raw) {
   function emitHardcodedPassword(varName, matchIndex) {
     const L = lineOf(matchIndex);
     if (cwe259Lines.has(L)) return;
-    if (!_nearestAssignIsLiteral(content, varName, matchIndex)) return;
+    if (!_nearestAssignIsLiteral(content, varName, matchIndex, deadRanges)) return;
     cwe259Lines.add(L);
     findings.push({
       id: id('java-extras:hardcoded-password', L, matchIndex),
