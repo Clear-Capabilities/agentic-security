@@ -160,6 +160,50 @@ class Auth {
   assert.equal(good.length, 0, 'expected no finding when the copied value ultimately traces back to a hardcoded literal');
 });
 
+// SARD_80_F1 W4.C37 — Juliet's own "if (CONST) { data = <literal-or-
+// source> } else { data = null; }" dead-code idiom (confirmed via the
+// public C# Juliet mirror's own CWE90_LDAP_Injection__Connect_tcp_04.cs) —
+// `null` was being treated as a disqualifying non-literal assignment,
+// which is wrong independent of any dead-code question: `null` can never
+// be attacker-controlled data. This bug predates and is independent of
+// this session's parser-cs.js CFG work (confirmed via a direct standalone
+// call bypassing runScan entirely).
+test('LDAP — C# a dead `data = null;` branch does not disqualify an otherwise-all-literal value from being recognized as safe', () => {
+  const good = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void GoodG2B1() {
+    string data;
+    if (PRIVATE_CONST_FALSE) {
+      data = null;
+    } else {
+      data = "foo";
+    }
+    DirectorySearcher search = new DirectorySearcher();
+    search.Filter = "(&(objectClass=user)(employeename=" + data + "))";
+  }
+}
+`);
+  assert.equal(good.length, 0, 'expected no finding — every REAL assignment to data is a hardcoded literal; null is never attacker-controlled');
+});
+
+test('LDAP — a genuinely non-literal assignment alongside an unrelated `null` branch still fires', () => {
+  const bad = scanLDAPInjection('Auth.cs', `
+class Auth {
+  void Bad() {
+    string data;
+    if (PRIVATE_CONST_TRUE) {
+      data = Environment.GetEnvironmentVariable("ADD");
+    } else {
+      data = null;
+    }
+    DirectorySearcher search = new DirectorySearcher();
+    search.Filter = "(&(objectClass=user)(employeename=" + data + "))";
+  }
+}
+`);
+  assert.ok(bad.length >= 1, 'expected a finding — data is genuinely sourced from an environment variable on the live path');
+});
+
 test('LDAP — unrelated string concat WITHOUT LDAP context does NOT fire', () => {
   const out = scanLDAPInjection('util.js', `
 function key(name) { return "(uid=" + name + ")"; }

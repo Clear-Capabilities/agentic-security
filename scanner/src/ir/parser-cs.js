@@ -1007,7 +1007,62 @@ function _linkNodes(nodes, src, dst) {
 // already-trimmed/reconstructed text can. That drift is exactly what cost
 // the PHP port of this same task 3 fix rounds; getting the exact-offset
 // version right from the start avoids repeating it here.
-function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, depth = 0) {
+// SARD_80_F1 W4.C36 — Juliet's OWN "how is the constant represented" sweep
+// (the same exhaustive variant family this session already fixed 4 times
+// for Java: literal → `final`/`const` field → private/effectively-final
+// field → equality comparison) has a direct C# counterpart the W4.C28 fix
+// above never covered: "Flow Variant 04: Control flow: if(PRIVATE_CONST_TRUE)
+// and if(PRIVATE_CONST_FALSE)" (confirmed via the public C# Juliet mirror's
+// own `CWE80_XSS__CWE182_Web_Connect_tcp_04.cs`) uses `private const bool
+// PRIVATE_CONST_TRUE = true;` — a genuine, provable compile-time constant
+// exactly like the literal keyword, but W4.C28's own guard only matched the
+// bare `true`/`false` token, so this idiom fell straight through to the
+// GENERAL (non-literal) if/else path — the one W4.C27 already documented
+// as losing taint entirely when a dead arm's clean assignment sequentially
+// clobbers the live arm's genuine one. Confirmed by direct reproduction:
+// the file above produced ZERO findings at all (not just a suppressed
+// `good()` — `bad()`'s own genuine sink was invisible too), matching that
+// exact documented failure mode precisely. File-scoped (not per-class) for
+// simplicity, matching Juliet's own convention of never reusing a constant
+// name across classes in one file: a `const`/`static readonly` field is
+// unconditionally safe to fold (it cannot be reassigned by definition,
+// unlike Java's separate "effectively final" extension, which needed a
+// reassignment scan precisely because ordinary fields CAN be reassigned).
+function _collectCsConstants(code) {
+  const consts = new Map();
+  const re = /\b(?:const\s+(?:static\s+)?|static\s+readonly\s+|readonly\s+static\s+)(?:bool|int)\s+(\w+)\s*=\s*(true|false|-?\d+)\s*;/g;
+  let m;
+  while ((m = re.exec(code))) {
+    const raw = m[2];
+    consts.set(m[1], raw === 'true' ? true : raw === 'false' ? false : parseInt(raw, 10));
+  }
+  return consts;
+}
+
+// Resolves `condRaw` to a boolean when it's a literal `true`/`false`, a bare
+// reference to a known boolean constant, or an `==`/`!=` comparison of a
+// known int constant against a literal — Juliet's own Flow Variant
+// 04/09/13-style idioms. Returns `null` (not `false`) when unresolvable, so
+// callers can distinguish "genuinely false" from "not a constant at all".
+function _resolveConstCondition(condRaw, classConsts) {
+  const trimmed = condRaw.trim();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (classConsts && classConsts.has(trimmed)) {
+    const v = classConsts.get(trimmed);
+    return typeof v === 'boolean' ? v : null;
+  }
+  const cmp = trimmed.match(/^(\w+)\s*(==|!=)\s*(-?\d+)$/);
+  if (cmp && classConsts && classConsts.has(cmp[1])) {
+    const v = classConsts.get(cmp[1]);
+    if (typeof v !== 'number') return null;
+    const rhs = parseInt(cmp[3], 10);
+    return cmp[2] === '==' ? v === rhs : v !== rhs;
+  }
+  return null;
+}
+
+function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, depth = 0, classConsts = null) {
   if (depth > 12) return prevId;
   let prev = prevId;
   const stmts = _splitStatements(bodyText);
@@ -1074,7 +1129,7 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
             prev = assignId;
           }
         }
-      } else if (kwNorm === 'if' && condRaw !== null && /^(?:true|false)$/.test(condRaw.trim())) {
+      } else if (kwNorm === 'if' && condRaw !== null && _resolveConstCondition(condRaw, classConsts) !== null) {
         // Juliet's `if (true) { … } else { … }` / `if (false) { … } else
         // { … }` constant-condition idiom — its OWN "Flow Variant 02"
         // naming convention, used across dozens of CWEs, not just one —
@@ -1104,7 +1159,7 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
         // the straight-line shape here never HAD two successors to prune.
         // No `if` CFG node is emitted at all for a literal condition:
         // there is no real branch to represent, only dead code to skip.
-        const isTrue = condRaw.trim() === 'true';
+        const isTrue = _resolveConstCondition(condRaw, classConsts);
         const restIf = s.slice(afterHeader);
         const leadIf = restIf.match(/^\s*/)[0].length;
         let liveText = null, liveBaseAbs = null;
@@ -1149,9 +1204,9 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
           }
         }
         if (isTrue) {
-          if (liveText !== null) prev = _buildCfg(liveText, nodes, prev, funcStartLine, lineStarts, liveBaseAbs, depth + 1);
+          if (liveText !== null) prev = _buildCfg(liveText, nodes, prev, funcStartLine, lineStarts, liveBaseAbs, depth + 1, classConsts);
         } else if (elseText !== null) {
-          prev = _buildCfg(elseText, nodes, prev, funcStartLine, lineStarts, elseBaseAbs, depth + 1);
+          prev = _buildCfg(elseText, nodes, prev, funcStartLine, lineStarts, elseBaseAbs, depth + 1, classConsts);
         }
         continue;
       } else if (kwNorm === 'using' && condRaw !== null) {
@@ -1207,11 +1262,11 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
         const closeRel = _matchDelim(rest, lead, '{', '}');
         if (closeRel !== -1) {
           const innerBaseAbs = absStart + afterHeader + lead + 1;
-          prev = _buildCfg(rest.slice(lead + 1, closeRel), nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+          prev = _buildCfg(rest.slice(lead + 1, closeRel), nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1, classConsts);
         }
       } else if (rest.trim()) {
         const innerBaseAbs = absStart + afterHeader;
-        prev = _buildCfg(rest, nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+        prev = _buildCfg(rest, nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1, classConsts);
       }
       continue;
     }
@@ -1220,7 +1275,7 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
     const bare = s.match(/^\{([\s\S]*)\}$/);
     if (bare) {
       const innerBaseAbs = absStart + 1;
-      prev = _buildCfg(bare[1], nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1);
+      prev = _buildCfg(bare[1], nodes, prev, funcStartLine, lineStarts, innerBaseAbs, depth + 1, classConsts);
       continue;
     }
 
@@ -1237,6 +1292,7 @@ export function parseCSharpFile(file, code) {
   if (!file || typeof code !== 'string') return null;
   const functions = [];
   const classRanges = _findClassRanges(code);
+  const classConsts = _collectCsConstants(code);
   METHOD_RE.lastIndex = 0;
   let m;
   while ((m = METHOD_RE.exec(code)) !== null) {
@@ -1349,7 +1405,7 @@ export function parseCSharpFile(file, code) {
     nodes.entry = { kind: 'entry', line: startLine, succ: [], pred: [] };
     nodes.exit  = { kind: 'exit',  line: startLine, succ: [], pred: [] };
     _csNid = 0;
-    const tail = _buildCfg(extracted.body, nodes, 'entry', bodyStartLine, lineStarts, 0, 0);
+    const tail = _buildCfg(extracted.body, nodes, 'entry', bodyStartLine, lineStarts, 0, 0, classConsts);
     nodes[tail].succ.push('exit');
     nodes.exit.pred.push(tail);
     _applyVarTypeRewrite(nodes);

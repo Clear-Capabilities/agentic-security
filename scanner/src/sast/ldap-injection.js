@@ -182,6 +182,32 @@ function _nearestAssignIsLiteral(code, varName, beforeIdx, _depth) {
     sawAny = true;
     const rhs = m[1].trim();
     if (literalRhsRe.test(rhs)) continue;
+    // SARD_80_F1 W4.C37 — `null` is never attacker-controlled data (it is
+    // the ABSENCE of a value, not a value), so an assignment of `data =
+    // null;` can never make a later sink call injectable — treating it as a
+    // disqualifying non-literal was always wrong, independent of any dead-
+    // code/control-flow question. This exact shape is Juliet's own "if
+    // (CONST) { data = <literal-or-source> } else { data = null; }" dead-
+    // code idiom (confirmed via the public C# Juliet mirror's own
+    // CWE90_LDAP_Injection__Connect_tcp_04.cs), but the fix is sound as a
+    // general rule, not merely a benchmark-shape accommodation: BEFORE
+    // this fix, `_nearestAssignIsLiteral` recursed into "null" as if it
+    // might be a traceable bare-identifier variable (`bareIdentRe` matches
+    // it — "null" is alphabetic), found no declaration or assignment for a
+    // variable literally named `null`, and returned `false` from that dead
+    // end — which then disqualified the WHOLE candidate as "not provably
+    // literal" even when every OTHER real assignment was a hardcoded
+    // literal. This bug PRE-DATES and is INDEPENDENT of this session's
+    // parser-cs.js CFG work (confirmed via a direct, standalone call to
+    // `scanLDAPInjection` bypassing runScan/parser-cs.js entirely) — it was
+    // simply never exercised on a real corpus file until an unrelated CFG
+    // fix elsewhere changed which findings survive `engine.js`'s own
+    // downstream dedup, surfacing it. Skipping (not disqualifying, not
+    // affirming) a `null` RHS can only ever ADD suppression where the old
+    // code returned false, never remove a genuine tainted-source detection
+    // — a real source assignment (`data = sr.ReadLine();`, `data =
+    // Environment.GetEnvironmentVariable(...)`) is never itself `null`.
+    if (rhs === 'null') continue;
     if (depth < 3 && rhs !== varName && bareIdentRe.test(rhs) && _nearestAssignIsLiteral(code, rhs, m.index, depth + 1)) continue;
     return false;
   }

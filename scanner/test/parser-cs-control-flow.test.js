@@ -640,3 +640,165 @@ public class C {
     'expected the else-branch assignment to still be present, got: ' + JSON.stringify(nodeList));
   assert.ok(nodeList.some(n => n.kind === 'if'), 'expected a genuine `if` CFG node for the non-constant condition');
 });
+
+// SARD_80_F1 W4.C36 — Juliet's own "Flow Variant 04: Control flow:
+// if(PRIVATE_CONST_TRUE) and if(PRIVATE_CONST_FALSE)" (confirmed via the
+// public C# Juliet mirror's own CWE80_XSS__CWE182_Web_Connect_tcp_04.cs)
+// is the SAME dead-code idiom as the literal if(true)/if(false) case above,
+// except the condition is a `private const bool` field reference — a real,
+// provable compile-time constant, but the literal-only guard above never
+// resolved it, so this whole flow-variant family fell through to the
+// general if/else path and lost taint entirely (the exact W4.C27-documented
+// "NetClient" failure mode). Confirmed by direct reproduction: the real
+// corpus file produced ZERO findings at all before this fix (not just a
+// suppressed good() — bad()'s own genuine sink was invisible too).
+test('parseCSharpFile: if(CONST_FIELD)/else — a private const bool field is resolved and folded exactly like a literal', () => {
+  const code = `
+public class C {
+    private const bool PRIVATE_CONST_TRUE = true;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (PRIVATE_CONST_TRUE) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead else-branch\'s `data = null` must not appear anywhere in the CFG, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the live if-branch\'s `data = sr.ReadLine()` must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+test('parseCSharpFile: end-to-end runScan — a private const bool condition resolves through the full pipeline (real corpus shape)', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-const-field-'));
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Bad {
+    private const bool PRIVATE_CONST_TRUE = true;
+    public void Run(StreamReader sr) {
+        string data;
+        if (PRIVATE_CONST_TRUE) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const badResult = await runScan(dir, { deep: true, deepInCi: true });
+  const badFindings = (badResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.ok(badFindings.length >= 1,
+    `expected a CWE-78 finding through if(PRIVATE_CONST_TRUE)/else, got: ${JSON.stringify(badResult.scan.findings)}`);
+
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.IO;
+public class Good {
+    private const bool PRIVATE_CONST_FALSE = false;
+    public void Run(StreamReader sr) {
+        string data;
+        if (PRIVATE_CONST_FALSE) {
+            data = sr.ReadLine();
+        } else {
+            data = "foo";
+        }
+        Process.Start(data);
+    }
+}
+`);
+  const goodResult = await runScan(dir, { deep: true, deepInCi: true });
+  const goodFindings = (goodResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.equal(goodFindings.length, 0,
+    `expected no CWE-78 finding for the if(PRIVATE_CONST_FALSE)/else good-source counterpart, got: ${JSON.stringify(goodFindings)}`);
+});
+
+// Juliet's own "Flow Variant 13: if(IO.STATIC_FINAL_FIVE==5) and
+// if(IO.STATIC_FINAL_FIVE!=5)" sibling shape (same-file version, since
+// cross-file constant resolution is out of scope) — an int constant
+// compared with `==`/`!=`.
+test('parseCSharpFile: if(CONST_FIELD == N)/else — an int const field compared with == is resolved', () => {
+  const code = `
+public class C {
+    private const int PRIVATE_CONST_FIVE = 5;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (PRIVATE_CONST_FIVE == 5) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  assert.ok(fn);
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead else-branch must not appear, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
+    'the live if-branch must still be present, got: ' + JSON.stringify(nodeList));
+});
+
+// Precision control: a `static readonly` (not `const`) field is the OTHER
+// real C# immutable-field idiom Juliet's own naming convention uses
+// elsewhere ("if(IO.staticTrue)" flow variants) and must resolve the same
+// way; an ordinary MUTABLE field with the same name/shape must NOT.
+test('parseCSharpFile: a `static readonly bool` field folds; a plain mutable field with the same shape does NOT', () => {
+  const readonlyCode = `
+public class C {
+    private static readonly bool STATIC_READONLY_TRUE = true;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (STATIC_READONLY_TRUE) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const roIr = parseCSharpFile('C.cs', readonlyCode);
+  const roFn = roIr.functions.find(f => bareTail(f.name) === 'Bad');
+  const roNodes = Object.values(roFn.cfg.nodes);
+  assert.ok(!roNodes.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'a static readonly field must be folded, dead branch must not appear');
+
+  const mutableCode = `
+public class C {
+    private static bool notActuallyReadonly = true;
+    public void Bad(System.IO.StreamReader sr) {
+        string data;
+        if (notActuallyReadonly) {
+            data = sr.ReadLine();
+        } else {
+            data = null;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const mutIr = parseCSharpFile('C.cs', mutableCode);
+  const mutFn = mutIr.functions.find(f => bareTail(f.name) === 'Bad');
+  const mutNodes = Object.values(mutFn.cfg.nodes);
+  assert.ok(mutNodes.some(n => n.kind === 'if'),
+    'a plain mutable field must NOT be folded — a genuine `if` CFG node is still expected, got: ' + JSON.stringify(mutNodes));
+});
