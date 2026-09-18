@@ -57,25 +57,142 @@ const RE = {
 // constants — this fix inherits BOTH capabilities for free) to skip an
 // assignment whose line falls inside a provably-dead branch when computing
 // `lastAnyEnd`.
-function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges) {
+// SARD_80_F1 W5.23 — ports java-bench-extras.js's W4.J37/W4.J38 cross-method
+// literal resolution (same-file callee-return, same-method copy-chain,
+// argument-passing via all call sites) into this file's OWN independent copy
+// of the "nearest assignment" heuristic. Confirmed via a real-corpus sweep
+// that CWE-89's own remaining fp bucket includes an even ~11-file share for
+// EACH of Juliet's Flow Variant 31 (copy)/41 (argument)/42 (return) suffixes,
+// the exact three idioms java-bench-extras.js's CWE-259/601 detectors already
+// needed this same fix for — this file never received the port. Kept as a
+// SEPARATE copy rather than a shared import, matching this file's own
+// established convention (see `_trailingIdentIsLiteral`'s header comment)
+// of independently-tuned duplicates rather than a cross-file dependency.
+// Regexes below are copied VERBATIM in their already-ReDoS-fixed form (see
+// java-bench-extras.js's own W4.J39 fix comments) — never reintroduce a
+// lazy, `\s`-inclusive "return type" prefix match; neither function below
+// ever reads that prefix, so it was never needed for correctness.
+const _CALLEE_RETURN_LITERAL_CACHE_DEPTH = 4;
+
+function _resolveCalleeReturnIsLiteral(content, calleeName, deadRanges, _depth) {
+  const depth = _depth || 0;
+  if (depth >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedCallee = calleeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declRe = new RegExp(`\\b${escapedCallee}\\s*\\([^)]*\\)\\s*(?:throws\\s+[\\w.,\\s]+)?\\s*\\{`, 'g');
+  const dm = declRe.exec(content);
+  if (!dm) return false;
+  const bodyStart = dm.index + dm[0].length;
+  let braceDepth = 1, i = bodyStart;
+  while (i < content.length && braceDepth > 0) {
+    if (content[i] === '{') braceDepth++;
+    else if (content[i] === '}') braceDepth--;
+    i++;
+  }
+  const body = content.slice(bodyStart, i - 1);
+  const returnRe = /\breturn\s+([^;]+);/g;
+  const returns = [];
+  let rm;
+  while ((rm = returnRe.exec(body))) returns.push({ expr: rm[1].trim(), idx: bodyStart + rm.index });
+  if (returns.length !== 1) return false;
+  const { expr, idx } = returns[0];
+  if (/^"[^"]*"$/.test(expr)) return true;
+  if (/^[A-Za-z_]\w*$/.test(expr)) {
+    return _trailingIdentIsLiteral(content, expr, idx, deadRanges, depth + 1);
+  }
+  return false;
+}
+
+function _splitTopLevelCommas(text) {
+  const parts = [];
+  let depth = 0, cur = '', inStr = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      cur += c;
+      if (c === '\\') { cur += text[++i] || ''; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; cur += c; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '' || parts.length) parts.push(cur);
+  return parts;
+}
+
+function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth) {
+  const depth0 = _depth || 0;
+  if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const methodDeclRe = /\b(?!if\b|for\b|while\b|switch\b|catch\b|synchronized\b|do\b|else\b|return\b|new\b)([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let enclosing = null, dm;
+  while ((dm = methodDeclRe.exec(content)) && dm.index < beforeIdx) enclosing = dm;
+  if (!enclosing) return false;
+  const methodName = enclosing[1];
+  const params = _splitTopLevelCommas(enclosing[2]).map(p => p.trim()).filter(Boolean);
+  const paramIdx = params.findIndex((p) => new RegExp(`\\b${escapedVar}$`).test(p));
+  if (paramIdx === -1) return false;
+  const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+  let cm, sawRealCallSite = false;
+  while ((cm = callRe.exec(content))) {
+    const argsStart = cm.index + cm[0].length;
+    let braceDepth = 1, i = argsStart;
+    while (i < content.length && braceDepth > 0) {
+      if (content[i] === '(') braceDepth++;
+      else if (content[i] === ')') braceDepth--;
+      i++;
+    }
+    const afterClose = content.slice(i).match(/^\s*(\{|throws)/);
+    if (afterClose) continue;
+    const args = _splitTopLevelCommas(content.slice(argsStart, i - 1)).map((a) => a.trim());
+    if (paramIdx >= args.length) return false;
+    sawRealCallSite = true;
+    const argExpr = args[paramIdx];
+    if (/^"[^"]*"$/.test(argExpr)) continue;
+    if (/^[A-Za-z_]\w*$/.test(argExpr) && _trailingIdentIsLiteral(content, argExpr, cm.index, deadRanges, depth0 + 1)) continue;
+    return false;
+  }
+  return sawRealCallSite;
+}
+
+function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDepth) {
   if (!varName) return false;
+  if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
-  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
   const lineOfIdx = (idx) => code.substring(0, idx).split('\n').length;
   let lastLiteralEnd = -1, m;
   while ((m = literalRe.exec(code)) && m.index < beforeIdx) {
     if (ranges.length && isLineInDeadRange(lineOfIdx(m.index), ranges)) continue;
     lastLiteralEnd = m.index + m[0].length;
   }
-  if (lastLiteralEnd === -1) return false;
-  let lastAnyEnd = -1;
+  let lastAnyEnd = -1, lastAnyRhs = null, lastAnyIdx = -1;
   while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) {
     if (ranges.length && isLineInDeadRange(lineOfIdx(m.index), ranges)) continue;
     lastAnyEnd = m.index + m[0].length;
+    lastAnyRhs = m[1].trim();
+    lastAnyIdx = m.index;
   }
-  return lastLiteralEnd === lastAnyEnd;
+  // Same-file callee-return resolution (Flow Variant 42).
+  if (lastAnyRhs && /^[A-Za-z_]\w*\s*\([^()]*\)$/.test(lastAnyRhs)) {
+    const calleeName = lastAnyRhs.slice(0, lastAnyRhs.indexOf('(')).trim();
+    if (_resolveCalleeReturnIsLiteral(code, calleeName, ranges, _calleeDepth)) return true;
+  }
+  // Same-method copy-chain resolution (Flow Variant 31).
+  if (lastAnyRhs && lastAnyRhs !== 'null' && /^[A-Za-z_]\w*$/.test(lastAnyRhs) && lastAnyRhs !== varName) {
+    if (_trailingIdentIsLiteral(code, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
+  }
+  if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
+    // Argument-passing resolution via all call sites (Flow Variant 41).
+    return _resolveParamLiteralViaAllCallSites(code, varName, beforeIdx, deadRanges, _calleeDepth);
+  }
+  return true;
 }
 
 const META = {

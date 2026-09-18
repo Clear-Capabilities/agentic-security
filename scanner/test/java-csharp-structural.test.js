@@ -79,6 +79,103 @@ test('Java SQLi — a second tainted term after a suppressible one still fires (
   assert.ok(has(f, 'CWE-89'), 'a safe FIRST term must not suppress a genuinely tainted second term');
 });
 
+// SARD_80_F1 W5.23 — ports java-bench-extras.js's W4.J37 (same-file callee-
+// return literal resolution, Flow Variant 42) and W4.J38 (same-method
+// copy-chain, Flow Variant 31; argument-passing via all call sites, Flow
+// Variant 41) into this file's own independent `_trailingIdentIsLiteral`.
+// Found via a real-corpus sweep of CWE-89's remaining fp bucket, which
+// showed an even ~11-file share for each of these three Juliet flow variants
+// — the identical idioms java-bench-extras.js already needed this fix for.
+test('Java SQLi — a same-method copy of a hardcoded literal is suppressed (Flow Variant 31)', () => {
+  const good = scanJavaStructural('S.java', 'void m(){ String data = "foo"; String data2 = data; Statement s = null; s.execute("insert into t (a) values (\'"+data2+"\')"); }');
+  assert.ok(none(good, 'CWE-89'), 'data2 is a same-method copy of a provable literal');
+});
+
+test('Java SQLi — a same-method copy of a genuinely tainted value still fires (Flow Variant 31)', () => {
+  const bad = scanJavaStructural('S.java', 'void m(){ String data = System.getenv("X"); String data2 = data; Statement s = null; s.execute("insert into t (a) values (\'"+data2+"\')"); }');
+  assert.ok(has(bad, 'CWE-89'), 'data2 copies a genuinely tainted value — must not be suppressed');
+});
+
+test('Java SQLi — a parameter whose EVERY real call site supplies a literal is suppressed (Flow Variant 41)', () => {
+  const good = scanJavaStructural('S.java', `
+    private void sink(String data) {
+      Statement s = null;
+      s.execute("insert into t (a) values ('"+data+"')");
+    }
+    private void goodCaller() {
+      String data = "foo";
+      sink(data);
+    }
+  `);
+  assert.ok(none(good, 'CWE-89'), 'the only real call site supplies a hardcoded literal');
+});
+
+test('Java SQLi — a parameter with a non-literal call site still fires (Flow Variant 41)', () => {
+  const bad = scanJavaStructural('S.java', `
+    private void sink(String data) {
+      Statement s = null;
+      s.execute("insert into t (a) values ('"+data+"')");
+    }
+    private void badCaller() {
+      String data = System.getenv("X");
+      sink(data);
+    }
+  `);
+  assert.ok(has(bad, 'CWE-89'), 'a genuinely tainted call site exists — must not be suppressed');
+});
+
+test('Java SQLi — a value returned from a same-file helper that always returns a literal is suppressed (Flow Variant 42)', () => {
+  const good = scanJavaStructural('S.java', `
+    private String source() {
+      return "foo";
+    }
+    private void m() {
+      String data = source();
+      Statement s = null;
+      s.execute("insert into t (a) values ('"+data+"')");
+    }
+  `);
+  assert.ok(none(good, 'CWE-89'), 'source() always returns a hardcoded literal');
+});
+
+test('Java SQLi — a same-file helper with 2+ ambiguous returns still fires (Flow Variant 42 control)', () => {
+  const bad = scanJavaStructural('S.java', `
+    private String source(boolean flag) {
+      if (flag) { return "foo"; }
+      return System.getenv("X");
+    }
+    private void m() {
+      String data = source(true);
+      Statement s = null;
+      s.execute("insert into t (a) values ('"+data+"')");
+    }
+  `);
+  assert.ok(has(bad, 'CWE-89'), '2+ returns is ambiguous — must fail closed and still fire');
+});
+
+// SARD_80_F1 W4.J39's ReDoS regression, ported here since this file's own
+// `_resolveCalleeReturnIsLiteral`/`_resolveParamLiteralViaAllCallSites`
+// carry the SAME already-fixed regex shapes — a long comment-blanked
+// whitespace run before a real sink must never hang.
+test('Java SQLi ReDoS regression: a long comment-blanked whitespace run before a real sink does not hang', () => {
+  const longWhitespaceRun = ' '.repeat(20000) + '\n'.repeat(200);
+  const src = `${longWhitespaceRun}
+    private void sink(String data) {
+      Statement s = null;
+      s.execute("insert into t (a) values ('"+data+"')");
+    }
+    private void goodCaller() {
+      String data = "foo";
+      sink(data);
+    }
+  `;
+  const t0 = Date.now();
+  const findings = scanJavaStructural('S.java', src);
+  const elapsed = Date.now() - t0;
+  assert.ok(elapsed < 2000, `expected well under 2s, took ${elapsed}ms — a ReDoS may have been reintroduced`);
+  assert.ok(none(findings, 'CWE-89'), 'the literal still resolves correctly despite the leading whitespace run');
+});
+
 test('Java path traversal — new File concat, guard suppresses (CWE-22)', () => {
   assert.ok(has(scanJavaStructural('F.java', 'byte[] read(String name){ return new FileInputStream(new File("/var/data/" + name)).readAllBytes(); }'), 'CWE-22'));
   assert.ok(none(scanJavaStructural('F.java', 'byte[] read(String name){ Path w = base.resolve(name).normalize().toRealPath(); if(!w.startsWith(base)) throw new Exception(); return Files.readAllBytes(w); }'), 'CWE-22'));
