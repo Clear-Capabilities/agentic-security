@@ -219,6 +219,56 @@ test('Java SQLi — a value passed via a private class field (all-literal) does 
   assert.ok(has(tainted, 'CWE-89'), 'the field is assigned a genuinely tainted value');
 });
 
+// SARD_80_F1 W5.35 — Juliet's own "Flow Variant 15: switch(6) and switch(7)"
+// idiom, confirmed via a real-corpus fp: a sink call sitting inside a
+// switch-case that never matches its scrutinee (`switch(8){case 7: <sink>}`)
+// is unreachable regardless of whether the value reaching it is tainted —
+// the literal-check alone can never suppress this shape, since the value
+// genuinely IS tainted, just dead-code-unreachable.
+test('Java SQLi — a sink inside a switch-case that never matches its scrutinee does NOT fire, even with a genuinely tainted value (CWE-89)', () => {
+  const src = `
+    class S {
+      void h() throws Throwable {
+        String data;
+        switch (6) {
+        case 6:
+          data = System.getenv("ADD");
+          break;
+        default:
+          data = null;
+          break;
+        }
+        switch (8) {
+        case 7:
+          Statement s = null;
+          s.execute("insert into users (status) values (\\'updated\\') where name=\\'"+data+"\\'");
+          break;
+        default:
+          break;
+        }
+      }
+    }`;
+  assert.ok(none(scanJavaStructural('S.java', src), 'CWE-89'), 'case 7 never matches scrutinee 8; the sink inside it is unreachable');
+});
+test('Java SQLi — a sink inside a switch-case that DOES match its scrutinee still fires (CWE-89)', () => {
+  const src = `
+    class S {
+      void bad() throws Throwable {
+        String data;
+        switch (6) {
+        case 6:
+          data = System.getenv("ADD");
+          Statement s = null;
+          s.execute("insert into users (status) values (\\'updated\\') where name=\\'"+data+"\\'");
+          break;
+        default:
+          break;
+        }
+      }
+    }`;
+  assert.ok(has(scanJavaStructural('S.java', src), 'CWE-89'), 'case 6 matches scrutinee 6; the sink inside it is genuinely reachable');
+});
+
 test('C# hardcoded secret — split-concat literals in a credential field (CWE-798)', () => {
   assert.ok(has(scanCsharpStructural('Config.cs', 'public const string ApiKey = "sk_" + "live_1234567890abcdef1234567890abcdef";'), 'CWE-798'));
   // env-var lookup → clean

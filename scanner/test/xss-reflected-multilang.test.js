@@ -349,6 +349,51 @@ test('Java — a value passed via a private class field (genuinely tainted) stil
   assert.ok(fires(['S.java', src]), 'the field is assigned a genuinely tainted value');
 });
 
+// SARD_80_F1 W5.35 — Juliet's own "Flow Variant 15: switch(6) and switch(7)"
+// idiom: a sink call sitting inside a switch-case that never matches its own
+// scrutinee is unreachable regardless of whether the value is tainted.
+test('Java — a sink inside a switch-case that never matches its scrutinee does NOT fire, even with a genuinely tainted value', () => {
+  const src = `
+    class S {
+      void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        switch (6) {
+        case 6:
+          data = r.readLine();
+          break;
+        default:
+          data = null;
+          break;
+        }
+        switch (8) {
+        case 7:
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+          break;
+        default:
+          break;
+        }
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'case 7 never matches scrutinee 8; the sink inside it is unreachable');
+});
+test('Java — a sink inside a switch-case that DOES match its scrutinee still fires', () => {
+  const src = `
+    class S {
+      void bad(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        switch (6) {
+        case 6:
+          data = r.readLine();
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+          break;
+        default:
+          break;
+        }
+      }
+    }`;
+  assert.ok(fires(['S.java', src]), 'case 6 matches scrutinee 6; the sink inside it is genuinely reachable');
+});
+
 test('non-matching languages / files produce nothing', () => {
   assert.deepEqual(x('a.js', 'res.send("<h1>" + req.query.q + "</h1>")'), []);
   assert.deepEqual(x('ok.go', 'func add(a, b int) int { return a + b }'), []);

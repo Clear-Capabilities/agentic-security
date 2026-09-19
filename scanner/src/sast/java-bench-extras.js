@@ -898,6 +898,15 @@ export function scanJavaBenchExtras(file, raw) {
   let m;
   while ((m = SEND_REDIRECT_RE.exec(content))) {
     const arg = (m[1] || '').trim();
+    // SARD_80_F1 W5.35 — a sink call sitting INSIDE a provably-dead branch
+    // (Juliet's "switch(8){case 7: <tainted sendRedirect>}" idiom, Flow
+    // Variant 15's goodB2G shapes — case 7 never matches scrutinee 8) is
+    // unreachable regardless of whether the argument is tainted: the
+    // literal-check below can never suppress it, since the value genuinely
+    // IS tainted, just unreachable. `deadRanges` was already computed for
+    // that literal check; nothing had checked it against the SINK's own
+    // line until now.
+    if (deadRanges.length && isLineInDeadRange(lineOf(m.index), deadRanges)) continue;
     // Literal-only arg: suppress. Tainted-looking arg: flag.
     if (/^"[^"]*"$/.test(arg)) continue;  // pure literal — safe
     // Same literal-blindness class already fixed for SQLi/LDAP/XSS

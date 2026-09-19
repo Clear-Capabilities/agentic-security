@@ -642,11 +642,60 @@ test('CWE-601: a same-named LOCAL variable (no access modifier) is never mistake
                 response.sendRedirect(shared);
             }
         }
-        private String otherSource() { return null; }
+        private String otherSource() { return System.getenv("X"); }
     }
   `;
   const hits = cwe601Hits(src);
   assert.equal(hits.length, 1, 'shared here is a plain local, never declared with an access modifier — must not be resolved as a field and must fire (unresolvable source)');
+});
+
+// SARD_80_F1 W5.35 — Juliet's own "Flow Variant 15: switch(6) and switch(7)"
+// idiom: a sink call sitting inside a switch-case that never matches its own
+// scrutinee is unreachable regardless of whether the argument is tainted.
+test('CWE-601: sendRedirect inside a switch-case that never matches its scrutinee does NOT fire, even with a genuinely tainted argument', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void h(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            switch (6) {
+            case 6:
+                data = System.getenv("X");
+                break;
+            default:
+                data = null;
+                break;
+            }
+            switch (8) {
+            case 7:
+                response.sendRedirect(data);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'case 7 never matches scrutinee 8; the sendRedirect inside it is unreachable');
+});
+test('CWE-601: sendRedirect inside a switch-case that DOES match its scrutinee still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            switch (6) {
+            case 6:
+                data = System.getenv("X");
+                response.sendRedirect(data);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'case 6 matches scrutinee 6; the sendRedirect inside it is genuinely reachable');
 });
 
 // SARD_80_F1 W4.J39 — a confirmed, severe ReDoS regression, caught during

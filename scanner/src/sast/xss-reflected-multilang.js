@@ -339,6 +339,12 @@ export function scanXssReflectedMultilang(fp, raw) {
       if (m) { sinkMatch = m; break; }
     }
     if (!sinkMatch) continue;
+    // SARD_80_F1 W5.35 — a sink call sitting INSIDE a provably-dead branch
+    // (Juliet's "switch(8){case 7: <tainted sink>}" idiom) is unreachable
+    // regardless of whether the value reaching it is tainted — the
+    // literal-check below can never suppress this shape, since the value
+    // genuinely IS tainted, just unreachable.
+    if (lang === LANGS.java && deadRanges.length && isLineInDeadRange(i + 1, deadRanges)) continue;
     // SARD_80_F1 W3.x — a captured trailing identifier (Java's sink patterns
     // only) that's provably a hardcoded literal at this point is not a real
     // XSS flow; see `_nearestAssignIsLiteral`'s header comment.

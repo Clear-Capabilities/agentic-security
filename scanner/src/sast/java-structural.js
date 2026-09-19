@@ -263,8 +263,20 @@ export function scanJavaStructural(fp, raw) {
     const r = new RegExp(re.source, re.flags);
     let m;
     while ((m = r.exec(code))) {
+      const line = lineOf(code, m.index);
+      // SARD_80_F1 W5.35 — a sink call sitting INSIDE a provably-dead branch
+      // (Juliet's own "switch(8){case 7: <tainted sink>}" idiom, Flow
+      // Variant 15's goodB2G shapes — case 7 never matches scrutinee 8) is
+      // unreachable regardless of whether the value reaching it is tainted:
+      // `deadRanges` was already computed for the LITERAL-CHECK below, but
+      // nothing checked it against the SINK'S OWN line. Confirmed via a
+      // real-corpus fp (CWE89_SQL_Injection__*_15.java's goodB2G1/2) that
+      // `_trailingIdentIsLiteral` correctly found the tainted socket-read
+      // value (so the literal check alone could never suppress this — the
+      // value genuinely IS tainted, just unreachable) before this fix.
+      if (deadRanges.length && isLineInDeadRange(line, deadRanges)) continue;
       if (_trailingIdentIsLiteral(code, m[1], m.index, deadRanges)) continue;
-      emit(key, lineOf(code, m.index), META[key]);
+      emit(key, line, META[key]);
     }
   }
 

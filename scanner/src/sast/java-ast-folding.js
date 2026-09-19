@@ -507,6 +507,7 @@ function walkSwitch(switchNode, scope, out) {
   // For each switchBlockStatementGroup, check if its case label matches `v`.
   const groups = blockNode.children?.switchBlockStatementGroup || [];
   let matchedAny = false;
+  const defaultGroups = [];
   for (const g of groups) {
     const labels = g.children?.switchLabel || [];
     let groupMatches = false;
@@ -542,11 +543,34 @@ function walkSwitch(switchNode, scope, out) {
     if (groupMatches) matchedAny = true;
     else {
       // Group does NOT match scrutinee → its block is dead (unless default and nothing else matched).
-      // We'll resolve default later. For now, conservatively skip "default-only" groups.
+      // Resolved in a second pass below, once every group's own match state
+      // is known (a "default"-only group's own dead-ness depends on whether
+      // ANY OTHER group in the switch matched — information not available
+      // until the whole switch has been scanned once).
       const onlyDefault = labels.every(l => l.children?.Default);
-      if (onlyDefault) continue;
+      if (onlyDefault) { defaultGroups.push(g); continue; }
       const r = rangeOf(g);
       if (r) out.push({ startLine: r.startLine, endLine: r.endLine, reason: 'unreachable case (switch on constant)' });
+    }
+  }
+  // SARD_80_F1 W5.35 — `matchedAny` was computed above but never actually
+  // consulted: the comment here said "we'll resolve default later," but
+  // nothing ever did, leaving `default:` permanently exempt from dead-code
+  // marking regardless of whether some OTHER case explicitly matched the
+  // scrutinee. Confirmed via a real-corpus fp (Juliet's own Flow Variant 15,
+  // `switch(6){case 6: data="foo"; default: data=null;}` — `case 6` matches
+  // 6, so `default` is provably dead, but the pre-fix code never marked it,
+  // leaving `_trailingIdentIsLiteral`'s backward scan seeing the DEAD
+  // `default: data=null;` as the "textually nearest" assignment instead of
+  // the genuinely-live `case 6: data="foo";`). Now that every group's own
+  // match state is known, a `default`-only group is dead exactly when some
+  // OTHER group explicitly matched — the one case this function can prove
+  // unreachable with total confidence, since Java guarantees at most one
+  // group runs per switch execution.
+  if (matchedAny) {
+    for (const g of defaultGroups) {
+      const r = rangeOf(g);
+      if (r) out.push({ startLine: r.startLine, endLine: r.endLine, reason: 'unreachable default (switch on constant, another case matched)' });
     }
   }
 }

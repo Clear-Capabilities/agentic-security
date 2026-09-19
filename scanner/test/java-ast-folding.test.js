@@ -326,6 +326,57 @@ test('a same-class method with 2+ statements in its body is NOT folded (ambiguou
   assert.equal(ranges.length, 0, 'a multi-statement body is ambiguous and must not be folded');
 });
 
+// SARD_80_F1 W5.35 — `walkSwitch` computed `matchedAny` but never actually
+// consulted it: a `default:` group was UNCONDITIONALLY exempted from
+// dead-code marking ("we'll resolve default later" — never finished),
+// regardless of whether some OTHER case explicitly matched the scrutinee
+// and made `default` provably unreachable. Confirmed via a real-corpus fp
+// (Juliet's own Flow Variant 15: `switch(6){case 6: data="foo"; default:
+// data=null;}` — case 6 matches 6, so default can never run, but the
+// backward literal-scan saw the un-marked `default: data=null;` as the
+// "nearest" assignment instead of the genuinely-live `case 6: data="foo";`).
+test('a `default:` group is marked dead when another case explicitly matches the scrutinee', () => {
+  const src = `
+    public class Bad {
+        public void bad() {
+            String data;
+            switch (6) {
+            case 6:
+                data = "foo";
+                break;
+            default:
+                data = null;
+                break;
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  assert.equal(ranges.length, 1, `expected exactly one dead range (the default group), got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'unreachable default (switch on constant, another case matched)');
+});
+test('a `default:` group is NOT marked dead when no other case matches the scrutinee', () => {
+  const src = `
+    public class Bad {
+        public void bad() {
+            String data;
+            switch (5) {
+            case 6:
+                data = null;
+                break;
+            default:
+                data = "foo";
+                break;
+            }
+        }
+    }
+  `;
+  const ranges = deadBranchRanges(src);
+  // Only case 6 (which does NOT match scrutinee 5) is dead; default is live.
+  assert.equal(ranges.length, 1, `expected exactly one dead range (case 6 only), got: ${JSON.stringify(ranges)}`);
+  assert.equal(ranges[0].reason, 'unreachable case (switch on constant)');
+});
+
 test('isLineInDeadRange: boundary lines are inclusive, adjacent lines are not', () => {
   const ranges = [{ startLine: 10, endLine: 20 }];
   assert.ok(isLineInDeadRange(10, ranges));
