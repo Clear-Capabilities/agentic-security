@@ -1194,6 +1194,68 @@ function _resolveConstCondition(condRaw, classConsts) {
   return null;
 }
 
+// SARD_80_F1 W5.36 — resolves a `switch` scrutinee to a constant INT value
+// when it's a bare integer literal or a known int constant (reusing the SAME
+// `classConsts` map `_resolveConstCondition`'s own `cmp` branch already
+// consults) — the switch-scrutinee analog of that function's boolean
+// resolution, needed separately because a switch's scrutinee is a VALUE to
+// match against case labels, not a boolean condition. Returns `null` (not
+// a number) when unresolvable, matching that function's own convention.
+function _resolveConstIntValue(expr, classConsts) {
+  const trimmed = expr.trim();
+  if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+  if (classConsts && classConsts.has(trimmed)) {
+    const v = classConsts.get(trimmed);
+    return typeof v === 'number' ? v : null;
+  }
+  return null;
+}
+
+// Splits a switch statement's braced BODY text into label segments —
+// `{kind:'case', value, bodyStart, bodyEnd}` or `{kind:'default', bodyStart,
+// bodyEnd}` — scanning at bracket/string-aware DEPTH 0 so a `case`/`default`
+// keyword appearing inside a nested block, string, or (extremely rare in
+// this corpus) nested switch is never mistaken for a real label. `bodyStart`
+// is the offset immediately after the label's own `:`; `bodyEnd` is the next
+// label's own start (or the whole body's length for the last label) — the
+// exact text a live case's statements occupy, `break;` and all (never
+// stripped: it is simply never reached during recursion since nothing reads
+// past the live section's own end).
+function _splitSwitchCases(bodyText) {
+  const labels = [];
+  let depth = 0, inStr = null, escape = false;
+  for (let i = 0; i < bodyText.length; i++) {
+    const c = bodyText[i];
+    if (escape) { escape = false; continue; }
+    if (inStr) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; continue; }
+    if (c === '{' || c === '(' || c === '[') { depth++; continue; }
+    if (c === '}' || c === ')' || c === ']') { depth--; continue; }
+    if (depth !== 0) continue;
+    const atBoundary = i === 0 || /[\s;}]/.test(bodyText[i - 1]);
+    if (!atBoundary) continue;
+    const rest = bodyText.slice(i);
+    const caseM = rest.match(/^case\s+(-?\d+)\s*:/);
+    if (caseM) {
+      labels.push({ kind: 'case', value: parseInt(caseM[1], 10), labelStart: i, bodyStart: i + caseM[0].length });
+      continue;
+    }
+    const defM = rest.match(/^default\s*:/);
+    if (defM) {
+      labels.push({ kind: 'default', labelStart: i, bodyStart: i + defM[0].length });
+      continue;
+    }
+  }
+  for (let idx = 0; idx < labels.length; idx++) {
+    labels[idx].bodyEnd = idx + 1 < labels.length ? labels[idx + 1].labelStart : bodyText.length;
+  }
+  return labels;
+}
+
 function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, depth = 0, classConsts = null) {
   if (depth > 12) return prevId;
   let prev = prevId;
@@ -1339,6 +1401,50 @@ function _buildCfg(bodyText, nodes, prevId, funcStartLine, lineStarts, baseAbs, 
           if (liveText !== null) prev = _buildCfg(liveText, nodes, prev, funcStartLine, lineStarts, liveBaseAbs, depth + 1, classConsts);
         } else if (elseText !== null) {
           prev = _buildCfg(elseText, nodes, prev, funcStartLine, lineStarts, elseBaseAbs, depth + 1, classConsts);
+        }
+        continue;
+      } else if (kwNorm === 'switch' && condRaw !== null && _resolveConstIntValue(condRaw, classConsts) !== null) {
+        // SARD_80_F1 W5.36 — Juliet's own "Flow Variant 15: switch(6) and
+        // switch(7)" idiom (confirmed via the public C# mirror's own
+        // CWE78_OS_Command_Injection__NetClient_15.cs), the switch-scrutinee
+        // sibling of the already-modeled `if(true)/if(false)` idiom just
+        // above. Before this fix, `switch` had NO constant-folding at all —
+        // the general fallback below builds an `if`-shaped CFG node whose
+        // `cond` is never consulted for branching, then recurses into the
+        // WHOLE braced body as ONE STRAIGHT-LINE SEQUENTIAL block, meaning
+        // `case 6: data = tainted; break; default: data = null; break;`
+        // executes BOTH assignments in sequence, with whichever is
+        // TEXTUALLY LAST always clobbering the other — silently destroying
+        // real taint (a false negative when the tainted case is textually
+        // first) or fabricating a false positive/negative for the opposite
+        // ordering, entirely independent of which case the switch would
+        // ACTUALLY take at runtime. Resolves ONLY when the scrutinee is a
+        // constant int (bare literal or a known int class-constant, via
+        // `_resolveConstIntValue` — the switch-scrutinee analog of
+        // `_resolveConstCondition`'s own boolean resolution); when it is,
+        // finds the matching `case`, falls back to `default` if no case
+        // matches, and recurses ONLY into that one section's own text —
+        // exactly mirroring the if(true)/if(false) pattern's "no CFG node
+        // for a literal condition, only the live branch's text" shape. A
+        // switch with neither a matching case nor any `default` is a
+        // genuine C# no-op (nothing runs) and is silently skipped, matching
+        // real language semantics.
+        const restSw = s.slice(afterHeader);
+        const leadSw = restSw.match(/^\s*/)[0].length;
+        if (restSw[leadSw] === '{') {
+          const closeRel = _matchDelim(restSw, leadSw, '{', '}');
+          if (closeRel !== -1) {
+            const scrutineeVal = _resolveConstIntValue(condRaw, classConsts);
+            const bodyText = restSw.slice(leadSw + 1, closeRel);
+            const bodyBaseAbs = absStart + afterHeader + leadSw + 1;
+            const cases = _splitSwitchCases(bodyText);
+            let live = cases.find(c => c.kind === 'case' && c.value === scrutineeVal);
+            if (!live) live = cases.find(c => c.kind === 'default');
+            if (live) {
+              const liveText = bodyText.slice(live.bodyStart, live.bodyEnd);
+              prev = _buildCfg(liveText, nodes, prev, funcStartLine, lineStarts, bodyBaseAbs + live.bodyStart, depth + 1, classConsts);
+            }
+          }
         }
         continue;
       } else if (kwNorm === 'using' && condRaw !== null) {

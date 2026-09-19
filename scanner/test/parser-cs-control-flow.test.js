@@ -1076,3 +1076,177 @@ public class C {
   assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'sr.ReadLine'),
     'the dead if-branch must not appear, got: ' + JSON.stringify(nodeList));
 });
+
+// SARD_80_F1 W5.36 — Juliet's own "Flow Variant 15: switch(6) and switch(7)"
+// idiom (confirmed via the public C# mirror's own
+// CWE78_OS_Command_Injection__NetClient_15.cs): the switch-scrutinee sibling
+// of the already-modeled if(true)/if(false) idiom. Before this fix, switch
+// had NO constant-folding at all — the general fallback built a CFG node
+// whose `cond` was never consulted for branching, then recursed into the
+// WHOLE braced body as one straight-line sequential block, letting
+// `default: data = null;` unconditionally clobber `case 6: data = tainted;`
+// regardless of which case would actually run.
+test('parseCSharpFile: switch(6){case 6:...;default:...;} — the matching case is live, default is dead', () => {
+  const code = `
+public class C {
+    public void Bad(HttpRequest request) {
+        string data;
+        switch (6) {
+        case 6:
+            data = request.Params.Get("id");
+            break;
+        default:
+            data = null;
+            break;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'request.Params.Get'),
+    'the matching case (6) must be live, got: ' + JSON.stringify(nodeList));
+  // The dead default's own `data = null;` assign node must not exist at all
+  // (excluding the bare `string data;` declaration itself, which is also
+  // lowered as an assign node with no real source).
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'ident' && n.source.name === 'null'),
+    'the dead default assignment (data = null) must be pruned entirely, got: ' + JSON.stringify(nodeList));
+});
+test('parseCSharpFile: switch(8){case 7:...;default:...;} — no case matches, default is live', () => {
+  const code = `
+public class C {
+    public void Bad(HttpRequest request) {
+        string data = request.Params.Get("id");
+        switch (8) {
+        case 7:
+            data = "dead";
+            break;
+        default:
+            Process.Start(data);
+            break;
+        }
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(nodeList.some(n => n.kind === 'call' && n.callee === 'Process.Start'),
+    'no case matches scrutinee 8; default must be live, got: ' + JSON.stringify(nodeList));
+  assert.ok(!nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.kind === 'literal' && n.source.value === '"dead"'),
+    'case 7 does not match scrutinee 8 and must be dead, got: ' + JSON.stringify(nodeList));
+});
+test('parseCSharpFile: switch(5){case 6:...;} — no case matches and there is no default: the whole switch is a no-op', () => {
+  const code = `
+public class C {
+    public void Bad(HttpRequest request) {
+        string data = request.Params.Get("id");
+        switch (5) {
+        case 6:
+            Process.Start(data);
+            break;
+        }
+        Console.WriteLine("after");
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  assert.ok(!nodeList.some(n => n.kind === 'call' && n.callee === 'Process.Start'),
+    'case 6 does not match scrutinee 5 and there is no default — the sink must be unreachable, got: ' + JSON.stringify(nodeList));
+  assert.ok(nodeList.some(n => n.kind === 'call' && n.callee === 'Console.WriteLine'),
+    'code AFTER the switch must still be reachable, got: ' + JSON.stringify(nodeList));
+});
+test('parseCSharpFile: switch(someVariable) — a genuinely non-constant scrutinee is left to the general (non-folding) handling', () => {
+  const code = `
+public class C {
+    public void Bad(int mode, HttpRequest request) {
+        string data;
+        switch (mode) {
+        case 6:
+            data = request.Params.Get("id");
+            break;
+        default:
+            data = null;
+            break;
+        }
+        Process.Start(data);
+    }
+}
+`;
+  const ir = parseCSharpFile('C.cs', code);
+  const fn = ir.functions.find(f => bareTail(f.name) === 'Bad');
+  const nodeList = Object.values(fn.cfg.nodes);
+  // A non-constant scrutinee must not be folded — BOTH assignments to data
+  // survive in the (recall-preserving, if imprecise) straight-line model
+  // the general fallback already used before this fix.
+  assert.ok(nodeList.some(n => n.kind === 'assign' && n.target === 'data' && n.source && n.source.callee === 'request.Params.Get'),
+    'a non-constant scrutinee must not drop the case 6 assignment, got: ' + JSON.stringify(nodeList));
+});
+test('parseCSharpFile: W5.36 end-to-end runScan — Juliet Flow Variant 15 (switch(N)) resolves through the full pipeline', async () => {
+  const { runScan } = await import('../src/runScan.js');
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-switch-const-'));
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.Diagnostics;
+public class Bad {
+    public void Run(HttpRequest request) {
+        string data;
+        switch (6) {
+        case 6:
+            data = request.Params.Get("id");
+            break;
+        default:
+            data = null;
+            break;
+        }
+        switch (7) {
+        case 7:
+            Process.Start(data);
+            break;
+        default:
+            break;
+        }
+    }
+}
+`);
+  const badResult = await runScan(dir, { deep: true, deepInCi: true });
+  const badFindings = (badResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.ok(badFindings.length >= 1,
+    `expected a CWE-78 finding through switch(6)/switch(7), got: ${JSON.stringify(badResult.scan.findings)}`);
+
+  fs.writeFileSync(path.join(dir, 'Bad.cs'), `
+using System;
+using System.Diagnostics;
+public class Good {
+    public void Run(HttpRequest request) {
+        string data;
+        switch (5) {
+        case 6:
+            data = request.Params.Get("id");
+            break;
+        default:
+            data = "foo";
+            break;
+        }
+        switch (7) {
+        case 7:
+            Process.Start(data);
+            break;
+        default:
+            break;
+        }
+    }
+}
+`);
+  const goodResult = await runScan(dir, { deep: true, deepInCi: true });
+  const goodFindings = (goodResult.scan.findings || []).filter(f => f.cwe === 'CWE-78');
+  assert.equal(goodFindings.length, 0,
+    `expected no CWE-78 finding for the switch(5)/switch(7) good-source counterpart, got: ${JSON.stringify(goodFindings)}`);
+});
