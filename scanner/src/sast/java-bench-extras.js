@@ -335,6 +335,44 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   return sawRealCallSite;
 }
 
+// SARD_80_F1 W5.34 — see the call site's own header comment for the full
+// idiom (Juliet Flow Variant 45: a value passed as a private class member
+// variable between two methods of the same class). Only resolves when
+// `varName` is confirmed to be an actual FIELD declaration — matched via an
+// access-modifier prefix (`private`/`protected`/`public`), syntax that is
+// valid ONLY on a class/interface member in Java, never on a local variable
+// or a method parameter, so this can't misfire on an unrelated same-named
+// local. Requires EVERY assignment to the field anywhere in the file
+// (statement order doesn't matter here — unlike a backward scan, this reads
+// the field as a whole-file invariant) to resolve to a literal, recursing
+// through the same `_nearestAssignIsLiteral` machinery for a bare-identifier
+// RHS (`dataGoodG2B = data;`, itself resolved at ITS OWN position so the
+// recursive scan only sees what was visible at the time of that assignment).
+// Fails closed: no recognizable field declaration, zero assignments found,
+// or ANY assignment resolving to something other than a literal all return
+// false.
+function _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _depth) {
+  const depth0 = _depth || 0;
+  if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fieldDeclRe = new RegExp(`\\b(?:private|protected|public)\\s+[\\w<>\\[\\],.\\s]+\\b${escaped}\\s*(?:=\\s*[^;]+)?;`);
+  if (!fieldDeclRe.test(content)) return false; // not a recognizable field declaration
+  const ranges = deadRanges || [];
+  const assignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
+  const lineOf = (idx) => content.substring(0, idx).split('\n').length;
+  let sawAssignment = false, m;
+  while ((m = assignRe.exec(content))) {
+    if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
+    sawAssignment = true;
+    const rhs = m[1].trim();
+    if (/^"[^"]*"$/.test(rhs)) continue; // this assignment is a direct literal
+    if (/^[A-Za-z_]\w*$/.test(rhs) && rhs !== varName
+      && _nearestAssignIsLiteral(content, rhs, m.index, ranges, depth0 + 1)) continue;
+    return false; // a non-literal (or unresolvable) assignment exists somewhere
+  }
+  return sawAssignment;
+}
+
 function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth) {
   if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const ranges = deadRanges || [];
@@ -383,7 +421,28 @@ function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calle
     // own header comment for why this is a DIFFERENT idiom than the
     // paramRe guard below (a caller whose own literal sits AFTER the sink
     // method in raw file text — invisible to any backward-only scan).
-    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth);
+    //
+    // W5.34 — a SIBLING idiom to both W4.J38 shapes above: Juliet's own
+    // "Flow Variant 45: data passed as a private class member variable from
+    // one function to another in the same class" (confirmed via the public
+    // mirror's own CWE80_XSS__CWE182_Servlet_getQueryString_Servlet_45.java)
+    // writes `dataGoodG2B = data;` in ONE method and reads it back via
+    // `String data = dataGoodG2B;` in a DIFFERENT method. The read's own
+    // recursive resolution correctly identifies `dataGoodG2B` as a bare
+    // identifier and recurses into it — but if the WRITER method
+    // (`goodG2B()`) is textually declared AFTER the reader method
+    // (`goodG2BSink()`), which Juliet's own file layout does not guarantee
+    // either way, the field's only assignment sits AFTER `beforeIdx` and is
+    // invisible to a backward-only scan, exactly the same "forward
+    // reference" problem `_resolveParamLiteralViaAllCallSites` exists to
+    // solve for parameters — just for a FIELD instead of an argument.
+    // `_resolveFieldLiteralViaAllAssignments` is that same fix for fields:
+    // it only fires when `varName` is confirmed to be an actual field
+    // declaration (an access-modifier-qualified declaration, syntax no
+    // local variable or parameter can carry), then requires EVERY
+    // assignment to it anywhere in the file to resolve to a literal.
+    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth)
+      || _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _calleeDepth);
   }
   // Juliet's "data passed as an argument from one method to another" flow
   // variants (its own template naming: sources-sink-41+) sink INSIDE A

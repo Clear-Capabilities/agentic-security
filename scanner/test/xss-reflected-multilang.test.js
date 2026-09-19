@@ -307,6 +307,48 @@ test('Java — a value passed as a genuinely tainted argument at some call site 
   assert.ok(fires(['S.java', src]), 'bad() supplies a non-literal at the data position; not every real call site agrees');
 });
 
+// SARD_80_F1 W5.34 — Juliet Flow Variant 45: a value passed as a private
+// class member variable from one method to another (confirmed via the
+// public mirror's own CWE80_XSS__CWE182_Servlet_getQueryString_Servlet_45.java).
+test('Java — a value passed via a private class field (all-literal) does NOT fire (W4.J45 idiom)', () => {
+  const src = `
+    class S {
+      private String dataGoodG2B;
+      private void goodG2BSink(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data = dataGoodG2B;
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+      void goodG2B(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        data = "foo";
+        dataGoodG2B = data;
+        goodG2BSink(resp);
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'the field is only ever assigned the literal "foo"');
+});
+test('Java — a value passed via a private class field (genuinely tainted) still fires', () => {
+  const src = `
+    class S {
+      private String dataBad;
+      private void badSink(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data = dataBad;
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+      void bad(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        data = r.readLine();
+        dataBad = data;
+        badSink(resp);
+      }
+    }`;
+  assert.ok(fires(['S.java', src]), 'the field is assigned a genuinely tainted value');
+});
+
 test('non-matching languages / files produce nothing', () => {
   assert.deepEqual(x('a.js', 'res.send("<h1>" + req.query.q + "</h1>")'), []);
   assert.deepEqual(x('ok.go', 'func add(a, b int) int { return a + b }'), []);

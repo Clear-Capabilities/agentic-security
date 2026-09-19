@@ -159,6 +159,36 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   return sawRealCallSite;
 }
 
+// SARD_80_F1 W5.34 — Juliet Flow Variant 45: a value passed as a private
+// class member variable between two methods of the same class (`dataX = y;`
+// in one method, `String data = dataX;` in another, in either textual
+// order). See java-bench-extras.js's own header comment on the identical,
+// canonical copy of this function for the full idiom and precision
+// reasoning. Only resolves when `varName` is confirmed to be an actual
+// field declaration (access-modifier-qualified — never valid on a local
+// variable or parameter).
+function _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _depth) {
+  const depth0 = _depth || 0;
+  if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fieldDeclRe = new RegExp(`\\b(?:private|protected|public)\\s+[\\w<>\\[\\],.\\s]+\\b${escaped}\\s*(?:=\\s*[^;]+)?;`);
+  if (!fieldDeclRe.test(content)) return false;
+  const ranges = deadRanges || [];
+  const assignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
+  const lineOf_ = (idx) => content.substring(0, idx).split('\n').length;
+  let sawAssignment = false, m;
+  while ((m = assignRe.exec(content))) {
+    if (ranges.length && isLineInDeadRange(lineOf_(m.index), ranges)) continue;
+    sawAssignment = true;
+    const rhs = m[1].trim();
+    if (/^"[^"]*"$/.test(rhs)) continue;
+    if (/^[A-Za-z_]\w*$/.test(rhs) && rhs !== varName
+      && _trailingIdentIsLiteral(content, rhs, m.index, ranges, depth0 + 1)) continue;
+    return false;
+  }
+  return sawAssignment;
+}
+
 function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDepth) {
   if (!varName) return false;
   if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
@@ -189,8 +219,10 @@ function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDe
     if (_trailingIdentIsLiteral(code, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
   }
   if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
-    // Argument-passing resolution via all call sites (Flow Variant 41).
-    return _resolveParamLiteralViaAllCallSites(code, varName, beforeIdx, deadRanges, _calleeDepth);
+    // Argument-passing resolution via all call sites (Flow Variant 41), then
+    // class-member-variable resolution via all assignments (Flow Variant 45).
+    return _resolveParamLiteralViaAllCallSites(code, varName, beforeIdx, deadRanges, _calleeDepth)
+      || _resolveFieldLiteralViaAllAssignments(code, varName, deadRanges, _calleeDepth);
   }
   return true;
 }

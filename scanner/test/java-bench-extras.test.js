@@ -562,6 +562,93 @@ test('CWE-601: sendRedirect on a value copied through an intermediate variable (
   assert.equal(hits.length, 1, 'a tainted copy chain must still fire');
 });
 
+// SARD_80_F1 W5.34 — Juliet's own "Flow Variant 45: data passed as a private
+// class member variable from one function to another in the same class"
+// (confirmed via the public mirror's own
+// CWE80_XSS__CWE182_Servlet_getQueryString_Servlet_45.java, which uses the
+// identical idiom for a different sink family) — a field write in one
+// method, a field read in another, textually in EITHER order.
+test('CWE-601: sendRedirect on a value passed via a private class field (all-literal) does NOT fire', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String dataGoodG2B;
+        private void goodG2BSink(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = dataGoodG2B;
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        private void goodG2B(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            data = "foo";
+            dataGoodG2B = data;
+            goodG2BSink(request, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 0, 'the field is only ever assigned the literal "foo"; the reader method is declared BEFORE the writer method');
+});
+test('CWE-601: sendRedirect on a value passed via a private class field (genuinely tainted) still fires', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String dataBad;
+        private void badSink(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data = dataBad;
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            String data;
+            data = request.getParameter("x");
+            dataBad = data;
+            badSink(request, response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'the field is assigned a genuinely tainted value; must still fire');
+});
+test('CWE-601: a private class field assigned from TWO sites, one non-literal, still fires (fails closed)', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private String shared;
+        private void sink(HttpServletResponse response) throws Throwable {
+            String data = shared;
+            if (data != null) {
+                response.sendRedirect(data);
+            }
+        }
+        public void good(HttpServletResponse response) throws Throwable {
+            shared = "foo";
+            sink(response);
+        }
+        public void bad(HttpServletRequest request, HttpServletResponse response) throws Throwable {
+            shared = request.getParameter("x");
+            sink(response);
+        }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'one of the two writers is non-literal — must fail closed and fire');
+});
+test('CWE-601: a same-named LOCAL variable (no access modifier) is never mistaken for a class field', () => {
+  const src = `
+    public class Bad extends HttpServlet {
+        private void sink(HttpServletResponse response) throws Throwable {
+            String shared = otherSource();
+            if (shared != null) {
+                response.sendRedirect(shared);
+            }
+        }
+        private String otherSource() { return null; }
+    }
+  `;
+  const hits = cwe601Hits(src);
+  assert.equal(hits.length, 1, 'shared here is a plain local, never declared with an access modifier — must not be resolved as a field and must fire (unresolvable source)');
+});
+
 // SARD_80_F1 W4.J39 — a confirmed, severe ReDoS regression, caught during
 // this session's OWN real-corpus verification (a live full-corpus scan hung
 // for 30+ minutes on a single small CWE directory before being killed).

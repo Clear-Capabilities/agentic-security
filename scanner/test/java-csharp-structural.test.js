@@ -197,6 +197,28 @@ test('Java SSRF — new URI(var) with no outbound connection call anywhere in th
   assert.ok(none(f, 'CWE-918'), 'a URI built purely to validate syntax, never connected to, is not SSRF');
 });
 
+// SARD_80_F1 W5.34 — Juliet Flow Variant 45: a value passed as a private
+// class member variable between two methods of the same class (`dataX = y;`
+// in one method, a read in another), ported from java-bench-extras.js's own
+// canonical fix for the identical idiom (found via CWE-80/601's own real
+// corpus fp lists).
+test('Java SQLi — a value passed via a private class field (all-literal) does NOT fire; genuinely tainted still fires (CWE-89)', () => {
+  const clean = scanJavaStructural('S.java', `
+    class S {
+      private String data;
+      void goodSink(){ Statement s = null; s.execute("insert into users (status) values (\\'updated\\') where name=\\'"+data+"\\'"); }
+      void good(){ data = "foo"; goodSink(); }
+    }`);
+  assert.ok(none(clean, 'CWE-89'), 'the field is only ever assigned the literal "foo"');
+  const tainted = scanJavaStructural('S.java', `
+    class S {
+      private String data;
+      void badSink(){ Statement s = null; s.execute("insert into users (status) values (\\'updated\\') where name=\\'"+data+"\\'"); }
+      void bad(){ data = System.getenv("ADD"); badSink(); }
+    }`);
+  assert.ok(has(tainted, 'CWE-89'), 'the field is assigned a genuinely tainted value');
+});
+
 test('C# hardcoded secret — split-concat literals in a credential field (CWE-798)', () => {
   assert.ok(has(scanCsharpStructural('Config.cs', 'public const string ApiKey = "sk_" + "live_1234567890abcdef1234567890abcdef";'), 'CWE-798'));
   // env-var lookup → clean
