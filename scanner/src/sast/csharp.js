@@ -603,6 +603,138 @@ function detectCleartextStorage(file, raw, ir, analysis, out, seen) {
   }
 }
 
+// SARD_80_F1 W5.39 — CWE-319 (Cleartext Transmission of Sensitive
+// Information), a total blackout for C# ever since W4.C30 first root-caused
+// it: a credential read verbatim from a NETWORK response (`WebClient`/
+// `TcpClient`), then concatenated directly into a DB connection string's
+// `Password=`/`Pwd=` field, with no decryption step — confirmed via the
+// public C# mirror's sole descriptor family for this CWE
+// (`CWE319_..._NetClient_SqlConnection_01.cs`). W4.C30 deliberately did NOT
+// build this, over a real, unquantified over-firing concern: a naive
+// "any tainted value reaching a connection-string password field" check
+// would ALSO fire on `password = Environment.GetEnvironmentVariable(...)`
+// (already a registered taint source in this very file, TAINT_SOURCE_PATTERNS
+// above) — an extremely common, entirely legitimate real-world pattern that
+// has nothing to do with this CWE's actual flaw (data arriving IN CLEARTEXT
+// OVER A NETWORK).
+//
+// This is deliberately narrower than "any taint reaches the sink": it
+// requires the enclosing method to ALSO contain unambiguous evidence of a
+// real network read (`WebClient`/`TcpClient`/`NetworkStream`/
+// `HttpWebRequest`) — env-var, config, and secrets-manager reads never
+// mention any of these — and it reuses `CRYPTO_OR_HASH_CALL_RE` (the SAME
+// guard `isUnencryptedSecureStringArg` above already established for
+// CWE-313/314) to exempt a method that decrypts the value before use,
+// exactly matching Juliet's own GoodB2G() fix
+// (`AesCryptoServiceProvider`/`CryptoStream`). The password-field match
+// itself is a plain text scan (matching this file's own established
+// precedent elsewhere in this function for shapes the structured IR
+// doesn't cleanly expose — here, a `+`-concatenated literal fragment
+// inside a constructor argument), scoped to the SqlConnection/
+// MySqlConnection/NpgsqlConnection/OracleConnection constructor family.
+const DB_CONNECTION_CTOR_RE = /^(?:Sql|MySql|Npgsql|Oracle)Connection$/;
+const PASSWORD_FIELD_CONCAT_RE = /(?:Password|Pwd)\s*=\s*"\s*\+\s*([A-Za-z_]\w*)/i;
+const NETWORK_READ_EVIDENCE_RE = /\bWebClient\b|\bTcpClient\b|\bNetworkStream\b|\bHttpWebRequest\b/;
+// `CRYPTO_OR_HASH_CALL_RE` (above) is scoped to ENCRYPT/HASH calls — the
+// shape CWE-313/314's own GoodSink uses (protect a value BEFORE storing it).
+// This CWE's own GoodB2G() fix runs the OPPOSITE direction (DEcrypt an
+// already-encrypted network value immediately before use), so it needs its
+// own, separate evidence regex rather than widening a different detector's
+// already-shipped, already-tested constant.
+const DECRYPT_CALL_RE = /\b(?:CreateDecryptor|Decrypt\w*|TransformFinalBlock|CryptoStream|AesCryptoServiceProvider|RijndaelManaged|TripleDESCryptoServiceProvider|DESCryptoServiceProvider|RSACryptoServiceProvider)\b/;
+
+function detectCleartextNetworkCredential(file, raw, ir, analysis, out, seen) {
+  for (const m of ir.methods) {
+    const flow = analysis.methodFlow.get(m);
+    if (!flow) continue;
+    const bodyText = (raw || '').split('\n').slice((m.line || 1) - 1, m.endLine || undefined).join('\n');
+    if (!NETWORK_READ_EVIDENCE_RE.test(bodyText)) continue;
+    if (DECRYPT_CALL_RE.test(bodyText)) continue; // decrypted before use — Juliet's own GoodB2G() fix
+    for (const ctor of m.ctors || []) {
+      if (!DB_CONNECTION_CTOR_RE.test(ctor.type)) continue;
+      const arg = (ctor.args || [])[0];
+      if (!arg || !arg.text) continue;
+      const pm = PASSWORD_FIELD_CONCAT_RE.exec(arg.text);
+      if (!pm) continue;
+      const varName = pm[1];
+      if (!(arg.idents || []).includes(varName)) continue; // sanity: the match must be a real identifier the arg IR also saw
+      if (!flow.taintMap.get(varName)) continue; // a hardcoded literal password (Juliet's own GoodG2B() fix) is not this flaw
+      const id = `csharp-cleartext-network-credential:${file}:${ctor.line}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(makeFinding({
+        ruleId: 'csharp-cleartext-network-credential', file, line: ctor.line, raw, ir,
+        family: 'data-exposure', severity: 'high', cwe: 'CWE-319',
+        vuln: `Cleartext Transmission of Sensitive Information — a credential read over the network is used directly in ${ctor.type}'s connection string`,
+        remediation: 'Never transmit or receive credentials in cleartext over the network. If the value must travel over an untrusted channel, encrypt it (e.g. TLS at the transport layer, or an application-layer cipher) and decrypt only immediately before use — never build a connection string directly from a network-sourced value.',
+      }));
+    }
+  }
+}
+
+// SARD_80_F1 W5.39b — CWE-319's SECOND, structurally distinct shape, found
+// while investigating why the W5.39 detector above showed zero real-corpus
+// movement: the public C# mirror's `send` descriptor family has nothing to
+// do with a DB connection string at all. A sensitive value (Juliet's own
+// Bad()/GoodB2G() shape: a hardcoded password wrapped character-by-character
+// into a `SecureString`, then unwrapped one assignment earlier via
+// `data = securePwd.ToString()`) is written directly to a PLAINTEXT socket
+// stream (`StreamWriter` wrapping `TcpClient.GetStream()`) instead of an
+// encrypted one (`SslStream`) — confirmed via `CWE319_..._send_01.cs`.
+// This reuses `isSensitiveArg`/`isUnencryptedSecureStringArg` (the same
+// guard shape CWE-313/314's own `detectCleartextStorage` already
+// established for a bare SecureString/`.ToString()` reaching a sink
+// directly), extended one assignment-hop back via
+// `_tracesToSecureStringToString` since Juliet unwraps the SecureString
+// on its OWN line here rather than inline at the sink call. GoodB2G needs
+// no explicit exemption: its sink receiver is `SslStream`-typed, not
+// `StreamWriter`, so the receiver-type gate below already excludes it
+// structurally — the same reason this can't be folded into
+// `detectCleartextStorage`'s own writer check (CWE-313, file-backed
+// writers only): that check's receiver-type gate is identical, but tagging
+// this network-socket shape as CWE-313 would score against the WRONG CWE
+// bucket for this corpus entry.
+const NETWORK_STREAM_EVIDENCE_RE = /\.\s*GetStream\s*\(\s*\)|\bNetworkStream\b/;
+
+function _tracesToSecureStringToString(varName, flow, methodBodyText) {
+  const re = new RegExp(`\\b${varName}\\s*=\\s*([A-Za-z_]\\w*)\\s*\\.\\s*ToString\\s*\\(\\s*\\)\\s*;`);
+  const m = re.exec(methodBodyText || '');
+  if (!m) return false;
+  const t = flow.typeMap.get(m[1]);
+  return !!t && SECURE_STRING_TYPE_RE.test(t);
+}
+
+function detectCleartextNetworkSend(file, raw, ir, analysis, out, seen) {
+  for (const m of ir.methods) {
+    const flow = analysis.methodFlow.get(m);
+    if (!flow) continue;
+    const bodyText = (raw || '').split('\n').slice((m.line || 1) - 1, m.endLine || undefined).join('\n');
+    if (!NETWORK_STREAM_EVIDENCE_RE.test(bodyText)) continue;
+    for (const call of m.calls) {
+      if (!/^Write(?:Line)?$/.test(call.method) || !call.receiver) continue;
+      const t = flow.typeMap.get(call.receiver);
+      if (!t || !/^(?:StreamWriter|TextWriter)$/.test(t)) continue;
+      const arg = (call.args || [])[0];
+      if (!arg || !arg.text) continue;
+      const identMatch = BARE_IDENT_RE.exec(arg.text);
+      const varName = identMatch ? identMatch[1] : null;
+      const sensitive = isSensitiveArg(arg)
+        || isUnencryptedSecureStringArg(arg, flow, bodyText)
+        || (varName && _tracesToSecureStringToString(varName, flow, bodyText));
+      if (!sensitive) continue;
+      const id = `csharp-cleartext-network-send:${file}:${call.line}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(makeFinding({
+        ruleId: 'csharp-cleartext-network-send', file, line: call.line, raw, ir,
+        family: 'data-exposure', severity: 'high', cwe: 'CWE-319',
+        vuln: `Cleartext Transmission of Sensitive Information — a sensitive value is written to a plaintext socket stream instead of an encrypted channel`,
+        remediation: 'Never send credentials, tokens, or other sensitive values over an unencrypted socket. Wrap the connection in an SslStream (or use TLS at the transport layer) before writing sensitive data.',
+      }));
+    }
+  }
+}
+
 function detectInsecureCookies(file, raw, ir, analysis, out, seen) {
   // `new HttpCookie(...)` without subsequent `.Secure = true` or `.HttpOnly = true` in the same method scope.
   for (const m of ir.methods) {
@@ -1293,6 +1425,8 @@ export function runCSharpDetectors(fp, raw, ir, analysis) {
   try { detectWeakRng(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectHardcodedSecret(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectCleartextStorage(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectCleartextNetworkCredential(fp, raw, ir, analysis, out, seen); } catch {}
+  try { detectCleartextNetworkSend(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectInsecureCookies(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectXss(fp, raw, ir, analysis, out, seen); } catch {}
   try { detectXssExpanded(fp, raw, ir, analysis, out, seen); } catch {}

@@ -1113,3 +1113,163 @@ test('detector: CWE-261 does NOT fire on Convert.FromBase64String applied to an 
   const findings = scanCSharp('t.cs', src);
   assert.ok(!findings.some(x => x.cwe === 'CWE-261'), 'expected no CWE-261 finding for an unrelated Base64 decode');
 });
+
+// ── Cleartext transmission of sensitive info over a network — CWE-319 ──────
+// SARD_80_F1 W5.39: a credential read verbatim from a NETWORK response
+// (WebClient/TcpClient/etc.), then concatenated directly into a DB
+// connection string's Password=/Pwd= field, with no decryption step.
+// Deliberately narrower than "any taint reaches the sink" — see the
+// detector's own header comment in src/sast/csharp.js for why a naive
+// taint-only check was rejected at W4.C30 (it would also fire on the
+// common, legitimate `Environment.GetEnvironmentVariable` pattern).
+
+test('detector: CWE-319 a network-read password used directly in a SqlConnection string fires', () => {
+  const src = `
+    public class Bad {
+      public void Run() {
+        string password;
+        password = "";
+        using (WebClient client = new WebClient()) {
+          using (StreamReader sr = new StreamReader(client.OpenRead("http://www.example.org/"))) {
+            password = sr.ReadLine();
+          }
+        }
+        using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + password)) {
+          connection.Open();
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-network-credential:'));
+  assert.ok(f, 'expected csharp-cleartext-network-credential finding');
+  assert.equal(f.cwe, 'CWE-319');
+});
+
+test('detector: CWE-319 does NOT fire on a hardcoded literal password (Juliet GoodG2B shape)', () => {
+  const src = `
+    public class GoodG2B {
+      public void Run() {
+        string password;
+        using (WebClient client = new WebClient()) {
+          using (StreamReader sr = new StreamReader(client.OpenRead("http://www.example.org/"))) {
+            sr.ReadLine();
+          }
+        }
+        password = "hunter2longenough";
+        using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + password)) {
+          connection.Open();
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-network-credential:')));
+});
+
+test('detector: CWE-319 does NOT fire when the network-read value is decrypted before use (Juliet GoodB2G shape)', () => {
+  const src = `
+    public class GoodB2G {
+      private void B2G() {
+        string password;
+        password = "";
+        using (WebClient client = new WebClient()) {
+          using (StreamReader sr = new StreamReader(client.OpenRead("http://www.example.org/"))) {
+            password = sr.ReadLine();
+          }
+        }
+        if (password != null) {
+          using (AesCryptoServiceProvider aesAlg = new AesCryptoServiceProvider()) {
+            ICryptoTransform decryptor = aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
+            using (MemoryStream ms = new MemoryStream(Encoding.UTF8.GetBytes(password))) {
+              using (CryptoStream cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read)) {
+                using (StreamReader srDecrypt = new StreamReader(cs)) {
+                  password = srDecrypt.ReadToEnd();
+                }
+              }
+            }
+          }
+          using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + password)) {
+            connection.Open();
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-network-credential:')));
+});
+
+test('detector: CWE-319 does NOT fire on an environment-variable-sourced password (common real-world pattern, no network read)', () => {
+  const src = `
+    public class Config {
+      public void Connect() {
+        string password = System.Environment.GetEnvironmentVariable("DB_PASS");
+        using (SqlConnection connection = new SqlConnection(@"Data Source=(local);Initial Catalog=CWE256;User ID=" + "sa" + ";Password=" + password)) {
+          connection.Open();
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-network-credential:')));
+});
+
+test('detector: CWE-319 a sensitive SecureString-derived value written to a plaintext socket stream fires', () => {
+  const src = `
+    public class Bad {
+      public void Run() {
+        string data;
+        using (SecureString securePwd = new SecureString()) {
+          for (int i = 0; i < "AP@ssw0rd".Length; i++) {
+            securePwd.AppendChar("AP@ssw0rd"[i]);
+          }
+          data = securePwd.ToString();
+        }
+        using (TcpClient tcpClient = new TcpClient("remote_host", 1337)) {
+          using (StreamWriter writer = new StreamWriter(tcpClient.GetStream())) {
+            writer.WriteLine(data);
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  const f = findings.find(x => x.id.startsWith('csharp-cleartext-network-send:'));
+  assert.ok(f, 'expected csharp-cleartext-network-send finding');
+  assert.equal(f.cwe, 'CWE-319');
+});
+
+test('detector: CWE-319 does NOT fire when a non-sensitive value is written to the same plaintext socket stream (Juliet GoodG2B shape)', () => {
+  const src = `
+    public class GoodG2B {
+      private void Run() {
+        string data;
+        data = "Hello World";
+        using (TcpClient tcpClient = new TcpClient("remote_host", 1337)) {
+          using (StreamWriter writer = new StreamWriter(tcpClient.GetStream())) {
+            writer.WriteLine(data);
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-network-send:')));
+});
+
+test('detector: CWE-319 does NOT fire when the sensitive value is sent over SslStream instead of a plaintext socket (Juliet GoodB2G shape)', () => {
+  const src = `
+    public class GoodB2G {
+      private void Run() {
+        string data;
+        using (SecureString securePwd = new SecureString()) {
+          for (int i = 0; i < "AP@ssw0rd".Length; i++) {
+            securePwd.AppendChar("AP@ssw0rd"[i]);
+          }
+          data = securePwd.ToString();
+        }
+        using (TcpClient client = new TcpClient("remote_host", 1337)) {
+          using (SslStream sslStream = new SslStream(client.GetStream())) {
+            sslStream.Write(Encoding.UTF8.GetBytes(data));
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(x => x.id.startsWith('csharp-cleartext-network-send:')));
+});
