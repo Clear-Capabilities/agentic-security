@@ -91,9 +91,26 @@ export class SummaryCache {
   _key(qid, taintedParams, receiverType) {
     // P1.2: when a receiver type is provided, extend the cache key with
     // its hash. Backward-compatible: no receiverType → same key as before.
-    let base = `${qid}::${_hashState(taintedParams)}`;
-    // R2: append the caller qid when call-string sensitivity is enabled.
-    if (this._callString && this._callerCtx) base = `${base}@${this._callerCtx}`;
+    const stateHash = _hashState(taintedParams);
+    let base = `${qid}::${stateHash}`;
+    // R2: append the caller qid when call-string sensitivity is enabled —
+    // but ONLY for a NON-EMPTY entry state. The EMPTY-entry baseline is the
+    // one summary `engine.js`'s outer fixed-point pre-pass loop shares and
+    // progressively refines across BOTH multiple passes AND every call path
+    // that reaches a function with no tainted args — splitting it by caller
+    // breaks that sharing outright: a 3-hop empty-entry mutation chain
+    // (leaf mutates its own param unconditionally, mid calls leaf, top calls
+    // mid) stopped propagating entirely once enabled, confirmed via direct
+    // instrumentation, not a hypothetical concern — the pre-pass loop's own
+    // `bMid`/`cLeaf` iterations write to a caller-LESS key nothing else ever
+    // reads once a NESTED call from a different caller starts writing to a
+    // caller-SUFFIXED key instead. A non-empty entry state has no such
+    // shared-convergence dependency to begin with — the value-context cache
+    // (`AGENTIC_SECURITY_KCFA_MAX_CONTEXTS`) already computes each distinct
+    // tainted-arg shape independently, lazily, per call site, so adding a
+    // caller dimension there only ever narrows an already-isolated lookup,
+    // never disconnects a shared one.
+    if (this._callString && this._callerCtx && stateHash !== 'empty') base = `${base}@${this._callerCtx}`;
     if (!receiverType) return base;
     return `${base}::${hashReceiverType(receiverType)}`;
   }
@@ -103,7 +120,8 @@ export class SummaryCache {
   }
 
   set(qid, taintedParams, summary, receiverType) {
-    this._cache.set(this._key(qid, taintedParams, receiverType), summary);
+    const k = this._key(qid, taintedParams, receiverType);
+    this._cache.set(k, summary);
   }
 
   has(qid, taintedParams, receiverType) {
