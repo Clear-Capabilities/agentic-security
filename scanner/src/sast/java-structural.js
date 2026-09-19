@@ -157,6 +157,29 @@ function _ownClassName(content) {
   return m ? m[1] : null;
 }
 
+// The smallest method body span (character offsets, `{`..matching `}`)
+// enclosing `idx` — used to bound a cross-file variable's own call search to
+// its DECLARING method only (see W5.45's own call site for why: Juliet
+// routinely reuses the same local variable name across sibling methods in
+// one file, e.g. `bad()`/`goodG2B()`/`goodB2G()` each declaring their own
+// `baseObject`). Returns null if no enclosing method is found or `idx` falls
+// in a gap between methods (a same-name field/local outside any method).
+function _enclosingMethodSpan(text, idx) {
+  const methodDeclRe = /\b(?!if\b|for\b|while\b|switch\b|catch\b|synchronized\b|do\b|else\b|return\b|new\b)([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let best = null, m;
+  while ((m = methodDeclRe.exec(text)) && m.index < idx) best = m;
+  if (!best) return null;
+  const openIdx = best.index + best[0].length - 1;
+  let depth = 1, i = openIdx + 1;
+  while (i < text.length && depth > 0) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') depth--;
+    i++;
+  }
+  if (i <= idx) return null; // the nearest preceding method already closed before idx — not actually enclosing
+  return { start: openIdx, end: i };
+}
+
 function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth, siblingFiles) {
   const depth0 = _depth || 0;
   if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
@@ -191,28 +214,89 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   // DIFFERENT file hashes to a DIFFERENT token). Same-file resolution never
   // sets this — an unqualified call within the declaring file itself is
   // already unambiguous.
+  function _checkCallAt(searchText, searchDeadRanges, matchIndex, matchEnd) {
+    const argsStart = matchEnd;
+    let braceDepth = 1, i = argsStart;
+    while (i < searchText.length && braceDepth > 0) {
+      if (searchText[i] === '(') braceDepth++;
+      else if (searchText[i] === ')') braceDepth--;
+      i++;
+    }
+    const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
+    if (afterClose) return 'skip'; // this is the method's OWN declaration, not a call site
+    const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
+    if (paramIdx >= args.length) return 'fail';
+    const argExpr = args[paramIdx];
+    if (/^"[^"]*"$/.test(argExpr)) return 'ok';
+    if (/^[A-Za-z_]\w*$/.test(argExpr) && _trailingIdentIsLiteral(searchText, argExpr, matchIndex, searchDeadRanges, depth0 + 1, siblingFiles)) return 'ok';
+    return 'fail';
+  }
+
   function scanCallSitesIn(searchText, searchDeadRanges, classNameFilter) {
-    const callRe = classNameFilter
-      ? new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g')
-      : new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
-    let cm, sawRealCallSite = false;
-    while ((cm = callRe.exec(searchText))) {
-      const argsStart = cm.index + cm[0].length;
-      let braceDepth = 1, i = argsStart;
-      while (i < searchText.length && braceDepth > 0) {
-        if (searchText[i] === '(') braceDepth++;
-        else if (searchText[i] === ')') braceDepth--;
-        i++;
+    let sawRealCallSite = false;
+    if (classNameFilter) {
+      // Inline construction: `(new ClassName()).method(` / `new ClassName().method(`.
+      const inlineRe = new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g');
+      let cm;
+      while ((cm = inlineRe.exec(searchText))) {
+        const r = _checkCallAt(searchText, searchDeadRanges, cm.index, cm.index + cm[0].length);
+        if (r === 'skip') continue;
+        if (r === 'fail') return 'fail';
+        sawRealCallSite = true;
       }
-      const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
-      if (afterClose) continue;
-      const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
-      if (paramIdx >= args.length) return 'fail';
-      sawRealCallSite = true;
-      const argExpr = args[paramIdx];
-      if (/^"[^"]*"$/.test(argExpr)) continue;
-      if (/^[A-Za-z_]\w*$/.test(argExpr) && _trailingIdentIsLiteral(searchText, argExpr, cm.index, searchDeadRanges, depth0 + 1, siblingFiles)) continue;
-      return 'fail';
+      // SARD_80_F1 W5.45 — Juliet's OWN abstract-dispatch caller convention
+      // (confirmed via a direct fetch of the public mirror's own
+      // `CWE89_SQL_Injection__Environment_executeQuery_81a.java`) is a TWO
+      // STATEMENT pattern, not the inline one above: `<BaseType> <var> = new
+      // <ConcreteClass>();` immediately followed (same or a later line,
+      // arbitrary intervening text) by `<var>.<method>(...)` — the inline
+      // regex above can never match this shape at all. Found by re-
+      // investigating a real-corpus regression this SAME session's own
+      // W5.43/44 scorer fix exposed: 30 Java files where our own detector
+      // fires on Juliet's "good source, structurally bad-shaped sink" test
+      // convention (a deliberate imprecision trap, not a real vulnerability
+      // — see buildJulietExpected's own header comment on why crediting a
+      // goodG2B() firing "rewarded exactly the imprecision Juliet is
+      // designed to expose") because the cross-file literal check couldn't
+      // see this SPECIFIC calling convention. A declared variable's type is
+      // NOT required to match `classNameFilter` (Java allows assigning a
+      // subclass instance to a base-typed variable, exactly what this
+      // idiom does — `CWE89_..._81_base baseObject = new CWE89_..._goodG2B();`)
+      // — only the CONSTRUCTOR call's own class name matters.
+      const declRe = new RegExp(`\\b[A-Za-z_]\\w*(?:<[^;()]*>)?\\s+([A-Za-z_]\\w*)\\s*=\\s*new\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*;`, 'g');
+      let dm;
+      while ((dm = declRe.exec(searchText))) {
+        const varName = dm[1];
+        // Bound the variable's own call search to its DECLARING METHOD's own
+        // body span — Juliet's own `bad()`/`goodG2B()`/`goodB2G()` sibling
+        // methods routinely reuse the SAME local variable name
+        // ("baseObject") for THREE DIFFERENT concrete-class constructions,
+        // one per method; an unbounded whole-file search for
+        // `baseObject.action(` would also match the OTHER two methods' own
+        // unrelated calls (one of them genuinely tainted, in `bad()`),
+        // wrongly failing this check closed for the correct pair.
+        const span = _enclosingMethodSpan(searchText, dm.index);
+        const searchWithin = span ? searchText.slice(span.start, span.end) : searchText;
+        const offset = span ? span.start : 0;
+        const escapedVarName = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const varCallRe = new RegExp(`\\b${escapedVarName}\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g');
+        let vm;
+        while ((vm = varCallRe.exec(searchWithin))) {
+          const r = _checkCallAt(searchText, searchDeadRanges, offset + vm.index, offset + vm.index + vm[0].length);
+          if (r === 'skip') continue;
+          if (r === 'fail') return 'fail';
+          sawRealCallSite = true;
+        }
+      }
+    } else {
+      const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+      let cm;
+      while ((cm = callRe.exec(searchText))) {
+        const r = _checkCallAt(searchText, searchDeadRanges, cm.index, cm.index + cm[0].length);
+        if (r === 'skip') continue;
+        if (r === 'fail') return 'fail';
+        sawRealCallSite = true;
+      }
     }
     return sawRealCallSite ? 'ok' : 'none';
   }

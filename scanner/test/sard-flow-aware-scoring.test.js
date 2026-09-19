@@ -638,7 +638,41 @@ test('buildJulietExpected: an abstract-class support file with NO method bodies 
     const files = expected.map((e) => e.file);
     assert.ok(!files.some((f) => f.includes('_81_base.java')), 'the genuinely-empty _base.java must get no expected entry');
     assert.ok(files.some((f) => f.includes('_81_bad.java')), 'the real vulnerability in _bad.java must still be scoreable (its own only mechanism, unchanged from before this fix)');
-    assert.ok(files.some((f) => f.includes('_81_goodG2B.java')), 'the pre-existing (separate, not-fixed-here) _goodG2B.java fallback entry is left untouched');
+    assert.ok(!files.some((f) => f.includes('_81_goodG2B.java')), 'the designated-safe-variant _goodG2B.java must get no expected entry either (W5.44)');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// SARD_80_F1 W5.44 — the "separate, larger issue" W5.43's own comment
+// flagged: a file whose NAME is Juliet's own designated safe-variant suffix
+// for this multi-file idiom (`_81_goodG2B`/`_81_goodB2G`, or the sibling
+// Flow Variant 82) can never legitimately contain the vulnerability by the
+// generator's own design — its unsatisfiable flat-file fallback entry is
+// removed the same way `_81_base.java`'s was, this time via a file-NAME
+// convention rather than a content-structure one.
+test('buildJulietExpected: a designated-safe _81_goodB2G.java file gets no expected entry, but an unrelated file merely containing "good" in its name is untouched', async () => {
+  const goodB2G = J81_GOODG2B.replace(/goodG2B/g, 'goodB2G');
+  const unrelatedGoodNamed = `
+public class CWE89_SQL_Injection__database_goodPractice_01
+{
+    public void action(String data) throws Throwable
+    {
+        Statement sqlStatement = null;
+        sqlStatement.addBatch("update users set hitcount=hitcount+1 where name='" + data + "'");
+    }
+}
+`;
+  const root = await writeJulietCweTree('89', {
+    'CWE89_SQL_Injection__Environment_executeBatch_81_goodB2G.java': goodB2G,
+    'CWE89_SQL_Injection__database_goodPractice_01.java': unrelatedGoodNamed,
+  });
+  try {
+    const gt = { cweToFamily: { CWE89: 'sql-injection' }, preciseMethodScoring: true };
+    const expected = await buildJulietExpected(root, gt, null);
+    const files = expected.map((e) => e.file);
+    assert.ok(!files.some((f) => f.includes('_81_goodB2G.java')), 'the designated-safe _81_goodB2G.java must get no expected entry');
+    assert.ok(files.some((f) => f.includes('goodPractice_01.java')), 'a file merely containing "good" in an unrelated position in its name must NOT be excluded — only the exact _81/_82_good(G2B|B2G) suffix counts');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -725,7 +759,7 @@ test('buildJulietCsExpected: an abstract-class support file with NO method bodie
     const files = expected.map((e) => e.file);
     assert.ok(!files.some((f) => f.includes('_81_base.cs')), 'the genuinely-empty _base.cs must get no expected entry');
     assert.ok(files.some((f) => f.includes('_81_bad.cs')), 'the real vulnerability in _bad.cs must still be scoreable');
-    assert.ok(files.some((f) => f.includes('_81_goodG2B.cs')), 'the pre-existing _goodG2B.cs fallback entry is left untouched');
+    assert.ok(!files.some((f) => f.includes('_81_goodG2B.cs')), 'the designated-safe-variant _goodG2B.cs must get no expected entry either (W5.44)');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

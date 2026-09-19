@@ -1277,7 +1277,11 @@ export async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
           // trailing `{` to match, so it likewise returns zero spans for a
           // pure abstract declaration.
           const isAbstractOrInterfaceOnly = methods.length === 0 && /\b(?:abstract\s+class|interface)\s/.test(content);
-          if (!anyEmitted && !isAbstractOrInterfaceOnly) {
+          // W5.44 — see buildJulietExpected's own (much longer) header
+          // comment on `isDesignatedSafeVariant` for the full writeup; ported
+          // here verbatim.
+          const isDesignatedSafeVariant = /_8[12]_good(?:g2b|b2g)\.cs$/i.test(f.name);
+          if (!anyEmitted && !isAbstractOrInterfaceOnly && !isDesignatedSafeVariant) {
             expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
           }
         } else {
@@ -1464,16 +1468,34 @@ export async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
           // themselves (concrete subclasses), and separately already have
           // methods.length >= 1, so this narrowing never touches them
           // either way — confirmed via the same 3-file reproduction.
-          // Deliberately still does NOT touch the (separate, larger, NOT
-          // attempted this cycle) issue that a `_81_goodG2B.java`/
-          // `_81_goodB2G.java` file — genuinely safe by Juliet's own design,
-          // and correctly never expected to produce a finding — ALSO gets a
-          // bogus flat-file fallback entry whenever its own one real method
-          // is name-filtered out; this fix was never scoped to make a
-          // safe/vulnerable content determination, only to remove the
-          // fallback for a file provably incapable of containing ANY code.
+          // W5.44 — the "separate, larger issue" flagged in W5.43's own
+          // comment above, closed the same session: `_81_goodG2B.java`/
+          // `_81_goodB2G.java` (and the sibling Flow Variant 82) are
+          // genuinely safe BY JULIET'S OWN GENERATOR DESIGN — the file
+          // literally cannot contain the vulnerability, since Juliet
+          // physically SPLITS this multi-file idiom's safe half into its
+          // own dedicated file, always suffixed `_81_goodG2B`/`_81_goodB2G`
+          // (or `_82_...`) — confirmed directly against a fresh real-corpus
+          // fn sweep: of 39 remaining `{line:1, lineTolerance:9999}`
+          // unsatisfiable entries after W5.43 landed, 37 matched this EXACT
+          // filename suffix (the other 2 were genuinely-unrelated `_81_bad`
+          // detection gaps, left untouched). This is READING THE CORPUS'S
+          // OWN FILE-NAMING CONVENTION to build ground truth — exactly what
+          // `buildJulietExpected`/`buildJulietCsExpected` already do via
+          // `javaBadNameRe`/`_isSourceOnlyNamedMethod`/
+          // `_isDelegateOnlyBadMethod` (method-name conventions) — extended
+          // one level up to FILE-name conventions for this one multi-file
+          // idiom, not a new kind of rule. This is NOT the scanner reading
+          // filenames to cheat (that concern is `sast/bench-shape/`'s own,
+          // separate, gated-off concern) — it is the SCORER'S OWN ground-
+          // truth builder, whose entire job is already reading Juliet's
+          // naming and structural conventions. Deliberately narrow: matches
+          // ONLY the exact `_8[12]_good(?:g2b|b2g)` suffix already confirmed
+          // against real files in both languages — never a bare "good"
+          // substring, which could coincidentally appear elsewhere.
           const isAbstractOrInterfaceOnly = methods.length === 0 && /\b(?:abstract\s+class|interface)\s/.test(content);
-          if (!anyEmitted && !isAbstractOrInterfaceOnly) {
+          const isDesignatedSafeVariant = /_8[12]_good(?:g2b|b2g)\.java$/i.test(f.name);
+          if (!anyEmitted && !isAbstractOrInterfaceOnly && !isDesignatedSafeVariant) {
             expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
           }
         } else {

@@ -280,6 +280,24 @@ function _ownClassName(content) {
   return m ? m[1] : null;
 }
 
+// See java-structural.js's own identical copy of this helper (W5.45) for
+// the full rationale.
+function _enclosingMethodSpan(text, idx) {
+  const methodDeclRe = /\b(?!if\b|for\b|while\b|switch\b|catch\b|synchronized\b|do\b|else\b|return\b|new\b)([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let best = null, m;
+  while ((m = methodDeclRe.exec(text)) && m.index < idx) best = m;
+  if (!best) return null;
+  const openIdx = best.index + best[0].length - 1;
+  let depth = 1, i = openIdx + 1;
+  while (i < text.length && depth > 0) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') depth--;
+    i++;
+  }
+  if (i <= idx) return null;
+  return { start: openIdx, end: i };
+}
+
 // SARD_80_F1 W5.42 — the SAME cross-file gap W5.41 fixed in java-structural.js,
 // ported here: Juliet's Flow Variant 51+ ("data passed as an argument from
 // one method to another in a DIFFERENT class") splits caller/callee across
@@ -327,35 +345,76 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   if (paramIdx === -1) return false; // varName isn't actually a param of the enclosing method
   const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+  function _checkCallAt(searchText, searchDeadRanges, matchIndex, matchEnd) {
+    const argsStart = matchEnd;
+    let braceDepth = 1, i = argsStart;
+    while (i < searchText.length && braceDepth > 0) {
+      if (searchText[i] === '(') braceDepth++;
+      else if (searchText[i] === ')') braceDepth--;
+      i++;
+    }
+    const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
+    if (afterClose) return 'skip'; // this is the method's OWN declaration, not a call site
+    const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
+    if (paramIdx >= args.length) return 'fail'; // arity mismatch — bail conservatively
+    const argExpr = args[paramIdx];
+    if (/^"[^"]*"$/.test(argExpr)) return 'ok'; // this caller's own argument is a direct literal
+    // The caller's argument is itself a bare identifier (Juliet's own
+    // idiom: `data = "foo"; goodG2BSink(data, ...);` — the LITERAL sits on
+    // the variable one step back from the call site, not at the call site
+    // itself). Resolve it the SAME way any other candidate literal is
+    // resolved — recursing through `_nearestAssignIsLiteral` itself,
+    // scoped to the CALL SITE's own position. Bounded by the shared
+    // recursion-depth guard.
+    if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(searchText, argExpr, matchIndex, searchDeadRanges, depth0 + 1, siblingFiles)) return 'ok';
+    return 'fail'; // a non-literal (or unresolvable) caller exists
+  }
+
   function scanCallSitesIn(searchText, searchDeadRanges, classNameFilter) {
-    const callRe = classNameFilter
-      ? new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g')
-      : new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
-    let cm, sawRealCallSite = false;
-    while ((cm = callRe.exec(searchText))) {
-      const argsStart = cm.index + cm[0].length;
-      let braceDepth = 1, i = argsStart;
-      while (i < searchText.length && braceDepth > 0) {
-        if (searchText[i] === '(') braceDepth++;
-        else if (searchText[i] === ')') braceDepth--;
-        i++;
+    let sawRealCallSite = false;
+    if (classNameFilter) {
+      const inlineRe = new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g');
+      let cm;
+      while ((cm = inlineRe.exec(searchText))) {
+        const r = _checkCallAt(searchText, searchDeadRanges, cm.index, cm.index + cm[0].length);
+        if (r === 'skip') continue;
+        if (r === 'fail') return 'fail';
+        sawRealCallSite = true;
       }
-      const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
-      if (afterClose) continue; // this is the method's OWN declaration, not a call site
-      const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
-      if (paramIdx >= args.length) return 'fail'; // arity mismatch — bail conservatively
-      sawRealCallSite = true;
-      const argExpr = args[paramIdx];
-      if (/^"[^"]*"$/.test(argExpr)) continue; // this caller's own argument is a direct literal
-      // The caller's argument is itself a bare identifier (Juliet's own
-      // idiom: `data = "foo"; goodG2BSink(data, ...);` — the LITERAL sits on
-      // the variable one step back from the call site, not at the call site
-      // itself). Resolve it the SAME way any other candidate literal is
-      // resolved — recursing through `_nearestAssignIsLiteral` itself,
-      // scoped to the CALL SITE's own position. Bounded by the shared
-      // recursion-depth guard.
-      if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(searchText, argExpr, cm.index, searchDeadRanges, depth0 + 1, siblingFiles)) continue;
-      return 'fail'; // a non-literal (or unresolvable) caller exists
+      // SARD_80_F1 W5.45 — see java-structural.js's own identical fix for
+      // the full incident writeup: Juliet's abstract-dispatch caller
+      // convention is a TWO-STATEMENT pattern (`<BaseType> <var> = new
+      // <ConcreteClass>();` then later `<var>.<method>(...)`), not the
+      // inline one above. The variable's own call search is bounded to its
+      // DECLARING method's own body span (via `_enclosingMethodSpan`)
+      // since Juliet routinely reuses the same local variable name
+      // ("baseObject") across sibling bad()/goodG2B()/goodB2G() methods.
+      const declRe = new RegExp(`\\b[A-Za-z_]\\w*(?:<[^;()]*>)?\\s+([A-Za-z_]\\w*)\\s*=\\s*new\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*;`, 'g');
+      let dm;
+      while ((dm = declRe.exec(searchText))) {
+        const varName2 = dm[1];
+        const span = _enclosingMethodSpan(searchText, dm.index);
+        const searchWithin = span ? searchText.slice(span.start, span.end) : searchText;
+        const offset = span ? span.start : 0;
+        const escapedVarName = varName2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const varCallRe = new RegExp(`\\b${escapedVarName}\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g');
+        let vm;
+        while ((vm = varCallRe.exec(searchWithin))) {
+          const r = _checkCallAt(searchText, searchDeadRanges, offset + vm.index, offset + vm.index + vm[0].length);
+          if (r === 'skip') continue;
+          if (r === 'fail') return 'fail';
+          sawRealCallSite = true;
+        }
+      }
+    } else {
+      const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+      let cm;
+      while ((cm = callRe.exec(searchText))) {
+        const r = _checkCallAt(searchText, searchDeadRanges, cm.index, cm.index + cm[0].length);
+        if (r === 'skip') continue;
+        if (r === 'fail') return 'fail';
+        sawRealCallSite = true;
+      }
     }
     return sawRealCallSite ? 'ok' : 'none';
   }

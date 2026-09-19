@@ -196,3 +196,105 @@ public class Redir51b {
   const drop = computeJavaStructuralCrossFileSuppressions(fc);
   assert.deepEqual([...drop], ['/proj/s01/Redir51b.java:7'], 'only goodG2BSink (always called with a literal) should be suppressed');
 });
+
+// SARD_80_F1 W5.45 — Juliet's own abstract-dispatch caller convention uses a
+// TWO-STATEMENT pattern (`<BaseType> <var> = new <ConcreteClass>();` then
+// later `<var>.<method>(...)`), not the inline `(new X()).method()` shape
+// W5.41 already handles — confirmed via a direct fetch of the public
+// mirror's own CWE89_SQL_Injection__Environment_executeQuery_81a.java.
+// Found while investigating a real-corpus regression W5.43/44's own scorer
+// fix exposed: 30 Java files where our detector fires on Juliet's "good
+// source, structurally bad-shaped sink" test convention (a deliberate
+// imprecision trap, not a real vulnerability) because this calling
+// convention was invisible to the cross-file literal check.
+test('cross-file: the two-statement "BaseType var = new Concrete(); var.method(...)" caller pattern is resolved', () => {
+  const fileA = `
+public class Caller {
+    public void bad() {
+        String data = getUntrustedInput();
+        Base baseObject = new Bad();
+        baseObject.action(data);
+    }
+    public void goodG2B() {
+        String data = "foo";
+        Base baseObject = new GoodG2B();
+        baseObject.action(data);
+    }
+}`;
+  const fileBad = `
+public class Bad extends Base {
+    public void action(String data) throws Throwable {
+        Statement sqlStatement = null;
+        sqlStatement.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fileGoodG2B = `
+public class GoodG2B extends Base {
+    public void action(String data) throws Throwable {
+        Statement sqlStatement = null;
+        sqlStatement.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fc = {
+    '/proj/s01/Caller.java': fileA,
+    '/proj/s01/Bad.java': fileBad,
+    '/proj/s01/GoodG2B.java': fileGoodG2B,
+  };
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.deepEqual([...drop], ['/proj/s01/GoodG2B.java:5'], 'only GoodG2B (always called with a literal) should be suppressed; Bad (genuinely tainted) must survive');
+});
+
+test('cross-file: reused local variable name across SIBLING methods in the caller does not cause a false negative', () => {
+  // The exact collision Juliet's own real corpus hits: bad()/goodG2B()/
+  // goodB2G() each declare their OWN local variable named "baseObject" for
+  // a DIFFERENT concrete class — an unscoped whole-file search for
+  // "baseObject.action(" would wrongly pick up bad()'s own genuinely
+  // tainted call when resolving goodG2B()'s completely unrelated one.
+  const fileCaller = `
+public class Caller {
+    public void bad() {
+        String data = getUntrustedInput();
+        Base baseObject = new Bad();
+        baseObject.action(data);
+    }
+    public void goodG2B() {
+        String data = "foo";
+        Base baseObject = new GoodG2B();
+        baseObject.action(data);
+    }
+    public void goodB2G() {
+        String data = getUntrustedInput();
+        Base baseObject = new GoodB2G();
+        baseObject.action(data);
+    }
+}`;
+  const fileBad = `
+public class Bad extends Base {
+    public void action(String data) throws Throwable {
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fileGoodG2B = `
+public class GoodG2B extends Base {
+    public void action(String data) throws Throwable {
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fileGoodB2G = `
+public class GoodB2G extends Base {
+    public void action(String data) throws Throwable {
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fc = {
+    '/proj/s01/Caller.java': fileCaller,
+    '/proj/s01/Bad.java': fileBad,
+    '/proj/s01/GoodG2B.java': fileGoodG2B,
+    '/proj/s01/GoodB2G.java': fileGoodB2G,
+  };
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.deepEqual([...drop], ['/proj/s01/GoodG2B.java:5'], 'GoodG2B must be suppressed (always literal); Bad and GoodB2G (both genuinely tainted) must survive despite sharing the "baseObject" variable name');
+});
