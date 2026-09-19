@@ -1209,7 +1209,34 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
           // call to a same-class `BadSource()` helper only supplies data,
           // it never completes the flaw, so it must not trigger the
           // delegate-only skip below.
-          const csDelegateTargetRe = /^Bad(?:Sink)?\d*$/;
+          //
+          // W5.37 — a FIFTH incident in the same "unsatisfiable expected
+          // entry" family: Juliet's own "Flow Variant 81/82: data passed in
+          // a parameter to an abstract method" idiom names its abstract
+          // dispatch target `Action` UNCONDITIONALLY, across every CWE that
+          // uses this variant (confirmed via the public C# mirror's own
+          // `CWE23_..._Database_81_base.cs`: `public abstract void
+          // Action(string data);`) — a DIFFERENT delegate-method-naming
+          // convention than the `BadSink`-style one this regex already
+          // covers, so a caller like `_81a.cs`'s own `bad()` (whose entire
+          // body is `BaseType obj = new ConcreteBad(); obj.Action(data);`)
+          // was never recognized as delegate-only, leaving it with its own
+          // unsatisfiable expected entry — our detector correctly reports
+          // the real flaw inside the CONCRETE subclass's own `Action()`
+          // override (a separate file/class), which this file's own
+          // expected-entry never credits. Confirmed via a direct `runScan`
+          // reproduction of the exact 3-file shape (abstract base + concrete
+          // bad subclass + caller) before touching this regex.
+          //
+          // W5.37 correction — see the Java builder's identical comment: a
+          // real-corpus regression (caught before shipping) showed CWE319
+          // needs the same exclusion `_isSourceOnlyNamedMethod` already
+          // carries, since `Bad()`'s own trailing `Action(data)` call must
+          // not make its OWN genuinely-satisfiable entry (the network read
+          // itself, this CWE's actual flaw) look delegate-only.
+          const csDelegateTargetRe = cwe === 'CWE319'
+            ? /^Bad(?:Sink)?\d*$/
+            : /^(?:Bad(?:Sink)?\d*|Action)$/;
           let anyEmitted = false;
           for (const meth of methods) {
             // Only Bad()/BadSink()/BadSource() are TP-eligible — see the
@@ -1332,7 +1359,33 @@ async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
           // call to a same-class `badSource()` helper only supplies data,
           // it never completes the flaw, so it must not trigger the
           // delegate-only skip below.
-          const javaDelegateTargetRe = /^(?:bad|badSink|bad\d+)$/;
+          //
+          // W5.37 — see the C# builder's own `csDelegateTargetRe` comment
+          // for the full idiom (Juliet's Flow Variant 81/82 abstract-dispatch
+          // convention names its target method `action` UNCONDITIONALLY,
+          // confirmed via the public Java mirror's own
+          // `CWE89_..._81_base.java`: `public abstract void action(String
+          // data);`) — the same fix, ported to Java's own naming case.
+          //
+          // W5.37 correction — CWE319 needs the SAME exclusion
+          // `_isSourceOnlyNamedMethod` already carries, for the identical
+          // reason: Cleartext Transmission's own flaw IS the network read
+          // itself, which for this flow variant happens INSIDE `bad()` —
+          // `bad()` ALSO calls `action(data)` afterward (to hand the value
+          // to the concrete subclass), but that trailing call must not make
+          // `bad()` itself look "delegate-only," or its own genuinely-
+          // satisfiable expected entry (matching our detector's real finding
+          // at the socket-read line) gets wrongly skipped. Confirmed by a
+          // real-corpus regression caught before shipping (the discipline
+          // working as intended): the first version of this fix, without
+          // this exclusion, LOST 4 confirmed CWE319 TPs (converted to
+          // unconsumed-actual FPs) on the exact `..._81a.java` files this
+          // whole fix targets — every other CWE's own `_81a.java` files
+          // moved fn→(properly credited), zero regressions, confirming the
+          // exclusion is scoped correctly.
+          const javaDelegateTargetRe = cwe === 'CWE319'
+            ? /^(?:bad|badSink|bad\d+)$/
+            : /^(?:bad|badSink|bad\d+|action)$/;
           let anyEmitted = false;
           for (const meth of methods) {
             const isBad = javaBadNameRe.test(meth.name);

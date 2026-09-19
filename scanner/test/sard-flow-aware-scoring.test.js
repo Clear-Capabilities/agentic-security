@@ -260,6 +260,87 @@ class C {
     'a call to a same-class badSource() data helper must not be mistaken for delegating the flaw');
 });
 
+// SARD_80_F1 W5.37 — Juliet's own "Flow Variant 81/82: data passed in a
+// parameter to an abstract method" idiom names its abstract dispatch target
+// `action`/`Action` UNCONDITIONALLY (confirmed via the public mirrors' own
+// `..._81_base.java`/`.cs` files) — a caller whose entire body constructs a
+// concrete subclass and calls this method must be recognized as a delegate,
+// the same as the existing `badSink`/`BadSink` convention.
+const JAVA_DELEGATE_TARGET_RE_WITH_ACTION = /^(?:bad|badSink|bad\d+|action)$/;
+const CS_DELEGATE_TARGET_RE_WITH_ACTION = /^(?:Bad(?:Sink)?\d*|Action)$/;
+test('_isDelegateOnlyBadMethod: a Java bad() whose entire body dispatches to an abstract action() is a delegate', () => {
+  const bad = findJavaMethodSpans(`
+class C {
+    public void bad() throws Throwable {
+        String data;
+        data = System.getenv("ADD");
+        AbstractBase baseObject = new ConcreteBad();
+        baseObject.action(data);
+    }
+}
+`).find((m) => m.name === 'bad');
+  assert.ok(bad, 'expected to find the bad() method span');
+  assert.ok(_isDelegateOnlyBadMethod(bad, JAVA_DELEGATE_TARGET_RE_WITH_ACTION),
+    'a method whose entire body dispatches to action() via a freshly-constructed subclass must be recognized as a delegate');
+});
+test('_isDelegateOnlyBadMethod: a Java bad() with a bare same-name action() call (self-recursion) is NOT a delegate', () => {
+  const bad = findJavaMethodSpans(`
+class C {
+    public void action() throws Throwable {
+        action();
+    }
+}
+`).find((m) => m.name === 'action');
+  assert.ok(bad, 'expected to find the action() method span');
+  assert.equal(_isDelegateOnlyBadMethod(bad, JAVA_DELEGATE_TARGET_RE_WITH_ACTION), false,
+    'a bare unqualified self-call must still be treated as recursion, not delegation');
+});
+test('_isDelegateOnlyBadMethod: a C# Bad() whose entire body dispatches to an abstract Action() is a delegate', () => {
+  const src = `
+class Caller : AbstractTestCase {
+    public override void Bad() {
+        string data;
+        data = System.Environment.GetEnvironmentVariable("ADD");
+        Base baseObject = new ConcreteBad();
+        baseObject.Action(data);
+    }
+}
+`;
+  const methods = findCsharpMethodSpans(src);
+  const bad = methods.find((m) => m.name === 'Bad');
+  assert.ok(bad, 'expected to find the Bad() method span');
+  assert.ok(_isDelegateOnlyBadMethod(bad, CS_DELEGATE_TARGET_RE_WITH_ACTION),
+    'a method whose entire body dispatches to Action() via a freshly-constructed subclass must be recognized as a delegate');
+});
+
+// SARD_80_F1 W5.37 correction — a real-corpus regression caught before
+// shipping: CWE319's own flaw IS the network read itself (Cleartext
+// Transmission), which for Flow Variant 81/82 happens INSIDE bad() — bad()
+// ALSO calls action(data) afterward to hand the value to the concrete
+// subclass, but that trailing call must not make bad() itself look
+// delegate-only, or its own genuinely-satisfiable expected entry (matching
+// the real finding at the socket-read line) gets wrongly skipped. The
+// production call sites choose the ORIGINAL (action-excluding) regex
+// specifically for CWE319 — this test pins that the underlying mechanism
+// behaves correctly when that regex is used, mirroring
+// _isSourceOnlyNamedMethod's own CWE319 exception test.
+test('_isDelegateOnlyBadMethod: with the CWE319 regex (action excluded), a Java bad() with a genuine socket read PLUS a trailing action() call is NOT a delegate', () => {
+  const bad = findJavaMethodSpans(`
+class C {
+    public void bad() throws Throwable {
+        String password;
+        Socket socket = new Socket("host.example.org", 39544);
+        password = (new BufferedReader(new InputStreamReader(socket.getInputStream()))).readLine();
+        AbstractBase baseObject = new ConcreteBad();
+        baseObject.action(password);
+    }
+}
+`).find((m) => m.name === 'bad');
+  assert.ok(bad, 'expected to find the bad() method span');
+  assert.equal(_isDelegateOnlyBadMethod(bad, JAVA_DELEGATE_TARGET_RE), false,
+    'with the CWE319 (action-excluding) regex, a trailing action() call must not mask bad()\'s own genuine network-read flaw');
+});
+
 test('buildSameFileCallGraph + reachableFrom: resolves a same-file call edge', () => {
   const content = [
     /* 1 */ 'public void Bad()',
