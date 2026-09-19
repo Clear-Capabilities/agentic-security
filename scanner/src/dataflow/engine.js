@@ -1917,6 +1917,22 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // lower a field write differently.
   const cha = opts._cha;
   const classTaintedFields = new Map(); // className -> Set(bareFieldName)
+  // SARD_80_F1 W5.48 — per-WRITER record alongside the per-class union just
+  // above: className -> field -> Set(qid of a method whose OWN exit state
+  // taints this field). `classTaintedFields` only ever answers "is this
+  // field EVER tainted somewhere in the class" (unioned across every
+  // method), which is what made the cross-class pass below seed a reader
+  // like `goodG2BSink()` as tainted even though its own real caller chain
+  // (`goodG2B()`) only ever writes this field a LITERAL — Juliet's Flow
+  // Variant 65-68 idiom (`_68a`/`_68b`) has bad()/goodG2B()/goodB2G() each
+  // write the SAME static field then immediately call their OWN uniquely-
+  // named sink (badSink/goodG2BSink/goodB2GSink), so "ever tainted
+  // anywhere in the class" is true (via bad()) but says nothing about
+  // which SPECIFIC caller reaches a SPECIFIC reader. This map lets the
+  // cross-class pass ask the narrower, call-string-sensitive question
+  // instead: "is EVERY discoverable direct caller of this reader a
+  // confirmed NON-tainting writer of this field" — see its own use site.
+  const fieldWriterQids = new Map();
   if (cha && cha.methodOwners && cha.classes) {
     for (const fn of fnList) {
       if (Date.now() > deadlineMs) break;
@@ -1952,6 +1968,10 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
             || hasTaintedSubpath(field) || hasTaintedSubpath(`this.${field}`) || hasTaintedSubpath(`_this_.${field}`) || hasTaintedSubpath(`$this.${field}`)) {
           if (!classTaintedFields.has(className)) classTaintedFields.set(className, new Set());
           classTaintedFields.get(className).add(field);
+          if (!fieldWriterQids.has(className)) fieldWriterQids.set(className, new Map());
+          const fw = fieldWriterQids.get(className);
+          if (!fw.has(field)) fw.set(field, new Set());
+          fw.get(field).add(fn.qid);
         }
       }
     }
@@ -2038,16 +2058,65 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // graceful-degradation convention as this file's other opt-in passes.
   const fileContents = opts.fileContents;
   if (cha && fileContents && classTaintedFields.size) {
+    // SARD_80_F1 W5.48 — `callGraph.callersOf` (ir/callgraph.js) is an
+    // ALREADY-BUILT reverse index (callee qid -> Array<{caller, ...}>),
+    // computed once in `buildCallGraph` from its own fast, purely local/
+    // exact-match resolution over `edges` — the same data this pass needs.
+    // An earlier version of this fix re-derived its own copy by calling
+    // `callGraph.resolveKnownCallee(name, file)` per call site instead of
+    // reading this map directly; `resolveKnownCallee`'s own fallback path
+    // is a project-wide `for (const m of byNameInFile.values())` scan for
+    // any call that isn't a same-file/bare-tail hit, making that rebuild
+    // effectively O(total call sites x total files) — confirmed as the
+    // actual cause of a corpus-scan slowdown (CWE-89 isolated: 290s -> 641s)
+    // found while verifying this fix's real-corpus impact, not a hypothetical
+    // concern. Reading the precomputed map instead is O(1) per lookup.
+    const _callerQidSetCache = new Map(); // fn.qid -> Set(callerQid)|null, memoized
+    const callersOfQid = (qid) => {
+      if (_callerQidSetCache.has(qid)) return _callerQidSetCache.get(qid);
+      const edges = callGraph && callGraph.callersOf && callGraph.callersOf.get(qid);
+      const set = edges && edges.length ? new Set(edges.map((e) => e.caller).filter(Boolean)) : null;
+      _callerQidSetCache.set(qid, set);
+      return set;
+    };
     for (const [className, fields] of classTaintedFields) {
       if (Date.now() > deadlineMs) break;
-      const qualifiedSeeds = new Set();
-      for (const f of fields) qualifiedSeeds.add(`${className}.${f}`);
       const needle = `${className}.`;
       for (const fn of fnList) {
         if (Date.now() > deadlineMs) break;
         if (cha.methodOwners.get(fn.qid) === className) continue; // already covered above
         const src = fileContents[fn.file];
         if (typeof src !== 'string' || !src.includes(needle)) continue;
+
+        // Call-string precision: narrow `fields` to only the ones fn should
+        // actually be seeded with. A field drops out only when EVERY direct
+        // caller of fn is a same-class method we POSITIVELY confirmed does
+        // NOT taint that field (absent from `fieldWriterQids`) — never when
+        // a caller is unresolved, ambiguous, or outside this class, since
+        // those cases carry no evidence either way. This is deliberately a
+        // narrow, local instance of call-string sensitivity (Juliet's own
+        // "write-then-immediately-call-a-uniquely-named-sink" idiom, one
+        // direct hop) rather than a general k>1 CFA — see this file's own
+        // CLAUDE.md "Scope — what we still do NOT model" for why the general
+        // form is out of scope. Fails closed (keeps the field seeded) the
+        // instant precision can't be established, same direction every
+        // other heuristic in this pass already takes.
+        const callers = callersOfQid(fn.qid);
+        const effectiveFields = new Set();
+        for (const f of fields) {
+          if (!callers || !callers.size) { effectiveFields.add(f); continue; }
+          const writers = fieldWriterQids.get(className) && fieldWriterQids.get(className).get(f);
+          let keep = false;
+          for (const callerQid of callers) {
+            if (writers && writers.has(callerQid)) { keep = true; break; }
+            if (cha.methodOwners.get(callerQid) !== className) { keep = true; break; }
+          }
+          if (keep) effectiveFields.add(f);
+        }
+        if (!effectiveFields.size) continue; // every caller of fn provably never taints any of these fields
+
+        const qualifiedSeeds = new Set();
+        for (const f of effectiveFields) qualifiedSeeds.add(`${className}.${f}`);
         if (summaryCache.has(fn.qid, qualifiedSeeds)) continue;
         const ctx = {
           _findings: [], _taintSources: [], _returnTainted: false,

@@ -298,3 +298,110 @@ public class GoodB2G extends Base {
   const drop = computeJavaStructuralCrossFileSuppressions(fc);
   assert.deepEqual([...drop], ['/proj/s01/GoodG2B.java:5'], 'GoodG2B must be suppressed (always literal); Bad and GoodB2G (both genuinely tainted) must survive despite sharing the "baseObject" variable name');
 });
+
+// SARD_80_F1 W5.47 — Juliet Flow Variant 65-68 ("data passed as a member
+// variable in the 'a' class, used by a method in another class in the same
+// package"): a public static field is written in one file, read via a
+// QUALIFIED `OtherClass.field` reference in a sibling file's sink method.
+// Independently identified 3 times this session (W3.4/PHP, W4.C24/C#,
+// W4.J27/Java) as needing "call-site-sensitive field-value tracking" — but
+// Juliet's own convention turns out narrower: each sink method is UNIQUELY
+// named per flow branch with EXACTLY ONE real caller, so this reduces to
+// the same "declare-then-call, one writer per callee" shape W5.45 already
+// solved, just via a static field instead of a method argument.
+test('cross-file: a qualified static field read (ClassName.field) resolves via the field-writing method that calls THIS specific sink method', () => {
+  const fileA = `
+public class Caller {
+    public static String data;
+    public void bad() {
+        data = getUntrustedInput();
+        (new Sink()).badSink();
+    }
+    public void goodG2B() {
+        data = "foo";
+        (new Sink()).goodG2BSink();
+    }
+    public void goodB2G() {
+        data = getUntrustedInput();
+        (new Sink()).goodB2GSink();
+    }
+}`;
+  const fileSink = `
+public class Sink {
+    public void badSink() {
+        String data = Caller.data;
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+    public void goodG2BSink() {
+        String data = Caller.data;
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+    public void goodB2GSink() {
+        String data = Caller.data;
+        PreparedStatement s = null;
+        s.executeQuery();
+    }
+}`;
+  const fc = { '/proj/s01/Caller.java': fileA, '/proj/s01/Sink.java': fileSink };
+  const findings = scanJavaStructural('/proj/s01/Sink.java', fileSink);
+  const badSinkFinding = findings.find((f) => /badSink/.test(f.snippet) || f.line < findings[findings.length - 1].line);
+  assert.ok(findings.length >= 2, 'badSink and goodG2BSink both fire structurally in isolation');
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.equal(drop.size, 1, 'exactly one finding (goodG2BSink) should be suppressed');
+  const suppressedFinding = findings.find((f) => [...drop].some((k) => k.endsWith(`:${f.line}`)));
+  assert.ok(suppressedFinding, 'the suppressed finding must be a real finding from this scan');
+  const survivingFindings = findings.filter((f) => f !== suppressedFinding);
+  assert.ok(survivingFindings.length >= 1, 'badSink must still survive (genuinely tainted)');
+});
+
+test('cross-file: a static field with NO writer calling this specific sink method is never suppressed (fail closed)', () => {
+  // Only ONE writer method exists, and it calls a DIFFERENT sink method
+  // than the one being resolved — the field-literal check must find no
+  // RELEVANT writer at all and correctly refuse to suppress.
+  const fileA = `
+public class Caller {
+    public static String data;
+    public void unrelated() {
+        data = "foo";
+        (new Sink()).otherMethod();
+    }
+}`;
+  const fileSink = `
+public class Sink {
+    public void realSink() {
+        String data = Caller.data;
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+    public void otherMethod() {
+        System.out.println("noop");
+    }
+}`;
+  const fc = { '/proj/s01/Caller.java': fileA, '/proj/s01/Sink.java': fileSink };
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.equal(drop.size, 0, 'no writer method calls realSink specifically — must not guess a suppression');
+});
+
+test('cross-file: a static field written non-literally by the SAME method that calls this sink still fires (fail closed)', () => {
+  const fileA = `
+public class Caller {
+    public static String data;
+    public void bad() {
+        data = getUntrustedInput();
+        (new Sink()).badSink();
+    }
+}`;
+  const fileSink = `
+public class Sink {
+    public void badSink() {
+        String data = Caller.data;
+        Statement s = null;
+        s.executeQuery("select * from users where name='"+data+"'");
+    }
+}`;
+  const fc = { '/proj/s01/Caller.java': fileA, '/proj/s01/Sink.java': fileSink };
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.equal(drop.size, 0, 'the one real caller supplies a genuinely tainted value — must never be suppressed');
+});

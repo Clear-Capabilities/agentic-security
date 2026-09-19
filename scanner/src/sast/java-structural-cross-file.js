@@ -118,7 +118,8 @@ export function computeJavaStructuralCrossFileSuppressions(fileContents) {
           // the first place — nothing to suppress; skip re-deriving it here.
           if (isLineInDeadRange(line0, self.deadRanges)) continue;
         }
-        if (_trailingIdentIsLiteral(self.code, varName, m.index, self.deadRanges, 0, siblingFiles)) {
+        const resolved = _trailingIdentIsLiteral(self.code, varName, m.index, self.deadRanges, 0, siblingFiles);
+        if (resolved) {
           const line = self.code.substring(0, m.index).split('\n').length;
           drop.add(`${file}:${line}`);
         }
