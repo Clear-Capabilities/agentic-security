@@ -2055,11 +2055,60 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       }
     }
   }
+  // SARD_80_F1 W5.50 — same reverse-call-graph lookup the cross-class pass
+  // below uses (`callGraph.callersOf`, already built once by `buildCallGraph`
+  // — see that pass's own header comment for why this reads the existing
+  // index rather than re-deriving one), hoisted up so the SAME-class pass
+  // immediately below can ALSO apply call-string precision. This pass had
+  // the IDENTICAL over-approximation `classTaintedFields`'s own header
+  // comment describes for the cross-class case — a sibling method reached
+  // ONLY via a confirmed non-tainting writer was still blanket-seeded as
+  // tainted, just scoped to siblings of the SAME class instead of a
+  // different one. Genuinely a rarer shape here (per this pass's OWN
+  // original comment, most sibling methods have no discoverable caller/
+  // callee edge to each other at all — that remains true and still fails
+  // closed correctly), but real whenever a sibling reader is directly
+  // called from a KNOWN writer method (mirrors the cross-class idiom, just
+  // without the class boundary).
+  const _callerQidSetCache = new Map(); // fn.qid -> Set(callerQid)|null, memoized
+  const callersOfQid = (qid) => {
+    if (_callerQidSetCache.has(qid)) return _callerQidSetCache.get(qid);
+    const edges = callGraph && callGraph.callersOf && callGraph.callersOf.get(qid);
+    const set = edges && edges.length ? new Set(edges.map((e) => e.caller).filter(Boolean)) : null;
+    _callerQidSetCache.set(qid, set);
+    return set;
+  };
   for (const [className, fields] of classTaintedFields) {
     if (Date.now() > deadlineMs) break;
     for (const fn of fnList) {
       if (cha.methodOwners.get(fn.qid) !== className) continue;
-      if (summaryCache.has(fn.qid, fields)) continue;
+
+      // Call-string precision (mirrors the cross-class pass below): narrow
+      // `fields` to only the ones fn's own discoverable callers can
+      // actually supply as tainted. Fails closed (keeps the field seeded)
+      // whenever fn has no discoverable caller, a caller outside this
+      // class, or any caller not positively confirmed as a non-tainting
+      // writer — this can ONLY ever narrow what was already being seeded,
+      // never widen it, so it cannot introduce a new false negative beyond
+      // what the pre-existing blanket behavior already accepted.
+      const callers = callersOfQid(fn.qid);
+      let seedFields = fields;
+      if (callers && callers.size) {
+        const effectiveFields = new Set();
+        for (const f of fields) {
+          const writers = fieldWriterQids.get(className) && fieldWriterQids.get(className).get(f);
+          let keep = false;
+          for (const callerQid of callers) {
+            if (writers && writers.has(callerQid)) { keep = true; break; }
+            if (cha.methodOwners.get(callerQid) !== className) { keep = true; break; }
+          }
+          if (keep) effectiveFields.add(f);
+        }
+        seedFields = effectiveFields;
+      }
+      if (!seedFields.size) continue; // every discoverable caller of fn provably never taints any of these fields
+
+      if (summaryCache.has(fn.qid, seedFields)) continue;
       const ctx = {
         _findings: [], _taintSources: [], _returnTainted: false,
         _stack: new Set(), deadlineMs,
@@ -2073,14 +2122,16 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // the taint regardless of which form it uses to reference the field
       // — mirrors the write-side check above, `$this.` (PHP, W5.10) included.
       const seeded = new Set();
-      for (const f of fields) { seeded.add(f); seeded.add(`this.${f}`); seeded.add(`_this_.${f}`); seeded.add(`$this.${f}`); }
+      for (const f of seedFields) { seeded.add(f); seeded.add(`this.${f}`); seeded.add(`_this_.${f}`); seeded.add(`$this.${f}`); }
       try { analyzeFunction(fn, _unionAnnotationTaint(fn, seeded), ctx); } catch {}
-      // Unlike the k=2 pass below, this is NOT speculative: `fields` was
+      // Unlike the k=2 pass below, this is NOT speculative: `seedFields` was
       // derived from a REAL, already-observed write elsewhere in this exact
       // class (the loop above), so a sink this re-analysis finds is a real,
       // reachable flow — report it directly instead of waiting for a call
-      // site that will never come (sibling methods have no caller/callee
-      // relationship for the taint engine to discover on its own).
+      // site that will never come (most sibling methods still have no
+      // caller/callee relationship for the taint engine to discover; the
+      // call-string narrowing just above only ever removes fields when one
+      // WAS discoverable).
       _collectFindings(fn, ctx._findings);
       // `findings` still rides on the cached summary too, for the (rarer)
       // case where a real caller ALSO consults this exact qid+entry pair via
@@ -2091,7 +2142,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         taintedGlobals: new Set(),
         findings: ctx._findings,
       };
-      summaryCache.set(fn.qid, fields, fieldSummary);
+      summaryCache.set(fn.qid, seedFields, fieldSummary);
       // SARD_80_F1 W3.x — the getter+return interprocedural-composition gap
       // documented at PHP W5.10: an EXTERNAL, no-argument caller of this
       // method (`$tainted = $obj->getInput();`) never consults the
@@ -2137,27 +2188,9 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   // graceful-degradation convention as this file's other opt-in passes.
   const fileContents = opts.fileContents;
   if (cha && fileContents && classTaintedFields.size) {
-    // SARD_80_F1 W5.48 — `callGraph.callersOf` (ir/callgraph.js) is an
-    // ALREADY-BUILT reverse index (callee qid -> Array<{caller, ...}>),
-    // computed once in `buildCallGraph` from its own fast, purely local/
-    // exact-match resolution over `edges` — the same data this pass needs.
-    // An earlier version of this fix re-derived its own copy by calling
-    // `callGraph.resolveKnownCallee(name, file)` per call site instead of
-    // reading this map directly; `resolveKnownCallee`'s own fallback path
-    // is a project-wide `for (const m of byNameInFile.values())` scan for
-    // any call that isn't a same-file/bare-tail hit, making that rebuild
-    // effectively O(total call sites x total files) — confirmed as the
-    // actual cause of a corpus-scan slowdown (CWE-89 isolated: 290s -> 641s)
-    // found while verifying this fix's real-corpus impact, not a hypothetical
-    // concern. Reading the precomputed map instead is O(1) per lookup.
-    const _callerQidSetCache = new Map(); // fn.qid -> Set(callerQid)|null, memoized
-    const callersOfQid = (qid) => {
-      if (_callerQidSetCache.has(qid)) return _callerQidSetCache.get(qid);
-      const edges = callGraph && callGraph.callersOf && callGraph.callersOf.get(qid);
-      const set = edges && edges.length ? new Set(edges.map((e) => e.caller).filter(Boolean)) : null;
-      _callerQidSetCache.set(qid, set);
-      return set;
-    };
+    // `callersOfQid` (SARD_80_F1 W5.48) is hoisted above the same-class pass
+    // now that pass ALSO consults it (W5.50) — reused here rather than
+    // re-derived, same memoized map, zero extra cost.
     for (const [className, fields] of classTaintedFields) {
       if (Date.now() > deadlineMs) break;
       const needle = `${className}.`;

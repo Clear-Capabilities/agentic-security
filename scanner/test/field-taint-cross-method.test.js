@@ -132,3 +132,58 @@ public class E {
   const hits = cmdi(findings);
   assert.ok(hits.length >= 1, `expected an IR-TAINT CWE-78 finding via List.Add + indexer, got: ${JSON.stringify(findings.map(f => [f.parser, f.cwe, f.line]))}`);
 });
+
+// SARD_80_F1 W5.50 — same-class call-string precision, mirroring W5.48's
+// cross-class fix: a static field written by MULTIPLE sibling methods with
+// DIFFERENT taint values, each immediately calling ITS OWN uniquely-named
+// sink method (all still within ONE class this time, not split across two).
+// Before this fix, `goodSink()` here would be wrongly seeded as tainted
+// purely because `Bad()` (a completely different, unrelated caller) taints
+// the same field via a different call path.
+test('a same-class sibling sink reached only via a non-tainting writer is NOT seeded as tainted', async () => {
+  const findings = await scanSource('F.cs', `using System;
+using System.Diagnostics;
+public class F {
+    private static string data;
+    public void Bad() {
+        data = Environment.GetEnvironmentVariable("ADD");
+        BadSink();
+    }
+    public void Good() {
+        data = "constant";
+        GoodSink();
+    }
+    private void BadSink() {
+        string d = data;
+        Process.Start("cmd.exe", d);
+    }
+    private void GoodSink() {
+        string d = data;
+        Process.Start("cmd.exe", d);
+    }
+}
+`);
+  const hits = cmdi(findings);
+  const inBadSink = hits.some((f) => f.line >= 12 && f.line <= 15);
+  const inGoodSink = hits.some((f) => f.line >= 16 && f.line <= 19);
+  assert.ok(inBadSink, `expected BadSink (reached only by the tainting writer Bad()) to still fire: ${JSON.stringify(hits.map(f => f.line))}`);
+  assert.ok(!inGoodSink, `expected GoodSink (reached only by the non-tainting writer Good()) NOT to fire: ${JSON.stringify(hits.map(f => f.line))}`);
+});
+
+test('a same-class sink with NO discoverable caller still fails closed (stays tainted)', async () => {
+  const findings = await scanSource('G.cs', `using System;
+using System.Diagnostics;
+public class G {
+    private static string data;
+    public void Bad() {
+        data = Environment.GetEnvironmentVariable("ADD");
+    }
+    private void OrphanSink() {
+        string d = data;
+        Process.Start("cmd.exe", d);
+    }
+}
+`);
+  const hits = cmdi(findings);
+  assert.ok(hits.length >= 1, `expected fail-closed (still tainted) with no discoverable caller for OrphanSink: ${JSON.stringify(findings.map(f => [f.parser, f.cwe, f.line]))}`);
+});
