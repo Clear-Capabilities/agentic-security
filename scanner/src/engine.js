@@ -9183,18 +9183,19 @@ function _deterministicFileTimings(timings) {
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
-  // SARD_80_F1 W5.41 — unlike the ADD-only cross-file passes above, this one
-  // SUPPRESSES an already-emitted java-structural.js finding when every real
-  // caller (checked project-wide within the finding's own directory) agrees
-  // the concatenated value is a literal. See java-structural-cross-file.js's
-  // own header comment for the full design and W5.40's EXECUTION_STATUS.md
+  // SARD_80_F1 W5.41/W5.42 — unlike the ADD-only cross-file passes above,
+  // this one SUPPRESSES an already-emitted java-structural.js or
+  // java-bench-extras.js finding when every real caller (checked project-
+  // wide within the finding's own directory) agrees the concatenated/
+  // redirected value is a literal. See java-structural-cross-file.js's own
+  // header comment for the full design and W5.40's EXECUTION_STATUS.md
   // entry for the root-cause investigation.
   {
     const _jsCrossSuppress = runDetector(_detectorErrors,'<project>','computeJavaStructuralCrossFileSuppressions',()=>computeJavaStructuralCrossFileSuppressions(fc));
     if (_jsCrossSuppress && _jsCrossSuppress.size) {
       for (let _i = aF.length - 1; _i >= 0; _i--) {
         const _f = aF[_i];
-        if (_f && typeof _f.id === 'string' && _f.id.startsWith('java-struct-') && _jsCrossSuppress.has(`${_f.file}:${_f.line}`)) {
+        if (_f && typeof _f.id === 'string' && (_f.id.startsWith('java-struct-') || _f.id.startsWith('java-extras:open-redirect:')) && _jsCrossSuppress.has(`${_f.file}:${_f.line}`)) {
           aF.splice(_i, 1);
         }
       }

@@ -1,5 +1,7 @@
-// SARD_80_F1 W5.41 — cross-file literal-resolution SUPPRESSION for
-// java-structural.js's own structural SQLi/cmdi detectors.
+// SARD_80_F1 W5.41/W5.42 — cross-file literal-resolution SUPPRESSION for
+// this codebase's Java taint-independent structural detectors
+// (java-structural.js's SQLi/cmdi rules, java-bench-extras.js's CWE-601
+// open-redirect rule).
 //
 // W5.40 root-caused java-structural.js's own remaining CWE-89 false-
 // positive bucket (175 of 186 fps, on the real corpus) to Juliet's Flow
@@ -11,11 +13,14 @@
 // itself lives in `_51b`'s `goodG2BSink(String data)`, where `data` is a
 // bare method PARAMETER with no same-file assignment at all. Every real
 // caller of `goodG2BSink` passes a literal — but that caller lives in a
-// SIBLING FILE, invisible to `java-structural.js`'s own same-file-only
-// `_resolveParamLiteralViaAllCallSites`.
+// SIBLING FILE, invisible to the detector's own same-file-only literal-
+// tracking helper. W5.42 found the SAME idiom manifests identically in
+// java-bench-extras.js's independent CWE-601 `response.sendRedirect`
+// detector (a separate, independently-tuned copy of the same "nearest
+// assignment is a literal" heuristic).
 //
 // This module is a SEPARATE, project-wide post-loop pass — NOT a change to
-// `scanJavaStructural`'s per-file call signature — deliberately mirroring
+// either detector's per-file call signature — deliberately mirroring
 // `csharp-cross-file.js`'s own W5.31 design of a standalone project-wide
 // pass rather than threading extra context through the per-file detector
 // cascade. `engine.js`'s `_runFileCascade` is explicitly documented as
@@ -29,22 +34,22 @@
 //
 // Unlike csharp-cross-file.js (which ADDS genuinely new findings from
 // cross-file taint), this module only ever SUPPRESSES an already-emitted
-// finding: it re-derives the exact same "is the concatenated variable
-// provably a literal" question java-structural.js's own detectors already
-// ask, using the SAME regexes and the SAME `_trailingIdentIsLiteral`
-// mechanism (imported, not duplicated, to avoid drift), extended with an
-// optional sibling-file fallback — see that function's own header comment
-// (java-structural.js) for why the fallback ALSO requires matching the
-// sink's own declared class name, not just its bare method name: Juliet
-// reuses the SAME generic method names (bad/badSink/goodG2B/goodG2BSink/…)
-// identically across thousands of otherwise-unrelated flow-variant files
-// living in the SAME directory, and blind scrambling preserves that
-// collision by design (the same original word always hashes to the same
-// opaque token, everywhere) — confirmed directly against the real corpus
-// during this fix's own verification (a bare-name search across one
-// directory's ~980 sibling files matched hundreds of unrelated classes'
-// own same-named methods, causing an unrelated caller elsewhere in the
-// directory to make this check fail closed even for the intended pair).
+// finding: it re-derives the exact same "is the concatenated/redirected
+// variable provably a literal" question each detector already asks, using
+// the SAME regexes and the SAME literal-tracking mechanism (imported, not
+// duplicated, to avoid drift), extended with an optional sibling-file
+// fallback — see `java-structural.js`'s own `_resolveParamLiteralViaAllCallSites`
+// header comment for why the fallback ALSO requires matching the sink's own
+// declared class name, not just its bare method name: Juliet reuses the
+// SAME generic method names (bad/badSink/goodG2B/goodG2BSink/…) identically
+// across thousands of otherwise-unrelated flow-variant files living in the
+// SAME directory, and blind scrambling preserves that collision by design
+// (the same original word always hashes to the same opaque token,
+// everywhere) — confirmed directly against the real corpus during W5.41's
+// own verification (a bare-name search across one directory's ~980 sibling
+// files matched hundreds of unrelated classes' own same-named methods,
+// causing an unrelated caller elsewhere in the directory to make the check
+// fail closed even for the intended pair).
 //
 // It never invents a new detection capability and never touches any other
 // detector's findings.
@@ -59,13 +64,11 @@
 // not guess from partial information.
 import { blankComments } from './_comment-strip.js';
 import { deadBranchRanges, isLineInDeadRange } from './java-ast-folding.js';
-import { RE, _trailingIdentIsLiteral } from './java-structural.js';
+import { RE as STRUCTURAL_RE, _trailingIdentIsLiteral } from './java-structural.js';
+import { SEND_REDIRECT_RE, _nearestAssignIsLiteral } from './java-bench-extras.js';
 
-export function computeJavaStructuralCrossFileSuppressions(fileContents) {
-  const drop = new Set();
+function _parseProject(fileContents) {
   const javaFiles = Object.entries(fileContents || {}).filter(([p, raw]) => /\.java$/i.test(p) && raw);
-  if (javaFiles.length < 2) return drop;
-
   const byDir = new Map();
   const parsedByFile = new Map(); // file -> { raw, code, deadRanges }
   for (const [file, raw] of javaFiles) {
@@ -76,22 +79,34 @@ export function computeJavaStructuralCrossFileSuppressions(fileContents) {
     let code;
     try { code = blankComments(raw); } catch { continue; }
     let ranges = [];
-    try { ranges = deadBranchRanges(raw); } catch { /* parse error → no AST info, same fallback as scanJavaStructural itself */ }
+    try { ranges = deadBranchRanges(raw); } catch { /* parse error → no AST info, same fallback as the detectors themselves use */ }
     parsedByFile.set(file, { raw, code, deadRanges: ranges });
   }
+  return { javaFiles, byDir, parsedByFile };
+}
+
+function _siblingsOf(file, byDir, parsedByFile) {
+  const dir = file.slice(0, file.lastIndexOf('/'));
+  return (byDir.get(dir) || [])
+    .filter((f) => f !== file)
+    .map((f) => parsedByFile.get(f))
+    .filter(Boolean)
+    .map((s) => ({ code: s.code, deadRanges: s.deadRanges }));
+}
+
+export function computeJavaStructuralCrossFileSuppressions(fileContents) {
+  const drop = new Set();
+  const { javaFiles, byDir, parsedByFile } = _parseProject(fileContents);
+  if (javaFiles.length < 2) return drop;
 
   for (const [file] of javaFiles) {
     const self = parsedByFile.get(file);
     if (!self) continue;
-    const dir = file.slice(0, file.lastIndexOf('/'));
-    const siblingFiles = (byDir.get(dir) || [])
-      .filter((f) => f !== file)
-      .map((f) => parsedByFile.get(f))
-      .filter(Boolean)
-      .map((s) => ({ code: s.code, deadRanges: s.deadRanges }));
+    const siblingFiles = _siblingsOf(file, byDir, parsedByFile);
     if (!siblingFiles.length) continue;
 
-    for (const re of Object.values(RE)) {
+    // java-structural.js's own SQLi/cmdi structural detectors.
+    for (const re of Object.values(STRUCTURAL_RE)) {
       const r = new RegExp(re.source, re.flags);
       let m;
       while ((m = r.exec(self.code))) {
@@ -100,14 +115,29 @@ export function computeJavaStructuralCrossFileSuppressions(fileContents) {
         if (self.deadRanges.length) {
           const line0 = self.code.substring(0, m.index).split('\n').length;
           // A sink already inside a dead range never produced a finding in
-          // the first place (scanJavaStructural's own check) — nothing to
-          // suppress; skip re-deriving it here too.
+          // the first place — nothing to suppress; skip re-deriving it here.
           if (isLineInDeadRange(line0, self.deadRanges)) continue;
         }
         if (_trailingIdentIsLiteral(self.code, varName, m.index, self.deadRanges, 0, siblingFiles)) {
           const line = self.code.substring(0, m.index).split('\n').length;
           drop.add(`${file}:${line}`);
         }
+      }
+    }
+
+    // java-bench-extras.js's own CWE-601 response.sendRedirect detector.
+    const redirectRe = new RegExp(SEND_REDIRECT_RE.source, SEND_REDIRECT_RE.flags);
+    let rm;
+    while ((rm = redirectRe.exec(self.code))) {
+      const arg = (rm[1] || '').trim();
+      if (!/^[A-Za-z_]\w*$/.test(arg)) continue; // only a bare identifier is a literal-tracking candidate
+      if (self.deadRanges.length) {
+        const line0 = self.code.substring(0, rm.index).split('\n').length;
+        if (isLineInDeadRange(line0, self.deadRanges)) continue;
+      }
+      if (_nearestAssignIsLiteral(self.code, arg, rm.index, self.deadRanges, 0, siblingFiles)) {
+        const line = self.code.substring(0, rm.index).split('\n').length;
+        drop.add(`${file}:${line}`);
       }
     }
   }

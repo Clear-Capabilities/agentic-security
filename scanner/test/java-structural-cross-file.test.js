@@ -170,3 +170,29 @@ public class OtherSink${i} {
   const drop = computeJavaStructuralCrossFileSuppressions(fc);
   assert.deepEqual([...drop], ['/proj/B.java:5'], 'only B.sink (called exclusively with a literal) should be suppressed');
 });
+
+test('cross-file: java-bench-extras.js CWE-601 open-redirect sendRedirect sink also benefits from cross-file literal resolution', () => {
+  const fileA = `
+public class Redir51a {
+    public void bad() {
+        String data = getUntrustedInput();
+        (new Redir51b()).badSink(data);
+    }
+    public void goodG2B() {
+        String data = "foo";
+        (new Redir51b()).goodG2BSink(data);
+    }
+}`;
+  const fileB = `
+public class Redir51b {
+    public void badSink(String data) {
+        response.sendRedirect(data);
+    }
+    public void goodG2BSink(String data) {
+        response.sendRedirect(data);
+    }
+}`;
+  const fc = { '/proj/s01/Redir51a.java': fileA, '/proj/s01/Redir51b.java': fileB };
+  const drop = computeJavaStructuralCrossFileSuppressions(fc);
+  assert.deepEqual([...drop], ['/proj/s01/Redir51b.java:7'], 'only goodG2BSink (always called with a literal) should be suppressed');
+});

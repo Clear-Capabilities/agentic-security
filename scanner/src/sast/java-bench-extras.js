@@ -54,7 +54,9 @@ const SETX_RE = /\.\s*set(?:String|Int|Long|Object|Date|Timestamp|Boolean|Float|
 // ─── New-rule patterns ────────────────────────────────────────────────────
 
 // CWE-601: response.sendRedirect(<tainted-or-non-literal>)
-const SEND_REDIRECT_RE = /\b(?:response|resp|res)\s*\.\s*sendRedirect\s*\(\s*([^)]+)\)/g;
+// Exported for java-structural-cross-file.js (W5.42) — the same sink
+// matching, reused to re-derive candidate findings for cross-file checking.
+export const SEND_REDIRECT_RE = /\b(?:response|resp|res)\s*\.\s*sendRedirect\s*\(\s*([^)]+)\)/g;
 
 // CWE-319: cleartext transmission of sensitive information.
 //
@@ -271,7 +273,28 @@ function _splitTopLevelCommas(text) {
 // ANY call site supplying a non-literal at that position all return
 // `false` — this only ever ADDS a positive signal when literally every
 // known caller agrees, never guesses from a single ambiguous data point.
-function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth) {
+// The declared class name of `content` itself — see java-structural.js's
+// own identical copy of this helper (W5.41/W5.42) for the full rationale.
+function _ownClassName(content) {
+  const m = /\bclass\s+([A-Za-z_]\w*)/.exec(content);
+  return m ? m[1] : null;
+}
+
+// SARD_80_F1 W5.42 — the SAME cross-file gap W5.41 fixed in java-structural.js,
+// ported here: Juliet's Flow Variant 51+ ("data passed as an argument from
+// one method to another in a DIFFERENT class") splits caller/callee across
+// two physical files in the same directory, invisible to a same-file-only
+// search. `siblingFiles` (optional; `{code, deadRanges}` for other `.java`
+// files in the same directory) is a fallback consulted ONLY when the
+// same-file search finds zero real call sites — `scanJavaBenchExtras`'s own
+// ordinary call never supplies it, so its behavior is unchanged. The
+// cross-file fallback ALSO requires the call site to construct THIS sink's
+// own declared class (`new ClassName()).method(`), not just call a
+// same-named method — see java-structural.js's own W5.41 header comment for
+// why a bare method-name match is unsound here (Juliet reuses the same
+// generic method names identically across thousands of unrelated files in
+// the same directory, a collision blind scrambling preserves by design).
+function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth, siblingFiles) {
   const depth0 = _depth || 0;
   if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -303,34 +326,53 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   const paramIdx = params.findIndex((p) => new RegExp(`\\b${escapedVar}$`).test(p));
   if (paramIdx === -1) return false; // varName isn't actually a param of the enclosing method
   const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
-  let cm, sawRealCallSite = false;
-  while ((cm = callRe.exec(content))) {
-    const argsStart = cm.index + cm[0].length;
-    let braceDepth = 1, i = argsStart;
-    while (i < content.length && braceDepth > 0) {
-      if (content[i] === '(') braceDepth++;
-      else if (content[i] === ')') braceDepth--;
-      i++;
+
+  function scanCallSitesIn(searchText, searchDeadRanges, classNameFilter) {
+    const callRe = classNameFilter
+      ? new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g')
+      : new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+    let cm, sawRealCallSite = false;
+    while ((cm = callRe.exec(searchText))) {
+      const argsStart = cm.index + cm[0].length;
+      let braceDepth = 1, i = argsStart;
+      while (i < searchText.length && braceDepth > 0) {
+        if (searchText[i] === '(') braceDepth++;
+        else if (searchText[i] === ')') braceDepth--;
+        i++;
+      }
+      const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
+      if (afterClose) continue; // this is the method's OWN declaration, not a call site
+      const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
+      if (paramIdx >= args.length) return 'fail'; // arity mismatch — bail conservatively
+      sawRealCallSite = true;
+      const argExpr = args[paramIdx];
+      if (/^"[^"]*"$/.test(argExpr)) continue; // this caller's own argument is a direct literal
+      // The caller's argument is itself a bare identifier (Juliet's own
+      // idiom: `data = "foo"; goodG2BSink(data, ...);` — the LITERAL sits on
+      // the variable one step back from the call site, not at the call site
+      // itself). Resolve it the SAME way any other candidate literal is
+      // resolved — recursing through `_nearestAssignIsLiteral` itself,
+      // scoped to the CALL SITE's own position. Bounded by the shared
+      // recursion-depth guard.
+      if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(searchText, argExpr, cm.index, searchDeadRanges, depth0 + 1, siblingFiles)) continue;
+      return 'fail'; // a non-literal (or unresolvable) caller exists
     }
-    const afterClose = content.slice(i).match(/^\s*(\{|throws)/);
-    if (afterClose) continue; // this is the method's OWN declaration, not a call site
-    const args = _splitTopLevelCommas(content.slice(argsStart, i - 1)).map((a) => a.trim());
-    if (paramIdx >= args.length) return false; // arity mismatch — bail conservatively
-    sawRealCallSite = true;
-    const argExpr = args[paramIdx];
-    if (/^"[^"]*"$/.test(argExpr)) continue; // this caller's own argument is a direct literal
-    // The caller's argument is itself a bare identifier (Juliet's own
-    // idiom: `data = "foo"; goodG2BSink(data, ...);` — the LITERAL sits on
-    // the variable one step back from the call site, not at the call site
-    // itself). Resolve it the SAME way any other candidate literal is
-    // resolved in this file — recursing through `_nearestAssignIsLiteral`
-    // itself, scoped to the CALL SITE's own position (where that variable's
-    // own most recent assignment is genuinely visible via a normal
-    // backward scan, since the assignment and the call live in the SAME
-    // caller method). Bounded by the shared recursion-depth guard.
-    if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(content, argExpr, cm.index, deadRanges, depth0 + 1)) continue;
-    return false; // a non-literal (or unresolvable) caller exists
+    return sawRealCallSite ? 'ok' : 'none';
+  }
+
+  const sameFileResult = scanCallSitesIn(content, deadRanges, null);
+  if (sameFileResult === 'fail') return false;
+  let sawRealCallSite = sameFileResult === 'ok';
+  if (siblingFiles && siblingFiles.length) {
+    const ownClass = _ownClassName(content);
+    if (ownClass) {
+      const escapedClass = ownClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      for (const sib of siblingFiles) {
+        const r = scanCallSitesIn(sib.code, sib.deadRanges, escapedClass);
+        if (r === 'fail') return false;
+        if (r === 'ok') sawRealCallSite = true;
+      }
+    }
   }
   return sawRealCallSite;
 }
@@ -373,7 +415,9 @@ function _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _de
   return sawAssignment;
 }
 
-function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth) {
+// Exported for java-structural-cross-file.js (W5.42) — see
+// _resolveParamLiteralViaAllCallSites's own header comment for `siblingFiles`.
+export function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth, siblingFiles) {
   if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -411,7 +455,7 @@ function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calle
   // excludes `null` explicitly (never a candidate literal — mirrors
   // ldap-injection.js's own W4.C37 precedent for the identical reasoning).
   if (lastAnyRhs && lastAnyRhs !== 'null' && /^[A-Za-z_]\w*$/.test(lastAnyRhs) && lastAnyRhs !== varName) {
-    if (_nearestAssignIsLiteral(content, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
+    if (_nearestAssignIsLiteral(content, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1, siblingFiles)) return true;
   }
   if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
     // W4.J38 — before failing closed, check whether `varName` is a
@@ -441,7 +485,7 @@ function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calle
     // declaration (an access-modifier-qualified declaration, syntax no
     // local variable or parameter can carry), then requires EVERY
     // assignment to it anywhere in the file to resolve to a literal.
-    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth)
+    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth, siblingFiles)
       || _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _calleeDepth);
   }
   // Juliet's "data passed as an argument from one method to another" flow
