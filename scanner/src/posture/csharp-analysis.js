@@ -418,6 +418,8 @@ export function analyzeCSharpIR(ir) {
   const methodFlow = new Map();
   const methodToClass = new Map();
   for (const c of ir.classes) for (const m of c.methods) methodToClass.set(m, c);
+  const classesByName = new Map();
+  for (const c of ir.classes) classesByName.set(c.name, c);
   // SARD_80_F1 W3.x — resolve a same-file call's return-taint verdict
   // instead of letting `analyzeMethodFlow`'s identifier-name fallback treat
   // ANY tainted identifier appearing in the call text (including an
@@ -506,8 +508,41 @@ export function analyzeCSharpIR(ir) {
     const callerFlow = methodFlow.get(caller);
     if (!callerFlow) continue;
     for (const call of caller.calls || []) {
-      if (call.receiver) continue; // same-file helper calls are bare (no receiver)
-      const candidates = methodsByName.get(call.method);
+      let candidates;
+      if (call.receiver) {
+        // SARD_80_F1 W5.30 — a receiver-qualified call (`Sink.BadSink(data,
+        // …)`) was unconditionally skipped here, same as any OTHER
+        // receiver-bearing call — Juliet's own cross-class "Flow Variant 51:
+        // data passed as an argument from one method to another in
+        // different classes in the same package" idiom (confirmed via the
+        // public C# mirror's own
+        // CWE36_..._Params_Get_Web_51a.cs/_51b.cs pair) was therefore
+        // invisible here even in the SAME FILE, let alone across files —
+        // confirmed by direct `runScan` reproduction showing ZERO findings
+        // from any detector for this shape, structural or deep-engine,
+        // before this fix. Resolvable ONLY when `call.receiver` is a REAL
+        // class declared in THIS file (`classesByName`, never an instance
+        // variable this analyzer has no type-tracking for) AND the matched
+        // candidate is `static` — the second check is load-bearing, not
+        // redundant: C# cannot compile `ClassName.InstanceMethod()` without
+        // an object reference, so if the resolved candidate is NOT static,
+        // `call.receiver`'s text is far more likely a coincidentally
+        // same-named INSTANCE VARIABLE than a genuine static-class
+        // qualifier, and treating it as one would silently invent a data-flow
+        // edge that doesn't exist — exactly the risk `byQname`'s own header
+        // comment in `callgraph.js` warns against for a structurally
+        // analogous ambiguity. Deliberately single-hop and same-file only,
+        // matching every other interprocedural mechanism in this file —
+        // cross-FILE resolution is a separate, larger undertaking (the deep
+        // taint engine's own `callgraph.js` already resolves cross-file
+        // static calls project-wide; this structural analyzer does not).
+        const cls = classesByName.get(call.receiver);
+        candidates = cls
+          ? (methodsByName.get(call.method) || []).filter(m => methodToClass.get(m) === cls && (m.modifiers || []).includes('static'))
+          : null;
+      } else {
+        candidates = methodsByName.get(call.method);
+      }
       if (!candidates || candidates.length !== 1) continue;
       const callee = candidates[0];
       if (callee === caller) continue;

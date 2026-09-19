@@ -978,6 +978,84 @@ test('an ambiguous same-named helper method (2+ candidates project-wide) is left
   assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding when the callee name is ambiguous across classes, got: ${findings.map(f => f.family).join(',')}`);
 });
 
+// SARD_80_F1 W5.30 — Juliet's own cross-class "Flow Variant 51: data passed
+// as an argument from one method to another in different classes in the
+// same package" idiom (confirmed via the public C# mirror's own
+// CWE36_..._Params_Get_Web_51a.cs/_51b.cs pair) was invisible even in the
+// SAME FILE before this fix: the taint-seeding loop unconditionally skipped
+// ANY receiver-qualified call (`call.receiver` truthy), with no exception
+// for a static cross-class call. Resolvable only when the receiver text
+// names a REAL class declared in the SAME file AND the matched candidate is
+// itself `static` (C# cannot compile `ClassName.InstanceMethod()`, so a
+// non-static match means the receiver was very likely a coincidentally
+// same-named instance variable, not a genuine class qualifier).
+test('a tainted value passed to a DIFFERENT class\'s static method (same file) reaches that method\'s own sink', () => {
+  const src = `
+    public class Caller : AbstractTestCaseWeb {
+      public override void Bad(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = req.Params.Get("name");
+        Sink.BadSink(data, req, resp);
+      }
+    }
+    public class Sink {
+      public static void BadSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(findings.some(f => f.family === 'path-traversal'), `expected a path-traversal finding via the cross-class argument-passed source, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('a hardcoded value passed to a DIFFERENT class\'s static method (same file) does not fire', () => {
+  const src = `
+    public class Caller : AbstractTestCaseWeb {
+      public override void Good(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = "foo";
+        Sink.GoodSink(data, req, resp);
+      }
+    }
+    public class Sink {
+      public static void GoodSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'path-traversal'), `expected no path-traversal finding for a hardcoded cross-class argument, got: ${findings.map(f => f.family).join(',')}`);
+});
+
+test('a receiver that names a class but resolves only to a NON-STATIC method is left unresolved (likely a same-named instance variable, not a class qualifier)', () => {
+  const src = `
+    public class Helper : AbstractTestCaseWeb {
+      public override void Bad(HttpRequest req, HttpResponse resp) {
+        string data;
+        data = req.Params.Get("name");
+        Helper.BadSink(data, req, resp);
+      }
+      private void BadSink(string data, HttpRequest req, HttpResponse resp) {
+        if (data != null) {
+          if (File.Exists(data)) {
+            using (StreamReader sr = new StreamReader(data)) {
+            }
+          }
+        }
+      }
+    }`;
+  const findings = scanCSharp('t.cs', src);
+  assert.ok(!findings.some(f => f.family === 'path-traversal'), `a non-static candidate must not be resolved via the class-name receiver path, got: ${findings.map(f => f.family).join(',')}`);
+});
+
 test('IR: a `using (Type x = expr)` declaration is not corrupted by the enclosing clause\'s own closing paren', () => {
   const src = 'class C { void M() { using (StreamReader sr = new StreamReader("f")) { data = sr.ReadLine(); } } }';
   const ir = buildCSharpIR(src);
