@@ -1277,17 +1277,13 @@ function detectWeakPasswordEncoding(file, raw, ir, analysis, out, seen) {
 
 // ─── Entry point ───────────────────────────────────────────────────────────
 
-export function scanCSharp(fp, raw) {
-  if (!/\.cs$/i.test(fp)) return [];
-  if (!raw || raw.length > 500_000) return [];
-  let ir, analysis;
-  try {
-    ir = buildCSharpIR(raw);
-    analysis = analyzeCSharpIR(ir);
-  } catch (e) {
-    // IR build failed — fail-closed; better to miss than to throw.
-    return [];
-  }
+// SARD_80_F1 W5.31 — split out of `scanCSharp` so `sast/csharp-cross-file.js`
+// can run the exact same detector suite a second time against a re-analyzed
+// `analysis` (one seeded with an externally-tainted parameter from a call in
+// a DIFFERENT file) without duplicating this call list. `scanCSharp` itself
+// is unchanged in behavior — it now just builds the IR/analysis and delegates
+// here, same as before this split.
+export function runCSharpDetectors(fp, raw, ir, analysis) {
   const out = [];
   const seen = new Set();
   try { detectSqlInjection(fp, raw, ir, analysis, out, seen); } catch {}
@@ -1324,6 +1320,20 @@ export function scanCSharp(fp, raw) {
     }
   }
   return out;
+}
+
+export function scanCSharp(fp, raw) {
+  if (!/\.cs$/i.test(fp)) return [];
+  if (!raw || raw.length > 500_000) return [];
+  let ir, analysis;
+  try {
+    ir = buildCSharpIR(raw);
+    analysis = analyzeCSharpIR(ir);
+  } catch (e) {
+    // IR build failed — fail-closed; better to miss than to throw.
+    return [];
+  }
+  return runCSharpDetectors(fp, raw, ir, analysis);
 }
 
 export { buildCSharpIR, analyzeCSharpIR };

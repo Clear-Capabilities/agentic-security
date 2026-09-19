@@ -390,7 +390,7 @@ function extractPath(argsRaw, argIdx) {
   return null;
 }
 
-export function analyzeCSharpIR(ir) {
+export function analyzeCSharpIR(ir, opts = {}) {
   // Class-level attribute roll-up.
   const classAuth = new Map(); // class-ref → { authedAtClass, anonymousAtClass, isController }
   for (const c of ir.classes) {
@@ -503,7 +503,31 @@ export function analyzeCSharpIR(ir) {
   // caller further up a chain that already resolved this callee's
   // pre-this-pass return-taint verdict, an accepted, narrow gap given the
   // single-hop scope above.
+  // SARD_80_F1 W5.31 — genuine cross-FILE extension of W5.30's same-file
+  // cross-class fix. This function has no visibility beyond its own `ir`
+  // (one file), so it cannot itself discover that `Sink.BadSink(data, …)`
+  // resolves to a static method declared in a DIFFERENT file — that
+  // project-wide resolution now happens one layer up, in
+  // `sast/csharp-cross-file.js`, which parses every `.cs` file in the
+  // project, finds a caller's tainted argument passed to a receiver-
+  // qualified call whose class lives in ANOTHER file, and re-invokes this
+  // function on the CALLEE's own file with the result seeded here via
+  // `opts.externalTaintedParams` (a `Map<methodObject, Set<paramName>>`,
+  // keyed by an object reference into THIS SAME `ir.methods` array — the
+  // caller resolves the callee from its own freshly-parsed copy of this
+  // exact `ir`, so the reference always matches). Seeding happens BEFORE
+  // the same-file loop below runs, and the two never conflict: the
+  // same-file loop only ever ADDS to whatever Set is already present for a
+  // callee (`if (!taintedParamNamesByMethod.has(callee)) …set(callee, new
+  // Set())`), so a param already seeded from across files is simply
+  // preserved, and a param seeded here that the same-file loop separately
+  // also proves tainted collapses harmlessly into the same Set entry.
   const taintedParamNamesByMethod = new Map();
+  if (opts.externalTaintedParams) {
+    for (const [m, names] of opts.externalTaintedParams) {
+      taintedParamNamesByMethod.set(m, new Set(names));
+    }
+  }
   for (const caller of ir.methods) {
     const callerFlow = methodFlow.get(caller);
     if (!callerFlow) continue;
