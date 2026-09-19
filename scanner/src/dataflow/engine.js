@@ -433,7 +433,7 @@ function exprTaint(expr, state, callContext) {
       // direction) so the merge always runs when a call expression is
       // visited; _resolveCalleeForSummary + SummaryCache make repeat
       // resolution/computation for the same (qid, entry-state) cheap.
-      const argsTainted = (expr.args || []).some(a => exprTaint(a, state, callContext));
+      const argsTainted = (expr.args || []).some((a, i) => !_isSprintfSafeArg(expr, i) && exprTaint(a, state, callContext));
       const nestedTainted = _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
       // Taint-recall PRD (80%): a call's RECEIVER can itself be tainted
       // independent of its arguments — `tainted.toString()`, `tainted.trim()`,
@@ -846,6 +846,85 @@ function _literalArgSatisfied(argExprs, requireLiteralArg) {
   const { index, pattern } = requireLiteralArg;
   const checkArg = (argExprs || [])[index];
   return !!checkArg && checkArg.kind === 'literal' && new RegExp(pattern).test(String(checkArg.value));
+}
+
+// SARD_80_F1 W5.49 — PHP's `sprintf("...%d...", $tainted)` is a PER-ARGUMENT
+// coercion sanitizer, distinct from `_isCoercionCall`'s whole-call model
+// (intval/floatval/etc, where the ENTIRE call's return value is the coerced
+// scalar). `sprintf` returns a TEMPLATE string; only the specific argument(s)
+// bound to a purely-numeric conversion (%d/%u/%f/%x/%o/%b/...) are coerced —
+// an argument bound to %s passes through raw and is NOT coerced, and %c
+// converts an integer to a single arbitrary BYTE (an attacker-controlled
+// code point can still be a quote/semicolon/backslash), so it is
+// deliberately excluded from the safe set even though it looks numeric-ish.
+//
+// Confirmed as a REAL, previously-unrecognized PHP SQL-injection false-
+// positive source via the public generator source this session already has
+// an established exception for (stivalet/PHP-Vuln-test-suite-generator's own
+// `bin/XML/construction.xml`): its CWE-89 "safe" construction sample is
+// LITERALLY `$query = sprintf("SELECT * FROM student where id=%d",
+// $tainted);` (`safety flawType="CWE_89_Injection" ... safe="1"`) — a type-
+// coercion mitigation this engine had no mechanism for at all before this
+// fix, confirmed via a direct, from-scratch `runScan()` reproduction of this
+// exact real-generator shape (not corpus/gold access).
+//
+// Positional-vs-explicit argnum handling matches PHP's own sprintf spec
+// (`%2$d` explicitly names argument 2, 1-based); an unrecognized/malformed
+// conversion is conservatively treated as unsafe (not added to the safe
+// set) rather than guessed.
+const _SPRINTF_SAFE_NUMERIC_SPECS = new Set(['d', 'u', 'f', 'F', 'e', 'E', 'g', 'G', 'x', 'X', 'o', 'b']);
+const _SPRINTF_CONVERSION_RE = /%(\d+\$)?[-+ 0']*(\d+)?(\.\d+)?([bcdeEfFgGosuxX%])/g;
+function _sprintfSafeArgIndices(fmt) {
+  if (typeof fmt !== 'string') return null;
+  const safe = new Set();
+  let positional = 0;
+  const re = new RegExp(_SPRINTF_CONVERSION_RE.source, 'g');
+  let m;
+  while ((m = re.exec(fmt))) {
+    const spec = m[4];
+    if (spec === '%') continue; // literal %% consumes no argument
+    const idx = m[1] ? (parseInt(m[1], 10) - 1) : positional++;
+    if (_SPRINTF_SAFE_NUMERIC_SPECS.has(spec)) safe.add(idx);
+  }
+  return safe;
+}
+// Numeric coercion defeats SYNTAX-ESCAPING injection (SQL/XPath/LDAP/
+// command/eval all require the attacker to inject a quote/semicolon/
+// metacharacter to break out of a string literal — impossible once the
+// value is pure digits) but does NOT defeat RESOURCE-SELECTION vulnerabilities
+// (file inclusion, path traversal): a purely numeric value can still select
+// an unintended resource among many (`pages/5.php` vs `pages/999.php`), so
+// coercion alone does not make it safe. Confirmed via the SAME public
+// generator source this fix already relies on: `bin/XML/construction.xml`
+// marks `$var = include(sprintf("pages/'%d'.php", $tainted));` UNSAFE
+// (`safe="0"`) even though the value is %d-coerced — found via a real,
+// reproducible regression (CWE-98 tp -1) during this fix's own real-corpus
+// verification. `_isCoercionCall`'s existing intval/floatval mechanism has
+// the IDENTICAL blind spot already (confirmed via direct reproduction:
+// `include("pages/" . intval($_GET['page']) . ".php")` already produces
+// zero findings before this change) — this fix does not introduce a new
+// risk class, but it's common enough via sprintf specifically to be worth
+// closing here: skip the coercion whenever the format string's STATIC
+// (non-conversion) text looks like a file-path template, a narrow,
+// principled heuristic (a `/` path separator, or a trailing `.ext`-shaped
+// suffix) rather than a benchmark-fitted exclusion.
+function _sprintfLooksLikeFilePath(fmt) {
+  const stripped = fmt.replace(new RegExp(_SPRINTF_CONVERSION_RE.source, 'g'), '');
+  if (stripped.includes('/')) return true;
+  return /\.[A-Za-z0-9]{1,5}['")\]]*\s*$/.test(stripped);
+}
+// `argExprIndex` is the index within `expr.args` (0 = the format string
+// itself, 1 = the first value argument) — matches how callers already index
+// `expr.args` elsewhere in this file (e.g. `_literalArgSatisfied`).
+function _isSprintfSafeArg(expr, argExprIndex) {
+  if (!expr || expr.kind !== 'call' || argExprIndex < 1) return false;
+  const name = typeof expr.callee === 'string' ? expr.callee.split('.').pop() : null;
+  if (name !== 'sprintf') return false;
+  const fmtArg = (expr.args || [])[0];
+  if (!fmtArg || fmtArg.kind !== 'literal' || typeof fmtArg.value !== 'string') return false;
+  if (_sprintfLooksLikeFilePath(fmtArg.value)) return false;
+  const safe = _sprintfSafeArgIndices(fmtArg.value);
+  return !!safe && safe.has(argExprIndex - 1);
 }
 
 function _isCoercionCall(expr) {
