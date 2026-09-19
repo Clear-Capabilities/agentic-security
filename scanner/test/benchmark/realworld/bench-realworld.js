@@ -1169,7 +1169,7 @@ export function findCsharpMethodSpans(content) {
 // only identifiers differing (e.g. the plain `-blinded` materialization
 // paired with a `-blinded-scrambled` one) — comment-stripping is shared by
 // both so line numbers still line up; only token text differs.
-async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
+export async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
   const expected = [];
   const cweMap = gt.cweToFamily || {};
   const root = path.join(repoRoot, 'src', 'testcases');
@@ -1267,7 +1267,17 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
               });
             }
           }
-          if (!anyEmitted) {
+          // W5.43 — see buildJulietExpected's own (much longer) header
+          // comment on this exact narrowing for the full incident writeup;
+          // ported here verbatim since C#'s `_81_base.cs` family uses the
+          // identical `abstract class { public abstract void Action(...); }`
+          // shape (confirmed via direct fetch of the public C# mirror's own
+          // `CWE113_HTTP_Response_Splitting__Web_Connect_tcp_addCookie_81_base.cs`)
+          // and `findCsharpMethodSpans`'s own `declRe` ALSO requires a
+          // trailing `{` to match, so it likewise returns zero spans for a
+          // pure abstract declaration.
+          const isAbstractOrInterfaceOnly = methods.length === 0 && /\b(?:abstract\s+class|interface)\s/.test(content);
+          if (!anyEmitted && !isAbstractOrInterfaceOnly) {
             expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
           }
         } else {
@@ -1289,7 +1299,7 @@ async function buildJulietCsExpected(repoRoot, gt, gtContentRoot) {
 
 // See buildJulietCsExpected's gtContentRoot comment above — same fix,
 // same reason, applied to the Java GT builder.
-async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
+export async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
   const expected = [];
   const cweMap = gt.cweToFamily || {};
   const ignoredDirs = new Set(['juliet-support', 'gradle', 'build']);
@@ -1416,7 +1426,54 @@ async function buildJulietExpected(repoRoot, gt, gtContentRoot) {
           }
           // Fallback: if no method spans found (unusual file shape), keep the
           // flat per-file entry to avoid silent recall loss.
-          if (!anyEmitted) {
+          //
+          // W5.43 — narrowed after re-investigating W5.38's own reverted
+          // attempt at a SIMILAR-sounding narrowing (see that ledger entry).
+          // W5.38 tried gating on a bare `methods.length === 0` and reverted
+          // after a severe regression; re-deriving from scratch here shows
+          // that condition was backwards, not merely mis-targeted:
+          // `findJavaMethodSpans`'s own `declRe` requires a trailing `{` to
+          // match at all, so it returns ZERO spans for `_81_base.java` (a
+          // pure `public abstract class … { public abstract void
+          // action(String data) throws Throwable; }` — no method BODY
+          // anywhere, confirmed via direct fetch+test of the public mirror's
+          // own `CWE89_SQL_Injection__Environment_executeBatch_81_base.java`)
+          // but returns EXACTLY ONE span for `_81_bad.java`/`_81_good*.java`
+          // (real, concrete `action(){ … }` overrides — also directly
+          // confirmed). A bare `methods.length === 0` check therefore KEEPS
+          // the fallback for the genuinely-empty base file and REMOVES it
+          // for `_81_bad.java` — exactly backwards, since the flat-file
+          // fallback is `_81_bad.java`'s ONLY mechanism for getting ANY
+          // expected entry at all (its one real method is named `action`,
+          // which never matches the per-method loop's `bad`-shaped name
+          // filter above) — reproduced this exact regression locally (via
+          // `buildJulietExpected` against the real fetched 3-file set)
+          // before correcting it, matching W5.38's own real-corpus finding.
+          //
+          // The actually-safe signal is narrower: only skip the fallback
+          // when the file has BOTH zero method spans AND an explicit
+          // `abstract class`/`interface` declaration — Juliet's own
+          // `_81_base.java` family is generated as exactly this shape, and
+          // conflating it with a genuine "unusual file shape" parse failure
+          // (the fallback's original protective target, where a real
+          // `bad()`-shaped method exists but the regex failed to find it)
+          // is structurally near-impossible: a parse failure never also
+          // happens to coincide with an explicit `abstract class`/
+          // `interface` keyword in the same file. `_81_bad.java`/
+          // `_81_good*.java` are never abstract/interface declarations
+          // themselves (concrete subclasses), and separately already have
+          // methods.length >= 1, so this narrowing never touches them
+          // either way — confirmed via the same 3-file reproduction.
+          // Deliberately still does NOT touch the (separate, larger, NOT
+          // attempted this cycle) issue that a `_81_goodG2B.java`/
+          // `_81_goodB2G.java` file — genuinely safe by Juliet's own design,
+          // and correctly never expected to produce a finding — ALSO gets a
+          // bogus flat-file fallback entry whenever its own one real method
+          // is name-filtered out; this fix was never scoped to make a
+          // safe/vulnerable content determination, only to remove the
+          // fallback for a file provably incapable of containing ANY code.
+          const isAbstractOrInterfaceOnly = methods.length === 0 && /\b(?:abstract\s+class|interface)\s/.test(content);
+          if (!anyEmitted && !isAbstractOrInterfaceOnly) {
             expected.push({ file: rel, line: 1, lineTolerance: 9999, matchAny: true, family, cwe });
           }
         } else {

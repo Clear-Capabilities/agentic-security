@@ -29,6 +29,8 @@ import {
   _isSourceOnlyNamedMethod,
   score,
   scoreLegacy,
+  buildJulietExpected,
+  buildJulietCsExpected,
 } from './benchmark/realworld/bench-realworld.js';
 
 test('findEnclosingMethod: picks the smallest containing span', () => {
@@ -567,6 +569,163 @@ test('score(): unchanged behavior — a finding directly inside Bad()\'s own spa
     const { tps, fps } = await score(actual, expected, {}, root, [], root);
     assert.equal(tps.length, 1);
     assert.equal(fps.length, 0);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// SARD_80_F1 W5.43 — see buildJulietExpected's own header comment (the
+// flat-file fallback's `isAbstractOrInterfaceOnly` narrowing) for the full
+// incident: Juliet's own Flow Variant 81/82 abstract-dispatch idiom splits
+// a testcase across FOUR files sharing one abstract base class — `_base`
+// (an abstract declaration with NO method body anywhere), `_bad` (a
+// concrete override containing the real vulnerability), and two `_good*`
+// safe variants. `_base.java` can never contain any finding (no code exists
+// to find), yet the pre-W5.43 fallback created an unsatisfiable expected
+// entry for it anyway. W5.38 attempted and reverted a SIMILAR-sounding but
+// backwards fix (`methods.length === 0` alone, which removes the fallback
+// from `_bad.java` — where it's the ONLY scoring mechanism — instead of
+// `_base.java`); these tests pin the CORRECT behavior directly against
+// `buildJulietExpected` using a real 4-file juliet-cweNN directory tree.
+async function writeJulietCweTree(cwe, files) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sard-juliet-expected-'));
+  const dir = path.join(root, `juliet-cwe${cwe}`, 'src', 'main', 'java', 'juliet', 'testcases');
+  await fs.mkdir(dir, { recursive: true });
+  for (const [name, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(dir, name), content, 'utf8');
+  }
+  return root;
+}
+
+const J81_BASE = `
+public abstract class CWE89_SQL_Injection__Environment_executeBatch_81_base
+{
+    public abstract void action(String data ) throws Throwable;
+}
+`;
+
+const J81_BAD = `
+public class CWE89_SQL_Injection__Environment_executeBatch_81_bad extends CWE89_SQL_Injection__Environment_executeBatch_81_base
+{
+    public void action(String data ) throws Throwable
+    {
+        Statement sqlStatement = null;
+        sqlStatement.addBatch("update users set hitcount=hitcount+1 where name='" + data + "'");
+    }
+}
+`;
+
+const J81_GOODG2B = `
+public class CWE89_SQL_Injection__Environment_executeBatch_81_goodG2B extends CWE89_SQL_Injection__Environment_executeBatch_81_base
+{
+    public void action(String data ) throws Throwable
+    {
+        Statement sqlStatement = null;
+        sqlStatement.addBatch("update users set hitcount=hitcount+1 where name='" + data + "'");
+    }
+}
+`;
+
+test('buildJulietExpected: an abstract-class support file with NO method bodies anywhere gets no expected entry at all', async () => {
+  const root = await writeJulietCweTree('89', {
+    'CWE89_SQL_Injection__Environment_executeBatch_81_base.java': J81_BASE,
+    'CWE89_SQL_Injection__Environment_executeBatch_81_bad.java': J81_BAD,
+    'CWE89_SQL_Injection__Environment_executeBatch_81_goodG2B.java': J81_GOODG2B,
+  });
+  try {
+    const gt = { cweToFamily: { CWE89: 'sql-injection' }, preciseMethodScoring: true };
+    const expected = await buildJulietExpected(root, gt, null);
+    const files = expected.map((e) => e.file);
+    assert.ok(!files.some((f) => f.includes('_81_base.java')), 'the genuinely-empty _base.java must get no expected entry');
+    assert.ok(files.some((f) => f.includes('_81_bad.java')), 'the real vulnerability in _bad.java must still be scoreable (its own only mechanism, unchanged from before this fix)');
+    assert.ok(files.some((f) => f.includes('_81_goodG2B.java')), 'the pre-existing (separate, not-fixed-here) _goodG2B.java fallback entry is left untouched');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('buildJulietExpected: a genuine non-abstract file with zero method spans (a real parse-failure shape) still keeps the protective fallback', async () => {
+  // Deliberately NOT an abstract class/interface — this must NOT be treated
+  // as the "provably no code" case; the original fallback's own protective
+  // intent (an unusual file shape that defeated findJavaMethodSpans, but
+  // which still legitimately contains a bad()-shaped vulnerability) must
+  // survive this narrowing untouched.
+  const weirdShape = `
+public class CWE89_SQL_Injection__weird_01
+{
+    public void bad() throws Throwable { /* body present but the regex below can't see it due to an unusual signature shape it doesn't recognize */ }
+}
+`;
+  const root = await writeJulietCweTree('89', {
+    'CWE89_SQL_Injection__weird_01.java': '\npublic class CWE89_SQL_Injection__weird_01\n{\n}\n',
+  });
+  try {
+    const gt = { cweToFamily: { CWE89: 'sql-injection' }, preciseMethodScoring: true };
+    const expected = await buildJulietExpected(root, gt, null);
+    assert.equal(expected.length, 1, 'a non-abstract file with zero method spans must still keep the flat-file fallback');
+    assert.equal(expected[0].lineTolerance, 9999);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// SARD_80_F1 W5.43 — the C# port of the same fix, since findCsharpMethodSpans's
+// own declRe ALSO requires a trailing `{` and Juliet's C# corpus uses the
+// identical `abstract class { public abstract void Action(...); }` shape
+// (confirmed via the public mirror's own
+// CWE113_HTTP_Response_Splitting__Web_Connect_tcp_addCookie_81_base.cs).
+async function writeJulietCsCweTree(cwe, files) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sard-juliet-cs-expected-'));
+  const dir = path.join(root, 'src', 'testcases', `CWE${cwe}_Test`);
+  await fs.mkdir(dir, { recursive: true });
+  for (const [name, content] of Object.entries(files)) {
+    await fs.writeFile(path.join(dir, name), content, 'utf8');
+  }
+  return root;
+}
+
+const CS81_BASE = `
+abstract class CWE89_SQL_Injection__test_81_base
+{
+    public abstract void Action(string data);
+}
+`;
+
+const CS81_BAD = `
+class CWE89_SQL_Injection__test_81_bad : CWE89_SQL_Injection__test_81_base
+{
+    public override void Action(string data)
+    {
+        SqlCommand cmd = null;
+        cmd.CommandText = "select * from users where name='" + data + "'";
+    }
+}
+`;
+
+const CS81_GOODG2B = `
+class CWE89_SQL_Injection__test_81_goodG2B : CWE89_SQL_Injection__test_81_base
+{
+    public override void Action(string data)
+    {
+        SqlCommand cmd = null;
+        cmd.CommandText = "select * from users where name='" + data + "'";
+    }
+}
+`;
+
+test('buildJulietCsExpected: an abstract-class support file with NO method bodies anywhere gets no expected entry at all', async () => {
+  const root = await writeJulietCsCweTree('89', {
+    'CWE89_SQL_Injection__test_81_base.cs': CS81_BASE,
+    'CWE89_SQL_Injection__test_81_bad.cs': CS81_BAD,
+    'CWE89_SQL_Injection__test_81_goodG2B.cs': CS81_GOODG2B,
+  });
+  try {
+    const gt = { cweToFamily: { CWE89: 'sql-injection' }, preciseMethodScoring: true };
+    const expected = await buildJulietCsExpected(root, gt, null);
+    const files = expected.map((e) => e.file);
+    assert.ok(!files.some((f) => f.includes('_81_base.cs')), 'the genuinely-empty _base.cs must get no expected entry');
+    assert.ok(files.some((f) => f.includes('_81_bad.cs')), 'the real vulnerability in _bad.cs must still be scoreable');
+    assert.ok(files.some((f) => f.includes('_81_goodG2B.cs')), 'the pre-existing _goodG2B.cs fallback entry is left untouched');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
