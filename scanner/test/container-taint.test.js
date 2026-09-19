@@ -226,6 +226,50 @@ public class ProbeChainedAppend {
     `a chained sb.append().append().append() must still see the taint. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
 });
 
+// SARD_80_F1 W5.32: the SAME class-qualification-rewrite defect W2.3 fixed
+// for JDK containers, found independently for a non-container JDK utility
+// wrapper: Juliet's dominant "parse a request field without getParameter()"
+// source idiom builds a `StringTokenizer` from a tainted string and reads it
+// back via `.nextToken()` — `tok.nextToken` was rewritten to
+// `StringTokenizer.nextToken`, desyncing the WRITE (`tok = new
+// StringTokenizer(tainted, "&")`, tainted under the real variable name) from
+// the READ (now keyed on the fake receiver "StringTokenizer"), silently
+// losing the taint even in a single, unbroken same-method flow (no for-each,
+// no cross-file split needed to reproduce it). Fixed by widening the same
+// exemption list to cover StringTokenizer and other common JDK wrapper types
+// with the identical shape (Scanner, BufferedReader, StringBuilder, etc.).
+test('java: taint survives new StringTokenizer(tainted, delim).nextToken()', async () => {
+  const findings = await scanSource('ProbeTokenizer.java', `import java.util.StringTokenizer;
+import javax.servlet.http.HttpServletRequest;
+public class ProbeTokenizer {
+    public void bad(HttpServletRequest request) {
+        String data;
+        StringTokenizer tokenizer = new StringTokenizer(request.getQueryString(), "&");
+        data = tokenizer.nextToken();
+        Runtime.getRuntime().exec(data);
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(t.some((f) => /Command Injection/i.test(f.vuln)),
+    `a StringTokenizer built from a tainted string must still see the taint through .nextToken(). IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
+test('java: a StringTokenizer built from a hardcoded literal does not fire', async () => {
+  const findings = await scanSource('ProbeTokenizerClean.java', `import java.util.StringTokenizer;
+import javax.servlet.http.HttpServletRequest;
+public class ProbeTokenizerClean {
+    public void bad(HttpServletRequest request) {
+        String data;
+        StringTokenizer tokenizer = new StringTokenizer("a&b&c", "&");
+        data = tokenizer.nextToken();
+        Runtime.getRuntime().exec(data);
+    }
+}`);
+  const t = taintOnly(findings);
+  assert.ok(!t.some((f) => /Command Injection/i.test(f.vuln)),
+    `a StringTokenizer built from a hardcoded literal must not fire. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+});
+
 test('java: a constant value through a chained StringBuilder.append() chain does not fire', async () => {
   const findings = await scanSource('ProbeChainedAppendClean.java', `import java.sql.Connection;
 import java.sql.Statement;

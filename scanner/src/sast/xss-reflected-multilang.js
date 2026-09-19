@@ -12,6 +12,7 @@
 // content-type, or a raw-superglobal echo) so plain-text responses don't fire.
 
 import { blankComments } from './_comment-strip.js';
+import { deadBranchRanges, isLineInDeadRange } from './java-ast-folding.js';
 
 const lineOf = (raw, idx) => raw.substring(0, idx).split('\n').length;
 
@@ -111,68 +112,58 @@ const LANGS = {
 // branch), but `_trailingIdentIsLiteral`'s plain backward-scan just finds
 // "the textually nearest assignment", which is the DEAD branch's `data =
 // null;` here (textually last), so it never recognizes `data` as the
-// literal it always actually is. This is a DIFFERENT shape from W4.C13's
-// if/else fix (a genuine two-way runtime branch, where BOTH sides can
-// execute depending on an environment value) — constant-folding the
-// PROVABLY-dead side is sound unconditionally, unlike that fix's own
-// fail-closed "every assignment must be literal" policy, which would still
-// (correctly) refuse to suppress here if `null` reached the sink. Blanks
-// the dead branch's own `{ … }` body to whitespace (preserving every line
-// break and character offset, matching `blankComments`'s own convention)
-// so the existing backward-scan below simply never sees it — a purely
-// input-transforming preprocessing step, not a new suppression rule.
-function _blankDeadConstantBranches(code) {
-  const IF_RE = /\bif\s*\(\s*(true|false)\s*\)\s*\{/g;
-  let out = code, m;
-  IF_RE.lastIndex = 0;
-  while ((m = IF_RE.exec(out))) {
-    const cond = m[1];
-    const ifBodyStart = m.index + m[0].length;
-    const ifBodyEnd = _matchingBrace(out, ifBodyStart - 1);
-    if (ifBodyEnd === -1) continue;
-    const afterIf = out.slice(ifBodyEnd + 1);
-    const elseMatch = afterIf.match(/^\s*else\s*\{/);
-    if (!elseMatch) { IF_RE.lastIndex = ifBodyEnd + 1; continue; }
-    const elseBodyStart = ifBodyEnd + 1 + elseMatch[0].length;
-    const elseBodyEnd = _matchingBrace(out, elseBodyStart - 1);
-    if (elseBodyEnd === -1) { IF_RE.lastIndex = ifBodyEnd + 1; continue; }
-    const [deadStart, deadEnd] = cond === 'true'
-      ? [elseBodyStart, elseBodyEnd]
-      : [ifBodyStart, ifBodyEnd];
-    out = out.slice(0, deadStart) + out.slice(deadStart, deadEnd).replace(/[^\n]/g, ' ') + out.slice(deadEnd);
-    IF_RE.lastIndex = elseBodyEnd + 1;
-  }
-  return out;
-}
-// Index of the `}` matching the `{` at `openIdx`, or -1 if unbalanced.
-function _matchingBrace(code, openIdx) {
-  let depth = 0;
-  for (let i = openIdx; i < code.length; i++) {
-    if (code[i] === '{') depth++;
-    else if (code[i] === '}') { depth--; if (depth === 0) return i; }
-  }
-  return -1;
-}
+// literal it always actually is.
+//
+// SARD_80_F1 W5.32 — originally patched with this file's OWN narrow regex
+// (matching only `if(true)`/`if(false)`, then widened to also match
+// `if(5==5)`/`if(5!=5)`) — found investigating a NEW fp this exact gap
+// exposed once an unrelated fix (a Java parser bug, W5.32's own
+// StringTokenizer fix) let the deep taint engine correctly detect `bad()`'s
+// real vulnerability for the first time: the resulting dedup/clustering
+// reshuffle stopped accidentally folding this ALREADY-PRESENT, independent
+// XSS-ML false positive into the genuine finding, exposing a real,
+// pre-existing gap rather than introducing one. That narrow regex approach
+// only ever covered 2 of the many dead-code idioms this real corpus uses
+// (checked directly: 04-14/21/22a/31/41/42/45/51b/52c/54e/61a/66b-74b all
+// remained as fps) — rather than keep extending a second, independent
+// regex-based dead-branch detector, this now consumes `java-ast-folding.js`'s
+// existing `deadBranchRanges`/`isLineInDeadRange` — the SAME shared,
+// AST-based (not regex-based) mechanism `java-bench-extras.js` and
+// `java-structural.js` already use, which ALREADY resolves literal
+// true/false, private-static-final fields, effectively-final fields,
+// literal-vs-literal int comparisons, and zero-arg/single-return same-class
+// helper calls (W4.J33-36/W5.27's own incrementally-built capability) — one
+// shared mechanism, extended once, every consumer benefits, matching this
+// whole session's established pattern. `_trailingIdentIsLiteral`'s own
+// backward-scan now simply SKIPS any assignment whose line falls in a dead
+// range, rather than relying on a pre-blanked copy of the source text.
+// Cross-file variants (the lettered-suffix families) remain correctly
+// out of scope — `deadBranchRanges` is single-file, same boundary as
+// every other interprocedural mechanism in this codebase.
 
-// True when `varName`'s NEAREST assignment before `beforeIdx` (source order)
-// is a plain string-literal RHS. Same "backward nearest-assignment" shape as
-// java-structural.js's `_trailingIdentIsLiteral` (SARD_80_F1 W3.x — Java's
-// XSS structural rule had the identical literal-blindness gap that
-// module's SQL/cmd-injection rules were already fixed for, just never
-// ported here). Deliberately narrow: only suppresses when the sink
-// regex captured a SINGLE trailing identifier immediately before the
-// sink call's closing `)`/`;` — a concatenation with more terms after it
-// is left alone, since a safe first term says nothing about a second one.
-function _trailingIdentIsLiteral(code, varName, beforeIdx) {
+// True when `varName`'s NEAREST assignment before `beforeIdx` (source order),
+// SKIPPING any assignment that falls inside a dead (provably-unreachable)
+// branch per `deadRanges`, is a plain string-literal RHS. Same "backward
+// nearest-assignment" shape as java-structural.js's `_trailingIdentIsLiteral`
+// (SARD_80_F1 W3.x — Java's XSS structural rule had the identical
+// literal-blindness gap that module's SQL/cmd-injection rules were already
+// fixed for, just never ported here). Deliberately narrow: only suppresses
+// when the sink regex captured a SINGLE trailing identifier immediately
+// before the sink call's closing `)`/`;` — a concatenation with more terms
+// after it is left alone, since a safe first term says nothing about a
+// second one.
+function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges) {
   if (!varName) return false;
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
   const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
+  const isDead = (idx) => deadRanges && deadRanges.length
+    && isLineInDeadRange(code.slice(0, idx).split('\n').length, deadRanges);
   let lastLiteralEnd = -1, m;
-  while ((m = literalRe.exec(code)) && m.index < beforeIdx) lastLiteralEnd = m.index + m[0].length;
+  while ((m = literalRe.exec(code)) && m.index < beforeIdx) { if (!isDead(m.index)) lastLiteralEnd = m.index + m[0].length; }
   if (lastLiteralEnd === -1) return false;
   let lastAnyEnd = -1;
-  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) lastAnyEnd = m.index + m[0].length;
+  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) { if (!isDead(m.index)) lastAnyEnd = m.index + m[0].length; }
   return lastLiteralEnd === lastAnyEnd;
 }
 
@@ -184,10 +175,8 @@ export function scanXssReflectedMultilang(fp, raw) {
 
   const code = blankComments(raw, /\.rb$/i.test(fp) ? 'py' : (/\.(?:php|phtml)$/i.test(fp) ? 'php' : undefined));
   const lines = code.split('\n');
-  // Same length/line/offset as `code` — only used for the literal-check
-  // below, never for sink-matching, so blanking a dead branch can't shift
-  // any reported line number.
-  const codeForLiteralCheck = lang === LANGS.java ? _blankDeadConstantBranches(code) : code;
+  let deadRanges = [];
+  if (lang === LANGS.java) { try { deadRanges = deadBranchRanges(code); } catch { deadRanges = []; } }
   const findings = [];
   const seen = new Set();
 
@@ -206,7 +195,7 @@ export function scanXssReflectedMultilang(fp, raw) {
     // SARD_80_F1 W3.x — a captured trailing identifier (Java's sink patterns
     // only) that's provably a hardcoded literal at this point is not a real
     // XSS flow; see `_trailingIdentIsLiteral`'s header comment.
-    if (lang === LANGS.java && sinkMatch[1] && _trailingIdentIsLiteral(codeForLiteralCheck, sinkMatch[1], thisLineStart + sinkMatch.index)) continue;
+    if (lang === LANGS.java && sinkMatch[1] && _trailingIdentIsLiteral(code, sinkMatch[1], thisLineStart + sinkMatch.index, deadRanges)) continue;
     const ln = i + 1;
     const id = `xss-reflected:${fp}:${ln}`;
     if (seen.has(id)) continue;

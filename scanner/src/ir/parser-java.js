@@ -449,7 +449,27 @@ function _collectThrowExprs(node, out, depth = 0) {
 // rewritten to `LinkedHashMap.values()`), so write and read stay
 // consistently (if wrongly) keyed on the same class name — a coincidence
 // that does not hold for the far more common bare-variable for-each shape.
-const _JDK_CONTAINER_TYPES = /^(?:List|ArrayList|LinkedList|Vector|Stack|CopyOnWriteArrayList|Map|HashMap|LinkedHashMap|TreeMap|Hashtable|ConcurrentHashMap|Properties|Set|HashSet|LinkedHashSet|TreeSet|CopyOnWriteArraySet|Queue|Deque|ArrayDeque|PriorityQueue|ConcurrentLinkedQueue|ConcurrentLinkedDeque|BlockingQueue|LinkedBlockingQueue|Collection)$/;
+//
+// SARD_80_F1 W5.32 — the SAME defect class, for a NON-container JDK utility
+// wrapper: `StringTokenizer tok = new StringTokenizer(request.getQueryString(),
+// "&"); data = tok.nextToken();` (Juliet's dominant "parse a request field
+// without getParameter()" source idiom, used across dozens of CWE test-case
+// families) rewrites `tok.nextToken` to `StringTokenizer.nextToken` for the
+// exact reason given above — `StringTokenizer` is never a project class, so
+// the rewrite buys `classMethods` nothing, while `_calleeReceiverTainted`
+// (engine.js) can no longer recognize `tok` as tainted, since the taint state
+// was recorded under the variable name, not the class name. Confirmed via a
+// direct CFG dump reproducing the exact bug (`tok.nextToken` silently became
+// `StringTokenizer.nextToken`), then a real real-corpus `runScan` reproduction
+// showing zero findings before the fix. Generalizing the FIX from "containers
+// only" to "any well-known JDK/stdlib type with no chance of being a project
+// class" rather than special-casing `StringTokenizer` alone, since this is
+// evidence that the whole rewrite mechanism's risk applies to any non-project
+// class, not just collections — this list covers the other common
+// wrapper/reader/parser JDK types whose own methods return or carry data
+// derived from a tainted constructor argument, the same shape that made
+// `StringTokenizer` a real gap.
+const _JDK_CONTAINER_TYPES = /^(?:List|ArrayList|LinkedList|Vector|Stack|CopyOnWriteArrayList|Map|HashMap|LinkedHashMap|TreeMap|Hashtable|ConcurrentHashMap|Properties|Set|HashSet|LinkedHashSet|TreeSet|CopyOnWriteArraySet|Queue|Deque|ArrayDeque|PriorityQueue|ConcurrentLinkedQueue|ConcurrentLinkedDeque|BlockingQueue|LinkedBlockingQueue|Collection|StringTokenizer|Scanner|BufferedReader|InputStreamReader|StringReader|StringBuilder|StringBuffer|ObjectInputStream|ObjectOutputStream|PrintWriter|PrintStream)$/;
 
 function _localVarConstructedTypes(nodes) {
   const varTypes = new Map(); // varName -> className | null (ambiguous)

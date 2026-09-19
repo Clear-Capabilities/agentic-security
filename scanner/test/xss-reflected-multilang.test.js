@@ -81,17 +81,139 @@ test('Java — a param (no local assignment to find) still fires through a chain
 // deliberately-dead "CWE 561 Dead Code" counterpart — a plain nearest-
 // assignment scan sees only the dead branch and wrongly concludes the
 // value isn't provably a literal.
+// SARD_80_F1 W5.32 — `deadBranchRanges` (java-ast-folding.js) computes dead
+// ranges from REAL parsed line numbers, so these fixtures (unlike this
+// file's other single-line ones) must be realistic multi-line Java source —
+// a whole class crammed onto one line puts the "dead" and "live" branches on
+// the SAME line, which a line-range mechanism cannot distinguish.
 test('Java — if(true)/else dead-branch: the literal in the reachable if-branch suppresses the finding', () => {
-  const src = 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (true) { data = "foo"; } else { data = null; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (true) {
+          data = "foo";
+        } else {
+          data = null;
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
   assert.ok(clean(['S.java', src]), 'the else branch is provably dead; data is always "foo"');
 });
 test('Java — if(false)/else dead-branch (the mirror image): the literal in the reachable else-branch suppresses the finding', () => {
-  const src = 'class S { void h(javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (false) { data = null; } else { data = "foo"; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (false) {
+          data = null;
+        } else {
+          data = "foo";
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
   assert.ok(clean(['S.java', src]), 'the if branch is provably dead; data is always "foo"');
 });
 test('Java — if(true)/else where the REACHABLE branch is genuinely tainted still fires', () => {
-  const src = 'class S { void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception { String data; if (true) { data = r.readLine(); } else { data = "foo"; } if (data != null) { resp.getWriter().println("<br>" + data.replaceAll("(<script>)", "")); } } }';
+  const src = `
+    class S {
+      void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (true) {
+          data = r.readLine();
+        } else {
+          data = "foo";
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
   assert.ok(fires(['S.java', src]), 'the reachable if-branch is tainted; the dead else-branch literal must not suppress it');
+});
+
+// SARD_80_F1 W5.32 — the sibling Juliet flow variant to W4.J28's own
+// "if(true)/if(false)" idiom: "Control flow: if(5==5) and if(5!=5)" (Flow
+// Variant 03) is the same provably-constant-condition dead-code shape spelled
+// as an integer-literal comparison instead of a bare boolean literal.
+// `deadBranchRanges`'s AST evaluator already resolves a literal-vs-literal
+// int comparison for free (it recurses into both operands regardless of
+// whether either is a known identifier) — no new production code was needed
+// for this specific shape once the switch to the shared mechanism landed.
+test('Java — if(5==5)/else dead-branch: the literal in the reachable if-branch suppresses the finding', () => {
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (5 == 5) {
+          data = "foo";
+        } else {
+          data = null;
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'the else branch is provably dead; data is always "foo"');
+});
+test('Java — if(5!=5)/else dead-branch (the mirror image): the literal in the reachable else-branch suppresses the finding', () => {
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (5 != 5) {
+          data = null;
+        } else {
+          data = "foo";
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'the if branch is provably dead; data is always "foo"');
+});
+test('Java — if(5==5)/else where the REACHABLE branch is genuinely tainted still fires', () => {
+  const src = `
+    class S {
+      void h(java.io.BufferedReader r, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (5 == 5) {
+          data = r.readLine();
+        } else {
+          data = "foo";
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(fires(['S.java', src]), 'the reachable if-branch is tainted; the dead else-branch literal must not suppress it');
+});
+test('Java — if(5==6)/else (a genuine, non-equal-literal comparison) is never guessed as constant, fails closed', () => {
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        if (5 == 6) {
+          data = "foo";
+        } else {
+          data = null;
+        }
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(fires(['S.java', src]),
+    'a comparison between two DIFFERENT literals must not be treated as provably constant; the textually-nearest assignment (the else branch\'s "null") is not a literal, so this must fail closed and still fire');
 });
 
 test('non-matching languages / files produce nothing', () => {
