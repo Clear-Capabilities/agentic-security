@@ -216,6 +216,97 @@ test('Java — if(5==6)/else (a genuine, non-equal-literal comparison) is never 
     'a comparison between two DIFFERENT literals must not be treated as provably constant; the textually-nearest assignment (the else branch\'s "null") is not a literal, so this must fail closed and still fire');
 });
 
+// SARD_80_F1 W5.33 — ports java-bench-extras.js's own W4.J37-39
+// interprocedural literal-resolution (return-value, copy-chain,
+// argument-passing) into this file's literal-blindness check, closing the
+// genuinely same-file (no lettered suffix) remainder of the fp landscape
+// W5.32 catalogued for CWE-80's getQueryString_Servlet descriptor family.
+test('Java — a value returned from a same-file, single-return helper suppresses the finding (W4.J37 idiom)', () => {
+  const src = `
+    class S {
+      private String goodG2BSource() {
+        String data;
+        data = "foo";
+        return data;
+      }
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data = goodG2BSource();
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'goodG2BSource() always returns the literal "foo"');
+});
+test('Java — a value returned from a same-file helper with 2+ returns fails closed (ambiguous)', () => {
+  const src = `
+    class S {
+      private String maybeSource(boolean b) {
+        if (b) { return "foo"; }
+        return readTainted();
+      }
+      String readTainted() { return null; }
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data = maybeSource(true);
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(fires(['S.java', src]), 'a callee with 2+ return statements is ambiguous and must fail closed');
+});
+test('Java — a same-method copy chain (dataCopy = data; ... data = dataCopy;) suppresses the finding (W4.J38 idiom)', () => {
+  const src = `
+    class S {
+      void h(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        String dataCopy;
+        data = "foo";
+        dataCopy = data;
+        data = dataCopy;
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'dataCopy is a copy of the literal "foo"');
+});
+test('Java — a value passed as a literal argument at every real call site suppresses the finding (W4.J38 argument-passing idiom)', () => {
+  const src = `
+    class S {
+      private void goodG2BSink(String data, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+      void goodG2B(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        data = "foo";
+        goodG2BSink(data, resp);
+      }
+    }`;
+  assert.ok(clean(['S.java', src]), 'every real call site of goodG2BSink supplies the literal "foo" at the data position');
+});
+test('Java — a value passed as a genuinely tainted argument at some call site still fires', () => {
+  const src = `
+    class S {
+      private void goodG2BSink(String data, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        if (data != null) {
+          resp.getWriter().println("<br>" + data.replaceAll("(<script>)", ""));
+        }
+      }
+      void bad(String tainted, javax.servlet.http.HttpServletResponse resp) throws Exception {
+        goodG2BSink(tainted, resp);
+      }
+      void goodG2B(javax.servlet.http.HttpServletResponse resp) throws Exception {
+        String data;
+        data = "foo";
+        goodG2BSink(data, resp);
+      }
+    }`;
+  assert.ok(fires(['S.java', src]), 'bad() supplies a non-literal at the data position; not every real call site agrees');
+});
+
 test('non-matching languages / files produce nothing', () => {
   assert.deepEqual(x('a.js', 'res.send("<h1>" + req.query.q + "</h1>")'), []);
   assert.deepEqual(x('ok.go', 'func add(a, b int) int { return a + b }'), []);

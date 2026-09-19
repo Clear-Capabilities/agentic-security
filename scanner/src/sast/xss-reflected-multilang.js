@@ -81,7 +81,7 @@ const LANGS = {
     // Each pattern additionally captures a trailing `+ identifier)`/`+
     // identifier;` tail — the SINGLE, LAST concatenated term, when the
     // concatenation ends right there — mirroring java-structural.js's own
-    // SQL/cmd-injection capture shape, so `_trailingIdentIsLiteral` (below)
+    // SQL/cmd-injection capture shape, so `_nearestAssignIsLiteral` (below)
     // can tell a real tainted variable from a hardcoded one. The capture
     // also tolerates ONE simple method call chained directly onto that
     // identifier (`data.replaceAll(...)`) — Juliet's own real corpus shape
@@ -109,7 +109,7 @@ const LANGS = {
 // `if (true) { data = "foo"; } else { /* CWE 561 Dead Code */ data = null; }`
 // (or the mirror image for `if (false)`) — the ELSE branch is PROVABLY
 // unreachable (a constant-condition, not a genuine runtime-dependent
-// branch), but `_trailingIdentIsLiteral`'s plain backward-scan just finds
+// branch), but a plain backward-scan just finds
 // "the textually nearest assignment", which is the DEAD branch's `data =
 // null;` here (textually last), so it never recognizes `data` as the
 // literal it always actually is.
@@ -134,37 +134,154 @@ const LANGS = {
 // literal-vs-literal int comparisons, and zero-arg/single-return same-class
 // helper calls (W4.J33-36/W5.27's own incrementally-built capability) — one
 // shared mechanism, extended once, every consumer benefits, matching this
-// whole session's established pattern. `_trailingIdentIsLiteral`'s own
-// backward-scan now simply SKIPS any assignment whose line falls in a dead
+// whole session's established pattern. The backward-scan now simply SKIPS any assignment whose line falls in a dead
 // range, rather than relying on a pre-blanked copy of the source text.
 // Cross-file variants (the lettered-suffix families) remain correctly
 // out of scope — `deadBranchRanges` is single-file, same boundary as
 // every other interprocedural mechanism in this codebase.
 
-// True when `varName`'s NEAREST assignment before `beforeIdx` (source order),
-// SKIPPING any assignment that falls inside a dead (provably-unreachable)
-// branch per `deadRanges`, is a plain string-literal RHS. Same "backward
-// nearest-assignment" shape as java-structural.js's `_trailingIdentIsLiteral`
-// (SARD_80_F1 W3.x — Java's XSS structural rule had the identical
-// literal-blindness gap that module's SQL/cmd-injection rules were already
-// fixed for, just never ported here). Deliberately narrow: only suppresses
-// when the sink regex captured a SINGLE trailing identifier immediately
-// before the sink call's closing `)`/`;` — a concatenation with more terms
-// after it is left alone, since a safe first term says nothing about a
-// second one.
-function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges) {
+// SARD_80_F1 W5.33 — this file's OWN backward-only "nearest assignment"
+// check (formerly `_trailingIdentIsLiteral`) had none of the interprocedural
+// resolution `java-bench-extras.js` already built for the identical Juliet
+// idioms (W4.J37-39): a value returned from a same-file helper
+// (`data = goodG2BSource();`), a same-method copy chain (`dataCopy = data;`
+// … `data = dataCopy;`), or an argument passed to a helper that receives it
+// as a PARAMETER rather than a local assignment. Confirmed via a real-corpus
+// sweep of this file's own remaining CWE-80 fp list (Flow Variants 31/41/42/
+// 45 — no lettered suffix, genuinely same-file) that these are exactly the
+// gap. Rather than re-derive a THIRD independent copy of this logic (a
+// second copy, in java-structural.js, was already ported once at W5.23),
+// this ports the same three functions verbatim in their already-ReDoS-fixed
+// form (W4.J39 — the "return type prefix" lazy `\s`-inclusive character
+// class that caused a confirmed hang was dropped entirely in the source
+// this was copied from; reintroducing it here would reintroduce the exact
+// same hang against Juliet's own large blanked-comment header blocks).
+// `_nearestAssignIsLiteral` is the direct, same-signature replacement for
+// this file's own former `_trailingIdentIsLiteral` at the one call site
+// below. Same-file only, matching every other interprocedural mechanism in
+// this codebase — the lettered-suffix (cross-file) variants remain
+// correctly out of scope.
+const _CALLEE_RETURN_LITERAL_CACHE_DEPTH = 4;
+function _resolveCalleeReturnIsLiteral(content, calleeName, deadRanges, _depth) {
+  const depth = _depth || 0;
+  if (depth >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedCallee = calleeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declRe = new RegExp(`\\b${escapedCallee}\\s*\\([^)]*\\)\\s*(?:throws\\s+[\\w.,\\s]+)?\\s*\\{`, 'g');
+  const dm = declRe.exec(content);
+  if (!dm) return false;
+  const bodyStart = dm.index + dm[0].length;
+  let braceDepth = 1, i = bodyStart;
+  while (i < content.length && braceDepth > 0) {
+    if (content[i] === '{') braceDepth++;
+    else if (content[i] === '}') braceDepth--;
+    i++;
+  }
+  const body = content.slice(bodyStart, i - 1);
+  const returnRe = /\breturn\s+([^;]+);/g;
+  const returns = [];
+  let rm;
+  while ((rm = returnRe.exec(body))) returns.push({ expr: rm[1].trim(), idx: bodyStart + rm.index });
+  if (returns.length !== 1) return false; // ambiguous (0 or 2+ returns) — fail closed
+  const { expr, idx } = returns[0];
+  if (/^"[^"]*"$/.test(expr)) return true;
+  if (/^[A-Za-z_]\w*$/.test(expr)) {
+    return _nearestAssignIsLiteral(content, expr, idx, deadRanges, depth + 1);
+  }
+  return false;
+}
+
+// Balanced top-level comma split (paren/bracket/brace-aware, quote-aware).
+function _splitTopLevelCommas(text) {
+  const parts = [];
+  let depth = 0, cur = '', inStr = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      cur += c;
+      if (c === '\\') { cur += text[++i] || ''; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inStr = c; cur += c; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    if (c === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '' || parts.length) parts.push(cur);
+  return parts;
+}
+
+function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth) {
+  const depth0 = _depth || 0;
+  if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const methodDeclRe = /\b(?!if\b|for\b|while\b|switch\b|catch\b|synchronized\b|do\b|else\b|return\b|new\b)([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g;
+  let enclosing = null, dm;
+  while ((dm = methodDeclRe.exec(content)) && dm.index < beforeIdx) enclosing = dm;
+  if (!enclosing) return false;
+  const methodName = enclosing[1];
+  const params = _splitTopLevelCommas(enclosing[2]).map(p => p.trim()).filter(Boolean);
+  const paramIdx = params.findIndex((p) => new RegExp(`\\b${escapedVar}$`).test(p));
+  if (paramIdx === -1) return false; // varName isn't actually a param of the enclosing method
+  const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+  let cm, sawRealCallSite = false;
+  while ((cm = callRe.exec(content))) {
+    const argsStart = cm.index + cm[0].length;
+    let braceDepth = 1, i = argsStart;
+    while (i < content.length && braceDepth > 0) {
+      if (content[i] === '(') braceDepth++;
+      else if (content[i] === ')') braceDepth--;
+      i++;
+    }
+    const afterClose = content.slice(i).match(/^\s*(\{|throws)/);
+    if (afterClose) continue; // this is the method's OWN declaration, not a call site
+    const args = _splitTopLevelCommas(content.slice(argsStart, i - 1)).map((a) => a.trim());
+    if (paramIdx >= args.length) return false; // arity mismatch — bail conservatively
+    sawRealCallSite = true;
+    const argExpr = args[paramIdx];
+    if (/^"[^"]*"$/.test(argExpr)) continue; // this caller's own argument is a direct literal
+    if (/^[A-Za-z_]\w*$/.test(argExpr) && _nearestAssignIsLiteral(content, argExpr, cm.index, deadRanges, depth0 + 1)) continue;
+    return false; // a non-literal (or unresolvable) caller exists
+  }
+  return sawRealCallSite;
+}
+
+function _nearestAssignIsLiteral(content, varName, beforeIdx, deadRanges, _calleeDepth) {
   if (!varName) return false;
+  if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
+  const ranges = deadRanges || [];
   const escaped = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literalRe = new RegExp(`\\b${escaped}\\s*=\\s*"[^"]*"\\s*;`, 'g');
-  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*[^;]+;`, 'g');
-  const isDead = (idx) => deadRanges && deadRanges.length
-    && isLineInDeadRange(code.slice(0, idx).split('\n').length, deadRanges);
+  const anyAssignRe = new RegExp(`\\b${escaped}\\s*=\\s*([^;]+);`, 'g');
+  const lineOf = (idx) => content.substring(0, idx).split('\n').length;
   let lastLiteralEnd = -1, m;
-  while ((m = literalRe.exec(code)) && m.index < beforeIdx) { if (!isDead(m.index)) lastLiteralEnd = m.index + m[0].length; }
-  if (lastLiteralEnd === -1) return false;
-  let lastAnyEnd = -1;
-  while ((m = anyAssignRe.exec(code)) && m.index < beforeIdx) { if (!isDead(m.index)) lastAnyEnd = m.index + m[0].length; }
-  return lastLiteralEnd === lastAnyEnd;
+  while ((m = literalRe.exec(content)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
+    lastLiteralEnd = m.index + m[0].length;
+  }
+  let lastAnyEnd = -1, lastAnyRhs = null, lastAnyIdx = -1;
+  while ((m = anyAssignRe.exec(content)) && m.index < beforeIdx) {
+    if (ranges.length && isLineInDeadRange(lineOf(m.index), ranges)) continue;
+    lastAnyEnd = m.index + m[0].length;
+    lastAnyRhs = m[1].trim();
+    lastAnyIdx = m.index;
+  }
+  if (lastAnyRhs && /^[A-Za-z_]\w*\s*\([^()]*\)$/.test(lastAnyRhs)) {
+    const calleeName = lastAnyRhs.slice(0, lastAnyRhs.indexOf('(')).trim();
+    if (_resolveCalleeReturnIsLiteral(content, calleeName, ranges, _calleeDepth)) return true;
+  }
+  if (lastAnyRhs && lastAnyRhs !== 'null' && /^[A-Za-z_]\w*$/.test(lastAnyRhs) && lastAnyRhs !== varName) {
+    if (_nearestAssignIsLiteral(content, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
+  }
+  if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
+    return _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _calleeDepth);
+  }
+  const paramRe = new RegExp(`\\([^()]*\\b[\\w.<>\\[\\]]+\\s+${escaped}\\s*[,)]`, 'g');
+  let lastParamEnd = -1;
+  while ((m = paramRe.exec(content)) && m.index < beforeIdx) lastParamEnd = m.index + m[0].length;
+  return lastParamEnd <= lastLiteralEnd;
 }
 
 export function scanXssReflectedMultilang(fp, raw) {
@@ -194,8 +311,8 @@ export function scanXssReflectedMultilang(fp, raw) {
     if (!sinkMatch) continue;
     // SARD_80_F1 W3.x — a captured trailing identifier (Java's sink patterns
     // only) that's provably a hardcoded literal at this point is not a real
-    // XSS flow; see `_trailingIdentIsLiteral`'s header comment.
-    if (lang === LANGS.java && sinkMatch[1] && _trailingIdentIsLiteral(code, sinkMatch[1], thisLineStart + sinkMatch.index, deadRanges)) continue;
+    // XSS flow; see `_nearestAssignIsLiteral`'s header comment.
+    if (lang === LANGS.java && sinkMatch[1] && _nearestAssignIsLiteral(code, sinkMatch[1], thisLineStart + sinkMatch.index, deadRanges)) continue;
     const ln = i + 1;
     const id = `xss-reflected:${fp}:${ln}`;
     if (seen.has(id)) continue;
