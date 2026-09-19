@@ -22,7 +22,10 @@ import { deadBranchRanges, isLineInDeadRange } from './java-ast-folding.js';
 // vs. `data = "foo"`) — this taint-independent detector, having no taint
 // model of its own, previously could not tell the two apart and fired on
 // both, a large fraction of this family's real corpus false positives.
-const RE = {
+// Exported for java-structural-cross-file.js (W5.41) — the SAME sink
+// matching used to re-derive candidate findings when checking whether a
+// sibling-file caller resolves the concatenated variable to a literal.
+export const RE = {
   sqlInjection: /\b(?:executeQuery|executeUpdate|execute|createQuery|createNativeQuery|prepareStatement|prepareCall)\s*\(\s*"[^"\n]*"\s*\+(?:\s*([A-Za-z_]\w*)\s*(?=(?:\s*\+\s*"[^"\n]*"\s*)?[);]))?/g,
   cmdInjection: /\b(?:Runtime\.getRuntime\(\)\s*\.\s*exec|ProcessBuilder)\s*\(\s*(?:new\s+String\s*\[\s*\]\s*\{\s*)?"[^"\n]*"\s*\+(?:\s*([A-Za-z_]\w*)\s*(?=(?:\s*\+\s*"[^"\n]*"\s*)?[);]))?/g,
 };
@@ -123,7 +126,38 @@ function _splitTopLevelCommas(text) {
   return parts;
 }
 
-function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth) {
+// SARD_80_F1 W5.41 — Juliet's own Flow Variant 51+ ("data passed as an
+// argument from one method to another in a DIFFERENT class, in the same or
+// a different package") splits this idiom's caller and callee across TWO
+// PHYSICAL FILES living in the SAME DIRECTORY (confirmed via W5.40's direct
+// fetch of the public mirror's own `CWE89_SQL_Injection__
+// database_executeQuery_51a.java`/`_51b.java` pair — see that ledger entry
+// for the full investigation) — the same-file-only search below can never
+// see a caller that lives in a sibling file, since `content` is always just
+// the one file being scanned. `siblingFiles` (optional; an array of
+// `{code, deadRanges}` for OTHER `.java` files in the same directory —
+// each with its OWN correctly-computed deadRanges, since a dead-branch
+// range computed for THIS file's line numbers would be meaningless applied
+// to a different file's text) is a fallback search space consulted ONLY
+// when the same-file search finds ZERO real call sites at all for this
+// method name — a real, non-literal call site in THIS file remains
+// authoritative and siblingFiles is never consulted, preserving this
+// function's own pre-existing "fail closed on any real caller passing a
+// non-literal" discipline exactly. Only `scanJavaStructural`'s own ordinary
+// per-file call never supplies this (so its behavior is byte-identical to
+// before this change) — it is supplied exclusively by the dedicated
+// project-wide suppression pass, `java-structural-cross-file.js`.
+// The declared class name of `content` itself — Juliet's own universal
+// one-public-class-per-file convention (confirmed across every fetched
+// corpus file this session), used ONLY to disambiguate a cross-file call
+// site (see below); irrelevant to same-file resolution, which never needs
+// it since a bare, unqualified call in the same file is unambiguous already.
+function _ownClassName(content) {
+  const m = /\bclass\s+([A-Za-z_]\w*)/.exec(content);
+  return m ? m[1] : null;
+}
+
+function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRanges, _depth, siblingFiles) {
   const depth0 = _depth || 0;
   if (depth0 >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -136,25 +170,71 @@ function _resolveParamLiteralViaAllCallSites(content, varName, beforeIdx, deadRa
   const paramIdx = params.findIndex((p) => new RegExp(`\\b${escapedVar}$`).test(p));
   if (paramIdx === -1) return false;
   const escapedMethod = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const callRe = new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
-  let cm, sawRealCallSite = false;
-  while ((cm = callRe.exec(content))) {
-    const argsStart = cm.index + cm[0].length;
-    let braceDepth = 1, i = argsStart;
-    while (i < content.length && braceDepth > 0) {
-      if (content[i] === '(') braceDepth++;
-      else if (content[i] === ')') braceDepth--;
-      i++;
+
+  // `classNameFilter` (only ever set for a SIBLING-file search — see below)
+  // requires the match to be a `(new ClassName()).method(` / `new
+  // ClassName().method(` construction naming THIS sink's own declared
+  // class, not just any call to a method sharing this method's bare name.
+  // Juliet reuses the SAME generic method names (bad/badSink/goodG2B/
+  // goodG2BSink/goodB2G/goodB2GSink/…) identically across thousands of
+  // otherwise-unrelated flow-variant files, and `--scramble-identifiers`
+  // preserves this collision BY DESIGN (the same original word always
+  // hashes to the same opaque token, everywhere) — confirmed the hard way
+  // via W5.41's own real-corpus debugging: a bare method-name search across
+  // a directory holding ~980 sibling files found hundreds of unrelated
+  // classes' own same-named methods, and picking up even ONE unrelated
+  // caller with a different arity or a genuinely different argument value
+  // wrongly failed this check closed for the ACTUAL intended pair. Requiring
+  // the class name too disambiguates correctly, since Juliet's own
+  // `CWEnnn_Descriptor__variant` → `case_<hash>` class-name scrambling is
+  // ALSO consistent per distinct original name (a DIFFERENT class name in a
+  // DIFFERENT file hashes to a DIFFERENT token). Same-file resolution never
+  // sets this — an unqualified call within the declaring file itself is
+  // already unambiguous.
+  function scanCallSitesIn(searchText, searchDeadRanges, classNameFilter) {
+    const callRe = classNameFilter
+      ? new RegExp(`\\bnew\\s+${classNameFilter}\\s*\\(\\s*\\)\\s*\\)?\\s*\\.\\s*${escapedMethod}\\s*\\(`, 'g')
+      : new RegExp(`\\b${escapedMethod}\\s*\\(`, 'g');
+    let cm, sawRealCallSite = false;
+    while ((cm = callRe.exec(searchText))) {
+      const argsStart = cm.index + cm[0].length;
+      let braceDepth = 1, i = argsStart;
+      while (i < searchText.length && braceDepth > 0) {
+        if (searchText[i] === '(') braceDepth++;
+        else if (searchText[i] === ')') braceDepth--;
+        i++;
+      }
+      const afterClose = searchText.slice(i).match(/^\s*(\{|throws)/);
+      if (afterClose) continue;
+      const args = _splitTopLevelCommas(searchText.slice(argsStart, i - 1)).map((a) => a.trim());
+      if (paramIdx >= args.length) return 'fail';
+      sawRealCallSite = true;
+      const argExpr = args[paramIdx];
+      if (/^"[^"]*"$/.test(argExpr)) continue;
+      if (/^[A-Za-z_]\w*$/.test(argExpr) && _trailingIdentIsLiteral(searchText, argExpr, cm.index, searchDeadRanges, depth0 + 1, siblingFiles)) continue;
+      return 'fail';
     }
-    const afterClose = content.slice(i).match(/^\s*(\{|throws)/);
-    if (afterClose) continue;
-    const args = _splitTopLevelCommas(content.slice(argsStart, i - 1)).map((a) => a.trim());
-    if (paramIdx >= args.length) return false;
-    sawRealCallSite = true;
-    const argExpr = args[paramIdx];
-    if (/^"[^"]*"$/.test(argExpr)) continue;
-    if (/^[A-Za-z_]\w*$/.test(argExpr) && _trailingIdentIsLiteral(content, argExpr, cm.index, deadRanges, depth0 + 1)) continue;
-    return false;
+    return sawRealCallSite ? 'ok' : 'none';
+  }
+
+  // Every known real call site — same file AND every sibling — must agree
+  // the argument is a literal; a single non-literal caller ANYWHERE fails
+  // this closed, so every sibling is checked even after an earlier one
+  // already resolved 'ok' (returning early on the first 'ok' would let a
+  // LATER sibling's genuinely-tainted caller go unseen).
+  const sameFileResult = scanCallSitesIn(content, deadRanges, null);
+  if (sameFileResult === 'fail') return false;
+  let sawRealCallSite = sameFileResult === 'ok';
+  if (siblingFiles && siblingFiles.length) {
+    const ownClass = _ownClassName(content);
+    if (ownClass) {
+      const escapedClass = ownClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      for (const sib of siblingFiles) {
+        const r = scanCallSitesIn(sib.code, sib.deadRanges, escapedClass);
+        if (r === 'fail') return false;
+        if (r === 'ok') sawRealCallSite = true;
+      }
+    }
   }
   return sawRealCallSite;
 }
@@ -189,7 +269,12 @@ function _resolveFieldLiteralViaAllAssignments(content, varName, deadRanges, _de
   return sawAssignment;
 }
 
-function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDepth) {
+// Exported for java-structural-cross-file.js (W5.41) — see
+// `_resolveParamLiteralViaAllCallSites`'s own header comment for what
+// `siblingFiles` is and why it's threaded through here too (the same-method
+// copy-chain branch below must be able to recurse into a cross-file-
+// resolved parameter if it is then copied to another local before use).
+export function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDepth, siblingFiles) {
   if (!varName) return false;
   if ((_calleeDepth || 0) >= _CALLEE_RETURN_LITERAL_CACHE_DEPTH) return false;
   const ranges = deadRanges || [];
@@ -216,12 +301,12 @@ function _trailingIdentIsLiteral(code, varName, beforeIdx, deadRanges, _calleeDe
   }
   // Same-method copy-chain resolution (Flow Variant 31).
   if (lastAnyRhs && lastAnyRhs !== 'null' && /^[A-Za-z_]\w*$/.test(lastAnyRhs) && lastAnyRhs !== varName) {
-    if (_trailingIdentIsLiteral(code, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1)) return true;
+    if (_trailingIdentIsLiteral(code, lastAnyRhs, lastAnyIdx, ranges, (_calleeDepth || 0) + 1, siblingFiles)) return true;
   }
   if (lastLiteralEnd === -1 || lastLiteralEnd !== lastAnyEnd) {
     // Argument-passing resolution via all call sites (Flow Variant 41), then
     // class-member-variable resolution via all assignments (Flow Variant 45).
-    return _resolveParamLiteralViaAllCallSites(code, varName, beforeIdx, deadRanges, _calleeDepth)
+    return _resolveParamLiteralViaAllCallSites(code, varName, beforeIdx, deadRanges, _calleeDepth, siblingFiles)
       || _resolveFieldLiteralViaAllAssignments(code, varName, deadRanges, _calleeDepth);
   }
   return true;

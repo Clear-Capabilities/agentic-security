@@ -108,6 +108,7 @@ import { scanHostHeader } from './sast/host-header.js';
 import { scanPythonSinks } from './sast/python-sinks.js';
 import { scanCSharp } from './sast/csharp.js';
 import { scanCsharpCrossFile } from './sast/csharp-cross-file.js';
+import { computeJavaStructuralCrossFileSuppressions } from './sast/java-structural-cross-file.js';
 import { scanCpp } from './sast/cpp.js';
 import { scanJulietShape, applyJulietJavaSuppressions, applyJulietCsSuppressions } from './sast/juliet-shape.js';
 import { scanCppDataflow, _parseErrorCount as _cppDataflowParseErrors } from './sast/cpp-dataflow.js';
@@ -9182,6 +9183,23 @@ function _deterministicFileTimings(timings) {
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
+  // SARD_80_F1 W5.41 — unlike the ADD-only cross-file passes above, this one
+  // SUPPRESSES an already-emitted java-structural.js finding when every real
+  // caller (checked project-wide within the finding's own directory) agrees
+  // the concatenated value is a literal. See java-structural-cross-file.js's
+  // own header comment for the full design and W5.40's EXECUTION_STATUS.md
+  // entry for the root-cause investigation.
+  {
+    const _jsCrossSuppress = runDetector(_detectorErrors,'<project>','computeJavaStructuralCrossFileSuppressions',()=>computeJavaStructuralCrossFileSuppressions(fc));
+    if (_jsCrossSuppress && _jsCrossSuppress.size) {
+      for (let _i = aF.length - 1; _i >= 0; _i--) {
+        const _f = aF[_i];
+        if (_f && typeof _f.id === 'string' && _f.id.startsWith('java-struct-') && _jsCrossSuppress.has(`${_f.file}:${_f.line}`)) {
+          aF.splice(_i, 1);
+        }
+      }
+    }
+  }
   aF.push(...(runDetector(_detectorErrors,'<project>','scanStoredPromptInjectionCrossFile',()=>scanStoredPromptInjectionCrossFile(fc))||[]));
   // Roadmap #8 — tree-sitter sinks for long-tail languages (opt-in,
   // AGENTIC_SECURITY_TREE_SITTER=1; degrades to no-op without the optional dep).
