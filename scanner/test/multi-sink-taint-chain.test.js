@@ -22,7 +22,7 @@ app.get('/x', (req, res) => {
   db.query("SELECT * FROM u WHERE b='" + q + "'");
 });
 `;
-  const res = await runFullScan({ fileContents: { 'app.js': src }, scanRoot: '/tmp/agentic-security-multi-sink-homogeneous', deep: true });
+  const res = await runFullScan({ fileContents: { 'app.js': src }, scanRoot: '/tmp/agentic-security-multi-sink-homogeneous', deep: true, deepInCi: true });
   const findings = res.findings || [];
   const multi = findings.filter((f) => f.parser === 'MULTI-SINK');
   assert.equal(multi.length, 0);
@@ -45,7 +45,7 @@ app.get('/x', (req, res) => {
   res.send("<div>" + q + "</div>");
 });
 `;
-  const res = await runFullScan({ fileContents: { 'app.js': src }, scanRoot: '/tmp/agentic-security-multi-sink-mixed', deep: true });
+  const res = await runFullScan({ fileContents: { 'app.js': src }, scanRoot: '/tmp/agentic-security-multi-sink-mixed', deep: true, deepInCi: true });
   const findings = res.findings || [];
   const multi = findings.filter((f) => f.parser === 'MULTI-SINK');
   assert.equal(multi.length, 1);

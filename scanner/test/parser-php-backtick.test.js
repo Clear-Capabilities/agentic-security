@@ -45,7 +45,7 @@ test('php: end-to-end — $_GET into a backtick reaches a command-injection find
   try {
     fs.writeFileSync(path.join(dir, 'a.php'),
       '<?php\n$cmd = $_GET["cmd"];\n$out = `ls -la $cmd`;\necho $out;\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'command-injection' || /command injection/i.test(f.vuln || ''));
     assert.ok(hit, `expected a command-injection finding — got families: ${(scan.findings || []).map(f => f.family).join(',')}`);
   } finally {

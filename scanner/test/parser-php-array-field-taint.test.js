@@ -32,7 +32,7 @@ async function findings(body) {
   const dir = tmpDir();
   try {
     fs.writeFileSync(path.join(dir, 'test.php'), body);
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     return scan.findings || [];
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

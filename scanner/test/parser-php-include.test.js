@@ -53,7 +53,7 @@ test('php: end-to-end — tainted data into $var = include(...) reaches a code-i
   try {
     fs.writeFileSync(path.join(dir, 'a.php'),
       '<?php\n$tainted = $_GET["UserData"];\n$var = include("\'". $tainted . ".php\'");\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'code-injection' && f.parser === 'IR-TAINT');
     assert.ok(hit, `expected a file-inclusion finding — got families: ${(scan.findings || []).map(f => f.family).join(',')}`);
   } finally {
@@ -66,7 +66,7 @@ test('php: a hardcoded path assigned via $var = include(...) does not fire', asy
   try {
     fs.writeFileSync(path.join(dir, 'a.php'),
       '<?php\n$safe = "literal_page";\n$var = include("\'". $safe . ".php\'");\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'code-injection' && f.parser === 'IR-TAINT');
     assert.ok(!hit, 'a literal-only value reaching $var = include(...) must not fire the taint sink');
   } finally {
@@ -79,7 +79,7 @@ test('php: end-to-end — $_GET into include reaches a code-injection finding un
   try {
     fs.writeFileSync(path.join(dir, 'a.php'),
       '<?php\n$page = $_GET["page"];\ninclude $page . ".php";\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'code-injection' || /inclusion/i.test(f.vuln || ''));
     assert.ok(hit, `expected a file-inclusion finding — got families: ${(scan.findings || []).map(f => f.family).join(',')}`);
   } finally {
@@ -91,7 +91,7 @@ test('php: a hardcoded include path does not fire', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'php-include-safe-'));
   try {
     fs.writeFileSync(path.join(dir, 'a.php'), '<?php\ninclude "header.php";\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'code-injection' && f.parser === 'IR-TAINT');
     assert.ok(!hit, 'a literal include path must not fire the taint sink');
   } finally {

@@ -73,7 +73,7 @@ test('php: end-to-end — fgets read inside an if-condition, then into system(),
   try {
     fs.writeFileSync(path.join(dir, 'a.php'),
       '<?php\n$handle = @fopen("/tmp/x.txt", "r");\nif ($handle) {\n  if (($value = fgets($handle, 4096)) == false) {\n    $value = "";\n  }\n  fclose($handle);\n} else {\n  $value = "";\n}\n$query = "cat \'". $value . "\'";\nsystem($query);\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'command-injection');
     assert.ok(hit, `expected a command-injection finding — got families: ${(scan.findings || []).map(f => f.family).join(',')}`);
   } finally {

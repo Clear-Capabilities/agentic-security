@@ -39,7 +39,7 @@ test('end-to-end: a source in one file reaches a sink in the includer via a lite
       '<?php\ninclude_once("source_input.php");\n' +
       '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
       '$xml->xpath($query);\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.cwe === 'CWE-91' && f.parser === 'IR-TAINT');
     assert.ok(hit, `expected a cross-file XPath injection finding — got: ${(scan.findings || []).map(f => `${f.parser}:${f.cwe}`).join(',')}`);
   } finally {
@@ -55,7 +55,7 @@ test('a dynamic (non-literal) include path is left alone — never merged, never
       '<?php\n$page = $_GET["page"];\ninclude($page . ".php");\n' +
       '$query = "//User[username/text()=\'". $tainted . "\']";\n' +
       '$xml->xpath($query);\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const xpathHit = (scan.findings || []).find(f => f.cwe === 'CWE-91');
     assert.ok(!xpathHit, 'a dynamic include path must never merge an unrelated file\'s assignments');
   } finally {
@@ -68,7 +68,7 @@ test('an include of a file with no matching path on the scan surface is a no-op 
   try {
     fs.writeFileSync(path.join(dir, 'main.php'),
       '<?php\ninclude_once("does_not_exist.php");\n$y = 1;\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     assert.ok(Array.isArray(scan.findings));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -97,7 +97,7 @@ test('the include call node itself is preserved unchanged — its own CWE-98 pat
   try {
     fs.writeFileSync(path.join(dir, 'header.php'), '<?php\n$safe = 1;\n');
     fs.writeFileSync(path.join(dir, 'a.php'), '<?php\ninclude("header.php");\n');
-    const { scan } = await runScan(dir, { deep: true });
+    const { scan } = await runScan(dir, { deep: true, deepInCi: true });
     const hit = (scan.findings || []).find(f => f.family === 'code-injection' && f.parser === 'IR-TAINT');
     assert.ok(!hit, 'a literal include path must still not fire the taint sink after merging');
   } finally {
