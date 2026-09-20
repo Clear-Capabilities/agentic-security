@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.151.3 |
-| Bundle SHA-256 | `20f079b2997e6c44886f390e2095526b1677c7098d773bf046e709a07a3d7450` |
-| Commit | `e41a3b24a3efc6543a837fb0384b876bb92875e5` |
+| Engine version | 0.152.0 |
+| Bundle SHA-256 | `93c2e026edb4b096aca1d732cb7ea42b2674431f3c3fe38fd9d218f8717ede65` |
+| Commit | `572675ca7c5905eef88aa96b8209a019b8b14c42` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-14T14:51:39.675Z |
+| Generated (UTC) | 2026-09-20T14:56:31.949Z |
 
 ## What these numbers are, and what they are not
 
@@ -93,7 +93,8 @@ All corpus entries scored; no entry was excluded.
 | CWE-22 | 16 | 16/16 (100.0%) | 16/16 (100.0%) |
 | CWE-284 | 1 | 1/1 (100.0%) | 1/1 (100.0%) |
 | CWE-316 | 2 | 2/2 (100.0%) | 2/2 (100.0%) |
-| CWE-327 | 10 | 10/10 (100.0%) | 10/10 (100.0%) |
+| CWE-327 | 6 | 6/6 (100.0%) | 6/6 (100.0%) |
+| CWE-328 | 4 | 4/4 (100.0%) | 4/4 (100.0%) |
 | CWE-329 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-338 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
 | CWE-352 | 8 | 8/8 (100.0%) | 8/8 (100.0%) |
@@ -212,7 +213,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 491 |
+| `scanner/src` | 484 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -229,7 +230,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 326/374 (87.2%) |
+| 324/366 (88.5%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone

@@ -9,7 +9,7 @@
 > make the history less accurate, not more.
 
 
-## Unreleased - Rust: first-class language (SAST + Layer-2 taint), part of the SARD 80% F1 push
+## 0.152.0 - Rust: first-class language, and the SARD 80% F1 push's taint-engine architecture work
 
 Rust joins the first-class language set (JS/TS, Python, Java, Kotlin, Go, Ruby, PHP, C#) with both
 a hand-rolled IR frontend (`scanner/src/ir/parser-rust.js`, the `parser-go.js`/`parser-cs.js`
@@ -39,6 +39,46 @@ opt-in, WASM-based tree-sitter long-tail path, which nothing in the taint engine
   composition, not general ecosystem coverage). `bench/cve-replay` — 5 new entries (2 capability,
   3 deep), all `pre:TP post:TN`. `bench/mutation` — 1 new detection-dimension baseline/adversarial
   pair (`format!`-built SQL fires; the parameterized `.bind()` form does not).
+
+### SARD/Juliet 80% macro-F1 push (`bench/sard/EXECUTION_STATUS.md`) — substantial progress, DoD not yet met
+
+A long-running execution PRD targeting macro-F1 >= 80% on the held-out TEST split for Java, C#, and
+PHP against the SARD/Juliet benchmark corpus. **Honest status: real, verified, substantial gains for
+all three languages, but the 80% target is not yet reached** — Java macroF1=59.1%, C#
+macroF1=68.6% (clears the 50% M2 gate), PHP macroF1=48.2% (all measured on TEST split, never on
+gold/answer-key signals — see the PRD's own integrity rules). This release ships the engine and
+scoring work; the PRD stays open.
+
+- **Measurement integrity first**: fixed truncation-masking in the benchmark harness (a truncated
+  scan was silently scoring as if complete), added per-CWE batched scanning to eliminate it in
+  practice, and made the scan surface match the gold surface exactly.
+- **Structural class resolution**: real `ir.classes` emission and class-hierarchy-based method
+  resolution replacing regex heuristics, across the languages that lacked it.
+- **Interprocedural completeness**: cross-file field/chain taint for C# (`csharp-cross-file.js`) and
+  Java, collection-element taint (typed reads, for-each binding), abstract/interface dispatch via
+  declared base type, and real branch+join CFGs for Java `if`/`switch` (previously linear
+  fall-through — a real correctness bug, not just a recall gap).
+- **Precision**: guard-predicate narrowing (`is_numeric`/`ctype_digit`/`int.TryParse`/etc. on an
+  if-statement's TRUE branch only), a proven-clean ledger, and dozens of per-CWE false-positive
+  fixes across Java/C# (many rooted in Juliet's own "dead code by construction" idioms —
+  `if(true)`/`if(5==5)`/constant-folded fields/methods — defeating naive literal-tracking heuristics).
+- **Call-string context-sensitivity, built from scratch this push**: `dataflow/engine.js` now
+  narrows a shared static/class field's taint to only the callers that can actually reach it
+  (previously any writer anywhere in the class tainted every reader), closing a real
+  context-sensitivity gap independently identified across all three languages. A second,
+  previously-built-but-never-validated k=1 call-string mechanism (`AGENTIC_SECURITY_KCFA_CALLSTRING`,
+  opt-in) was found broken, root-caused, and repaired.
+- **Two new "next-generation taint analysis" capabilities**, requested and scoped independently of
+  the SARD benchmark itself: (1) sound regex-validation-guard narrowing for JS/TS — a
+  fully-anchored pattern like `/^[a-zA-Z0-9]+$/` used as `if (pattern.test(x))` now provably proves
+  `x` metacharacter-free on the true branch, via a new conservative character-class parser
+  (`dataflow/string-domain.js`'s `isSafeValidationPattern`); (2) object-instance field taint via
+  method calls, a general (not JS-specific) engine capability — `bad.setData(tainted)` now taints
+  `bad`'s own field, read back correctly through `bad.getData()`, while a **different** instance of
+  the same class stays untainted (real object-instance sensitivity, without a full
+  allocation-site-keyed heap model).
+- PHP: closed total blackouts for LFI/RFI (`include`/`require` result assignment), several IDOR
+  sub-shapes, and a cross-file variable-scope-merging capability for split include chains.
 
 ## 0.151.3 - Adversarial premortem on the SARD benchmarking PROGRAM itself: full remediation, first genuine held-out numbers
 

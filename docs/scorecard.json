@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.151.3",
-    "bundleSha256": "20f079b2997e6c44886f390e2095526b1677c7098d773bf046e709a07a3d7450",
-    "commit": "e41a3b24a3efc6543a837fb0384b876bb92875e5",
+    "engineVersion": "0.152.0",
+    "bundleSha256": "93c2e026edb4b096aca1d732cb7ea42b2674431f3c3fe38fd9d218f8717ede65",
+    "commit": "572675ca7c5905eef88aa96b8209a019b8b14c42",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-09-14T14:51:39.675Z",
+    "generatedAt": "2026-09-20T14:56:31.949Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -315,14 +315,26 @@
       },
       {
         "key": "CWE-327",
-        "entries": 10,
+        "entries": 6,
         "detection": {
-          "n": 10,
-          "d": 10
+          "n": 6,
+          "d": 6
         },
         "silence": {
-          "n": 10,
-          "d": 10
+          "n": 6,
+          "d": 6
+        }
+      },
+      {
+        "key": "CWE-328",
+        "entries": 4,
+        "detection": {
+          "n": 4,
+          "d": 4
+        },
+        "silence": {
+          "n": 4,
+          "d": 4
         }
       },
       {
@@ -588,14 +600,14 @@
         }
       },
       "scanner/src": {
-        "total": 491,
+        "total": 484,
         "byFile": {
+          "(deep-engine)": 1,
           "badge.js": 3,
           "dataflow/cross-service-taint.js": 5,
           "dataflow/exploit-prover.js": 1,
           "dataflow/ifds-precise.js": 3,
           "dataflow/incremental.js": 7,
-          "dataflow/index.js": 5,
           "dataflow/polyglot.js": 1,
           "dataflow/privacy-deep-walker.js": 2,
           "dataflow/privacy-governance.js": 1,
@@ -607,21 +619,21 @@
           "fix/apply-fix-service.js": 3,
           "fix/approver-registry.js": 1,
           "history-scan.js": 1,
-          "integrations/index.js": 11,
+          "integrations/index.js": 10,
           "integrations/tickets.js": 9,
           "ir/chrome-probe.mjs": 1,
           "ir/cpp-preprocessor.js": 1,
           "ir/ir-stats.js": 1,
           "ir/parser-cpp.js": 4,
-          "ir/parser-cs.js": 1,
+          "ir/parser-cs.js": 2,
           "ir/parser-go.js": 2,
           "ir/parser-kt.js": 1,
-          "ir/parser-php.js": 5,
+          "ir/parser-php.js": 6,
           "ir/parser-py-cst.js": 1,
           "ir/parser-py.helper.py": 1,
           "ir/parser-rb.js": 2,
           "ir/parser-rust.js": 4,
-          "ir/type-stubs.js": 8,
+          "ir/type-stubs.js": 4,
           "ir/universal-ir.js": 1,
           "leaderboard.js": 3,
           "lineage/CLAUDE.md": 2,
@@ -817,8 +829,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 326,
-    "d": 374
+    "n": 324,
+    "d": 366
   },
   "taintRecall": {
     "measuredThisRun": true,
