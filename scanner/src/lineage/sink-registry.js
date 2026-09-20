@@ -161,6 +161,9 @@ export const CWE_MAP = Object.freeze({
   // category models either.
   'CWE-470':  Object.freeze({ category: null, status: 'unsupported', why: 'unsafe reflection — destination is the class loader / reflection API, not an FR-201 egress category' }),
   'CWE-134':  Object.freeze({ category: null, status: 'unsupported', why: 'uncontrolled format string — destination is the string formatter, not an FR-201 egress category' }),
+  // SARD 80% F1 push catalog additions (2026-09).
+  'CWE-81':   Object.freeze({ category: 'http-response', status: 'modeled', why: 'reflected script in an error-message response (e.g. response.sendError/StatusDescription) is a response-header/body writer, the same destination as ordinary reflected XSS' }),
+  'CWE-91':   Object.freeze({ category: null, status: 'unsupported', why: 'XML/XPath injection (SimpleXMLElement::xpath and equivalents) — destination is a query engine over an in-memory document, same reasoning as CWE-643' }),
 });
 
 // §5.2 — CWE-79's refinement key. FR-201 lumps "browser DOM or client

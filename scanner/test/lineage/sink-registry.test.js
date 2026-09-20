@@ -209,9 +209,19 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // PHP SARD push (1 new CWE, CWE-98 local/remote file inclusion — the
   // destination is the PHP interpreter itself, same in-process-computation
   // shape as the existing CWE-94/CWE-1336 rows) all landed in the same
-  // merge. Re-measured against the merged catalog, not hand-summed from
-  // any branch's own delta.
-  assert.equal(unsupported.length, 112);
+  // merge.
+  // 112 -> 116: the 0.152.0 release gate caught CWE-81 and CWE-91 sink
+  // entries (added later in the same SARD push) with NO CWE_MAP row at
+  // all — `completeness/1a` above was failing (an unmapped-CWE build
+  // break), and every one of those entries was silently falling through
+  // `reclassifySink`'s defensive `unsupported` fallback rather than a real,
+  // reasoned row. Added CWE-91 (XML/XPath injection — destination is a
+  // query engine over an in-memory document, same as CWE-643) as a real
+  // `unsupported` row (net +N unsupported entries) and CWE-81 (reflected
+  // script in an error-message response) as `http-response`/`modeled`
+  // (moving its entries OUT of unsupported) — see CWE_MAP for both. Net
+  // effect measured directly against the live catalog, not hand-summed.
+  assert.equal(unsupported.length, 116);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -229,7 +239,14 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // 16 -> 20: the Rust catalog additions (SARD 80% F1 push) added 4 XSS
   // sinks (actix body, axum Html, rocket RawHtml, warp reply::html), none
   // `framework: 'dom'|'react'`, so all 4 land in the `otherCount` bucket.
-  assert.equal(cwe79.length, 20);
+  // 20 -> 24, caught (not hand-attributed) by the 0.152.0 release gate:
+  // the same SARD push's continued Java/PHP/Kotlin/C# work added 4 more
+  // CWE-79 sink entries this pinned count was never updated for. Verified
+  // directly against the live catalog that `domCount` is unchanged at 6
+  // (every new entry is a server-side, non-DOM/React response writer, so
+  // all 4 land in `otherCount`) rather than re-deriving which specific
+  // entries account for the delta from 210 commits of history.
+  assert.equal(cwe79.length, 24);
   let domCount = 0;
   let otherCount = 0;
   for (const e of cwe79) {
@@ -247,7 +264,7 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 14);
+  assert.equal(otherCount, 18);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -476,16 +493,24 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // CWE-95/CWE-1333 rows), plus the PHP SARD push (a new CWE-98
   // local/remote file inclusion row, `unsupported` — the destination is the
   // PHP interpreter itself, same in-process-computation shape as the
-  // existing CWE-94/CWE-1336 rows) landed in the same merge. Re-measured
-  // against the merged catalog, not hand-summed from any branch's own
-  // delta.
+  // existing CWE-94/CWE-1336 rows) landed in the same merge.
+  // 303 -> 313 entries, 176 -> 182 modeled, 112 -> 116 unsupported (0.152.0
+  // release gate): the growth above was correct, but this pinned test
+  // itself had drifted stale (never re-run against the live catalog since
+  // the SARD push added the trailing 10 entries this comment's own history
+  // never accounted for), AND `completeness/1a` above caught 2 sink CWEs
+  // (CWE-81, CWE-91) added with no CWE_MAP row at all — both fixed
+  // together: CWE-91 (XML/XPath injection) added as a real `unsupported`
+  // row, CWE-81 (reflected script in an error-message response) added as
+  // `http-response`/`modeled`. Re-measured directly against the live
+  // catalog, not hand-summed from any branch's own delta.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 303);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 176);
+  assert.equal(SINKS.length, 313);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 182);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 112);
-  assert.equal(176 + 6 + 9 + 112, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 116);
+  assert.equal(182 + 6 + 9 + 116, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

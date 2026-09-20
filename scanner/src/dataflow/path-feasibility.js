@@ -39,7 +39,7 @@
 // else (a branch, an assignment, a call, a non-literal return) disqualifies
 // it — conservative by design, since a false resolution here silently prunes
 // a REAL branch.
-export function triviallyConstantValue(fn) {
+function triviallyConstantValue(fn) {
   if (!fn || !fn.cfg || !fn.cfg.nodes) return undefined;
   const real = Object.values(fn.cfg.nodes).filter(n => n && n.kind !== 'entry' && n.kind !== 'exit' && n.kind !== 'noop');
   if (real.length !== 1) return undefined;
