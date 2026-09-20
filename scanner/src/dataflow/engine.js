@@ -50,6 +50,7 @@ import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { lookupBuiltinSummary } from './builtin-summaries.js';
 import { isImplicitFlowEnabled, buildImplicitContext, implicitAssignTarget, markImplicitTaint, createImplicitFinding } from './implicit-flow.js';
+import { isSafeValidationPattern } from './string-domain.js';
 // NOTE: receiver-context.js's receiverTypeAtCall is deliberately NOT imported
 // here. It was the implementation of _receiverTypeFor's old `this.field`
 // branch, whose PascalCase-of-field-name guess is the false-negative bug this
@@ -731,6 +732,32 @@ function _guardNarrowsVar(cond, state) {
     const path = arg && accessPathOf(arg);
     if (path && isCoveredBy(state, path)) return path;
   }
+  return null;
+}
+
+// Next-gen taint capability #2 — regex-validation guard narrowing (JS/TS).
+// Recognizes the idiom `if (<regex-literal>.test(x)) { ... }` — `parser-js.js`
+// lowers a regex literal's own `.test(...)` call to `{kind:'call',
+// callee:{kind:'member', object:{kind:'literal', value:RegExp, isRegex:true},
+// prop:'test'}, args:[x]}`. When the literal's pattern is
+// `isSafeValidationPattern`-safe, an OBSERVED true return proves `x` cannot
+// carry injection metacharacters, same soundness contract and TRUE-branch-
+// only narrowing as `GUARD_PREDICATES`/`_guardNarrowsVar` above. Deliberately
+// narrow for this landing, same "documented follow-up" precedent as that
+// function's own header comment: a regex bound to a variable first
+// (`const re = /.../; if (re.test(x))`) is not resolved back to its literal —
+// this engine has no constant-propagation map for local variable bindings to
+// reuse here, and adding one is a real, separate piece of work.
+function _regexTestGuardNarrowsVar(cond, state) {
+  if (!cond || cond.kind !== 'call') return null;
+  const callee = cond.callee;
+  if (!callee || typeof callee !== 'object' || callee.kind !== 'member' || callee.prop !== 'test') return null;
+  const obj = callee.object;
+  if (!obj || obj.kind !== 'literal' || !obj.isRegex || !(obj.value instanceof RegExp)) return null;
+  if (!isSafeValidationPattern(obj.value)) return null;
+  const arg = cond.args && cond.args[0];
+  const path = arg && accessPathOf(arg);
+  if (path && isCoveredBy(state, path)) return path;
   return null;
 }
 
@@ -1578,7 +1605,7 @@ function step(node, stateIn, callContext) {
       // this codebase's established CFG convention (path-feasibility.js),
       // `succ[0]` is the THEN edge and `succ[1+]` are the ELSE/fall-through
       // edge(s).
-      const narrowedVar = _guardNarrowsVar(node.cond, state);
+      const narrowedVar = _guardNarrowsVar(node.cond, state) || _regexTestGuardNarrowsVar(node.cond, state);
       if (narrowedVar && node.succ && node.succ.length > 0) {
         const thenState = removePathAndDescendants(state, narrowedVar);
         return { state, findings, succOverride: new Map([[node.succ[0], thenState]]) };

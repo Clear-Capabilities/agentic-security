@@ -232,3 +232,135 @@ export function isSafeRedirectTarget(absVal, allowedHosts) {
 export function hashAbstract(absVal) {
   return render(absVal);
 }
+
+/**
+ * Next-gen taint capability #2 — regex-VALIDATION guard safety.
+ *
+ * A DIFFERENT question from `provablyMatches` above (which asks "does this
+ * already-known abstract value fit a safety regex"): here we're asked "is
+ * this REGEX PATTERN, used as a `pattern.test(x)`-style validation guard,
+ * restrictive enough that observing it MATCH on the true branch proves `x`
+ * cannot carry injection metacharacters for ANY family?" This is the JS/TS
+ * analog of PHP's `if (preg_match($re, $x) == 1) { ... }` idiom — found to
+ * be a genuine, real-world-common pattern with NO recognition anywhere in
+ * this engine (neither the name-based `GUARD_PREDICATES` in engine.js, nor
+ * this file's own `abstract()`/`SANITIZER_OUTPUT_REGEX`, which characterizes
+ * a SANITIZER CALL's output, not a validation-guard's CONDITION).
+ *
+ * Deliberately a conservative ALLOWLIST parser, not a full regex-engine
+ * subset check (undecidable in general): walks the pattern character by
+ * character, permitting only literal safe characters (letters, digits, and
+ * a short vetted punctuation set), `\d`/`\w` shorthand classes, and
+ * bracket character classes built from the same safe set — with
+ * quantifiers on any of the above. Anything it cannot fully account for
+ * (alternation, groups, wildcards, negated classes `[^...]`, negated
+ * shorthand `\D`/`\W`/`\s`/`\S`, backreferences, lookaround, unicode
+ * property escapes, an unescaped stray metacharacter) REJECTS rather than
+ * guesses — a false "safe" here would silently suppress a real,
+ * exploitable finding, which is a much worse failure mode than missing a
+ * genuinely-safe-but-unrecognized pattern (the existing, unchanged taint
+ * flow still fires in that case, exactly as it did before this capability
+ * existed).
+ *
+ * Also requires full anchoring (`^...$`) and rejects the `m` (multiline)
+ * flag: with `m` set, `^`/`$` match at LINE boundaries rather than string
+ * boundaries, so a multi-line input could have a safe first line and an
+ * unsafe second line while still matching `^safe$` against line one —
+ * silently defeating the "matched, therefore the WHOLE value is safe"
+ * guarantee this function exists to provide.
+ */
+export function isSafeValidationPattern(pattern) {
+  if (!(pattern instanceof RegExp)) return false;
+  if (pattern.flags && pattern.flags.includes('m')) return false;
+  const source = pattern.source;
+  if (!source.startsWith('^') || !source.endsWith('$')) return false;
+  const body = source.slice(1, -1);
+  if (!body) return false; // `^$` (empty-string-only) is degenerate, not a useful guard
+  // Two DISTINCT allowlists, deliberately not merged into one — conflating
+  // them is exactly the bug this comment now documents (caught by this
+  // function's own adversarial unit tests before ever reaching production):
+  //
+  // `isSafeBareChar` — characters with NO special regex meaning when they
+  // appear UNESCAPED. Critically, `.` (the wildcard metacharacter — matches
+  // ANY character) is NOT in this set: an earlier version of this function
+  // included `.` here on the (wrong) assumption that it's "just punctuation,"
+  // which caused `/^.*$/` — the real PHP generator's OWN "no_filtering"
+  // unsafe sample, matching literally everything — to be accepted as a safe
+  // guard. A bare `.` in a pattern is ALWAYS the wildcard; a literal dot
+  // must be escaped (`\.`) or appear inside a character class (`[.]`),
+  // both handled by the escaped/class-content paths below.
+  //
+  // `isSafeEscapedPunct` — punctuation that, when ESCAPED with a backslash,
+  // unambiguously means "match this literal character." Deliberately
+  // EXCLUDES every letter and digit: an escaped letter in regex syntax is
+  // Two DELIBERATELY SEPARATE allowlists, keyed by context, not merged into
+  // one — conflating them is the exact bug class this function's own
+  // adversarial unit tests caught twice while writing it, both fixed here:
+  //
+  // `isSafeBareChar` (governs an UNESCAPED character, bare or inside a
+  // class) — letters, digits, underscore, hyphen, at-sign: characters with
+  // NO special regex meaning at all when unescaped. Crucially this does
+  // NOT include `.` — a bare `.` outside a class is the wildcard
+  // metacharacter (matches ANY character), not punctuation. An earlier
+  // version of this allowlist included `.`, which let `/^.*$/` — the real
+  // PHP generator's own "no_filtering" UNSAFE sample, matching literally
+  // everything — pass as a safe guard.
+  //
+  // `isSafeEscapedChar` (governs a character immediately AFTER a
+  // backslash) — punctuation ONLY, deliberately excluding every letter and
+  // digit. An escaped letter in regex syntax is NEVER a plain literal:
+  // `\d`/`\D`/`\w`/`\W`/`\s`/`\S`/`\b`/`\B` are shorthand/boundary
+  // constructs, `\1`/`\2`/… are backreferences, and any other escaped
+  // letter could be a unicode property escape (`\p{...}`) or named
+  // backreference this parser has never heard of. An earlier version of
+  // this function reused `isSafeBareChar` (which includes letters) for the
+  // escaped-character check too, so `\D` (negated digit — matches almost
+  // anything) was accepted as though it meant a literal capital D.
+  const isSafeBareChar = (ch) => /^[a-zA-Z0-9_\-@]$/.test(ch);
+  const isSafeEscapedChar = (ch) => /^[_\-@.]$/.test(ch);
+  let i = 0;
+  const consumeQuantifier = () => {
+    if (i >= body.length) return;
+    const ch = body[i];
+    if (ch === '*' || ch === '+' || ch === '?') { i++; return; }
+    if (ch === '{') {
+      const close = body.indexOf('}', i);
+      if (close === -1) throw new Error('unterminated');
+      if (!/^\d+(,\d*)?$/.test(body.slice(i + 1, close))) throw new Error('malformed');
+      i = close + 1;
+    }
+  };
+  try {
+    while (i < body.length) {
+      const ch = body[i];
+      if (ch === '\\') {
+        const next = body[i + 1];
+        if (next === 'd' || next === 'w') { i += 2; consumeQuantifier(); continue; }
+        if (next && isSafeEscapedChar(next)) { i += 2; consumeQuantifier(); continue; }
+        return false; // \D, \W, \s, \S, \b, an escaped letter/digit, unicode escapes, or anything unrecognized
+      }
+      if (ch === '[') {
+        const close = body.indexOf(']', i);
+        if (close === -1) return false;
+        const cls = body.slice(i + 1, close);
+        if (cls.startsWith('^')) return false; // negated class — "anything except", unsafe by construction
+        let j = 0;
+        while (j < cls.length) {
+          if (cls[j] === '\\' && (cls[j + 1] === 'd' || cls[j + 1] === 'w')) { j += 2; continue; }
+          if (cls[j] === '\\' && isSafeEscapedChar(cls[j + 1])) { j += 2; continue; }
+          // Inside a character class, `.` loses its wildcard meaning and IS
+          // a literal dot even when bare — no escaping needed here, unlike
+          // outside a class.
+          if (isSafeBareChar(cls[j]) || cls[j] === '-' || cls[j] === '.') { j++; continue; }
+          return false;
+        }
+        i = close + 1;
+        consumeQuantifier();
+        continue;
+      }
+      if (isSafeBareChar(ch)) { i++; consumeQuantifier(); continue; }
+      return false; // `.`, `|`, `(`, `)`, a bare mid-pattern `^`/`$`, or any other metacharacter
+    }
+  } catch { return false; }
+  return true;
+}

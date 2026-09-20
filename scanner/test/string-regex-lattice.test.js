@@ -6,6 +6,7 @@ import {
   TOP, BOTTOM,
   makeConst, makeConcat, makeRegex,
   abstract, join, render, provablyMatches,
+  isSafeValidationPattern,
 } from '../src/dataflow/string-domain.js';
 
 test('makeRegex rejects unanchored patterns', () => {
@@ -97,4 +98,70 @@ test('parseInt is recognized as integer-output', () => {
   assert.ok(a.pattern.test('42'));
   assert.ok(a.pattern.test('-7'));
   assert.equal(a.pattern.test('1e5'), false);
+});
+
+// Next-gen taint capability #2 — regex-validation guard safety
+// (`isSafeValidationPattern`). Every "safe" case here must be one where
+// observing a MATCH provably rules out injection metacharacters for every
+// family this catalog covers; every "unsafe" case is either a pattern that
+// can match dangerous characters, or one this conservative parser cannot
+// fully reason about (which must reject, not guess).
+
+test('isSafeValidationPattern: accepts simple anchored character classes', () => {
+  assert.equal(isSafeValidationPattern(/^[a-zA-Z]+$/), true);
+  assert.equal(isSafeValidationPattern(/^[0-9]*$/), true);
+  assert.equal(isSafeValidationPattern(/^[a-zA-Z0-9]+$/), true);
+  assert.equal(isSafeValidationPattern(/^\d+$/), true);
+  assert.equal(isSafeValidationPattern(/^\w+$/), true);
+  assert.equal(isSafeValidationPattern(/^\d{1,10}$/), true);
+  assert.equal(isSafeValidationPattern(/^[a-z_.\-@]+$/), true);
+});
+
+test('isSafeValidationPattern: rejects unanchored patterns', () => {
+  assert.equal(isSafeValidationPattern(/[a-zA-Z]+/), false);
+  assert.equal(isSafeValidationPattern(/^[a-zA-Z]+/), false);
+  assert.equal(isSafeValidationPattern(/[a-zA-Z]+$/), false);
+});
+
+test('isSafeValidationPattern: rejects the wildcard-everything pattern (the real generator\'s own "no_filtering" unsafe sample)', () => {
+  assert.equal(isSafeValidationPattern(/^.*$/), false);
+});
+
+test('isSafeValidationPattern: rejects negated character classes', () => {
+  assert.equal(isSafeValidationPattern(/^[^<>]*$/), false);
+});
+
+test('isSafeValidationPattern: rejects negated shorthand classes (\\D, \\W, \\S)', () => {
+  assert.equal(isSafeValidationPattern(/^\D+$/), false);
+  assert.equal(isSafeValidationPattern(/^\W+$/), false);
+  assert.equal(isSafeValidationPattern(/^\S+$/), false);
+  assert.equal(isSafeValidationPattern(/^\s+$/), false); // \s permits newlines — CRLF-injection relevant
+});
+
+test('isSafeValidationPattern: rejects alternation, groups, and backreferences', () => {
+  assert.equal(isSafeValidationPattern(/^(a|b)+$/), false);
+  assert.equal(isSafeValidationPattern(/^(abc)+$/), false);
+  assert.equal(isSafeValidationPattern(/^(\w)\1+$/), false);
+});
+
+test('isSafeValidationPattern: rejects the multiline flag even on an otherwise-safe body', () => {
+  assert.equal(isSafeValidationPattern(new RegExp('^[a-z]+$', 'm')), false);
+});
+
+test('isSafeValidationPattern: rejects a dangerous character sneaking into a bracket class', () => {
+  assert.equal(isSafeValidationPattern(/^[a-zA-Z'"<>;]+$/), false);
+});
+
+test('isSafeValidationPattern: rejects the degenerate empty-body pattern', () => {
+  assert.equal(isSafeValidationPattern(/^$/), false);
+});
+
+test('isSafeValidationPattern: rejects a malformed quantifier', () => {
+  assert.equal(isSafeValidationPattern(/^[a-z]{2,x}$/), false);
+});
+
+test('isSafeValidationPattern: rejects non-RegExp input', () => {
+  assert.equal(isSafeValidationPattern('^[a-z]+$'), false);
+  assert.equal(isSafeValidationPattern(null), false);
+  assert.equal(isSafeValidationPattern(undefined), false);
 });

@@ -80,6 +80,28 @@ function exprOf(n) {
     case 'StringLiteral':
     case 'BooleanLiteral':
     case 'NullLiteral':       return { kind: 'literal', value: n.value !== undefined ? n.value : null };
+    // Next-gen taint capability #2 (string/value abstract domain) — a regex
+    // LITERAL (`/^[a-z]+$/`) previously fell through to `{kind:'unknown'}`
+    // entirely: no case matched `RegExpLiteral`, so the ENTIRE pattern was
+    // lost before any downstream consumer (a guard-narrowing check, the
+    // existing `string-domain.js` lattice) ever saw it. This is why a
+    // pattern-based validation guard (`if (/^\d+$/.test(x)) sink(x)`) could
+    // never be recognized as safety-narrowing at all, regardless of how
+    // permissive or restrictive the pattern was — confirmed via a direct IR
+    // dump before this fix (the regex literal's own callee-object lowered to
+    // `{kind:'unknown'}`, not merely an unrecognized guard shape). Lowered
+    // to a `literal` node carrying the ACTUAL RegExp instance (safe here —
+    // this parser runs in-process, unlike the five hand-rolled parsers,
+    // which have no such runtime and store literal-only VALUES), tagged
+    // `isRegex: true` so a consumer can distinguish "this literal's value
+    // happens to be a RegExp" from a genuine string/number/boolean literal
+    // without doing an `instanceof` check itself. A malformed pattern (rare,
+    // Babel would normally reject it upstream) falls back to `unknown`
+    // rather than throwing mid-parse.
+    case 'RegExpLiteral': {
+      try { return { kind: 'literal', value: new RegExp(n.pattern, n.flags || ''), isRegex: true }; }
+      catch { return { kind: 'unknown' }; }
+    }
     case 'TemplateLiteral':   return { kind: 'tpl', parts: (n.expressions || []).map(exprOf) };
     case 'MemberExpression':  return {
       kind: 'member',
