@@ -190,8 +190,16 @@ export class SummaryCache {
   // Helper: apply a summary to a caller's taint state given the call site's
   // argument bindings. Returns { calleeReturnTainted, mutated: Set of caller-side
   // var names that should become tainted because the callee mutated them }.
-  applyAtCallSite(summary, paramNames, callArgs, callerTaintedVars) {
-    if (!summary) return { returnTainted: false, mutated: new Set() };
+  // `receiverPath` (optional, next-gen taint capability #3): the caller-side
+  // access path of a receiver-qualified call's OWN receiver (`bad` for
+  // `bad.setData(x)`). When present and `summary.mutatedThisFields` is
+  // non-empty, also returns `mutatedThisPaths` — the receiver's own field
+  // paths (`bad.data`) to taint in the caller, mirroring `mutated` above but
+  // for the implicit `this` parameter instead of a declared one. Omitting
+  // `receiverPath` (every pre-existing call site) leaves `mutatedThisPaths`
+  // empty, so this is purely additive for callers that don't pass it.
+  applyAtCallSite(summary, paramNames, callArgs, callerTaintedVars, receiverPath) {
+    if (!summary) return { returnTainted: false, mutated: new Set(), mutatedThisPaths: new Set() };
     const mutated = new Set();
     if (summary.mutatedParams && summary.mutatedParams.size) {
       // Map each mutated parameter position back to the caller-side argument name.
@@ -202,7 +210,11 @@ export class SummaryCache {
         if (arg && arg.kind === 'ident') mutated.add(arg.name);
       }
     }
-    return { returnTainted: !!summary.returnTainted, mutated };
+    const mutatedThisPaths = new Set();
+    if (receiverPath && summary.mutatedThisFields && summary.mutatedThisFields.size) {
+      for (const field of summary.mutatedThisFields) mutatedThisPaths.add(`${receiverPath}.${field}`);
+    }
+    return { returnTainted: !!summary.returnTainted, mutated, mutatedThisPaths };
   }
 
   size() { return this._cache.size; }
@@ -226,6 +238,16 @@ function _summaryEq(a, b) {
   const bm = b.mutatedParams || new Set();
   if (am.size !== bm.size) return false;
   for (const p of am) if (!bm.has(p)) return false;
+  // Next-gen taint capability #3's `mutatedThisFields` is a THIRD summary
+  // field alongside `returnTainted`/`mutatedParams` — deliberately compared
+  // here too, not left out, per this function's own header comment above:
+  // omitting a field from this equality check is exactly how a fresher,
+  // more-refined summary can be silently discarded by the fixed-point loop
+  // while still being returned to its immediate caller.
+  const atf = a.mutatedThisFields || new Set();
+  const btf = b.mutatedThisFields || new Set();
+  if (atf.size !== btf.size) return false;
+  for (const f of atf) if (!btf.has(f)) return false;
   return true;
 }
 

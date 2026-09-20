@@ -353,13 +353,18 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
       return {
         returnTainted: !!inner._returnTainted,
         mutatedParams: inner._mutatedParamsOut || new Set(),
+        mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
         findings: inner._findings,
       };
     });
   }
   _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
-  return !!(sum && sum.returnTainted);
+  // Next-gen taint capability #3: a single-field getter's return is tainted
+  // whenever THIS call's own receiver already carries that field as
+  // tainted, independent of `sum.returnTainted` (which reflects only the
+  // EMPTY-args entry state a zero-param getter always computes under).
+  return _calleeGetterFieldTainted(calleeExpr, state, callContext) || !!(sum && sum.returnTainted);
 }
 
 // Taint-recall PRD (80%): is a call's own RECEIVER tainted? Handles the two
@@ -384,6 +389,85 @@ function _calleeReceiverTainted(callee, state, callContext) {
     return exprTaint(callee.object, state, callContext);
   }
   return false;
+}
+
+// Next-gen taint capability #3 — object-instance field taint via method
+// calls (JS/TS). `classTaintedFields` (below, in the pre-pass) already
+// tracks "does ANY method of this class ever taint field F", but that is a
+// deliberate, CLASS-WIDE over-approximation used only when no direct call-
+// graph link between writer and reader is discoverable. When code instead
+// calls a mutator method directly on a LOCAL receiver variable —
+// `const bad = new Holder(); bad.setData(tainted); ...` — the engine had no
+// mechanism at all to taint `bad`'s own `data` field: `_mutatedParamsOut`
+// (v0.66) only ever tracks the callee's DECLARED PARAMETERS, never the
+// implicit `this` receiver, so a setter's `this.field = v` mutation was
+// invisible to its own caller. Fixed by treating `this` as an implicit
+// mutable parameter (see the `_mutatedThisFieldsOut` population in
+// `analyzeFunction`, mirroring `_mutatedParamsOut` exactly) and, on the read
+// side, recognizing a single-field getter shape (`return this.field;`) so a
+// later `bad.getData()` resolves to whatever was tainted on `bad` SPECIFICALLY
+// — not on every other instance of `Holder`. Because the caller-side effect
+// lands on the RECEIVER'S OWN access path (`bad.data`, not a class-wide
+// bucket), two different local variables holding instances of the SAME
+// class are naturally kept distinct — real object-instance sensitivity,
+// without needing a full allocation-site-keyed heap model.
+
+// Field name a getter-shaped function unconditionally returns, or null.
+// Deliberately narrow and structural (no taint-state dependency): only a
+// BARE `this.<field>`/`_this_.<field>`/`$this.<field>` return value counts
+// (not `this.field.sub`, not `this.field + x`) — accessPathOf already
+// rejects anything with further computation. If the function has multiple
+// return statements naming DIFFERENT fields, this is ambiguous and bails to
+// null rather than guess, since guessing the wrong field here couldn't add
+// a false negative (the true field would just stay whatever it already was)
+// but a memoized wrong answer would be needlessly confusing to reason about.
+const _THIS_FIELD_RETURN_RE = /^(?:_this_|this|\$this)\.([^.]+)$/;
+// Same receiver-spelling prefix, WITHOUT the end anchor — matches a deeper
+// path too (`_this_.data.sub`), used to recover just the top-level field
+// name a function's exit state taints on its receiver (mutator side).
+const _THIS_FIELD_PREFIX_RE = /^(?:_this_|this|\$this)\.([^.]+)/;
+const _getterFieldCache = new WeakMap();
+function _thisFieldGetterName(fn) {
+  if (!fn || !fn.cfg || !fn.cfg.nodes) return null;
+  if (_getterFieldCache.has(fn)) return _getterFieldCache.get(fn);
+  let field = null;
+  for (const node of Object.values(fn.cfg.nodes)) {
+    if (node.kind !== 'return' || !node.value) continue;
+    const path = accessPathOf(node.value);
+    if (!path) continue;
+    const m = _THIS_FIELD_RETURN_RE.exec(path);
+    if (!m) continue;
+    if (field === null) field = m[1];
+    else if (field !== m[1]) { field = null; break; }
+  }
+  _getterFieldCache.set(fn, field);
+  return field;
+}
+
+// The receiver's OWN access path for a receiver-qualified callee, in
+// EITHER IR shape this codebase's frontends produce — same dual-shape
+// handling as `_calleeReceiverTainted` just above, but returning the path
+// itself (to taint/query it) rather than a boolean.
+function _receiverAccessPathOf(callee) {
+  if (!callee) return null;
+  if (typeof callee === 'string') {
+    const idx = callee.lastIndexOf('.');
+    return idx > 0 ? callee.slice(0, idx) : null;
+  }
+  if (callee.kind === 'member' && callee.object) return accessPathOf(callee.object);
+  return null;
+}
+
+// Does calling `calleeExpr` return a receiver-specific field that is
+// ALREADY tainted on THIS SPECIFIC receiver (per `_thisFieldGetterName`)?
+// Read-side counterpart of the `_mutatedThisFieldsOut` write-side fix.
+function _calleeGetterFieldTainted(calleeExpr, state, callContext) {
+  if (!callContext || !callContext._summaryCache) return false;
+  const target = _resolveCalleeForSummary(calleeExpr, callContext);
+  const field = target && _thisFieldGetterName(target.fn);
+  if (!field) return false;
+  const receiverPath = _receiverAccessPathOf(calleeExpr);
+  return !!(receiverPath && isCoveredBy(state, `${receiverPath}.${field}`));
 }
 
 function exprTaint(expr, state, callContext) {
@@ -1276,6 +1360,7 @@ function step(node, stateIn, callContext) {
               return {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
+                mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
                 // Real findings from the callee's own body — e.g.
                 // `function makeQuery(id){ db.query(...id) } ... makeQuery(uid)`
@@ -1290,7 +1375,12 @@ function step(node, stateIn, callContext) {
             });
           }
           _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
-          if (sum && sum.returnTainted) {
+          // Next-gen taint capability #3: `x = bad.getData()` — a single-
+          // field getter's return is tainted whenever THIS call's own
+          // receiver already carries that field, independent of `sum`
+          // (a zero-param getter's entry-state summary can never see it).
+          const _getterTainted = _calleeGetterFieldTainted(node.source.callee, newState, callContext);
+          if ((sum && sum.returnTainted) || _getterTainted) {
             newState = _addPathAliasAware(newState, target, callContext);
             callContext._taintSources.push({
               varName: target,
@@ -1300,13 +1390,17 @@ function step(node, stateIn, callContext) {
               line: node.line,
             });
           }
-          // applyAtCallSite — mutated params propagate to caller arg-vars.
-          if (sum && sum.mutatedParams && sum.mutatedParams.size && paramNames.length) {
-            const mutated = callContext._summaryCache.applyAtCallSite(
-              sum, paramNames, callArgs, callerTainted);
-            for (const v of mutated.mutated) newState = addPath(newState, v);
+          // applyAtCallSite — mutated params (and, next-gen capability #3,
+          // the implicit `this` receiver's own mutated fields) propagate to
+          // the caller's state.
+          if (sum && ((sum.mutatedParams && sum.mutatedParams.size && paramNames.length) || (sum.mutatedThisFields && sum.mutatedThisFields.size))) {
+            const receiverPath = _receiverAccessPathOf(node.source.callee);
+            const applied = callContext._summaryCache.applyAtCallSite(
+              sum, paramNames, callArgs, callerTainted, receiverPath);
+            for (const v of applied.mutated) newState = addPath(newState, v);
+            for (const p of applied.mutatedThisPaths) newState = addPath(newState, p);
           }
-          if (sum && sum.returnTainted) return { state: newState, findings };
+          if ((sum && sum.returnTainted) || _getterTainted) return { state: newState, findings };
         } else if (target && calleeName) {
           // Fallback: check builtin summaries for unresolved external calls
           const builtin = lookupBuiltinSummary(calleeName);
@@ -1415,6 +1509,7 @@ function step(node, stateIn, callContext) {
               return {
                 returnTainted: !!inner._returnTainted,
                 mutatedParams: inner._mutatedParamsOut || new Set(),
+                mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
                 taintedGlobals: new Set(),
                 // See the sibling assign-call-site compute() above — same
                 // fix, same reason: this callee's own findings were
@@ -1424,10 +1519,17 @@ function step(node, stateIn, callContext) {
             });
           }
           _mergeSummaryFindings(callContext, callContext._currentFnQid, sum, 'interproc');
-          if (sum && sum.mutatedParams && sum.mutatedParams.size) {
-            const mutated = callContext._summaryCache.applyAtCallSite(
-              sum, paramNames, node.args || [], state);
-            for (const v of mutated.mutated) state = addPath(state, v);
+          // Next-gen taint capability #3: the plain-statement-position
+          // counterpart of the assign-from-call site above — `bad.setData(
+          // tainted);` never assigns anything, but the receiver's OWN field
+          // still needs tainting so a LATER `bad.getData()`/`bad.data` read
+          // sees it.
+          if (sum && ((sum.mutatedParams && sum.mutatedParams.size) || (sum.mutatedThisFields && sum.mutatedThisFields.size))) {
+            const receiverPath = _receiverAccessPathOf(node.callee);
+            const applied = callContext._summaryCache.applyAtCallSite(
+              sum, paramNames, node.args || [], state, receiverPath);
+            for (const v of applied.mutated) state = addPath(state, v);
+            for (const p of applied.mutatedThisPaths) state = addPath(state, p);
           }
         }
       }
@@ -1839,6 +1941,20 @@ function analyzeFunction(fn, entryState, callContext) {
       if (isCoveredBy(exit, p)) callContext._mutatedParamsOut.add(p);
     }
   }
+  // Next-gen taint capability #3 — treat `this` as an implicit mutable
+  // parameter, mirroring the block just above exactly: extract every field
+  // name this function's own exit state taints on its receiver (any of the
+  // three `this` spellings this codebase's frontends use), so the caller can
+  // propagate that mutation onto ITS OWN receiver variable's access path
+  // (`bad.data`), not a class-wide bucket. See this file's own header
+  // comment above `_thisFieldGetterName` for the full rationale.
+  if (callContext) {
+    if (!callContext._mutatedThisFieldsOut) callContext._mutatedThisFieldsOut = new Set();
+    for (const p of exit) {
+      const m = _THIS_FIELD_PREFIX_RE.exec(p);
+      if (m) callContext._mutatedThisFieldsOut.add(m[1]);
+    }
+  }
   // R2: restore the caller context for the enclosing function's analysis.
   if (_prevCallerCtx !== undefined && callContext && callContext._summaryCache && callContext._summaryCache.setCallerContext) {
     callContext._summaryCache.setCallerContext(_prevCallerCtx);
@@ -1969,6 +2085,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       const next = {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
+        mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
         findings: [],
       };
@@ -2166,6 +2283,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       const fieldSummary = {
         returnTainted: !!ctx._returnTainted,
         mutatedParams: ctx._mutatedParamsOut || new Set(),
+        mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
         taintedGlobals: new Set(),
         findings: ctx._findings,
       };
@@ -2271,6 +2389,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         summaryCache.set(fn.qid, qualifiedSeeds, {
           returnTainted: !!ctx._returnTainted,
           mutatedParams: ctx._mutatedParamsOut || new Set(),
+          mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
           taintedGlobals: new Set(),
           findings: ctx._findings,
         });
@@ -2315,6 +2434,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     summaryCache.set(fn.qid, taintedEntry, {
       returnTainted: !!ctx._returnTainted,
       mutatedParams: ctx._mutatedParamsOut || new Set(),
+      mutatedThisFields: ctx._mutatedThisFieldsOut || new Set(),
       taintedGlobals: new Set(),
       findings: ctx._findings,
     });
@@ -2386,6 +2506,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
           return {
             returnTainted: !!inner._returnTainted,
             mutatedParams: inner._mutatedParamsOut || new Set(),
+            mutatedThisFields: inner._mutatedThisFieldsOut || new Set(),
             taintedGlobals: new Set(),
             findings: inner._findings,
           };
