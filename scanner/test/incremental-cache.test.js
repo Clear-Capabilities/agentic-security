@@ -101,6 +101,7 @@ test('serializeSummaries round-trips through JSON without dropping Set fields', 
   cache.set('Q', new Set(), {
     returnTainted: true,
     mutatedParams: new Set(['p1', 'p2']),
+    mutatedThisFields: new Set(['data']),
     taintedGlobals: new Set(['g']),
     findings: [],
   });
@@ -108,7 +109,29 @@ test('serializeSummaries round-trips through JSON without dropping Set fields', 
   const json = JSON.parse(JSON.stringify(serialized));
   assert.equal(json.Q.returnTainted, true);
   assert.deepEqual(json.Q.mutatedParams.sort(), ['p1', 'p2']);
+  // W5.53: mutatedThisFields (object-instance field taint) is a Set field
+  // added after this serialize/reseed pair was written -- must round-trip
+  // exactly like mutatedParams/taintedGlobals, not silently drop.
+  assert.deepEqual(json.Q.mutatedThisFields, ['data']);
   assert.deepEqual(json.Q.taintedGlobals, ['g']);
+});
+
+test('seedSummaryCache reconstitutes mutatedThisFields as a real Set, not a dropped array', () => {
+  const cache = new SummaryCache();
+  cache.set('Q', new Set(), {
+    returnTainted: false,
+    mutatedParams: new Set(),
+    mutatedThisFields: new Set(['data']),
+    taintedGlobals: new Set(),
+    findings: [],
+  });
+  const persisted = JSON.parse(JSON.stringify(serializeSummaries(cache)));
+  const fresh = new SummaryCache();
+  const n = seedSummaryCache(fresh, persisted, new Set(['Q']));
+  assert.equal(n, 1);
+  const reseeded = fresh.get('Q', new Set());
+  assert.ok(reseeded.mutatedThisFields instanceof Set);
+  assert.ok(reseeded.mutatedThisFields.has('data'));
 });
 
 test('dropIncrementalState removes the state directory', () => {

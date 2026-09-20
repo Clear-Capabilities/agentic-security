@@ -149,6 +149,18 @@ export function seedSummaryCache(summaryCache, persisted, reusableQids) {
     const summary = {
       returnTainted: !!s.returnTainted,
       mutatedParams: new Set(s.mutatedParams || []),
+      // W5.53: mutatedThisFields is a THIRD Set-valued summary field
+      // (object-instance field taint via method calls), added after this
+      // module's own serialize/reseed pair was written — omitting it here
+      // wouldn't crash (every consumer already null-guards with `&&`), but
+      // would silently drop the capability on any incremental/warm-cache
+      // scan, exactly the class of gap `_summaryEq`'s own header comment in
+      // summaries.js warns about for a different (but structurally
+      // identical) reason: a summary field that exists on some code paths
+      // and not others must be threaded through EVERY path that copies the
+      // summary shape, not just the ones exercised by this session's own
+      // tests.
+      mutatedThisFields: new Set(s.mutatedThisFields || []),
       taintedGlobals: new Set(s.taintedGlobals || []),
       findings: Array.isArray(s.findings) ? s.findings : [],
     };
@@ -195,6 +207,7 @@ export function serializeSummaries(summaryCache) {
     out[qid] = {
       returnTainted: !!summary.returnTainted,
       mutatedParams: [...(summary.mutatedParams || [])],
+      mutatedThisFields: [...(summary.mutatedThisFields || [])],
       taintedGlobals: [...(summary.taintedGlobals || [])],
       findings: Array.isArray(summary.findings) ? summary.findings.slice(0, 50) : [],
     };
