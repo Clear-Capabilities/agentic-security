@@ -39,8 +39,15 @@ const _AST_CACHE = new WeakMap();
  * Build the CHA over a perFileIR map (file → parsed IR with raw AST attached
  * under `_ast`). When AST isn't attached, fall back to the IR's own
  * structural hints (class names appearing in qids).
+ *
+ * `callGraph` (optional, from `../ir/callgraph.js#buildCallGraph`) enables
+ * one additional, otherwise-skipped pass: cross-call-site parameter type
+ * inference from the argument a caller actually passes (see that pass's own
+ * header comment below for the full rationale). Every existing caller that
+ * only ever passed `perFileIR` keeps working unchanged — the pass simply
+ * doesn't run without it.
  */
-export function buildClassHierarchy(perFileIR) {
+export function buildClassHierarchy(perFileIR, callGraph) {
   const classes = new Map();       // className -> { file, line, methods, extends }
   const methodOwners = new Map();  // qid -> className
   const typeOfVar = new Map();     // file::scope::var -> className
@@ -257,6 +264,84 @@ export function buildClassHierarchy(perFileIR) {
         if (node.kind !== 'assign' || !node.declaredType || typeof node.target !== 'string' || node.target.includes('.')) continue;
         const key = `${file}::${fn.qid}::${node.target}`;
         if (!typeOfVar.has(key) && !ambiguousVarKeys.has(key)) typeOfVar.set(key, node.declaredType);
+      }
+    }
+  }
+
+  // Next-gen taint capability #4 (a narrow, call-site-scoped slice of
+  // "Andersen-style points-to", not the full thing): cross-call-site
+  // PARAMETER type inference from the ARGUMENT a caller actually passes, for
+  // JS/TS — which has no declared-type mechanism at all (`fn.paramTypes`
+  // just above only ever fires for Java/C#). Juliet's own dominant
+  // "driver constructs the concrete instance, passes it as a parameter to a
+  // helper that invokes the virtual method" idiom (already solved for
+  // Java/C# via fn.paramTypes) has no JS/TS equivalent: `function
+  // wrapper(h, req) { return h.getValue(req); }`, called only as `const h =
+  // new Helper(); wrapper(h, req);`, leaves `h` permanently untyped inside
+  // wrapper's own body, so `h.getValue()` can never resolve via CHA —
+  // confirmed via a direct reproduction (cold-cache AND warm-incremental-
+  // cache both miss it identically, ruling out a caching-specific cause)
+  // showing a real cross-file taint-recall false negative for exactly this
+  // shape. Requires `callGraph` (optional, backward-compatible — every
+  // existing caller that only ever passed `perFileIR` simply skips this
+  // pass, matching this file's own established graceful-degradation
+  // convention). Deliberately runs as a LAST, separate pass over every file
+  // (not merged into the per-file loop above) because it needs BOTH a
+  // cross-file callee lookup (`callGraph.resolveKnownCallee`) AND the
+  // CALLER's own already-inferred `typeOfVar` entries (an identifier
+  // argument's type, established by the constructor-assignment pass above)
+  // — neither is available mid-way through that loop for an arbitrary file
+  // ordering.
+  if (callGraph && typeof callGraph.resolveKnownCallee === 'function' && callGraph.functions) {
+    for (const [callerFile, ir] of Object.entries(perFileIR)) {
+      if (!ir || !Array.isArray(ir.functions)) continue;
+      for (const callerFn of ir.functions) {
+        if (!Array.isArray(callerFn.calls)) continue;
+        for (const call of callerFn.calls) {
+          const calleeName = typeof call.callee === 'string' ? call.callee
+            : call.callee && call.callee.kind === 'ident' ? call.callee.name : null;
+          if (!calleeName) continue;
+          const calleeQid = callGraph.resolveKnownCallee(calleeName, callerFile);
+          if (!calleeQid) continue;
+          const calleeFn = callGraph.functions.get(calleeQid);
+          if (!calleeFn || !Array.isArray(calleeFn.params) || !calleeFn.params.length || !calleeFn.file) continue;
+          const args = Array.isArray(call.args) ? call.args : [];
+          for (let i = 0; i < args.length && i < calleeFn.params.length; i++) {
+            const arg = args[i];
+            let className = null;
+            if (arg && arg.kind === 'call' && arg.isNew) {
+              // A literal `new ClassName(...)` passed directly as the argument.
+              const argCallee = arg.callee;
+              className = argCallee?.kind === 'ident' ? argCallee.name
+                : typeof argCallee === 'string' ? (argCallee.includes('.') ? argCallee.slice(argCallee.lastIndexOf('.') + 1) : argCallee)
+                : null;
+            } else if (arg && arg.kind === 'ident' && arg.name) {
+              // Juliet's own dominant idiom: `const h = new Helper(); f(h,
+              // ...)`. `h`'s type was already established by the
+              // constructor-assignment pass above (it runs first, in the
+              // SAME outer file loop) — reuse it directly rather than
+              // re-deriving, so this stays in sync with that pass's own
+              // ambiguity handling by construction.
+              className = typeOfVar.get(`${callerFile}::${callerFn.qid}::${arg.name}`) || null;
+            }
+            if (!className || !(classes.has(className) || /^[A-Z]/.test(className))) continue;
+            const paramName = calleeFn.params[i];
+            if (typeof paramName !== 'string' || !paramName) continue;
+            // Same collision-refusal discipline as every other typeOfVar-
+            // populating pass in this file: a wrong "confidently resolved"
+            // type is worse than staying unknown, so a SECOND call site
+            // disagreeing with an already-recorded type for this exact
+            // parameter permanently refuses it, never picks a side.
+            const key = `${calleeFn.file}::${calleeQid}::${paramName}`;
+            if (ambiguousVarKeys.has(key)) continue;
+            if (typeOfVar.has(key) && typeOfVar.get(key) !== className) {
+              ambiguousVarKeys.add(key);
+              typeOfVar.delete(key);
+            } else {
+              typeOfVar.set(key, className);
+            }
+          }
+        }
       }
     }
   }

@@ -98,7 +98,7 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // every consumer degrades to today's behavior when it finds no useful type.
   let classHierarchy = null;
   try {
-    classHierarchy = buildClassHierarchy(perFileIR);
+    classHierarchy = buildClassHierarchy(perFileIR, callGraph);
     // PRD W2.5 (SARD_80_F1_EXECUTION_PRD.md) — RTA-annotate so
     // `engine.js`'s `_resolveMemberCalleeViaCHA` can resolve a
     // parameter-typed (or otherwise non-`new`-tracked) receiver against
