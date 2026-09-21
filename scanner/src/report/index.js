@@ -228,6 +228,18 @@ export function normalizeFindings(scan){
       dataClasses: f.dataClasses || [],
       chain: Array.isArray(f.chain) ? f.chain : null,
       sourceProvenance: f.sourceProvenance || null,
+      // Next-gen taint capability #7 (cross-service schema-driven taint):
+      // dataflow/cross-service-taint.js SETS crossService/_severityBumpReason
+      // on findings whose source crosses a declared services.yml trust
+      // boundary, but this allowlist never named either field — the same
+      // "silently dropped field" bug class engine.js's own _funcQid/callee/
+      // argIndex comments already document twice for the raw finding
+      // object, this time at the report layer. Without this, an operator
+      // reading a report saw a bumped severity with no visible reason at
+      // all: `severity` itself IS in this allowlist (so the bump survived),
+      // but its only explanation was silently discarded.
+      crossService: f.crossService || null,
+      _severityBumpReason: f._severityBumpReason || null,
       confidence: typeof f.confidence === 'number' ? f.confidence : null,
       // R17: corroboration ("one issue, many signals") — count of independent
       // analyses that agreed, and which ones.

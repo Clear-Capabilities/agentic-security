@@ -114,6 +114,11 @@ test('cross-service-taint: loads graph from yaml', async () => {
   assert.equal(norm.edges[0].via, 'kafka');
 });
 
+// The second sanity test here originally fed `{ snippet: 'process(amount)' }`
+// — a shape no real detector produces (real findings carry `source.label`,
+// never a bare `snippet`; see `test/cross-service-taint.test.js`'s own
+// header for the full rebuild writeup). Fixed to use the real finding
+// shape so this stays a genuine sanity check, not a false confirmation.
 test('cross-service-taint: annotateCrossServiceFindings bumps severity', async () => {
   const { annotateCrossServiceFindings, _internals } = await import('../src/dataflow/cross-service-taint.js');
   const graph = _internals._normalizeGraph({
@@ -123,7 +128,7 @@ test('cross-service-taint: annotateCrossServiceFindings bumps severity', async (
     },
     edges: [{ from: 'payments', to: 'ledger', via: 'kafka', topic: 'events.charge_created' }],
   });
-  const findings = [{ severity: 'medium', snippet: 'process(amount)' }];
+  const findings = [{ severity: 'medium', source: { label: 'amount' } }];
   const r = annotateCrossServiceFindings(findings, graph, graph.services.ledger);
   assert.equal(r.annotated, 1);
   assert.equal(findings[0].crossService.from, 'payments');

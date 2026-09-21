@@ -150,7 +150,6 @@ const ALLOWLIST = new Set([
   'dataflow/cross-repo.js::detectIntraProjectServiceEdges',
   'dataflow/cross-service-taint.js::identifyCurrentService',
   'dataflow/cross-service-taint.js::incomingEdges',
-  'dataflow/cross-service-taint.js::upstreamTaintContract',
   'dataflow/formal-verify.js::dischargeMiri',
   'dataflow/ifds-precise.js::loadPersistedCache',
   'dataflow/ifds-precise.js::persistCache',
