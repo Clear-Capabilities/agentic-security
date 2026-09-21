@@ -163,7 +163,17 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
     });
   }
   // P1.4 — backward slice (opt-in via AGENTIC_SECURITY_BACKWARD_SLICE=1).
-  if (process.env.AGENTIC_SECURITY_BACKWARD_SLICE === '1') {
+  // Next-gen taint capability #5 (SMT path-feasibility rebuild): ALSO run
+  // this when AGENTIC_SECURITY_SYMEXEC=1 is set, even if the operator never
+  // separately set AGENTIC_SECURITY_BACKWARD_SLICE — `proveExploits`'s own
+  // infeasibility check now depends on `finding.backwardSlice` for a sound
+  // verdict (see exploit-prover.js's own header), and requiring an operator
+  // to know to independently set a SECOND, differently-named flag just to
+  // get a real answer out of the first is exactly the kind of silent,
+  // undiscoverable degradation this codebase's own verification discipline
+  // warns against — SYMEXEC's own soundness must not be a hidden function
+  // of an unrelated flag.
+  if (process.env.AGENTIC_SECURITY_BACKWARD_SLICE === '1' || process.env.AGENTIC_SECURITY_SYMEXEC === '1') {
     findings = annotateBackwardSlices(findings, perFileIR, callGraph);
   }
   // Roadmap #6 — flow-proof: prove SQL sinks reached only through a

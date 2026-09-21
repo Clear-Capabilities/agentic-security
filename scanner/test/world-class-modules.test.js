@@ -82,28 +82,20 @@ test('ifds-precise: backwardSlice returns source-first ordered trace', async () 
   assert.equal(slice.at(-1).line, 50);  // sink last
 });
 
-// ── Item 3: SMT path feasibility ───────────────────────────────────────────
-
-test('smt-feasibility: emitSmtScript produces SMT-LIB output', async () => {
-  const { emitSmtScript } = await import('../src/dataflow/smt-feasibility.js');
-  const preds = [
-    { kind: 'source', var: 'v0' },
-    { kind: 'const',  var: 'v0', value: 'attacker-input' },
-    { kind: 'reach',  file: 'app.js', line: 42 },
-  ];
-  const script = emitSmtScript(preds);
-  assert.match(script, /^\(set-logic QF_S\)/m);
-  assert.match(script, /\(declare-const v0 String\)/);
-  assert.match(script, /\(check-sat\)/);
-});
-
-test('smt-feasibility: dischargeFinding returns pending when Z3 unavailable', async () => {
-  const { dischargeFinding } = await import('../src/dataflow/smt-feasibility.js');
-  const r = await dischargeFinding([{ kind: 'source', var: 'v0' }]);
-  // z3-solver is not installed; verdict should be 'pending' with SMT script.
-  assert.ok(r.verdict === 'pending' || r.verdict === 'unknown');
-  if (r.verdict === 'pending') assert.ok(typeof r.script === 'string' && r.script.length > 0);
-});
+// ── Item 3: SMT path feasibility — RETIRED ──────────────────────────────────
+//
+// `dataflow/smt-feasibility.js` (opt-in `AGENTIC_SECURITY_SMT_FEASIBILITY=1`)
+// has been removed. Its predicate encoder read `f.chain`/`f.taintPath` as a
+// sequential source-to-sink path, but those fields are actually a flat list
+// of SOURCES reaching the sink (`_sourcesReachingExpr`) — never a real path
+// — so its SMT-LIB output never modeled anything genuine, confirmed by
+// direct code reading rather than by any test here (its own tests only ever
+// fed it hand-fabricated predicate objects, never real finding data). It
+// also mutated `f.severity` directly on an 'unsat' verdict, violating this
+// codebase's recall-preserving-demotion convention (`dataflow/CLAUDE.md`).
+// Superseded by `dataflow/exploit-prover.js`'s `proveExploits`, which
+// consumes the real `backward.js`-built `finding.backwardSlice` — see
+// `test/smt-path-feasibility.test.js` for its coverage.
 
 // ── Item 4: Cross-repo / cross-service taint ────────────────────────────────
 

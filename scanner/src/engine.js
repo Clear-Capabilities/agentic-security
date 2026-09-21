@@ -239,7 +239,6 @@ import { runCrossServiceTaint } from './dataflow/cross-service-taint.js';
 import { annotateRuntimeCorrelation } from './posture/runtime-correlation.js';
 import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
-import { annotatePathFeasibility } from './dataflow/smt-feasibility.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
 import { applySanitizerGate } from './dataflow/sanitizer-gate.js';
 import { annotateFalsification } from './posture/falsification.js';
@@ -9839,11 +9838,16 @@ function _deterministicFileTimings(timings) {
     if (process.env.AGENTIC_SECURITY_FORMAL === '1') {
       await _runAnnotator("annotateFormalVerification", async () => { await annotateFormalVerification(finalFindings, fc, {}); });
     }
-    // SMT path feasibility: Z3-backed proof of reachability. Opt-in via
-    // AGENTIC_SECURITY_SMT_FEASIBILITY=1.
-    if (process.env.AGENTIC_SECURITY_SMT_FEASIBILITY === '1') {
-      await _runAnnotator("annotatePathFeasibility", async () => { await annotatePathFeasibility(finalFindings, {}); });
-    }
+    // SMT path feasibility (`AGENTIC_SECURITY_SMT_FEASIBILITY`) was retired:
+    // its predicate encoder read `f.chain`/`f.taintPath` as a sequential
+    // source-to-sink path, but those fields are actually a flat list of
+    // SOURCES reaching the sink (`_sourcesReachingExpr`), never a path —
+    // confirmed by direct code reading, never fixed by real data. It also
+    // mutated `f.severity` directly on an 'unsat' verdict, violating this
+    // codebase's own recall-preserving-demotion convention that every other
+    // proof gate here follows (see `dataflow/CLAUDE.md`). Superseded by the
+    // real backward-slice-driven mechanism: `dataflow/exploit-prover.js`'s
+    // `proveExploits`, opt-in via `AGENTIC_SECURITY_SYMEXEC=1`.
     // Privacy / PII taint: emits pii-exposure findings + DPIA artifact.
     // FR-405 (assurance-hardening PRD): _privacyIrBacked is declared at
     // function scope above the AGENTIC_SECURITY_NO_INTEGRATION block, not

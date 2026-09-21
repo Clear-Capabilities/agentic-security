@@ -547,7 +547,15 @@ function exprTaint(expr, state, callContext) {
 // Collects the variable / access-path roots referenced by `expr` and returns
 // the _taintSources entries whose varName matches one of those roots. This
 // replaces "first source we ever saw" with "sources tied to this argument."
-function _collectExprVars(expr, out) {
+// Exported (next-gen taint capability #5, SMT path-feasibility rebuild) so
+// backward.js's `annotateBackwardSlices` can reuse the SAME free-variable
+// extraction for a COMPOUND tainted-sink-argument expression (`'SELECT...'
+// + id`, not a bare identifier) — `accessPathOf` alone returns null for
+// anything but a pure ident/member chain, which previously made
+// `annotateBackwardSlices` fall back to an unmatchable placeholder string
+// for the overwhelmingly common "string-concatenation into a sink" shape,
+// silently degrading the backward slice to just the bare sink node.
+export function _collectExprVars(expr, out) {
   if (!expr) return;
   if (typeof expr === 'string') { out.add(expr); return; }
   if (expr.kind === 'ident' && expr.name) { out.add(expr.name); return; }
@@ -2602,6 +2610,20 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // backward-slice annotation was permanently a no-op regardless of
         // AGENTIC_SECURITY_BACKWARD_SLICE.
         ...(f._funcQid ? { _funcQid: f._funcQid } : {}),
+        // argIndex: which sink argument is the tainted one (a number, or the
+        // literal 'all'/'rhs') — set upstream at the finding's creation site
+        // but, exactly like `_funcQid`/`callee` above, silently dropped by
+        // this same allowlist before backward.js's `annotateBackwardSlices`
+        // ever saw it. Without it, `annotateBackwardSlices` falls back to
+        // the placeholder string `arg[undefined]` for EVERY finding (it can
+        // never be a real access path, since no source ever names a
+        // variable that literally), so `sliceBackward` always started and
+        // ended at the bare sink node with no source/sanitize steps at all
+        // — the backward-slice pass was a structural no-op for real findings
+        // regardless of AGENTIC_SECURITY_BACKWARD_SLICE, discovered while
+        // rebuilding the SMT path-feasibility mechanism (next-gen taint
+        // capability #5) to depend on a REAL slice for a sound proof.
+        ...(f.argIndex !== undefined ? { argIndex: f.argIndex } : {}),
         // callee: kept as plain `callee` (not underscore-prefixed) to match
         // backward.js's own contract, which reads `f.callee` on both real and
         // fake-fixture findings throughout its module and test suite. It is

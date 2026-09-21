@@ -146,7 +146,43 @@ const SANITIZER_OUTPUT_REGEX = {
   // (We can't distinguish overloads from regex name alone; conservative listing.)
   // PHP htmlspecialchars / htmlentities — HTML-entity escape.
   htmlspecialchars:   /^[^<>&"']*(?:&(?:lt|gt|amp|quot|#039);)*[^<>&"']*$/,
+  // JS-ecosystem HTML escapers (he/escape-html/lodash.escape and similar
+  // libraries all converge on the same five-entity escape set) — same
+  // shape as htmlspecialchars above, different ecosystem name. Added
+  // during the SMT path-feasibility rebuild: this exact name was already
+  // trusted by exploit-prover.js's own (now-superseded) duplicate table,
+  // so omitting it here would have been a real regression, not a
+  // deliberate narrowing.
+  escapeHtml:         /^[^<>&"']*(?:&(?:lt|gt|amp|quot|#039);)*[^<>&"']*$/,
 };
+
+// Next-gen taint capability #5 (SMT path-feasibility rebuild) — a SAFE,
+// bare-tail lookup against the SAME catalog `abstract()` above already
+// uses, exported so a soundness-critical consumer (the SMT/exploit-prover
+// infeasibility check) can reuse this exact table rather than maintaining
+// its own, inevitably-drifting copy — confirmed live that THREE separate,
+// slightly different sanitizer-regex tables existed across this codebase
+// before this fix (this one, exploit-prover.js's own `_sanitizerRegexFor`,
+// and smt-feasibility.js's now-superseded encoder), each with subtly
+// different entries.
+//
+// Deliberately EXCLUDES `toString` from what this function will return:
+// `abstract()`'s own use of the FULL table above is fine with the
+// over-approximation (worst case, a coarser Regex/Unknown classification —
+// never a false SAFETY claim on its own, since nothing downstream of
+// `abstract()` treats its answer as license to PROVE a finding infeasible).
+// A soundness-critical consumer is different in kind: treating "this
+// callee's output matches the regex" as grounds to demote a finding to
+// provably-unreachable must not trust a name as ambiguous as `toString`
+// (matches ANY object's own stringifier, not just a Buffer's base64
+// encoding specifically) — an incorrect match there would manufacture a
+// false "provably safe" verdict for a genuinely exploitable finding.
+export function safeSanitizerOutputRegex(calleeName) {
+  if (!calleeName) return null;
+  const tail = String(calleeName).split('.').pop();
+  if (tail === 'toString') return null;
+  return SANITIZER_OUTPUT_REGEX[tail] || null;
+}
 
 /**
  * SAFE-CHARSET PROOF — does the abstract value provably fit the given regex?
