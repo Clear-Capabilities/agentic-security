@@ -9,6 +9,60 @@
 > make the history less accurate, not more.
 
 
+## 0.153.0 - Taint-engine points-to precision, and two default-adjacent capabilities rebuilt from broken to sound
+
+Four taint-engine capabilities landed since 0.152.0, continuing the "next-generation taint analysis
+capabilities" initiative: two narrow points-to-precision fixes for JS/TS class-hierarchy resolution,
+and two substantial rebuilds of capabilities found to be structurally non-functional on real data —
+one opt-in (SMT path feasibility), one running by default (cross-service schema-driven taint).
+
+- **Cross-call-site parameter type inference for CHA** (`dataflow/class-hierarchy.js`): JS/TS gains
+  the same "driver constructs a concrete instance, passes it as a parameter to a helper that invokes
+  a virtual method" resolution Java/C# already had via declared parameter types — a narrow,
+  well-scoped slice of Andersen-style points-to analysis, not the full thing. A call site's literal
+  `new ClassName(...)` argument, or an identifier whose type was already established, now propagates
+  onto the callee's parameter; two call sites disagreeing on the class permanently refuse to resolve
+  it rather than guess.
+- **Factory-function return-type inference for CHA**: the sibling gap on the RETURN side —
+  `function makeHelper() { return new Helper(); } const h = makeHelper();` — closed with the same
+  "never guess" discipline: a function only qualifies when every reachable `return` is a `new
+  ClassName(...)` of the same class.
+- **SMT/exploit-proof path feasibility, rebuilt from the ground up** (`dataflow/exploit-prover.js`,
+  `dataflow/backward.js`): the pre-existing SMT-lite infeasibility check was fed a flat list of
+  taint sources reaching a sink, never a real sequential source-to-sink path, so its own
+  (correctly-written) metacharacter-exclusion logic had nothing genuine to walk — confirmed by
+  direct code reading, and by its own tests only ever exercising hand-fabricated fixtures the real
+  engine never produces. A second, parallel, independently-broken module (`smt-feasibility.js`, also
+  opt-in) had the identical defect plus a direct `severity` mutation that violated this codebase's
+  recall-preserving-demotion convention; retired outright rather than fixed twice. Three real engine
+  bugs were found and fixed to make the rebuild work on real data: `sliceBackward` couldn't trace
+  through a call-shaped sanitizer RHS, `engine.js`'s own finding-normalization allowlist silently
+  dropped `argIndex`, and a compound (string-concatenation) sink argument couldn't be resolved. The
+  rebuilt check now refuses to conclude safety the moment an opaque, unmodeled call sits between a
+  trusted sanitizer and a sink, verified via direct adversarial reproduction. `z3-solver` is added as
+  a genuine `optionalDependencies` entry, with its current (load-only, not yet query-discharging)
+  scope documented honestly rather than overclaimed. Opt-in via `AGENTIC_SECURITY_SYMEXEC=1`.
+- **Cross-service schema-driven taint, rebuilt from a complete no-op** (`dataflow/cross-service-taint.js`):
+  this module runs BY DEFAULT (opt-out via `AGENTIC_SECURITY_NO_CROSS_SERVICE=1`) but was found, via
+  direct reproduction, to have never worked at all for real findings — an HTTP path-template matcher
+  that failed on the module's own documented example (a `:param` vs. `{param}` placeholder-syntax
+  mismatch), a field-name correlation check that read finding properties (`source.snippet`/
+  `source.expr`) that do not exist on any real finding, and a report-layer allowlist that silently
+  dropped the annotation even when it did fire. Rebuilt with structural path-template matching and
+  provenance-based correlation for HTTP transport (a real, catalog-backed signal, since a real
+  finding never retains the specific field name that reached a sink) with a best-effort text-match
+  fallback for other transports; the report-layer allowlist fix means the annotation now actually
+  reaches SARIF/JSON/HTML output. A genuine remaining scope limitation — no mechanism seeds a NEW
+  taint source from a `consumes` declaration — is documented in the module's own header rather than
+  left implicit.
+- **Measured**: both rebuilds verified via full real-corpus TEST-split runs for all three
+  SARD/Juliet languages, byte-identical to the 0.152.0 baseline in every case (Java macroF1=59.1%,
+  C# macroF1=68.6%, PHP macroF1=48.2%) — neither the SARD fixtures nor the CVE-replay/self-scan/
+  mutation/layer-recall corpora exercise these specific capabilities, so this release ships real,
+  adversarially-tested engine correctness with no corpus-visible movement, consistent with this
+  project's own established precedent for capability work independent of any one benchmark.
+
+
 ## 0.152.0 - Rust: first-class language, and the SARD 80% F1 push's taint-engine architecture work
 
 Rust joins the first-class language set (JS/TS, Python, Java, Kotlin, Go, Ruby, PHP, C#) with both

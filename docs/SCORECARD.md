@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.152.0 |
-| Bundle SHA-256 | `93c2e026edb4b096aca1d732cb7ea42b2674431f3c3fe38fd9d218f8717ede65` |
-| Commit | `572675ca7c5905eef88aa96b8209a019b8b14c42` |
+| Engine version | 0.153.0 |
+| Bundle SHA-256 | `1e727ef20f7fd2c897af4598b51db75771cc0b75e07dd00a30bd840d34736b10` |
+| Commit | `0a1292ed2d87c0d14692e085ba69b5fb6c02eae0` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-09-20T14:56:31.949Z |
+| Generated (UTC) | 2026-09-21T23:08:36.224Z |
 
 ## What these numbers are, and what they are not
 
