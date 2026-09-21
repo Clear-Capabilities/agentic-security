@@ -167,3 +167,130 @@ module.exports = (req, res) => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Next-gen taint capability #4b — the sibling gap this file's own
+// `class-hierarchy.js` header comment names and explicitly marks
+// unimplemented: "`function buildFoo(): Foo { ... }` typed-return
+// inference -- NOT implemented. `const x = buildFoo()` is untyped
+// (correctly: it is a plain call, not a `new`)". Confirmed still real via a
+// direct reproduction: `function makeHelper() { return new Helper(); }
+// const h = makeHelper(); h.getValue(req);` missed the vulnerability
+// entirely, the identical failure shape 4a closes for the parameter case.
+
+test('unit: a local assigned from a factory function (return new Foo()) is inferred', () => {
+  const { perFile } = buildProjectIR({
+    'a.js': 'class Helper { getValue(req) { return req; } }\nfunction makeHelper() { return new Helper(); }\nfunction top(req) { const h = makeHelper(); return h.getValue(req); }\n',
+  });
+  const callGraph = buildCallGraph(perFile);
+  const cha = buildClassHierarchy(perFile, callGraph);
+  const topQid = [...callGraph.functions.keys()].find((q) => q.includes('::top@'));
+  assert.ok(topQid, 'sanity: top must be a real function in the built call graph');
+  assert.equal(classOfVar(cha, 'a.js', topQid, 'h'), 'Helper',
+    "top's own local `h` must be inferred as Helper from makeHelper()'s consistent return shape");
+});
+
+test('unit: a factory with a non-constructor return on ANY path infers nothing (never guesses)', () => {
+  const { perFile } = buildProjectIR({
+    'a.js': `
+class Helper { getValue(req) { return req; } }
+function maybeMakeHelper(flag) {
+  if (flag) { return new Helper(); }
+  return null;
+}
+function top(req, flag) { const h = maybeMakeHelper(flag); return h.getValue(req); }
+`,
+  });
+  const callGraph = buildCallGraph(perFile);
+  const cha = buildClassHierarchy(perFile, callGraph);
+  const topQid = [...callGraph.functions.keys()].find((q) => q.includes('::top@'));
+  assert.equal(classOfVar(cha, 'a.js', topQid, 'h'), null,
+    'a factory that can also return null (or anything non-constructor) on some path must stay untyped, not confidently guess');
+});
+
+test('unit: a factory whose returns disagree on class infers nothing (never guesses)', () => {
+  const { perFile } = buildProjectIR({
+    'a.js': `
+class Safe { getValue(req) { return req; } }
+class Other { getValue(req) { return req; } }
+function pick(flag) {
+  if (flag) { return new Safe(); }
+  return new Other();
+}
+function top(req, flag) { const h = pick(flag); return h.getValue(req); }
+`,
+  });
+  const callGraph = buildCallGraph(perFile);
+  const cha = buildClassHierarchy(perFile, callGraph);
+  const topQid = [...callGraph.functions.keys()].find((q) => q.includes('::top@'));
+  assert.equal(classOfVar(cha, 'a.js', topQid, 'h'), null,
+    'disagreeing constructor returns across branches must refuse to resolve, not pick one arbitrarily');
+});
+
+test('unit: a real `new Foo()` assignment is unaffected by this pass (no double-processing regression)', () => {
+  const { perFile } = buildProjectIR({
+    'a.js': 'class Helper { getValue(req) { return req; } }\nfunction top(req) { const h = new Helper(); return h.getValue(req); }\n',
+  });
+  const callGraph = buildCallGraph(perFile);
+  const cha = buildClassHierarchy(perFile, callGraph);
+  const topQid = [...callGraph.functions.keys()].find((q) => q.includes('::top@'));
+  assert.equal(classOfVar(cha, 'a.js', topQid, 'h'), 'Helper');
+});
+
+test('end-to-end: the real cross-file finding this sub-capability closes now fires', async () => {
+  const dir = mkTmp('e2e-4b-fire', {
+    'src/app.js': `const { exec } = require('child_process');
+class Helper {
+  getValue(req) { return req.query.cmd; }
+}
+function makeHelper() {
+  return new Helper();
+}
+module.exports = (req, res) => {
+  const h = makeHelper();
+  exec(h.getValue(req));
+};
+`,
+  });
+  process.env.AGENTIC_SECURITY_DEEP = '1';
+  const prevCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+  try {
+    const { scan } = await runScan(dir);
+    const t = taintOnly(scan.findings || []);
+    assert.ok(t.some((f) => /Command Injection/i.test(f.vuln)),
+      `a local typed only via a factory function's consistent return shape must resolve h.getValue(req) via CHA. IR-TAINT findings: ${JSON.stringify(t.map((f) => f.vuln))}`);
+  } finally {
+    delete process.env.AGENTIC_SECURITY_DEEP;
+    if (prevCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+    else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevCi;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('end-to-end precision: a PascalCase factory that does NOT return new X() must not be mistyped (regression guard)', async () => {
+  const dir = mkTmp('e2e-4b-precision', {
+    'src/app.js': `const express = require('express');
+const app = express();
+function BuildCache() { return require('mysql').createConnection({}); }
+app.get('/search', (req, res) => {
+  const q = BuildCache();
+  q.query(req.query.q);
+  res.send('ok');
+});
+`,
+  });
+  process.env.AGENTIC_SECURITY_DEEP = '1';
+  const prevCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+  try {
+    const { scan } = await runScan(dir);
+    const sqlFindings = (scan.findings || []).filter((f) => /sql/i.test(f.vuln || ''));
+    assert.ok(sqlFindings.some((f) => f.parser === 'IR-TAINT'),
+      'a factory returning a non-constructor value (a real DB connection factory) must never be mistyped as a class -- the real SQLi must still fire, unsuppressed');
+  } finally {
+    delete process.env.AGENTIC_SECURITY_DEEP;
+    if (prevCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+    else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevCi;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

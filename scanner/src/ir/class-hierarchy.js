@@ -268,6 +268,80 @@ export function buildClassHierarchy(perFileIR, callGraph) {
     }
   }
 
+  // Next-gen taint capability #4b — factory-function RETURN-type inference,
+  // the sibling gap this file's OWN header comment names and explicitly
+  // marks unimplemented ("`function buildFoo(): Foo { ... }` typed-return
+  // inference — NOT implemented. `const x = buildFoo()` is untyped
+  // (correctly: it is a plain call, not a `new`)"). Confirmed still real via
+  // a direct reproduction: `function makeHelper() { return new Helper(); }
+  // const h = makeHelper(); h.getValue(req);` misses the vulnerability
+  // entirely, the identical failure shape 4a (above) closes for the
+  // parameter case. `_inferredFactoryReturnClass` is deliberately
+  // conservative, same "refuse rather than guess" discipline as every other
+  // pass in this file: a function qualifies ONLY when every one of its own
+  // `return` statements is a `new ClassName(...)` literal of the SAME
+  // class — a function with no return, a non-constructor return on any
+  // path, or disagreeing classes across returns all correctly infer
+  // nothing, rather than picking one arbitrarily.
+  function _inferredFactoryReturnClass(fn) {
+    if (!fn || !fn.cfg || !fn.cfg.nodes) return null;
+    let className = null;
+    for (const node of Object.values(fn.cfg.nodes)) {
+      if (node.kind !== 'return' || !node.value) continue;
+      const v = node.value;
+      if (v.kind !== 'call' || !v.isNew) return null;
+      const callee = v.callee;
+      const cn = callee?.kind === 'ident' ? callee.name
+        : typeof callee === 'string' ? (callee.includes('.') ? callee.slice(callee.lastIndexOf('.') + 1) : callee)
+        : null;
+      if (!cn || !(classes.has(cn) || /^[A-Z]/.test(cn))) return null;
+      if (className === null) className = cn;
+      else if (className !== cn) return null;
+    }
+    return className;
+  }
+  if (callGraph && typeof callGraph.resolveKnownCallee === 'function' && callGraph.functions) {
+    const factoryReturnCache = new Map(); // qid -> className|null, memoized
+    const factoryReturnClassOf = (qid, fn) => {
+      if (factoryReturnCache.has(qid)) return factoryReturnCache.get(qid);
+      const cn = _inferredFactoryReturnClass(fn);
+      factoryReturnCache.set(qid, cn);
+      return cn;
+    };
+    for (const [callerFile, ir] of Object.entries(perFileIR)) {
+      if (!ir || !Array.isArray(ir.functions)) continue;
+      for (const fn of ir.functions) {
+        if (!fn.cfg || !fn.cfg.nodes) continue;
+        for (const node of Object.values(fn.cfg.nodes)) {
+          if (node.kind !== 'assign' || typeof node.target !== 'string' || node.target.includes('.')) continue;
+          const src = node.source;
+          // A plain call (isNew must be FALSY — a real `new Foo()` is
+          // already handled by the constructor-assignment pass above, and
+          // conflating the two would just redundantly re-derive the same
+          // answer through a slower path).
+          if (!src || src.kind !== 'call' || src.isNew) continue;
+          const calleeName = typeof src.callee === 'string' ? src.callee
+            : src.callee && src.callee.kind === 'ident' ? src.callee.name : null;
+          if (!calleeName) continue;
+          const calleeQid = callGraph.resolveKnownCallee(calleeName, callerFile);
+          if (!calleeQid) continue;
+          const calleeFn = callGraph.functions.get(calleeQid);
+          if (!calleeFn) continue;
+          const className = factoryReturnClassOf(calleeQid, calleeFn);
+          if (!className) continue;
+          const key = `${callerFile}::${fn.qid}::${node.target}`;
+          if (ambiguousVarKeys.has(key)) continue;
+          if (typeOfVar.has(key) && typeOfVar.get(key) !== className) {
+            ambiguousVarKeys.add(key);
+            typeOfVar.delete(key);
+          } else {
+            typeOfVar.set(key, className);
+          }
+        }
+      }
+    }
+  }
+
   // Next-gen taint capability #4 (a narrow, call-site-scoped slice of
   // "Andersen-style points-to", not the full thing): cross-call-site
   // PARAMETER type inference from the ARGUMENT a caller actually passes, for
