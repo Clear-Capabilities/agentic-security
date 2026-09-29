@@ -175,7 +175,7 @@ jobs:
 
       - name: Post advisor comment
         if: github.event_name == 'pull_request' && inputs.pr-comment-mode == 'advisor'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -190,7 +190,7 @@ jobs:
       # Legacy findings-table comment — opt-in via pr-comment-mode: findings-table
       - name: Post findings-table comment (legacy)
         if: github.event_name == 'pull_request' && inputs.pr-comment-mode == 'findings-table'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

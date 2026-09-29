@@ -10,6 +10,12 @@ on:
     branches: [main]
   pull_request:
 
+# Opt JavaScript actions onto Node 24 before GitHub's June 16, 2026 forced
+# migration. Silences the Node 20 deprecation warning. Matches every other
+# workflow in this repo, which already sets this.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -130,7 +136,7 @@ jobs:
       # JDK 21, not 17. IntelliJ Platform 2024.2 requires it; building against 17
       # still produces a zip, and only `verifyPluginProjectConfiguration` says
       # the artifact is wrong. See ide/jetbrains/build.gradle.kts.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -142,7 +148,7 @@ jobs:
       # The pin existed because `org.jetbrains.intellij` 1.17.4 cannot be applied
       # by Gradle 9 at all. That plugin is gone — this builds on the IntelliJ
       # Platform Gradle Plugin 2.x.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and verify the plugin
         # `set -o pipefail` is load-bearing, not decoration. The default shell
         # for a `run:` step is `bash -e {0}` — NO pipefail — so the exit status
@@ -311,7 +317,7 @@ jobs:
         run: |
           set -o pipefail
           node scripts/attest-fixture.mjs --json | tee "attestation-${{ matrix.os }}.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: attestation-${{ matrix.os }}
           path: attestation-${{ matrix.os }}.json
@@ -321,7 +327,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           pattern: attestation-*
           merge-multiple: true
