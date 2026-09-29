@@ -9,6 +9,25 @@
 > make the history less accurate, not more.
 
 
+## 0.153.1 - CI hygiene: off the deprecated Node 20 Actions runtime
+
+A maintenance-only release, no engine or scanner behavior changes.
+
+- **GitHub Actions upgraded off the deprecated Node.js 20 runtime**: `github/codeql-action/{init,analyze}`
+  (v3 → v4), `actions/setup-java` (v4 → v6), `gradle/actions/setup-gradle` (v4 → v6),
+  `actions/upload-artifact` (v4 → v7), `actions/download-artifact` (v5 → v8), and
+  `actions/github-script` (v8 → v9) — all confirmed against each action's own latest published
+  release. `ci.yml` also gained the `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var every other
+  workflow in this repo already sets.
+- **`@types/node` bumped one patch** (0.153.0 shipped with 26.6.2; latest is 26.6.3) in both
+  `scanner/` and `ide/vscode/`, caught by running the project's own `dependency-currency.mjs` gate
+  locally — a dev-only, types-only dependency, so the bundle is byte-identical.
+- Note for anyone who saw a GitHub Actions annotation naming an old Ubuntu version: that notice
+  (`ubuntu-latest` migrating to Ubuntu 26 around October 2026) is informational only — every
+  workflow in this repo already uses the floating `ubuntu-latest`/`macos-latest` labels, which
+  resolve to the new image automatically with no action required.
+
+
 ## 0.153.0 - Taint-engine points-to precision, and two default-adjacent capabilities rebuilt from broken to sound
 
 Four taint-engine capabilities landed since 0.152.0, continuing the "next-generation taint analysis
