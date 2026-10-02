@@ -147,10 +147,23 @@ test('a budget_exhausted result is NEVER cached, so a larger --timeout still wor
     // is ever touched, and would pass this test either way. The limitation
     // string is asserted precisely so that a mis-timed run fails LOUDLY instead
     // of silently degrading into the non-discriminating path.
-    const starved = { file: 'a.js', line: 1, ruleId: 'r', stableId };
-    await annotateGitProvenance([starved], {
-      scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', timeoutMs: 5,
-    });
+    //
+    // Whether a given run lands there is a race against git's latency: on a
+    // fast runner the blame call can finish inside a 5ms budget and the finding
+    // resolves instead of exhausting (seen on a hosted runner as 'partial'). So
+    // use the smallest budget and retry until a run lands on the path under
+    // test, clearing anything a non-exhausted attempt cached. It still fails
+    // loudly when no attempt lands, rather than degrading into a weaker test.
+    let starved;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      starved = { file: 'a.js', line: 1, ruleId: 'r', stableId };
+      await annotateGitProvenance([starved], {
+        scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z', timeoutMs: 1,
+      });
+      if (starved.findingProvenance.status === 'budget_exhausted'
+        && /origin could be resolved/.test(starved.findingProvenance.limitations?.[0] || '')) break;
+      fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
     assert.equal(starved.findingProvenance.status, 'budget_exhausted');
     assert.match(starved.findingProvenance.limitations[0], /origin could be resolved/,
       'this test is only meaningful on the resolveOrigin budget path');

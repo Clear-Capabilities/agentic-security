@@ -33,6 +33,13 @@ reproduced locally before it was changed:
 - **SARD blind smoke:** the macro-F1 check now uses the support-floored macro. Zero-support rows that exist
   only because a detector fired outside the scanned CWE subset were dragging down the mean, so a micro-F1
   gain from 65.8% to 88.7% read as a macro regression. Precision remains gated separately.
+- **Real-world bench truncation:** eight unfloored corpora (pygoat, django-clean, nextjs-clean, ...) contain
+  files over the engine's size caps, which it skips by design, and the bench read any skipped file as a failed
+  measurement, so the job exited 1 on every run. The workflow now passes `--allow-truncation` and instead fails
+  any app that HAS a floor if it was truncated, so the gating apps still fail closed.
+- **Flaky provenance test:** `a budget_exhausted result is NEVER cached` raced a 5ms budget against git's
+  latency and failed on a fast hosted runner. It now uses a 1ms budget and retries until a run lands on the
+  path under test, still failing loudly if none does.
 - `@types/node` 26.6.3 to 26.6.4 in `scanner/` and `ide/vscode/` for the dependency-currency gate.
 
 ## 0.153.1 - CI hygiene: off the deprecated Node 20 Actions runtime

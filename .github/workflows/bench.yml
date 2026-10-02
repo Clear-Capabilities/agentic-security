@@ -131,6 +131,14 @@ jobs:
       # is a leak or an unbounded accumulator inside that app's scan, and the
       # answer is a profile — a bigger heap is how a real leak stays hidden.
       #
+      # --allow-truncation: the unfloored corpora (pygoat, django-clean,
+      # nextjs-clean, ...) contain files over the 500 KB / dense-line caps that
+      # the engine skips by design, and the bench treats any skipped file as a
+      # failed measurement, which made this job exit 1 on every run regardless
+      # of detection quality. Truncation is NOT ignored: the enforcement step
+      # below fails any app that has a floor if it was truncated, so the
+      # apps whose numbers gate the build still fail closed.
+      #
       # The bench exits non-zero if any app fails, but we defer that to the
       # enforcement step below so the results still get printed and uploaded.
       # A failure you can read beats a failure you can only infer from $?.
@@ -140,7 +148,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
         run: |
           set +e
-          node test/benchmark/realworld/bench-realworld.js --all --json > /tmp/realworld.json
+          node test/benchmark/realworld/bench-realworld.js --all --allow-truncation --json > /tmp/realworld.json
           echo "$?" > /tmp/realworld.exit
           set -e
           head -200 /tmp/realworld.json
@@ -198,6 +206,10 @@ jobs:
               if (!present.has(name)) { console.error(`FAIL ${name}: absent from results`); failed = true; }
             }
             for (const res of r.results) {
+              if (res.truncated && (FLOORS[res.name] != null || RECALL_FLOORS[res.name] != null)) {
+                console.error(`FAIL ${res.name}: scan truncated ${JSON.stringify(res.truncationDetail)}, so its numbers are not a valid measurement`);
+                failed = true;
+              }
               const rfloor = RECALL_FLOORS[res.name];
               if (rfloor != null && !res.error) {
                 const rec = res.recall || 0;
