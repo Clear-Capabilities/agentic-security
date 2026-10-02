@@ -67,7 +67,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.4",
     "@types/vscode": "^1.125.0",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",

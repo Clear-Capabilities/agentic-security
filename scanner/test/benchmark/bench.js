@@ -51,6 +51,11 @@ function familyFor(vuln, familyMap, finding) {
     }
     return 'unknown';
   }
+  // T5.1 ownership-authz names the handler in its vuln string
+  // ("get() looks up or mutates by request-supplied 'id' ..."), so no fixed
+  // prefix in _familyMap can cover it. It is the IDOR class; key on the
+  // detector rather than the text.
+  if (finding?.parser === 'OWNERSHIP-AUTHZ') return 'idor';
   if (familyMap.exact?.[vuln]) return familyMap.exact[vuln];
   for (const [prefix, fam] of Object.entries(familyMap.prefix || {})) {
     if (vuln.startsWith(prefix)) return fam;
@@ -69,7 +74,13 @@ async function scanFixture(fixDir) {
   // but bench only needs file/line/vuln, all read via lineOf/fileOf below.
   return [
     ...(scan.findings || []),
-    ...(scan.logicVulns || []),
+    // `stack-playbook:` entries are the per-stack hardening CHECKLIST (helmet,
+    // CSRF middleware, ...) emitted as info-severity advice at package.json:1.
+    // They are posture guidance, not detections of a vulnerability in the
+    // fixture, so scoring them as findings reads every Express fixture as six
+    // false positives. They only reached scan.logicVulns after the `title` ->
+    // `vuln` fix (762cdf63, 2026-08-11) stopped the no-vuln filter dropping them.
+    ...(scan.logicVulns || []).filter((f) => !String(f.id || '').startsWith('stack-playbook:')),
     ...(scan.secrets || []),
     ...(scan.supplyChain || []),
   ];

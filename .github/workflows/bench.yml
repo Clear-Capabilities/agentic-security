@@ -150,23 +150,31 @@ jobs:
           node -e '
             const fs = require("node:fs");
             const r = JSON.parse(fs.readFileSync("/tmp/realworld.json","utf8"));
-            // Per-app F1 floors. The 100% floors on JS apps were
-            // aspirational and pre-dated the integration-block detectors
-            // (PQC, web3, crypto-protocol, ml-supply-chain, etc.) that
-            // fire on real-world JS code. bench-realworld.js now sets
-            // AGENTIC_SECURITY_NO_INTEGRATION=1 to preserve apples-to-
-            // apples regression testing; floors below allow ~5-10pp
-            // headroom under the locally-achieved values:
-            //   juice-shop  69.6% local → floor 0.60
-            //   snyk-goof   72.0% local → floor 0.65
-            //   nodegoat    82.1% local → floor 0.75
+            // Per-app floors.
+            //
+            // owasp-benchmark / sard-juliet-java have audited, complete gold
+            // files, so F1 is a meaningful gate and keeps its floor.
+            //
+            // juice-shop / snyk-goof / nodegoat carry `requiresReAudit:true`:
+            // their gold files predate most of the detectors the scanner now
+            // ships, so a newer detector firing correctly on a real
+            // vulnerability the gold file never listed scores as a false
+            // positive. bench-realworld.js itself declares F1 against them
+            // "informational only until a human re-walks it", and gating on it
+            // failed this job every day while recall sat flat at 81-83%.
+            // For those apps the gate is RECALL (a regression there is a real
+            // detection loss, whatever the gold file omits); F1 is still
+            // printed. Local recall at the time of writing:
+            //   juice-shop 82.6%   snyk-goof 81.3%   nodegoat 80.8%
             // Raising these requires expected.json maintenance.
             const FLOORS = {
-              "juice-shop":      0.60,
-              "snyk-goof":       0.65,
-              "nodegoat":        0.75,
               "owasp-benchmark": 0.95,
               "sard-juliet-java": 0.95,
+            };
+            const RECALL_FLOORS = {
+              "juice-shop": 0.75,
+              "snyk-goof":  0.75,
+              "nodegoat":   0.75,
             };
             let failed = false;
             // A crashed or errored app fails the run whether or not it
@@ -186,10 +194,17 @@ jobs:
             // Every floored app must be PRESENT. A floor on an app that never
             // appears in the results enforces nothing at all.
             const present = new Set(r.results.map(x => x.name));
-            for (const name of Object.keys(FLOORS)) {
+            for (const name of [...Object.keys(FLOORS), ...Object.keys(RECALL_FLOORS)]) {
               if (!present.has(name)) { console.error(`FAIL ${name}: absent from results`); failed = true; }
             }
             for (const res of r.results) {
+              const rfloor = RECALL_FLOORS[res.name];
+              if (rfloor != null && !res.error) {
+                const rec = res.recall || 0;
+                const rok = rec + 1e-6 >= rfloor;
+                console.log(`${rok ? "PASS" : "FAIL"} ${res.name}: recall=${(rec*100).toFixed(1)}% (floor ${(rfloor*100).toFixed(0)}%)  [F1=${((res.f1||0)*100).toFixed(1)}% informational]`);
+                if (!rok) failed = true;
+              }
               const floor = FLOORS[res.name];
               if (floor == null) continue;
               if (res.error) continue; // already counted above

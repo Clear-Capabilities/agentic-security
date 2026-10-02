@@ -5700,19 +5700,29 @@ function _isLikelyUnsafeRegex(body){
   // the first required literal). redos-nfa.js is consulted as a second
   // opinion for the intrinsic case only, since it does not model the
   // polynomial one.
-  if (!_hasNestedQuantifier(body) && !_hasLeadingUnboundedQuantifier(body)) return false;
+  const ambiguousAlt = _hasOverlappingQuantifiedAlternation(body);
+  if (!_hasNestedQuantifier(body) && !_hasLeadingUnboundedQuantifier(body) && !ambiguousAlt) return false;
   // FIX-DISCRIMINATION (GHSA-29g2-3rmr-qm68): an anchored pattern with no
   // nested quantifier has neither failure mode — no start-offset multiplier,
   // no intrinsic catastrophe. safe-regex's star-height heuristic cannot see
   // anchoring at all and flagged the fixed revision identically to the
   // vulnerable one, so the finding survived its own fix.
-  if (_isAnchoredRegex(body) && !_hasNestedQuantifier(body)) return false;
+  if (_isAnchoredRegex(body) && !_hasNestedQuantifier(body) && !ambiguousAlt) return false;
   if (_safeRegex) {
     try { if (!_safeRegex(body)) return true; } catch (_) { /* fall through */ }
   }
-  // safe-regex's star-height analysis misses `(a|aa)*` — the alternatives
-  // overlap on their first character, which causes catastrophic backtracking
-  // even at star-height 1. Add a first-char overlap check on `(X|Y…)[*+]` shapes.
+  // safe-regex's star-height analysis misses `(a|aa)*` (see the helper below).
+  return ambiguousAlt;
+}
+/**
+ * `(X|Y…)[*+]` whose alternatives can start with the same character — `(a|aa)*`.
+ * The overlap makes the engine fork on every iteration, which is catastrophic
+ * backtracking even at star-height 1, and like a nested quantifier it is
+ * intrinsic: anchoring does not cure it. A third mechanism alongside nested
+ * quantifiers and scan-and-retry; the gate in _isLikelyUnsafeRegex must admit
+ * it, or `/^(a|aa)*$/` is rejected before this check is ever reached.
+ */
+function _hasOverlappingQuantifiedAlternation(body){
   const altQuantRe = /\((?:\?:)?([^()]+)\)[*+]/g;
   let am;
   while ((am = altQuantRe.exec(body)) !== null) {

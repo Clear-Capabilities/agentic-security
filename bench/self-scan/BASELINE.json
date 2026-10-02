@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-17T06:04:57.125Z",
-  "commit": "a4d35d460fa9397f80e8075b688475e2f5c31ac7",
+  "generatedAt": "2026-10-02T14:47:08.969Z",
+  "commit": "b6300558bbe5dbb86af0d53718264ad59f7b0562",
   "targets": {
     "hooks": {
-      "total": 21,
+      "total": 20,
       "byFile": {
         "conversation-context.js": 1,
         "lib/transcript.js": 1,
@@ -11,7 +11,7 @@
         "model-cost-advisor.js": 1,
         "post-edit-scan.js": 2,
         "pre-bash-guard.js": 1,
-        "pre-edit-bodyguard.js": 5,
+        "pre-edit-bodyguard.js": 4,
         "session-start-self-check.js": 4,
         "session-stop-drift-check.js": 2,
         "session-welcome.js": 3
@@ -34,7 +34,7 @@
       }
     },
     "scanner/src": {
-      "total": 484,
+      "total": 479,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -201,9 +201,8 @@
         "report/index.js": 5,
         "runScan.js": 1,
         "sandbox/backend-namespace.js": 1,
-        "sast/agent-untrusted-flow.js": 2,
         "sast/claude-hook-injection.js": 1,
-        "sast/client-side.js": 6,
+        "sast/client-side.js": 3,
         "sast/cpp-dataflow.js": 2,
         "sast/crypto-protocol.js": 2,
         "sast/db-taint.js": 1,

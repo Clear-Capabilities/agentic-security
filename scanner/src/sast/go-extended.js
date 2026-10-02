@@ -5,6 +5,9 @@
 //   - exec.Command shell-form        exec.Command("sh", "-c", <var>) vs argv-form
 //   - http.Client custom-transport   http.Get(<var>) or http.NewRequest with
 //                                    user-controlled URL and no allowlist
+//   - package-level http.Get/Post    runs on http.DefaultClient, which has no
+//                                    timeout (DoS: one stalled upstream pins
+//                                    the goroutine and its connection forever)
 //
 // These patterns are narrow and complement the existing regex-based Go rules
 // (GORM raw SQL, source patterns for net/http, Echo, Chi, Gin).
@@ -37,6 +40,14 @@ const FINDINGS = [
     re: /\bhttp\.(?:Get|Post|Head|PostForm)\s*\(\s*(?!"[^"]*"\s*\))[a-zA-Z_]\w*/g,
     vuln: 'SSRF — http.Get/Post with variable URL',
     remediation: 'Allowlist the destination host before any net/http call. Use `net/url.Parse(target)` then check `parsed.Host` against an explicit allowlist. Reject RFC1918 (10/8, 172.16/12, 192.168/16) and the cloud metadata addresses (169.254.169.254, fd00:ec2::254).',
+  },
+  {
+    id: 'go-http-no-timeout', severity: 'medium', cwe: 'CWE-400', family: 'dos-no-timeout',
+    // Only the package-level helpers. `client.Get(...)` is the caller's own
+    // client, which may well set Timeout, so it is deliberately not matched.
+    re: /\bhttp\.(?:Get|Post|Head|PostForm)\s*\(/g,
+    vuln: 'Missing Timeout on Outbound HTTP Request (DoS)',
+    remediation: 'http.Get/Post/Head/PostForm use http.DefaultClient, which never times out. Build a client instead: `c := &http.Client{Timeout: 10 * time.Second}` and call `c.Get(...)`, or pass a context with a deadline to http.NewRequestWithContext.',
   },
   {
     id: 'go-newrequest-user-url', severity: 'high', cwe: 'CWE-918', family: 'ssrf',

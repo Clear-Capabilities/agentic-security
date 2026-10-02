@@ -168,14 +168,24 @@ function main() {
     const base = baselineByName[app.name];
     if (!base) { lines.push(`  + ${app.name}: no baseline entry yet (new app) — informational, not a failure.`); continue; }
 
-    const macroDelta = app.macroF1 - base.macroF1;
+    // Gate the support-floored macro (macro-score.mjs#macroF1MinSupport), not the
+    // raw unweighted mean. The raw mean also averages in CWE rows with ZERO
+    // expected instances that exist only because some detector fired on a file
+    // outside the scanned CWE subset (CWE-502/22/79 at F1 0 each). Those rows
+    // measure how widely false positives spread, which the precision check
+    // below already gates; letting them dilute the mean made detection
+    // IMPROVEMENTS (micro F1 65.8% -> 88.7%) read as a 15.8pp macro regression.
+    // Older baselines predate the field, so each side falls back to macroF1.
+    const macroOf = (a) => (a.macroF1MinSupport && typeof a.macroF1MinSupport.value === 'number') ? a.macroF1MinSupport.value : a.macroF1;
+    const macroNow = macroOf(app), macroBase = macroOf(base);
+    const macroDelta = macroNow - macroBase;
     const microDelta = app.aggregate.microF1 - base.aggregate.microF1;
     const precisionDelta = app.aggregate.precision - base.aggregate.precision;
     const aggregateSupport = (base.aggregate.tp || 0) + (base.aggregate.fn || 0);
     const aggregateTolerance = adaptiveTolerance(TOLERANCE, aggregateSupport);
 
-    if (macroDelta < 0) { failed = true; lines.push(`  ✗ ${app.name}: macro F1 regressed ${(base.macroF1*100).toFixed(1)}% -> ${(app.macroF1*100).toFixed(1)}% (${(macroDelta*100).toFixed(1)}pp)`); }
-    else lines.push(`  ✓ ${app.name}: macro F1 ${(base.macroF1*100).toFixed(1)}% -> ${(app.macroF1*100).toFixed(1)}% (${macroDelta>=0?'+':''}${(macroDelta*100).toFixed(1)}pp)`);
+    if (macroDelta < 0) { failed = true; lines.push(`  ✗ ${app.name}: macro F1 regressed ${(macroBase*100).toFixed(1)}% -> ${(macroNow*100).toFixed(1)}% (${(macroDelta*100).toFixed(1)}pp)`); }
+    else lines.push(`  ✓ ${app.name}: macro F1 ${(macroBase*100).toFixed(1)}% -> ${(macroNow*100).toFixed(1)}% (${macroDelta>=0?'+':''}${(macroDelta*100).toFixed(1)}pp)`);
 
     if (microDelta < -aggregateTolerance) { failed = true; lines.push(`  ✗ ${app.name}: micro F1 regressed beyond tolerance (${(aggregateTolerance*100).toFixed(2)}pp, support=${aggregateSupport}): ${(base.aggregate.microF1*100).toFixed(1)}% -> ${(app.aggregate.microF1*100).toFixed(1)}%`); }
     if (precisionDelta < -aggregateTolerance) { failed = true; lines.push(`  ✗ ${app.name}: precision regressed beyond tolerance (secure-code FP proxy, ${(aggregateTolerance*100).toFixed(2)}pp, support=${aggregateSupport}): ${(base.aggregate.precision*100).toFixed(1)}% -> ${(app.aggregate.precision*100).toFixed(1)}%`); }

@@ -1640,6 +1640,7 @@ async function getCallGraphInfo(fileAbsPath, language) {
 // if this indexing diverged between them, a macroF1 delta between the two
 // could be measuring an unrelated bookkeeping difference instead of the
 // scoring-methodology change it's meant to isolate.
+const NPM_LOCKFILES = new Set(['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml']);
 function _indexActuals(actual, vulnFamilyMap) {
   // Perf: index actuals by basename for O(1) lookup instead of O(A) scan per
   // expected entry. With 55k expected × 87k actuals this drops 4.8B ops to
@@ -1650,14 +1651,21 @@ function _indexActuals(actual, vulnFamilyMap) {
   for (let i = 0; i < actual.length; i++) {
     const a = actual[i];
     const aFile = fileOf(a);
-    const base = aFile.replace(/\\/g,'/').split('/').slice(-1)[0];
+    let base = aFile.replace(/\\/g,'/').split('/').slice(-1)[0];
     // meta.cwe: the RAW finding's own claimed CWE (per the repo-wide findings
     // schema, `{..., cwe, ...}`) — distinct from an expected entry's `.cwe`,
     // which is the GT's answer. Threaded through to fps/tps so
     // macro-score.mjs can build a genuine expected-CWE → reported-CWE
     // confusion matrix (PRD §19) instead of one that just echoes the
     // matched expected entry back at itself.
-    const meta = { file: aFile, base, line: lineOf(a), fam: familyForBench(a.vuln, vulnFamilyMap, a), vuln: a.vuln, cwe: a.cwe || null };
+    const fam = familyForBench(a.vuln, vulnFamilyMap, a);
+    // SCA findings are attributed to the lockfile that pins the vulnerable
+    // version (package-lock.json), but the gold files declare the dependency
+    // at its manifest (package.json). Same dependency, same defect; without
+    // this every SCA finding reads as an FP and the one manifest-level
+    // expectation reads as an FN (nodegoat 80.7% -> 15.7%).
+    if (fam === 'vulnerable-dep' && NPM_LOCKFILES.has(base)) base = 'package.json';
+    const meta = { file: aFile, base, line: lineOf(a), fam, vuln: a.vuln, cwe: a.cwe || null };
     actualMeta[i] = meta;
     if (!actualByBase.has(base)) actualByBase.set(base, []);
     actualByBase.get(base).push(i);
@@ -2104,7 +2112,10 @@ async function runOne(name, app, vulnFamilyMap) {
 
   let actual = [
     ...(scan.findings || []),
-    ...(scan.logicVulns || []),
+    // `stack-playbook:` entries are the per-stack hardening checklist (helmet,
+    // CSRF middleware, mongo scoping...): info-severity posture advice pinned
+    // to package.json:1, not detections. See the same filter in ../bench.js.
+    ...(scan.logicVulns || []).filter((f) => !String(f.id || '').startsWith('stack-playbook:')),
     ...(scan.secrets || []),
     ...(scan.supplyChain || []),
   ];

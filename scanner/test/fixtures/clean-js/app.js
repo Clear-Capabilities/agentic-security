@@ -12,7 +12,7 @@ app.use(csurf());
 app.get('/users/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id < 1) return res.status(400).send();
-  const user = await db.query('SELECT id, name FROM users WHERE id = $1', [id]);
+  const user = await db.query('SELECT id, name FROM users WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
   res.json(user);
 });
 

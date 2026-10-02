@@ -123,6 +123,20 @@ function _lang(fp) {
   return null;
 }
 
+// True when `idx` sits inside a '…' or "…" literal on its own line. A sink name
+// quoted in a string (a rule library's `fix:`/`example:` text, a log message) is
+// prose, not a call. Backticks are deliberately not tracked: a template literal's
+// `${…}` holds real code, and erring toward "this is code" is the safe direction.
+function _insideQuote(code, idx) {
+  let q = null;
+  for (let i = code.lastIndexOf('\n', idx - 1) + 1; i < idx; i++) {
+    const c = code[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; }
+    else if (c === '\'' || c === '"') q = c;
+  }
+  return q !== null;
+}
+
 export function scanCodeInjectionMultilang(fp, raw) {
   if (!raw || raw.length > 500_000) return [];
   const lang = _lang(fp);
@@ -137,6 +151,7 @@ export function scanCodeInjectionMultilang(fp, raw) {
     const r = new RegExp(re.source, re.flags);
     let m;
     while ((m = r.exec(code))) {
+      if (_insideQuote(code, m.index + Math.max(0, m[0].search(/\w/)))) continue;
       const line = lineOf(code, m.index);
       const id = `code-injection-ml:${fp}:${line}:${key}`;
       if (seen.has(id)) continue;

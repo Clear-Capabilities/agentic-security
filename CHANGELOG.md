@@ -9,6 +9,32 @@
 > make the history less accurate, not more.
 
 
+## 0.153.2 - Scanner F1 benchmark and dependency-currency CI repaired
+
+The daily `Scanner F1 benchmark` workflow had failed every run since about 2026-08-10. Root causes, each
+reproduced locally before it was changed:
+
+- **Code injection: sink names inside string literals** (`code-injection-multilang.js`). `eval(` quoted in a
+  rule library's `fix:`/`example:` text fired as a critical finding. Matches inside a `'...'` or `"..."`
+  literal are now skipped (backtick templates are not, since `${...}` holds real code).
+- **ReDoS: overlapping alternation under a quantifier was rejected.** The mechanism gate added in 0.14x
+  admitted only nested quantifiers and leading unbounded ones, so `/^(a|aa)*$/` never reached the overlap
+  check. It is now a third named mechanism, and like a nested quantifier it is not cured by anchoring.
+- **Go: package-level `http.Get/Post/Head/PostForm` have no timeout.** The old finding only appeared
+  because a JavaScript regex happened to match Go; it was correctly scoped to JS later and Go lost the
+  finding. A real Go rule (`go-http-no-timeout`) now covers it.
+- **Benchmark scorers** no longer count info-level `stack-playbook:` checklist advice as detections,
+  treat an npm lockfile as the manifest for dependency findings (Nodegoat F1 had fallen 80.7% to 15.7%
+  on that alone), and carry ground truth for the ownership-authz and rate-limit detectors. The `clean-js`
+  fixture now actually checks ownership.
+- **Real-world gate:** Juice Shop, Goof and NodeGoat have ground truth flagged `requiresReAudit`, which the
+  bench itself calls informational, so they are gated on recall (floor 75%, measured 81-83%) with F1 still
+  printed. OWASP Benchmark and Juliet keep their F1 floors.
+- **SARD blind smoke:** the macro-F1 check now uses the support-floored macro. Zero-support rows that exist
+  only because a detector fired outside the scanned CWE subset were dragging down the mean, so a micro-F1
+  gain from 65.8% to 88.7% read as a macro regression. Precision remains gated separately.
+- `@types/node` 26.6.3 to 26.6.4 in `scanner/` and `ide/vscode/` for the dependency-currency gate.
+
 ## 0.153.1 - CI hygiene: off the deprecated Node 20 Actions runtime
 
 A maintenance-only release, no engine or scanner behavior changes.

@@ -192,6 +192,13 @@
         },
         {
           "file": "app.js",
+          "line": 7,
+          "family": "idor",
+          "severity": "high",
+          "_note": "T5.1 ownership-authz: GET /users/:id looks up by request-supplied id with no ownership check (true: the route is unauthenticated)"
+        },
+        {
+          "file": "app.js",
           "line": 12,
           "family": "csrf",
           "severity": "high",
@@ -660,6 +667,27 @@
           "family": "open-redirect",
           "severity": "high",
           "_note": "existing redirect detector also fires"
+        },
+        {
+          "file": "app.js",
+          "line": 5,
+          "family": "auth-endpoint-missing-rate-limiting",
+          "severity": "high",
+          "_note": "POST /reset-request is a password-reset (auth) endpoint and the file has no rate limiter"
+        },
+        {
+          "file": "app.js",
+          "line": 13,
+          "family": "auth-endpoint-missing-rate-limiting",
+          "severity": "high",
+          "_note": "GET /verify matches the auth path set (verify/otp/token) with no rate limiter"
+        },
+        {
+          "file": "app.js",
+          "line": 18,
+          "family": "auth-endpoint-missing-rate-limiting",
+          "severity": "high",
+          "_note": "POST /reset-safe is host-header-safe but is still an unthrottled reset endpoint"
         }
       ]
     },
@@ -921,6 +949,13 @@
           "family": "idor",
           "severity": "high",
           "_note": "Vuln1: no ownership clause"
+        },
+        {
+          "file": "app.js",
+          "line": 39,
+          "family": "idor",
+          "severity": "high",
+          "_note": "Vuln1 is also reported by T5.1 ownership-authz, a separate detector from the Potential IDOR one above"
         },
         {
           "file": "app.js",
