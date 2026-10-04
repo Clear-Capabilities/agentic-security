@@ -116,7 +116,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libpq-dev
           cabal update
-          cabal install --lib --package-env=default --allow-newer --index-state=2026-10-04T17:05:37Z scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
+          cabal install --lib --package-env=default --allow-newer --index-state=2026-10-04T17:05:37Z --constraint='crypton==1.0.6' --constraint='memory==0.18.0' --constraint='jose==0.11' scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
         timeout-minutes: 25
       - run: npm ci
         timeout-minutes: 10
