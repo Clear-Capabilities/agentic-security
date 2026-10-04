@@ -48,11 +48,13 @@ function expandIds(text) {
 export const PRD_SNAPSHOT_PATH = 'scripts/capability-ledger/prd-snapshot.json';
 
 export function parsePrd(root = REPO_ROOT) {
-  if (!fs.existsSync(path.join(root, PRD_PATH))) {
+  let text;
+  try { text = read(root, PRD_PATH); } catch (e) {
+    if (e && e.code !== 'ENOENT') throw e;
     const snap = JSON.parse(read(root, PRD_SNAPSHOT_PATH));
     return { ids: snap.ids, suiteByRequirement: snap.suiteByRequirement, suiteNames: new Set(Object.values(snap.suiteByRequirement)), section3Ids: new Set(snap.section3Ids) };
   }
-  return parsePrdText(read(root, PRD_PATH));
+  return parsePrdText(text);
 }
 
 export function writePrdSnapshot(root = REPO_ROOT) {
