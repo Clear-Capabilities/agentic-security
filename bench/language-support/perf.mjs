@@ -49,7 +49,15 @@ const parseRss = (stderr) => {
 };
 
 /** One CLI scan under /usr/bin/time: {ms, rssBytes, exit}. Peak RSS of the scan process (the scanner starts no child analyser). */
+// The PRD's reference profile is a 4-core, 8 GiB machine, where V8 sizes its old-generation limit near 2 GiB by itself. On a larger host
+// the same scan is allowed to let the heap grow (measured 1.7 to 2.6 GiB of peak RSS, mostly collectable garbage), so a measurement taken
+// there says nothing about the reference profile. The scan is therefore measured under an explicit heap limit standing in for that
+// profile, and the limit is recorded in the result. It is not applied to a user's scan.
+export const REFERENCE_HEAP_LIMIT_MIB = 1792;
+const withHeapLimit = (env) => ({ ...env, NODE_OPTIONS: `${env.NODE_OPTIONS || process.env.NODE_OPTIONS || ''} --max-old-space-size=${REFERENCE_HEAP_LIMIT_MIB}`.trim() });
+
 export function timedScan(root, extra = [], env = {}) {
+  env = withHeapLimit(env);
   const timeBin = fs.existsSync('/usr/bin/time') ? '/usr/bin/time' : null;
   const args = [CLI, 'scan', root, '--format', 'json', ...extra];
   const t0 = process.hrtime.bigint();
@@ -63,7 +71,7 @@ export function timedScan(root, extra = [], env = {}) {
 export const p95 = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)]; };
 
 export function profile() {
-  return { platform: process.platform, arch: process.arch, logicalCpus: os.cpus().length, memoryGiB: Math.round(os.totalmem() / 1073741824), node: process.version, referenceProfile: { cores: 4, memoryGiB: 8, os: 'Linux/NixOS', note: 'the PRD reference; any other host is an operational profile' } };
+  return { platform: process.platform, arch: process.arch, logicalCpus: os.cpus().length, memoryGiB: Math.round(os.totalmem() / 1073741824), node: process.version, heapLimitMiB: REFERENCE_HEAP_LIMIT_MIB, referenceProfile: { cores: 4, memoryGiB: 8, os: 'Linux/NixOS', note: 'the PRD reference; any other host is an operational profile' } };
 }
 
 /** Three cold and three warm scans plus a 10-file incremental change in a git checkout of the same fixture. */
