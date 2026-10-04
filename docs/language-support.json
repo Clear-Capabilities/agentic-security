@@ -1,0 +1,791 @@
+{
+  "schema": "agentic-security/language-support@1",
+  "version": "language-support/1",
+  "generatedAt": "2026-10-04",
+  "node": "v24.20.0",
+  "targets": {
+    "precision": 0.9,
+    "recall": 0.85,
+    "f1": 0.8,
+    "perFamilyF1": 0.8,
+    "minHoldoutPerLabelPerFamily": 5,
+    "minPrivacyPositives": 100,
+    "minPrivacyNegatives": 100
+  },
+  "pairGate": {
+    "change": 1,
+    "preserve": 0.9
+  },
+  "languages": {
+    "haskell": {
+      "frozen": {
+        "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+        "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+        "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+        "corpusVersion": "qa001-v2"
+      },
+      "measuredOn": {
+        "split": "holdout",
+        "measuredAt": "2026-10-04",
+        "corpusVersion": "qa001-v2",
+        "hashes": {
+          "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+          "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+          "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+          "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+          "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+        },
+        "corpusTotals": {
+          "security": {
+            "vulnerable": 260,
+            "safe": 260,
+            "unknown": 52,
+            "families": 13
+          },
+          "privacy": {
+            "positives": 100,
+            "negatives": 200
+          }
+        }
+      },
+      "rows": {
+        "parser": {
+          "capability": "parser",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "parse-fixtures",
+            "files": 175,
+            "parsed": 175,
+            "validFixtures": 156,
+            "crashed": 0
+          }
+        },
+        "sast": {
+          "capability": "sast",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "sast-holdout",
+            "layer": "sast",
+            "tp": 48,
+            "fp": 0,
+            "fn": 0,
+            "tn": 44,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "cases": 96,
+            "families": {
+              "weak-password-hash": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "weak-randomness": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "resource-limits": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "parser-safety": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "sensitive-logging": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "route-authentication": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "object-authorization": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "session-cookie": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "strictPrecision": 0.8571428571428571
+          }
+        },
+        "taint": {
+          "capability": "taint",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "taint-holdout",
+            "layer": "taint",
+            "tp": 30,
+            "fp": 0,
+            "fn": 0,
+            "tn": 30,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "cases": 60,
+            "families": {
+              "sql-injection": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "command-injection": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "path-traversal": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "ssrf": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "html-injection": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "strictPrecision": 1
+          }
+        },
+        "privacy-lineage": {
+          "capability": "privacy-lineage",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "privacy-holdout",
+            "positives": 30,
+            "negatives": 60,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "byKind": {
+              "direct": {
+                "tp": 30,
+                "fp": 0,
+                "fn": 0,
+                "tn": 0
+              },
+              "protected": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "tn": 30
+              },
+              "sibling-field": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "tn": 30
+              }
+            }
+          }
+        },
+        "auth": {
+          "capability": "auth",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/haskell/haskell-web-auth.test.js"
+            ]
+          }
+        },
+        "sca": {
+          "capability": "sca",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "sca-fixtures",
+            "manifests": "48/48",
+            "advisoryRanges": "28/28"
+          }
+        },
+        "bom": {
+          "capability": "bom",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/language/language-bom.test.js",
+              "test/language/language-aibom.test.js"
+            ]
+          }
+        },
+        "fix": {
+          "capability": "fix",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "fix-fixtures",
+            "accepted": "20/20",
+            "rejected": "10/10",
+            "advertised": "4/4",
+            "unsupportedShapes": 22,
+            "pairs": {
+              "preserve": "17/17",
+              "change": "9/9"
+            }
+          }
+        },
+        "integration": {
+          "capability": "integration",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/language/language-integrations.test.js",
+              "test/language/language-report-formats.test.js"
+            ]
+          }
+        }
+      },
+      "summary": {
+        "required": 9,
+        "supported": 9,
+        "notSupported": [],
+        "dataOk": true
+      },
+      "metamorphic": {
+        "preserve": 1,
+        "change": 1,
+        "gate": {
+          "change": 1,
+          "preserve": 0.9
+        },
+        "ok": true,
+        "broken": []
+      },
+      "unknownOutcomes": {
+        "total": 19,
+        "disclosed": 16,
+        "withFinding": 19,
+        "silentClean": 0,
+        "requiredDisclosure": 9,
+        "requiredDisclosureMissing": 0
+      },
+      "modelledVersions": {
+        "packages": {
+          "base": [
+            "4.18",
+            "4.19"
+          ],
+          "process": [
+            "1.6.17",
+            "1.6.18"
+          ],
+          "directory": [
+            "1.3.8"
+          ],
+          "filepath": [
+            "1.4.100"
+          ],
+          "postgresql-simple": [
+            "0.6.5",
+            "0.7.0"
+          ],
+          "mysql-simple": [
+            "0.4.9"
+          ],
+          "sqlite-simple": [
+            "0.4.18"
+          ],
+          "persistent": [
+            "2.14"
+          ],
+          "scotty": [
+            "0.12",
+            "0.20"
+          ],
+          "wai": [
+            "3.2"
+          ],
+          "yesod": [
+            "1.6"
+          ],
+          "http-client": [
+            "0.7"
+          ],
+          "http-conduit": [
+            "2.3"
+          ],
+          "wreq": [
+            "0.5"
+          ],
+          "blaze-html": [
+            "0.9"
+          ],
+          "lucid": [
+            "2.11"
+          ],
+          "shakespeare": [
+            "2.0"
+          ],
+          "text": [
+            "2.0"
+          ],
+          "cryptonite": [
+            "0.30"
+          ],
+          "random": [
+            "1.2"
+          ],
+          "hxt": [
+            "9.3"
+          ],
+          "bytestring": [
+            "0.11",
+            "0.12"
+          ]
+        },
+        "webFrameworks": {
+          "scotty": [
+            "0.12",
+            "0.20"
+          ],
+          "wai": [
+            "3.2"
+          ],
+          "servant": [
+            "0.19",
+            "0.20"
+          ],
+          "yesod": [
+            "1.6"
+          ]
+        }
+      }
+    },
+    "nix": {
+      "frozen": {
+        "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+        "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+        "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+        "corpusVersion": "qa001-v2"
+      },
+      "measuredOn": {
+        "split": "holdout",
+        "measuredAt": "2026-10-04",
+        "corpusVersion": "qa001-v2",
+        "hashes": {
+          "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+          "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+          "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+          "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+          "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+        },
+        "corpusTotals": {
+          "security": {
+            "vulnerable": 240,
+            "safe": 240,
+            "unknown": 52,
+            "families": 12
+          },
+          "privacy": {
+            "positives": 100,
+            "negatives": 200
+          }
+        }
+      },
+      "rows": {
+        "parser": {
+          "capability": "parser",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "parse-fixtures",
+            "files": 161,
+            "parsed": 161,
+            "validFixtures": 144,
+            "crashed": 0
+          }
+        },
+        "config-sast": {
+          "capability": "config-sast",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "sast-holdout",
+            "layer": "sast",
+            "tp": 66,
+            "fp": 0,
+            "fn": 0,
+            "tn": 66,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "cases": 132,
+            "families": {
+              "secret-in-store": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "unpinned-source": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "binary-cache-trust": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "trusted-users": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "native-eval": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "sandbox-trust": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "ssh-access": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "service-privilege": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "firewall-exposure": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "privilege-escalation-policy": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "tls-secret-runtime": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "strictPrecision": 1
+          }
+        },
+        "config-taint": {
+          "capability": "config-taint",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "taint-holdout",
+            "layer": "taint",
+            "tp": 6,
+            "fp": 0,
+            "fn": 0,
+            "tn": 6,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "cases": 12,
+            "families": {
+              "script-interpolation": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "strictPrecision": 1
+          }
+        },
+        "privacy-lineage": {
+          "capability": "privacy-lineage",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "privacy-holdout",
+            "positives": 30,
+            "negatives": 60,
+            "tp": 30,
+            "fp": 0,
+            "fn": 0,
+            "tn": 60,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "byKind": {
+              "direct": {
+                "tp": 30,
+                "fp": 0,
+                "fn": 0,
+                "tn": 0
+              },
+              "protected": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "tn": 30
+              },
+              "sibling-field": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 0,
+                "tn": 30
+              }
+            }
+          }
+        },
+        "sca": {
+          "capability": "sca",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "sca-fixtures",
+            "manifests": "48/48",
+            "advisoryRanges": "28/28"
+          }
+        },
+        "bom": {
+          "capability": "bom",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/language/language-bom.test.js",
+              "test/language/language-aibom.test.js"
+            ]
+          }
+        },
+        "fix": {
+          "capability": "fix",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "fix-fixtures",
+            "accepted": "20/20",
+            "rejected": "10/10",
+            "advertised": "8/8",
+            "unsupportedShapes": 16,
+            "pairs": {
+              "preserve": "14/14",
+              "change": "14/14"
+            }
+          }
+        },
+        "integration": {
+          "capability": "integration",
+          "status": "supported",
+          "reasons": [],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/language/language-integrations.test.js",
+              "test/language/language-report-formats.test.js"
+            ]
+          }
+        },
+        "nix-eval": {
+          "capability": "nix-eval",
+          "status": "blocked",
+          "reasons": [
+            "nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-011.AC04)"
+          ],
+          "evidence": {
+            "metric": "test-suite",
+            "suites": [
+              "test/nix/nix-eval-isolation.test.js"
+            ]
+          }
+        },
+        "nixos-host": {
+          "capability": "nixos-host",
+          "status": "blocked",
+          "reasons": [
+            "nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012)",
+            "no test-suite evidence was recorded for this capability"
+          ],
+          "evidence": {
+            "metric": "host-run",
+            "suites": []
+          }
+        }
+      },
+      "summary": {
+        "required": 10,
+        "supported": 8,
+        "notSupported": [
+          "nix-eval:blocked",
+          "nixos-host:blocked"
+        ],
+        "dataOk": true
+      },
+      "metamorphic": {
+        "preserve": 1,
+        "change": 1,
+        "gate": {
+          "change": 1,
+          "preserve": 0.9
+        },
+        "ok": true,
+        "broken": []
+      },
+      "unknownOutcomes": {
+        "total": 17,
+        "disclosed": 17,
+        "withFinding": 17,
+        "silentClean": 0,
+        "requiredDisclosure": 0,
+        "requiredDisclosureMissing": 0
+      },
+      "modelledVersions": null
+    }
+  },
+  "tools": {
+    "ghc": true,
+    "cabal": true,
+    "stack": false,
+    "nix": false,
+    "nixos": false,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "limits": [
+    "The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.",
+    "No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.",
+    "No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.",
+    "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
+    "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read."
+  ],
+  "verified": {
+    "ok": true,
+    "stale": []
+  }
+}

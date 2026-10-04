@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Loop verification evidence envelope",
+  "type": "object",
+  "required": ["schemaVersion", "evidenceId", "requirement", "result", "verifier", "manifest", "prdSha256", "treeDigest", "environment", "exec", "criteria", "counts", "createdAt", "signature"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "evidenceId": { "type": "string" },
+    "requirement": { "type": "string" },
+    "result": { "enum": ["pass", "fail", "blocked"] },
+    "invoker": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "signature": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "prdSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "treeDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "verifier": { "type": "object", "required": ["version", "hash"] },
+    "manifest": { "type": "object", "required": ["version", "acceptanceHash"] },
+    "environment": { "type": "object" },
+    "exec": { "type": "object", "required": ["argv", "cwd", "startedAt", "endedAt", "outcome"] },
+    "counts": { "type": "object", "required": ["tests", "pass", "fail", "skipped"] },
+    "criteria": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "object", "required": ["id", "state"], "properties": { "id": { "type": "string" }, "state": { "enum": ["pass", "fail"] } } }
+    },
+    "logs": { "type": "object" },
+    "limitations": { "type": "array" }
+  }
+}

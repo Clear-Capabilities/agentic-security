@@ -19,6 +19,13 @@
     "onLanguage:typescript",
     "onLanguage:python",
     "onLanguage:dockerfile",
+    "onLanguage:haskell",
+    "onLanguage:literate haskell",
+    "onLanguage:cabal",
+    "onLanguage:nix",
+    "workspaceContains:**/*.cabal",
+    "workspaceContains:**/flake.nix",
+    "workspaceContains:**/configuration.nix",
     "onCommand:agenticSecurity.scanWorkspace",
     "workspaceContains:**/.agentic-security/last-scan.json"
   ],

@@ -26,8 +26,9 @@
 import { spawnSync } from 'node:child_process';
 import { hardenGitArgs, hardenGitEnv } from './util/git-hardening.js';
 import { runFullScan } from './engine.js';
+import { isLanguageManifest, isLanguageExcludedPath } from './language/discovery.js';
 
-const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md)$/i;
+const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md|hs|lhs|hsc|hs-boot|nix|cabal)$/i;
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
 // `root` is the PR's repository — a scan target, not this project's own
@@ -54,23 +55,27 @@ function _listFilesAtRef(root, ref) {
   return r.stdout.trim().split('\n').filter(p => {
     if (!p) return false;
     if (p.includes('/node_modules/') || p.includes('/.venv/')) return false;
-    return FILE_EXT_RE.test(p);
+    if (isLanguageExcludedPath(p)) return false;
+    return FILE_EXT_RE.test(p) || isLanguageManifest(p);
   });
 }
 
 async function _scanAtRef(root, ref) {
   const files = _listFilesAtRef(root, ref);
   const fileContents = {};
+  const depFileContents = {};
   for (const f of files) {
     const c = _readFileAtRef(root, ref, f);
-    if (c != null) fileContents[f] = c;
+    if (c == null) continue;
+    // Haskell/Nix manifests and lock files are dependency inputs, not code (the same split a working-tree scan makes).
+    if (isLanguageManifest(f)) depFileContents[f] = c; else fileContents[f] = c;
   }
   // `provenance:false` — a base-ref snapshot, not the current working state.
   // Beyond the wasted git walks, updateLifecycle marks every open stableId
   // absent from the finding set it is handed as `remediated`; running the PR
   // delta gate would silently rewrite the project's lifecycle store from the
   // base ref's findings.
-  return runFullScan({ fileContents, scanRoot: root, provenance: false }, () => {});
+  return runFullScan({ fileContents, depFileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {

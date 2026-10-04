@@ -1,0 +1,29 @@
+{
+ "paths": {
+  "app": "/nix/store/7bgkpvz37bgkpvz37bgkpvz37bgkpvz3-myapp-1.2.3",
+  "app_dev": "/nix/store/fkqx27cinv05aglry38djpw16bhmsz49-myapp-1.2.3-dev",
+  "libfoo": "/nix/store/mv17dkrz5bipx39gmv17dkrz5bipx39g-libfoo-2.0",
+  "glibc": "/nix/store/w3aiqz6dlv29hpy5cks18gnx4bjr07fm-glibc-2.39-52",
+  "zlib": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-zlib-1.3.1",
+  "curl_a": "/nix/store/akw5fp09jv4dnz8is3cmy7hr2blx6gq1-curl-8.7.1",
+  "curl_b": "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-curl-8.7.1",
+  "gcc": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+  "cmake": "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-cmake-3.29.2",
+  "pytest": "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-pytest-8.1.1",
+  "src": "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-myapp-1.2.3.tar.gz",
+  "patch": "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-CVE-2024-0001.patch",
+  "bash": "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-bash-5.2p26"
+ },
+ "drvs": {
+  "app": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-myapp-1.2.3.drv",
+  "libfoo": "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-libfoo-2.0.drv",
+  "glibc": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv",
+  "zlib": "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-zlib-1.3.1.drv",
+  "curl_a": "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-curl-8.7.1.drv",
+  "curl_b": "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-curl-8.7.1.drv",
+  "gcc": "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv",
+  "cmake": "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-cmake-3.29.2.drv",
+  "pytest": "/nix/store/2k4m6p8ravcxfzh1j3l5n7q9sbwdyg0i-pytest-8.1.1.drv",
+  "bash": "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv"
+ }
+}

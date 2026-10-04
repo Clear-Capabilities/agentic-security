@@ -113,6 +113,21 @@ there field by field, not repeated here:
 
 ---
 
+## Haskell and Nix additions
+
+These are **optional** and additive; every legacy required field is unchanged.
+
+- On a finding: `language` (`haskell` | `nix`), `capability` (`sast`, `taint`, `sca`, `secrets`, `privacy`, `config`, ...),
+  `evidenceKind`, `scope` (an object naming the `target`, `configuration` and `component` the claim applies to), `uncertainty[]`, and `originalLocation` when the reported line is
+  in a preprocessed or generated source. A dependency finding adds `declaringFile` / `declaringLine` (the manifest and line that
+  declares it, when known) and `fixedIn` as an array when the advisory names fixed versions.
+- On `scanHealth.languageCoverage`: `totals` (`discovered`, `analyzed`, `excluded`, `unresolved`, `failed`, `timedOut`,
+  `missingGrammar`), `byKind`, `limitations[]` (each with a `kind` such as `opaque-boundary`, `unmodeled-imports`,
+  `supply-gap`, `license-data-unavailable`), `capabilities` (per language, required capabilities and their state) and
+  `optionalModes` (`nix-eval`, `cabal-plan`, `hackage-live`, each with `selected`, `status`, `ran`, `reason`). Conditions that
+  make a scan `partial` are in `scanHealth.conditions`.
+- Support statuses in `docs/language-support.json`: `supported`, `partial`, `failed`, `not-measured`, `blocked`.
+
 ## Go deeper
 
 - [Finding evidence](../walkthroughs/finding-evidence.md) — every field on

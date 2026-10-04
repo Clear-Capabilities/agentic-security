@@ -243,6 +243,22 @@ full three-vocabulary picture.
 
 ---
 
+## Haskell and Nix: missing tool, stale data, conditional options
+
+| You see | Why | What to do |
+|---|---|---|
+| `no Hackage advisory snapshot is loaded` | no snapshot configured | set `AGENTIC_SECURITY_HACKAGE_ADVISORIES` (and optionally `..._SHA256`), or keep `hackage-advisories.json` in `.agentic-security/` |
+| the same for the Nix closure | no Nix snapshot | set `AGENTIC_SECURITY_NIX_ADVISORIES` |
+| a cabal plan is `stale` / a stale freshness reason | the compiler, flags, local packages or declared bounds changed since the plan was written | run `cabal build --dry-run all` to refresh `dist-newstyle/cache/plan.json` |
+| `malformed-export` | `nix-export.json` is not valid JSON, or has no usable provenance | regenerate it with the commands in [Nix and NixOS](../guides/nix-nixos.md#dependencies-flake-inputs-the-closure-and-advisories) |
+| `the effective NixOS configuration for X is partial` | conditional options, dynamic attributes, a cycle, or an unresolved import | open the listed items; a value that depends on a runtime argument cannot be decided statically |
+| `unresolved` files / `opaque-boundary:th-splice` | a splice, CPP branch or foreign call | expected for such code; keep the boundary in mind when reading findings |
+| `optional mode "nix-eval" was selected but did not run` | no `nix` on `PATH`, no target, no sandbox, or the isolation probe failed | install Nix and set `AGENTIC_SECURITY_NIX_TARGET`; on a host with no sandbox it will not run |
+| `N file(s) exceed the size cap` | a source or manifest is over the cap | split or exclude it; it was **not** analysed |
+| `required analyzer ... is disabled` | `AGENTIC_SECURITY_LANG_DISABLE` is set | unset it |
+| `missing-grammar` / `corrupt-grammar` | the shipped grammar table is missing or does not match its hash | reinstall the package; never edit the table |
+| a model call `timeout` | the endpoint is slow or down | raise `AGENTIC_SECURITY_LLM_TIMEOUT_MS`, or leave the deterministic result |
+
 ## Go deeper
 
 - [Scan health](../walkthroughs/scan-health.md) — the full `scanHealth`

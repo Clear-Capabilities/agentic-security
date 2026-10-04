@@ -9,6 +9,7 @@ import { runFullScan, shouldScan, isKubernetesManifest, isCloudFormationTemplate
 import { appendScanSnapshot } from './posture/security-trend.js';
 import { recover as recoverFixHistory } from './posture/fix-history.js';
 import { stampScan } from './posture/ruleset-version.js';
+import { isLanguageManifest, isLanguageExcludedPath, isLanguageSource, readExplicitExports, WALK_IGNORE_GLOBS, impactedFiles, buildImportGraph, importClosure } from './language/discovery.js';
 
 const DEP_FILE_NAMES = new Set([
   'package.json','package-lock.json','yarn.lock','pnpm-lock.yaml',
@@ -40,6 +41,9 @@ export function isDepFile(rel) {
   if (DEP_FILE_NAMES.has(base)) return true;
   if (REQUIREMENTS_FILE.test(base)) return true;
   if (REQUIREMENTS_DIR_FILE.test(rel.split(path.sep).join('/'))) return true;
+  // Haskell/Nix project manifests (cabal, stack, flake, lockfiles): a change to
+  // any of them moves the global checkpoint key via depFileContents.
+  if (isLanguageManifest(rel) && !isLanguageExcludedPath(rel)) return true;
   return false;
 }
 
@@ -68,18 +72,27 @@ const DEFAULT_IGNORE = [
   '**/dist/**','**/build/**','**/.next/**','**/venv/**','**/env/**','**/.venv/**',
   '**/target/**','**/bin/**','**/obj/**','**/.cache/**','**/coverage/**',
   '**/bower_components/**','**/tests/**','**/test/**','**/__tests__/**','**/spec/**','**/mocks/**',
+  // Haskell/Nix build output and store closures; explicit exports inside them
+  // are read by exact path below, never by walking.
+  ...WALK_IGNORE_GLOBS,
 ];
 
 export async function readTree(root, { ignore = [] } = {}) {
   const entries = await listFiles(root, { ignore: [...DEFAULT_IGNORE, ...ignore] });
   const fileContents = {};
   const depFileContents = {};
+  const oversize = [];
   for (const rel of entries) {
     const abs = path.join(root, rel);
     let stat;
     try { stat = await fs.stat(abs); } catch { continue; }
     const dep = isDepFile(rel);
-    if (stat.size > (dep ? MAX_DEP_BYTES : MAX_CODE_BYTES)) continue;
+    if (stat.size > (dep ? MAX_DEP_BYTES : MAX_CODE_BYTES)) {
+      // A Haskell/Nix source or manifest over the read cap is not analysed. That is a coverage gap a reader must be told about,
+      // not a quiet omission: it is listed (path, size, cap) and reaches scan health as a condition.
+      if (isLanguageSource(rel) || isLanguageManifest(rel)) oversize.push({ file: rel, bytes: stat.size, cap: dep ? MAX_DEP_BYTES : MAX_CODE_BYTES });
+      continue;
+    }
     let content;
     try { content = await fs.readFile(abs, 'utf8'); } catch { continue; }
     const base = path.basename(rel);
@@ -107,7 +120,14 @@ export async function readTree(root, { ignore = [] } = {}) {
     // project index parses key=value lines for cross-file lookup.
     else if (/\.properties$/i.test(rel)) fileContents[rel] = content;
   }
-  return { fileContents, depFileContents };
+  // Explicit Cabal plan / Stack / Nix exports live inside directories the walk
+  // prunes. Read them by exact path next to each project manifest.
+  try {
+    const manifests = Object.keys(depFileContents).concat(Object.keys(fileContents)).filter(isLanguageManifest);
+    const { contents } = readExplicitExports(root, manifests);
+    for (const [rel, text] of Object.entries(contents)) depFileContents[rel] = text;
+  } catch { /* exports are best-effort evidence */ }
+  return { fileContents, depFileContents, oversize };
 }
 
 // Feat-10: incremental scan via `--changed-since <git-ref>`. Returns the set of
@@ -146,6 +166,14 @@ export function changedSince(root, gitRef) {
   }
 }
 
+const POLICY_ONLY_HEAVY = ['**/node_modules/**', '**/.git/**', '**/venv/**', '**/.venv/**', '**/__pycache__/**', ...WALK_IGNORE_GLOBS];
+/** Haskell/Nix sources the default ignore list kept out of the scan (relative paths, sorted, capped). */
+export async function languageFilesIgnoredByPolicy(root, fileContents, depFileContents) {
+  const all = await listFiles(root, { ignore: POLICY_ONLY_HEAVY });
+  const seen = new Set([...Object.keys(fileContents), ...Object.keys(depFileContents)]);
+  return all.filter((rel) => (isLanguageSource(rel) || isLanguageManifest(rel)) && !isLanguageExcludedPath(rel) && !seen.has(rel)).sort().slice(0, 500);
+}
+
 export async function runScan(rootDir, opts = {}) {
   const root = path.resolve(rootDir);
   const startedAt = new Date().toISOString();
@@ -173,6 +201,7 @@ export async function runScan(rootDir, opts = {}) {
   // path added later must opt OUT explicitly rather than silently inherit a
   // false claim of coverage.
   let completeScan = true;
+  let sizeSkipped = [];
   if (opts.fileContents) {
     // Caller-supplied file list (MCP `scan_diff`, the LSP's on-save scan): by
     // construction a subset of the tree, not a scan of it.
@@ -180,16 +209,38 @@ export async function runScan(rootDir, opts = {}) {
     depFileContents = opts.depFileContents || {};
     completeScan = false;
   } else {
-    ({ fileContents, depFileContents } = await readTree(root, opts));
+    ({ fileContents, depFileContents, oversize: sizeSkipped } = await readTree(root, opts));
+  }
+
+  // Haskell/Nix sources under a default-ignored directory (tests, specs, mocks, bin, build, dist, vendor) are not
+  // scanned, exactly as for every other language. That policy is kept, but it is never silent: the files it kept
+  // out are listed and reach scan health as a stated limitation.
+  let policyExcluded = [];
+  if (!opts.fileContents && Object.keys(fileContents).some(isLanguageSource)) {
+    try { policyExcluded = await languageFilesIgnoredByPolicy(root, fileContents, depFileContents); } catch { policyExcluded = []; }
   }
 
   // Feat-10: incremental mode — restrict the scan to files changed since a git ref
   if (opts.changedSince) {
     const changed = changedSince(root, opts.changedSince);
     if (changed) {
+      const keep = new Set(changed);
+      // Haskell and Nix results depend on more than the file that changed: a module that imports a changed module
+      // may now be (or stop being) vulnerable, an effective NixOS value is decided by the modules it imports, and a
+      // lock file, Cabal flags or an explicit export can change every file's verdict. So the scan set is the changed
+      // files, everything that transitively imports one (all language sources for a manifest change), and the import
+      // closure of those as context. A deleted language file or manifest widens to every language source, because
+      // its importers can no longer be found from the tree on disk.
+      const langSources = Object.keys(fileContents).filter(isLanguageSource);
+      if (langSources.length) {
+        const deletedLang = [...changed].some((c) => (isLanguageSource(c) || isLanguageManifest(c)) && !(c in fileContents) && !(c in depFileContents));
+        const impacted = deletedLang ? langSources : impactedFiles(fileContents, depFileContents, [...changed]);
+        const { graph } = buildImportGraph(fileContents);
+        for (const f of impacted) { keep.add(f); for (const d of importClosure(graph, f).files) keep.add(d); }
+      }
       const filtered = {};
       for (const f of Object.keys(fileContents)) {
-        if (changed.has(f)) filtered[f] = fileContents[f];
+        if (keep.has(f)) filtered[f] = fileContents[f];
       }
       fileContents = filtered;
       // Only when the filter actually applied. A `changedSince` that resolved
@@ -203,7 +254,7 @@ export async function runScan(rootDir, opts = {}) {
 
   // R8: `resume` is opt-in. Left undefined here, runFullScan falls back to the
   // AGENTIC_SECURITY_RESUME=1 env var, which is off by default.
-  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan }, opts.onProgress || (()=>{}));
+  const scan = await runFullScan({ fileContents, depFileContents, scanRoot: root, resume: opts.resume, deep: opts.deep, deepInCi: opts.deepInCi, completeScan, policyExcluded, sizeSkipped }, opts.onProgress || (()=>{}));
   // Premortem 2R4.2: stamp ruleset version + source on the scan result, and
   // notify if the operator pinned a different version than what's installed.
   try { stampScan(root, scan); } catch {}

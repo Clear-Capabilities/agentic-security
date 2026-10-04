@@ -1201,3 +1201,11 @@ way `recipient-profiles.json`/`privacy-policy.json` already are).
   allowed to live. No other module in this package — and per PRD Appendix
   D.1, no UI code in a later milestone — may special-case a fixture name.
   The generic hook is `graph.scope.source === 'fixture'`.
+
+## Haskell and Nix views
+
+`haskell-view.js` rewrites a clone of each Haskell function so a monadic source read becomes a seedable member read on the
+synthetic root `$hs`, seeds record-parameter sources, and treats `length`/`null` as non-content. `nix-view.js` builds
+field-to-store flows from `language/nix-privacy.js` (a personal-data `config.<module>.<field>` interpolated into another option;
+hashed, measured or compared references are protected and make no flow). Coverage reports `unknown` for both languages: no
+taint-recall tier is borrowed. See `scanner/src/language/CLAUDE.md`.

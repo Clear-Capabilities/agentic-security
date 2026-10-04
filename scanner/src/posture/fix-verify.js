@@ -35,8 +35,17 @@ export async function verifyPatch({
   depFileContents = {},
 } = {}) {
   if (!files || typeof files !== 'object') return { ok: false, reason: 'no-files-provided' };
-  const fileContents = { ...files };
+  let fileContents = { ...files };
   let scan;
+  // Haskell/Nix findings come from the deep (IR) layer and depend on imported modules: verifying a patch without
+  // either would never see the original finding at all, so a patch that fixes nothing would read "verified". The
+  // patched files are scanned deep, together with their import closure and manifests read from disk.
+  let deep;
+  if (Object.keys(fileContents).some((f) => /\.(?:l?hs|hs-boot|hsc|nix)$/i.test(f))) {
+    const { withLanguageContext } = await import('../language/context.js');
+    const lc = withLanguageContext(scanRoot, fileContents, depFileContents);
+    fileContents = lc.fileContents; depFileContents = lc.depFileContents; deep = true;
+  }
   try {
     // `provenance:false` is REQUIRED here, not an optimisation. This scan is
     // deliberately scoped to just the patched file(s), so its finding set is a
@@ -46,7 +55,7 @@ export async function verifyPatch({
     // would mass-mark the rest of the project as remediated, then
     // `reintroduced` on the next real scan. The patched content is also not
     // committed, so there is no history to resolve provenance against anyway.
-    scan = await runFullScan({ fileContents, depFileContents, scanRoot, provenance: false }, () => {});
+    scan = await runFullScan({ fileContents, depFileContents, scanRoot, provenance: false, ...(deep ? { deep: true } : {}) }, () => {});
   } catch (e) {
     return { ok: false, reason: 'rescan-failed', error: e.message };
   }
@@ -56,8 +65,11 @@ export async function verifyPatch({
   if (stillHasOriginal) {
     return { ok: false, reason: 'original-finding-still-present', stableId: originalFindingStableId };
   }
+  // With language context in play, files that were only read for context carry findings that predate the patch;
+  // only findings in the PATCHED files can be introduced by it.
+  const patchedSet = new Set(Object.keys(files));
   const introducedHighOrAbove = findings.filter(f =>
-    (SEVERITY_RANK[f.severity] ?? 9) <= SEVERITY_RANK.medium);
+    (SEVERITY_RANK[f.severity] ?? 9) <= SEVERITY_RANK.medium && (!deep || patchedSet.has(f.file)));
   // Don't count findings on lines outside the patched files — but our
   // fileContents map IS the patched files, so every finding is in-scope.
   return {

@@ -110,6 +110,20 @@ function explainParts(f, { verbose = false } = {}) {
 // <confidence>". Nothing here throws on a partially-populated object; every
 // field access is optional-chained or defaulted, because a provenance record
 // that survived a failure path is exactly the input this has to render.
+// Additive Haskell/Nix finding metadata (src/language/contracts.js). Only keys the finding actually carries.
+const _LANGUAGE_KEYS = ['language', 'capability', 'analysisKind', 'evidenceKind', 'originalLocation', 'generatedLocation', 'scope', 'uncertainty', 'resolutionStatus', 'modelVersion', 'trustBoundary', 'route', 'modelNote', 'controls', 'guardNote', 'rule', 'exposure', 'destination', 'source', 'origins', 'sink', 'protection', 'attrPath', 'bridge', 'applicationFlow', 'secretValue', 'environmentVariable', 'provider', 'rotation', 'llmRole', 'llmContext', 'owaspLlm', 'end2endProof', 'chainNote', 'declaredCapability', 'exercised', 'service', 'subject', 'option', 'optionEvidence', 'locationKind', 'entry', 'ignorePragmaIgnored'];
+// Keys that other detectors already use with a different meaning; passed through only for Haskell/Nix findings.
+const _LANGUAGE_ONLY_KEYS = new Set(['rule', 'source', 'sink', 'destination', 'origins', 'protection', 'exposure', 'service']);
+function languageFields(f) {
+  const out = {};
+  const lang = f.language === 'haskell' || f.language === 'nix';
+  for (const k of _LANGUAGE_KEYS) {
+    if (_LANGUAGE_ONLY_KEYS.has(k) && !lang) continue;
+    if (f[k] !== undefined && f[k] !== null) out[k] = f[k];
+  }
+  return out;
+}
+
 export function explainProvenance(f) {
   const fp = f && f.findingProvenance;
   if (!fp) return null;
@@ -274,6 +288,8 @@ export function normalizeFindings(scan){
       unvalidated: f.unvalidated === true,
       cross_language: f.cross_language === true,
       family: f.family || null,
+      // Haskell/Nix language contract (additive; absent for every other finding, so existing output is unchanged).
+      ...languageFields(f),
       // Premortem #8: surface the parser field so downstream consumers
       // (UI, SARIF, calibration) see the value the engine backfilled.
       parser: f.parser || null,
@@ -527,7 +543,8 @@ export function normalizeFindings(scan){
       cveAliases: sc.cveAliases || [],
       osvId: sc.osvId || null,
       advisory: sc.advisory || sc.description || '',
-      fixedIn: sc.range || null,
+      fixedIn: sc.range || (Array.isArray(sc.fixedIn) && sc.fixedIn.length ? sc.fixedIn : null),
+      ...(Number.isInteger(sc.line) && sc.line > 0 ? { declaringLine: sc.line, declaringFile: sc.file || null } : {}),
       // Feat-9: real-world risk signals
       epssScore: sc.epssScore ?? null,
       epssPercentile: sc.epssPercentile ?? null,
@@ -1034,15 +1051,24 @@ export function toSARIF(scan, meta={}){
         const chain = Array.isArray(f.chain) ? f.chain : [];
         const codeFlows = chain.length >= 2 ? [{
           threadFlows: [{
-            locations: chain.map((hop, idx) => ({
-              location: {
-                physicalLocation: {
-                  artifactLocation: { uri: hop.file || f.file },
-                  region: { startLine: Math.max(1, hop.line || 1) },
+            locations: chain.map((hop, idx) => {
+              // A hop inside a GENERATED script (a shell script a Nix string builds) has coordinates in the script
+              // text, not in the file. It is reported at the nearest ORIGINAL span (the interpolation that feeds it)
+              // and carries its generated position and origin in properties, so no reader mistakes script line 1 for
+              // line 1 of the Nix file.
+              const generated = hop.generated === true;
+              const orig = generated && f.originalLocation && Number.isInteger(f.originalLocation.startLine) ? f.originalLocation : null;
+              const region = orig
+                ? { startLine: Math.max(1, orig.startLine), ...(Number.isInteger(orig.startColumn) ? { startColumn: orig.startColumn + 1 } : {}), ...(Number.isInteger(orig.endLine) ? { endLine: orig.endLine } : {}), ...(Number.isInteger(orig.endColumn) ? { endColumn: orig.endColumn + 1 } : {}) }
+                : { startLine: Math.max(1, hop.line || 1), ...(Number.isInteger(hop.column) ? { startColumn: hop.column + 1 } : {}), ...(Number.isInteger(hop.endLine) ? { endLine: hop.endLine } : {}), ...(Number.isInteger(hop.endColumn) ? { endColumn: hop.endColumn + 1 } : {}) };
+              return {
+                location: {
+                  physicalLocation: { artifactLocation: { uri: hop.file || f.file }, region },
+                  message: { text: `${hop.label || (idx === 0 ? 'source' : idx === chain.length - 1 ? 'sink' : 'propagation')}${generated ? ' [generated script]' : ''}` },
                 },
-                message: { text: hop.label || (idx === 0 ? 'source' : idx === chain.length - 1 ? 'sink' : 'propagation') },
-              },
-            })),
+                ...(generated ? { kinds: ['generated'], properties: { generated: true, generatedLocation: { line: hop.line, ...(Number.isInteger(hop.column) ? { startColumn: hop.column } : {}), ...(Number.isInteger(hop.endLine) ? { endLine: hop.endLine } : {}), ...(Number.isInteger(hop.endColumn) ? { endColumn: hop.endColumn } : {}) }, ...(f.attrPath ? { generatedBy: f.attrPath } : {}) } } : {}),
+              };
+            }),
           }],
         }] : undefined;
         const fixes = f.remediation ? [{

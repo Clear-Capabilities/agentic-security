@@ -122,6 +122,13 @@ same source constant, so they cannot drift apart.
 
 ---
 
+## Haskell and Nix evidence
+
+Haskell and Nix findings enter an OSCAL document exactly as other findings do: through the family aliases of the control
+mapping (`scanner/src/language/compliance-map.js`), under the same rule that a control the engine could not decide carries **no
+finding**. A project written in these languages makes no control assessed or satisfied by existing, and a NixOS configuration that
+was only scanned as source is never described as an assessed host.
+
 ## What is checked, and what is not
 
 `scanner/test/oscal-conformance.test.js` performs **structural** validation:

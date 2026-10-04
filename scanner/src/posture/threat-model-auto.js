@@ -23,7 +23,7 @@
 // .agentic-security/threat-model.md (human-readable).
 
 import * as fs from 'node:fs';
-import { stateDir, stateWritesEnabled } from './state-dir.js';
+import { stateDir, stateWritesEnabled, safeWriteState } from './state-dir.js';
 import * as path from 'node:path';
 
 // STRIDE category descriptors
@@ -215,9 +215,9 @@ export function persistThreatModel(scanRoot, model) {
   // NON_MUTATING_SCAN_PRD S1 — a scan must not modify the tree it scans.
   if (!stateWritesEnabled()) return;
   const dir = stateDir(scanRoot);
-  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
-  try { fs.writeFileSync(path.join(dir, 'threat-model.json'), JSON.stringify(model, null, 2)); } catch {}
-  try { fs.writeFileSync(path.join(dir, 'threat-model.md'), renderMarkdown(model)); } catch {}
+  // through the state seam: a symlinked state directory or file is refused, never written through
+  safeWriteState(path.join(dir, 'threat-model.json'), JSON.stringify(model, null, 2));
+  safeWriteState(path.join(dir, 'threat-model.md'), renderMarkdown(model));
 }
 
 function renderMarkdown(model) {

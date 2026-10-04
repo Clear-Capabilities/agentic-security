@@ -1,0 +1,11 @@
+{ config, lib, pkgs, ... }:
+let
+  appName = "mailer0";
+  appPort = 8084;
+in
+{
+  systemd.services.${appName}.description = "mailer service 0";
+  networking.hostName = appName;
+  nix.settings.allow-unsafe-native-code-during-evaluation = true;
+  boot.kernelModules = lib.mkIf config.virtualisation.docker.enable [ "br_netfilter" ];
+}

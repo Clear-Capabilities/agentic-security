@@ -43,6 +43,7 @@
 // HOW MUCH was removed per category (FR-604's audit metadata wants exactly
 // this: counts, not content) without retaining what was actually removed.
 
+import { redactLanguageSecrets } from '../language/secrets.js';
 import { loadPolicyConfig } from './policy.js';
 import { redactSecrets } from '../llm-validator/redact.js';
 import { loadPrivacyTaxonomy } from '../dataflow/privacy-taxonomy.js';
@@ -159,6 +160,13 @@ export function redactPayload({ text, filePath = null, scanRoot = null, taxonomy
   const secretResult = redactSecrets(out, { filePath });
   out = secretResult.text;
   categories.secrets = secretResult.redactions;
+  // Haskell and Nix: a credential split across string literals (`"sk_live_" ++ "..."`) is invisible to a
+  // single-literal pattern, so those files get a token-based pass as well.
+  if (filePath && /\.(?:l?hs|hs-boot|hsc|nix)$/i.test(filePath)) {
+    const lang = redactLanguageSecrets(filePath, out);
+    out = lang.text;
+    categories.secrets += lang.redactions;
+  }
 
   const piiEnabled = cfg.redactPii !== false; // default ON — this category has a safe built-in default, unlike customerDataPatterns
   if (piiEnabled) {

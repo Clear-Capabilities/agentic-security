@@ -3,6 +3,7 @@
 // Build per-file IR for every JS/TS/Python/Java file in a project, then
 // build the cross-file call graph on top.
 
+import { buildHaskellIR } from '../language/haskell-ir.js';
 import { parseJsFile } from './parser-js.js';
 import { parseCSharpFile } from './parser-cs.js';
 import { parseKotlinFile } from './parser-kt.js';
@@ -137,6 +138,7 @@ function _parsePythonFiles(pyEntries) {
 export function buildProjectIR(fileContents) {
   const perFile = {};
   const pyBatch = [];
+  const hsFiles = {};
   for (const [file, code] of Object.entries(fileContents || {})) {
     // Each branch is wrapped so one pathological file (e.g. a deeply nested
     // expression tree that blows the regex-parser's recursive descent, seen
@@ -148,6 +150,8 @@ export function buildProjectIR(fileContents) {
       if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
         const ir = parseJsFile(file, code);
         if (ir) perFile[file] = ir;
+      } else if (/\.hs$/i.test(file)) {
+        hsFiles[file] = code;   // lowered together: Haskell resolution is whole-program (imports, re-exports)
       } else if (/\.py$/i.test(file)) {
         // Defer Python files to a single batched subprocess call.
         pyBatch.push({ file, content: code });
@@ -185,6 +189,7 @@ export function buildProjectIR(fileContents) {
   // the CFGs (SSA numbering included), since PHP's `include` genuinely
   // executes in the caller's variable namespace. See php-include-merge.js's
   // module header for the full rationale and scope.
+  const hsCg = mergeHaskellIR(perFile, hsFiles);
   try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
@@ -199,15 +204,44 @@ export function buildProjectIR(fileContents) {
   // passed — without it, a call to an aliased re-export can never resolve
   // (no function is literally named the alias anywhere), a dropped edge,
   // not just an imprecise one.
-  const cg = buildCallGraph(perFile, fileContents);
+  const cg = withHaskellCallGraph(buildCallGraph(perFile, fileContents), hsCg);
   const cha = buildClassHierarchy(perFile);
   return { perFile, callGraph: cg, cha };
+}
+
+// Haskell is lowered as one project (module resolution crosses files), then its
+// per-file IR joins the same perFile map every consumer already reads. Its call graph
+// keeps its richer edge statuses and is merged into the shared one below.
+function mergeHaskellIR(perFile, hsFiles) {
+  if (!Object.keys(hsFiles).length) return null;
+  try {
+    const hs = buildHaskellIR(hsFiles);
+    for (const [file, ir] of Object.entries(hs.perFile)) perFile[file] = ir;
+    for (const d of hs.diagnostics) _noteParseFailure(d.file, new Error(`haskell ${d.kind}: ${d.detail}`));
+    return hs.callGraph;
+  } catch (err) {
+    for (const f of Object.keys(hsFiles)) _noteParseFailure(f, err);
+    return null;
+  }
+}
+
+function withHaskellCallGraph(cg, hsCg) {
+  if (!hsCg) return cg;
+  const functions = new Map([...cg.functions, ...hsCg.functions]);
+  const edges = [...(cg.edges || []), ...hsCg.edges];
+  const callersOf = new Map(cg.callersOf || []);
+  for (const [k, v] of hsCg.callersOf || []) callersOf.set(k, [...(callersOf.get(k) || []), ...v]);
+  const isHs = (f) => typeof f === 'string' && /\.hs$/i.test(f);
+  const resolve = (name, callerFile) => (isHs(callerFile) ? hsCg.resolve(name) : cg.resolve(name, callerFile));
+  const resolveKnownCallee = (name, callerFile) => (isHs(callerFile) ? hsCg.resolveKnownCallee(name) : cg.resolveKnownCallee(name, callerFile));
+  return { ...cg, functions, edges, callersOf, resolve, resolveKnownCallee, haskell: hsCg };
 }
 
 // Async variant — includes Java IR via java-parser.
 export async function buildProjectIRAsync(fileContents) {
   const perFile = {};
   const pyBatch = [];
+  const hsFiles = {};
   for (const [file, code] of Object.entries(fileContents || {})) {
     // See buildProjectIR's comment: per-file try/catch so one pathological
     // file can't abort IR construction for the whole project.
@@ -215,6 +249,8 @@ export async function buildProjectIRAsync(fileContents) {
       if (/\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(file)) {
         const ir = parseJsFile(file, code);
         if (ir) perFile[file] = ir;
+      } else if (/\.hs$/i.test(file)) {
+        hsFiles[file] = code;
       } else if (/\.py$/i.test(file)) {
         pyBatch.push({ file, content: code });
       } else if (/\.cs$/i.test(file)) {
@@ -256,6 +292,7 @@ export async function buildProjectIRAsync(fileContents) {
   // the CFGs (SSA numbering included), since PHP's `include` genuinely
   // executes in the caller's variable namespace. See php-include-merge.js's
   // module header for the full rationale and scope.
+  const hsCg = mergeHaskellIR(perFile, hsFiles);
   try { mergePhpIncludes(perFile); } catch {}
   if (isSSAEnabled()) {
     for (const ir of Object.values(perFile)) {
@@ -270,7 +307,7 @@ export async function buildProjectIRAsync(fileContents) {
   // passed — without it, a call to an aliased re-export can never resolve
   // (no function is literally named the alias anywhere), a dropped edge,
   // not just an imprecise one.
-  const cg = buildCallGraph(perFile, fileContents);
+  const cg = withHaskellCallGraph(buildCallGraph(perFile, fileContents), hsCg);
   const cha = buildClassHierarchy(perFile);
   return { perFile, callGraph: cg, cha };
 }

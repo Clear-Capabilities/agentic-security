@@ -1,0 +1,16 @@
+cabal-version: 3.0
+name: app15
+version: 0.1.0.15
+
+library
+  build-depends:
+    base >=4.14 && <5
+    , persistent >=2.14.6.0 && <2.15
+    , yesod-core >=1.6.25.1
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  build-depends:
+    base
+    , aeson ^>=2.1.2.1

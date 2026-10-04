@@ -1,0 +1,55 @@
+{
+  "nodes": {
+    "root": {
+      "inputs": {
+        "sops-nix": "sops-nix",
+        "impermanence": "impermanence",
+        "home-manager": "home-manager"
+      }
+    },
+    "sops-nix": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "sops-nix",
+        "rev": "b7ce09d66a9df4919198b99196f0b2cf1d23b813",
+        "narHash": "sha256-MI4RSQ9OqXe9d0QmU7sfkG6JNnVmtVj4jNkllYEDUAQ="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "sops-nix"
+      }
+    },
+    "impermanence": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "impermanence",
+        "rev": "40c59657f108101fbf808db5c0a3219ab85c1484",
+        "narHash": "sha256-UKJx2GcBT/fn9qAKXddaReZOvb/DucaTvPuuCokSGpw="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "impermanence"
+      }
+    },
+    "home-manager": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "home-manager",
+        "rev": "79c93345edd76d3c08331a89f3fc0655302c99c2",
+        "narHash": "sha256-nzYKBLPCIa7nHmjWtuZ4Lb69+53fXEPThPsGLXg/Eqk="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "home-manager"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

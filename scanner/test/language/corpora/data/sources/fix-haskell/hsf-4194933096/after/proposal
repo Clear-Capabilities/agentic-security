@@ -1,0 +1,10 @@
+module UsersSvc where
+
+
+import qualified Vendor.Users.Guard as G
+
+handleParse :: String -> IO ()
+handleParse raw = print (read raw :: Int)
+
+endpointPath :: String
+endpointPath = "/users/v7"

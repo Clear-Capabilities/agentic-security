@@ -197,6 +197,12 @@ export function buildEvidenceBundle(finding, { engineVersion, rulesetVersion, bu
       cwe: finding.cwe ?? null,
       family: finding.family ?? null,
       parser: finding.parser ?? null,
+      // Haskell/Nix findings carry where the code is and what kind of evidence decided them. Added only when present, so
+      // the canonical bytes (and signatures) of every existing bundle are unchanged.
+      ...(finding.language ? { language: finding.language } : {}),
+      ...(finding.evidenceKind ? { evidenceKind: finding.evidenceKind } : {}),
+      ...(finding.originalLocation ? { originalLocation: finding.originalLocation } : {}),
+      ...(finding.generatedLocation ? { generatedLocation: finding.generatedLocation } : {}),
     },
     evidence: {
       // The honest chain, in the vocabulary the engine already uses.
@@ -206,7 +212,7 @@ export function buildEvidenceBundle(finding, { engineVersion, rulesetVersion, bu
       exploitability: finding.exploitability ?? null,
       unreachable: finding.unreachable ?? null,
       // Present only for the layers that produce them; absent means absent.
-      taintPath: finding.pathSteps ?? finding.exampleFlows ?? null,
+      taintPath: finding.pathSteps ?? finding.exampleFlows ?? (Array.isArray(finding.chain) && finding.language ? finding.chain : null),
       discovery: finding.discovery ?? null,
     },
     engine: {

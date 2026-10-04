@@ -1,0 +1,7 @@
+cabal-version: 2.4
+name:          haskell-client
+version:       0.1.0.0
+
+executable haskell-client
+  main-is:        Client.hs
+  build-depends:  base, http-conduit, aeson, amqp, postgresql-simple

@@ -1,0 +1,213 @@
+{
+  "schema": "agentic-security/language-support-suites@1",
+  "ranAt": "2026-10-04",
+  "node": "v24.20.0",
+  "tools": {
+    "ghc": true,
+    "cabal": true,
+    "stack": false,
+    "nix": false,
+    "nixos": false,
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "capabilitySuites": {
+    "haskell": {
+      "auth": [
+        "test/haskell/haskell-web-auth.test.js"
+      ],
+      "sca": [
+        "test/haskell/haskell-sca.test.js",
+        "test/haskell/haskell-manifests.test.js",
+        "test/haskell/haskell-resolved-graph.test.js"
+      ],
+      "bom": [
+        "test/language/language-bom.test.js",
+        "test/language/language-aibom.test.js"
+      ],
+      "fix": [
+        "test/haskell/haskell-remediation.test.js",
+        "test/language/language-proof-remediation.test.js"
+      ],
+      "integration": [
+        "test/language/language-integrations.test.js",
+        "test/language/language-report-formats.test.js"
+      ]
+    },
+    "nix": {
+      "sca": [
+        "test/nix/nix-input-inventory.test.js",
+        "test/nix/nix-resolved-closure.test.js",
+        "test/nix/nix-sca-patches.test.js"
+      ],
+      "bom": [
+        "test/language/language-bom.test.js",
+        "test/language/language-aibom.test.js"
+      ],
+      "fix": [
+        "test/nix/nix-remediation.test.js",
+        "test/language/language-proof-remediation.test.js"
+      ],
+      "integration": [
+        "test/language/language-integrations.test.js",
+        "test/language/language-report-formats.test.js"
+      ],
+      "nix-eval": [
+        "test/nix/nix-eval-isolation.test.js"
+      ],
+      "nixos-host": []
+    }
+  },
+  "results": {
+    "haskell-manifests.test.js": {
+      "name": "haskell-manifests.test.js",
+      "file": "test/haskell/haskell-manifests.test.js",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "haskell-remediation.test.js": {
+      "name": "haskell-remediation.test.js",
+      "file": "test/haskell/haskell-remediation.test.js",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "haskell-resolved-graph.test.js": {
+      "name": "haskell-resolved-graph.test.js",
+      "file": "test/haskell/haskell-resolved-graph.test.js",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "haskell-sca.test.js": {
+      "name": "haskell-sca.test.js",
+      "file": "test/haskell/haskell-sca.test.js",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "haskell-web-auth.test.js": {
+      "name": "haskell-web-auth.test.js",
+      "file": "test/haskell/haskell-web-auth.test.js",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "language-aibom.test.js": {
+      "name": "language-aibom.test.js",
+      "file": "test/language/language-aibom.test.js",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "language-bom.test.js": {
+      "name": "language-bom.test.js",
+      "file": "test/language/language-bom.test.js",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "language-integrations.test.js": {
+      "name": "language-integrations.test.js",
+      "file": "test/language/language-integrations.test.js",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "language-proof-remediation.test.js": {
+      "name": "language-proof-remediation.test.js",
+      "file": "test/language/language-proof-remediation.test.js",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "language-report-formats.test.js": {
+      "name": "language-report-formats.test.js",
+      "file": "test/language/language-report-formats.test.js",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "nix-eval-isolation.test.js": {
+      "name": "nix-eval-isolation.test.js",
+      "file": "test/nix/nix-eval-isolation.test.js",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "nix-input-inventory.test.js": {
+      "name": "nix-input-inventory.test.js",
+      "file": "test/nix/nix-input-inventory.test.js",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "nix-remediation.test.js": {
+      "name": "nix-remediation.test.js",
+      "file": "test/nix/nix-remediation.test.js",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "nix-resolved-closure.test.js": {
+      "name": "nix-resolved-closure.test.js",
+      "file": "test/nix/nix-resolved-closure.test.js",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    },
+    "nix-sca-patches.test.js": {
+      "name": "nix-sca-patches.test.js",
+      "file": "test/nix/nix-sca-patches.test.js",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "failing": []
+    }
+  }
+}

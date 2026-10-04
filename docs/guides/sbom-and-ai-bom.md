@@ -91,6 +91,31 @@ unpinned dependency.
 
 ---
 
+## Haskell and Nix components
+
+**Haskell.** Components are `pkg:hackage/<name>@<version>` with their scope (library, executable, test, benchmark, setup,
+build-tool). A declared dependency carries the version a freeze file or an exact pin states, else only its range. With a fresh
+`dist-newstyle/cache/plan.json` or `.stack-work/dependencies.json` the SBOM carries the **resolved** graph: exact versions,
+transitive packages, flag variants as distinct components, and dependency edges labelled runtime, test or build. A stale plan
+is dropped and said so; the document's composition is `incomplete` whenever the closure is not complete.
+
+**Nix.** Flake inputs are components with their locked revision, fetch type and `narHash`, labelled `nix:class=flake-input`
+and **incomplete** (inputs are not the build closure). With an exported closure (`nix-export.json`, see
+[Nix and NixOS](nix-nixos.md#dependencies-flake-inputs-the-closure-and-advisories)) the SBOM adds store outputs and
+with runtime versus build-only scope and the system. A component gets an upstream `purl` only when its source URL is on a
+recognised host; otherwise it is a generic one and says so. Two different builds of one package stay two components, and
+the runtime composition is `complete` only when the import proved an exact runtime closure.
+
+**Honest labels.** The SBOM is `declared` or `resolved` and `complete` or `incomplete`; a version is never copied from an
+unverified source. No license data exists for these records, so license policy is not applied and the scan says so.
+
+**AI-BOM.** Haskell HTTP/model-client code and Nix services produce models, endpoints, prompt templates, frameworks and vector
+stores, each with its source evidence and a status (`declared`, `installed`, `invoked`): an AI component being present in a
+manifest or enabled in a configuration does not show that a model is called. Endpoint URLs are redacted to host and path
+(query keys and header tokens are removed), and prompt text is hashed, not stored. The format is this tool's own AI-BOM; a
+CycloneDX ML-BOM view is a separate, labelled projection. Example, captured from `examples/polyglot-privacy`: one model
+(`gpt-4o-mini`), one endpoint, and one declared local inference service (`services.open-webui`).
+
 ## Keeping it current
 
 New CVEs land against dependencies you already have. Check now, and wire up

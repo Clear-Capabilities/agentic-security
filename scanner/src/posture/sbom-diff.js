@@ -21,7 +21,7 @@
 // module produces the diff on the next scan.
 
 import * as fs from 'node:fs';
-import { statePath, stateWritesEnabled } from './state-dir.js';
+import { statePath, stateWritesEnabled, safeWriteState } from './state-dir.js';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -52,6 +52,9 @@ function _gitHead(scanRoot) {
 }
 
 function _snapshotKey(component) {
+  // Language components carry an identity that survives a version change but keeps two resolved builds apart
+  // (a flag variant, a second store hash); everything else keeps the ecosystem:name key it always had.
+  if (component.identityKey) return component.identityKey;
   return `${component.ecosystem || 'unknown'}:${component.name || ''}`;
 }
 
@@ -65,7 +68,6 @@ export function persistSbom(scanRoot, components) {
   // empty `sbom-history/` in the scanned tree — invisible to `git status`,
   // because git does not track empty directories, and therefore exactly the
   // kind of mutation that passes a clean-status check while still being one.
-  if (stateWritesEnabled()) { try { fs.mkdirSync(dir, { recursive: true }); } catch {} }
   const sha = _gitHead(scanRoot) || crypto.createHash('sha256').update(JSON.stringify(components)).digest('hex').slice(0, 12);
   const snap = {
     sha, ts: new Date().toISOString(),
@@ -73,14 +75,13 @@ export function persistSbom(scanRoot, components) {
     components: components.map(c => ({
       ecosystem: c.ecosystem, name: c.name, version: c.version,
       purl: c.purl, scope: c.scope, isUnpinned: !!c.isUnpinned,
-      sha256: c.sha256 || c.integrity || null,
+      ...(c.identityKey ? { identityKey: c.identityKey, bomRef: c.bomRef || null } : {}),
+      sha256: c.sha256 || c.integrity || ((c.hashes || []).find((h) => h.alg === 'SHA-256') || {}).content || null,
     })),
   };
   // NON_MUTATING_SCAN_PRD S1 — history is a feature, but not at the cost of
   // mutating a tree the caller only asked us to read.
-  if (stateWritesEnabled()) {
-    try { fs.writeFileSync(path.join(dir, `${sha}.json`), JSON.stringify(snap, null, 2)); } catch {}
-  }
+  if (stateWritesEnabled()) safeWriteState(path.join(dir, `${sha}.json`), JSON.stringify(snap, null, 2));   // refuses a symlinked state directory or file
   return snap;
 }
 

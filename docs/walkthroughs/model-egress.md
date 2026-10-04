@@ -184,6 +184,17 @@ itself."*
 
 ---
 
+## Haskell and Nix
+
+The same policy applies. Before anything is sent to a model, a Haskell or Nix excerpt goes through the redactor, which joins
+a credential split across literals (`"sk_live_" ++ "..."`, a Nix `"a" + "b"`) so the **whole** value is masked, not only the
+fragment that looks like a token. The extra context a model gets for a finding whose evidence is not on its reported line (the
+other files on the data-flow chain, or the files that decided a configuration value) is limited to those files, a few lines
+each, redacted per file path. Validation cache keys include a digest of the file's **import closure** and the manifests, so a
+verdict is invalidated when a module it depends on changes, not only the file itself. A model call has a deadline
+(`AGENTIC_SECURITY_LLM_TIMEOUT_MS`, default 60 s); a timeout is recorded as the error `timeout` and the deterministic
+finding is kept. With no endpoint configured, nothing leaves the machine and the validator is a no-op.
+
 ## Try It Yourself
 
 Flip the config's `mode` to `deny` (or skip the file entirely and set

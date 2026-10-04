@@ -95,6 +95,16 @@ export const ARTIFACT_REGISTRY = [
   // clears by default, same as last-scan.json itself.
   { name: 'lineage-graph.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'lineage-graph.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan' },
+  // X-016: Haskell/Nix analysis metadata (capability status, parser/resolver ledger, limitations, input digests) and the
+  // language BOM, written by src/language/state-artifacts.js beside last-scan.json. Paths and digests only, never source
+  // text. Scan-class retention for the metadata; the BOM is evidence.
+  { name: 'language-analysis.json', kind: 'file', classification: 'generated', retentionClass: 'scan', source: 'src/language/state-artifacts.js (persistLanguageArtifacts)' },
+  { name: 'language-analysis.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan', source: 'src/language/state-artifacts.js (persistLanguageArtifacts)' },
+  { name: 'language-bom.json', kind: 'file', classification: 'generated', retentionClass: 'evidence', source: 'src/language/state-artifacts.js (persistLanguageArtifacts)' },
+  { name: 'language-bom.json.sig', kind: 'file', classification: 'generated', retentionClass: 'evidence', source: 'src/language/state-artifacts.js (persistLanguageArtifacts)' },
+  // X-016: pre-image of every file a Haskell/Nix fix rewrote (original text + meta), the undo source. It holds customer
+  // source, so it is a backup-class artifact and marked confidential for the encryption policy.
+  { name: 'fix-backups', kind: 'dir', classification: 'generated', retentionClass: 'backup', confidential: true, source: 'src/language/fix-lifecycle.js (writeWithBackup)' },
   // M4 deliverable #8 (FR-503 §14, DFG-022, sub-project 8a): the "Data-Flow
   // Time Machine" foundation — one commit-keyed GraphSnapshot per scan,
   // written by src/lineage/graph-snapshot.js's persistGraphSnapshot(),
@@ -237,6 +247,8 @@ export const ARTIFACT_REGISTRY = [
   { name: 'provenance-providers.yml', kind: 'file', classification: 'operator-config', note: 'Finding Provenance M3 §3.4 GitHub/GitLab provider enrichment opt-in ({token} or provider-scoped tokens) — read by posture/provenance/providers/config.js, never written by the scanner; env vars (AGENTIC_SECURITY_GITHUB_TOKEN/AGENTIC_SECURITY_GITLAB_TOKEN) take precedence when set' },
   { name: 'repo-lineage.json', kind: 'file', classification: 'operator-config', note: 'Finding Provenance M4 §4.2 cross-repository lineage declaration ({linkedFrom: {path, atCommit}}) — read by posture/provenance/repo-lineage.js, never written by the scanner; the linked path is verified as a real local git repo before use, no remote fetch' },
   { name: 'recipient-profiles.json', kind: 'file', classification: 'operator-config', note: 'FR-506 recipient/subprocessor governance profiles — hand- or agent-authored via `governance propose-edit`, never scanner-regenerable, so a routine reset must never delete it' },
+  { name: 'hackage-advisories.json', kind: 'file', classification: 'operator-config', note: 'X-016: operator-supplied Hackage advisory snapshot read by language/haskell-supply.js; never written by the scanner, so `reset` preserves it' },
+  { name: 'nix-advisories.json', kind: 'file', classification: 'operator-config', note: 'QA-005: operator-supplied Nix advisory snapshot read by language/resolved-pass.js; never written by the scanner, so `reset` preserves it' },
   { name: 'cross-repo-links.json', kind: 'file', classification: 'operator-config', note: 'M5 deliverable #8 (FR-304 "declared" half) — declared local<->remote node links between two independently-scanned repos, written via `federate declare --yes`, never scanner-regenerable, so a routine reset must never delete it' },
   { name: 'logic-claims.json', kind: 'file', classification: 'operator-config', note: 'authored by an external reviewing agent; engine.js only ever reads it (fs.readFileSync, never written)' },
   { name: 'current-intent.md', kind: 'file', classification: 'operator-config', note: 'developer-authored; no writer exists anywhere in src/ or bin/' },

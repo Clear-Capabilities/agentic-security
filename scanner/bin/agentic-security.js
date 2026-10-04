@@ -50,9 +50,11 @@ import { toOSCAL } from '../src/report/oscal.js';
 // format had to be added to all three or it silently got human chatter
 // interleaved into its stdout/stderr. One list, one place to update.
 const MACHINE_FORMATS = new Set([
-  'json', 'sarif', 'oscal', 'cyclonedx', 'sbom', 'spdx', 'vex', 'openvex', 'pbom', 'aibom',
+  'json', 'sarif', 'oscal', 'cyclonedx', 'sbom', 'spdx', 'vex', 'openvex', 'pbom', 'aibom', 'mlbom',
 ]);
 function isMachineFormat(fmt) { return MACHINE_FORMATS.has(String(fmt)); }
+// Every output label `scan` produces (the body of cmdScan has one branch per entry).
+const SCAN_FORMATS = new Set(['cli', 'json', 'md', 'markdown', 'sarif', 'oscal', 'stix', 'junit', 'csv', 'html', 'cyclonedx', 'sbom', 'spdx', 'vex', 'openvex', 'pbom', 'aibom', 'aibom-md', 'mlbom', 'ship', 'pro', 'summary']);
 
 // Shared stderr progress reporter for any command that runs a fresh scan —
 // the same `\r[phase] current/total file` status line the default `scan`
@@ -75,7 +77,7 @@ function clearScanProgressLine() {
 }
 import { toCycloneDX, toSPDX } from '../src/posture/sbom.js';
 import { toPBOM } from '../src/sast/pipeline.js';
-import { buildAIBOM, aibomToMarkdown } from '../src/posture/aibom.js';
+import { buildAIBOM, aibomToMarkdown, toCycloneDXMLBOM } from '../src/posture/aibom.js';
 import { recordScan, formatStreakLine, formatGradeDelta } from '../src/posture/streak.js';
 import { loadProfile, saveProfile, detectProfile, renderAttributionLine, ATTRIBUTION, ATTRIBUTION_URL } from '../src/posture/profile.js';
 import { applySuppressions, addSoftAcceptance, expiredSoftAcceptances } from '../src/posture/suppressions.js';
@@ -93,6 +95,16 @@ import * as triage from '../src/posture/triage.js';
 import { buildSlackDigest, buildDiscordDigest, postWebhook, buildJiraIssue, buildPrComment, buildSiemEvent, loadIntegrationConfig } from '../src/integrations/index.js';
 
 import { stateDir, statePath, withStateWritesDisabled } from '../src/posture/state-dir.js';
+
+// A state file is never written THROUGH a symlink: a hostile tree could place a link at `.agentic-security/last-scan.json` and have a
+// scan overwrite whatever it points to. O_NOFOLLOW makes the open itself refuse a link (no check-then-write race); where the flag does
+// not exist an lstat check stands in for it.
+const _NOFOLLOW_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | (fs.constants.O_NOFOLLOW || 0);
+async function _writeStateNoFollow(file, body) {
+  if (!fs.constants.O_NOFOLLOW) { try { if ((await fsp.lstat(file)).isSymbolicLink()) return false; } catch { /* absent */ } }
+  try { await fsp.writeFile(file, body, { flag: _NOFOLLOW_FLAGS, mode: 0o644 }); return true; }
+  catch (e) { if (e && (e.code === 'ELOOP' || e.code === 'EMLINK')) return false; throw e; }
+}
 import { listGeneratedArtifacts } from '../src/posture/artifact-registry.js';
 // last-scan.json integrity helpers — implementation in posture/integrity.js
 // so the MCP server tools can share verification.
@@ -194,6 +206,8 @@ Commands:
                                --remote-node <node-id> [--repository <label>]
                                [--relationship data_flow] [--rationale <text>]
                                [--output <file>] [--yes] [--base-digest <hex>]
+                               [--local-target <t>] [--local-config <c>]
+                               [--remote-target <t>] [--remote-config <c>]
                                Declare a CrossRepoLink between a node in the
                                current locally-scanned graph and a node in a
                                remote graph export (dataflow export --format
@@ -234,7 +248,7 @@ Commands:
 Options:
   --profile vibecoder|pro      Override profile for this run
   --only sast|sca|secrets      Limit scan to one pillar
-  --format <fmt>               cli | json | md | sarif | oscal | stix | junit | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md
+  --format <fmt>               cli | json | md | sarif | oscal | stix | junit | csv | html | cyclonedx | spdx | pbom | aibom | aibom-md | mlbom
   --pack <name>                Focus on a curated rule pack (repeatable): owasp-top-10 | cwe-top-25 | llm-security | supply-chain
   --baseline <ref>             Diff against a git ref; only findings new vs. that ref count (ci subcommand)
   --fail-on critical|high|medium|low|none  ci-mode exit policy (default: critical)
@@ -470,12 +484,12 @@ async function writeMachineOutput(targetAbs, scan, meta, profile, args) {
   }
   await fsp.mkdir(stateDirPath, { recursive: true });
   // Always JSON (used by /security-fix and /security-report).
-  await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
+  await _writeStateNoFollow(path.join(stateDirPath, 'findings.json'),
     JSON.stringify(toJSON(scan, meta), null, 2));
   if (profile.profile === 'pro' || profile.machineOutput || (args && args.flags['machine-output'])) {
-    await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
+    await _writeStateNoFollow(path.join(stateDirPath, 'findings.sarif'),
       JSON.stringify(toSARIF(scan, meta), null, 2));
-    await fsp.writeFile(path.join(stateDirPath, 'findings.csv'), toCSV(scan));
+    await _writeStateNoFollow(path.join(stateDirPath, 'findings.csv'), toCSV(scan));
   }
 }
 
@@ -613,6 +627,12 @@ async function cmdScan(args) {
   // Load persona profile (R1). Persona-aware defaults flow from here.
   const profile = loadPersonaProfile(targetAbs, args);
   const format = args.flags.format || (profile.profile === 'pro' ? 'cli' : 'ship');
+  // An output label this command does not produce is an error, not a quiet fallback to the summary: a CI job that
+  // asked for `sarif ` or `junit-xml` and got human text would upload garbage and report success.
+  if (!SCAN_FORMATS.has(String(format))) {
+    process.stderr.write(`agentic-security scan: unsupported --format ${JSON.stringify(String(format))}. Supported: ${[...SCAN_FORMATS].join(' | ')}.\n`);
+    return 2;
+  }
   const verbose = !!args.flags.verbose;
   const output = args.flags.output;
   const noNet = !!args.flags['no-network'];
@@ -782,6 +802,9 @@ async function cmdScan(args) {
   if (args.flags['set-baseline']) {
     const { normalizeFindings } = await import('../src/report/index.js');
     const baselineIds = new Set(normalizeFindings(scan).map(f => f.stableId || f.id));
+    // A supply-chain, secret or logic finding's normalised id includes its line, so an unrelated edit above it would make it
+    // look new. Its own producer id (when it has one) does not, so both are recorded.
+    for (const bucket of ['secrets', 'supplyChain', 'logicVulns']) for (const f of scan[bucket] || []) if (f && typeof f.id === 'string' && f.id.includes(':')) baselineIds.add(f.id);
     fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
     fs.writeFileSync(baselinePath, JSON.stringify({ ids: [...baselineIds], createdAt: new Date().toISOString(), count: baselineIds.size }, null, 2));
     process.stderr.write(`[baseline] saved ${baselineIds.size} findings as baseline\n`);
@@ -793,6 +816,20 @@ async function cmdScan(args) {
       const baselineSet = new Set(baseline.ids || []);
       const before = scan.findings.length;
       scan.findings = (scan.findings || []).filter(f => !baselineSet.has(f.stableId || f.id));
+      // The baseline is built from every bucket (findings, secrets, supply chain, logic), so it must be applied to every bucket:
+      // filtering only `findings` left a baselined dependency or secret finding reappearing as "new" on every run.
+      // Identity is the one the baseline was written with: the NORMALISED id (raw supply-chain entries carry a different one).
+      const { normalizeFindings: _norm } = await import('../src/report/index.js');
+      const _empty = { findings: [], secrets: [], supplyChain: [], logicVulns: [], suppressions: [], components: [], routes: [], filesScanned: 0 };
+      for (const bucket of ['secrets', 'supplyChain', 'logicVulns']) {
+        if (!Array.isArray(scan[bucket])) continue;
+        scan[bucket] = scan[bucket].filter((f) => {
+          if (!f) return true;
+          let id = f.stableId || f.id;
+          try { const n = _norm({ ..._empty, [bucket]: [f] })[0]; if (n) id = n.stableId || n.id; } catch { /* keep the raw identity */ }
+          return !baselineSet.has(id) && !(typeof f.id === 'string' && f.id.includes(':') && baselineSet.has(f.id));
+        });
+      }
       process.stderr.write(`[baseline] filtered ${before - scan.findings.length} baseline findings, ${scan.findings.length} new\n`);
     } catch { /* baseline file unreadable, skip */ }
   }
@@ -997,9 +1034,10 @@ async function cmdScan(args) {
   else if (format === 'cyclonedx' || format === 'sbom') body = JSON.stringify(toCycloneDX(scan, meta), null, 2);
   else if (format === 'spdx')                            body = JSON.stringify(toSPDX(scan, meta), null, 2);
   else if (format === 'vex' || format === 'openvex')     body = JSON.stringify(toVex(scan, meta), null, 2);
-  else if (format === 'pbom')                            body = JSON.stringify(toPBOM(scan.fc || {}, meta), null, 2);
-  else if (format === 'aibom')                           body = JSON.stringify(buildAIBOM(scan, scan.fc || {}, meta), null, 2);
-  else if (format === 'aibom-md')                        body = aibomToMarkdown(buildAIBOM(scan, scan.fc || {}, meta));
+  else if (format === 'pbom')                            body = JSON.stringify(toPBOM(scan.fc || {}, meta, { languageBuild: (await import('../src/language/bom.js')).languagePbom({ ...(scan.fc || {}), ...(scan.depFileContents || {}) }) }), null, 2);
+  else if (format === 'aibom')                           body = JSON.stringify(buildAIBOM(scan, scan.fc || {}, { ...meta, manifests: scan.depFileContents || {} }), null, 2);
+  else if (format === 'mlbom')                           body = JSON.stringify(toCycloneDXMLBOM(buildAIBOM(scan, scan.fc || {}, { ...meta, manifests: scan.depFileContents || {} }), meta), null, 2);
+  else if (format === 'aibom-md')                        body = aibomToMarkdown(buildAIBOM(scan, scan.fc || {}, { ...meta, manifests: scan.depFileContents || {} }));
   else if (format === 'ship')  body = toShipVerdict(scan, { profile: effProfile });
   else if (format === 'pro')   body = toProTable(scan, { profile: effProfile, columns: args.flags.columns });
   else if (format === 'cli')   body = toCLIByProfile(scan, { profile: effProfile, columns: args.flags.columns, verbose });
@@ -1143,10 +1181,16 @@ async function cmdScan(args) {
       } catch { /* best-effort, offline-degrading — never block a scan */ }
     }
     const lastScanBody = JSON.stringify(persistedScan, null, 2);
-    await fsp.writeFile(path.join(stateDirPath, 'last-scan.json'), lastScanBody);
+    await _writeStateNoFollow(path.join(stateDirPath, 'last-scan.json'), lastScanBody);
     try {
-      await fsp.writeFile(path.join(stateDirPath, 'last-scan.json.sig'), _signLastScan(lastScanBody));
+      await _writeStateNoFollow(path.join(stateDirPath, 'last-scan.json.sig'), _signLastScan(lastScanBody));
     } catch { /* non-fatal — sig file is best-effort */ }
+    // X-016: Haskell/Nix analysis metadata and BOM as registered, signed artifacts. Written only when the scan has
+    // Haskell or Nix content, so every other project's state directory is unchanged.
+    try {
+      const { persistLanguageArtifacts } = await import('../src/language/state-artifacts.js');
+      persistLanguageArtifacts(path.resolve(target), { ...scan, scanHealth: persistedScan.scanHealth || scan.scanHealth });
+    } catch { /* non-fatal: metadata artifacts never block a scan */ }
     // Sub-project E, increment 5: persist the lineage graph as its own
     // artifact, mirroring last-scan.json's own write+sign pattern exactly
     // — signLastScan/verifyLastScan are fully generic (an arbitrary string
@@ -1158,9 +1202,9 @@ async function cmdScan(args) {
     if (scan.lineageGraph) {
       try {
         const lineageBody = JSON.stringify(scan.lineageGraph, null, 2);
-        await fsp.writeFile(path.join(stateDirPath, 'lineage-graph.json'), lineageBody);
+        await _writeStateNoFollow(path.join(stateDirPath, 'lineage-graph.json'), lineageBody);
         try {
-          await fsp.writeFile(path.join(stateDirPath, 'lineage-graph.json.sig'), _signLastScan(lineageBody));
+          await _writeStateNoFollow(path.join(stateDirPath, 'lineage-graph.json.sig'), _signLastScan(lineageBody));
         } catch { /* non-fatal — sig file is best-effort, same precedent as last-scan.json.sig above */ }
       } catch { /* non-fatal — the lineage artifact write is best-effort and must never block a scan */ }
       // M4 deliverable #8 (FR-503 §14, DFG-022, sub-project 8a): ADDITIVELY
@@ -1301,11 +1345,11 @@ async function cmdCi(args) {
     if (process.env.AGENTIC_SECURITY_DEBUG === '1') process.stderr.write(`[agentic-security] refusing to write CI artifacts at ${stateDirPath} — no project marker\n`);
   } else {
     await fsp.mkdir(stateDirPath, { recursive: true });
-    await fsp.writeFile(path.join(stateDirPath, 'findings.json'),
+    await _writeStateNoFollow(path.join(stateDirPath, 'findings.json'),
       JSON.stringify(toJSON(scan, meta), null, 2));
-    await fsp.writeFile(path.join(stateDirPath, 'findings.sarif'),
+    await _writeStateNoFollow(path.join(stateDirPath, 'findings.sarif'),
       JSON.stringify(toSARIF(scan, meta), null, 2));
-    await fsp.writeFile(path.join(stateDirPath, 'findings.junit.xml'),
+    await _writeStateNoFollow(path.join(stateDirPath, 'findings.junit.xml'),
       toJUnit(scan, meta));
   }
 
@@ -1534,7 +1578,7 @@ async function cmdTriage(args) {
   const lastScanPath = statePath(target, 'findings.json');
   if (fs.existsSync(lastScanPath)) {
     const last = JSON.parse(await fsp.readFile(lastScanPath, 'utf8'));
-    triage.syncWithScan(target, last.findings || []);
+    triage.syncWithScan(target, last.findings || [], { scanHealth: last.scanHealth || null });
   }
   if (sub === 'list') {
     const filter = {};
@@ -2587,8 +2631,8 @@ async function cmdCalibrationReport(args) {
 // Languages the Layer-1 IR parses. Anything else cannot be partitioned into a
 // call-graph focus area, so feeding it to a hunter would spend tokens on files
 // the confirmation gate can never corroborate.
-const HUNT_EXTS = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb)$/i;
-const HUNT_IGNORE = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendor/**', '**/.agentic-security/**'];
+const HUNT_EXTS = /\.(?:js|jsx|mjs|cjs|ts|tsx|py|java|cs|kt|go|php|rb|l?hs|nix)$/i;
+const HUNT_IGNORE = ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'vendor/**', '**/.agentic-security/**', 'dist-newstyle/**', '.stack-work/**', '.direnv/**'];
 const HUNT_MAX_FILES = 2000;
 
 async function cmdHunt(args) {
@@ -3406,6 +3450,41 @@ async function cmdFix(args) {
     if (f.fix?.code) { console.log('\n--- suggested patch ---\n'); console.log(f.fix.code); }
     console.log('\nUse --preview to see a diff, or --apply to apply directly.');
     return 0;
+  }
+
+  // Haskell and Nix findings have their own verified fixers (tiered, rescanned, reversible by `undo`); the generic path below
+  // knows nothing about them and used to answer "no mechanical fix" for every one.
+  {
+    const { languageOfFinding, languageFixPreview, loadLanguageProject, isLanguageDependencyFinding, languageUpgradePreview } = await import('../src/language/context.js');
+    if (isLanguageDependencyFinding(f)) {
+      if (isApply && sigVerified !== true) {
+        console.error(`Refusing to apply: last-scan.json integrity check ${sigVerified === false ? 'failed (tampered)' : 'could not verify (unsigned)'} — re-run \`agentic-security scan\` to refresh.`);
+        return 4;
+      }
+      const proj = loadLanguageProject(scanRoot);
+      const res = await languageUpgradePreview(f, { ...proj.files, ...proj.manifests }, { apply: isApply, root: scanRoot, toRef: args.flags.to || null });
+      if (!res.ok) { console.error(`No dependency fix for this finding (${res.status}${res.tier ? `, ${res.tier}` : ''}): ${res.reason || 'unsupported'}`); return 4; }
+      console.log(`${res.label} (${res.tier}): ${res.explanation}`);
+      console.log(res.diff);
+      for (const c of res.consequences || []) console.log(`  note: ${c}`);
+      console.log(isApply ? '\nApplied. This is a source edit only: re-resolve or re-lock, then rescan. Revert with `agentic-security undo`.' : '\nRun with --apply to write this change. Use `agentic-security undo` to revert.');
+      return 0;
+    }
+    if (languageOfFinding(f)) {
+      if (isApply && sigVerified !== true) {
+        console.error(`Refusing to apply: last-scan.json integrity check ${sigVerified === false ? 'failed (tampered)' : 'could not verify (unsigned)'} — re-run \`agentic-security scan\` to refresh.`);
+        return 4;
+      }
+      const proj = loadLanguageProject(scanRoot);
+      const res = await languageFixPreview(f, proj.files, { apply: isApply, root: scanRoot });
+      if (!res.ok) { console.error(`No verified fix for this finding (${res.status}${res.tier ? `, ${res.tier}` : ''}): ${res.reason || 'unsupported'}`); return 4; }
+      console.log(`${res.label || 'FIX'}${res.tier ? ` (${res.tier})` : ''}: ${res.explanation || ''}`.trim());
+      console.log(res.diff);
+      for (const c of res.consequences || []) console.log(`  note: ${c}`);
+      if (isApply) { console.log(`\nApplied. Verified: ${Object.entries(res.gates || {}).map(([k, v]) => `${k}=${v && v.ok === false ? 'FAILED' : (v && v.ran === false ? 'not-run' : 'ok')}`).join(' ')}. Revert with \`agentic-security undo\`.`); }
+      else console.log('\nVerified (syntax, rescan: the finding is gone and nothing new appears). Run with --apply to write this change. Use `agentic-security undo` to revert.');
+      return 0;
+    }
   }
 
   // FR-303 (assurance-hardening PRD): confine BEFORE the first read, not just
@@ -5558,6 +5637,21 @@ async function cmdGovernancePropose(args) {
 // through to main()'s own outer catch/process.exit(4), the identical,
 // deliberate non-pattern cmdGovernancePropose itself relies on (no local
 // try/catch here either).
+function _federateEndpointScope(node, target, config, graph) {
+  // Node-level limitations when present, plus those of every flow that starts or ends at the node: a Nix or Haskell
+  // flow states its own limits (static configuration evidence, generated-script locations) and a link must not lose them.
+  const lim = new Set(Array.isArray(node && node.limitations) ? node.limitations.filter((x) => typeof x === 'string') : []);
+  for (const f of (graph && Array.isArray(graph.flows) ? graph.flows : [])) {
+    if (f && (f.source === (node && node.id) || f.sink === (node && node.id)) && Array.isArray(f.limitations)) for (const x of f.limitations) if (typeof x === 'string') lim.add(x);
+  }
+  return {
+    target: typeof target === 'string' ? target : null,
+    config: typeof config === 'string' ? config : null,
+    analysis: (node && node.analysis && typeof node.analysis === 'object') ? node.analysis : null,
+    limitations: [...lim].sort(),
+  };
+}
+
 async function cmdFederateDeclare(args) {
   const target = args._[2] || '.'; // args._ = ['federate', 'declare', <path>?]
   const targetAbs = path.resolve(target);
@@ -5680,6 +5774,14 @@ async function cmdFederateDeclare(args) {
       sourceFile: path.resolve(remoteGraphFlag),
       graphId: remote.graph.graphId, graphDigest: remote.digest, nodeId: remoteNodeFlag,
     },
+    // Scope and limitations of both endpoints, copied from the nodes themselves (a Haskell/Nix configuration node says it
+    // is static configuration evidence), plus the operator's own target/config labels. A declared link is an assertion by
+    // an operator, never an observed data flow, and the record says so.
+    scope: {
+      local: _federateEndpointScope(localNode, args.flags['local-target'], args.flags['local-config'], local.graph),
+      remote: _federateEndpointScope(remoteNode, args.flags['remote-target'], args.flags['remote-config'], remote.graph),
+    },
+    evidence: { declared: true, observed: false },
     rationale: args.flags.rationale ?? null,
     declaredBy: process.env.USER || process.env.USERNAME || '(unspecified)',
     declaredAt: new Date().toISOString(),
@@ -5798,6 +5900,8 @@ async function cmdFederateList(args) {
       id: record?.id ?? null,
       local: { nodeId: record?.local?.nodeId ?? null, stillValid: localStillValid },
       remote: { sourceFile: sourceFile ?? null, nodeId: record?.remote?.nodeId ?? null, ...remoteStatus },
+      scope: record?.scope ?? null,
+      evidence: record?.evidence ?? { declared: true, observed: false },
       rationale: record?.rationale ?? null,
       declaredBy: record?.declaredBy ?? null,
       declaredAt: record?.declaredAt ?? null,

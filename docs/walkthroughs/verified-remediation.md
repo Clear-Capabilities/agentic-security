@@ -245,6 +245,16 @@ text fails with `'non-FULL tier must document a residual'`.
 
 ---
 
+## Haskell and Nix: the same gates, different edits
+
+The legs above are the same for Haskell and Nix findings; what differs is the edit and the tier. A Haskell fix is a typed,
+layout-preserving rewrite of the lines involved (a SQL string becomes a parameterised query; a shell string becomes an
+argument list) and says whether it is FULL, a MITIGATION or a WORKAROUND. A Nix fix changes the setting that wins by priority
+(`mkForce` over a plain assignment over `mkDefault`), and a change that needs `nix flake lock` is labelled
+`source-edit-requires-relock`. A **rejected** Haskell fix looks like this in practice (captured from `examples/haskell-app/vulnerable`):
+the shell-to-argv rewrite would introduce a new argument-injection finding, so the rescan gate refuses it and nothing is
+written. See [Haskell](../guides/haskell.md#fixes) for the captured output and [Nix and NixOS](../guides/nix-nixos.md#fixes).
+
 ## Try It Yourself
 
 ```bash

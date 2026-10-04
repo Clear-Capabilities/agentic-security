@@ -308,7 +308,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all twenty-four checks in order', () => {
+test('release-gate — full run plans all twenty-five checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -348,7 +348,7 @@ test('release-gate — full run plans all twenty-four checks in order', () => {
   // the same single-author, no-second-review process bench/self-scan/
   // exists to guard against for detector findings, with no equivalent gate.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 24);
+  assert.equal(ids.length, 25);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -373,7 +373,7 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
 test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 10);
+  assert.equal(slowIds.length, 11);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
   assert.equal(ids.length, 14);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
@@ -398,7 +398,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
 test('release-gate — the slow checks are the six command gates, the three measurement gates (FR-906\'s ttff/memory plus the Finding Provenance M2 provenance gate), and the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'layer-recall-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'layer-recall-gate', 'language-support-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'dependency-currency']
   );
 });
 

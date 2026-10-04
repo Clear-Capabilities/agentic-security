@@ -133,6 +133,20 @@ instead.
 
 ---
 
+## Haskell and Nix projects
+
+| Topic | Behavior |
+|---|---|
+| Discovery | `.hs`, `.lhs`, `.hs-boot`, `.hsc`, `.nix`, `flake.lock`, and the Haskell manifests (`*.cabal`, `cabal.project`, `cabal.project.freeze`, `package.yaml`, `stack.yaml`, `stack.yaml.lock`). Found by file type, so no flag is needed. |
+| Exclusions | `dist-newstyle/`, `.stack-work/`, `.cabal-sandbox/`, `.direnv/`, `result` and `nix/store/` are never walked. Two explicit exports are read by exact path: `dist-newstyle/cache/plan.json` / `.stack-work/dependencies.json` and `nix-export.json` / `.direnv/nix-export.json`. A source over the size cap is **not** analysed and is a scan-health condition. |
+| Modes | `--format` (every report format), `--set-baseline` / `--since-baseline`, `--changed-since`, `--only` and `ci` all apply. (The editor and MCP surfaces that scan a single file add that file's imported modules as context and report only the file you asked about.) `--since-baseline` filters every bucket (code, secrets, supply chain), so a baselined dependency finding does not return as new when you edit another line. |
+| Suppression | `-- agentic-security-ignore: <rule>` (Haskell, also `{- -}`) and `# agentic-security-ignore: <rule>` (Nix, also `/* */`). Line-scoped, matched by exact rule id, family or CWE (never a substring), and recognised only inside a comment. A malformed pragma suppresses nothing and is reported. Every suppression is logged. |
+| Partial coverage | Template Haskell, CPP branches, foreign imports, dynamic Nix attributes, unreadable files and a stale resolved plan are stated as limitations or scan-health conditions. `scanHealth.status` is then `partial`. |
+| Exit codes | the usual `0` / `1` / `2` / `3` / `4`; `ci --assurance strict` additionally fails on any incomplete analysis. |
+
+Without an advisory snapshot the dependency half of a Haskell or Nix scan is not performed, and the verdict says so: see
+[Haskell](haskell.md#dependencies-advisories-and-the-software-bill-of-materials) and [Nix and NixOS](nix-nixos.md).
+
 ## Related
 
 - [Fixing vulnerabilities](fixing-vulnerabilities.md)

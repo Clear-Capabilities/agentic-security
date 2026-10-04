@@ -1,0 +1,27 @@
+module UsersSvc where
+
+import Web.Scotty
+import Control.Monad.IO.Class (liftIO)
+import Database.SQLite.Simple
+import Network.HTTP.Types.Status (status401)
+class Sink a where
+  emitUsers :: a -> IO ()
+
+requireAuth :: ActionM ()
+requireAuth = do
+  h <- header "Authorization"
+  case h of
+    Nothing -> status status401 >> finish
+    Just _ -> pure ()
+
+main :: IO ()
+main = scotty 3000 $ do
+  get "/users/:id" $ do
+    requireAuth
+    oid <- param "id"
+    conn <- liftIO (open "users.db")
+    rows <- liftIO (query conn "SELECT email FROM users WHERE id = ?" (Only (oid :: Int)))
+    json (rows :: [Only String])
+
+endpointPath :: String
+endpointPath = "/users/v0"

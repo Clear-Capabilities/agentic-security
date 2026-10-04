@@ -1,0 +1,140 @@
+// Haskell supply-chain orchestration for a project (HS-009): manifests -> components -> advisories + policy.
+// The pure logic lives in haskell-sca.js; this module only gathers inputs and shapes supply-chain entries.
+
+import { statePath } from '../posture/state-dir.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { analyzeHaskellManifests } from './haskell-manifests.js';
+import { buildHaskellIR } from './haskell-ir.js';
+import { AdvisoryDb, loadAdvisorySnapshot, evaluateComponents, reachability, nearNameCandidates, sourceIntegrity, lifecycle, licensePolicy, hackagePurl, GHC_BOOT_PACKAGES } from './haskell-sca.js';
+
+const MANIFEST = /(?:^|\/)(?:[^/]+\.cabal|cabal\.project(?:\.[a-z]+)?|package\.yaml|stack\.yaml|stack\.yaml\.lock)$/;
+const SCOPE = { runtime: 'required', test: 'optional', benchmark: 'optional', setup: 'optional', 'build-tool': 'optional' };
+
+export function manifestFiles(files) {
+  return Object.entries(files).filter(([p, t]) => MANIFEST.test(p) && typeof t === 'string').map(([path, text]) => ({ path, text }));
+}
+
+/** Components from declared dependencies, each with its RESOLVED version when a freeze file or an exact pin gives one. */
+export function hackageComponents(files) {
+  const mf = manifestFiles(files);
+  if (!mf.length) return { components: [], manifests: null };
+  const manifests = analyzeHaskellManifests(mf);
+  const locked = new Map();
+  const lockedAt = new Map();
+  for (const l of manifests.lockedPackages || []) { locked.set(l.name, l.version); if (l.version && l.file) lockedAt.set(l.name, { file: l.file, line: l.line || null }); }
+  const seen = new Map();
+  for (const d of manifests.dependencies || []) {
+    const resolved = locked.get(d.name) || d.exactPin || null;
+    const key = `${d.name}@${d.scope || 'runtime'}`;
+    if (seen.has(key)) continue;
+    seen.set(key, {
+      ecosystem: 'hackage', name: d.name, version: resolved, declaredRange: d.declaredRange || null,
+      resolution: locked.has(d.name) ? 'freeze' : (d.exactPin ? 'exact-pin' : 'unresolved'),
+      scope: d.scope || 'runtime', engineScope: SCOPE[d.scope] || 'required', target: d.component || null, componentKind: d.componentKind || null,
+      manifest: d.manifest, line: d.line, ghcComponent: GHC_BOOT_PACKAGES.has(d.name),
+      versionSource: locked.has(d.name) && lockedAt.has(d.name) ? lockedAt.get(d.name) : null,
+    });
+  }
+  return { components: [...seen.values()], manifests };
+}
+
+/**
+ * Folds an explicit resolved graph (a fresh cabal plan or Stack export) into the declared inventory: a declared dependency gets the
+ * exact version the plan chose, and a transitive package nobody declared is added with its own scope. Nothing is guessed: when the
+ * graph is stale or absent the caller passes none and the declared inventory stands.
+ */
+function mergeResolved(declared, resolved) {
+  if (!resolved || !resolved.components || !resolved.components.length) return declared;
+  const byName = new Map(declared.map((c) => [c.name, c]));
+  const out = declared.map((c) => {
+    const r = resolved.components.find((x) => x.name === c.name);
+    return r && r.version ? { ...c, version: r.version, resolution: 'plan', versionSource: r.versionSource, unitId: r.unitId } : c;
+  });
+  const seen = new Set(out.map((c) => `${c.name}@${c.version || ''}`));
+  for (const r of resolved.components) {
+    if (byName.has(r.name) || seen.has(`${r.name}@${r.version}`)) continue;
+    seen.add(`${r.name}@${r.version}`);
+    out.push({ ...r, transitive: true });
+  }
+  return out;
+}
+
+/** Advisory data configured for this scan: a hash-pinned snapshot from the environment or the project's state dir. */
+export function configuredAdvisoryDb(root, env = process.env) {
+  const path = env.AGENTIC_SECURITY_HACKAGE_ADVISORIES || (root && existsSync(statePath(root, 'hackage-advisories.json')) ? statePath(root, 'hackage-advisories.json') : null);
+  if (!path) return { db: null, reason: 'no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES or provide the hackage-advisories.json snapshot in the project state directory)' };
+  let snap;
+  try { snap = JSON.parse(readFileSync(path, 'utf8')); } catch (e) { return { db: null, reason: `advisory snapshot unreadable: ${e.code || e.message}` }; }
+  const r = loadAdvisorySnapshot(snap, { pinnedSha256: env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256 || null });
+  return r.ok ? { db: r.db, reason: null } : { db: null, reason: `advisory snapshot refused: ${r.reason}` };
+}
+
+/** Imports and import-qualified callees across the project's Haskell sources. */
+export function collectUsage(files) {
+  const hs = {};
+  for (const [f, t] of Object.entries(files)) if (/\.hs$/i.test(f) && typeof t === 'string') hs[f] = t;
+  if (!Object.keys(hs).length) return { imports: [], callees: new Set() };
+  const ir = buildHaskellIR(hs);
+  const imports = [];
+  const callees = new Set();
+  for (const f of Object.values(ir.perFile)) {
+    for (const i of f.imports || []) imports.push({ module: i.module, items: i.names && i.names.length ? i.names : null, file: f.file, line: i.line });
+    for (const fn of f.functions) for (const c of fn.calls || []) if (typeof c.callee === 'string') callees.add(c.callee);
+  }
+  return { imports, callees };
+}
+
+/**
+ * @returns {{supplyChain:object[], statuses:object[], feed:object, policy:object, gaps:object[], components:object[]}}
+ */
+export function analyzeHaskellSupply(files, { db = undefined, root = null, env = process.env, kev = null, epss = null, metadata = null, registry = null, symbols = {}, resolved = null } = {}) {
+  const hc = hackageComponents(files);
+  const { manifests } = hc;
+  const components = mergeResolved(hc.components, resolved);
+  const out = { supplyChain: [], statuses: [], feed: null, policy: {}, gaps: [...((resolved && resolved.gaps) || []).map((g) => ({ ...g, source: 'haskell' }))], components, resolved: resolved ? resolved.summary : null };
+  if (!components.length) return out;
+  let feedReason = null;
+  if (db === undefined) { const c = configuredAdvisoryDb(root, env); db = c.db; feedReason = c.reason; }
+  const ev = evaluateComponents(components, db, { kev, epss });
+  out.statuses = ev.statuses;
+  out.feed = ev.feed;
+  if (!db) out.gaps.push({ kind: 'advisory-feed-unavailable', detail: `${feedReason || ev.feed.detail}. ${components.length} Hackage dependencies were NOT checked against any advisory: the absence of findings is not a clean result.` });
+  else if (ev.feed.status === 'stale-cache') out.gaps.push({ kind: 'advisory-feed-stale', detail: ev.feed.detail });
+  const unresolved = components.filter((c) => !c.version);
+  if (unresolved.length) out.gaps.push({ kind: 'unresolved-dependency-versions', detail: `${unresolved.length} dependency version(s) are only declared ranges (${unresolved.slice(0, 5).map((c) => c.name).join(', ')}${unresolved.length > 5 ? ', ...' : ''}); generate a Cabal plan or a Stack export to resolve them` });
+
+  // reachability, per finding
+  const usage = collectUsage(files);
+  for (const f of ev.findings) {
+    const r = reachability(f.name, usage.imports, usage.callees, (symbols && symbols[f.osvId]) || null);
+    f.reachability = r;
+    f.functionReachable = r.function === 'reachable' ? 'reachable' : (r.function === 'not-imported' ? 'unreachable' : 'unknown');
+    f.reachabilityTier = r.import === 'imported' ? (r.function === 'reachable' ? 'function-reachable' : 'import-reachable') : (r.import === 'not-imported' ? 'not-imported' : 'unknown');
+    out.supplyChain.push({ ...f, file: f.file, line: f.line });
+  }
+  // policy
+  const si = sourceIntegrity(manifests || {});
+  for (const s of si.filter((x) => x.finding)) {
+    out.supplyChain.push({
+      type: 'source_integrity', ecosystem: 'hackage', name: s.location, version: s.tag || null, severity: s.severity, file: s.file, line: s.line,
+      vuln: 'Source repository dependency is not pinned to a commit', cwe: 'CWE-829', description: `source-repository-package ${s.location}: ${s.reason}`,
+      remediation: 'Pin `tag:` to a full commit hash (and add `--sha256` where supported).', parser: 'HS-SUPPLY', family: 'source-integrity',
+      language: 'haskell', capability: 'sca', analysisKind: 'application', evidenceKind: 'manifest', dataSource: { manifest: s.file },
+    });
+  }
+  out.policy.sourceIntegrity = si;
+  out.policy.nearName = nearNameCandidates(components, { registry });
+  out.policy.lifecycle = lifecycle(components, metadata);
+  out.policy.license = licensePolicy(components, metadata);
+  for (const n of out.policy.nearName) {
+    out.supplyChain.push({
+      type: 'dep_confusion_candidate', ecosystem: 'hackage', name: n.name, version: null, severity: 'info', file: components.find((c) => c.name === n.name).manifest, line: components.find((c) => c.name === n.name).line,
+      vuln: 'Dependency name resembles a popular package', cwe: 'CWE-1357', description: `${n.name} is one edit from ${n.similarTo}. ${n.note}; registry evidence: ${n.status}.`,
+      remediation: 'Confirm the package name is intended.', parser: 'HS-SUPPLY', family: 'dependency-confusion', verdict: 'candidate', malicious: false,
+      language: 'haskell', capability: 'sca', analysisKind: 'application', evidenceKind: 'manifest', confidence: 0.2,
+    });
+  }
+  void hackagePurl; void AdvisoryDb;
+  return out;
+}

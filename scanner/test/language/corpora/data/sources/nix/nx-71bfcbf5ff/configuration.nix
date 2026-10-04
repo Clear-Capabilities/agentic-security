@@ -1,0 +1,10 @@
+{ config, lib, pkgs, ... }:
+let
+  appName = "tracker0";
+  appPort = 8085;
+in
+{
+  systemd.services.${appName}.description = "tracker service 0";
+  networking.hostName = appName;
+  environment.etc."tracker.src".source = pkgs.fetchurl { url = "https://example.org/tracker-0.tar.gz"; hash = "sha256-E58GysCRXxOBt+JFzbZEiC7chENisEEEBbSmZmbsnRQ="; };
+}

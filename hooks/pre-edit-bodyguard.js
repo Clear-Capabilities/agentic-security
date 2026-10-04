@@ -44,7 +44,41 @@ function readStdinJSON() {
 // Fast in-memory rules — high-precision, low-FP patterns that vibe-coders
 // most often ship unintentionally. The full scanner runs post-edit; this is
 // the just-in-time gate for the obviously-dangerous stuff.
+const HS_FILE = /\.l?hs$/i;
+const NIX_FILE = /\.nix$/i;
 const RULES = [
+  // ── Haskell (only on .hs / .lhs files) ──
+  {
+    id: 'hs-cmd-injection', files: HS_FILE, name: 'Haskell shell command built from input', severity: 'critical',
+    re: /\b(?:callCommand|readCommand|readCommandWithExitCode|system)\b[^\n]*?"\s*(?:\+\+|<>)\s*[A-Za-z_(]/,
+    hint: 'Never build a shell string. Use `callProcess "prog" [arg]` (no shell) with a fixed program and validate each argument.',
+  },
+  {
+    id: 'hs-sql-concat', files: HS_FILE, name: 'Haskell SQL text built by concatenation', severity: 'critical',
+    re: /\b(?:execute_?|query_?|executeMany|rawSql|rawExecute)\s+(?:\w+\s+)?\(?\s*"[^"\n]*"\s*(?:\+\+|<>)\s*[A-Za-z_(]/,
+    hint: 'Use parameters: `execute conn "UPDATE t SET n = ? WHERE id = ?" (n, i)` (postgresql-simple) — never concatenate input into the query text.',
+  },
+  {
+    id: 'hs-tls-no-verify', files: HS_FILE, name: 'Haskell TLS certificate validation disabled', severity: 'critical',
+    re: /\bTLSSettingsSimple\s+True\b/,
+    hint: '`TLSSettingsSimple True` turns certificate validation off. Use the default manager settings, or `mkManagerSettings (TLSSettingsSimple False False False) Nothing`.',
+  },
+  // ── Nix / NixOS (only on .nix files) ──
+  {
+    id: 'nix-root-login', files: NIX_FILE, name: 'NixOS SSH allows direct root login', severity: 'high',
+    re: /\bPermitRootLogin\s*=\s*"yes"/,
+    hint: 'Set `services.openssh.settings.PermitRootLogin = "no"` (or "prohibit-password") and use a normal user with sudo.',
+  },
+  {
+    id: 'nix-firewall-off', files: NIX_FILE, name: 'NixOS firewall disabled', severity: 'high',
+    re: /\bnetworking\.firewall\.enable\s*=\s*false\b/,
+    hint: 'Leave the firewall on and open only the ports a service needs with `networking.firewall.allowedTCPPorts`.',
+  },
+  {
+    id: 'nix-script-unescaped', files: NIX_FILE, name: 'Nix value interpolated into a shell command unescaped', severity: 'high',
+    re: /^(?![^\n]*escapeShellArg)[^\n#]*\b(?:cp|mv|rm|chown|chmod|curl|wget|tar|rsync|ln)\s+[^\n]*\$\{\s*(?:cfg|config)\.[A-Za-z0-9_.\-]+\s*\}/m,
+    hint: 'Wrap the value: `${lib.escapeShellArg cfg.dest}` (unquoted position), or pass it through an environment variable and quote the expansion.',
+  },
   {
     id: 'sqli-string-concat',
     name: 'SQL injection (string concatenation)',
@@ -67,10 +101,17 @@ const RULES = [
     hint: 'Anything prefixed `NEXT_PUBLIC_` ships to the browser. Move this to a non-public env var and access it only in a server route.',
   },
   {
+    id: 'split-credential',
+    name: 'Credential split across concatenated string literals',
+    severity: 'critical',
+    re: /["'`](?:sk-|sk_live_|rk_live_|pk_live_|ghp_|xoxb-|AKIA|AIza)[A-Za-z0-9_-]{0,12}["'`]\s*(?:\+\+|<>|\+|\.\.)\s*["'`][A-Za-z0-9_-]{8,}["'`]/,
+    hint: 'Splitting a token across literals does not hide it from anyone who can read the source. Load it from the environment or a secret manager.',
+  },
+  {
     id: 'hardcoded-secret',
     name: 'Hardcoded credential',
     severity: 'critical',
-    re: /(?:api[_-]?key|secret[_-]?key|password|access[_-]?token)\s*[:=]\s*['"`](?:sk-[A-Za-z0-9-]{20,}|ghp_[A-Za-z0-9]{30,}|xoxb-[A-Za-z0-9-]{30,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|pk_live_[A-Za-z0-9]{20,}|rk_live_[A-Za-z0-9]{20,})['"`]/i,
+    re: /(?:api[_-]?key|secret[_-]?key|secret|password|passwd|token|access[_-]?token|psk|credential)['"`]?\s*(?:[:=]|<-)\s*(?:[A-Za-z_][\w.']*\s*\$?\s*)?['"`](?:sk-[A-Za-z0-9-]{20,}|ghp_[A-Za-z0-9]{30,}|xoxb-[A-Za-z0-9-]{30,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|pk_live_[A-Za-z0-9]{20,}|rk_live_[A-Za-z0-9]{20,})['"`]/i,
     hint: 'Move this credential to an env var (e.g. `process.env.OPENAI_API_KEY`) and add the value to .env (which must be in .gitignore).',
   },
   {
@@ -198,12 +239,15 @@ function loadForbiddenApis() {
 function scan(content, filePath) {
   const findings = [];
   for (const r of RULES) {
+    if (r.files && !r.files.test(String(filePath || ''))) continue;
     if (r.requires && !r.requires(content)) continue;
     const m = r.re.exec(content);
     if (m) {
       const before = content.slice(0, m.index);
       const line = before.split('\n').length;
-      findings.push({ id: r.id, name: r.name, severity: r.severity, hint: r.hint, line, sample: m[0].slice(0, 120) });
+      // a credential rule must never echo the credential back into the model's context: mask the quoted value
+      const sample = r.id === 'hardcoded-secret' ? m[0].replace(/(['"`])([^'"`]{4})[^'"`]*([^'"`]{2})\1/, '$1$2…$3$1') : m[0];
+      findings.push({ id: r.id, name: r.name, severity: r.severity, hint: r.hint, line, sample: sample.slice(0, 120) });
     }
   }
   // Per-project forbidden APIs — treat as critical bans.

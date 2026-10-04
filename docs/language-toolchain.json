@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "purpose": "The runtime and tool versions Haskell and Nix/NixOS support is built, tested and supported against. Checked by scanner/test/language/language-package-ci.test.js against package.json, the CI workflow and the code that probes each tool. A version here is a statement of what was exercised, not a promise about untested versions.",
+  "runtime": {
+    "node": {
+      "required": ">=24.0.0",
+      "source": "scanner/package.json engines.node",
+      "ci": "24"
+    }
+  },
+  "parsers": {
+    "haskell": {
+      "kind": "in-process lexer, layout resolver and extractor over SHA-256-pinned grammar tables",
+      "module": "scanner/src/language/haskell-parser.js",
+      "needsCompiler": false
+    },
+    "nix": {
+      "kind": "in-process lexer and parser over SHA-256-pinned grammar tables",
+      "module": "scanner/src/language/nix-parser.js",
+      "needsNix": false
+    },
+    "existing": {
+      "web-tree-sitter": {
+        "pinned": "0.20.8",
+        "reason": "held with tree-sitter-wasms 0.1.13 as an ABI pair; see .dependency-holds.json"
+      },
+      "python-ast": "optional python3 subprocess, regex fallback when absent",
+      "java-parser": "bundled"
+    }
+  },
+  "optionalTools": {
+    "ghc": {
+      "used by": "compile verification of a fix (opt-in) and the HS-006 route-fixture compile criterion",
+      "ci pin": {
+        "ghc": "9.4.8",
+        "cabal": "3.10.2.1",
+        "job": "language-tools-ghc"
+      },
+      "when absent": "the compile gate reports not-run, and a criterion that needs the compiler FAILS (never skips)"
+    },
+    "nix": {
+      "used by": "opt-in isolated evaluation (AGENTIC_SECURITY_NIX_EVAL=1) and the NixOS runtime checks",
+      "ci pin": {
+        "nix": "2.24.10",
+        "job": "nixos-runtime",
+        "blocking": false
+      },
+      "when absent": "evaluation is reported as unsupported with the reason; static results are retained"
+    },
+    "sandbox": {
+      "used by": "isolation of the evaluator (macOS sandbox-exec, Linux namespaces)",
+      "when absent": "the evaluation does not run"
+    }
+  },
+  "hostsExercised": [
+    {
+      "os": "darwin arm64",
+      "node": "24.x",
+      "ghc": "9.4.8 (Homebrew ghc@9.4, with libpq; the route-fixture packages installed with cabal 3.x, scotty pinned at 0.20.1)",
+      "nix": "absent",
+      "note": "development host of the loop run. GHC was installed late, so the compile criteria (HS-006.AC01) ran here; nix and NixOS were never available, so NIX-011 and NIX-012 could not be executed here"
+    },
+    {
+      "os": "ubuntu-latest",
+      "node": "24",
+      "ghc": "9.4.8",
+      "nix": "2.24.10",
+      "note": "hosted CI; not executed from this repository checkout"
+    }
+  ]
+}

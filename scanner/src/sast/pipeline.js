@@ -14,6 +14,38 @@ const _GH_WORKFLOW_RE = /(?:^|\/)\.github\/workflows\/.*\.ya?ml$/i;
 const _NONPROD_RE = /(?:^|\/)(?:tests?|examples?|fixtures?)\//i;
 
 const PIPELINE_PATTERNS = [
+  // ── build hooks common to Haskell (ghcup, Cabal, Stack, Hackage) and Nix pipelines ──
+  {
+    re: /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b/g,
+    vuln: 'Pipeline: remote script piped into a shell (unverified installer)',
+    sev: 'high', cwe: 'CWE-494',
+    fix: 'Download the installer to a file, verify its published checksum or signature, then run it. Installers for ghcup, Nix and similar tools are a common supply-chain target when piped straight into `sh`.',
+  },
+  {
+    re: /\bnix\s+(?:run|shell|develop|build|profile\s+install|eval)\b[^\n]*?\b(?:github|gitlab|sourcehut):[\w.-]+\/[\w.-]+(?!\/[0-9a-f]{40}\b)(?=[\s#?]|$)/g,
+    vuln: 'Pipeline: Nix flake reference executed without a pinned revision',
+    sev: 'high', cwe: 'CWE-829',
+    fix: 'Pin the flake reference to a full commit (`github:owner/repo/<40-hex-rev>`) or run it from this repository\'s own locked flake, so CI cannot execute whatever the branch points to today.',
+  },
+  {
+    re: /\bnix\b[^\n]*(?:--accept-flake-config|--option\s+sandbox\s+false|--option\s+substituters\s+http:|--extra-trusted-public-keys|--impure\b)/g,
+    vuln: 'Pipeline: Nix evaluation or build trust relaxed in CI',
+    sev: 'medium', cwe: 'CWE-693',
+    fix: 'Do not accept a flake\'s own configuration, disable the sandbox, add unauthenticated substituters or evaluate impurely in CI. Put the trust decision in the repository\'s reviewed configuration instead.',
+  },
+  {
+    re: /^env\s*:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+[A-Za-z0-9_]+\s*:\s*\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}/gm,
+    vuln: 'Pipeline: secret exposed at workflow-wide environment scope',
+    sev: 'medium', cwe: 'CWE-522',
+    fix: 'Set secrets such as a Hackage or Cachix token on the single step that needs them (`env:` under that step), not at the top of the workflow where every step and every third-party action can read them.',
+  },
+  {
+    re: /\bref\s*:\s*\$\{\{\s*github\.(?:event\.pull_request\.head\.(?:sha|ref)|head_ref)\s*\}\}/g,
+    vuln: 'Pipeline: pull_request_target checks out untrusted pull request code',
+    sev: 'high', cwe: 'CWE-829',
+    fix: 'A `pull_request_target` workflow runs with repository secrets. Never check out and build the pull request head in it (a Cabal custom Setup.hs, a Nix flake or a build hook would run attacker code with those secrets); use `pull_request`, or split the privileged step.',
+    contextRe: /\bpull_request_target\b/,
+  },
   {
     re: /\buses\s*:\s*[\w-]+\/[\w-]+@(?:main|master|latest)\b/g,
     vuln: 'Pipeline: GitHub Action pinned to floating tag',
@@ -96,7 +128,7 @@ export function scanPipeline(fp, raw) {
 // `uses:` step with its pin (SHA or tag), every secret reference, every
 // permissions block. The PBOM is meant to be stored alongside the SBOM and
 // produced from the same scan.
-export function toPBOM(fileContents, meta = {}) {
+export function toPBOM(fileContents, meta = {}, extras = {}) {
   const workflows = [];
   for (const [fp, raw] of Object.entries(fileContents || {})) {
     if (!_GH_WORKFLOW_RE.test(fp.replace(/\\/g, '/'))) continue;
@@ -120,6 +152,7 @@ export function toPBOM(fileContents, meta = {}) {
     version: '1',
     generatedAt: meta.startedAt || new Date().toISOString(),
     workflows,
+    ...(extras.languageBuild && (extras.languageBuild.haskell || extras.languageBuild.nix) ? { languageBuild: extras.languageBuild } : {}),
     summary: {
       totalWorkflows: workflows.length,
       totalActions: workflows.reduce((n, w) => n + w.uses.length, 0),

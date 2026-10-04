@@ -161,6 +161,17 @@ Real captured finding — a SQL injection detected in `report.py`:
 
 ---
 
+## Haskell and Nix evidence fields
+
+A Haskell or Nix finding carries the usual evidence plus optional fields that say what kind of claim it is: `language`
+(`haskell` or `nix`), `capability` (`sast`, `taint`, `sca`, `secrets`, `privacy`, ...), `evidenceKind`, a `scope`
+(the target, configuration and component the claim applies to), `uncertainty` entries, and `originalLocation` when the reported line is in a generated or
+preprocessed source (CPP, literate Haskell, `.hsc`): the location always indexes the file you wrote. A taint finding's `chain`
+lists the source, any intermediate calls (including across modules) and the sink; a Nix finding about an effective option
+names the file and line of the definition that **won** by priority, and when the value was decided only conditionally the
+finding says so and is capped at `medium`. A control the scanner could not decide (a guard it cannot see through) is recorded as an `uncertainty` on the finding,
+never as a satisfied control.
+
 ## Try It Yourself
 
 ```bash

@@ -1,0 +1,26 @@
+{
+  "nodes": {
+    "a": {
+      "inputs": { "dep": ["b"] },
+      "locked": { "narHash": "sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=", "owner": "example", "repo": "a", "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "github" },
+      "original": { "owner": "example", "repo": "a", "type": "github" }
+    },
+    "b": {
+      "inputs": { "dep": ["a"] },
+      "locked": { "narHash": "sha256-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=", "owner": "example", "repo": "b", "rev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "type": "github" },
+      "original": { "owner": "example", "repo": "b", "type": "github" }
+    },
+    "c": {
+      "inputs": { "missing": ["nope"], "self-loop": "c" },
+      "locked": { "narHash": "sha256-ccccccccccccccccccccccccccccccccccccccccccc=", "owner": "example", "repo": "c", "rev": "cccccccccccccccccccccccccccccccccccccccc", "type": "github" },
+      "original": { "owner": "example", "repo": "c", "type": "github" }
+    },
+    "orphan": {
+      "locked": { "narHash": "sha256-ooooooooooooooooooooooooooooooooooooooooooo=", "owner": "example", "repo": "orphan", "rev": "oooooooooooooooooooooooooooooooooooooooo", "type": "github" },
+      "original": { "owner": "example", "repo": "orphan", "type": "github" }
+    },
+    "root": { "inputs": { "a": "a", "b": "b", "c": "c", "ghost": "ghost" } }
+  },
+  "root": "root",
+  "version": 7
+}

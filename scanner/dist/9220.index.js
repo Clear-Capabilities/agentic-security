@@ -16,6 +16,7 @@ export const modules = {
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(73024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
 /* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(31174);
+/* harmony import */ var _language_discovery_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(30951);
 // Watch mode — continuous incremental scan as the developer edits.
 //
 // Spawns a long-running scan watcher that:
@@ -42,6 +43,7 @@ export const modules = {
 
 
 
+
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
 const DEBOUNCE_MS = 350;
@@ -51,8 +53,33 @@ const SCAN_EXT_RE = /\.(?:[jt]sx?|mjs|cjs|py|java|kt|go|rb|php|cs|c|cc|cpp|h|hpp
 const IGNORE_DIR_RE = /(?:^|\/)(?:\.git|node_modules|\.bench-cache|dist|build|\.next|coverage|\.agentic-security)(?:$|\/)/;
 
 function _isScanable(rel) {
-  if (!rel || IGNORE_DIR_RE.test(rel)) return false;
+  if (!rel) return false;
+  // An explicit export is evidence even though it lives in a build directory.
+  if ((0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isExplicitExport */ .Zh)(rel)) return true;
+  if (IGNORE_DIR_RE.test(rel)) return false;
+  if ((0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageSource */ .Sv)(rel) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageManifest */ .mD)(rel)) return !(0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageExcludedPath */ .EG)(rel);
   return SCAN_EXT_RE.test(rel);
+}
+
+/**
+ * Widen a batch of changed absolute paths to every file whose results the
+ * change can stale: dependents through imports, and all Haskell/Nix sources for
+ * a manifest, lockfile or export change. Batches with no Haskell/Nix path are
+ * returned untouched, so other languages never pay for a tree read.
+ */
+async function expandChangedBatch(scanRoot, batch) {
+  const rels = batch.map((p) => node_path__WEBPACK_IMPORTED_MODULE_2__.relative(scanRoot, p).split(node_path__WEBPACK_IMPORTED_MODULE_2__.sep).join('/'));
+  if (!rels.some((r) => (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageSource */ .Sv)(r) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageManifest */ .mD)(r) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isExplicitExport */ .Zh)(r))) return batch;
+  try {
+    const { readTree } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 45950));
+    const { fileContents, depFileContents } = await readTree(scanRoot);
+    const hit = (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .impactedFiles */ .nn)(fileContents, depFileContents, rels);
+    const out = new Set(batch);
+    for (const r of hit) out.add(node_path__WEBPACK_IMPORTED_MODULE_2__.join(scanRoot, r));
+    return [...out];
+  } catch {
+    return batch;
+  }
 }
 
 function _readJsonSafe(fp) {
@@ -162,7 +189,12 @@ async function watchProject(scanRoot, onChange, opts = {}) {
     if (pending.size > MAX_BURST) { pending.clear(); return; }
     const batch = Array.from(pending);
     pending.clear();
-    try { onChange(batch); } catch {}
+    const needsExpansion = batch.some((p) => {
+      const r = node_path__WEBPACK_IMPORTED_MODULE_2__.relative(scanRoot, p).split(node_path__WEBPACK_IMPORTED_MODULE_2__.sep).join('/');
+      return (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageSource */ .Sv)(r) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isLanguageManifest */ .mD)(r) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_4__/* .isExplicitExport */ .Zh)(r);
+    });
+    if (!needsExpansion) { try { onChange(batch); } catch {} return; }
+    expandChangedBatch(scanRoot, batch).then((b) => { try { onChange(b); } catch {} });
   };
   let stopped = false;
   (async () => {
@@ -187,7 +219,7 @@ async function watchProject(scanRoot, onChange, opts = {}) {
   };
 }
 
-const _internals = { _isScanable, SCAN_EXT_RE, IGNORE_DIR_RE };
+const _internals = { _isScanable, expandChangedBatch, SCAN_EXT_RE, IGNORE_DIR_RE };
 
 
 /***/ })

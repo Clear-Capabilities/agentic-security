@@ -249,12 +249,18 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // `partial`. All four branches landed in the same merge; the figures
   // below are re-measured against the merged catalog, not summed by hand
   // from any branch's own delta.
-  assert.equal(SOURCES.length, 260);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 146);
-  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 15);
-  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 99);
+  // 260 -> 442 (146 -> 284 modeled, 15 -> 59 partial, candidate unchanged at 99): the Haskell source model adds 182 entries,
+  // generated from language/haskell-models.js: 91 call-form sources for the taint engine and 91 member-form twins
+  // (`$hs.<Module.name>`) that the lineage view of a Haskell function reads. Re-measured against the live catalog.
+  // 442 -> 444 (candidate 99 -> 101): two Haskell sources, a text parameter of an exported function (taint form) and a record
+  // parameter of one (lineage form). Neither carries a request provenance, so both resolve `candidate` through
+  // NO_PROVENANCE_OVERRIDES (category user-input). Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 444);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 284);
+  assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 59);
+  assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 101);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(146 + 15 + 99, SOURCES.length);
+  assert.equal(284 + 59 + 101, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────

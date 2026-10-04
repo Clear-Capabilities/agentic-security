@@ -146,6 +146,29 @@ exists.
 
 ---
 
+## Haskell and Nix conditions
+
+`scanHealth.languageCoverage` carries what the language analyzers could and could not do: files discovered, analysed,
+unresolved, failed, timed out or missing a grammar; **limitations** (`opaque-boundary:th-splice`, `cpp`, `ffi`,
+`unmodeled-imports`, `container-image-scan`, `license-data-unavailable`); and the state of the optional modes. These become
+scan-health **conditions** (and a `partial` status) rather than being dropped:
+
+| Condition | Meaning |
+|---|---|
+| `no Hackage advisory snapshot is loaded: ...` | dependencies were not checked; absence of findings is not a clean result |
+| `advisory-feed-unavailable` / `closure-advisory-feed-unavailable` | the same for the Nix closure |
+| `malformed-export: ...` | a `nix-export.json` could not be parsed |
+| `stale` / `freshness` reasons on a cabal plan | the plan no longer matches the project, so no version was taken from it |
+| `required analyzer "haskell:taint" is disabled` | switched off with `AGENTIC_SECURITY_LANG_DISABLE` |
+| `N Haskell/Nix source or manifest file(s) exceed the size cap` | not analysed |
+| `optional mode "nix-eval" was selected but did not run` | evaluation was requested and unavailable |
+| `the effective NixOS configuration for X is partial` | unresolved or truncated options |
+
+A real captured example: `examples/haskell-app/fixed` is a clean service whose dependencies were not checked, so it reports
+one informational finding and `scanHealth.status` of `partial` with the first condition above. `ci --assurance strict` exits
+non-zero for it; `advisory` mode reports the gap and does not fail. See
+[Haskell](../guides/haskell.md#scan-a-haskell-project).
+
 ## Try It Yourself
 
 ```bash

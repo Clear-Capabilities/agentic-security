@@ -69,6 +69,8 @@ import { loadObservations } from './observation-store.js';
 // mirroring `scenario.js`'s own boundary) or `federation-loader.js`
 // (which owns only the REMOTE side).
 import { validateCrossRepoLink, CROSS_REPO_LINKS_FILENAME } from './cross-repo-link.js';
+import { contributeNixConfigLineage } from './nix-view.js';
+import { adaptCallGraphForLineage } from './haskell-view.js';
 
 // A small, LOCAL, tolerant loader for the operator-declared
 // cross-repo-links.json config file — mirrors `loadRecipientConfig`'s own
@@ -257,7 +259,10 @@ export function buildLineageGraph(callGraph, opts = {}) {
     const crossRepoLinkRecords = _crossRepoLinksFile && fs.existsSync(_crossRepoLinksFile)
       ? _loadCrossRepoLinkRecords(_crossRepoLinksFile)
       : undefined;
-    const built = buildGraphWithCoverage(callGraph, {
+    // Haskell is rewritten into a lineage VIEW (source reads become seedable member reads, sinks become
+    // statement-level calls); every other language, and the shared call graph itself, are untouched.
+    const lineageCallGraph = adaptCallGraphForLineage(callGraph);
+    const built = buildGraphWithCoverage(lineageCallGraph, {
       repository: opts.repository,
       generatedAt: opts.deterministic ? undefined : new Date().toISOString(),
       perFile: opts.perFile,
@@ -273,6 +278,8 @@ export function buildLineageGraph(callGraph, opts = {}) {
       observationWindowEnd: opts.observationWindowEnd,
       onProgress: opts.onProgress,
     });
+    const nixFiles = opts.fileContents && Object.keys(opts.fileContents).some((f) => /\.nix$/i.test(f));
+    if (nixFiles) contributeNixConfigLineage(built.graph, opts.fileContents, { repository: opts.repository });
     return { status: 'complete', graph: built.graph, transitEvidence, failure: null, elapsedMs: Date.now() - t0 };
   } catch (e) {
     // Best-effort (DESIGN_GRAPH_BUILDER.md §9.5 item 1): recorded, never

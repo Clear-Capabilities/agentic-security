@@ -107,6 +107,16 @@ step: it runs once, per output request, over whatever fields the earlier
 stages already attached, through an explicit field allowlist with an
 honest `null` default for anything not populated.
 
+## Haskell and Nix in the lifecycle
+
+Haskell and Nix files take a language branch beside the per-file cascade: the language **producers** (parser adapter, SAST
+rules, taint, secrets, hardening, build trust) are registered in `pipeline/producer-registry.js`, a result from an unregistered
+producer is discarded and reported, and every file's outcome (analysed, excluded, unresolved, failed, timed out, missing
+grammar) is recorded per analyzer so `scan-health` can count it. The supply branch (declared and resolved Hackage dependencies,
+flake inputs, an exported closure and its advisories) joins `supplyChain`. Fixes run the shared fix lifecycle: plan, path, syntax,
+rescan, optional compile, backup, history, `undo`. Persisted language artifacts (`language-analysis.json`, `language-bom.json`)
+are signed beside `last-scan.json`.
+
 ## Report output
 
 `findings[]` (via `normalizeFindings()`) and `scanHealth` (via

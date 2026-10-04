@@ -1,0 +1,353 @@
+{
+  "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-myapp-1.2.3.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/7bgkpvz37bgkpvz37bgkpvz37bgkpvz3-myapp-1.2.3"
+      },
+      "dev": {
+        "path": "/nix/store/fkqx27cinv05aglry38djpw16bhmsz49-myapp-1.2.3-dev"
+      }
+    },
+    "inputSrcs": [
+      "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-myapp-1.2.3.tar.gz",
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-CVE-2024-0001.patch"
+    ],
+    "inputDrvs": {
+      "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-libfoo-2.0.drv": [
+        "out"
+      ],
+      "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-curl-8.7.1.drv": [
+        "out"
+      ],
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ],
+      "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-cmake-3.29.2.drv": [
+        "out"
+      ],
+      "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-curl-8.7.1.drv": [
+        "out"
+      ],
+      "/nix/store/2k4m6p8ravcxfzh1j3l5n7q9sbwdyg0i-pytest-8.1.1.drv": [
+        "out"
+      ],
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out",
+        "dev"
+      ],
+      "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "myapp-1.2.3",
+      "pname": "myapp",
+      "version": "1.2.3",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "buildInputs": "/nix/store/mv17dkrz5bipx39gmv17dkrz5bipx39g-libfoo-2.0 /nix/store/akw5fp09jv4dnz8is3cmy7hr2blx6gq1-curl-8.7.1",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0 /nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-cmake-3.29.2 /nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-curl-8.7.1",
+      "nativeCheckInputs": "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-pytest-8.1.1",
+      "doCheck": "1",
+      "patches": "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-CVE-2024-0001.patch",
+      "src": "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-myapp-1.2.3.tar.gz",
+      "urls": "https://example.invalid/releases/myapp-1.2.3.tar.gz",
+      "out": "/nix/store/7bgkpvz37bgkpvz37bgkpvz37bgkpvz3-myapp-1.2.3",
+      "dev": "/nix/store/fkqx27cinv05aglry38djpw16bhmsz49-myapp-1.2.3-dev",
+      "outputs": "out dev"
+    }
+  },
+  "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-libfoo-2.0.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/mv17dkrz5bipx39gmv17dkrz5bipx39g-libfoo-2.0"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-zlib-1.3.1.drv": [
+        "out"
+      ],
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out"
+      ],
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "libfoo-2.0",
+      "pname": "libfoo",
+      "version": "2.0",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "buildInputs": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-zlib-1.3.1",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "out": "/nix/store/mv17dkrz5bipx39gmv17dkrz5bipx39g-libfoo-2.0",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-zlib-1.3.1.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-zlib-1.3.1"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out"
+      ],
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "zlib-1.3.1",
+      "pname": "zlib",
+      "version": "1.3.1",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "out": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-zlib-1.3.1",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/w3aiqz6dlv29hpy5cks18gnx4bjr07fm-glibc-2.39-52"
+      },
+      "dev": {
+        "path": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52-dev"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "glibc-2.39-52",
+      "pname": "glibc",
+      "version": "2.39-52",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "out": "/nix/store/w3aiqz6dlv29hpy5cks18gnx4bjr07fm-glibc-2.39-52",
+      "outputs": "out dev"
+    }
+  },
+  "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-curl-8.7.1.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/akw5fp09jv4dnz8is3cmy7hr2blx6gq1-curl-8.7.1"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-zlib-1.3.1.drv": [
+        "out"
+      ],
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out"
+      ],
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "curl-8.7.1",
+      "pname": "curl",
+      "version": "8.7.1",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "buildInputs": "/nix/store/3bkv3bkv3bkv3bkv3bkv3bkv3bkv3bkv-zlib-1.3.1",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "out": "/nix/store/akw5fp09jv4dnz8is3cmy7hr2blx6gq1-curl-8.7.1",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/dv9p5k1gxbr7m3izdv9p5k1gxbr7m3iz-curl-8.7.1.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-curl-8.7.1"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out"
+      ],
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "curl-8.7.1",
+      "pname": "curl",
+      "version": "8.7.1",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "nativeBuildInputs": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "patches": "/nix/store/2k4m6p8ravcxfzh1j3l5n7q9sbwdyg0i-curl-fix-for-CVE-2024-2398.patch",
+      "out": "/nix/store/iv5gr3dp1bmz9kx7iv5gr3dp1bmz9kx7-curl-8.7.1",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-glibc-2.39-52.drv": [
+        "out"
+      ],
+      "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "gcc-13.2.0",
+      "pname": "gcc",
+      "version": "13.2.0",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "out": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-gcc-13.2.0",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-cmake-3.29.2.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-cmake-3.29.2"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ],
+      "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "cmake-3.29.2",
+      "pname": "cmake",
+      "version": "3.29.2",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "out": "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-cmake-3.29.2",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/2k4m6p8ravcxfzh1j3l5n7q9sbwdyg0i-pytest-8.1.1.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-pytest-8.1.1"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "pytest-8.1.1",
+      "pname": "pytest",
+      "version": "8.1.1",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "out": "/nix/store/6k0ds7l1fv8m2gw9n3hxap4iybq5jzcr-pytest-8.1.1",
+      "outputs": "out"
+    }
+  },
+  "/nix/store/pbzk7vg3pbzk7vg3pbzk7vg3pbzk7vg3-bash-5.2p26.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-bash-5.2p26"
+      }
+    },
+    "inputSrcs": [],
+    "inputDrvs": {
+      "/nix/store/l3j1hzfxcvar8p6m4k2i0gydwbs9q7n5-gcc-13.2.0.drv": [
+        "out"
+      ]
+    },
+    "system": "x86_64-linux",
+    "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/zbp3gv7kzbp3gv7kzbp3gv7kzbp3gv7k-builder.sh"
+    ],
+    "env": {
+      "name": "bash-5.2p26",
+      "pname": "bash",
+      "version": "5.2p26",
+      "system": "x86_64-linux",
+      "builder": "/nix/store/q3fr4gs5hv6iw7jx8ky9lzam0bn1cp2d-bash-5.2p26/bin/bash",
+      "out": "/nix/store/vbvbvbvbvbvbvbvbvbvbvbvbvbvbvbvb-bash-5.2p26",
+      "outputs": "out"
+    }
+  }
+}

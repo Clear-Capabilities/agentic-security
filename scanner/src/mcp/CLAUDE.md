@@ -65,3 +65,10 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 - **Lifecycle.** `_codeFingerprint()` reads source files at module-load time. New files added to the MCP source set won't be in the fingerprint until they're added to the `files = […]` array in `server.js`.
 - **Audit log.** The chain hashes plain JSON lines; a full-file rewrite is not detectable without a remote sink. Acknowledged limitation.
 - **Concurrency.** `stdio.js`'s `'data'` handler is async; concurrent `apply_fix` calls can race on `fix-history/`. Today benign because fixed-fix-history is idempotent on retry, but a future stateful tool needs serialization.
+
+## Haskell and Nix context
+
+`scan_diff`, `verify_fix` and `synthesize_fix` add the import closure of a Haskell or Nix file and the manifests as context
+(`language/context.js` `withLanguageContext`, bounded in files and bytes, read-only) and still report only the files asked
+about. The tool that previews a fix for these files uses the language fixers; `apply_fix` is unchanged (its generic confined-write
+path), and the language-aware apply with backup and `undo` is the CLI's `fix --apply`.

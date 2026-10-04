@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Loop requirements manifest",
+  "type": "object",
+  "required": ["manifestVersion", "schemaVersion", "prd", "createdAt", "totals", "acceptanceHash", "requirements"],
+  "properties": {
+    "manifestVersion": { "type": "integer", "minimum": 1 },
+    "schemaVersion": { "const": 1 },
+    "supersedes": { "type": ["integer", "null"] },
+    "createdAt": { "type": "string" },
+    "acceptanceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "prd": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["requirements", "criteria", "weight"],
+      "properties": { "requirements": { "type": "integer", "minimum": 1 }, "criteria": { "type": "integer", "minimum": 1 }, "weight": { "type": "integer", "minimum": 1 } }
+    },
+    "changes": { "type": "object" },
+    "checkout": { "type": "object" },
+    "tools": { "type": "object" },
+    "baselineGates": { "type": "array" },
+    "profile": { "type": "object" },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "weight", "required", "dependencies", "suite", "criteria", "verification", "watch"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Z]+(-[0-9]+)?-?[0-9]*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "category": { "enum": ["loop", "shared", "haskell", "nix", "quality", "documentation", "release"] },
+          "weight": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "required": { "const": true },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "suite": { "type": "string", "minLength": 1 },
+          "watch": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "criteria": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "required": ["id", "text", "assertionIds"],
+              "properties": { "id": { "type": "string", "pattern": "^[A-Z]+(-[0-9]+)?\\.AC[0-9]{2}$" }, "text": { "type": "string", "minLength": 1 }, "assertionIds": { "type": "array", "minItems": 1, "items": { "type": "string" } } }
+            }
+          },
+          "verification": {
+            "type": "object",
+            "required": ["kind", "cwd", "executable", "args", "expectedExitCode", "timeoutSeconds"],
+            "properties": {
+              "kind": { "enum": ["node-test", "controller-final"] },
+              "cwd": { "type": "string" },
+              "executable": { "type": "string", "minLength": 1 },
+              "args": { "type": "array", "items": { "type": "string" } },
+              "files": { "type": "array", "items": { "type": "string" } },
+              "expectedExitCode": { "type": "integer" },
+              "timeoutSeconds": { "type": "integer", "minimum": 1 },
+              "requiresTools": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

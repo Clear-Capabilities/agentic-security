@@ -1,0 +1,13 @@
+module OrdersSvc where
+
+import Network.HTTP.Client
+
+handleProbe :: String -> IO ()
+handleProbe target = do
+  req <- parseUrlThrow target
+  mgr <- newManager defaultManagerSettings
+  body <- httpLbs req mgr
+  print (responseBody body)
+
+endpointPath :: String
+endpointPath = "/orders/v1"

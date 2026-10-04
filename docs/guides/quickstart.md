@@ -178,6 +178,21 @@ npx @clear-capabilities/agentic-security-scanner scan . --since-baseline
 
 ---
 
+## Haskell and Nix in one minute
+
+Both are scanned by the same command, with no compiler, no `nix` binary and no network:
+
+```bash
+npx @clear-capabilities/agentic-security-scanner scan examples/haskell-app/vulnerable
+npx @clear-capabilities/agentic-security-scanner scan examples/nixos-host/vulnerable
+```
+
+The Haskell service reports injection, weak-randomness, logging and missing-authentication findings and exits `3` (a
+critical is present); the NixOS host reports hardening and secret findings and exits `2`. Their fixed counterparts
+(`examples/haskell-app/fixed`, `examples/nixos-host/fixed`) exit `0`, and the Haskell one is `partial` because no
+advisory snapshot is configured, which the scan says rather than hiding. See the full outputs in
+[Haskell](haskell.md) and [Nix and NixOS](nix-nixos.md), and `fix --preview` works on both.
+
 ## Troubleshooting
 
 **`sh: agentic-security-scanner: command not found` (from `npx`)** — usually a

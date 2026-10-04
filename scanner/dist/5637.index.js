@@ -14,6 +14,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var node_child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(31421);
 /* harmony import */ var _util_git_hardening_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(78844);
 /* harmony import */ var _engine_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(67198);
+/* harmony import */ var _language_discovery_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(30951);
 var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_engine_js__WEBPACK_IMPORTED_MODULE_2__]);
 _engine_js__WEBPACK_IMPORTED_MODULE_2__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // Shadowscan / security-DELTA on PR (v0.72).
@@ -45,7 +46,8 @@ _engine_js__WEBPACK_IMPORTED_MODULE_2__ = (__webpack_async_dependencies__.then ?
 
 
 
-const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md)$/i;
+
+const FILE_EXT_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs|py|java|cs|kt|go|rb|php|sol|swift|rs|tf|yml|yaml|json|toml|md|hs|lhs|hsc|hs-boot|nix|cabal)$/i;
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 
 // `root` is the PR's repository — a scan target, not this project's own
@@ -72,23 +74,27 @@ function _listFilesAtRef(root, ref) {
   return r.stdout.trim().split('\n').filter(p => {
     if (!p) return false;
     if (p.includes('/node_modules/') || p.includes('/.venv/')) return false;
-    return FILE_EXT_RE.test(p);
+    if ((0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_3__/* .isLanguageExcludedPath */ .EG)(p)) return false;
+    return FILE_EXT_RE.test(p) || (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_3__/* .isLanguageManifest */ .mD)(p);
   });
 }
 
 async function _scanAtRef(root, ref) {
   const files = _listFilesAtRef(root, ref);
   const fileContents = {};
+  const depFileContents = {};
   for (const f of files) {
     const c = _readFileAtRef(root, ref, f);
-    if (c != null) fileContents[f] = c;
+    if (c == null) continue;
+    // Haskell/Nix manifests and lock files are dependency inputs, not code (the same split a working-tree scan makes).
+    if ((0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_3__/* .isLanguageManifest */ .mD)(f)) depFileContents[f] = c; else fileContents[f] = c;
   }
   // `provenance:false` — a base-ref snapshot, not the current working state.
   // Beyond the wasted git walks, updateLifecycle marks every open stableId
   // absent from the finding set it is handed as `remediated`; running the PR
   // delta gate would silently rewrite the project's lifecycle store from the
   // base ref's findings.
-  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_2__/* .runFullScan */ .wW)({ fileContents, scanRoot: root, provenance: false }, () => {});
+  return (0,_engine_js__WEBPACK_IMPORTED_MODULE_2__/* .runFullScan */ .wW)({ fileContents, depFileContents, scanRoot: root, provenance: false }, () => {});
 }
 
 function _summary(findings) {

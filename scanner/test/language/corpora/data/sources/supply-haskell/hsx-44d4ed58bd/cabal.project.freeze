@@ -1,0 +1,4 @@
+active-repositories: hackage.haskell.org:merge
+constraints: any.bytestring ==0.11.5.3,
+             any.servant ==0.20.1,
+             any.cryptonite ==0.30

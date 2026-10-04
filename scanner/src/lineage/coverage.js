@@ -328,6 +328,8 @@ const LANGUAGE_EXT_PATTERNS = Object.freeze([
   [/\.go$/i, 'go'],
   [/\.(?:php|phtml)$/i, 'php'],
   [/\.rb$/i, 'ruby'],
+  [/\.l?hs(?:c|ig)?$|\.hs-boot$/i, 'haskell'],
+  [/\.nix$/i, 'nix'],
   [/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i, 'cpp'],
   // Milestone 5, language coverage-tier disclosure: these 4 have ZERO
   // lineage/taint wiring (tree-sitter-pattern-only, sast/tree-sitter-sinks.js

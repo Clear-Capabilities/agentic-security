@@ -1,0 +1,10 @@
+cabal-version: 3.0
+name:          orders-codegen
+version:       0.1.0.0
+build-type:    Simple
+
+library
+  exposed-modules:  Gen
+  hs-source-dirs:   src
+  build-depends:    base >=4.18 && <5, process, template-haskell
+  default-language: Haskell2010

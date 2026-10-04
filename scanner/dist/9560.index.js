@@ -1018,6 +1018,10 @@ const scan_diff = {
     const abs = files.map(f => _confine(sessionRoot, f, 'files[]'));
 
     const fileContents = {};
+    // `_confine` returns real paths; the session root may itself be a symlink (macOS /tmp, /var), so keys are made
+    // relative to the REAL root. A key built from the unresolved root climbs out of the tree and no finding ever
+    // matches the file it was asked about.
+    const rootReal = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot));
     let totalBytes = 0;
     for (const a of abs) {
       let stat;
@@ -1030,7 +1034,7 @@ const scan_diff = {
       }
       let content;
       try { content = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(a, 'utf8'); } catch { continue; }
-      const rel = node_path__WEBPACK_IMPORTED_MODULE_2__.relative(sessionRoot, a).replace(/\\/g, '/');
+      const rel = node_path__WEBPACK_IMPORTED_MODULE_2__.relative(rootReal, a).replace(/\\/g, '/');
       fileContents[rel] = content;
     }
 
@@ -1050,9 +1054,13 @@ const scan_diff = {
     // user's real project on every pre-write self-correction scan. Confirmed
     // by direct execution before this fix (11 state artifacts written by a
     // single scan_diff-shaped call).
-    const result = await (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__/* .withStateWritesDisabled */ .Ao)(() =>
-      runScan(sessionRoot, { network: false, fileContents, deep: true, deepInCi: true }));
+    // Haskell and Nix results depend on imported modules and manifests, so the files asked about are scanned together
+    // with their import closure (read from disk, bounded). Findings are still reported only for the requested files.
     const wantSet = new Set(Object.keys(fileContents));
+    const { withLanguageContext } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 15911));
+    const lc = withLanguageContext(sessionRoot, fileContents, {});
+    const result = await (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__/* .withStateWritesDisabled */ .Ao)(() =>
+      runScan(sessionRoot, { network: false, fileContents: lc.fileContents, depFileContents: lc.depFileContents, deep: true, deepInCi: true }));
     const sevRank = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
     const min = sevRank[severity] ?? 0;
     // Stage 6 correctness audit (historical): this used to only read
@@ -1702,12 +1710,26 @@ const synthesize_fix = {
     // even a mis-attributed swap can't land a bad edit. No stored replacement,
     // no per-finding bloat in last-scan.json.
     let autofix = null;
+    let languageFix = null;
     if (!hasReplacement) {
       try {
         const abs = _confine(ctx.sessionRoot, f.file, 'finding.file');
         const det = (0,_posture_deterministic_fix_js__WEBPACK_IMPORTED_MODULE_8__/* .synthesizeDeterministicPatch */ .X)(f, node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(abs, 'utf8'));
         if (det) autofix = { deterministic: true, ruleId: det.ruleId, patch: det.patch };
       } catch { /* best-effort — no file / no rule → no autofix */ }
+      // Haskell and Nix: a read-only preview from the language fixer, with the verification gates' verdict and the
+      // FULL / MITIGATION / WORKAROUND tier. It writes nothing; apply_fix re-verifies before anything lands.
+      if (!autofix) {
+        try {
+          const lc = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 15911));
+          if (lc.languageOfFinding(f)) {
+            const proj = lc.loadLanguageProject(ctx.sessionRoot);
+            const prev = await lc.languageFixPreview(f, proj.files);
+            languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
+            if (prev.ok) autofix = { deterministic: true, ruleId: f.rule || f.family || null, patch: prev.after, file: prev.file, label: prev.label || null, verified: true };
+          }
+        } catch { /* best-effort: the preview is advisory */ }
+      }
     }
     // Premortem #2: `replacement` is a *patch* (the code we'll write to disk),
     // not a finding excerpt. Running it through redactString silently corrupts
@@ -1726,6 +1748,7 @@ const synthesize_fix = {
       replacement: hasReplacement ? fix.replacement : null,
       template: fix.code || null,
       autofix,
+      languageFix,
       // #15 — the regression test the scan annotator already generated for this
       // finding (present when a PoC was built). Surfaced here so the fix flow
       // writes the test alongside the patch; fix-verify-loop then runs it, so an

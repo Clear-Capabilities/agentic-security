@@ -144,6 +144,9 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   'py-os-getenv': 'env-value',
   'py-os-environ': 'env-value',
   'py-input': 'user-input',
+  // Haskell: a parameter of an exported function carries caller-supplied text or a customer record (no request is modelled)
+  'hs-src-caller-controlled-param': 'user-input',
+  'hs-lin-src-record-parameter': 'user-input',
   // Java / Servlet
   'java-request-getParameter': 'http-query',
   'java-request-getHeader': 'http-header',

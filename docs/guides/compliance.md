@@ -209,6 +209,15 @@ npx @clear-capabilities/agentic-security-scanner compliance --fail-on gap
 
 ---
 
+## Haskell and Nix evidence
+
+Findings from Haskell and Nix carry CWE identifiers and feed the technical controls that are mapped by CWE or family, with the
+same honesty model: a control the engine cannot decide stays `not assessed`, and the satisfied rate is never reported over a
+framework's whole control list. Privacy frameworks that read the Data Flow Explorer graph use the Haskell and Nix flows only
+when the lineage analysis ran (`AGENTIC_SECURITY_LINEAGE_DEEP=1`), and the graph's coverage block states which languages were
+analysed. No control is marked assessed or satisfied because a Haskell or Nix project exists, and no compliance claim is made
+about a NixOS host that was only scanned as source.
+
 ## Related
 
 - [SBOM & AI-BOM](sbom-and-ai-bom.md) — evidence several frameworks ask for

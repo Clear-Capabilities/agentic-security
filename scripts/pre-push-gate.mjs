@@ -188,6 +188,15 @@ export const CHECKS = [
     remedy: 'Run `npm run bench:layer-recall:check` in scanner/ and inspect which ' +
       "language's taint-layer recall regressed — see docs/METRICS.md.",
   },
+  {
+    // Recomputes the Haskell/Nix support registry from the STORED measurement and fails on any difference (a drop, an
+    // unrecorded improvement, a changed corpus hash, a hand edit). It never measures, so it is fast.
+    id: 'language-support-gate',
+    title: 'Haskell/Nix support registry matches the stored measurement',
+    npmScript: 'bench:language-support:check',
+    remedy: 'Run `npm run bench:language-support:check` in scanner/. To change a number, re-measure and promote it deliberately ' +
+      '(bench/language-support/promote.mjs); never edit docs/language-support.json by hand.',
+  },
 ];
 
 /** Ids in execution order — cheapest first. */

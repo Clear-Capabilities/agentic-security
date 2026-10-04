@@ -1,0 +1,10 @@
+{ config, lib, pkgs, ... }:
+let
+  appName = "tracker1";
+  appPort = 8185;
+in
+{
+  systemd.services.${appName}.description = "tracker service 1";
+  networking.hostName = appName;
+  environment.etc."tracker.git".source = pkgs.fetchFromGitHub { owner = "example"; repo = "tracker"; rev = "main"; };
+}

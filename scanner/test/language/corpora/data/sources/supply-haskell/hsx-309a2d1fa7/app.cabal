@@ -1,0 +1,16 @@
+cabal-version: 3.0
+name: app0
+version: 0.1.0.0
+
+library
+  build-depends:
+    base >=4.14 && <5
+    , aeson >=2.1.2.1
+    , containers ^>=0.6.7
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  build-depends:
+    base
+    , persistent ==2.14.6.0

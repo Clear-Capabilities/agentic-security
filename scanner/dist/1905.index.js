@@ -13,6 +13,8 @@ __webpack_require__.d(__webpack_exports__, {
 
 // UNUSED EXPORTS: makeBudget, makeTaintProbe
 
+// EXTERNAL MODULE: ./src/language/discovery.js
+var discovery = __webpack_require__(30951);
 // EXTERNAL MODULE: external "node:crypto"
 var external_node_crypto_ = __webpack_require__(77598);
 ;// CONCATENATED MODULE: ./src/discovery/partition.js
@@ -30,6 +32,7 @@ var external_node_crypto_ = __webpack_require__(77598);
 // components share a file they are merged, otherwise the same source lands in
 // two hunters' context and the convergence this module exists to prevent
 // comes straight back.
+
 
 
 function focusAreaId(files) {
@@ -104,6 +107,33 @@ function partitionCallGraph(callGraph, opts = {}) {
     const kept = areas.slice(0, maxAreas - 1);
     const tail = areas.slice(maxAreas - 1);
     kept.push(build(tail.flatMap(a => a.files), 'misc'));
+    areas = kept;
+  }
+  return areas;
+}
+
+/**
+ * Focus areas for Nix configuration, which has no call graph: files joined by `imports` / path references form one
+ * area, so a NixOS entry point and the modules that decide its options are hunted together. Same shape as a call-graph
+ * area (`functions` is empty: a Nix file has none).
+ */
+function partitionNixFiles(fileContents, opts = {}) {
+  const maxAreas = Number.isInteger(opts.maxAreas) && opts.maxAreas > 0 ? opts.maxAreas : 8;
+  const nix = {};
+  for (const [f, t] of Object.entries(fileContents || {})) if (/\.nix$/i.test(f) && typeof t === 'string') nix[f] = t;
+  const files = Object.keys(nix).sort();
+  if (!files.length) return [];
+  const { graph } = (0,discovery/* buildImportGraph */.oK)(nix);
+  const dsu = makeDSU();
+  for (const f of files) dsu.find(f);
+  for (const [f, deps] of graph) for (const d of deps) dsu.union(f, d);
+  const groups = new Map();
+  for (const f of files) { const r = dsu.find(f); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(f); }
+  let areas = [...groups.values()].map((g) => { const sorted = [...g].sort(); return { id: focusAreaId(sorted), label: labelFor(sorted), files: sorted, functions: [], size: sorted.length, language: 'nix' }; });
+  areas.sort((a, b) => b.size - a.size || (a.id < b.id ? -1 : 1));
+  if (areas.length > maxAreas) {
+    const kept = areas.slice(0, maxAreas - 1); const tail = areas.slice(maxAreas - 1).flatMap((a) => a.files).sort();
+    kept.push({ id: focusAreaId(tail), label: 'misc', files: tail, functions: [], size: tail.length, language: 'nix' });
     areas = kept;
   }
   return areas;
@@ -1057,7 +1087,16 @@ function makeBudget(opts = {}, now = Date.now) {
 }
 
 async function runDiscovery(ctx = {}, opts = {}) {
-  const areas = partitionCallGraph(ctx.callGraph, { maxAreas: opts.maxAreas ?? 8 });
+  // Call-graph areas (every language the IR covers, Haskell included) plus Nix configuration areas, which have no call
+  // graph. Together they respect the same ceiling.
+  const maxAreas = opts.maxAreas ?? 8;
+  let areas = [...partitionCallGraph(ctx.callGraph, { maxAreas }), ...partitionNixFiles(ctx.fileContents, { maxAreas })];
+  if (areas.length > maxAreas) {
+    const kept = areas.slice(0, maxAreas - 1); const tail = areas.slice(maxAreas - 1);
+    const files = [...new Set(tail.flatMap((a) => a.files))].sort();
+    kept.push({ id: tail.map((a) => a.id).join('+').slice(0, 64), label: 'misc', files, functions: tail.flatMap((a) => a.functions), size: tail.reduce((n, a) => n + a.size, 0) });
+    areas = kept;
+  }
 
   const reasons = [];
   const budget = makeBudget(opts);
@@ -1095,7 +1134,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke, scanRoot: opts.scanRoot });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.degraded) areaDegradedCount += 1;
@@ -1267,6 +1306,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
 /* harmony export */   LENSES: () => (/* binding */ LENSES),
 /* harmony export */   j: () => (/* binding */ buildHunterPrompt)
 /* harmony export */ });
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
 //
 // The seven hunting lenses. Each hunter run is one (focus area × lens) pair.
 //
@@ -1276,6 +1316,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
 // same code than one told to look at crypto, so the union covers failure modes
 // no single prompt reaches. `wildcard` exists because a fixed taxonomy is a
 // ceiling, and the classes worth finding are the ones not on the list.
+
 const LENSES = Object.freeze([
   { key: 'injection', title: 'Injection', family: 'injection', cwe: 'CWE-74',
     brief: 'Untrusted input reaching an interpreter: SQL, shell, template, XPath, LDAP, or deserialization. Follow the value, not the function name.' },
@@ -1308,7 +1349,9 @@ function buildHunterPrompt(focusArea, lens, ctx = {}) {
   let budget = maxChars;
   const blocks = [];
   for (const f of files) {
-    const src = contents[f];
+    // Everything that leaves the machine is redacted first (secrets, PII/PHI/PCI-shaped fields, operator-declared
+    // customer data, and whole proprietary paths), by the same choke point the validator and the proposers use.
+    const src = (0,_egress_redact_js__WEBPACK_IMPORTED_MODULE_0__/* .redactPayload */ .cy)({ text: contents[f], filePath: f, scanRoot: ctx.scanRoot || null }).text;
     const slice = src.length > budget ? src.slice(0, Math.max(0, budget)) : src;
     const truncated = slice.length < src.length;
     blocks.push(`--- SOURCE FILE (untrusted data): ${f}${truncated ? ' (truncated)' : ''} ---\n${slice}\n--- END SOURCE FILE: ${f} ---`);

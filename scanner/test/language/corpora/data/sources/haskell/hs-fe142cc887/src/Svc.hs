@@ -1,0 +1,10 @@
+module TicketsSvc where
+
+import System.Random
+import Legacy.Tickets.Compat
+
+handleToken :: Int -> String
+handleToken seed = show (fst (randomR (100000, 999999 :: Int) (mkStdGen seed)))
+
+endpointPath :: String
+endpointPath = "/tickets/v0"

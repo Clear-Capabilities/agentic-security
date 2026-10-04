@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.153.2-blue)]()
+[![Version](https://img.shields.io/badge/version-0.154.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -184,6 +184,10 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 - [Reading a finding's evidence](docs/walkthroughs/finding-evidence.md) — every real field, explained one at a time
 - [SBOM & AI-BOM](docs/guides/sbom-and-ai-bom.md) — inventory dependencies and AI components
 - [Responding to a leaked secret](docs/guides/leaked-secrets.md) — the rotation playbook
+- [Haskell](docs/guides/haskell.md): default scan, Cabal/Stack inputs, sources and sinks, web routes, dependencies and the SBOM, verified fixes, and the limits
+- [Nix and NixOS](docs/guides/nix-nixos.md): scanning flakes and configurations: static, declared, effective, evaluated and runtime scope; hardening, build trust, secrets in the store, closures, optional evaluation
+- [Installing on NixOS](docs/guides/nixos-install.md): running the scanner itself on a NixOS host, offline use, and what has not been verified
+- [Haskell and Nix support](docs/language-support.md): the measured, per-capability status behind every claim, with its denominators
 - [Finding provenance](docs/guides/finding-provenance.md) — which commit introduced a finding
 - [Local AI with Ollama](docs/guides/ollama.md) — run validation/fix/hunt against a model on your own machine, no cloud calls
 
@@ -206,6 +210,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 - [CI setup](docs/guides/ci-setup.md) — gate every pull request; severity gate vs. assurance gate
 - [Configuration & env vars](docs/reference/configuration.md) — every toggle and `.agentic-security/` file
 - [State & retention](docs/governance/state-and-retention.md) — TTLs, encryption, `export`, `legal-hold`
+- [Background implementation loop](docs/guides/loop-engineering.md): the bounded runbook used to build and verify the Haskell/Nix work (a development tool, not part of the scanner)
 
 **Reference**
 - [CLI](docs/reference/cli.md) · [Output schema](docs/reference/output-schema.md) · [Glossary](docs/reference/glossary.md)
@@ -376,7 +381,7 @@ found it. Full guide, including the 8 GB / 16 GB RAM profiles and Gemma 4 —
 
 ## Language coverage
 
-Nine first-class languages, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes.
+Nine languages have the full flow engine plus structural detectors, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes. Haskell and Nix/NixOS are covered separately, with their status measured per capability (below).
 
 | Language | Vuln-class coverage |
 |----------|---------------------|
@@ -391,6 +396,50 @@ Nine first-class languages, with cross-language detectors for the OWASP-relevant
 | Rust | full (flow engine + structural) |
 
 Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, unrestricted file upload, missing authentication on state-changing routes, broken object/function-level authorization (BOLA/BFLA), and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
+
+### Haskell and Nix/NixOS
+
+Both are scanned with no compiler, no `nix` binary and no network. Each capability below is **supported** only from passing
+evidence of its own kind; a capability that needs a tool this project was measured without (`ghc`, `nix`, a NixOS host) is
+shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), [Nix and NixOS](docs/guides/nix-nixos.md) and
+[the support record](docs/language-support.md) before quoting any figure.
+
+<!-- generated:support-summary:start -->
+**Haskell**
+
+| Capability | Status | Measured on the frozen holdout, or why not |
+| --- | --- | --- |
+| parser | supported | see the table |
+| sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) |
+| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
+| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
+| auth | supported | see the table |
+| sca | supported | see the table |
+| bom | supported | see the table |
+| fix | supported | see the table |
+| integration | supported | see the table |
+
+**Nix and NixOS**
+
+| Capability | Status | Measured on the frozen holdout, or why not |
+| --- | --- | --- |
+| parser | supported | see the table |
+| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) |
+| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) |
+| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
+| sca | supported | see the table |
+| bom | supported | see the table |
+| fix | supported | see the table |
+| integration | supported | see the table |
+| nix-eval | blocked | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-01 |
+| nixos-host | blocked | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012) |
+
+Measured 2026-10-04 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
+<!-- generated:support-summary:end -->
+
+Honest limits: the corpus behind these numbers is synthetic and template-generated, so a score of 100% describes robustness
+over those shapes and is **not** a claim about arbitrary real-world Haskell or Nix; no real-world project set and no
+advisory feed beyond a pinned fixture were measured; and nothing here says a NixOS host was exercised.
 
 The detectors are precision-first: parameterized queries, escaped output, allow-list guards, CSPRNG-derived IVs, framework CSRF middleware, and token-auth schemes are recognized and **not** flagged.
 

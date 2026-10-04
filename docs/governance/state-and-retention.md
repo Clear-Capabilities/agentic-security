@@ -151,6 +151,17 @@ age, regardless of classification.
 
 ---
 
+### Haskell and Nix artifacts
+
+| Artifact | Purpose | Sensitive? | Retention | Deleted by Reset |
+|---|---|---|---|---|
+| `language-analysis.json` (+ `.sig`) | Haskell/Nix analysis summary: file outcomes, limitations, digests (paths and digests only, no source) | No | scan, 90d default | Yes |
+| `language-bom.json` (+ `.sig`) | Haskell/Nix SBOM projection | No | evidence, 365d default | Yes |
+| `fix-backups/` | Original file saved before a language fix (`undo` reads it) | **Yes** (encrypted at rest when configured) | backup, 30d default | Yes |
+| `hackage-advisories.json`, `nix-advisories.json` | Operator-supplied advisory snapshots | No | none (operator config) | **No**, preserved |
+
+`export` copies every artifact that is present; a legal hold on `fix-backups` blocks its deletion like any other artifact.
+
 ## TTL by retention class
 
 `reset --expired` (as opposed to a plain `reset`, which deletes every

@@ -108,6 +108,30 @@ verdict and the run reports its own **acceptance rate**.
 
 ---
 
+## Haskell and Nix fixes
+
+`fix --finding <id> --preview` and `--apply` route Haskell and Nix findings to their own fixers, which share one lifecycle
+with the rest of the tool: a backup is written first, the change appears in `undo --list`, and `undo` restores the file byte
+for byte.
+
+- **Haskell** fixes five shapes: SQL parameterisation, shell-string to argument list, HTML escaping, SHA-256 for a weak
+  hash, and log redaction. Each is labelled **FULL**, **MITIGATION** or **WORKAROUND** by what it changes and what it costs.
+  The patch is applied at the dangerous call even when the finding is reported at the call that reaches it.
+- **Nix** edits the definition that **wins by priority** (not the first match), and carries a tier: `full-source-edit`,
+  `source-edit-requires-relock` (regenerate `flake.lock` yourself), `guidance-only` or `blocked`. A secret in the store is
+  always guidance: moving a credential is a human decision.
+- **Gates**, for both: the path stays inside the project, the result still parses, and a rescan shows the finding gone and
+  **no new finding at medium or above**. A fix that fails a gate is reported with the reason and writes nothing; one the
+  fixers do not support says so instead of inventing a patch.
+- **Compiler or evaluator verification** is opt-in and runs only when the tool exists; otherwise the gate reads `not-run`.
+- **Dependency upgrades** are source edits with an honest tier. For a declared Hackage dependency with a known fixed version,
+  `fix --finding <id>` raises the bound in the manifest that declares it (`constraints-only (not re-resolved)`: nothing was
+  re-resolved, so it is **not** a confirmed fix; a generated plan or freeze file is evidence, never edited). For a flake input,
+  `fix --finding <id> --to <ref>` retargets the input and is `source-edit-requires-relock`: `flake.lock` is left untouched and
+  no hash is invented. Both are reversible with `undo`.
+
+See the real previews in [Haskell](haskell.md#fixes) and [Nix and NixOS](nix-nixos.md#fixes).
+
 ## Undo
 
 Every applied fix is backed up and revertible:

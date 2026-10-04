@@ -9,6 +9,40 @@
 > make the history less accurate, not more.
 
 
+## 0.154.0 - Haskell and Nix/NixOS support, with every limit stated
+
+Haskell and Nix/NixOS are now scanned by the same commands as every other language, with no compiler, no `nix` binary and no
+network. This entry records what is **measured** and what is **not**; nothing here announces completion beyond the evidence.
+
+- **Analysis.** Dependency-free Haskell and Nix parsers over SHA-256-pinned grammar tables; Haskell taint (SQL, command, path,
+  SSRF, HTML), weak crypto, logging, resource and web-route authentication rules; the NixOS effective-configuration resolver with
+  hardening, build-trust and store-secret rules; Haskell and Nix personal-data flows in the Data Flow Explorer; a Haskell
+  catalog generated from one model registry. Unresolved constructs, conditional options, stale inputs and missing feeds become
+  scan-health conditions, so a scan that could not check something is `partial`, never complete.
+- **Supply chain and BOM.** Hackage components with PVP-aware advisory matching (a snapshot you provide), a resolved graph from a
+  fresh Cabal plan or Stack export, Nix flake inputs, an exported closure matched by upstream identity with patch evidence, and
+  AI-BOM entries for model calls and inference services. License data is absent for these records and is disclosed, not guessed.
+- **Fixes.** Verified, tiered, reversible fixes for five Haskell shapes and for Nix effective settings, plus dependency-bound
+  and flake-input edits labelled as needing a re-resolve or re-lock. The planner now follows a flow into the callee that holds
+  the dangerous call. A fix a gate refuses is reported, not applied.
+- **CLI reach.** `fix` and `undo` now work for these languages, `hunt` includes `.hs`/`.nix`, `--since-baseline` filters every
+  bucket (a baselined dependency finding no longer reappears as new), the edit hook catches credentials split across literals, and
+  a Cabal or Nix project is recognised as a project root for state.
+- **Support, measured.** `docs/language-support.md` records per-capability status from a frozen holdout. On the synthetic,
+  template-generated QA-001 corpus every measured layer scores P/R/F1 100%, which says the engine is robust over those shapes and
+  **not** that it is accurate on arbitrary real code. `auth` (Haskell) and `nix-eval` / `nixos-host` (Nix) are **blocked**: no
+  `ghc`, `nix` or NixOS host was available where this was built.
+- **Tooling.** The `npm test` gate now runs the Haskell, Nix and language scopes; `language-stress` and `language-tools` have
+  their own scripts. New CI jobs (`language-suites`, `language-tools-ghc`, `nixos-runtime`) carry explicit deadlines; a
+  `language-support-gate` joins pre-push and the release check. A bounded background-loop controller and runbook
+  (`docs/guides/loop-engineering.md`) are a development tool, not part of the package.
+- **Docs.** New Haskell, Nix/NixOS, NixOS-install and loop guides; tables and example outputs are generated from the registries and
+  from the built bundle, and stale ones fail `npm run docs:check-language`.
+- **Verified and not verified.** The Haskell route fixtures compile under GHC 9.4.8 and the Haskell support table is 9 of 9. NIX-011 (a
+  real controlled evaluation) and NIX-012 (the scanner on a NixOS host, VM checks, and the new `flake.nix`) need Nix and NixOS, which
+  were never available where this was built: they stay blocked rather than faked, and the flake has never been built. The CI jobs
+  that would exercise them are written but have not run.
+
 ## 0.153.2 - Scanner F1 benchmark and dependency-currency CI repaired
 
 The daily `Scanner F1 benchmark` workflow had failed every run since about 2026-08-10. Root causes, each

@@ -389,7 +389,7 @@ test('D4/10b: the catalog\'s measured shape is pinned as equality, not a floor',
   const perKind = {};
   for (const entry of TRANSFORM_CATALOG) perKind[entry.kind] = (perKind[entry.kind] || 0) + 1;
   assert.deepEqual(perKind, {
-    hash: 15,
+    hash: 24,   // 15 -> 24: nine Haskell hash/KDF entries (Crypto.Hash, SHA256, SHA512, BLAKE2, HMAC, BCrypt, Argon2)
     encrypt: 5,
     decrypt: 5,
     encode: 5,
@@ -401,7 +401,7 @@ test('D4/10b: the catalog\'s measured shape is pinned as equality, not a floor',
     truncate: 2,
     normalize: 1,
   });
-  assert.equal(TRANSFORM_CATALOG.length, 42);
+  assert.equal(TRANSFORM_CATALOG.length, 51);
 });
 
 test('D4/10c: the catalog and its entries are frozen', () => {

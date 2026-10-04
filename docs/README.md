@@ -27,6 +27,9 @@ links each, into the docs on this page:
 - [Reading a finding's evidence](walkthroughs/finding-evidence.md) — every real field, explained one at a time
 - [Examples gallery](examples/README.md) — thirteen real findings, one screen each
 - [Local AI with Ollama](guides/ollama.md) — the fix/validate/hunt stages, running on your own machine
+- [Haskell](guides/haskell.md): default scan, Cabal/Stack inputs, sources and sinks, web routes, dependencies, verified fixes, limits
+- [Nix and NixOS](guides/nix-nixos.md): flakes and configurations: static, declared, effective, evaluated and runtime scope; hardening, store secrets, closures
+- [Installing on NixOS](guides/nixos-install.md): running the scanner itself on a NixOS host; what has not been verified
 
 **AppSec** — set the gate, read the evidence
 - [Scan health](walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
@@ -62,6 +65,10 @@ One page per job, each with copy-paste commands and expected output:
 - **[Finding provenance](guides/finding-provenance.md)** — which commit introduced a finding, and how confident that attribution is
 - **[Risk in dollars](guides/risk-dollars.md)** — the scenario-disclosure mechanism behind `riskDollars`
 - **[Local AI with Ollama](guides/ollama.md)** — run validation/fix/hunt against a model on your own machine, loopback-only, no cloud fallback
+- **[Haskell](guides/haskell.md)**: scan, dependencies and the SBOM, verified fixes, partial scans, and the limits
+- **[Nix and NixOS](guides/nix-nixos.md)**: scan a flake or a configuration: effective options, hardening, build trust, store secrets, closures, optional evaluation
+- **[Installing on NixOS](guides/nixos-install.md)**: run the scanner on a NixOS host, offline use, and what has not been verified
+- **[Background implementation loop](guides/loop-engineering.md)**: the bounded runbook used to build and verify the Haskell/Nix work (a development tool, not part of the scanner)
 
 ## Walkthroughs
 
@@ -83,8 +90,10 @@ Real captured output, field by field or run by run:
 - **[Architecture](ARCHITECTURE.md)** — how the engine's layers fit together
 - **[Architecture: the finding lifecycle](architecture/finding-lifecycle.md)** — the real module pipeline, detector to report
 - **[Concepts](concepts.md)** — evidence before severity; deterministic vs. model-assisted
-- **[Metrics](METRICS.md)** — per-layer, per-language recall, measured with repro commands
+- **[Metrics](METRICS.md)**: per-layer, per-language recall, measured with repro commands; the Haskell and Nix section carries denominators and the corpus revision
 - **[Scorecard](SCORECARD.md)** — the published accuracy scorecard
+- **[Haskell and Nix support](language-support.md)**: the measured per-capability support table, generated from the frozen holdout, with its limits
+- **Tool versions**, [`language-toolchain.json`](language-toolchain.json) records the Node, GHC, Nix and parser versions the support is built and tested against
 - **[Compliance coverage](compliance/)** — what each framework's controls map to
 - **[Agent threat model](AGENT_THREAT_MODEL.md)** — how the tool hardens itself against the code it scans
 - **[Positioning](POSITIONING.md)** — who this is for
@@ -92,7 +101,7 @@ Real captured output, field by field or run by run:
 
 ## Examples
 
-- **[Examples gallery](examples/README.md)** — thirteen real findings and real feature runs, one screen each: SQLi, authz, secrets, SCA, IaC, PII flows, cross-file taint, incomplete scan, verified fix, rejected fix, compliance evidence, model egress denial
+- **[Examples gallery](examples/README.md)**: real findings and real feature runs, including the Haskell and Nix/NixOS examples, one screen each: SQLi, authz, secrets, SCA, IaC, PII flows, cross-file taint, incomplete scan, verified fix, rejected fix, compliance evidence, model egress denial
 
 ## Troubleshooting
 

@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.153.2",
-    "bundleSha256": "dce16625abaef7a52aad4a8d0ca0402d22ea681c9a1479f7378401458e38d55e",
-    "commit": "b6300558bbe5dbb86af0d53718264ad59f7b0562",
+    "engineVersion": "0.154.0",
+    "bundleSha256": "e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849",
+    "commit": "c3c65ae767bcfefb841a0339ad8a39f0047769e5",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-02T14:52:19.146Z",
+    "generatedAt": "2026-10-04T18:56:42.604Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 479,
+        "total": 544,
         "byFile": {
           "(deep-engine)": 1,
           "badge.js": 3,
@@ -635,6 +635,26 @@
           "ir/parser-rust.js": 4,
           "ir/type-stubs.js": 4,
           "ir/universal-ir.js": 1,
+          "language/bridges.js": 1,
+          "language/context.js": 3,
+          "language/discovery.js": 1,
+          "language/fix-lifecycle.js": 2,
+          "language/haskell-fix.js": 2,
+          "language/haskell-ir.js": 8,
+          "language/haskell-llm.js": 1,
+          "language/haskell-manifests.js": 8,
+          "language/haskell-parser.js": 3,
+          "language/haskell-resolved-graph.js": 3,
+          "language/haskell-sca.js": 1,
+          "language/nix-build-trust.js": 3,
+          "language/nix-closure.js": 6,
+          "language/nix-eval-isolation.js": 3,
+          "language/nix-inventory.js": 1,
+          "language/nix-ir.js": 4,
+          "language/nix-script-taint.js": 2,
+          "language/nixos-hardening.js": 1,
+          "language/secrets.js": 1,
+          "language/witness.js": 2,
           "leaderboard.js": 3,
           "lineage/CLAUDE.md": 2,
           "lineage/drift-policy.js": 1,
@@ -647,7 +667,7 @@
           "lineage/remediation.js": 6,
           "llm-validator/agent-tools.js": 4,
           "llm-validator/consistency.js": 1,
-          "llm-validator/index.js": 5,
+          "llm-validator/index.js": 4,
           "llm-validator/model-probe.js": 1,
           "llm-validator/oom-feedback.js": 1,
           "lsp/server.js": 3,
@@ -692,7 +712,7 @@
           "posture/feature-flags.js": 3,
           "posture/federated-learning.js": 8,
           "posture/findings-memory.js": 1,
-          "posture/fix-history.js": 12,
+          "posture/fix-history.js": 14,
           "posture/fix-metrics.js": 1,
           "posture/fix-plan.js": 1,
           "posture/fix-style-mirror.js": 3,
@@ -726,6 +746,7 @@
           "posture/provenance/lifecycle.js": 1,
           "posture/provenance/providers/config.js": 1,
           "posture/provenance/repo-lineage.js": 1,
+          "posture/provenance/sca-origin.js": 4,
           "posture/realtime-cve-monitor.js": 5,
           "posture/remediation-ledger.js": 1,
           "posture/retention-policy.js": 1,
@@ -742,6 +763,7 @@
           "posture/sca-upgrade.js": 4,
           "posture/sca-verdict.js": 1,
           "posture/scan-checkpoint.js": 2,
+          "posture/secret-history.js": 2,
           "posture/secret-live-check.js": 1,
           "posture/security-trend.js": 1,
           "posture/stack-playbook.js": 1,
@@ -750,18 +772,18 @@
           "posture/suppressions.js": 4,
           "posture/telemetry-ingest.js": 3,
           "posture/test-runner.js": 2,
-          "posture/threat-model-auto.js": 1,
           "posture/threat-model-grounding.js": 1,
           "posture/time-to-fix.js": 3,
           "posture/triage-learning.js": 3,
           "posture/triage-memory.js": 3,
-          "posture/triage.js": 4,
+          "posture/triage.js": 5,
           "posture/validator-metrics.js": 3,
           "posture/verifier-ephemeral.js": 1,
           "posture/verifier-target.js": 3,
           "posture/verifier.js": 2,
           "posture/version.js": 3,
           "posture/waf-ingest.js": 5,
+          "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
           "report/index.js": 5,
@@ -784,7 +806,7 @@
           "sast/model-load.js": 1,
           "sast/mutation-xss.js": 1,
           "sast/php.js": 1,
-          "sast/pipeline.js": 1,
+          "sast/pipeline.js": 2,
           "sast/rate-limit.js": 2,
           "sast/sensitive-data-logging.js": 2,
           "sast/solidity.js": 1,
@@ -805,14 +827,19 @@
         }
       },
       "scripts": {
-        "total": 30,
+        "total": 44,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
           "calibration-expand.mjs": 2,
           "calibration-holdout-check.mjs": 1,
+          "capability-ledger/check.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
           "llm-cost-ceiling.py": 1,
+          "loop-engineering/lib/claude.mjs": 1,
+          "loop-engineering/lib/controller.mjs": 4,
+          "loop-engineering/lib/server.mjs": 5,
+          "loop-engineering/lib/tap.mjs": 3,
           "nist-compliance/scan.py": 8,
           "owasp-llm-top10/scan.py": 1,
           "rotate-key-auto.py": 1,
@@ -828,8 +855,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 318,
-    "d": 360
+    "n": 239,
+    "d": 417
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -976,6 +1003,489 @@
       "generatedAt": "2026-09-14",
       "total": 220,
       "passing": 220
+    },
+    "languageSupport": {
+      "source": "docs/language-support.json",
+      "generatedAt": "2026-10-04",
+      "node": "v24.20.0",
+      "tools": {
+        "ghc": true,
+        "cabal": true,
+        "stack": false,
+        "nix": false,
+        "nixos": false,
+        "platform": "darwin",
+        "arch": "arm64"
+      },
+      "targets": {
+        "precision": 0.9,
+        "recall": 0.85,
+        "f1": 0.8,
+        "perFamilyF1": 0.8,
+        "minHoldoutPerLabelPerFamily": 5,
+        "minPrivacyPositives": 100,
+        "minPrivacyNegatives": 100
+      },
+      "limits": [
+        "The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.",
+        "No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.",
+        "No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.",
+        "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
+        "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read."
+      ],
+      "languages": {
+        "haskell": {
+          "frozen": {
+            "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+            "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+            "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+            "corpusVersion": "qa001-v2"
+          },
+          "measuredOn": {
+            "split": "holdout",
+            "measuredAt": "2026-10-04",
+            "corpusVersion": "qa001-v2",
+            "hashes": {
+              "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+              "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+              "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+              "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+              "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+            },
+            "corpusTotals": {
+              "security": {
+                "vulnerable": 260,
+                "safe": 260,
+                "unknown": 52,
+                "families": 13
+              },
+              "privacy": {
+                "positives": 100,
+                "negatives": 200
+              }
+            }
+          },
+          "rows": [
+            {
+              "capability": "parser",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "parse-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "sast",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "sast-holdout",
+                "layer": "sast",
+                "tp": 48,
+                "fp": 0,
+                "fn": 0,
+                "tn": 44,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": 96,
+                "familyCount": 8
+              }
+            },
+            {
+              "capability": "taint",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "taint-holdout",
+                "layer": "taint",
+                "tp": 30,
+                "fp": 0,
+                "fn": 0,
+                "tn": 30,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": 60,
+                "familyCount": 5
+              }
+            },
+            {
+              "capability": "privacy-lineage",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "privacy-holdout",
+                "layer": null,
+                "tp": 30,
+                "fp": 0,
+                "fn": 0,
+                "tn": 60,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "auth",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "sca",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "sca-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "bom",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "fix",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "fix-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "integration",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            }
+          ],
+          "unknownOutcomes": {
+            "total": 19,
+            "disclosed": 16,
+            "withFinding": 19,
+            "silentClean": 0,
+            "requiredDisclosure": 9,
+            "requiredDisclosureMissing": 0
+          },
+          "metamorphic": {
+            "preserve": 1,
+            "change": 1,
+            "gate": {
+              "change": 1,
+              "preserve": 0.9
+            },
+            "ok": true,
+            "broken": []
+          }
+        },
+        "nix": {
+          "frozen": {
+            "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+            "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+            "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+            "corpusVersion": "qa001-v2"
+          },
+          "measuredOn": {
+            "split": "holdout",
+            "measuredAt": "2026-10-04",
+            "corpusVersion": "qa001-v2",
+            "hashes": {
+              "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+              "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+              "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+              "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+              "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+            },
+            "corpusTotals": {
+              "security": {
+                "vulnerable": 240,
+                "safe": 240,
+                "unknown": 52,
+                "families": 12
+              },
+              "privacy": {
+                "positives": 100,
+                "negatives": 200
+              }
+            }
+          },
+          "rows": [
+            {
+              "capability": "parser",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "parse-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "config-sast",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "sast-holdout",
+                "layer": "sast",
+                "tp": 66,
+                "fp": 0,
+                "fn": 0,
+                "tn": 66,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": 132,
+                "familyCount": 11
+              }
+            },
+            {
+              "capability": "config-taint",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "taint-holdout",
+                "layer": "taint",
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "tn": 6,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": 12,
+                "familyCount": 1
+              }
+            },
+            {
+              "capability": "privacy-lineage",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "privacy-holdout",
+                "layer": null,
+                "tp": 30,
+                "fp": 0,
+                "fn": 0,
+                "tn": 60,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "sca",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "sca-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "bom",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "fix",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "fix-fixtures",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "integration",
+              "status": "supported",
+              "reasons": [],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "nix-eval",
+              "status": "blocked",
+              "reasons": [
+                "nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-011.AC04)"
+              ],
+              "evidence": {
+                "metric": "test-suite",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            },
+            {
+              "capability": "nixos-host",
+              "status": "blocked",
+              "reasons": [
+                "nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012)",
+                "no test-suite evidence was recorded for this capability"
+              ],
+              "evidence": {
+                "metric": "host-run",
+                "layer": null,
+                "tp": null,
+                "fp": null,
+                "fn": null,
+                "tn": null,
+                "precision": null,
+                "recall": null,
+                "f1": null,
+                "cases": null,
+                "familyCount": null
+              }
+            }
+          ],
+          "unknownOutcomes": {
+            "total": 17,
+            "disclosed": 17,
+            "withFinding": 17,
+            "silentClean": 0,
+            "requiredDisclosure": 0,
+            "requiredDisclosureMissing": 0
+          },
+          "metamorphic": {
+            "preserve": 1,
+            "change": 1,
+            "gate": {
+              "change": 1,
+              "preserve": 0.9
+            },
+            "ok": true,
+            "broken": []
+          }
+        }
+      }
     },
     "independent": {
       "source": "bench/independent/RESULT.json",

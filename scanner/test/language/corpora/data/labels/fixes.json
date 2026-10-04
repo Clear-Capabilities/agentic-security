@@ -1,0 +1,662 @@
+[
+ {
+  "id": "hsf-ff77019171",
+  "ecosystem": "haskell",
+  "family": "sql-injection",
+  "tag": "ok0",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-32d7ddd99b",
+  "ecosystem": "haskell",
+  "family": "command-injection",
+  "tag": "ok1",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-56e1bbf83f",
+  "ecosystem": "haskell",
+  "family": "path-traversal",
+  "tag": "ok2",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-7677c0d491",
+  "ecosystem": "haskell",
+  "family": "ssrf",
+  "tag": "ok3",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-8744586f3c",
+  "ecosystem": "haskell",
+  "family": "html-injection",
+  "tag": "ok4",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-d1db47cbc6",
+  "ecosystem": "haskell",
+  "family": "weak-password-hash",
+  "tag": "ok5",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-9bc48a0043",
+  "ecosystem": "haskell",
+  "family": "weak-randomness",
+  "tag": "ok6",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-be4f0eaefd",
+  "ecosystem": "haskell",
+  "family": "resource-limits",
+  "tag": "ok7",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-285eccdd78",
+  "ecosystem": "haskell",
+  "family": "parser-safety",
+  "tag": "ok8",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-04b0aa18b8",
+  "ecosystem": "haskell",
+  "family": "sensitive-logging",
+  "tag": "ok9",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-9a5239173c",
+  "ecosystem": "haskell",
+  "family": "route-authentication",
+  "tag": "ok10",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-6cc5846eab",
+  "ecosystem": "haskell",
+  "family": "object-authorization",
+  "tag": "ok11",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-e84dd47c1d",
+  "ecosystem": "haskell",
+  "family": "session-cookie",
+  "tag": "ok12",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-f503853dfe",
+  "ecosystem": "haskell",
+  "family": "sql-injection",
+  "tag": "ok13",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-9dd6c3dc82",
+  "ecosystem": "haskell",
+  "family": "command-injection",
+  "tag": "ok14",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-34bb27f53a",
+  "ecosystem": "haskell",
+  "family": "path-traversal",
+  "tag": "ok15",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-98f4aa8d72",
+  "ecosystem": "haskell",
+  "family": "ssrf",
+  "tag": "ok16",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-3260ae7fda",
+  "ecosystem": "haskell",
+  "family": "html-injection",
+  "tag": "ok17",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-d765681072",
+  "ecosystem": "haskell",
+  "family": "weak-password-hash",
+  "tag": "ok18",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-63efe6b571",
+  "ecosystem": "haskell",
+  "family": "weak-randomness",
+  "tag": "ok19",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "hsf-2be8920d30",
+  "ecosystem": "haskell",
+  "family": "sql-injection",
+  "tag": "rej0",
+  "targetPath": "../../etc/passwd",
+  "expected": {
+   "accepted": false,
+   "reason": "path-escape"
+  }
+ },
+ {
+  "id": "hsf-1980f907bf",
+  "ecosystem": "haskell",
+  "family": "path-traversal",
+  "tag": "rej1",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "syntax"
+  }
+ },
+ {
+  "id": "hsf-a2bc65bd0c",
+  "ecosystem": "haskell",
+  "family": "html-injection",
+  "tag": "rej2",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "no-change"
+  }
+ },
+ {
+  "id": "hsf-14b3570319",
+  "ecosystem": "haskell",
+  "family": "weak-randomness",
+  "tag": "rej3",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "still-vulnerable"
+  }
+ },
+ {
+  "id": "hsf-4194933096",
+  "ecosystem": "haskell",
+  "family": "parser-safety",
+  "tag": "rej4",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "not-proven-safe"
+  }
+ },
+ {
+  "id": "hsf-eefe16e981",
+  "ecosystem": "haskell",
+  "family": "route-authentication",
+  "tag": "rej5",
+  "targetPath": "../../etc/passwd",
+  "expected": {
+   "accepted": false,
+   "reason": "path-escape"
+  }
+ },
+ {
+  "id": "hsf-f546a4c847",
+  "ecosystem": "haskell",
+  "family": "session-cookie",
+  "tag": "rej6",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "syntax"
+  }
+ },
+ {
+  "id": "hsf-819a12ffcf",
+  "ecosystem": "haskell",
+  "family": "command-injection",
+  "tag": "rej7",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "no-change"
+  }
+ },
+ {
+  "id": "hsf-e8ac866732",
+  "ecosystem": "haskell",
+  "family": "ssrf",
+  "tag": "rej8",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "still-vulnerable"
+  }
+ },
+ {
+  "id": "hsf-e6880d3a0e",
+  "ecosystem": "haskell",
+  "family": "weak-password-hash",
+  "tag": "rej9",
+  "targetPath": "src/Svc.hs",
+  "expected": {
+   "accepted": false,
+   "reason": "not-proven-safe"
+  }
+ },
+ {
+  "id": "nxf-24f80e2560",
+  "ecosystem": "nix",
+  "family": "script-interpolation",
+  "tag": "ok0",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-02baa482ef",
+  "ecosystem": "nix",
+  "family": "secret-in-store",
+  "tag": "ok1",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-5340cf87de",
+  "ecosystem": "nix",
+  "family": "unpinned-source",
+  "tag": "ok2",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-15342f13ca",
+  "ecosystem": "nix",
+  "family": "binary-cache-trust",
+  "tag": "ok3",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-f740012d0e",
+  "ecosystem": "nix",
+  "family": "trusted-users",
+  "tag": "ok4",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-700d5e09bd",
+  "ecosystem": "nix",
+  "family": "native-eval",
+  "tag": "ok5",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-b402940dd4",
+  "ecosystem": "nix",
+  "family": "sandbox-trust",
+  "tag": "ok6",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-c80552e549",
+  "ecosystem": "nix",
+  "family": "ssh-access",
+  "tag": "ok7",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-614ccd1d64",
+  "ecosystem": "nix",
+  "family": "service-privilege",
+  "tag": "ok8",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-1f8f20d58f",
+  "ecosystem": "nix",
+  "family": "firewall-exposure",
+  "tag": "ok9",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-6a1cdef60c",
+  "ecosystem": "nix",
+  "family": "privilege-escalation-policy",
+  "tag": "ok10",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-b702525f01",
+  "ecosystem": "nix",
+  "family": "tls-secret-runtime",
+  "tag": "ok11",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-7ea0a8586e",
+  "ecosystem": "nix",
+  "family": "script-interpolation",
+  "tag": "ok12",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-447800db12",
+  "ecosystem": "nix",
+  "family": "secret-in-store",
+  "tag": "ok13",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-087089d7f4",
+  "ecosystem": "nix",
+  "family": "unpinned-source",
+  "tag": "ok14",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-9577df47c4",
+  "ecosystem": "nix",
+  "family": "binary-cache-trust",
+  "tag": "ok15",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-07e21eca17",
+  "ecosystem": "nix",
+  "family": "trusted-users",
+  "tag": "ok16",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-abe38e89c4",
+  "ecosystem": "nix",
+  "family": "native-eval",
+  "tag": "ok17",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-548ea33cc1",
+  "ecosystem": "nix",
+  "family": "sandbox-trust",
+  "tag": "ok18",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-55e048808a",
+  "ecosystem": "nix",
+  "family": "ssh-access",
+  "tag": "ok19",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": true,
+   "reason": "verified-safe"
+  }
+ },
+ {
+  "id": "nxf-d4d90e8d96",
+  "ecosystem": "nix",
+  "family": "script-interpolation",
+  "tag": "rej0",
+  "targetPath": "../../etc/passwd",
+  "expected": {
+   "accepted": false,
+   "reason": "path-escape"
+  }
+ },
+ {
+  "id": "nxf-b905639ee9",
+  "ecosystem": "nix",
+  "family": "unpinned-source",
+  "tag": "rej1",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "syntax"
+  }
+ },
+ {
+  "id": "nxf-1bab7130f2",
+  "ecosystem": "nix",
+  "family": "trusted-users",
+  "tag": "rej2",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "no-change"
+  }
+ },
+ {
+  "id": "nxf-cb05d79f7b",
+  "ecosystem": "nix",
+  "family": "sandbox-trust",
+  "tag": "rej3",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "still-vulnerable"
+  }
+ },
+ {
+  "id": "nxf-316b84a8ad",
+  "ecosystem": "nix",
+  "family": "service-privilege",
+  "tag": "rej4",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "not-proven-safe"
+  }
+ },
+ {
+  "id": "nxf-7b60862c90",
+  "ecosystem": "nix",
+  "family": "privilege-escalation-policy",
+  "tag": "rej5",
+  "targetPath": "../../etc/passwd",
+  "expected": {
+   "accepted": false,
+   "reason": "path-escape"
+  }
+ },
+ {
+  "id": "nxf-e69a802af6",
+  "ecosystem": "nix",
+  "family": "script-interpolation",
+  "tag": "rej6",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "syntax"
+  }
+ },
+ {
+  "id": "nxf-992cf0a069",
+  "ecosystem": "nix",
+  "family": "unpinned-source",
+  "tag": "rej7",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "no-change"
+  }
+ },
+ {
+  "id": "nxf-a6b8ddaf94",
+  "ecosystem": "nix",
+  "family": "trusted-users",
+  "tag": "rej8",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "still-vulnerable"
+  }
+ },
+ {
+  "id": "nxf-b9de4d48e6",
+  "ecosystem": "nix",
+  "family": "sandbox-trust",
+  "tag": "rej9",
+  "targetPath": "configuration.nix",
+  "expected": {
+   "accepted": false,
+   "reason": "not-proven-safe"
+  }
+ }
+]

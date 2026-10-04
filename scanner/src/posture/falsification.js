@@ -90,6 +90,13 @@ export function classifyFinding(finding, fileContents) {
   if (finding.sanitizerMismatch) {
     return { verdict: 'survived', reasons: ['wrong-context sanitizer does not neutralize this sink'] };
   }
+  // Haskell and Nix findings are judged on the IR / effective configuration, never on adjacent text: the taint
+  // engine already refuses a flow that a DOMINATING, context-matched guard covers (language/haskell-guards.js), and
+  // a NixOS value is decided by option precedence. A sanitizer-looking word near the sink (a comment, a helper that
+  // is not on the path, a control for a different family) is not control evidence, so text proximity never blocks.
+  if (/\.(?:l?hs|nix)$/i.test(String(finding.file || ''))) {
+    return { verdict: 'survived', reasons: ['judged on the IR/effective configuration: adjacent text is not control evidence'] };
+  }
   const window = _pathWindow(finding, fileContents);
   if (!window || !window.trim()) {
     return { verdict: 'unproven', reasons: ['no source context available to attempt falsification'] };

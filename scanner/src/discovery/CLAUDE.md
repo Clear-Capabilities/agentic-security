@@ -46,3 +46,9 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
   it was not examined, and the report says so.
 - **Coverage is reported.** Degraded runs and their reasons appear in every
   report. A half-failed pass must never read as a clean one.
+
+## Nix partitioning
+
+`partition.js` `partitionNixFiles` groups `.nix` files by their import structure (a configuration and the modules it imports are
+one area), merged areas are capped, and hunter prompts for Haskell and Nix are redacted (split literals joined first) before they
+leave the process. `hunt` includes `.hs`, `.lhs` and `.nix`. With no endpoint every run is degraded and says so.

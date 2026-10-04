@@ -126,6 +126,25 @@ prose even mentions reaching.
 
 ---
 
+## Haskell and Nix field journeys
+
+Haskell and Nix feed the same graph, with the same evidence grades. Captured from `examples/polyglot-privacy`
+(`AGENTIC_SECURITY_LINEAGE_DEEP=1 scan`, then `dataflow export --format json`):
+
+- A Haskell record parameter of an exported function (`Customer { email, socialSecurityNumber, ... }`) is a source labelled
+  `hs:record-parameter`; its `email` field reaches an application log (`putStrLn`) and an external CRM call (`httpLBS`), and
+  its `socialSecurityNumber` reaches the log. Each is a field-level edge with the field path on both ends.
+- A Nix `config.customer.email` option interpolated into `environment.etc."crm-contact.conf".text` is a field-to-**store**
+  flow: the destination is labelled `an /etc file (a store file)`, because everything rendered there is world-readable in the
+  Nix store. A value wrapped in `builtins.hashString` or only compared is recorded as protected and makes no edge.
+- Destinations the scanner cannot resolve (a computed URL) stay `unresolved`, and the coverage block lists which files were
+  analysed per language and which sink sites are connected or not. Haskell and Nix have no measured taint-recall tier, so the
+  coverage says `unknown` for them rather than borrowing another language's number.
+
+What is claimed: a static path from a classified field to a destination in the source as written. What is not: that the
+function is called with real personal data, or that a service is running. Configuration and script boundaries are part of the
+graph; runtime ones are not.
+
 ## Build the graph
 
 ```bash

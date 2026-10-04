@@ -1073,7 +1073,11 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           ? argTaints.findIndex(Boolean) : e.argIndex;
         const taintedArgExpr = (argExprs || [])[taintedArgIdx];
         // String content analysis: skip if literal skeleton doesn't match injection family
-        if (e.vuln && taintedArgExpr && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // Haskell entries are import-qualified, API-specific sinks (`preEscapedToHtml`, `callCommand`), never a generic
+        // `.query()`-style call that may carry an unrelated string, so the literal-skeleton filter does not apply to them.
+        if (e.vuln && taintedArgExpr && !e.hs && !literalSkeletonMatchesFamily(taintedArgExpr, e.vuln.cwe)) continue;
+        // A text-output sink that is an XSS sink ONLY when the string being assembled contains markup (`putStrLn`).
+        if (e.hs && e.hs.htmlSkeleton && !(taintedArgExpr && /<[A-Za-z!\/]/.test(_literalPartsOfExpr(taintedArgExpr).join(' ')))) continue;
         // Taint-recall PRD (80%): `match.requireLiteralArg` — a precision
         // gate for sinks whose danger depends on a SIBLING argument's
         // literal value, not the tainted one. Go's `exec.Command(path,
@@ -1141,6 +1145,9 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         findings.push({
           ...(_sanNames.size ? { _sanitizersOnPath: [..._sanNames] } : {}),
           ...(_unsanNames.size ? { _unsanitizersOnPath: [..._unsanNames] } : {}),
+          // Haskell: two sinks of the same kind on one line (`if b then f (clean x) else f x`) are distinct
+          // sites; without a site key they share an id and one silently replaces the other.
+          ...(/\.(?:hs|lhs)$/i.test(_currentFile || '') ? { siteKey: _siteKey(taintedArgExpr) } : {}),
           kind: 'taint',
           sinkId: e.id,
           vuln: e.vuln?.name || 'Tainted Sink',
@@ -1742,6 +1749,18 @@ function step(node, stateIn, callContext) {
         findings.push(..._sinkFindingsForCall(
           node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line, node.value.kwargs).findings);
         findings.push(..._nestedSinkFindings(node.value.args, state, callContext, node.line));
+      } else if (node.value && node.value.kind === 'union' && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
+        // Haskell: `if c then A else B` and guards return a union of the branch ACTIONS, each of which
+        // runs when its branch is taken, so every branch call is a sink site in its own right. (Scoped
+        // to Haskell: other IRs lower conditional expressions differently and are unchanged.)
+        const leaves = [];
+        const walk = (v, d) => { if (!v || d > 40) return; if (v.kind === 'union') (v.branches || []).forEach((b) => walk(b, d + 1)); else if (v.kind === 'call') leaves.push(v); };
+        walk(node.value, 0);
+        for (const c of leaves) {
+          const { cat, argTaints } = _matchCallCatalog(c.callee, c.args, state, callContext);
+          findings.push(..._sinkFindingsForCall(c.callee, c.args, cat, argTaints, state, callContext, c.line || node.line, c.kwargs).findings);
+          findings.push(..._nestedSinkFindings(c.args, state, callContext, c.line || node.line));
+        }
       }
       if (exprTaint(node.value, state, callContext)) {
         callContext._returnTainted = true;
@@ -1764,6 +1783,14 @@ function step(node, stateIn, callContext) {
 // state, never into the SummaryCache key (that stays exactly what the caller
 // supplied). Returns the ORIGINAL Set unchanged when there's nothing to add,
 // so callers that never touch annotation-shaped params pay zero extra cost.
+// Short stable fingerprint of an argument expression (ignores line numbers and IR bookkeeping).
+function _siteKey(expr) {
+  let h = 5381;
+  const str = JSON.stringify(expr, (k, v) => (k === 'line' || k === 'hs' ? undefined : v)) || '';
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
 function _unionAnnotationTaint(fn, entrySet) {
   if (!fn.paramAnnotations || !fn.paramAnnotations.length) return entrySet;
   const extra = matchAnnotationParams(fn.paramAnnotations, fn.file);
@@ -2541,6 +2568,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     if (!fn) continue;
     if (calledQids.has(f._funcQid)) continue;
     if (fn.name === '<module>' || /handler|route|controller|middleware|endpoint/i.test(fn.name || '')) continue;
+    // Haskell: an exported function or `main` is reachable from outside the analysed files.
+    if (fn.hs && (fn.hs.exported || /\.main$/.test(fn.name || ''))) continue;
     f._inDeadCode = true;
     const dg = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
     if (dg[f.severity]) f.severity = dg[f.severity];
@@ -2572,12 +2601,13 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
       // every path pushing into `_findings` sets `file` explicitly as of
       // this fix.
       const file = f.file || attributedFn.file;
-      const key = `${f.sinkId}:${file}:${f.line}`;
+      const key = `${f.sinkId}:${file}:${f.line}${f.siteKey ? ':' + f.siteKey : ''}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const fn = attributedFn;
       all.push({
-        id: `ir-taint:${file}:${f.line}:${f.sinkId}`,
+        id: `ir-taint:${file}:${f.line}:${f.sinkId}${f.siteKey ? ':' + f.siteKey : ''}`,
+        ...(f.siteKey ? { siteKey: f.siteKey } : {}),
         file,
         line: f.line,
         vuln: f.vuln,

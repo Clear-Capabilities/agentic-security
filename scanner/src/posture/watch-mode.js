@@ -24,6 +24,7 @@ import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 
 import { stateDir, statePath, stateWritesEnabled } from './state-dir.js';
+import { isLanguageSource, isLanguageManifest, isLanguageExcludedPath, isExplicitExport, impactedFiles } from '../language/discovery.js';
 const STATUS_MD   = 'watch-status.md';
 const STATUS_JSON = 'watch-status.json';
 const DEBOUNCE_MS = 350;
@@ -33,8 +34,33 @@ const SCAN_EXT_RE = /\.(?:[jt]sx?|mjs|cjs|py|java|kt|go|rb|php|cs|c|cc|cpp|h|hpp
 const IGNORE_DIR_RE = /(?:^|\/)(?:\.git|node_modules|\.bench-cache|dist|build|\.next|coverage|\.agentic-security)(?:$|\/)/;
 
 function _isScanable(rel) {
-  if (!rel || IGNORE_DIR_RE.test(rel)) return false;
+  if (!rel) return false;
+  // An explicit export is evidence even though it lives in a build directory.
+  if (isExplicitExport(rel)) return true;
+  if (IGNORE_DIR_RE.test(rel)) return false;
+  if (isLanguageSource(rel) || isLanguageManifest(rel)) return !isLanguageExcludedPath(rel);
   return SCAN_EXT_RE.test(rel);
+}
+
+/**
+ * Widen a batch of changed absolute paths to every file whose results the
+ * change can stale: dependents through imports, and all Haskell/Nix sources for
+ * a manifest, lockfile or export change. Batches with no Haskell/Nix path are
+ * returned untouched, so other languages never pay for a tree read.
+ */
+async function expandChangedBatch(scanRoot, batch) {
+  const rels = batch.map((p) => path.relative(scanRoot, p).split(path.sep).join('/'));
+  if (!rels.some((r) => isLanguageSource(r) || isLanguageManifest(r) || isExplicitExport(r))) return batch;
+  try {
+    const { readTree } = await import('../runScan.js');
+    const { fileContents, depFileContents } = await readTree(scanRoot);
+    const hit = impactedFiles(fileContents, depFileContents, rels);
+    const out = new Set(batch);
+    for (const r of hit) out.add(path.join(scanRoot, r));
+    return [...out];
+  } catch {
+    return batch;
+  }
 }
 
 function _readJsonSafe(fp) {
@@ -144,7 +170,12 @@ export async function watchProject(scanRoot, onChange, opts = {}) {
     if (pending.size > MAX_BURST) { pending.clear(); return; }
     const batch = Array.from(pending);
     pending.clear();
-    try { onChange(batch); } catch {}
+    const needsExpansion = batch.some((p) => {
+      const r = path.relative(scanRoot, p).split(path.sep).join('/');
+      return isLanguageSource(r) || isLanguageManifest(r) || isExplicitExport(r);
+    });
+    if (!needsExpansion) { try { onChange(batch); } catch {} return; }
+    expandChangedBatch(scanRoot, batch).then((b) => { try { onChange(b); } catch {} });
   };
   let stopped = false;
   (async () => {
@@ -169,4 +200,4 @@ export async function watchProject(scanRoot, onChange, opts = {}) {
   };
 }
 
-export const _internals = { _isScanable, SCAN_EXT_RE, IGNORE_DIR_RE };
+export const _internals = { _isScanable, expandChangedBatch, SCAN_EXT_RE, IGNORE_DIR_RE };

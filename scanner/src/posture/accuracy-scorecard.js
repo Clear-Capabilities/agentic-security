@@ -205,6 +205,23 @@ export function buildScorecard(inputs) {
       corpusBaseline: committed.corpusBaseline
         ? { source: 'bench/cve-replay/corpus-baseline.json', generatedAt: committed.corpusBaseline.generatedAt, total: committed.corpusBaseline.total, passing: committed.corpusBaseline.passing }
         : null,
+      // Haskell and Nix support (HASKELL_NIXOS_FULL_CAPABILITY_PRD.md DOC-002): the committed support registry, passed through with
+      // its denominators, layers, corpus revision, date and tool availability. Read, never re-measured here.
+      languageSupport: committed.languageSupport
+        ? {
+          source: 'docs/language-support.json',
+          generatedAt: committed.languageSupport.generatedAt || null,
+          node: committed.languageSupport.node || null,
+          tools: committed.languageSupport.tools || null,
+          targets: committed.languageSupport.targets || null,
+          limits: committed.languageSupport.limits || [],
+          languages: Object.fromEntries(Object.entries(committed.languageSupport.languages || {}).map(([k, v]) => [k, {
+            frozen: v.frozen || null, measuredOn: v.measuredOn || null,
+            rows: Object.values(v.rows || {}).map((r) => ({ capability: r.capability, status: r.status, reasons: r.reasons || [], evidence: r.evidence ? { metric: r.evidence.metric || null, layer: r.evidence.layer || null, tp: r.evidence.tp ?? null, fp: r.evidence.fp ?? null, fn: r.evidence.fn ?? null, tn: r.evidence.tn ?? null, precision: r.evidence.precision ?? null, recall: r.evidence.recall ?? null, f1: r.evidence.f1 ?? null, cases: r.evidence.cases ?? null, familyCount: r.evidence.families ? Object.keys(r.evidence.families).length : null } : null })),
+            unknownOutcomes: v.unknownOutcomes || null, metamorphic: v.metamorphic || null,
+          }])),
+        }
+        : null,
       independent: committed.independent
         ? {
           source: 'bench/independent/RESULT.json',
@@ -619,6 +636,40 @@ export function renderScorecardMarkdown(m) {
       L.push('statement that the control is satisfied.');
       L.push('');
     }
+  }
+
+  const ls = m.committedInputs.languageSupport;
+  if (ls) {
+    L.push('## Haskell and Nix/NixOS support');
+    L.push('');
+    L.push(`*Committed artifact:* \`${ls.source}\`, measured ${ls.generatedAt || 'unknown date'} on node ${ls.node || '?'}. It is read here, not re-measured by this command.`);
+    L.push('');
+    L.push('Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer');
+    L.push('is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted');
+    L.push('separately (family-scoped scoring); the strict precision that counts it is stored in the registry. Denominators are cases, with');
+    L.push('TP/FP/FN/TN shown; a row without a denominator carries a different kind of evidence (parse counts, fix gates, manifests).');
+    L.push('');
+    for (const [lang, v] of Object.entries(ls.languages)) {
+      L.push(`### ${lang === 'haskell' ? 'Haskell' : 'Nix and NixOS'}`);
+      L.push('');
+      L.push('| Capability | Status | Layer | Cases | TP | FP | FN | TN | Precision | Recall | F1 | Families |');
+      L.push('| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+      const pct = (x) => (typeof x === 'number' ? `${(x * 100).toFixed(1)}%` : ', ');
+      for (const r of v.rows) {
+        const e = r.evidence;
+        L.push(`| ${r.capability} | ${r.status} | ${e && e.layer ? e.layer : '—'} | ${e && e.cases != null ? e.cases : '—'} | ${e && e.tp != null ? e.tp : '—'} | ${e && e.fp != null ? e.fp : '—'} | ${e && e.fn != null ? e.fn : '—'} | ${e && e.tn != null ? e.tn : '—'} | ${e ? pct(e.precision) : '—'} | ${e ? pct(e.recall) : '—'} | ${e ? pct(e.f1) : '—'} | ${e && e.familyCount != null ? e.familyCount : '—'} |`);
+      }
+      L.push('');
+      const blocked = v.rows.filter((r) => r.status !== 'supported');
+      if (blocked.length) { L.push(`Not supported here: ${blocked.map((r) => `${r.capability} (${r.status}: ${(r.reasons[0] || '').slice(0, 140)})`).join('; ')}.`); L.push(''); }
+      if (v.unknownOutcomes) L.push(`Unknown and unmodelled cases: ${JSON.stringify(v.unknownOutcomes)}.`);
+      if (v.metamorphic) L.push(`Metamorphic pairs: ${JSON.stringify(v.metamorphic)}.`);
+      L.push('');
+    }
+    if (ls.tools) L.push(`Tools present where this was measured: ${Object.entries(ls.tools).map(([k, x]) => `${k}=${x === false ? 'absent' : x}`).join(', ')}.`);
+    L.push('');
+    for (const lim of ls.limits) L.push(`- ${lim}`);
+    L.push('');
   }
 
   const ind = m.committedInputs.independent;

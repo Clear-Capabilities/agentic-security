@@ -61,6 +61,7 @@
 // Cache key includes the prompt template version + model id, so any change
 // to the hardened prompt invalidates the cache.
 
+import { languageClosureDigest, languagePromptExtras } from '../language/context.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
@@ -288,6 +289,12 @@ function fileHashOf(fileContents, file) {
   if (!file) return '';
   const c = fileContents?.[file];
   if (!c) return '';
+  // Haskell/Nix: a model verdict about one file depends on the modules it imports and the manifests around it, so the
+  // key covers that closure. Otherwise a cached `reject` would survive a change to the very module that made the
+  // finding true.
+  if (/\.(?:l?hs|hs-boot|hsc|nix)$/i.test(file)) {
+    try { return languageClosureDigest(fileContents, file); } catch { /* fall back to the file alone */ }
+  }
   return crypto.createHash('sha256').update(c).digest('hex').slice(0, 32);
 }
 
@@ -319,6 +326,10 @@ function renderPrompt(finding, fileContents, challenge, nonce, scanRoot) {
     : `${finding.file}:${finding.line} [single-point detection, no cross-file path]`;
   // Defensive: strip the delimiter literally from the untrusted excerpt so
   // an attacker can't close it early by embedding our token.
+  // Related files on the finding's own evidence chain (Haskell/Nix), under the same untrusted-excerpt rules.
+  try {
+    for (const x of languagePromptExtras(finding, fileContents)) context += `${context ? '\n' : ''}--- related excerpt: ${x.file} ---\n${redactPayload({ text: x.text, filePath: x.file, scanRoot }).text}`;
+  } catch { /* extra context is advisory */ }
   let sterileContext = String(context || '')
     .replace(/BEGIN-UNTRUSTED-CODE-EXCERPT-[a-f0-9]+/gi, '[stripped-delimiter]')
     .replace(/END-UNTRUSTED-CODE-EXCERPT-[a-f0-9]+/gi, '[stripped-delimiter]');
@@ -394,12 +405,15 @@ async function callEndpoint(endpoint, apiKey, model, prompt, preset = null, shap
     else headers['Authorization'] = `Bearer ${apiKey}`;
   }
   try {
-    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+    // A model that accepts the connection and never answers must not hold a scan open forever: every call is bounded.
+    // The result is an UNAVAILABLE finding (kept, unvalidated), never a silent pass.
+    const ms = Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) > 0 ? Number(process.env.AGENTIC_SECURITY_LLM_TIMEOUT_MS) : 60_000;
+    const r = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(ms) });
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     const j = await r.json().catch(() => null);
     return { ok: true, text: String(extractText(j) || ''), usage: extractUsage ? extractUsage(j) : null };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: e && e.name === 'TimeoutError' ? 'timeout' : e.message };
   }
 }
 

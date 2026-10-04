@@ -141,6 +141,13 @@ import('${CLAUDE_PLUGIN_ROOT}/scanner/src/posture/material-change.js').then(m =>
 esac
 ```
 
+## Haskell and Nix
+
+Haskell (`.hs`, `.lhs`, `.hs-boot`, `.hsc`) and Nix (`.nix`, `flake.lock`) projects are scanned by the same command with no
+compiler, `nix` binary or network, and `hunt` includes them. Partial coverage (Template Haskell, CPP, foreign calls, dynamic Nix
+attributes, a missing advisory snapshot) is stated in the scan health, never dropped. Guides: `docs/guides/haskell.md`,
+`docs/guides/nix-nixos.md`.
+
 ## Modes
 
 **`/scan` or `/scan --all`** — Full SAST + SCA + secrets sweep. One-screen "safe to deploy?" verdict. If ❌, ask which tier to fix:

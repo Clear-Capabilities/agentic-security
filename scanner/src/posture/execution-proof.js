@@ -80,6 +80,21 @@ export async function proveFinding(finding, { timeoutMs = DEFAULT_PROOF_TIMEOUT_
   if (!poc?.code) {
     return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: 'no proof-of-concept attached' }));
   }
+  // X-009: language witnesses (generated Nix shell scripts; Haskell programs when a toolchain exists). The proof is the
+  // same marker file; the SCOPE is recorded so a configuration/generated-script proof is never read as runtime
+  // exploitation of a deployed system.
+  if (poc.lang === 'nix-shell' || poc.lang === 'haskell') {
+    const W = await import('../language/witness.js');
+    const r = poc.lang === 'haskell' ? W.runHaskellWitness(poc.code, { timeoutMs, force }) : W.runNixScriptWitness(poc.witness, { timeoutMs, force });
+    const scope = poc.lang === 'nix-shell'
+      ? { proofKind: 'generated-script-execution', doesNotProve: 'that a deployed host evaluates this configuration or that the interpolated option is attacker-controlled there' }
+      : { proofKind: 'source-witness-execution', doesNotProve: 'that the deployed application receives attacker input on this path' };
+    return attachProofTier(finding, _evidence({
+      tier: r.status === 'reproduced' ? 'execution-proven' : r.status === 'not-reproduced' ? 'proof-failed' : proofTierOf(finding),
+      backend: r.backend || detectBackend(), ran: !!r.ran, observed: r.observed || null, reason: r.reason || null, exitCode: r.exitCode ?? null, timedOut: !!r.timedOut,
+      witnessStatus: r.status, ...scope,
+    }));
+  }
   if (poc.lang !== 'js') {
     return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: `unsupported poc language: ${poc.lang}` }));
   }

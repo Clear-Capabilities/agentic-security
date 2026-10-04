@@ -440,6 +440,21 @@ where noted. Each epic's state, and what it would take to move the rest:
   numbers is a decision with licensing and fairness dimensions that belongs to
   the operator, not to the harness.
 
+## Haskell and Nix/NixOS - status
+
+Landed: static analysis, supply chain, BOM/AI-BOM, privacy flows, verified fixes, evidence and compliance wiring, scan assurance
+and the documentation, with per-capability status in [`language-support.md`](language-support.md). **Remaining, truthfully:**
+
+- **Verification that needs tools this project was built without.** A GHC to compile the Haskell route fixtures (HS-006.AC01),
+  a Nix to run a real controlled evaluation (NIX-011), and a NixOS host or VM to run the scanner itself (NIX-012). The CI jobs
+  exist (`language-tools-ghc`, `nixos-runtime`); a run on a machine with the tools is what moves those rows from `blocked`.
+- **Real-world accuracy.** The measurement corpus is synthetic and template-generated; no real-project set and no live advisory
+  feed beyond pinned fixtures were measured. A canary set of real projects is the next measurement, and the holdout must not be
+  reused to tune against it.
+- **A shipped Nix package** for the scanner itself; today the documented route is Node 24 from nixpkgs.
+- **Haskell semantics beyond the source as written:** type-directed resolution, Template Haskell expansion and CPP evaluation
+  remain disclosed boundaries.
+
 ## Sequencing
 
 ```

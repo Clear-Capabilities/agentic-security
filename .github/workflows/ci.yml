@@ -19,6 +19,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: scanner
@@ -40,6 +41,119 @@ jobs:
         run: npm run build
       - name: Verify committed bundle matches source
         run: git diff --exit-code dist/agentic-security.mjs dist/agentic-security.mjs.sha256
+
+  # Haskell and Nix/NixOS support (HASKELL_NIXOS_FULL_CAPABILITY_PRD.md, QA-004).
+  #
+  # `npm test` already runs test:haskell, test:nix and test:language through the combined invocation, so these jobs are the
+  # EXPLICIT selection: each critical suite is a named step with its own deadline, a missing npm script fails the step (npm exits
+  # non-zero for an unknown script) and an empty file list fails (node --test with no files is an error here, not a pass).
+  # scanner/test/language/language-package-ci.test.js pins that every one of these steps exists.
+  language-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node --version && npm --version
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Haskell suites
+        run: npm run test:haskell
+        timeout-minutes: 10
+      - name: Nix and NixOS suites
+        run: npm run test:nix
+        timeout-minutes: 10
+      - name: Language suites (accuracy regression, end-to-end matrix, privacy, secrets, governance, assurance)
+        run: npm run test:language
+        timeout-minutes: 25
+      - name: Support registry is current (fails on any drift from the stored measurement)
+        run: npm run bench:language-support:check
+        timeout-minutes: 5
+      - name: CLI-driven language suites (capability matrix, packed tarball, example capture, scan modes)
+        run: npm run test:language-slow
+        timeout-minutes: 40
+      - name: The existing mandatory benchmark gates do not regress (QA-002.AC02)
+        run: npm run test:language-gates
+        timeout-minutes: 30
+      - name: Scale and memory stress (offline)
+        run: npm run test:language-stress
+        timeout-minutes: 20
+
+  # The criteria that need a real compiler. An unavailable compiler is a FAILED criterion, never a skip, so this job installs one
+  # (pinned to an exact version) and runs the files that cannot pass without it.
+  language-tools-ghc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          cabal-version: '3.10.2.1'
+      - run: ghc --version && cabal --version
+      - name: Provision the packages the route fixtures import (the compile criterion needs them installed)
+        run: |
+          sudo apt-get update && sudo apt-get install -y libpq-dev
+          cabal update
+          cabal install --lib --package-env=default --allow-newer scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
+        timeout-minutes: 25
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Route fixtures compile and the support gate that consumes the result
+        run: npm run test:language-tools
+        timeout-minutes: 15
+
+  # NixOS architecture checks with a real Nix. INFORMATIONAL, like jetbrains-plugin: the installer and a channel fetch are network
+  # events, so a failure here is more often the network than this code. The offline half (parser, module resolver, hardening rules,
+  # isolated-evaluation harness with a fake evaluator) is blocking in language-suites. Nix is pinned to an exact release.
+  nixos-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: cachix/install-nix-action@v31
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+      - run: nix --version
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Isolated evaluation harness against a real evaluator
+        run: node --test test/nix/nix-eval-isolation.test.js
+        timeout-minutes: 10
+      - name: The flake builds offline and the NixOS host suite runs (NIX-012)
+        run: |
+          nix flake lock ..
+          nix build ..#default --offline --no-link --print-out-paths
+          npm run test:nixos-host
+        timeout-minutes: 15
+      - name: The NixOS example scans, and the opt-in evaluation states what it did
+        run: |
+          set -o pipefail
+          AGENTIC_SECURITY_NIX_EVAL=1 AGENTIC_SECURITY_NIX_TARGET=nixosConfigurations.edge-1.config.system.build.toplevel.drvPath \
+            node bin/agentic-security.js scan ../examples/nixos-host/fixed --format json | node -e '
+              const h = JSON.parse(require("fs").readFileSync(0, "utf8")).scanHealth.languageCoverage.optionalModes["nix-eval"];
+              console.log(JSON.stringify(h));
+              if (!h.selected) process.exit(1);
+            '
+        timeout-minutes: 10
 
   # PRD F11.1 — the VS Code extension is a shipped surface and its bundle is
   # committed, so it can go stale exactly the way the scanner bundle can.

@@ -85,6 +85,19 @@
                      change, malware-analyst, refactor-cleaner.
 ```
 
+## Haskell and Nix/NixOS
+
+Haskell and Nix are a second family of analyzers, wired beside the language pipeline rather than inside the JavaScript-centred
+one. A shared **discovery registry** (`scanner/src/language/discovery.js`) decides what is a source, a manifest or an explicit
+export, what is pruned and how files invalidate each other. Each language has its own dependency-free **parser** over
+SHA-256-pinned grammar tables, which produces a layer-1 IR: a functional IR for Haskell (feeding the shared taint engine and the
+lineage view) and a bounded **configuration IR** for Nix (feeding the module resolver, the hardening and build-trust rules and
+the Nix lineage view). Findings flow through the ordinary posture pipeline, with both **taint** and **privacy lineage**
+reading the same IR. Every result carries its uncertainty: an unresolved construct, a conditional option or a stale input is
+recorded in the language **assurance** step and joins `scanHealth`, so the verdict follows it. **Optional execution** (a
+compile check of a fix, a sandboxed `nix eval`) sits behind explicit opt-ins and a sandbox probe; the default scan never starts a
+compiler or an evaluator. The measured status of each capability is in [Haskell and Nix support](language-support.md).
+
 ## Data Flow Explorer (separate subsystem)
 
 A deliberately isolated second pipeline — not a mode of the engine above.

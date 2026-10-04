@@ -1,6 +1,6 @@
 // VS Code extension for agentic-security.
 //
-// Activates on JS / TS / Python / Dockerfile files. On save, runs the bundled
+// Activates on JS / TS / Python / Dockerfile / Haskell / Nix files (and Cabal, Stack and flake projects). On save, runs the bundled
 // CLI in SARIF mode and surfaces findings as VS Code diagnostics (Problems pane
 // + inline squiggles). Provides a code-action that hands the finding to a
 // canonical-fix handler.
@@ -118,7 +118,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   const onSave = vscode.workspace.onDidSaveTextDocument(async (doc) => {
     const config = vscode.workspace.getConfiguration('agenticSecurity');
     if (!config.get<boolean>('scanOnSave', true)) return;
-    if (!/\.(js|jsx|ts|tsx|py|tf|yaml|yml)$/i.test(doc.fileName) && !/Dockerfile$/i.test(doc.fileName)) return;
+    if (!/\.(js|jsx|ts|tsx|py|tf|yaml|yml|hs|lhs|hsc|nix|cabal)$/i.test(doc.fileName) && !/Dockerfile$/i.test(doc.fileName)
+        && !/(?:^|[\\/])(?:cabal\.project(?:\.freeze|\.local)?|stack\.yaml(?:\.lock)?|package\.yaml|flake\.lock)$/i.test(doc.fileName)) return;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       const folder = vscode.workspace.getWorkspaceFolder(doc.uri)?.uri.fsPath;

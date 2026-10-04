@@ -106,6 +106,19 @@ as a scan-health condition; `ci`'s own `--assurance strict` — see the
 
 ---
 
+## Haskell and Nix behavior of these commands
+
+| Command | Behavior for Haskell and Nix |
+|---|---|
+| `scan` | Finds `.hs` / `.lhs` / `.hs-boot` / `.hsc` / `.nix` / `flake.lock` and the Haskell manifests by file type. `--since-baseline` filters every bucket (code, secrets, supply chain). |
+| `fix --finding <id>` | Routes to the Haskell or Nix fixer (tiered, rescan-gated). For a dependency finding: raises the declaring bound (Hackage) or, with **`--to <ref>`**, retargets a flake input. `--preview` writes nothing; `--apply` writes only after every gate passes. A finding with no verified fix exits `4` and says why. |
+| `undo` | Restores a language fix byte for byte (the same history as every other fix). |
+| `hunt` | Includes `.hs`, `.lhs` and `.nix`. With no model configured it reports every run as degraded and says the result says nothing about the code; it exits `0` because it is advisory. |
+| `ci --assurance` | `strict` also fails on language-analysis conditions (unreadable sources, a disabled required analyzer, a stale or malformed export, a missing advisory snapshot, a selected evaluation that did not run). |
+| `compliance`, `dataflow export`, `attest` | Use the language findings and flows like any other: no separate flag. |
+
+New environment variables and files are in [Configuration](configuration.md#haskell-and-nix).
+
 ## Exit codes
 
 | Code | Meaning |

@@ -1,0 +1,171 @@
+{
+ "records": [
+  {
+   "package": "examplelib",
+   "ranges": [
+    {
+     "introduced": "2.0.0",
+     "fixed": "2.1.2"
+    },
+    {
+     "introduced": "1.0.0",
+     "fixed": "1.5.9"
+    }
+   ],
+   "synthetic": true,
+   "id": "SYN-a8d81273",
+   "cases": [
+    {
+     "version": "0.9.0"
+    },
+    {
+     "version": "1.0.0"
+    },
+    {
+     "version": "1.5.8"
+    },
+    {
+     "version": "1.5.9"
+    },
+    {
+     "version": "1.6.0"
+    },
+    {
+     "version": "1.9.9"
+    },
+    {
+     "version": "2.0.0"
+    },
+    {
+     "version": "2.1.1"
+    },
+    {
+     "version": "2.1.2"
+    },
+    {
+     "version": "2.2.0"
+    }
+   ]
+  },
+  {
+   "package": "sample-codec",
+   "ranges": [
+    {
+     "introduced": "0.3.0",
+     "fixed": "0.3.4"
+    },
+    {
+     "introduced": "0.4.0",
+     "fixed": "0.4.2"
+    }
+   ],
+   "synthetic": true,
+   "id": "SYN-28a2069d",
+   "cases": [
+    {
+     "version": "0.2.9"
+    },
+    {
+     "version": "0.3.0"
+    },
+    {
+     "version": "0.3.3"
+    },
+    {
+     "version": "0.3.4"
+    },
+    {
+     "version": "0.3.9"
+    },
+    {
+     "version": "0.4.0"
+    },
+    {
+     "version": "0.4.1"
+    },
+    {
+     "version": "0.4.2"
+    },
+    {
+     "version": "0.5.0"
+    }
+   ]
+  },
+  {
+   "package": "demo-parser",
+   "ranges": [
+    {
+     "introduced": "3.0",
+     "fixed": "3.2.1"
+    },
+    {
+     "introduced": "2.8",
+     "fixed": "2.8.7"
+    }
+   ],
+   "synthetic": true,
+   "id": "SYN-87779be4",
+   "cases": [
+    {
+     "version": "2.7"
+    },
+    {
+     "version": "2.8"
+    },
+    {
+     "version": "2.8.6"
+    },
+    {
+     "version": "2.8.7"
+    },
+    {
+     "version": "2.9"
+    },
+    {
+     "version": "3.0"
+    },
+    {
+     "version": "3.2"
+    },
+    {
+     "version": "3.2.1"
+    },
+    {
+     "version": "3.3"
+    }
+   ]
+  }
+ ],
+ "nixPatch": [
+  {
+   "id": "nxb-0b46729c55",
+   "advisory": "SYN-a8d81273",
+   "expected": "patched-by-backport"
+  },
+  {
+   "id": "nxb-52bc0c887c",
+   "advisory": "SYN-28a2069d",
+   "expected": "unpatched"
+  },
+  {
+   "id": "nxb-9f63d8f28d",
+   "advisory": "SYN-87779be4",
+   "expected": "patched-by-backport"
+  },
+  {
+   "id": "nxb-1e8101282e",
+   "advisory": "SYN-a8d81273",
+   "expected": "unpatched"
+  },
+  {
+   "id": "nxb-36de3617ed",
+   "advisory": "SYN-28a2069d",
+   "expected": "patched-by-backport"
+  },
+  {
+   "id": "nxb-96a01ab952",
+   "advisory": "SYN-87779be4",
+   "expected": "unpatched"
+  }
+ ]
+}

@@ -50,6 +50,23 @@ CI environment that doesn't invoke the CLI flags:
 | `AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS` | Same as `--pseudonymize-authors`: replace author names with a stable `Contributor-XXXXXXXX` id. |
 | `AGENTIC_SECURITY_GITHUB_TOKEN` / `AGENTIC_SECURITY_GITLAB_TOKEN` | Token for optional PR-metadata/CODEOWNERS provider enrichment; takes precedence over a token in `provenance-providers.yml`. |
 
+### Haskell and Nix
+
+| Variable | Effect |
+|---|---|
+| `AGENTIC_SECURITY_HACKAGE_ADVISORIES` | Path to a hash-pinned Hackage advisory snapshot. Without it (and without `hackage-advisories.json` in the state directory) Haskell dependencies are **not assessed** and the scan is `partial`. |
+| `AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256` | Optional digest the snapshot must match. |
+| `AGENTIC_SECURITY_NIX_ADVISORIES` | Path to an OSV-style snapshot (`[...]` or `{generatedAt, records}`) for the Nix closure. Without it (and without `nix-advisories.json` in the state directory) an exported closure is **not checked**, and the scan says so. |
+| `AGENTIC_SECURITY_NIX_EVAL` | `1` selects the opt-in, sandboxed evaluation. Off by default: a default scan never starts `nix`. |
+| `AGENTIC_SECURITY_NIX_TARGET` | The flake output attribute to evaluate when evaluation is selected. Without it the evaluation reports `blocked`. |
+| `AGENTIC_SECURITY_NIX_SYSTEM` | The system for the evaluation target (default: the target's own). |
+| `AGENTIC_SECURITY_LANG_DISABLE` | Comma-separated `language:capability` pairs to switch off (`haskell:taint`, `nix:config`, ...). A disabled required analyzer is a scan-health condition. |
+| `AGENTIC_SECURITY_LANG_TIMEOUT_MS` | Per-file deadline for language analysis; a timeout makes the file `timed_out`, never silent. |
+| `AGENTIC_SECURITY_LLM_TIMEOUT_MS` | Deadline for one model call (default 60 s); a timeout is the error `timeout` and the deterministic finding is kept. |
+
+Files read by exact path (never discovered by walking): `dist-newstyle/cache/plan.json`, `.stack-work/dependencies.json`,
+`nix-export.json` and `.direnv/nix-export.json`. See [Haskell](../guides/haskell.md) and [Nix and NixOS](../guides/nix-nixos.md).
+
 ### Turning a detector off
 
 Most detectors have a `AGENTIC_SECURITY_NO_<NAME>` kill switch (e.g.
@@ -114,6 +131,16 @@ rest, and how to export or legal-hold one (`export`, `legal-hold add|remove|list
 — see the [CLI reference](cli.md)), see
 [State & retention](../governance/state-and-retention.md) rather than this
 page — this page's scope stays env vars and the artifact listing above.
+
+### Haskell and Nix artifacts
+
+| File | Written by | Read by |
+|---|---|---|
+| `language-analysis.json` (+ `.sig`) | every scan that sees a Haskell or Nix file | the analysis summary and its digests (paths and digests only, never source) |
+| `language-bom.json` (+ `.sig`) | the same | the language SBOM projection |
+| `fix-backups/` | a language `fix --apply` | `undo`; one directory per fix with the original file (**confidential**, encrypted at rest when encryption is configured) |
+
+Policy files you provide (preserved by `reset`): `hackage-advisories.json`, `nix-advisories.json`.
 
 ### Policy (author these yourself — they change behavior)
 

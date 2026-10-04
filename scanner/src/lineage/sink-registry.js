@@ -116,6 +116,10 @@ export const CWE_MAP = Object.freeze({
   'CWE-22':   Object.freeze({ category: 'file',          status: 'modeled',     why: 'path traversal sinks are filesystem reads/writes' }),
   'CWE-73':   Object.freeze({ category: 'file',          status: 'modeled',     why: 'arbitrary file write' }),
   'CWE-918':  Object.freeze({ category: 'external-api',  status: 'modeled',     why: 'SSRF sinks are outbound HTTP client calls' }),
+  // X-004 / haskell-models.js: untrusted text placed in a model request BODY. The call is an ordinary outbound HTTP
+  // body setter, so it is an external-api destination; whether the destination is a model provider is decided by
+  // the AI-evidence overlay (lineage/haskell-ai.js), never by this table.
+  'CWE-1427': Object.freeze({ category: 'external-api',  status: 'modeled',     why: 'a model request body is an outbound HTTP request body' }),
   'CWE-601':  Object.freeze({ category: 'http-response', status: 'modeled',     why: 'a redirect is written as a response header' }),
   'CWE-113':  Object.freeze({ category: 'http-response', status: 'modeled',     why: 'response splitting — the sink IS the response header writer' }),
   // The sink side's ONE documented refinement (§5.2). `status: 'split'` is
@@ -136,6 +140,7 @@ export const CWE_MAP = Object.freeze({
   // memory). FR-201's category list is an EGRESS taxonomy and models none
   // of them — the single largest structural finding of D1 (§3/§7.1).
   'CWE-78':   Object.freeze({ category: null, status: 'unsupported', why: 'shell/process execution — no FR-201 category models process execution' }),
+  'CWE-88':   Object.freeze({ category: null, status: 'unsupported', why: 'process-argument injection (Haskell argv sinks), no FR-201 category models process execution' }),
   'CWE-95':   Object.freeze({ category: null, status: 'unsupported', why: 'code evaluation (eval/Function/exec/compile) — destination is an interpreter' }),
   'CWE-94':   Object.freeze({ category: null, status: 'unsupported', why: 'code injection / template compilation — destination is an interpreter or template engine' }),
   // PHP SARD catalog addition: include/require executes the included file
@@ -291,7 +296,11 @@ export function reclassifySink(entry, opts = {}) {
   }
   if (row.status === 'split') {
     // The single documented refinement on the sink side (§5.2).
-    row = DOM_FRAMEWORKS.has(entry.framework)
+    // A Haskell text-output sink (`putStrLn`) that is an XSS sink only when the string being assembled carries markup
+    // (`hs.htmlSkeleton`): the destination is standard output (a log), not a browser response.
+    row = entry.hs && entry.hs.htmlSkeleton
+      ? { category: 'log', status: 'modeled', why: 'text written to standard output (the console is a log destination); an XSS sink to the taint engine only when the assembled string carries markup' }
+      : DOM_FRAMEWORKS.has(entry.framework)
       ? { category: 'client-storage', status: 'partial', why: "LOSSY: the destination is the rendered browser DOM; schema.js's `client-storage` is its encoding of FR-201's 'browser DOM or client storage' bullet, and under-names the DOM half" }
       : { category: 'http-response', status: 'modeled', why: 'a server-side response writer (res.send / PrintWriter / echo / Fprintf)' };
   }

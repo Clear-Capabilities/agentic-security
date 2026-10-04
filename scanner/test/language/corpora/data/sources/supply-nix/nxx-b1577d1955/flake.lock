@@ -1,0 +1,55 @@
+{
+  "nodes": {
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "flake-utils": "flake-utils",
+        "disko": "disko"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "nixpkgs",
+        "rev": "889921f7b403175918e3287a977afca5781c5f3d",
+        "narHash": "sha256-TVB/2ujA5o4+QfUGSzUUhrwhzQZba8AyiqoggYxKY1U="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "nixpkgs"
+      }
+    },
+    "flake-utils": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "flake-utils",
+        "rev": "ce9334ea75415ab72538d60fbe4d72ebe1c9be2e",
+        "narHash": "sha256-yefqXtvNhzg2bcMUhfAwfJgf8YcXVu5r1f6mBObDHWI="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "flake-utils"
+      }
+    },
+    "disko": {
+      "locked": {
+        "type": "github",
+        "owner": "example",
+        "repo": "disko",
+        "rev": "0136a2812b0dd84021c260aedc78656a222561f0",
+        "narHash": "sha256-8SzVOBNYsjSGggbR4/nIBSfjP8TMTDuKksRJtiQIhFU="
+      },
+      "original": {
+        "type": "github",
+        "owner": "example",
+        "repo": "disko"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

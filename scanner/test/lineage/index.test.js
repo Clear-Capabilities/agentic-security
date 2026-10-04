@@ -101,5 +101,9 @@ test('E5/6: reuse boundary — index.js imports only coverage.js, transit-protec
     './recipient-registry.js',
     './observation-store.js',
     './cross-repo-link.js',
+    // X-004: Nix configuration lineage (contributes static-configuration flows) and the Haskell lineage VIEW
+    // (rewrites a clone of the Haskell call graph; no other language is touched)
+    './nix-view.js',
+    './haskell-view.js',
   ]);
 });

@@ -1,0 +1,10 @@
+cabal-version: 2.4
+name: ai-app
+version: 0.1.0.0
+build-type: Simple
+
+library
+  hs-source-dirs: src
+  exposed-modules: Chat, Embed, Dynamic, Sdk, NoAI
+  build-depends: base >=4.14 && <5, http-conduit, aeson, text, postgresql-simple, openai-hs, ollama-haskell, hnswlib
+  default-language: Haskell2010

@@ -10,6 +10,8 @@
 //
 // One definition, no cycle, both callers import from here.
 
+import { LANGUAGE_FAMILY_ALIASES } from '../language/compliance-map.js';
+
 export const COMPLIANCE_FAMILY_ALIAS = {
   // ASVS spells it `sqli`; every detector emits `sql-injection` (or a
   // language-prefixed variant, which the suffix rule below does NOT cover
@@ -45,3 +47,8 @@ export function resolveFamilyKeys(fam, availableKeys) {
   return out;
 }
 
+// Haskell/Nix producers emit finer families than the frameworks name; those are evidence for the framework family
+// (language/compliance-map.js). Merged without disturbing any existing alias.
+for (const [fam, extra] of Object.entries(LANGUAGE_FAMILY_ALIASES)) {
+  COMPLIANCE_FAMILY_ALIAS[fam] = [...new Set([...(COMPLIANCE_FAMILY_ALIAS[fam] || []), ...extra])];
+}

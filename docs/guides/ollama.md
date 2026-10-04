@@ -112,7 +112,7 @@ export AGENTIC_SECURITY_LLM_MODEL_FIX=qwen3-coder:30b
 agentic-security models doctor
 ```
 
-```text
+```console
 agentic-security local AI doctor
 
 ✓ Ollama server reachable
@@ -417,3 +417,13 @@ a fake in-process server standing in for Ollama, which is fast and hermetic
 but cannot catch a real model doing something a scripted reply never would.
 This tier is opt-in and slow by design (a cold local model can legitimately
 take minutes per call) — it is never run as part of normal CI.
+
+## Haskell and Nix
+
+Validation, fix proposals and `hunt` work on Haskell and Nix with a local model, with the redaction and context rules in
+[Model egress policy](../walkthroughs/model-egress.md#haskell-and-nix). `hunt` now includes `.hs`, `.lhs` and `.nix` files
+(Nix files are partitioned by their import structure). **When the endpoint is not configured or unreachable** every hunter run
+is reported as degraded, the output says "EVERY hunter run degraded: this result says nothing about the code", and the
+deterministic findings are unchanged: an unavailable model is a stated status, never an empty clean result. A model-written fix
+must pass the same gates as a deterministic one (path, syntax, the finding gone, nothing new at medium or above) before it is
+applied.

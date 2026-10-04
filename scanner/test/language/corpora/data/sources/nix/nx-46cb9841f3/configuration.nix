@@ -1,0 +1,11 @@
+{ config, lib, pkgs, ... }:
+let
+  appName = "crm0";
+  appPort = 8081;
+in
+{
+  systemd.services.${appName}.description = "crm service 0";
+  networking.hostName = appName;
+  systemd.services."${appName}-job".script = "backup ${config.services.crm.target}";
+  networking.domain = lib.mkDefault "crm.example.org";
+}

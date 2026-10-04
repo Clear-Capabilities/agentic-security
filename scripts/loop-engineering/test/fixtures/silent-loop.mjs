@@ -1,0 +1,1 @@
+for (;;) { /* silent busy loop */ }

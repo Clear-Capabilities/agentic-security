@@ -41,6 +41,7 @@ import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 
 import { safeWriteState, stateDir, statePath } from './state-dir.js';
+import { BUILD_TRUST_TYPE } from '../language/contracts.js';
 const DEFAULT_POLICY = {
   acceptRisk: [],
   sla: {},
@@ -75,6 +76,7 @@ function _normalizeAccept(entry) {
   return {
     cve: entry.cve ? String(entry.cve).toUpperCase() : null,
     package: entry.package ? String(entry.package).toLowerCase() : null,
+    rule: entry.rule ? String(entry.rule) : null,
     version: entry.version ? String(entry.version) : null,
     ecosystem: entry.ecosystem ? String(entry.ecosystem).toLowerCase() : null,
     reason: entry.reason || '',
@@ -125,6 +127,13 @@ export function matchAcceptRisk(finding, policy, today = new Date()) {
   const pkgName = String(finding.name || '').toLowerCase();
   for (const entry of policy.acceptRisk) {
     if (!_accepted(entry, today)) continue;
+    // A `rule:` entry targets a build-trust policy finding (no CVE, no version) by its rule id.
+    if (entry.rule) {
+      if (finding.type === BUILD_TRUST_TYPE && finding.rule === entry.rule
+          && (!entry.package || pkgName === entry.package)
+          && (!entry.ecosystem || entry.ecosystem === finding.ecosystem)) return entry;
+      continue;
+    }
     if (entry.cve && cves.includes(entry.cve)) return entry;
     if (entry.package && pkgName === entry.package) {
       if (entry.version && finding.version && entry.version !== finding.version) continue;
@@ -144,7 +153,7 @@ export function applyScaPolicy(findings, policy, scanTime = new Date()) {
   const stats = { suppressed: 0, slaTagged: 0, frozen: 0 };
   if (!policy || !Array.isArray(findings)) return stats;
   for (const f of findings) {
-    if (!f || f.type !== 'vulnerable_dep') continue;
+    if (!f || (f.type !== 'vulnerable_dep' && f.type !== BUILD_TRUST_TYPE)) continue;
     // Accept-risk suppression
     const acceptance = matchAcceptRisk(f, policy, scanTime);
     if (acceptance) {

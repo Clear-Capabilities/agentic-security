@@ -98,3 +98,12 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 - **`AGENTIC_SECURITY_BLIND_BENCH=1` does NOT disable the deep engine.** It gates the bench-shape detectors; `_deepRequested` in `engine.js` keys on `AGENTIC_SECURITY_DEEP === '1'` alone, so deep mode runs regardless. (This bullet previously claimed the opposite — verified false while building `bench/layer-recall/`, where setting `BLIND_BENCH=1` left taint recall unchanged at 20/210.) To turn the taint engine off, set `AGENTIC_SECURITY_DEEP=0`.
 - **The corpus barely exercises this engine.** `bench/cve-replay` enables deep mode only for its 6 `deep`-tier entries, and with the deep engine off entirely, corpus detection falls only 210 → 204. Taint quality is measured by `npm run bench:layer-recall` (which forces deep on for all 210), not by the corpus gate — see `docs/METRICS.md`.
 - **Resolved: `stub-aware-filter.js` no longer mutates `severity`.** It used to (`f.severity = downgrade[f.severity]`, opt-in via `AGENTIC_SECURITY_TYPE_STUBS=1`), which violated the recall-preserving convention every other precision annotator in this directory follows. Flagged by documentation audit, then fixed on maintainer decision: it now demotes `confidence` (× 0.4, floor 0.01) + `confidenceTier` + `exploitabilityTier` by one step each, mirroring `proof-gate.js`'s own demotion shape exactly (`_confidenceBeforeStubFilter` records the pre-demotion value, a distinct field from `proof-gate.js`'s `_confidenceBeforeProofGate` so the two compose if both fire on the same finding). Severity is never touched.
+
+## Haskell catalog
+
+`catalog-haskell.js` is **generated** from `language/haskell-models.js` (one registry of sources, sinks and sanitizers; entries
+match import-qualified callees, so a user function with the same name cannot match). Two extra sources are annotation- and
+member-based: `hs-src-caller-controlled-param` (a text parameter of an exported function nothing in the module calls) and
+`hs-lin-src-record-parameter` (the lineage form of a record parameter). `engine.js` skips the literal-skeleton filter for Haskell
+catalog entries and requires a markup literal for `htmlSkeleton` sinks. Pinned counts in the lineage registry tests change
+deliberately when the model registry grows. Details: `scanner/src/language/CLAUDE.md`.

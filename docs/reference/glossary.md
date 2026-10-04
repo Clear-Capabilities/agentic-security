@@ -198,6 +198,19 @@ See [Compliance](../guides/compliance.md) for how each is used.
 
 ---
 
+## Haskell and Nix terms
+
+**Static / declared / effective / evaluated / runtime.** The five scopes a Nix finding can have: the text as written; what the
+files declare; the value after module priorities and merges are applied; what an opt-in sandboxed evaluation returned; and what a
+running host does (never claimed). **Boundary (opaque).** A construct the scanner saw but cannot see through: a Template Haskell
+splice, a CPP branch, a foreign call. **Closure.** The set of store paths a Nix build or runtime depends on, imported only from an
+explicit, provenance-carrying export. **Plan.** `dist-newstyle/cache/plan.json`, the resolved dependency graph Cabal writes.
+**Freshness.** Whether a plan or closure export still describes the current project; stale data contributes nothing.
+**Effective option.** A NixOS option's value after priority resolution. **Tier** (of a fix). FULL, MITIGATION or WORKAROUND
+(Haskell), or full-source-edit, source-edit-requires-relock, guidance-only, blocked (Nix). **Blocked** (support status). A
+capability that needs a tool the measuring host did not have; it is never reported as passing. **Condition.** A stated reason a
+scan is `partial`.
+
 ## Go deeper
 
 - [Output schema](output-schema.md) — where these fields sit in scan

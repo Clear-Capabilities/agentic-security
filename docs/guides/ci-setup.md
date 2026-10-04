@@ -146,6 +146,21 @@ workflow; `/agentic-security:supply --cve-alerts` will also help you wire it in.
 
 ---
 
+## Haskell and Nix in CI
+
+Nothing extra is needed to gate a Haskell or Nix project: `ci` scans it with the other languages. Two settings matter:
+
+- **`--assurance strict`** fails the build when the analysis was incomplete, which for these languages includes a source the
+  parser could not read, a disabled required analyzer, a stale or malformed resolved export, a missing advisory snapshot and a
+  selected evaluation that did not run. Provide a snapshot (`AGENTIC_SECURITY_HACKAGE_ADVISORIES`,
+  `AGENTIC_SECURITY_NIX_ADVISORIES`) to make a dependency check possible in CI.
+- **Evaluation stays off** unless you set `AGENTIC_SECURITY_NIX_EVAL=1` and a target; a default CI scan never starts `nix`.
+
+This repository's own CI, for reference: the `language-suites` job runs `test:haskell`, `test:nix`, `test:language`, the support
+registry freshness check and the offline stress suite, each step with a deadline; `language-tools-ghc` installs a pinned GHC
+and runs the criteria that need a compiler; `nixos-runtime` installs a pinned Nix and is informational. The first two are
+required checks.
+
 ## Related
 
 - [Scanning](scanning.md) — modes and exit codes the gate relies on

@@ -154,6 +154,15 @@ code-derived evidence, producing false assurance.
   `'runtime'` — a future scenario evidence type has a place to land
   without overloading an existing grade.
 
+## Haskell and Nix flows
+
+Haskell record parameters and Nix `config.<option>` references add source and store nodes to the graph. They carry no new asset
+class and no new network surface: the graph is built from the same static IR as other languages, is signed with the rest of the
+artifact, and is served by the same loopback-only, read-only server. Two points specific to them: a Nix field-to-store edge
+labels the **store** as a world-readable destination (a statement about the file as written, not about a host), and a Haskell
+record-parameter source states that the caller supplies the value, which is weaker than a request read. Neither is a runtime
+claim, and the coverage block reports `unknown` rather than borrowing another language's recall tier.
+
 ## What this milestone does NOT yet threat-model
 
 Everything that requires the server, browser client, or export pipeline

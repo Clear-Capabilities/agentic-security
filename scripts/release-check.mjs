@@ -222,6 +222,13 @@ export const CHECKS = [
       "language's taint-layer recall regressed — see docs/METRICS.md.",
   },
   {
+    id: 'language-support-gate',
+    title: 'Haskell/Nix support registry matches the stored measurement',
+    slow: true,
+    remedy: 'Run `npm run bench:language-support:check` in scanner/. To change a number, re-measure and promote it deliberately ' +
+      '(bench/language-support/promote.mjs); never edit docs/language-support.json by hand.',
+  },
+  {
     // FR-906 (assurance-hardening PRD): the performance half of "add
     // performance, memory, determinism, and fault-injection gates." The
     // measurement (bench/ttff/runner.mjs, PRD F11.2) already existed and
@@ -868,6 +875,7 @@ function main(argv) {
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
   evaluate('protection-verdict-gate', () => runNpmGate('bench:protection-verdict:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
+  evaluate('language-support-gate', () => runNpmGate('bench:language-support:check'));
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));

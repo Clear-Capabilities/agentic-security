@@ -57,14 +57,17 @@
     "analyze (javascript-typescript)",
     "vscode-extension",
     "nvim-plugin",
-    "dependency-currency"
+    "dependency-currency",
+    "language-suites",
+    "language-tools-ghc"
   ],
   "informational": [
     "realworld-bench",
     "synthetic-bench",
     "jetbrains-plugin",
     "sard-blind-smoke",
-    "sard-full-test-split"
+    "sard-full-test-split",
+    "nixos-runtime"
   ],
   "self": [
     "publish"

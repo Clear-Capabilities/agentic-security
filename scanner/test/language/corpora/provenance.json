@@ -1,0 +1,119 @@
+{
+  "version": "qa001-v2",
+  "policy": "Every dataset entry is either generated in this repository (origin 'generated-in-repo') or imported from an external source with a license and an immutable pin. An import without both is rejected by the integrity suite.",
+  "sources": [
+    {
+      "dataset": "haskell-security-cases",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "nix-security-cases",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "privacy-lineage",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "supply-chain-manifests",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "fix-proposals",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "metamorphic-pairs",
+      "origin": "generated-in-repo",
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup"
+    },
+    {
+      "dataset": "backport-near-misses",
+      "origin": "generated-in-repo",
+      "synthetic": true,
+      "generator": "test/language/corpora/generate.mjs",
+      "license": "PolyForm-Internal-Use-1.0.0",
+      "pin": "manifest.json#contentRollup",
+      "note": "Synthetic version-range records. They are not real advisories and are never counted toward the real-advisory minimum."
+    }
+  ],
+  "externalImports": [],
+  "benchmarks": {
+    "nistSard": {
+      "haskell": {
+        "status": "not-obtained",
+        "claim": "none"
+      },
+      "nix": {
+        "status": "not-obtained",
+        "claim": "none"
+      },
+      "note": "NIST SARD is not known to provide Haskell or Nix/NixOS cases. No SARD or Juliet case is used or claimed for either ecosystem."
+    }
+  },
+  "gaps": [
+    {
+      "requirement": "at least 10 real pinned HSEC/upstream advisory records",
+      "status": "not-obtained",
+      "reason": "needs network access to the advisory database; no record is fabricated to fill the count"
+    },
+    {
+      "requirement": "at least 3 pinned Haskell canary projects",
+      "status": "not-obtained",
+      "reason": "needs network access to fetch and pin upstream commits and licenses"
+    },
+    {
+      "requirement": "at least 3 pinned Nix/NixOS canary configurations",
+      "status": "not-obtained",
+      "reason": "needs network access to fetch and pin upstream commits and licenses"
+    },
+    {
+      "requirement": "compile/evaluate check of controlled fixtures",
+      "status": "not-run",
+      "reason": "ghc, cabal and nix are not installed in the build environment; fixtures are reviewed by the independent label reviewer only, not compiled or evaluated"
+    }
+  ],
+  "revisions": [
+    {
+      "version": "qa001-v2",
+      "date": "2026-10-04",
+      "changed": [
+        "haskell/route-authentication",
+        "haskell/object-authorization",
+        "nix/ssh-access",
+        "nix/service-privilege",
+        "nix/firewall-exposure",
+        "nix/privilege-escalation-policy",
+        "nix/tls-secret-runtime",
+        "nix/script-interpolation",
+        "nix/secret-in-store",
+        "haskell/privacy-lineage (sinks use imported, real APIs; field ipAddr renamed ipAddress to match the taxonomy)"
+      ],
+      "unchangedHoldoutCases": 334,
+      "changedHoldoutCases": 182,
+      "reason": "Label-validity defects found while measuring on the development splits, not detector tuning: the v1 route-authentication \"guard\" was a no-op stub (`requireAuth = pure ()`), which is not authentication, and its handlers performed no state change; the v1 object-authorization cases were plain functions that ignored a parameter, not request handlers with an id lookup. A safe label on a stub guard and a vulnerable label on a handler with no sensitive operation are not defensible labels. v2 uses a credential-reading guard that rejects with 401 and handlers that persist a change, in both labels. The route-authentication handlers were later changed again, before any holdout was ever scored, to operations with no object id (a cache purge, a settings update): the id-keyed delete they used also had a latent object-authorization defect that appears once the route is authenticated, so a \"safe\" route-authentication case carried a second defect.",
+      "engineChangedBecauseOfThis": false,
+      "oldFailuresRecorded": "v1 holdout results for these two families are not published as a measurement; the v1 corpus is preserved in git history.",
+      "holdoutRule": "Only the holdout cases of the listed families changed; every other holdout hash is identical to v1. None of the changed holdout cases was used to tune a detector.",
+      "nixReason": "Same class of label-validity defect, found on the development splits: configurations where the service is not enabled (sshd, postgresql, nginx, doas, a systemd unit with no ExecStart/wantedBy), whose options are inert on NixOS; a \"safe\" ssh configuration that left PasswordAuthentication at its NixOS default (true); a \"least-capability\" service that still ran as root; a TLS \"vulnerable\" shape that used a /etc/ssl/private string path (a runtime path, not a defect) in place of a Nix path literal (copied into the store); and two shapes with attribute syntax that is not valid Nix (`systemd.services.${appName}-job`). Detector behaviour was not the reason for any of these edits. The dangerous-capability service shape also named no User, so the service ran as root as well as holding the capability (two defects in one case, against a one-defect-per-case design); it now names a non-root User. The root-login shape left PasswordAuthentication at its NixOS default (true), so it carried a second defect; it now disables password authentication so each vulnerable case seeds one defect.",
+      "privacyReason": "The v1 Haskell privacy sources named functions that were never imported and one invented API (`postJson`), used an undefined `maskTail`, and unparenthesised accessor applications (`hashWith SHA256 email acct`); the sinks now use real imported APIs and the protections are well-formed. No holdout field changed split (the holdout fields are still ssn, address, passport)."
+    }
+  ]
+}

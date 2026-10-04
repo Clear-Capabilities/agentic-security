@@ -221,7 +221,10 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // script in an error-message response) as `http-response`/`modeled`
   // (moving its entries OUT of unsupported) — see CWE_MAP for both. Net
   // effect measured directly against the live catalog, not hand-summed.
-  assert.equal(unsupported.length, 116);
+  // 116 -> 134: the Haskell sink model (HS-003..HS-006, X-003/X-004: 135 import-qualified sinks, generated from
+  // language/haskell-models.js) added CWE-78/CWE-88 process sinks, which are `unsupported` for the same reason as every
+  // other CWE-78 entry. Re-measured against the live catalog.
+  assert.equal(unsupported.length, 134);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -246,9 +249,14 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
   // (every new entry is a server-side, non-DOM/React response writer, so
   // all 4 land in `otherCount`) rather than re-deriving which specific
   // entries account for the delta from 210 commits of history.
-  assert.equal(cwe79.length, 24);
+  // 24 -> 41: the Haskell XSS sinks (Blaze/Lucid/Scotty html), all server-side response writers, land in `otherCount`.
+  // 41 -> 47: six Haskell text-output sinks (putStrLn/putStr x Prelude, System.IO, Data.Text.IO) that are XSS sinks only when the
+  // string being assembled carries markup (`hs.htmlSkeleton`). Their destination is standard output, so they reclassify to the
+  // `log` category, not `http-response`.
+  assert.equal(cwe79.length, 47);
   let domCount = 0;
   let otherCount = 0;
+  let stdoutText = 0;
   for (const e of cwe79) {
     const r = reclassifySink(e);
     if (DOM_FRAMEWORKS.has(e.framework)) {
@@ -256,6 +264,11 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
       assert.equal(r.category, 'client-storage', e.id);
       assert.equal(r.coverageStatus, 'partial', e.id);
       assert.equal(r.kind, 'store', e.id);
+    } else if (e.hs && e.hs.htmlSkeleton) {
+      stdoutText += 1;
+      assert.equal(r.category, 'log', e.id);
+      assert.equal(r.coverageStatus, 'modeled', e.id);
+      assert.equal(r.kind, 'log', e.id);
     } else {
       otherCount += 1;
       assert.equal(r.category, 'http-response', e.id);
@@ -264,7 +277,8 @@ test('CWE-79 refinement: DOM/React sinks are `client-storage`/`partial`; every o
     }
   }
   assert.equal(domCount, 6);   // 4 dom + 2 react
-  assert.equal(otherCount, 18);
+  assert.equal(otherCount, 35);   // 18 -> 35 with the 17 Haskell server-side XSS sinks
+  assert.equal(stdoutText, 6);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -505,12 +519,16 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // `http-response`/`modeled`. Re-measured directly against the live
   // catalog, not hand-summed from any branch's own delta.
   const results = SINKS.map((e) => reclassifySink(e));
-  assert.equal(SINKS.length, 313);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 182);
+  // 313 -> 448, 182 -> 299 modeled, 116 -> 134 unsupported: the Haskell sink model (135 import-qualified entries generated
+  // from language/haskell-models.js: SQL/URL/path/XSS/prompt sinks are modeled categories, CWE-78/CWE-88 process
+  // sinks are `unsupported`). Re-measured directly against the live catalog, not hand-summed.
+  // 448 -> 454, 299 -> 305 modeled: six Haskell text-output XSS sinks (`hs.htmlSkeleton`), modeled as `log` destinations.
+  assert.equal(SINKS.length, 454);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 305);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 116);
-  assert.equal(182 + 6 + 9 + 116, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 134);
+  assert.equal(305 + 6 + 9 + 134, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

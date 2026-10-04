@@ -356,6 +356,46 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
   });
 }
 
+/**
+ * Records a fix that a language lifecycle (Haskell, Nix) has ALREADY written, with its own backup, so one ledger
+ * serves every ecosystem: `agentic-security undo` reverts it, the attempt budget counts it, and its tier (FULL,
+ * MITIGATION, WORKAROUND) and the gates it passed are kept on the entry beside the timestamp. No second write happens
+ * here; `backup.original` is the file the lifecycle saved before it wrote.
+ */
+export async function recordExternalFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fixLabel = null, verification = null, backup = null, source = 'language-lifecycle', findingProvenance = null }) {
+  return _withLogLock(scanRoot, async () => {
+    if (!ensure(scanRoot)) return null;
+    const log = readLog(scanRoot);
+    const priorAttempts = _countPriorAttempts(log, stableId || null, findingId);
+    const bakAbs = backup && backup.dir ? path.join(backup.dir, 'original') : null;
+    const entry = {
+      id: `fix-${Date.now().toString(36)}-${sha(file + findingId).slice(0, 6)}`,
+      findingId, stableId: stableId || null, ruleId: ruleId || null, vuln: vuln || null, file, fileExisted: true,
+      backupPath: bakAbs ? path.relative(scanRoot, bakAbs) : null,
+      originalSha: sha(originalContent), newSha: sha(newContent),
+      appliedAt: new Date().toISOString(), status: 'applied', reverted: false, attemptOrdinal: priorAttempts + 1,
+      provenanceAtFix: _snapshotProvenanceAtFix(findingProvenance, new Date().toISOString()),
+      fixLabel, verification, source, languageBackupId: backup ? backup.id : null,
+    };
+    log.push(entry);
+    await _writeLogAndSync(scanRoot, log);
+    return entry;
+  });
+}
+
+/** Marks the history entry written for a language-lifecycle backup as reverted (sync: the lifecycle's undo is sync). */
+export function markRevertedByBackup(scanRoot, backupId) {
+  try {
+    const fp = logPath(scanRoot);
+    if (!fs.existsSync(fp)) return false;
+    const log = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    let hit = false;
+    for (const e of log) if (e && e.languageBackupId === backupId && !e.reverted) { e.reverted = true; e.revertedAt = new Date().toISOString(); hit = true; }
+    if (hit) { const tmp = `${fp}.tmp-${process.pid}`; fs.writeFileSync(tmp, JSON.stringify(log, null, 2)); fs.renameSync(tmp, fp); }
+    return hit;
+  } catch { return false; }
+}
+
 async function _writeAndSync(fp, content) {
   await fsp.mkdir(path.dirname(fp), { recursive: true });
   const handle = await fsp.open(fp, 'w');

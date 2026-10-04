@@ -77,6 +77,14 @@ When `--check` finishes, partition the vulnerable dependencies into:
 
 Bundle the **safe** set and offer to open one PR via `/fix --sca --pr`: a single branch + commit that bumps every safe dependency at once, with a summarized changelog and the cleared advisory IDs in the PR body. List the **risky** set separately for manual review — never auto-bump across a major version.
 
+## Haskell and Nix
+
+`--sbom` includes Hackage components (`pkg:hackage/...`, resolved when `dist-newstyle/cache/plan.json` or
+`.stack-work/dependencies.json` is fresh) and Nix flake inputs (and an exported closure from `nix-export.json`). Advisory
+matching needs a snapshot you provide: `AGENTIC_SECURITY_HACKAGE_ADVISORIES` and `AGENTIC_SECURITY_NIX_ADVISORIES`. Without one,
+the check says the dependencies were **not assessed**; it never reports them clean. See `docs/guides/haskell.md` and
+`docs/guides/nix-nixos.md`.
+
 ## Implementation
 
 `--check` routes to the built-in SCA engine via the real `scan --only sca` CLI invocation above. `--sbom` and `--license` read `scan.sbomDiff` / `scan.licenseGraph` (`posture/sbom-diff.js` / `posture/license-graph.js`) from `.agentic-security/last-scan.json`, running a scan first if none exists. `--cve-alerts` runs the real `cve-watch` CLI subcommand (`posture/cve-alert-daemon.js`) as a one-shot check.

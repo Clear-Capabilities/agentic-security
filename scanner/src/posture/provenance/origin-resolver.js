@@ -23,7 +23,7 @@
 // that disambiguates them; see the branch below for exactly how each is
 // handled.
 
-import { candidateCommitsForLine, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
+import { candidateCommitsForLine, candidateCommitsForFiles, commitMeta, getBlobAtCommit, isAncestor } from './git-evidence.js';
 import { replayAt } from './predicate-replay.js';
 import { PROVENANCE_METHOD } from './schema.js';
 import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-walk.js';
@@ -38,6 +38,11 @@ function relevantFiles(finding) {
   if (Array.isArray(finding.pathSteps)) {
     for (const step of finding.pathSteps) if (step.file) files.add(step.file);
   }
+  // Haskell/Nix findings are decided by more than the line they point at: a taint chain crosses modules, and a
+  // NixOS option is decided by imported modules. Replaying only the anchor file would attribute the finding to the
+  // commit that last touched that one file, so the files that decided it are replayed together.
+  if (Array.isArray(finding.chain)) for (const step of finding.chain) if (step && typeof step.file === 'string' && step.file) files.add(step.file);
+  if (Array.isArray(finding.controlFiles)) for (const f of finding.controlFiles) if (typeof f === 'string' && f) files.add(f);
   return [...files];
 }
 
@@ -173,7 +178,14 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
     return { status: 'not_available', reason: 'missing-file-line-or-stableId', commitsConsidered: 0 };
   }
 
-  const candidates = candidateCommitsForLine(scanRoot, file, line, { since });
+  let candidates = candidateCommitsForLine(scanRoot, file, line, { since });
+  // Haskell/Nix: more than the anchor line decides a finding (an import chain, a module graph), so the commits that
+  // touched ANY of the deciding files are candidates too, in chronological order.
+  const decidingFiles = relevantFiles(finding);
+  if (/\.nix$/i.test(file) || (decidingFiles.length > 1 && /\.l?hs$/i.test(file))) {
+    const wide = candidateCommitsForFiles(scanRoot, decidingFiles, { since });
+    if (wide.length) candidates = [...new Set([...wide, ...candidates])];
+  }
   if (candidates.length === 0) {
     return { status: 'not_available', reason: 'no-candidate-commits', commitsConsidered: 0 };
   }

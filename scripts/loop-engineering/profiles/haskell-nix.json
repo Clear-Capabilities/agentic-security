@@ -1,0 +1,963 @@
+{
+  "profileVersion": 1,
+  "name": "haskell-nix",
+  "description": "Execution profile for HASKELL_NIXOS_FULL_CAPABILITY_PRD.md. Limits are the PRD section 6.2 defaults; they are finite operational budgets, not delivery estimates.",
+  "platforms": {
+    "supported": [
+      "darwin",
+      "linux"
+    ],
+    "unsupported": [
+      "win32"
+    ],
+    "note": "Windows needs a Job Object/WSL implementation that is not tested; disclosed as unsupported."
+  },
+  "limits": {
+    "heartbeatSeconds": 5,
+    "workerIdleSeconds": 180,
+    "noProgressSeconds": 600,
+    "subprocessWallSeconds": 120,
+    "killGraceSeconds": 10,
+    "networkRequestSeconds": 15,
+    "networkRetries": 2,
+    "parserTaskSeconds": 5,
+    "analyzerPhaseSeconds": 120,
+    "claudeAttemptSeconds": 1200,
+    "claudeMaxTurns": 80,
+    "compileOperationMaxSeconds": 900,
+    "vmOperationMaxSeconds": 1800,
+    "attemptsPerRequirement": 3,
+    "sameFailureRepeats": 2,
+    "runWallSeconds": 43200,
+    "runMaxAttempts": 150,
+    "claudeBudgetUsd": 50,
+    "perAttemptBudgetUsd": 6,
+    "retryBackoffMaxSeconds": 60,
+    "resource": {
+      "maxRssMiB": 6144,
+      "maxOutputMiB": 256,
+      "maxLogMiB": 5,
+      "minFreeDiskGiB": 5,
+      "cpu": "No separate CPU cap: wall-clock deadlines bound CPU time. Disclosed, not silently omitted."
+    }
+  },
+  "worker": {
+    "concurrency": 1,
+    "command": "claude",
+    "bare": false,
+    "permissionMode": "dontAsk",
+    "permissionPrompts": "none",
+    "model": null,
+    "mcp": "disabled",
+    "allowedTools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(node:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(python3:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(pwd:*)",
+      "Bash(cut:*)",
+      "Bash(uniq:*)",
+      "Bash(tr:*)",
+      "Bash(awk:*)",
+      "Bash(which:*)"
+    ],
+    "disallowedTools": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(git clean:*)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)",
+      "Bash(git tag:*)",
+      "Bash(git remote:*)",
+      "Bash(git config:*)",
+      "Bash(npm publish:*)",
+      "Bash(npm login:*)",
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx:*)",
+      "Bash(gh:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(doas:*)",
+      "Bash(nixos-rebuild:*)",
+      "Bash(nix-env:*)",
+      "Bash(systemctl:*)",
+      "Bash(launchctl:*)",
+      "Bash(kill:*)",
+      "Bash(pkill:*)",
+      "Bash(killall:*)",
+      "Bash(rm:*)",
+      "Edit(.loop-engineering/**)",
+      "Write(.loop-engineering/**)",
+      "Read(.loop-engineering/**)",
+      "Edit(scripts/loop-engineering/lib/**)",
+      "Write(scripts/loop-engineering/lib/**)",
+      "Edit(scripts/loop-engineering/run.mjs)",
+      "Write(scripts/loop-engineering/run.mjs)",
+      "Edit(HASKELL_NIXOS_FULL_CAPABILITY_PRD.md)",
+      "Write(HASKELL_NIXOS_FULL_CAPABILITY_PRD.md)"
+    ],
+    "honestLimits": [
+      "Bash(node:*) can run arbitrary JavaScript, so the allow list scopes tool use but is not a filesystem sandbox. The controller therefore re-verifies every attempt itself and the final phase re-runs all suites from scratch; worker claims and worker-written evidence are never trusted.",
+      "The installed Claude CLI has no --max-turns flag; the 80-turn cap is enforced externally by counting assistant turns in the stream and terminating the attempt.",
+      "Bash(rm:*) is denied outright: workers delete files with node or by overwriting, which keeps destructive shell commands out of the unattended profile."
+    ],
+    "protectedPaths": [
+      ".loop-engineering/",
+      "scripts/loop-engineering/lib/",
+      "scripts/loop-engineering/run.mjs",
+      "HASKELL_NIXOS_FULL_CAPABILITY_PRD.md"
+    ]
+  },
+  "serve": {
+    "host": "127.0.0.1",
+    "port": 4317,
+    "lingerSeconds": 3600
+  },
+  "approvedExecutables": [
+    "node",
+    "npm",
+    "python3",
+    "git",
+    "nix",
+    "ghc",
+    "cabal",
+    "stack"
+  ],
+  "suites": {
+    "loop-manifest": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-manifest.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "loop-watchdog": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-watchdog.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "loop-background": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-background.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "loop-dashboard": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-dashboard.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "loop-evidence": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-evidence.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "loop-recovery": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-recovery.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "capability-ledger": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/capability-ledger.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-discovery": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-discovery.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-contracts": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-contracts.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-parser": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-parser.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-ir": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-ir.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-injection": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-injection.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-security-rules": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-security-rules.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-taint": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-taint.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "haskell-web-auth": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-web-auth.test.js"
+      ],
+      "timeoutSeconds": 900
+    },
+    "haskell-manifests": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-manifests.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-resolved-graph": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-resolved-graph.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "haskell-sca": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-sca.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "haskell-remediation": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-remediation.test.js"
+      ],
+      "timeoutSeconds": 600
+    },
+    "haskell-support-gate": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/haskell/haskell-support-gate.test.js"
+      ],
+      "timeoutSeconds": 600
+    },
+    "nix-parser-ir": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-parser-ir.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nixos-module-resolution": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nixos-module-resolution.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-script-taint": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-script-taint.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "nixos-hardening": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nixos-hardening.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-build-trust": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-build-trust.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-secrets-store": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-secrets-store.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-input-inventory": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-input-inventory.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-resolved-closure": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-resolved-closure.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "nix-sca-patches": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-sca-patches.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "nix-remediation": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-remediation.test.js"
+      ],
+      "timeoutSeconds": 600
+    },
+    "nix-eval-isolation": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nix-eval-isolation.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "requiresTools": [
+        "nix"
+      ]
+    },
+    "nixos-host-runtime": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/nix/nixos-host-runtime.test.js"
+      ],
+      "timeoutSeconds": 1800,
+      "requiresTools": [
+        "nix"
+      ]
+    },
+    "language-secrets": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-secrets.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-aibom": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-aibom.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-llm-agent": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-llm-agent.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-privacy-lineage": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-privacy-lineage.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-explorer": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-explorer.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-polyglot-bridges": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-polyglot-bridges.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-assurance": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-assurance.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-evidence-posture": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-evidence-posture.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-proof-remediation": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-proof-remediation.test.js"
+      ],
+      "timeoutSeconds": 600
+    },
+    "language-bom": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-bom.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-compliance": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-compliance.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-report-formats": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-report-formats.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-scan-modes": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-scan-modes.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-integrations": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-integrations.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-local-ai": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-local-ai.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-governance": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-governance.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-corpora-integrity": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-corpora-integrity.test.js"
+      ],
+      "timeoutSeconds": 300
+    },
+    "language-accuracy-regression": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-accuracy-regression.test.js",
+        "test/language/language-benchmark-gates.test.js"
+      ],
+      "timeoutSeconds": 900
+    },
+    "language-stress-offline": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-stress-offline.test.js"
+      ],
+      "timeoutSeconds": 900
+    },
+    "language-package-ci": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-package-ci.test.js"
+      ],
+      "timeoutSeconds": 900
+    },
+    "language-end-to-end": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-end-to-end.test.js"
+      ],
+      "timeoutSeconds": 900
+    },
+    "language-doc-coverage": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-doc-coverage.test.js"
+      ],
+      "timeoutSeconds": 180
+    },
+    "language-doc-examples-metrics": {
+      "kind": "node-test",
+      "cwd": "scanner",
+      "executable": "node",
+      "files": [
+        "test/language/language-doc-examples-metrics.test.js"
+      ],
+      "timeoutSeconds": 600
+    },
+    "loop-runbook": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-runbook.test.js"
+      ],
+      "timeoutSeconds": 120
+    },
+    "language-release-final": {
+      "kind": "controller-final",
+      "cwd": ".",
+      "executable": "node",
+      "files": [],
+      "timeoutSeconds": 3600
+    }
+  },
+  "watch": {
+    "LOOP": [
+      "scripts/loop-engineering/**"
+    ],
+    "CORE": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**",
+      "docs/**"
+    ],
+    "HS": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**"
+    ],
+    "NIX": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**",
+      "flake.nix",
+      "flake.lock",
+      "nix/**"
+    ],
+    "X": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**"
+    ],
+    "QA": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**",
+      "bench/**",
+      "scanner/dist/**",
+      ".github/**",
+      "flake.nix",
+      "nix/**"
+    ],
+    "DOC": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "ide/**",
+      "data/**",
+      "scripts/loop-engineering/profiles/**",
+      "docs/**",
+      "examples/**",
+      "README.md",
+      "CHANGELOG.md",
+      "CLAUDE.md",
+      "scripts/loop-engineering/**"
+    ],
+    "REL": [
+      "**"
+    ]
+  },
+  "baselineGates": [
+    {
+      "id": "npm-test",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "test"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "bench-cve-replay",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:cve-replay:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-mutation",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:mutation:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-layer-recall",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:layer-recall:check"
+      ],
+      "timeoutSeconds": 300
+    }
+  ],
+  "finalGates": [
+    {
+      "id": "build",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "npm-test",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "test"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "test-ci-parity",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "test:ci-parity"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "test-loop-controller",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "test:loop"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "bench-cve-replay",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:cve-replay:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-self-scan",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:self-scan:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-mutation",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:mutation:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-protection-verdict",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:protection-verdict:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-provenance-accuracy",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:provenance-accuracy:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "bench-layer-recall",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:layer-recall:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "bench-language-support",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:language-support:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "test-language-stress",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "test:language-stress"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "check-doc-drift",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "check-doc-drift"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "docs-verify-examples",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "docs:verify-examples"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "scorecard-check",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "scorecard:check"
+      ],
+      "timeoutSeconds": 300
+    }
+  ]
+}

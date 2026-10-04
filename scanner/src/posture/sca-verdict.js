@@ -13,6 +13,8 @@
 // Verdict enum (must match the agent + downstream /fix --sca):
 //   AUTO_MERGE_PATCH · WAIT_FOR_PATCH · MANUAL_REVIEW · ACCEPT_RISK · WONT_FIX
 
+import { BUILD_TRUST_TYPE } from '../language/contracts.js';
+
 export const SCA_VERDICTS = ['AUTO_MERGE_PATCH', 'WAIT_FOR_PATCH', 'MANUAL_REVIEW', 'ACCEPT_RISK', 'WONT_FIX'];
 
 const REACHABLE_TIERS = new Set(['route-reachable-via-function', 'function-reachable', 'import-reachable']);
@@ -63,6 +65,11 @@ export function computeScaVerdict(sc, opts = {}) {
   // 1. Already suppressed by policy (accept-risk match) → pass-through.
   if (sc.suppressed || sc.suppressionReason) {
     return { verdict: 'ACCEPT_RISK', reason: sc.suppressionReason || 'matched existing accept-risk in sca-policy.yml' };
+  }
+  // 1b. Nix build-trust policy findings have no advisory, fixed version or upgrade
+  // path: the remedy is a configuration or pin change, which is always a human call.
+  if (sc.type === BUILD_TRUST_TYPE) {
+    return { verdict: 'MANUAL_REVIEW', reason: `${sc.rule}: ${sc.remediation || 'review the Nix build-trust setting'}` };
   }
   // 2. No fixed version exists → nothing to upgrade yet.
   if (!fixed.length) {
@@ -116,7 +123,7 @@ export function annotateScaVerdicts(supplyChain, opts = {}) {
   if (!Array.isArray(supplyChain)) return supplyChain;
   const counts = { AUTO_MERGE_PATCH: 0, WAIT_FOR_PATCH: 0, MANUAL_REVIEW: 0, ACCEPT_RISK: 0, WONT_FIX: 0 };
   for (const sc of supplyChain) {
-    if (!sc || sc.type !== 'vulnerable_dep') continue;
+    if (!sc || (sc.type !== 'vulnerable_dep' && sc.type !== BUILD_TRUST_TYPE)) continue;
     const { verdict, reason, expiryDays } = computeScaVerdict(sc, opts);
     sc.scaVerdict = verdict;
     sc.scaVerdictReason = reason;

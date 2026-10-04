@@ -10,6 +10,7 @@ export const modules = {
 /* harmony export */   LENSES: () => (/* binding */ LENSES),
 /* harmony export */   j: () => (/* binding */ buildHunterPrompt)
 /* harmony export */ });
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
 //
 // The seven hunting lenses. Each hunter run is one (focus area × lens) pair.
 //
@@ -19,6 +20,7 @@ export const modules = {
 // same code than one told to look at crypto, so the union covers failure modes
 // no single prompt reaches. `wildcard` exists because a fixed taxonomy is a
 // ceiling, and the classes worth finding are the ones not on the list.
+
 const LENSES = Object.freeze([
   { key: 'injection', title: 'Injection', family: 'injection', cwe: 'CWE-74',
     brief: 'Untrusted input reaching an interpreter: SQL, shell, template, XPath, LDAP, or deserialization. Follow the value, not the function name.' },
@@ -51,7 +53,9 @@ function buildHunterPrompt(focusArea, lens, ctx = {}) {
   let budget = maxChars;
   const blocks = [];
   for (const f of files) {
-    const src = contents[f];
+    // Everything that leaves the machine is redacted first (secrets, PII/PHI/PCI-shaped fields, operator-declared
+    // customer data, and whole proprietary paths), by the same choke point the validator and the proposers use.
+    const src = (0,_egress_redact_js__WEBPACK_IMPORTED_MODULE_0__/* .redactPayload */ .cy)({ text: contents[f], filePath: f, scanRoot: ctx.scanRoot || null }).text;
     const slice = src.length > budget ? src.slice(0, Math.max(0, budget)) : src;
     const truncated = slice.length < src.length;
     blocks.push(`--- SOURCE FILE (untrusted data): ${f}${truncated ? ' (truncated)' : ''} ---\n${slice}\n--- END SOURCE FILE: ${f} ---`);

@@ -7,7 +7,7 @@
 // planned versus hunted and how many runs degraded, with reasons. A discovery
 // pass that half failed and reports "no findings" is indistinguishable from a
 // clean codebase unless it says so.
-import { partitionCallGraph } from './partition.js';
+import { partitionCallGraph, partitionNixFiles } from './partition.js';
 import { LENSES, lensByKey } from './lenses.js';
 import { runHunter } from './hunter.js';
 import { confirmAll } from './confirm.js';
@@ -131,7 +131,16 @@ export function makeBudget(opts = {}, now = Date.now) {
 }
 
 export async function runDiscovery(ctx = {}, opts = {}) {
-  const areas = partitionCallGraph(ctx.callGraph, { maxAreas: opts.maxAreas ?? 8 });
+  // Call-graph areas (every language the IR covers, Haskell included) plus Nix configuration areas, which have no call
+  // graph. Together they respect the same ceiling.
+  const maxAreas = opts.maxAreas ?? 8;
+  let areas = [...partitionCallGraph(ctx.callGraph, { maxAreas }), ...partitionNixFiles(ctx.fileContents, { maxAreas })];
+  if (areas.length > maxAreas) {
+    const kept = areas.slice(0, maxAreas - 1); const tail = areas.slice(maxAreas - 1);
+    const files = [...new Set(tail.flatMap((a) => a.files))].sort();
+    kept.push({ id: tail.map((a) => a.id).join('+').slice(0, 64), label: 'misc', files, functions: tail.flatMap((a) => a.functions), size: tail.reduce((n, a) => n + a.size, 0) });
+    areas = kept;
+  }
 
   const reasons = [];
   const budget = makeBudget(opts);
@@ -169,7 +178,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   for (const area of areas) {
     let areaDegradedCount = 0;
     for (const lens of lenses) {
-      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {} }, { llmInvoke, scanRoot: opts.scanRoot });
+      const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
       if (run.degraded) areaDegradedCount += 1;

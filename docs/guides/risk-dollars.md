@@ -195,6 +195,13 @@ it isn't one of the five gating inputs.
 
 ---
 
+## Haskell and Nix findings
+
+Haskell and Nix findings carry `riskDollars` and `blastRadius` computed by the same formula, with the same scenario
+disclosure: until you configure the five inputs the figures are labelled `scenario_default`, and nothing here adds a
+language-specific price. A hardening finding on a NixOS option and an injection in a Haskell handler are therefore comparable
+on the same scale, with the same stated assumptions. `--no-blast-radius` removes the figures.
+
 ## Related
 
 - [Reading a finding's evidence](../walkthroughs/finding-evidence.md) — every

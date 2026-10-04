@@ -42,7 +42,7 @@ export const SCAN_HEALTH_SCHEMA_VERSION = 1;
  *   never a fabricated all-zero summary.
  * @returns {object} scanHealth per PRD §10.3, additive fields only.
  */
-export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engineErrors = null, deepStatus = null, analyzerCoverage = null, lineageStatus = null } = {}) {
+export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engineErrors = null, deepStatus = null, analyzerCoverage = null, lineageStatus = null, languageCoverage = null, supplyChain = null } = {}) {
   const conditions = [];
   const safeAnnotatorErrors = Array.isArray(annotatorErrors) ? annotatorErrors : [];
   const filesTimedOut = Number(scanMeta?.filesTimedOut) || 0;
@@ -84,11 +84,29 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
     conditions.push(`${analyzerCoverage.failed} analyzer(s) threw on at least one file`);
   }
 
+  // CORE-003: Haskell/Nix coverage outcomes (missing grammar, adapter
+  // exception, timeout, unresolved branch) from language/contracts.js.
+  // Additive: absent input leaves the output shape and conditions untouched.
+  if (languageCoverage && Array.isArray(languageCoverage.conditions)) {
+    conditions.push(...languageCoverage.conditions);
+  }
+
+  // NIX-005: build-trust findings ride in the ordinary supplyChain bucket. A finding that
+  // rests on an unresolved branch or a partial module graph is an analysis gap, so it is
+  // surfaced here rather than counted as a settled result.
+  const trustFindings = Array.isArray(supplyChain) ? supplyChain.filter((f) => f && f.type === 'nix_build_trust') : [];
+  const trustUncertain = trustFindings.filter((f) => Array.isArray(f.uncertainty) && f.uncertainty.length > 0).length;
+  if (trustUncertain > 0) {
+    conditions.push(`${trustUncertain} Nix build-trust finding(s) rest on an unresolved branch or partial module graph`);
+  }
+
   const status = conditions.length > 0 ? 'partial' : 'complete';
 
   return {
     schemaVersion: SCAN_HEALTH_SCHEMA_VERSION,
     status,
+    ...(trustFindings.length ? { buildTrust: { findings: trustFindings.length, uncertain: trustUncertain } } : {}),
+    ...(languageCoverage ? { languageCoverage: { totals: languageCoverage.totals ?? null, byKind: languageCoverage.byKind ?? null, ...(languageCoverage.limitations ? { limitations: languageCoverage.limitations } : {}), ...(languageCoverage.capabilities ? { capabilities: languageCoverage.capabilities } : {}), ...(languageCoverage.optionalModes ? { optionalModes: languageCoverage.optionalModes } : {}) } } : {}),
     files: {
       expected: scanMeta?.checkpoint?.total ?? null,
       scanned: scanMeta?.filesScanned ?? null,

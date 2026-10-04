@@ -409,3 +409,155 @@ it's still visible in the scan output as unvalidated, not missing.
 exact captured audit log, the redaction pipeline that runs on anything that
 *is* allowed through, and the real call site that enforces this before
 `renderPrompt` ever runs.
+
+---
+
+## Haskell and Nix/NixOS
+
+Six more entries, from the controlled projects under [`examples/`](../../examples/). Everything below is **generated** from a
+real run of the built scanner over those projects (`node scripts/capture-language-examples.mjs` captures it into
+[`docs/examples/language/captured.json`](language/captured.json); `node scripts/render-language-docs.mjs --check` fails when a
+block here is stale). Each project has a vulnerable and a fixed or partial counterpart where that is the point of the example.
+
+### A. Haskell service: injection, weak randomness, logging, missing authentication
+
+`examples/haskell-app/vulnerable`. A Scotty service whose handlers build SQL and a shell command from request parameters.
+Walkthrough in [Haskell](../guides/haskell.md).
+
+<!-- generated:ex-hs-vuln:start -->
+Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code **3**, scan health **partial**.
+
+| Severity | Family | CWE | Location |
+| --- | --- | --- | --- |
+| high | `weak-randomness` | CWE-338 | src/Main.hs:21 |
+| high | `sensitive-logging` | CWE-532 | src/Main.hs:24 |
+| critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:32 |
+| critical | `sql-injection` | CWE-89 | src/Main.hs:32 |
+| high | `missing-authentication` | CWE-306 | src/Main.hs:34 |
+| critical | `command-injection` | CWE-78 | src/Main.hs:36 |
+| high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
+
+Scan-health conditions:
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+
+Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
+<!-- generated:ex-hs-vuln:end -->
+
+### B. A Haskell project that is only partly readable
+
+`examples/haskell-app/partial`. A real command-injection finding sits next to code the scanner cannot see through. The output
+discloses each boundary; it does not pretend the module was fully analysed.
+
+<!-- generated:ex-hs-partial:start -->
+Captured from the built bundle on `examples/haskell-app/partial`: exit code **3**, scan health **partial**.
+
+| Severity | Family | CWE | Location |
+| --- | --- | --- | --- |
+| critical | `command-injection` | CWE-78 | src/Gen.hs:19 |
+
+Scan-health conditions:
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+
+Disclosed limits: `license-data-unavailable`, `opaque-boundary:cpp`, `opaque-boundary:ffi`, `opaque-boundary:th-splice`, `opaque-boundary:th-top-level-splice`, `unmodeled-imports`.
+<!-- generated:ex-hs-partial:end -->
+
+### C. NixOS host: effective configuration findings and secrets in the store
+
+`examples/nixos-host/vulnerable`. Walkthrough in [Nix and NixOS](../guides/nix-nixos.md).
+
+<!-- generated:ex-nix-vuln:start -->
+Captured from the built bundle on `examples/nixos-host/vulnerable`: exit code **2**, scan health **partial**.
+
+| Severity | Family | CWE | Location |
+| --- | --- | --- | --- |
+| medium | `vulnerable-dep` | CWE-494 | configuration.nix:0 |
+| high | `firewall-exposure` | CWE-284 | configuration.nix:4 |
+| high | `ssh-access` | CWE-250 | configuration.nix:8 |
+| medium | `ssh-access` | CWE-307 | configuration.nix:9 |
+| high | `hardcoded-secret` | CWE-798 | configuration.nix:14 |
+| high | `firewall-exposure` | CWE-668 | configuration.nix:19 |
+| high | `firewall-exposure` | CWE-306 | configuration.nix:20 |
+| low | `service-identity` | CWE-250 | configuration.nix:26 |
+| high | `secret-in-store` | CWE-312 | configuration.nix:29 |
+| high | `secret-in-store` | CWE-312 | configuration.nix:31 |
+| medium | `vulnerable-dep` | CWE-829 | flake.nix:0 |
+
+Scan-health conditions:
+- 1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph
+<!-- generated:ex-nix-vuln:end -->
+
+### D. A verified Nix fix
+
+The same host. This setting is edited at the definition that wins by priority, then rescanned:
+
+<!-- generated:fix-nix-ssh:start -->
+```text
+$ agentic-security fix --finding <id> --preview     # exit 0
+FULL (full-source-edit): services.openssh.settings.PermitRootLogin = "yes" -> "no" at configuration.nix:8, the definition that wins by priority.
+--- a/configuration.nix
++++ b/configuration.nix
+@@ -8,1 +8,1 @@
+-    settings.PermitRootLogin = "yes";
++    settings.PermitRootLogin = "no";
+  note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out.
+```
+<!-- generated:fix-nix-ssh:end -->
+
+### E. A Haskell fix the gates refuse
+
+The rewrite the fixer proposes would introduce a new finding, so nothing is written:
+
+<!-- generated:fix-hs-cmd:start -->
+```text
+$ agentic-security fix --finding <id> --preview     # exit 4
+No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)
+```
+<!-- generated:fix-hs-cmd:end -->
+
+### F. Haskell built with Nix
+
+`examples/haskell-on-nix/vulnerable`: a Haskell program and the flake that builds and runs it as `root`.
+
+<!-- generated:ex-hn-vuln:start -->
+Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit code **3**, scan health **partial**.
+
+| Severity | Family | CWE | Location |
+| --- | --- | --- | --- |
+| medium | `vulnerable-dep` | CWE-829 | flake.nix:0 |
+| low | `vulnerable-dep` | CWE-829 | flake.nix:0 |
+| high | `path-traversal` | CWE-22 | src/Main.hs:14 |
+| critical | `command-injection` | CWE-78 | src/Main.hs:15 |
+| critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:15 |
+
+Scan-health conditions:
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+- 1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph
+
+Disclosed limits: `license-data-unavailable`.
+<!-- generated:ex-hn-vuln:end -->
+
+### G. Privacy and AI inventory across Haskell, Nix and Python
+
+`examples/polyglot-privacy`. A customer record is logged and sent to a CRM from Haskell, a Nix option puts the same field into
+the store, and a Python assistant calls a hosted model.
+
+<!-- generated:ex-pp:start -->
+Captured from the built bundle on `examples/polyglot-privacy`: exit code **2**, scan health **partial**.
+
+| Severity | Family | CWE | Location |
+| --- | --- | --- | --- |
+| high | `prompt-injection-untrusted-text-in-a-mod` | CWE-1427 | src/Sync.hs:30 |
+
+Scan-health conditions:
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+
+Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
+<!-- generated:ex-pp:end -->
+
+<!-- generated:pp-facts:start -->
+AI inventory (`scan --format aibom`): models `gpt-4o-mini`; 1 endpoint(s); 1 declared service(s).
+
+Dependency inventory (`--format cyclonedx`): `aeson@?`, `base@?`, `http-conduit@?`, `text@?` (declared; no plan was supplied, so no resolved versions).
+
+Data Flow Explorer export (`dataflow export --format json`, schema 1.0.0): 6 nodes, 4 edges; per-language coverage: haskell 1/1 files (unknown), python 1/1 files (partial).
+<!-- generated:pp-facts:end -->

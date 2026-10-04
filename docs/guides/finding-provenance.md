@@ -247,6 +247,17 @@ compliance, or certification.
 
 ---
 
+## Haskell and Nix
+
+Provenance resolves the commit that introduced the finding's reported line by the same replay it uses for other languages.
+Captured on a two-commit copy of `examples/nixos-host/vulnerable` (`scan --provenance standard`): a `wheelNeedsPassword = false`
+added in the second commit resolves to that commit with **high** confidence (the finding is absent in the parent and present in
+the commit), while the findings that were in the first commit resolve to it with **medium** confidence (there is no parent to
+replay). For an effective Nix option the reported line is the winning definition, so an override added later is attributed to
+the commit that added the override; a change elsewhere that alters which definition wins is not attributed to the option line.
+Dependency findings have no line (they are about a locked input or a resolved version), so they report `not_available` rather
+than a guess. A lock-file change that moves a dependency is visible as a change to that input, not as authorship of a finding.
+
 ## Related
 
 - [Compliance](compliance.md) — how a provenance-derived "earliest proven

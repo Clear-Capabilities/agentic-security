@@ -43,11 +43,13 @@
 // attestation" describes independent certification, not attestation).
 
 import * as fs from 'node:fs';
+import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 
 import { statePath, stateWritesEnabled } from './state-dir.js';
 import { EVIDENCE_GRADE_DISCLAIMER_SHORT } from './evidence-grade-wording.js';
 import { COMPLIANCE_FAMILY_ALIAS, resolveFamilyKeys } from './family-resolve.js';
+import { LANGUAGE_COMPLIANCE_FAMILIES, languageAnalysisGaps } from '../language/compliance-map.js';
 import { strengthOfControl as _strengthOfControl } from './coverage-strength.js';
 // FR-PROV-026: earliestOrigin.authorName below is untrusted git commit
 // metadata. renderWalkthrough()'s output is console.log'd verbatim by
@@ -497,6 +499,7 @@ export function evaluateFramework(scanRoot, fw, scan) {
     || logicVulns.length > 0
     || supplyChain.length > 0;
 
+  const langIncomplete = languageAnalysisGaps(scan);
   const results = [];
   for (const c of fw.controls || []) {
     const obs = [];
@@ -599,6 +602,12 @@ export function evaluateFramework(scanRoot, fw, scan) {
           allCleared = false;
           contributingFindings.push(...open);
           obs.push(`${open.length} open ${fam} finding(s) at ${minSeverity}+.`);
+        } else if (langIncomplete.incomplete && LANGUAGE_COMPLIANCE_FAMILIES.has(fam)) {
+          // Empty bucket, but Haskell/Nix analysis in this scan did not complete (a parser failed, a required analyzer
+          // was off, an effective configuration is partial): an empty bucket is then not evidence, and an unknown
+          // option or an unresolved taint result must never read as satisfied.
+          obs.push(`⚠ ${fam}: Haskell/Nix analysis was incomplete (${langIncomplete.reasons[0]}${langIncomplete.reasons.length > 1 ? `; +${langIncomplete.reasons.length - 1} more` : ''}), so an empty finding bucket is not evidence (not assessed).`);
+          hasUnverifiableMapping = true;
         } else if (!assessable) {
           // Empty bucket, but the scan examined nothing — see the guard above.
           // Not evidence, and deliberately not a failure either.
@@ -853,6 +862,38 @@ export function persistWalkthrough(scanRoot, fw, body) {
   const fp = path.join(dir, `${fw.id}.md`);
   try { fs.writeFileSync(fp, body); } catch {}
   return fp;
+}
+
+/**
+ * A signable evidence document for one framework evaluation (the same shape `signComplianceEvidence` covers), so a
+ * walkthrough can be handed to an auditor with an integrity signature. Statuses, observations and finding references
+ * are copied from the evaluation; nothing is added. The language-analysis gaps that capped any control travel in
+ * `provenance`, so a reader of the signed document sees why a control is "partial".
+ */
+export function walkthroughToEvidenceJsonLd(fw, evaluation, { scan = null, engineVersion = null, generatedAt = null } = {}) {
+  const controls = (evaluation || []).map((e) => ({
+    '@type': 'Control', id: e.control && e.control.id, title: e.control && e.control.summary, status: e.status,
+    observations: e.observations || [], controlRefs: e.controlRefs || [],
+    codeTestable: (e.control && e.control.codeTestable) || null,
+  }));
+  const count = (st) => controls.filter((c) => c.status === st).length;
+  const gaps = languageAnalysisGaps(scan);
+  const digest = crypto.createHash('sha256').update(JSON.stringify(controls)).digest('hex');
+  return {
+    '@context': { '@vocab': 'https://agentic-security.io/compliance/v1/', schema: 'https://schema.org/' },
+    '@type': 'ComplianceEvidence',
+    schemaVersion: 1,
+    statusSemantics: 'present = no open findings on every mapped family and nothing capped it; partial = evidence with a gap or an unverifiable mapping; absent = nothing checked out; manual = no automated mapping',
+    policySource: `bundled:${fw.id}`,
+    framework: fw.id,
+    version: fw.controlsDigest || null,
+    generatedAt: generatedAt || new Date().toISOString(),
+    disclaimer: EVIDENCE_GRADE_DISCLAIMER_SHORT,
+    provenance: { engineVersion, languageAnalysis: { present: gaps.present, incomplete: gaps.incomplete, reasons: gaps.reasons } },
+    evidenceDigest: digest,
+    summary: { total: controls.length, present: count('present'), partial: count('partial'), absent: count('absent'), manual: count('manual') },
+    controls,
+  };
 }
 
 export const _internals = { _readJson, _resolveOpenFindingMinSeverity, SEVERITY_POLICY_FILE };

@@ -233,6 +233,30 @@ export function getBlobAtCommit(scanRoot, sha, file) {
   return r.ok ? r.stdout : null;
 }
 
+/** Files in the tree at `sha` (relative to scanRoot) whose path matches `re`, capped. Empty on any failure. */
+export function listFilesAtCommit(scanRoot, sha, re, { max = 400 } = {}) {
+  if (!_isSha(sha) || !(re instanceof RegExp)) return [];
+  const r = _run(scanRoot, ['ls-tree', '-r', '--name-only', sha, '--', '.']);
+  if (!r.ok) return [];
+  return r.stdout.split('\n').map((x) => x.trim()).filter((x) => x && re.test(x)).slice(0, max);
+}
+
+/**
+ * Commits, oldest first, that touched ANY of `files`. Used when a finding is decided by several files (an import
+ * chain, a module graph) so the commit that changed any of them is a candidate origin. No rename following.
+ */
+export function candidateCommitsForFiles(scanRoot, files, { since } = {}) {
+  const rels = (files || []).map((f) => _relPath(scanRoot, f)).filter(Boolean);
+  if (!rels.length) return [];
+  if (since && !_isSafeRevision(since)) return [];
+  const args = ['log', '--format=%H', '--reverse'];
+  if (since) args.push(`${since}..HEAD`);
+  args.push('--', ...rels);
+  const r = _run(scanRoot, args);
+  if (!r.ok) return [];
+  return [...new Set(r.stdout.split('\n').map((x) => x.trim()).filter(Boolean))];
+}
+
 export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
   const rel = _relPath(scanRoot, file);
   if (!rel) return [];

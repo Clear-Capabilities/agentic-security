@@ -29,13 +29,24 @@ function _save(scanRoot, data) {
 
 // Sync the triage store with the latest scan: new findings become 'open',
 // findings no longer surfaced become 'fixed' (with a transition entry).
-export function syncWithScan(scanRoot, findings) {
+export function syncWithScan(scanRoot, findings, opts = {}) {
   const data = loadTriage(scanRoot);
   const now = new Date().toISOString();
   const seen = new Set();
+  // A finding that is no longer reported is only "fixed" when the scan that stopped reporting it was COMPLETE for the
+  // code it lives in. If its analysis was partial (a parser failed, a required analyzer was off), its absence is
+  // unverified, so it stays open and is marked `unverified` rather than silently closed.
+  const health = opts && opts.scanHealth;
+  const incomplete = !!(health && health.status && health.status !== 'complete');
   for (const f of findings) {
     const id = f.id || `${f.file}:${f.line}:${f.vuln}`;
     seen.add(id);
+    const existing = data.findings[id];
+    // A finding that was closed and is reported again is a regression: reopen it, never leave it 'fixed'.
+    if (existing && existing.state === 'fixed') {
+      existing.state = 'open'; existing.reopened_at = now; delete existing.fixed_at; delete existing.unverified;
+      data.transitions.push({ id, from: 'fixed', to: 'open', at: now, automatic: true, reason: 'reported again by a later scan' });
+    } else if (existing && existing.unverified) { delete existing.unverified; }
     if (!data.findings[id]) {
       data.findings[id] = {
         id,
@@ -56,6 +67,8 @@ export function syncWithScan(scanRoot, findings) {
         ecosystem: f.ecosystem || null,
         osvId: f.osvId || null,
         cveAliases: Array.isArray(f.cveAliases) ? f.cveAliases : [],
+        language: f.language || null,
+        rule: f.rule || null,
       };
       data.transitions.push({ id, from: null, to: 'open', at: now });
     }
@@ -65,6 +78,10 @@ export function syncWithScan(scanRoot, findings) {
     const cur = data.findings[id];
     if (seen.has(id)) continue;
     if (cur.state === 'fixed' || cur.state === 'wont-fix' || cur.state === 'false-positive') continue;
+    if (incomplete) {
+      if (!cur.unverified) { cur.unverified = { since: now, reason: 'not reported, but the scan was not complete' }; data.transitions.push({ id, from: cur.state, to: cur.state, at: now, automatic: true, unverified: true, reason: 'not reported by an incomplete scan' }); }
+      continue;
+    }
     cur.state = 'fixed';
     cur.fixed_at = now;
     data.transitions.push({ id, from: 'open', to: 'fixed', at: now, automatic: true });

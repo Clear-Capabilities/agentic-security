@@ -113,6 +113,14 @@ provenance bar can't be met, not a way of hiding the gap.
 
 ---
 
+## Haskell and Nix under the three modes
+
+Language analysis feeds the same scan-health input as every other analyzer, so the modes apply unchanged. With
+`AGENTIC_SECURITY_LANG_DISABLE=haskell:taint` (or `haskell:sast`, `nix:config`, ...) the required analyzer is a
+`disabled` condition: `advisory` reports it, `standard` marks the scan `partial`, and `strict` fails the build. A source the
+parser could not read, an advisory snapshot that is missing or stale, a malformed closure export and a selected-but-unavailable
+evaluation are conditions of the same kind. Findings are never dropped when a condition appears.
+
 ## Try It Yourself
 
 Run all three modes against your own repo and compare:

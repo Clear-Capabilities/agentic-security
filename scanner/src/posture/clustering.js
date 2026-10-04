@@ -38,8 +38,8 @@ function sinkKey(f) {
   // finding reaching this point has a distinct line — folding the line into
   // the key here can only split buckets more finely, never wrongly merge one.
   const sinkExpr = (parser === 'IR-TAINT'
-    ? `L${f.sink?.line || f.line || 0}:${f.sink?.label || ''}`
-    : (f.sink?.label || f.sink?.snippet || f.snippet || ''))
+    ? `L${f.sink?.line || f.line || 0}:${f.sink?.label || ''}${f.siteKey ? `:${f.siteKey}` : ''}`   // Haskell: distinct sinks on one line stay distinct
+    : `${f.sink?.label || f.sink?.snippet || f.snippet || ''}${f.siteKey ? `|${f.siteKey}` : ''}`)
     .replace(/['"`][^'"`]*['"`]/g, '_S_')
     .replace(/\s+/g, ' ')
     .trim()

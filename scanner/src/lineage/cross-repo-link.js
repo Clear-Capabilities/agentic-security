@@ -99,6 +99,28 @@ export function validateCrossRepoLink(record) {
   _validateEndpoint(record.local, 'local', err);
   _validateEndpoint(record.remote, 'remote', err, ['repository', 'sourceFile']);
 
+  // Optional scope and evidence. Haskell and Nix endpoints carry an analysis scope (static configuration is not runtime
+  // exposure) and limitations; a link records them rather than flattening them away. `evidence` states that a link is a
+  // DECLARATION: it is an operator assertion, never an observed data flow, and a record claiming otherwise is invalid.
+  if (record.scope !== undefined && record.scope !== null) {
+    if (!_isPlainObject(record.scope)) err('$.scope', 'scope must be an object');
+    else {
+      for (const side of ['local', 'remote']) {
+        const sc = record.scope[side];
+        if (sc === undefined || sc === null) continue;
+        if (!_isPlainObject(sc)) { err(`$.scope.${side}`, `scope.${side} must be an object`); continue; }
+        if (!_isStringOrNull(sc.target)) err(`$.scope.${side}.target`, 'target must be a string or null');
+        if (!_isStringOrNull(sc.config)) err(`$.scope.${side}.config`, 'config must be a string or null');
+        if (sc.analysis !== undefined && sc.analysis !== null && !_isPlainObject(sc.analysis)) err(`$.scope.${side}.analysis`, 'analysis must be an object or null');
+        if (sc.limitations !== undefined && !(Array.isArray(sc.limitations) && sc.limitations.every((x) => typeof x === 'string'))) err(`$.scope.${side}.limitations`, 'limitations must be an array of strings');
+      }
+    }
+  }
+  if (record.evidence !== undefined && record.evidence !== null) {
+    if (!_isPlainObject(record.evidence) || record.evidence.declared !== true || record.evidence.observed !== false) {
+      err('$.evidence', 'evidence must be {declared: true, observed: false}: a declared link is never an observed data flow');
+    }
+  }
   if (!_isStringOrNull(record.rationale)) err('$.rationale', 'rationale must be a string or null');
   if (!_isNonEmptyString(record.declaredBy)) err('$.declaredBy', 'declaredBy is required');
   if (!_isNonEmptyString(record.declaredAt)) err('$.declaredAt', 'declaredAt is required');

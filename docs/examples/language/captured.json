@@ -1,0 +1,696 @@
+{
+  "schema": 1,
+  "engineVersion": "0.154.0",
+  "bundleSha256": "e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849",
+  "examples": {
+    "haskell-app/vulnerable": {
+      "exitCode": 3,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+        ]
+      },
+      "coverage": {
+        "discovered": 1,
+        "analyzed": 1,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable",
+        "unmodeled-imports"
+      ],
+      "findings": [
+        {
+          "family": "weak-randomness",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 21,
+          "cwe": "CWE-338",
+          "vuln": "Predictable random number generator used for a security value",
+          "parser": "HS-RULES",
+          "stableId": "1e46e31a101189bd"
+        },
+        {
+          "family": "sensitive-logging",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 24,
+          "cwe": "CWE-532",
+          "vuln": "Sensitive value written to a log or trace",
+          "parser": "HS-RULES",
+          "stableId": "2645f7649bc9af6f"
+        },
+        {
+          "family": "multi-sink-taint-chain",
+          "severity": "critical",
+          "file": "src/Main.hs",
+          "line": 32,
+          "cwe": "CWE-20",
+          "vuln": "Multi-Sink Taint Chain — scotty request parameter reaches 2 sinks",
+          "parser": "MULTI-SINK",
+          "stableId": "abe5d32dddc67eb4"
+        },
+        {
+          "family": "sql-injection",
+          "severity": "critical",
+          "file": "src/Main.hs",
+          "line": 32,
+          "cwe": "CWE-89",
+          "vuln": "SQL Injection (query text)",
+          "parser": "IR-TAINT",
+          "stableId": "3e41003348f19447"
+        },
+        {
+          "family": "missing-authentication",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 34,
+          "cwe": "CWE-306",
+          "vuln": "State-changing route without authentication",
+          "parser": "HS-WEB",
+          "stableId": "9876dcbe53671df0"
+        },
+        {
+          "family": "command-injection",
+          "severity": "critical",
+          "file": "src/Main.hs",
+          "line": 36,
+          "cwe": "CWE-78",
+          "vuln": "OS Command Injection (shell string)",
+          "parser": "IR-TAINT",
+          "stableId": "b50fe40ebcf6f225"
+        },
+        {
+          "family": "missing-authentication",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 38,
+          "cwe": "CWE-306",
+          "vuln": "State-changing route without authentication",
+          "parser": "HS-WEB",
+          "stableId": "e3ad2bcbfd35b9cf"
+        }
+      ],
+      "sbom": [
+        "aeson@?",
+        "base@?",
+        "process@?",
+        "random@?",
+        "scotty@?",
+        "sqlite-simple@?"
+      ],
+      "fixPreviews": [
+        {
+          "family": "weak-randomness",
+          "line": 21,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        },
+        {
+          "family": "sensitive-logging",
+          "line": 24,
+          "exitCode": 0,
+          "text": "MITIGATION: Replaced 2 sensitive log argument(s) with \"[REDACTED]\". The value is no longer logged; the log line loses that detail.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -24,1 +24,1 @@\n-logLogin user password = putStrLn (\"login \" ++ user ++ \" password=\" ++ password)\n+logLogin user password = putStrLn (\"login \" ++ user ++ \" \"[REDACTED]\"=\" ++ \"[REDACTED]\")"
+        },
+        {
+          "family": "multi-sink-taint-chain",
+          "line": 32,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        },
+        {
+          "family": "sql-injection",
+          "line": 32,
+          "exitCode": 0,
+          "text": "FULL: Moved 1 interpolated value(s) out of the SQL text into query parameters.\n--- a/src/Main.hs\n+++ b/src/Main.hs\n@@ -10,4 +10,5 @@\n-\n--- | Look an order up by reference. The reference comes straight from the URL.\n-lookupOrder :: Connection -> String -> IO [Only String]\n-lookupOrder conn ref = query_ conn (fromString (\"SELECT status FROM orders WHERE ref = '\" ++ ref ++ \"'\"))\n+import Database.PostgreSQL.Simple (execute, query, Only)\n+\n+-- | Look an order up by reference. The reference comes straight from the URL.\n+lookupOrder :: Connection -> String -> IO [Only String]\n+lookupOrder conn ref = query conn \"SELECT status FROM orders WHERE ref = ?\" (Only ref)"
+        },
+        {
+          "family": "missing-authentication",
+          "line": 34,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        },
+        {
+          "family": "command-injection",
+          "line": 36,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)"
+        },
+        {
+          "family": "missing-authentication",
+          "line": 38,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        }
+      ]
+    },
+    "haskell-app/fixed": {
+      "exitCode": 0,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+        ]
+      },
+      "coverage": {
+        "discovered": 1,
+        "analyzed": 1,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable",
+        "unmodeled-imports"
+      ],
+      "findings": [
+        {
+          "family": "argument-injection",
+          "severity": "info",
+          "file": "src/Main.hs",
+          "line": 46,
+          "cwe": "CWE-88",
+          "vuln": "Argument Injection (process arguments)",
+          "parser": "IR-TAINT",
+          "stableId": "f617c19750ac7923"
+        }
+      ],
+      "sbom": [
+        "aeson@?",
+        "base@?",
+        "crypton@?",
+        "http-types@?",
+        "process@?",
+        "scotty@?",
+        "sqlite-simple@?"
+      ]
+    },
+    "haskell-app/partial": {
+      "exitCode": 3,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+        ]
+      },
+      "coverage": {
+        "discovered": 1,
+        "analyzed": 0,
+        "excluded": 0,
+        "unresolved": 1,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable",
+        "opaque-boundary:cpp",
+        "opaque-boundary:ffi",
+        "opaque-boundary:th-splice",
+        "opaque-boundary:th-top-level-splice",
+        "unmodeled-imports"
+      ],
+      "findings": [
+        {
+          "family": "command-injection",
+          "severity": "critical",
+          "file": "src/Gen.hs",
+          "line": 19,
+          "cwe": "CWE-78",
+          "vuln": "OS Command Injection (shell string)",
+          "parser": "IR-TAINT",
+          "stableId": "46988d357264b23a"
+        }
+      ],
+      "sbom": [
+        "base@?",
+        "process@?",
+        "template-haskell@?"
+      ]
+    },
+    "nixos-host/vulnerable": {
+      "exitCode": 2,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph"
+        ]
+      },
+      "coverage": {
+        "discovered": 2,
+        "analyzed": 2,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [],
+      "findings": [
+        {
+          "family": "vulnerable-dep",
+          "severity": "medium",
+          "file": "configuration.nix",
+          "line": 0,
+          "cwe": "CWE-494",
+          "vuln": "Script downloads a file with no integrity check",
+          "parser": "SCA",
+          "stableId": null
+        },
+        {
+          "family": "firewall-exposure",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 4,
+          "cwe": "CWE-284",
+          "vuln": "Host firewall is disabled",
+          "parser": "nixos-hardening",
+          "stableId": "7b09266300f9298d"
+        },
+        {
+          "family": "ssh-access",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 8,
+          "cwe": "CWE-250",
+          "vuln": "SSH permits direct root login with a password",
+          "parser": "nixos-hardening",
+          "stableId": "d317c0c0891e40da"
+        },
+        {
+          "family": "ssh-access",
+          "severity": "medium",
+          "file": "configuration.nix",
+          "line": 9,
+          "cwe": "CWE-307",
+          "vuln": "SSH accepts password authentication",
+          "parser": "nixos-hardening",
+          "stableId": "7f3444c3b5c2b0d3"
+        },
+        {
+          "family": "hardcoded-secret",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 14,
+          "cwe": "CWE-798",
+          "vuln": "Credential written as a literal in Nix source",
+          "parser": "NIX-SECRET",
+          "stableId": "34f75581f068f5b0"
+        },
+        {
+          "family": "firewall-exposure",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 19,
+          "cwe": "CWE-668",
+          "vuln": "Service is configured to listen on every interface",
+          "parser": "nixos-hardening",
+          "stableId": "eb8b35eb421a7dca"
+        },
+        {
+          "family": "firewall-exposure",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 20,
+          "cwe": "CWE-306",
+          "vuln": "Database authentication is \"trust\" for a network-wide address range",
+          "parser": "nixos-hardening",
+          "stableId": "b2079555ac9db2c2"
+        },
+        {
+          "family": "service-identity",
+          "severity": "low",
+          "file": "configuration.nix",
+          "line": 26,
+          "cwe": "CWE-250",
+          "vuln": "systemd service runs as root",
+          "parser": "nixos-hardening",
+          "stableId": "784163096940a140"
+        },
+        {
+          "family": "secret-in-store",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 29,
+          "cwe": "CWE-312",
+          "vuln": "Secret value reaches the world-readable Nix store",
+          "parser": "NIX-SECRET",
+          "stableId": "e5e32eeb564e0837"
+        },
+        {
+          "family": "secret-in-store",
+          "severity": "high",
+          "file": "configuration.nix",
+          "line": 31,
+          "cwe": "CWE-312",
+          "vuln": "Secret value reaches the world-readable Nix store",
+          "parser": "NIX-SECRET",
+          "stableId": "413c681768e063da"
+        },
+        {
+          "family": "vulnerable-dep",
+          "severity": "medium",
+          "file": "flake.nix",
+          "line": 0,
+          "cwe": "CWE-829",
+          "vuln": "Flake input is not locked to a revision",
+          "parser": "SCA",
+          "stableId": null
+        }
+      ],
+      "sbom": [],
+      "fixPreviews": [
+        {
+          "family": "vulnerable-dep",
+          "line": 0,
+          "exitCode": 4,
+          "text": "No dependency fix for this finding (blocked, blocked): a flake input fix needs a target: pass --to <ref or revision>"
+        },
+        {
+          "family": "vulnerable-dep",
+          "line": 0,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported, guidance-only): the finding names no rule"
+        },
+        {
+          "family": "firewall-exposure",
+          "line": 4,
+          "exitCode": 0,
+          "text": "FULL (full-source-edit): networking.firewall.enable = false -> true at configuration.nix:4, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -4,1 +4,1 @@\n-  networking.firewall.enable = false;\n+  networking.firewall.enable = true;\n  note: Every port not listed in networking.firewall.allowedTCPPorts/allowedUDPPorts becomes unreachable from the network. Open the ports your services need (and services.openssh.openFirewall for SSH) or you can lose remote access."
+        },
+        {
+          "family": "ssh-access",
+          "line": 8,
+          "exitCode": 0,
+          "text": "FULL (full-source-edit): services.openssh.settings.PermitRootLogin = \"yes\" -> \"no\" at configuration.nix:8, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -8,1 +8,1 @@\n-    settings.PermitRootLogin = \"yes\";\n+    settings.PermitRootLogin = \"no\";\n  note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out."
+        },
+        {
+          "family": "ssh-access",
+          "line": 9,
+          "exitCode": 0,
+          "text": "FULL (full-source-edit): services.openssh.settings.PasswordAuthentication = true -> false at configuration.nix:9, the definition that wins by priority.\n--- a/configuration.nix\n+++ b/configuration.nix\n@@ -9,1 +9,1 @@\n-    settings.PasswordAuthentication = true;\n+    settings.PasswordAuthentication = false;\n  note: Password logins stop working for every account. Each administrator needs an authorized SSH key first (users.users.<name>.openssh.authorizedKeys)."
+        },
+        {
+          "family": "hardcoded-secret",
+          "line": 14,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (manual, guidance-only): moving a secret out of the store changes where the credential lives and who can read it: it needs a human migration, never an automatic rewrite"
+        },
+        {
+          "family": "firewall-exposure",
+          "line": 19,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported, guidance-only): no deterministic fix exists for listener-all-interfaces"
+        },
+        {
+          "family": "firewall-exposure",
+          "line": 20,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported, guidance-only): no deterministic fix exists for listener-trust-auth"
+        },
+        {
+          "family": "service-identity",
+          "line": 26,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported, guidance-only): no deterministic fix exists for service-runs-as-root"
+        },
+        {
+          "family": "secret-in-store",
+          "line": 29,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (manual, guidance-only): moving a secret out of the store changes where the credential lives and who can read it: it needs a human migration, never an automatic rewrite"
+        },
+        {
+          "family": "secret-in-store",
+          "line": 31,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (manual, guidance-only): moving a secret out of the store changes where the credential lives and who can read it: it needs a human migration, never an automatic rewrite"
+        }
+      ]
+    },
+    "nixos-host/fixed": {
+      "exitCode": 0,
+      "health": {
+        "status": "complete",
+        "conditions": []
+      },
+      "coverage": {
+        "discovered": 2,
+        "analyzed": 2,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable"
+      ],
+      "findings": [],
+      "sbom": [
+        "nixpkgs@0123456789abcdef0123456789abcdef01234567"
+      ]
+    },
+    "haskell-on-nix/vulnerable": {
+      "exitCode": 3,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed",
+          "1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph"
+        ]
+      },
+      "coverage": {
+        "discovered": 2,
+        "analyzed": 2,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable"
+      ],
+      "findings": [
+        {
+          "family": "vulnerable-dep",
+          "severity": "medium",
+          "file": "flake.nix",
+          "line": 0,
+          "cwe": "CWE-829",
+          "vuln": "Flake input is not locked to a revision",
+          "parser": "SCA",
+          "stableId": null
+        },
+        {
+          "family": "vulnerable-dep",
+          "severity": "low",
+          "file": "flake.nix",
+          "line": 0,
+          "cwe": "CWE-829",
+          "vuln": "Import from derivation crosses an evaluation boundary",
+          "parser": "SCA",
+          "stableId": null
+        },
+        {
+          "family": "path-traversal",
+          "severity": "high",
+          "file": "src/Main.hs",
+          "line": 14,
+          "cwe": "CWE-22",
+          "vuln": "Path Traversal (filesystem operation)",
+          "parser": "IR-TAINT",
+          "stableId": "aab3292c8f8114f0"
+        },
+        {
+          "family": "command-injection",
+          "severity": "critical",
+          "file": "src/Main.hs",
+          "line": 15,
+          "cwe": "CWE-78",
+          "vuln": "OS Command Injection (shell string)",
+          "parser": "IR-TAINT",
+          "stableId": "9dbc017f57a15f9e"
+        },
+        {
+          "family": "multi-sink-taint-chain",
+          "severity": "critical",
+          "file": "src/Main.hs",
+          "line": 15,
+          "cwe": "CWE-20",
+          "vuln": "Multi-Sink Taint Chain — command-line argument reaches 2 sinks",
+          "parser": "MULTI-SINK",
+          "stableId": "abe5d32dddc67eb4"
+        }
+      ],
+      "sbom": [
+        "base@?",
+        "directory@?",
+        "process@?"
+      ],
+      "fixPreviews": [
+        {
+          "family": "vulnerable-dep",
+          "line": 0,
+          "exitCode": 4,
+          "text": "No dependency fix for this finding (blocked, blocked): a flake input fix needs a target: pass --to <ref or revision>"
+        },
+        {
+          "family": "vulnerable-dep",
+          "line": 0,
+          "exitCode": 4,
+          "text": "No dependency fix for this finding (blocked, blocked): a flake input fix needs a target: pass --to <ref or revision>"
+        },
+        {
+          "family": "path-traversal",
+          "line": 14,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        },
+        {
+          "family": "command-injection",
+          "line": 15,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (blocked): the patch introduces 1 new medium-or-higher finding(s)"
+        },
+        {
+          "family": "multi-sink-taint-chain",
+          "line": 15,
+          "exitCode": 4,
+          "text": "No verified fix for this finding (unsupported): no deterministic fix is supported for this exact shape"
+        }
+      ]
+    },
+    "polyglot-privacy": {
+      "exitCode": 2,
+      "health": {
+        "status": "partial",
+        "conditions": [
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+        ]
+      },
+      "coverage": {
+        "discovered": 2,
+        "analyzed": 2,
+        "excluded": 0,
+        "unresolved": 0,
+        "failed": 0,
+        "timedOut": 0,
+        "missingGrammar": 0
+      },
+      "limitations": [
+        "license-data-unavailable",
+        "unmodeled-imports"
+      ],
+      "findings": [
+        {
+          "family": "prompt-injection-untrusted-text-in-a-mod",
+          "severity": "high",
+          "file": "src/Sync.hs",
+          "line": 30,
+          "cwe": "CWE-1427",
+          "vuln": "Prompt Injection (untrusted text in a model request)",
+          "parser": "IR-TAINT",
+          "stableId": "6fb8fe8532a285f3"
+        }
+      ],
+      "sbom": [
+        "aeson@?",
+        "base@?",
+        "http-conduit@?",
+        "text@?"
+      ],
+      "aibom": {
+        "models": [
+          "gpt-4o-mini"
+        ],
+        "endpoints": 1,
+        "services": 1
+      },
+      "dataflow": {
+        "schemaVersion": "1.0.0",
+        "nodeCount": 6,
+        "edgeCount": 4,
+        "coverage": {
+          "languages": [
+            {
+              "language": "haskell",
+              "filesExpected": 1,
+              "filesAnalyzed": 1,
+              "tier": "unknown"
+            },
+            {
+              "language": "python",
+              "filesExpected": 1,
+              "filesAnalyzed": 1,
+              "tier": "partial",
+              "irTaintRecallPct": 66,
+              "measuredAt": "2026-08-19",
+              "source": "docs/METRICS.md"
+            }
+          ],
+          "parseFailures": [],
+          "destinationResolutionStatus": "not-attempted",
+          "pathBudgetTruncation": false,
+          "sources": {
+            "matched": 3,
+            "unseedable": 0,
+            "dataElements": 2,
+            "byCategory": {
+              "user-input": {
+                "sites": 3,
+                "coverageStatus": "candidate"
+              }
+            }
+          },
+          "sinks": {
+            "callStatementSites": 5,
+            "connected": 2,
+            "disconnected": 3,
+            "nonStatementSitesNotEnumerable": 4,
+            "unsupportedSites": 0,
+            "byCategory": {
+              "external-api": {
+                "sites": 4,
+                "connected": 1,
+                "coverageStatus": "modeled"
+              },
+              "log": {
+                "sites": 1,
+                "connected": 1,
+                "coverageStatus": "modeled"
+              }
+            }
+          },
+          "degradedTerminals": 0,
+          "unresolvedDestinations": 2,
+          "paths": {
+            "enumerated": 3,
+            "projected": 3,
+            "truncatedQueries": 0
+          },
+          "budgets": {
+            "maxPaths": 32,
+            "maxPathsPerTerminal": 8,
+            "maxCandidatePaths": 256,
+            "maxExpansions": 10000,
+            "maxDepth": 64
+          },
+          "provenance": {
+            "hops": 32,
+            "pnodes": 11,
+            "pedges": 8
+          }
+        }
+      }
+    }
+  }
+}

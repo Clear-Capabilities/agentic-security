@@ -31,6 +31,13 @@ Do not declare the fix complete until:
 
 ---
 
+### Haskell and Nix findings
+
+`fix --finding <id>` routes a Haskell or Nix finding to its own verified fixer (tiered FULL / MITIGATION / WORKAROUND, or
+full-source-edit / source-edit-requires-relock / guidance-only for Nix), gated by path, syntax and a rescan, and reversible with
+`undo`. For a dependency finding it edits the declaring bound (Hackage) or, with `--to <ref>`, retargets a flake input; both
+are source edits that need a re-resolve or re-lock, and are labelled so. A finding with no verified fix exits `4` with the reason.
+
 ### `/fix --all [--critical|--high|--medium|--low]`
 
 Batch-fix every finding at or above a severity tier. **Non-interactive — no prompts.**

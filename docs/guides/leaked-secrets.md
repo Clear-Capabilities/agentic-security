@@ -88,6 +88,22 @@ deleted — the ones a normal working-tree scan can't see.
 
 ---
 
+## Haskell and Nix specifics
+
+- **Haskell literals.** A credential assigned to a name (`apiKey = "..."`), joined from literals (`"sk_live_" ++ "..."` or
+  `<>`), or embedded in a dependency URL (`https://user:password@host/...` in `cabal.project`) is found. The value is never
+  printed or written to state, SARIF, HTML or any other output. Secrets already in git history are found by
+  `--secret-history`, the same as for other languages.
+- **Nix store exposure.** Anything rendered into the Nix store is readable by every local user, so a secret in a string that
+  becomes a store path is a leak even in a private repository: a plaintext credential, a secret interpolated into an
+  `environment.etc` file or a unit, one echoed into a build log, and a decrypt-then-copy into the store are separate findings.
+- **Alternatives that keep the secret out of the store**: a runtime secret manager's path (for example `age.secrets.<n>.path`
+  or `sops.secrets.<n>.path`), systemd `LoadCredential=`, or an `EnvironmentFile` outside the store. These are guidance: the
+  scanner does not rewrite them, because moving a credential changes who can read it.
+- **Rotation is the same**: treat a value that was ever in a store path or a commit as exposed, rotate it, then scrub history.
+- **Before it is written.** The edit hook recognises Haskell and Nix credential assignments, including a literal split across
+  `++`, `<>` or `+`, before the edit lands.
+
 ## Prevent the next one
 
 Install the write-time bodyguard so a hardcoded key is caught as your AI writes

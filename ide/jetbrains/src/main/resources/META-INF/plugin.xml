@@ -32,5 +32,10 @@
     <languageMapping language="Go"           serverId="agentic-security"/>
     <languageMapping language="Ruby"         serverId="agentic-security"/>
     <languageMapping language="PHP"          serverId="agentic-security"/>
+    <!-- Haskell and Nix: the IDE plugins that provide these languages vary, so files are also matched by name -->
+    <languageMapping language="Haskell"      serverId="agentic-security"/>
+    <languageMapping language="Nix"          serverId="agentic-security"/>
+    <fileNamePatternMapping patterns="*.hs;*.lhs;*.hsc;*.hs-boot;*.nix;*.cabal;cabal.project;cabal.project.freeze;cabal.project.local;stack.yaml;stack.yaml.lock;package.yaml;flake.lock"
+                            serverId="agentic-security"/>
   </extensions>
 </idea-plugin>

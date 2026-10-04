@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "source": "https://api.osv.dev/v1/vulns/<id> (OSV export of https://github.com/haskell/security-advisories)",
+  "fetchedAt": "2026-10-04T02:09:14.191Z",
+  "note": "Real, unmodified OSV records for Hackage packages, pinned verbatim. The loader verifies each file against its sha256. Nothing in the analyser reads these files; they are test inputs only.",
+  "license": "CC0-1.0 (haskell/security-advisories advisory text); records are redistributed unmodified",
+  "records": {
+    "HSEC-2023-0001.json": {
+      "sha256": "8d83f76becf1a631f7bb1bf8c51012b322dee24c24e9181fb1ea192e5271191a",
+      "bytes": 2460,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0001"
+    },
+    "HSEC-2023-0004.json": {
+      "sha256": "e718213db6c5ce9c05e299a1e658f28fd98b818fbc2b9a6b99427089f339fa9f",
+      "bytes": 2526,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0004"
+    },
+    "HSEC-2023-0007.json": {
+      "sha256": "3a814c5b2a1799b0de60031fe7ea388505bf41fcb9e344755c705f8350e6e81f",
+      "bytes": 4263,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0007"
+    },
+    "HSEC-2023-0009.json": {
+      "sha256": "9afb0db9bb70e34fd4cf4f540863fc7c80ad31c82896916cda7dc037eb3ebc73",
+      "bytes": 4834,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0009"
+    },
+    "HSEC-2023-0010.json": {
+      "sha256": "4a98b48280b123d9713b8c93c775c4d0132ac6e7251028fcfd6e0b88cee76300",
+      "bytes": 6676,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0010"
+    },
+    "HSEC-2023-0011.json": {
+      "sha256": "1c4b7c55c33f3259ad17694b647f7f3b13d206224d8fa7c642ce08060c11c733",
+      "bytes": 5316,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0011"
+    },
+    "HSEC-2023-0012.json": {
+      "sha256": "330bd01c101c8a96c9b7584e71ec2704c318675df9d52c4c3762660582822748",
+      "bytes": 3908,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0012"
+    },
+    "HSEC-2023-0013.json": {
+      "sha256": "4878f13fc2a6145ebfbbca9a48387dd3994eaeb8ef30ad25a28e35dc4dfa803d",
+      "bytes": 5017,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0013"
+    },
+    "HSEC-2023-0014.json": {
+      "sha256": "a9ce91bf487edeb238877d2de2156ec84866259e998308ad71783ac696c3c57b",
+      "bytes": 3034,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0014"
+    },
+    "HSEC-2023-0015.json": {
+      "sha256": "679fe869151c07c5a18f874a9ce3aeed99f613a30e82a5d7ff7784ad55f474a2",
+      "bytes": 5242,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2023-0015"
+    },
+    "HSEC-2024-0004.json": {
+      "sha256": "94b05691d9e36f6b09d094aa3b305af359c6ecd800dea8105de32fc1ac8333e7",
+      "bytes": 11654,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2024-0004"
+    },
+    "HSEC-2024-0006.json": {
+      "sha256": "b8695a37f41c0a1595f601ad9bdea5d46ccaf8051c2217c54feae22a8f9e07c4",
+      "bytes": 1983,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2024-0006"
+    },
+    "HSEC-2025-0002.json": {
+      "sha256": "028fe4a136203c738f4ae6c3ad7340077c1130137999f88fe247a6a5ff3c0e1a",
+      "bytes": 3972,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2025-0002"
+    },
+    "HSEC-2025-0005.json": {
+      "sha256": "84735b3fde734ffa75accdf22da50d8e0b29d664db597c300d189d831760fad4",
+      "bytes": 3577,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2025-0005"
+    },
+    "HSEC-2025-0007.json": {
+      "sha256": "71fe41e8614cbc8eea51058a2febc4e67b73965f8fe04ad6a39597733f9b8818",
+      "bytes": 2725,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2025-0007"
+    },
+    "HSEC-2026-0002.json": {
+      "sha256": "65cf8d7ea66ec4f9d6e3c5bff99275522358482ad8fa52f155e15e0421b81781",
+      "bytes": 2926,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2026-0002"
+    },
+    "HSEC-2026-0004.json": {
+      "sha256": "974f6927225e6023831bd8680077fb3dd7b8320aca22611cd86df9406e6961ae",
+      "bytes": 2643,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2026-0004"
+    },
+    "HSEC-2026-0007.json": {
+      "sha256": "c7de945dcfe7b01b42f34bdc96d50dfda7dcb858a862b4930122644ca6c18c81",
+      "bytes": 4040,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2026-0007"
+    },
+    "HSEC-2026-0008.json": {
+      "sha256": "0d3952b2776e66fafb7a3b0b86985771c70c0f8e810b3d7aa36cc8a90269507b",
+      "bytes": 4813,
+      "url": "https://api.osv.dev/v1/vulns/HSEC-2026-0008"
+    }
+  }
+}

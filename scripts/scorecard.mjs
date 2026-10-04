@@ -212,6 +212,7 @@ function countPartiallyEvidenced(dir) {
     scan: selfScan.provenanceScan,
     committed: {
       corpusBaseline: readJsonIfPresent('bench/cve-replay/corpus-baseline.json'),
+      languageSupport: readJsonIfPresent('docs/language-support.json'),
       proofCorpus: readJsonIfPresent('bench/proof-corpus/results/summary.json'),
       // The independent-population result is READ from a committed file rather
       // than re-run: scoring 110 upstream packages takes ~32 minutes, far too

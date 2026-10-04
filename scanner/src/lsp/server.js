@@ -13,6 +13,8 @@
 // Wire-format: vscode-jsonrpc framing (Content-Length headers). Stateless
 // per file — no incremental analysis yet.
 
+import { isLanguageManifest } from '../language/discovery.js';
+import { withLanguageContext, loadLanguageProject, languageOfFinding, languageFixPreview, minimalEdit } from '../language/context.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
@@ -53,6 +55,21 @@ function sevToLsp(sev) {
   }
 }
 
+// The most precise location a finding carries. Haskell and Nix findings keep their ORIGINAL span (0-based columns); a
+// finding with only a line is reported across that line, as before.
+function _rangeOf(f) {
+  const o = f && f.originalLocation;
+  if (o && Number.isInteger(o.startLine) && Number.isInteger(o.startColumn)) {
+    return { start: { line: Math.max(0, o.startLine - 1), character: o.startColumn }, end: { line: Math.max(0, (Number.isInteger(o.endLine) ? o.endLine : o.startLine) - 1), character: Number.isInteger(o.endColumn) ? o.endColumn : o.startColumn + 1 } };
+  }
+  if (o && Number.isInteger(o.line) && Number.isInteger(o.column)) {
+    const line = Math.max(0, o.line - 1);
+    return { start: { line, character: o.column }, end: { line, character: 200 } };
+  }
+  const line = Math.max(0, ((f && f.line) || 1) - 1);
+  return { start: { line, character: 0 }, end: { line, character: 200 } };
+}
+
 function findingToDiagnostic(f) {
   const line = Math.max(0, (f.line || 1) - 1);
   // Stage 6 correctness audit: this read f.remediation directly, but raw
@@ -63,13 +80,12 @@ function findingToDiagnostic(f) {
   // report/index.js already established for this exact split (CMP-3).
   const remediation = _remediationOf(f);
   return {
-    range: {
-      start: { line, character: 0 },
-      end:   { line, character: 200 },
-    },
+    range: _rangeOf(f),
     severity: sevToLsp(f.severity),
     source: 'agentic-security',
     code: f.cwe || f.family || 'finding',
+    // carried back by the client in codeAction requests, so a fix is offered for exactly this finding
+    data: { id: f.id || null, stableId: f.stableId || null, rule: f.rule || null, family: f.family || null, language: f.language || languageOfFinding(f) || null },
     message: `${f.vuln || 'Security finding'}${remediation ? '\n\n' + remediation : ''}`.slice(0, 2000),
     tags: [],
   };
@@ -101,7 +117,10 @@ const DEP_BASE_NAMES = new Set([
   'go.mod', 'Cargo.toml', 'Cargo.lock',
   'pom.xml', 'build.gradle', 'build.gradle.kts',
 ]);
-const DEP_EXT_RE = /\.(?:proto|graphql|gql|tf)$/i;
+const DEP_EXT_RE = /\.(?:proto|graphql|gql|tf|cabal)$/i;
+// Haskell and Nix project manifests and lock files (cabal.project*, stack.yaml*, package.yaml, flake.lock, ...) are
+// recognised by the shared language discovery module, never by a second list here.
+const _isLanguageDep = (base) => isLanguageManifest(base);
 const DEP_NAME_RE = /(?:openapi|swagger)\.(?:ya?ml|json)$/i;
 
 let _depCache = { rootDir: null, depFileContents: {} };
@@ -119,7 +138,7 @@ function _loadDepFileContents(rootDir) {
       if (e.isDirectory()) { walk(full); continue; }
       if (!e.isFile()) continue;
       const base = e.name;
-      if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base)) {
+      if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base) || _isLanguageDep(base)) {
         let stat;
         try { stat = fs.statSync(full); } catch { continue; }
         if (stat.size > 500_000) continue;
@@ -144,8 +163,11 @@ async function scanFile(uri) {
   try {
     const rel = path.relative(_rootDir, filePath);
     const content = fs.readFileSync(filePath, 'utf8');
-    const fileContents = { [rel]: content };
-    const depFileContents = _loadDepFileContents(_rootDir);
+    let fileContents = { [rel]: content };
+    let depFileContents = _loadDepFileContents(_rootDir);
+    // Haskell/Nix: scan the saved file together with the modules it imports and the ones that import it (bounded).
+    const lc = withLanguageContext(_rootDir, fileContents, depFileContents);
+    fileContents = lc.fileContents; depFileContents = lc.depFileContents;
     // Premortem 4R-12 + 4R-15: reset the per-process custom-rules budget at
     // the start of each LSP scan. Each save is a logical scan session; without
     // the reset, a long-lived LSP server would accumulate budget across saves
@@ -220,12 +242,50 @@ function handleInitialize(params) {
         save: { includeText: false },
       },
       diagnosticProvider: { interFileDependencies: true, workspaceDiagnostics: false },
+      // quick fixes for Haskell and Nix findings (preview edits from the verified language fixers)
+      codeActionProvider: { codeActionKinds: ['quickfix'], resolveProvider: false },
     },
     serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
   };
 }
 
+/**
+ * textDocument/codeAction: a quick fix for each agentic-security diagnostic in range that a language fixer can repair.
+ * The edit is a PREVIEW the editor applies; nothing is written here. A finding with no safe fix gets a disabled
+ * action that says why, never a silent omission.
+ */
+async function codeActionsFor(params) {
+  const uri = params && params.textDocument && params.textDocument.uri;
+  const diags = ((params && params.context && params.context.diagnostics) || []).filter((d) => d && d.source === 'agentic-security' && d.data && d.data.id);
+  const stored = (uri && _diagnosticsByUri.get(uri)) || [];
+  if (!diags.length || !stored.length) return [];
+  let files = null;
+  const actions = [];
+  for (const d of diags) {
+    const f = stored.find((x) => x && x.id === d.data.id);
+    if (!f || !languageOfFinding(f)) continue;
+    if (!files) files = loadLanguageProject(_rootDir).files;
+    let prev;
+    try { prev = await languageFixPreview(f, files); } catch (e) { prev = { ok: false, reason: String((e && e.message) || e) }; }
+    if (prev && prev.ok && prev.file) {
+      const target = pathToUri(path.join(_rootDir, prev.file));
+      actions.push({
+        title: `Fix${prev.label ? ` (${prev.label})` : ''}: ${f.vuln || f.rule || 'finding'}`,
+        kind: 'quickfix', diagnostics: [d], isPreferred: false,
+        edit: { changes: { [target]: [minimalEdit(prev.before, prev.after)] } },
+        data: { stableId: f.stableId || null, verified: { syntax: true, rescan: true } },
+      });
+    } else {
+      actions.push({ title: `No automatic fix: ${f.vuln || f.rule || 'finding'}`, kind: 'quickfix', diagnostics: [d], disabled: { reason: (prev && (prev.reason || prev.status)) || 'no deterministic fix exists for this finding' } });
+    }
+  }
+  return actions;
+}
+
 async function handleMessage(msg) {
+  if (msg.method === 'textDocument/codeAction') {
+    return { id: msg.id, result: await codeActionsFor(msg.params || {}) };
+  }
   if (msg.method === 'initialize') {
     return { id: msg.id, result: handleInitialize(msg.params || {}) };
   }
@@ -254,7 +314,7 @@ async function handleMessage(msg) {
       const savedPath = uriToPath(uri);
       if (savedPath && _depCache.rootDir === _rootDir) {
         const base = path.basename(savedPath);
-        if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base)) {
+        if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base) || _isLanguageDep(base)) {
           try {
             const rel = path.relative(_rootDir, savedPath);
             const st = fs.statSync(savedPath);

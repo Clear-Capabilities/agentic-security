@@ -20,6 +20,7 @@
 // scan.components. Extraction precision is verified by a smoke test against
 // a labelled fixture set.
 
+import { extractLanguageAI } from '../language/aibom.js';
 import * as crypto from 'node:crypto';
 import { statePath, safeWriteState } from './state-dir.js';
 
@@ -199,6 +200,16 @@ export function buildAIBOM(scan, fileContents = {}, meta = {}) {
     if (classes.includes('vector-store')) vectorStores.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
     if (classes.includes('embedding-provider')) embeddings.push({ ecosystem: c.ecosystem, name: c.name, version: c.version });
   }
+  // 4. Haskell and Nix (X-002): declared / installed / enabled / invoked are kept apart, evidence is a list,
+  //    and anything source does not spell out is `unresolved` rather than guessed.
+  let lang = { models: [], endpoints: [], services: [], frameworks: [], vectorStores: [], embeddings: [], promptTemplates: [], unresolved: [], links: [], gaps: [] };
+  try { lang = extractLanguageAI({ ...(meta.manifests || {}), ...(fileContents || {}) }); } catch { /* best effort: the JS/Python inventory above stands */ }
+  const knownModel = new Set(models.map((m) => `${m.provider}:${m.modelId}`));
+  for (const m of lang.models) { const k = `${m.provider}:${m.modelId}`; if (!knownModel.has(k)) { knownModel.add(k); models.push({ ...m, file: (m.evidence && m.evidence[0] && m.evidence[0].file) || null, line: (m.evidence && m.evidence[0] && m.evidence[0].line) || null }); } }
+  promptTemplates.push(...lang.promptTemplates);
+  const knownFw = new Set(frameworks.map((f) => `${f.ecosystem}:${f.name}`));
+  for (const f of lang.frameworks) { const k = `${f.ecosystem}:${f.name}`; if (!knownFw.has(k)) { knownFw.add(k); frameworks.push(f); } }
+  vectorStores.push(...lang.vectorStores); embeddings.push(...lang.embeddings);
   return {
     aibomFormat: 'agentic-security AI-BOM',
     version: '1',
@@ -221,6 +232,15 @@ export function buildAIBOM(scan, fileContents = {}, meta = {}) {
     frameworks,
     vectorStores,
     embeddings,
+    endpoints: lang.endpoints,
+    services: lang.services,
+    unresolved: lang.unresolved,
+    links: lang.links,
+    limits: [
+      'an AI component being declared, installed or enabled does not show that a model is called or that data is sent to it',
+      'models, endpoints and providers that source does not spell out are listed under `unresolved`, not guessed',
+      ...(lang.gaps || []).map((g) => g.detail || g.kind),
+    ],
     summary: {
       totalModels: models.length,
       totalProviders: new Set(models.map(m => m.provider)).size,
@@ -229,6 +249,10 @@ export function buildAIBOM(scan, fileContents = {}, meta = {}) {
       promptTemplates: promptTemplates.length,
       frameworks: frameworks.length,
       vectorStores: vectorStores.length,
+      endpoints: lang.endpoints.length,
+      services: lang.services.length,
+      embeddings: embeddings.length,
+      unresolved: lang.unresolved.length,
     },
   };
 }
@@ -297,6 +321,30 @@ export function aibomToMarkdown(aibom) {
     out.push('');
   }
 
+  const row = (cells) => `| ${cells.map((c) => String(c ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')).join(' | ')} |`;
+  if ((aibom.endpoints || []).length) {
+    out.push('## Endpoints'); out.push(''); out.push('| Provider | Purpose | URL (redacted) | Evidence |'); out.push('|---|---|---|---|');
+    for (const e of aibom.endpoints) out.push(row([e.provider, e.purpose, e.url, (e.evidence || []).map((x) => `${x.file}:${x.line}`).join(', ')]));
+    out.push('');
+  }
+  if ((aibom.services || []).length) {
+    out.push('## Services'); out.push(''); out.push('| Service | Kind | Status | Evidence |'); out.push('|---|---|---|---|');
+    for (const x of aibom.services) out.push(row([x.name, x.kind, x.status, (x.evidence || []).map((e) => `${e.file}:${e.line}`).join(', ')]));
+    out.push('');
+  }
+  if ((aibom.embeddings || []).length) {
+    out.push('## Embeddings'); out.push(''); out.push('| Name | Provider | Status |'); out.push('|---|---|---|');
+    for (const e of aibom.embeddings) out.push(row([e.name, e.provider, e.status]));
+    out.push('');
+  }
+  if ((aibom.unresolved || []).length) {
+    out.push('## Unresolved'); out.push(''); out.push('| Kind | Location | Reason |'); out.push('|---|---|---|');
+    for (const u of aibom.unresolved) out.push(row([u.kind, `${u.file}:${u.line}`, u.reason]));
+    out.push('');
+  }
+  if ((aibom.limits || []).length) { out.push('## Limits'); out.push(''); for (const l of aibom.limits) out.push(`- ${l}`); out.push(''); }
+  out.push('> This document is the proprietary agentic-security AI-BOM, not a CycloneDX document. A CycloneDX 1.6 ML-BOM view is available separately.');
+  out.push('');
   return out.join('\n');
 }
 
@@ -324,9 +372,9 @@ export function toCycloneDXMLBOM(aibom, meta = {}) {
   const models = (aibom && aibom.models) || [];
   const components = models.map((m) => ({
     type: 'machine-learning-model',
-    'bom-ref': `model:${m.provider || 'unknown'}/${m.name || 'unknown'}${m.version ? `@${m.version}` : ''}`,
-    name: m.name || 'unknown',
-    ...(m.version ? { version: m.version } : {}),
+    'bom-ref': `model:${m.provider || 'unknown'}/${m.name || m.modelId || 'unknown'}${m.version || m.revision ? `@${m.version || m.revision}` : ''}`,
+    name: m.name || m.modelId || 'unknown',
+    ...(m.version || m.revision ? { version: m.version || m.revision } : {}),
     modelCard: {
       modelParameters: {
         ...(m.provider ? { approach: { type: 'supervised' } } : {}),
@@ -359,6 +407,10 @@ export function toCycloneDXMLBOM(aibom, meta = {}) {
       component: { type: 'application', name: 'scan-target', version: '1.0.0' },
     },
     components,
+    ...(((aibom && aibom.services) || []).length || ((aibom && aibom.endpoints) || []).length ? { services: [
+      ...(aibom.services || []).map((x) => ({ 'bom-ref': `service:${x.name}`, name: x.name, provider: { name: x.provider || 'unknown' }, description: `${x.kind} (${x.status})`, properties: [{ name: 'agentic-security:status', value: String(x.status) }, { name: 'agentic-security:egress', value: 'not-established' }] })),
+      ...(aibom.endpoints || []).map((e) => ({ 'bom-ref': `endpoint:${e.url}`, name: `${e.provider} ${e.purpose}`, provider: { name: e.provider }, endpoints: [e.url], properties: [{ name: 'agentic-security:status', value: String(e.status) }] })),
+    ] } : {}),
   };
 }
 
@@ -394,6 +446,12 @@ export function validateMLBOM(doc) {
         `components[${i}] is a machine-learning-model but carries no modelCard — that is the whole ML-BOM extension`);
     }
   }
+  for (const [i, sv] of (Array.isArray(doc.services) ? doc.services : []).entries()) {
+    req(typeof sv.name === 'string' && sv.name, `services[${i}].name is required`);
+    if (sv.endpoints !== undefined) req(Array.isArray(sv.endpoints) && sv.endpoints.every((u) => typeof u === 'string' && !/\/\/[^/@]*:[^/@]*@/.test(u)), `services[${i}].endpoints must be URL strings without credentials`);
+  }
+  const refs = (Array.isArray(doc.components) ? doc.components : []).concat(Array.isArray(doc.services) ? doc.services : []).map((c) => c && c['bom-ref']).filter(Boolean);
+  req(new Set(refs).size === refs.length, 'bom-ref values must be unique');
   return { ok: errors.length === 0, errors, checked: 'structural (required fields + ML-BOM component shape), NOT full JSON-Schema validation' };
 }
 

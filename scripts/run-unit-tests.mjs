@@ -71,7 +71,7 @@ const SCANNER = path.join(HERE, '..', 'scanner');
 export const SCOPES = [
   'smoke', 'glob', 'sast', 'posture', 'dataflow', 'mcp',
   'report', 'bench-modules', 'lifecycle', 'eval', 'discovery', 'lineage',
-  'server',
+  'server', 'haskell', 'nix', 'language',
 ];
 
 const FILE_RE = /test\/[\w.\-/]+\.test\.js/g;
@@ -107,7 +107,21 @@ export function unionFiles(pkg, scopes = SCOPES) {
  * under the combined invocation while still passing `npm run test:<newone>`
  * on its own — the exact drift this file exists to prevent.
  */
-export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity'] } = {}) {
+// `loop` is the supervised-loop controller's own fault-injection suite
+// (scripts/loop-engineering/test). It spawns real controller, guardian and worker
+// process trees and measures wall-clock deadlines, so it must NOT share cores
+// with the combined run: under that load its timing assertions become flaky.
+// It runs on its own (`npm run test:loop`, --test-concurrency=1) and is part of
+// the loop requirement verifier and the final gate list in the execution profile.
+// `language-stress` is the Haskell/Nix scale and memory suite (QA-003): it scans thousands of files and asserts a peak-memory
+// ceiling, so it must own the machine. `language-tools` holds the criteria that need a real compiler or Nix on the host (HS-006
+// route fixtures compile; the support gate that consumes it). `language-slow` is the CLI-driven language suites (the capability matrix, the
+// packed-tarball scan, example capture, scan modes): each spawns many full scans, and running them beside the rest of the suite starved the
+// Chrome rendering tests of CPU. They run in CI (language-suites) and in the loop's verification. `language-gates` runs the five existing benchmark gates (QA-002.AC02), about
+// fifteen minutes that would starve every other test of CPU inside the combined run; the pre-push gate and release check run them too. `nixos-host` is the NixOS package and host suite (NIX-012): it fails
+// without a NixOS host and a nix binary, so it runs on one (`npm run test:nixos-host`): an unavailable tool is a FAILED criterion there, never a skip, so
+// they are run where the tools exist (`npm run test:language-tools`) and are part of the loop verifier and the release gate.
+export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity', 'loop', 'language-stress', 'language-tools', 'language-gates', 'language-slow', 'nixos-host'] } = {}) {
   const covered = new Set(unionFiles(pkg, scopes));
   const missing = [];
   for (const [key, value] of Object.entries(pkg.scripts || {})) {

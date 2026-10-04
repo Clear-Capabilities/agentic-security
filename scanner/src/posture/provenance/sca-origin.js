@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 import { candidateCommitsForFile, getFirstParent, getBlobAtCommit, commitMeta } from './git-evidence.js';
 import { PROVENANCE_METHOD } from './schema.js';
+import { compareVersions } from '../../language/haskell-manifests.js';
 
 function parseSemver(v) {
   const m = String(v || '').replace(/^[^\d]*/, '').match(/^(\d+)\.(\d+)\.(\d+)/);
@@ -13,7 +14,17 @@ function cmpSemver(a, b) {
   return 0;
 }
 
-export function versionInRange(version, range) {
+// Hackage versions follow the PVP: any number of components, compared numerically component by component. The
+// three-component semver comparison below would call 2.1.2.1 and 2.1.2.9 equal.
+function pvpInRange(version, range) {
+  if (!version) return false;
+  if (range.introduced && compareVersions(version, range.introduced) < 0) return false;
+  if (range.fixed && compareVersions(version, range.fixed) >= 0) return false;
+  return true;
+}
+
+export function versionInRange(version, range, ecosystem = null) {
+  if (ecosystem && String(ecosystem).toLowerCase() === 'hackage') return pvpInRange(version, range);
   const v = parseSemver(version);
   if (!v) return false;
   if (range.introduced) {
@@ -42,6 +53,12 @@ function extractDeclaredVersion(blobText, depName, filePath) {
       return null;
     }
   }
+  // Hackage: the version is exact only where a freeze, a Stack lock or an extra-deps pin states it.
+  const esc = String(depName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (base === 'cabal.project.freeze') { const m = new RegExp(`any\\.${esc}\\s*==\\s*([0-9][0-9.]*)`).exec(blobText); return m ? m[1] : null; }
+  if (base === 'stack.yaml.lock') { const m = new RegExp(`hackage:\\s*${esc}-([0-9][0-9.]*)(?:@|\\s|$)`).exec(blobText); return m ? m[1] : null; }
+  if (base === 'stack.yaml') { const m = new RegExp(`^\\s*-\\s*${esc}-([0-9][0-9.]*)\\s*$`, 'm').exec(blobText); return m ? m[1] : null; }
+  if (/\.cabal$/i.test(base)) { const m = new RegExp(`(?:^|[\\s,:])${esc}\\s*==\\s*([0-9][0-9.]*)(?![\\w.*])`, 'm').exec(blobText); return m ? m[1] : null; }
   if (/^requirements(?:[._-][\w.-]+)?\.txt$/i.test(base)) {
     for (const line of blobText.split('\n')) {
       const m = line.trim().match(/^([A-Za-z0-9_.-]+)\s*[=~<>!]+\s*([^\s;#,]*)/);
@@ -98,7 +115,7 @@ export async function resolveDirectSCAOrigin(scanRoot, scaEntry, { since, deadli
     const blob = getBlobAtCommit(scanRoot, sha, file);
     if (blob == null) continue;
     const declaredVersion = extractDeclaredVersion(blob, scaEntry.name, file);
-    if (!declaredVersion || !versionInRange(declaredVersion, range)) continue;
+    if (!declaredVersion || !versionInRange(declaredVersion, range, scaEntry.ecosystem)) continue;
 
     const parent = getFirstParent(scanRoot, sha);
     if (!parent) {
@@ -111,7 +128,7 @@ export async function resolveDirectSCAOrigin(scanRoot, scaEntry, { since, deadli
 
     const parentBlob = getBlobAtCommit(scanRoot, parent, file);
     const parentVersion = parentBlob ? extractDeclaredVersion(parentBlob, scaEntry.name, file) : null;
-    const parentOutOfRange = !parentVersion || !versionInRange(parentVersion, range);
+    const parentOutOfRange = !parentVersion || !versionInRange(parentVersion, range, scaEntry.ecosystem);
     if (!parentOutOfRange) {
       // Parent was already in the vulnerable range too. If the declared value
       // actually changed here, this is the ambiguous "still-vulnerable bump"

@@ -132,7 +132,6 @@ const ALLOWLIST = new Set([
   'posture/runtime-correlation.js::findingObservedInRuntime',
   'posture/runtime-correlation.js::loadTrace',
   'posture/sbom-diff.js::loadPreviousSnapshot',
-  'posture/sbom-diff.js::persistSbom',
   'posture/triage.js::exportTriageMetrics',
   // Dataflow scaffolded internals (IFDS cache helpers, K2 wrapper, cross-
   // service annotations). PREVIOUS JUSTIFICATION WAS FALSE ("consumed
@@ -226,7 +225,7 @@ function loadAllSources() {
   for (const e of fs.readdirSync(SRC_ROOT, { withFileTypes: true })) {
     if (e.isFile() && /\.js$/.test(e.name)) files.push(path.join(SRC_ROOT, e.name));
   }
-  for (const d of ['report', 'sast', 'sca', 'secrets', 'integrations']) {
+  for (const d of ['report', 'sast', 'sca', 'secrets', 'integrations', 'language']) {
     files.push(...listJsFiles(path.join(SRC_ROOT, d)));
   }
   // Also include bin scripts (they're consumers).

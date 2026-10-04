@@ -11,7 +11,7 @@
 
 import { runFullScan, _snapshotSuppressionLog, _restoreSuppressionLog } from '../../engine.js';
 import { computeStableId } from '../stable-id.js';
-import { getBlobAtCommit } from './git-evidence.js';
+import { getBlobAtCommit, listFilesAtCommit } from './git-evidence.js';
 
 // Task 11 concurrency fix: `coordinator.js` resolves several findings' origins
 // CONCURRENTLY (its own comment: "the scheduler runs these four at a time"),
@@ -59,6 +59,12 @@ export function _runExclusive(fn) {
 
 export async function replayAt(scanRoot, sha, files, targetStableId) {
   const fileContents = {};
+  // A NixOS option is decided by every module the configuration imports, including ones deleted later, so a Nix
+  // finding is replayed against ALL Nix sources and the lock file as they existed at that commit.
+  if (files.some((f) => /\.nix$/i.test(f))) {
+    const all = listFilesAtCommit(scanRoot, sha, /(?:\.nix|(?:^|\/)flake\.lock)$/i);
+    files = [...new Set([...files, ...all])];
+  }
   for (const f of files) {
     const content = getBlobAtCommit(scanRoot, sha, f);
     if (content != null) fileContents[f] = content;
@@ -100,7 +106,10 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
         // identical computeStableId output with and without annotators, over
         // a real scan) before this was wired in — see the FR-PROV-029 commit
         // message for methodology.
-        return await runFullScan({ fileContents, scanRoot, provenance: false, skipAnnotators: true }, () => {});
+        // Haskell/Nix findings come from the IR-taint layer, which only runs in deep mode: a replay that skips it
+        // can never see the finding at ANY commit, so origin resolution would end "never confirmed" for every one.
+        const _langDeep = Object.keys(fileContents).some((f) => /\.(?:l?hs|nix)$/i.test(f)) ? { deep: true } : {};
+        return await runFullScan({ fileContents, scanRoot, provenance: false, skipAnnotators: true, ..._langDeep }, () => {});
       } finally {
         _restoreSuppressionLog(_suppSnapshot);
       }

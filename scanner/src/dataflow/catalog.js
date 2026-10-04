@@ -2174,6 +2174,7 @@ export const CATALOG = [
 // Lives in catalog-expanded.js to keep the diff reviewable. Merged into
 // the main CATALOG below so the indexer treats them identically.
 import { EXPANDED_SANITIZERS } from './catalog-expanded.js';
+import { HASKELL_CATALOG } from './catalog-haskell.js';
 import { cppExtRe } from '../ir/parser-cpp.js';
 
 // Language-scope guard. `file` is optional — when absent, behavior is
@@ -2200,6 +2201,7 @@ const _LANG_EXT = {
   rb:   /\.rb$/i,
   java: /\.java$/i,
   rs:   /\.rs$/i,
+  hs:   /\.(?:hs|lhs)$/i,
 };
 
 // cpp delegates to cppExtRe() rather than duplicating a literal set, so it
@@ -2395,6 +2397,8 @@ function _receiverTypeConfirms(entry, receiverType) {
     _ids.add(k);
     CATALOG.push(e);
   }
+  // Haskell models (generated from language/haskell-models.js). Entries are import-qualified.
+  for (const e of HASKELL_CATALOG) { const k = String(e.id).toLowerCase(); if (_ids.has(k)) continue; _ids.add(k); CATALOG.push(e); }
 }
 
 // Provenance defaults (Sentinel-parity audit P1-10):

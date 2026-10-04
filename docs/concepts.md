@@ -73,6 +73,14 @@ lifecycle](architecture/finding-lifecycle.md).
 
 ---
 
+## Static is not effective is not runtime
+
+For Nix in particular a value can be read three ways, and the scanner keeps them apart. The **text** says
+`PermitRootLogin = "yes"`; the **effective** configuration, after a later `mkForce`, may say `no`; what a **running host** does
+depends on things no source file states. A finding is stated at the scope it was established at, an undecidable condition stays
+`conditional`, and runtime reachability is always `unknown`. The same discipline applies to dependencies: a declared range, a
+resolved plan and an exported closure are different strengths of evidence, and a stale one is worth nothing.
+
 ## Deterministic vs. model-assisted
 
 Not every capability in this package needs a model, and the ones that can

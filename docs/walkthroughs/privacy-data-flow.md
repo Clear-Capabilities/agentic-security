@@ -132,6 +132,14 @@ exactly what backed the ✅ on the masked edge above:
 
 ---
 
+## The same journey in Haskell and Nix
+
+The hop-by-hop reading above applies unchanged to the new languages. In `examples/polyglot-privacy`, `Customer.email` is a
+field of a record parameter in `src/Sync.hs`: hop 1 is that parameter (a source with no provenance claim beyond "supplied by
+the caller"), hop 2 is the argument of `putStrLn` (an application log) and a second edge goes to `httpLBS` (an external API).
+In `module.nix`, `config.customer.email` reaches `environment.etc."crm-contact.conf".text`, a store file. The evidence grade is
+**static**: the path exists in the source. See [Code Boundaries](../guides/data-flow-explorer.md#haskell-and-nix-field-journeys).
+
 ## Try It Yourself
 
 Pick one sensitive field in your own codebase — an email address, an SSN,

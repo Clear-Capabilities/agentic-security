@@ -208,6 +208,8 @@ import { annotateNarration } from './posture/flow-narration.js';
 import { applyPathConstraints } from './posture/path-predicates.js';
 // Phase 3 (Sentinel-parity Layer 1 + 2) — IR + interprocedural taint engine.
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
+import _v8 from 'node:v8';
+import _vm from 'node:vm';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
@@ -301,6 +303,15 @@ import {
   computeGlobalKey, globalKeyMeta, invalidatedFiles, bundleShaForRunKey,
 } from './posture/scan-checkpoint.js';
 import { SCANNER_VERSION as _ENGINE_VERSION } from './posture/version.js';
+import { isLanguageSource, isLanguageExcludedPath, withLanguageClosure } from './language/discovery.js';
+import { annotateHaskellFindings } from './language/haskell-findings.js';
+import { annotateHaskellLlm, analyzeHaskellLlmRules } from './language/haskell-llm.js';
+import { languagePragmaOnLine as _languagePragmaOnLine, languagePragmaSuppresses as _languagePragmaSuppresses } from './language/pragma.js';
+import { applyHaskellGuards, consolidateFlowSinks } from './language/haskell-guards.js';
+import { annotateUnresolvedTargets, attachEvidenceChains } from './language/haskell-disclosure.js';
+import { analyzeHaskellRules } from './language/haskell-security-rules.js';
+import { scanLanguageSecretConcat, scanDependencyUrlCredentials, providerInfo as _secretProvider } from './language/secrets.js';
+import { analyzeHaskellWeb, toEngineRoutes } from './language/haskell-web.js';
 import { effectiveVersion as _effectiveRulesetVersion } from './posture/ruleset-version.js';
 
 // Disk-backed cache replacing browser sessionStorage. One JSON blob per key under ~/.claude/agentic-security/osv-cache/.
@@ -818,7 +829,9 @@ function shouldScan(p){if(/\.(test|spec|mock)\./i.test(p))return false;if(/_test
   if (/(?:^|[\\/])Info\.plist$/i.test(p)) return true;
   if (/(?:^|[\\/])module\.json5$/i.test(p)) return true;
   if (/^\.env(?:\.[\w-]+)?$/.test(base)) return true;
-  return CODE_EXTS.has(getExt(p)) || _isIaCFile(p);}
+  // Haskell/Nix sources come from the shared registry; build output and store
+  // paths stay out. Scoped to those sources so no other language's semantics move.
+  return CODE_EXTS.has(getExt(p)) || _isIaCFile(p) || (isLanguageSource(p) && !isLanguageExcludedPath(p));}
 function lineAt(c,i){return c.substring(0,i).split("\n").length;}
 
 
@@ -2776,8 +2789,19 @@ function _applyIgnorePragmas(arr, fc){
     const file = f && (f.file || f.sink?.file);
     const line = f && Number(f.line ?? f.sink?.line);
     if (!file || !Number.isInteger(line)) continue;
-    const pragma = _pragmaOnLine(fc[file], line);
-    if (!_pragmaSuppresses(pragma, f)) continue;
+    // Haskell and Nix pragmas are recognised only inside real comments (never in a string or an operator) and match a
+    // rule id EXACTLY; every other language keeps the line-regex pragma below.
+    let pragma; let suppresses;
+    if (/\.(?:l?hs|hs-boot|hsc|nix)$/i.test(file)) {
+      const lp = _languagePragmaOnLine(file, fc[file], line);
+      if (lp && lp.malformed && !lp.bare && !lp.rules.length) { f.ignorePragmaIgnored = `malformed agentic-security-ignore: ${lp.malformed}`; continue; }
+      suppresses = _languagePragmaSuppresses(lp, f);
+      pragma = lp ? { rule: lp.bare ? '' : lp.rules.join(', ') } : null;
+    } else {
+      pragma = _pragmaOnLine(fc[file], line);
+      suppresses = _pragmaSuppresses(pragma, f);
+    }
+    if (!suppresses) continue;
     _suppressionLog.push({
       vuln: f.vuln, file, line, snippet: f.snippet || '',
       reason: `inline pragma: agentic-security-ignore${pragma.rule ? ': ' + pragma.rule : ''}`,
@@ -6534,7 +6558,9 @@ function dedupeFindingsWithEvidence(findings){
     // Multiple sources reaching the same sink collapse — the merged finding
     // accumulates them in `evidence` and `dedupedSources` instead.
     const sinkLine = f.sink?.line || f.line || 0;
-    const key=`${file}:${sinkLine}:${fam}`;
+    // Haskell taint findings carry a site key: two distinct sinks of one family on one line stay two findings,
+    // so a discharged (sanitized) sink can never absorb its unprotected sibling.
+    const key=`${file}:${sinkLine}:${fam}${f.siteKey?':'+f.siteKey:''}`;
     if(!buckets.has(key)){buckets.set(key,f);continue;}
     const kept=buckets.get(key);
     // Winner selection: an IR-TAINT finding (the deep engine's real
@@ -7237,7 +7263,7 @@ function scanCredentials(fp,raw){
       // unredacted-snippet leak as scanEntropySecrets — `snippet` carried
       // the raw source line (full credential value) straight through to
       // every report format. Redact the exact matched value here too.
-      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,_urlCreds:!!pat.urlCreds,snippet:snippet.split(val).join(masked),masked,fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
+      results.push({vuln:pat.n,severity,cwe:"CWE-798",stride:"Information Disclosure",file:fp,line,_urlCreds:!!pat.urlCreds,snippet:snippet.split(val).join(masked),masked,..._secretProvider(val),fix:"Remove the hardcoded credential. Store secrets in environment variables or a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager). Rotate the exposed credential immediately, treat it as compromised.",code:`// Remove hardcoded value:\n// const secret = "${masked}";\n\n// Use environment variable instead:\nconst secret = process.env.${pat.n.toUpperCase().replace(/[^A-Z0-9]/g,"_")};`});
     }
   }
   // One secret, one finding. A `postgres://user:pass@host/db` matches both the
@@ -8692,6 +8718,7 @@ async function queryRegistries(components){
       _aF.push(...(runDetector(_detectorErrors,p,'scanPythonStructural',()=>scanPythonStructural(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanGoStructural',()=>scanGoStructural(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanSecretConcat',()=>scanSecretConcat(p,cc))||[]));
+      _aF.push(...(runDetector(_detectorErrors,p,'scanLanguageSecretConcat',()=>scanLanguageSecretConcat(p,c))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanXssReflectedMultilang',()=>scanXssReflectedMultilang(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanCodeInjectionMultilang',()=>scanCodeInjectionMultilang(p,cc))||[]));
       _aF.push(...(runDetector(_detectorErrors,p,'scanResponseSplitting',()=>scanResponseSplitting(p,cc))||[]));
@@ -8742,7 +8769,14 @@ async function queryRegistries(components){
 // because a direct runFullScan caller supplying no file-subsetting options is
 // scanning everything it was given; runScan.js narrows it for --changed-since
 // and for caller-supplied fileContents.
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+let _gcFn = null;
+function _gcHint(minHeapMiB) {
+  if (process.memoryUsage().heapUsed < minHeapMiB * 1048576) return;
+  if (!_gcFn) { _v8.setFlagsFromString('--expose_gc'); _gcFn = _vm.runInNewContext('gc'); }
+  _gcFn();
+}
+
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -8794,7 +8828,9 @@ function _deterministicFileTimings(timings) {
       _ckpt = openCheckpoint(scanRoot, {
         globalKey: computeGlobalKey(_ckptIdentity),
         meta: globalKeyMeta(_ckptIdentity),
-        fileContents,
+        // Haskell/Nix sources hash with their import closure, so an imported
+        // module's change invalidates its importers' checkpointed work too.
+        fileContents: withLanguageClosure(fileContents, depFileContents),
       });
       for (const r of resumeFindings(_ckpt)) { if (r && r.findings) _ckptPayloads.set(r.file, r.findings); }
       _ckptDone = completedFiles(_ckpt);
@@ -9190,6 +9226,9 @@ function _deterministicFileTimings(timings) {
     }
   }
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
+  // X-010: Hackage and Nix components, dependency edges and target provenance. Kept beside (not inside) the ordinary
+  // component list so the existing consumers are untouched; the BOM emitters and the SBOM diff read it explicitly.
+  let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
   // SARD_80_F1 W5.41/W5.42 — unlike the ADD-only cross-file passes above,
@@ -9291,10 +9330,17 @@ function _deterministicFileTimings(timings) {
   // believing it enables deep mode — it never did, so those tests were
   // exercising whatever coincidentally fires without the deep engine, not
   // the interprocedural machinery they're named for.
-  const _deepRequested = deep === true || process.env.AGENTIC_SECURITY_DEEP === '1';
+  // Haskell has NO analysis outside the deep (IR) layer: its taint findings, sink checks and guard refutations all
+  // live there. So, unlike the other languages, a project with Haskell sources runs deep mode by default, in CI too,
+  // unless it is explicitly switched off (AGENTIC_SECURITY_DEEP=0 / --no-deep / deep:false). An explicit off is not
+  // silent: the missing analyzer is a scan-health condition (see language/assurance.js) and strict assurance fails.
+  const _hasHaskellSource = Object.keys(fc).some((f) => /\.l?hs$/i.test(f));
+  const _deepExplicitlyOff = deep === false || process.env.AGENTIC_SECURITY_DEEP === '0';
+  const _deepForHaskell = _hasHaskellSource && !_deepExplicitlyOff;
+  const _deepRequested = deep === true || process.env.AGENTIC_SECURITY_DEEP === '1' || _deepForHaskell;
   const _inCi = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI ||
                    process.env.BUILDKITE || process.env.CIRCLECI || process.env.JENKINS_URL);
-  const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1';
+  const _deepInCiAllowed = deepInCi === true || process.env.AGENTIC_SECURITY_DEEP_IN_CI === '1' || _deepForHaskell;
   const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
   let _deepCallGraph = null;
   let _deepFailure = null;
@@ -9343,6 +9389,7 @@ function _deterministicFileTimings(timings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
       }
+      try { applyHaskellGuards(irFindings, perFile); consolidateFlowSinks(irFindings, perFile); annotateUnresolvedTargets(irFindings, perFile); attachEvidenceChains(irFindings, perFile); annotateHaskellFindings(irFindings, fc); annotateHaskellLlm(irFindings, fc); } catch (_) { /* metadata only; the finding stands without it */ }
       aF.push(...irFindings);
     } catch (e) {
       // Deep mode is best-effort. A parser blowup in one file shouldn't kill
@@ -9506,6 +9553,13 @@ function _deterministicFileTimings(timings) {
       }
     } catch { /* Java SCA enrichment is best-effort */ }
   }
+  // Haskell crypto / randomness / resource / XML / sensitive-logging rules (project-level: imports resolve across modules).
+  try{aF.push(...analyzeHaskellRules(fc).findings);}catch(_){}
+  try{aF.push(...analyzeHaskellLlmRules(fc));}catch(_){}
+  try{const{analyzeLanguageFindings}=await import('./language/engine-pass.js');aF.push(...analyzeLanguageFindings(allFileContents).findings);}catch(_){}
+  let _languageBridges=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$/i.test(f))){const{analyzePolyglotBridges}=await import('./language/bridges.js');_languageBridges=analyzePolyglotBridges(allFileContents);}}catch(_){}
+  try{for(const[_p,_t]of Object.entries(allFileContents))if(typeof _t==='string')aF.push(...scanDependencyUrlCredentials(_p,_t));}catch(_){}
+  try{const _hw=analyzeHaskellWeb(fc);aF.push(..._hw.findings);aR.push(...toEngineRoutes(_hw));}catch(_){}
   let finalFindings;try{finalFindings=dedupeFindingsWithEvidence(aF);}catch(_){finalFindings=dd(aF,f=>f.id);}
   // Inline `agentic-security-ignore` pragmas, pass 1 of 2. This covers every
   // finding that exists BY THIS POINT — the pattern detectors, the cross-file
@@ -9708,6 +9762,10 @@ function _deterministicFileTimings(timings) {
   // reports fewer steps than the total and the progress bar does not
   // necessarily reach it — that's the same "stale total, real motion" shape
   // the pre-existing "Linking" phase already accepts.
+  // A large scan has just finished its heaviest allocation phase (IR, taint). Ask V8 for a collection before the annotators start so
+  // the transient garbage of that phase is not still resident when the annotation phase peaks (the V8 heuristics would otherwise let
+  // the process grow first). Only when the heap is already large: a small scan never pays for it.
+  try { _gcHint(400); } catch (_) { /* a hint, never a requirement */ }
   const _ANNOTATOR_TOTAL_ESTIMATE = 52;
   let _annotatorIdx = 0;
   const _runAnnotator = (phase, fn) => {
@@ -10207,6 +10265,8 @@ function _deterministicFileTimings(timings) {
   // aF — aF was already snapshotted into finalFindings at dedupeFindingsWithEvidence
   // above, so pushing into aF here silently discards every result.
   try{const dc=detectDepConfusion(annotatedComponents,scanRoot);supplyChain.push(...dc);}catch(_){}
+  // Nix fetch/build/cache trust (static): supply-chain entries, so they live in this bucket.
+  try{const{analyzeLanguageSupplyChain}=await import('./language/engine-pass.js');supplyChain.push(...analyzeLanguageSupplyChain(allFileContents,{scanRoot}).supplyChain);}catch(_){}
   // Deployment-platform security checklist
   try{const dpf=scanDeployPlatform(scanRoot);aLogic.push(...dpf);}catch(_){}
   // Stack-specific security playbook
@@ -10422,7 +10482,7 @@ function _deterministicFileTimings(timings) {
     // SBOM diff — drift detection across releases.
     if (process.env.AGENTIC_SECURITY_NO_SBOM_DIFF !== '1') {
       try {
-        _sbomDiff = runSbomDiff(scanRoot, annotatedComponents || []);
+        _sbomDiff = runSbomDiff(scanRoot, [...(annotatedComponents || []), ...((_languageBom && _languageBom.components) || [])]);
         if (_sbomDiff && Array.isArray(_sbomDiff.findings)) finalFindings.push(..._sbomDiff.findings);
       } catch (_) {}
     }
@@ -10459,14 +10519,18 @@ function _deterministicFileTimings(timings) {
     if (process.env.AGENTIC_SECURITY_NO_LICENSE_GRAPH !== '1') {
       try {
         const lgPolicy = loadLicenseGraphPolicy(scanRoot);
-        _licenseGraph = analyzeLicenseGraph(annotatedComponents || [], lgPolicy);
+        // A Haskell or Nix component carries no license data of its own, and "no license" is not evidence of a licensing problem:
+        // judging it would add a review finding per dependency for every project. They are left out and the gap is disclosed
+        // (language/assurance.js `licenseUnavailable`) rather than turned into noise.
+        const _langLic = ((_languageBom && _languageBom.components) || []).filter((c) => c && (c.license || (Array.isArray(c.licenses) && c.licenses.length)));
+        _licenseGraph = analyzeLicenseGraph([...(annotatedComponents || []), ..._langLic], lgPolicy);
         if (_licenseGraph && Array.isArray(_licenseGraph.findings)) finalFindings.push(..._licenseGraph.findings);
       } catch (_) {}
     }
     // Attributions: emit ATTRIBUTIONS.md (and NOTICE if Apache deps present).
     if (process.env.AGENTIC_SECURITY_NO_ATTRIBUTIONS !== '1') {
       try {
-        _attributions = generateAttributions(annotatedComponents || []);
+        _attributions = generateAttributions([...(annotatedComponents || []), ...((_languageBom && _languageBom.components) || [])]);
         if (_attributions && _attributions.componentCount) persistAttributions(scanRoot, _attributions);
       } catch (_) {}
     }
@@ -10477,7 +10541,7 @@ function _deterministicFileTimings(timings) {
     // .json 03.04.10, nist-ai-600-1.json MG-4.1-001) could never clear.
     if (process.env.AGENTIC_SECURITY_NO_AIBOM !== '1') {
       try {
-        const _aibom = buildAIBOM({ components: annotatedComponents || [] }, fc, {});
+        const _aibom = buildAIBOM({ components: annotatedComponents || [] }, fc, { manifests: depFileContents });
         if (_aibom && (_aibom.models.length || _aibom.promptTemplates.length || _aibom.frameworks.length)) {
           persistAIBOM(scanRoot, _aibom);
         }
@@ -10728,6 +10792,14 @@ function _deterministicFileTimings(timings) {
     // exists on dependency COMPONENTS but was never carried onto the
     // vulnerable_dep entries, so the negation was true for every entry and the
     // filter excluded nothing. `isDirect` is now propagated at materialization.
+    // Hackage entries come from a declared dependency; the VERSION may be decided by a freeze/lock/extra-deps file, and
+    // that file is where the version transition (the origin) is recorded, so it is the manifest provenance reads.
+    for (const s of (supplyChain || [])) {
+      if (!s || s.type !== 'vulnerable_dep' || s.ecosystem !== 'hackage') continue;
+      if (s.isDirect === undefined) s.isDirect = true;
+      if (!s.fixedVersions && Array.isArray(s.fixedIn)) s.fixedVersions = s.fixedIn;
+      if (!s.filePath) s.filePath = (s.versionSource && s.versionSource.file) || s.file;
+    }
     const directDeps = (supplyChain || []).filter((s) => s && s.type === 'vulnerable_dep' && s.isDirect);
     // `resolveDirectSCAOrigin`/`scaStableId` key on `filePath`; the vulnerable_dep
     // entries built above carry the manifest path as `file` (report/index.js
@@ -10923,6 +10995,18 @@ function _deterministicFileTimings(timings) {
   // (_rootCauseSweep/_proofCoverage/_coverageLedger/_scanHealth are hoisted
   // above the `skipAnnotators` guard — FR-PROV-029.)
   try { _rootCauseSweep = sweepRootCauses(finalFindings, fc); } catch { _rootCauseSweep = null; }
+  // X-008: Haskell siblings are found on the IR by resolved callee (the generic sweep keys on a call-text shape that
+  // Haskell never produces). Merged into the same structure so found === candidates + mitigated still holds overall.
+  try {
+    if (finalFindings.some(f => f && f.parser === 'IR-TAINT' && /\.l?hs$/i.test(f.file || ''))) {
+      const { buildProjectIR } = await import('./ir/index.js');
+      const { sweepHaskellSiblings } = await import('./language/haskell-sweep.js');
+      const hsFiles = Object.fromEntries(Object.entries(fc).filter(([k]) => /\.l?hs$/i.test(k)));
+      const hs = sweepHaskellSiblings(finalFindings, buildProjectIR(hsFiles).callGraph);
+      const base = _rootCauseSweep || { sweeps: [], totals: { found: 0, candidates: 0, mitigated: 0 } };
+      _rootCauseSweep = { ...base, sweeps: [...base.sweeps, ...hs.sweeps.map(x => ({ ...x, language: 'haskell' }))], totals: { found: base.totals.found + hs.totals.found, candidates: base.totals.candidates + hs.totals.candidates, mitigated: base.totals.mitigated + hs.totals.mitigated } };
+    }
+  } catch { /* the Haskell sweep is additive; the generic sweep result stands */ }
   // PRD F7.2: publish what CANNOT be proven alongside what can. A proof RATE
   // computed over the provable subset makes a narrow subset look like strength;
   // the three-bucket split (provable / declined-on-purpose / not-yet-classified)
@@ -10938,6 +11022,31 @@ function _deterministicFileTimings(timings) {
   // summary, computed from signals the engine already collects.
   // `analyzers` was `null` (see pipeline/scan-health.js's prior comment)
   // until FR-203's coverage ledger existed to compute it for real.
+  // X-007: Haskell/Nix assurance (parse outcomes, manifests, advisory currency, required capabilities, optional
+  // modes) feeds the SAME scan-health input every other analyzer uses, so advisory/standard/strict and the
+  // deploy verdict apply unchanged. A failure here is recorded as a condition; findings are never dropped.
+  let _languageCoverage = null;
+  try {
+    if (Object.keys(allFileContents).some(f => /\.(?:l?hs|hs-boot|hsc|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project|package\.yaml|stack\.yaml)/i.test(f))) {
+      const { assessLanguageAssurance } = await import('./language/assurance.js');
+      const { configuredAdvisoryDb } = await import('./language/haskell-supply.js');
+      const env = process.env;
+      const { resolvedHackageComponents, analyzeNixClosure, runSelectedNixEval } = await import('./language/resolved-pass.js');
+      let _languageSupplyGaps = [];
+      try { _languageSupplyGaps = [...resolvedHackageComponents(allFileContents).gaps, ...((analyzeNixClosure(allFileContents, { scanRoot }) || {}).gaps || [])]; } catch (e) { _languageSupplyGaps = [{ kind: 'resolved-analysis-failed', detail: String((e && e.message) || e).slice(0, 160) }]; }
+      const _nixEvalResult = await runSelectedNixEval(scanRoot, env);
+      _languageCoverage = (await assessLanguageAssurance({
+        files: allFileContents, findings: finalFindings, timeoutMs: Number(env.AGENTIC_SECURITY_LANG_TIMEOUT_MS) || 0,
+        disabled: [...String(env.AGENTIC_SECURITY_LANG_DISABLE || '').split(',').map(x => x.trim()).filter(Boolean), ...((_hasHaskellSource && !_deepEnabled) ? ['haskell:taint'] : [])],
+        advisoryDb: configuredAdvisoryDb(scanRoot).db,
+        policyExcluded,
+        sizeSkipped,
+        supplyGaps: _languageSupplyGaps,
+        licenseUnavailable: ((_languageBom && _languageBom.components) || []).filter((c) => c && !c.license && !(Array.isArray(c.licenses) && c.licenses.length)).length,
+        optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': { selected: false } },
+      })).languageCoverage;
+    }
+  } catch (e) { _languageCoverage = { totals: null, byKind: null, conditions: [`language assurance could not be computed: ${String((e && e.message) || e)}`] }; }
   _scanHealth = computeScanHealth({
     scanMeta: _scanMeta,
     annotatorErrors: _annotatorErrors,
@@ -10945,6 +11054,8 @@ function _deterministicFileTimings(timings) {
     deepStatus: _deepStatus,
     analyzerCoverage: summarizeCoverageForScanHealth(_coverageLedger),
     lineageStatus: _lineageStatus,
+    languageCoverage: _languageCoverage,
+    supplyChain,
   });
   // FR-207: stale vulnerability feeds, calibration data, and compliance
   // evidence are real assurance gaps, not just findings the feed omits --
@@ -10960,7 +11071,7 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,aiAssistance:_aiAssistance};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

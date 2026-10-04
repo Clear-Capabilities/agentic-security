@@ -36,6 +36,7 @@
 
 import { classifyFieldAgainst } from './privacy-taxonomy.js';
 import { _languageFamilyExtensions } from './catalog.js';
+import { HASKELL_PRIVACY_SINKS } from './privacy-catalog-haskell.js';
 
 export const PRIVACY_SINK_CATALOG = [
   // ── log ──────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ export const PRIVACY_SINK_CATALOG = [
     vuln: { name: 'Privacy Leak (message queue)', severity: 'medium', cwe: 'CWE-359',
             remediation: 'Regulated data (PII/PHI/PCI) placed on a queue is readable by every consumer with queue access — document who can subscribe before sending it.' } },
 ];
+
 
 // All 9 sink categories FR-403 names (7 already covered by privacy-taint.js's
 // own SINK_PATTERNS, plus storage/queues) — used by this module's own tests
@@ -242,7 +244,9 @@ export function matchPrivacySink(calleeExpr, file, receiverType) {
   if (!calleeExpr) return null;
   const { last, full } = _privacyCalleeNames(calleeExpr);
   if (!last && !full) return null;
-  const hits = PRIVACY_SINK_CATALOG.filter((e) => {
+  // Haskell privacy sinks live in their own table (privacy-catalog-haskell.js): the pinned catalog above is the
+  // JS/Python/... surface other suites count, and a new language does not silently change those counts.
+  const hits = [...PRIVACY_SINK_CATALOG, ...HASKELL_PRIVACY_SINKS].filter((e) => {
     if (!e || e.kind !== 'sink') return false;
     const cName = e.match && e.match.callee;
     if (!cName) return false;

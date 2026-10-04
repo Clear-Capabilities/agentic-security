@@ -36,3 +36,10 @@ vsce publish           # requires Marketplace publisher credentials (clearcapabi
 ```
 
 The Marketplace token + publish step requires Clear Capabilities Inc. credentials and is not run from the open-source repo.
+
+## Haskell and Nix
+
+The plugin also serves Haskell, Cabal and Nix files (`*.hs`, `*.lhs`, `*.nix`, `*.cabal`, `cabal.project*`, `stack.yaml*`,
+`package.yaml`, `flake.lock`). On save it analyses the file with its imported modules as context and reports findings for that
+file only; a code action is offered only for a fix that passed the same gates as `agentic-security fix`. Support status per
+capability: `docs/language-support.md`.

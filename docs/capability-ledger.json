@@ -1,0 +1,2169 @@
+{
+  "schema": "capability-ledger/v1",
+  "requirement": "CORE-001",
+  "purpose": "Maps every documented capability to the proposed Haskell and Nix/NixOS work, the source entry points, requirement IDs, verification suites and documents to update. Checked by scripts/capability-ledger/check.mjs via scanner/test/language/capability-ledger.test.js.",
+  "prd": {
+    "file": "HASKELL_NIXOS_FULL_CAPABILITY_PRD.md",
+    "baselineCommit": "c3c65ae767bcfefb841a0339ad8a39f0047769e5"
+  },
+  "separation": "existingBehavior records what the checkout does today (source observations re-checked by the test, and old documented metrics that are NOT re-measured). Every Haskell/Nix/NixOS block in entries is proposed support only, with status \"proposed\".",
+  "crawl": {
+    "depth": 1,
+    "roots": [
+      "README.md#documentation",
+      "docs/README.md",
+      "commands/*.md",
+      "README.md#commands"
+    ],
+    "followUpTask": "CORE-001-T01"
+  },
+  "denominator": {
+    "planningRequirements": 57,
+    "additionalRequiredTasks": 3,
+    "frozenRequiredScope": 60
+  },
+  "excludedDocPrefixes": [
+    {
+      "prefix": "docs/superpowers/",
+      "reason": "Dated internal implementation plans for finished subsystems, not user-facing capability documentation."
+    }
+  ],
+  "existingBehavior": [
+    {
+      "id": "BASE-001",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "The engine admits source files through a CODE_EXTS allowlist.",
+      "file": "scanner/src/engine.js",
+      "pattern": "CODE_EXTS\\s*=\\s*new Set\\(\\[",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-002",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "CODE_EXTS contains no hs, lhs or nix entry.",
+      "file": "scanner/src/engine.js",
+      "pattern": "CODE_EXTS\\s*=\\s*new Set\\(\\[[^\\]]*\"(?:hs|lhs|nix)\"",
+      "expect": "absent"
+    },
+    {
+      "id": "BASE-003",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "The universal IR maps the hs extension to a haskell language name (a mapping only, not a normalizer).",
+      "file": "scanner/src/ir/universal-ir.js",
+      "pattern": "\\bhs:\\s*'haskell'",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-004",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "At the PRD baseline commit the main IR dispatch had no Haskell or Nix adapter. Reconciled by HS-002: `.hs` files are now lowered by the Haskell adapter through both project entry points; Nix is configuration analysis and is deliberately not an IR language, so it still has no dispatch there.",
+      "file": "scanner/src/ir/index.js",
+      "pattern": "buildHaskellIR",
+      "flags": "",
+      "expect": "present",
+      "reconciledBy": "HS-002"
+    },
+    {
+      "id": "BASE-005",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "The tree-sitter loader has no Haskell or Nix grammar.",
+      "file": "scanner/src/ir/tree-sitter-loader.js",
+      "pattern": "haskell|\\bhs\\b|\\bnix\\b|cabal",
+      "flags": "i",
+      "expect": "absent"
+    },
+    {
+      "id": "BASE-006",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "Watch mode's source-change matching routes through the language discovery module in this checkout (reconciled from the PRD baseline, where it did not mention Haskell or Nix). This records wiring only; Haskell/Nix scan support remains proposed until its requirement suites pass.",
+      "file": "scanner/src/posture/watch-mode.js",
+      "pattern": "language/discovery\\.js",
+      "flags": "",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-007",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "At the PRD baseline commit AI-BOM extraction had no Haskell or Nix path. Reconciled by X-010: Haskell and Nix agent, model and service usage now reaches the shared AI-BOM (`posture/aibom.js`). This records wiring only; Haskell/Nix AI-BOM support remains proposed until its requirement suites pass.",
+      "file": "scanner/src/posture/aibom.js",
+      "pattern": "haskell|\\bhs\\b|\\bnix\\b|cabal",
+      "flags": "i",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-008",
+      "kind": "source-observation",
+      "measuredThisRun": false,
+      "statement": "At the PRD baseline commit SBOM generation had no Hackage, Cabal or Nix identity. Reconciled by X-009: language components (Hackage and Nix inputs) are merged by the shared SBOM and its diff (`posture/sbom.js`). This records wiring only; Haskell/Nix SBOM support remains proposed until its requirement suites pass.",
+      "file": "scanner/src/posture/sbom.js",
+      "pattern": "hackage|cabal|\\bnix\\b|haskell",
+      "flags": "i",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-009",
+      "kind": "documented-metric",
+      "status": "documented-not-remeasured",
+      "measuredThisRun": false,
+      "statement": "Root CLAUDE.md states taint attribution of 117/215 (54%) as of 2026-09-12. Quoted from the document, not re-measured by this ledger.",
+      "asOf": "2026-09-12 (as stated in the source)",
+      "file": "CLAUDE.md",
+      "pattern": "117/215 \\(54%\\)",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-010",
+      "kind": "documented-metric",
+      "status": "documented-not-remeasured",
+      "measuredThisRun": false,
+      "statement": "docs/README.md describes the examples gallery as thirteen real findings. Quoted from the document, not re-measured by this ledger.",
+      "asOf": "undated in the source",
+      "file": "docs/README.md",
+      "pattern": "thirteen real findings",
+      "expect": "present"
+    },
+    {
+      "id": "BASE-011",
+      "kind": "documented-metric",
+      "status": "documented-not-remeasured",
+      "measuredThisRun": false,
+      "statement": "README.md states coverage maps exist for 5 of the 10 bundled compliance frameworks. Quoted from the document, not re-measured by this ledger.",
+      "asOf": "undated in the source",
+      "file": "README.md",
+      "pattern": "5 of the 10 bundled frameworks",
+      "expect": "present"
+    }
+  ],
+  "additionalRequiredTasks": [
+    {
+      "id": "CORE-001-T01",
+      "version": "1",
+      "required": true,
+      "discoveredBy": "checkout-crawl",
+      "title": "Crawl documentation links recursively beyond the index pages",
+      "reason": "The ledger crawls the README Documentation section and docs/README.md (depth 1). Links inside the guides, walkthroughs and references they point to are not yet inventoried, so capabilities documented only there are unmapped.",
+      "acceptance": [
+        "Every internal link reachable from the index documents has ledger coverage or a recorded exclusion with a reason.",
+        "The crawl depth recorded in the ledger is raised accordingly."
+      ]
+    },
+    {
+      "id": "CORE-001-T02",
+      "version": "1",
+      "required": true,
+      "discoveredBy": "checkout-crawl",
+      "title": "Inventory modes of commands the README does not describe",
+      "reason": "The dataflow, federate, governance and remediation dispatchers exist under commands/ but the README Commands section lists neither them nor their modes, so their mode-level coverage is unknown.",
+      "acceptance": [
+        "Each mode of the four dispatchers is recorded in the ledger with Haskell, Nix and NixOS applicability.",
+        "The README Commands section or docs/reference/cli.md documents them."
+      ]
+    },
+    {
+      "id": "CORE-001-T03",
+      "version": "1",
+      "required": true,
+      "discoveredBy": "checkout-crawl",
+      "title": "Map documents present in docs/ that no index links to",
+      "reason": "Twelve markdown documents exist in docs/ but neither the README Documentation section nor docs/README.md links them. Their documented capabilities (OSCAL output, harness assessment, audit, standards, implementation reports, privacy comparison, threat models) have no ledger mapping yet.",
+      "acceptance": [
+        "Each listed document is either linked from an index and mapped to a ledger entry, or recorded as internal with a reason.",
+        "OSCAL output and harness assessment each get Haskell and Nix applicability and requirement IDs."
+      ]
+    }
+  ],
+  "unindexedDocs": [
+    {
+      "path": "docs/DATA_FLOW_EXPLORER_THREAT_MODEL.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/HARNESS_ASSESSMENT_EVIDENCE.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/HARNESS_ASSESSMENT_SPEC.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/OSCAL.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/audit/README.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation/assurance-hardening-decisions.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation/assurance-hardening-final-report.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation/assurance-hardening-handoff.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation/assurance-hardening-status.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/lineage/PRIVACY_COMPARISON.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/standards/README.md",
+      "taskId": "CORE-001-T03"
+    }
+  ],
+  "entries": [
+    {
+      "id": "CAP-001",
+      "kind": "doc-link",
+      "title": "Scanning: quickstart, modes, output, exit codes, suppression",
+      "sources": [
+        "docs/guides/quickstart.md",
+        "docs/guides/scanning.md",
+        "examples/demo-app/",
+        "docs/guides/haskell.md",
+        "docs/guides/nix-nixos.md",
+        "docs/guides/nixos-install.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-001",
+          "HS-002",
+          "HS-003",
+          "HS-004",
+          "HS-005",
+          "HS-006",
+          "CORE-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-001",
+          "NIX-002",
+          "NIX-003",
+          "NIX-004",
+          "NIX-005",
+          "NIX-006",
+          "CORE-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js",
+        "scanner/src/ir/index.js",
+        "scanner/src/ir/universal-ir.js",
+        "scanner/src/ir/tree-sitter-loader.js"
+      ],
+      "suites": [
+        "language-discovery",
+        "haskell-parser",
+        "haskell-taint",
+        "nix-parser-ir"
+      ],
+      "documents": [
+        "docs/guides/quickstart.md",
+        "docs/guides/scanning.md",
+        "docs/guides/haskell.md",
+        "docs/guides/nix-nixos.md",
+        "docs/guides/nixos-install.md"
+      ],
+      "baselineRefs": [
+        "BASE-001",
+        "BASE-002",
+        "BASE-003",
+        "BASE-004",
+        "BASE-005"
+      ]
+    },
+    {
+      "id": "CAP-002",
+      "kind": "doc-link",
+      "title": "Fix, triage, verify and verified remediation",
+      "sources": [
+        "docs/guides/fixing-vulnerabilities.md",
+        "docs/walkthroughs/verified-remediation.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-010",
+          "X-009"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-010",
+          "X-009"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js",
+        "scanner/src/mcp/server.js"
+      ],
+      "suites": [
+        "haskell-remediation",
+        "nix-remediation",
+        "language-proof-remediation"
+      ],
+      "documents": [
+        "docs/guides/fixing-vulnerabilities.md",
+        "docs/walkthroughs/verified-remediation.md"
+      ]
+    },
+    {
+      "id": "CAP-003",
+      "kind": "doc-link",
+      "title": "Finding evidence and provenance, attack surface and execution proof",
+      "sources": [
+        "docs/walkthroughs/finding-evidence.md",
+        "docs/guides/finding-provenance.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-006",
+          "X-008"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-004",
+          "X-008"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js",
+        "scanner/src/posture/evidence-bundle.js",
+        "scanner/src/pipeline/evidence-provenance.js"
+      ],
+      "suites": [
+        "language-evidence-posture",
+        "haskell-web-auth",
+        "nixos-hardening"
+      ],
+      "documents": [
+        "docs/walkthroughs/finding-evidence.md",
+        "docs/guides/finding-provenance.md"
+      ]
+    },
+    {
+      "id": "CAP-004",
+      "kind": "doc-link",
+      "title": "SBOM, AI-BOM, SCA, license policy and supply-chain integrity",
+      "sources": [
+        "docs/guides/sbom-and-ai-bom.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-007",
+          "HS-008",
+          "HS-009",
+          "X-002",
+          "X-010"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-005",
+          "NIX-007",
+          "NIX-008",
+          "NIX-009",
+          "X-002",
+          "X-010"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/posture/sbom.js",
+        "scanner/src/posture/aibom.js",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-bom",
+        "language-aibom",
+        "haskell-resolved-graph",
+        "nix-resolved-closure"
+      ],
+      "documents": [
+        "docs/guides/sbom-and-ai-bom.md"
+      ],
+      "baselineRefs": [
+        "BASE-007",
+        "BASE-008"
+      ]
+    },
+    {
+      "id": "CAP-005",
+      "kind": "doc-link",
+      "title": "Leaked secret response and secrets detection",
+      "sources": [
+        "docs/guides/leaked-secrets.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-001"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-006",
+          "X-001"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-secrets",
+        "nix-secrets-store"
+      ],
+      "documents": [
+        "docs/guides/leaked-secrets.md"
+      ]
+    },
+    {
+      "id": "CAP-006",
+      "kind": "doc-link",
+      "title": "Local AI, model cost controls, model egress policy, LLM and agent safety",
+      "sources": [
+        "docs/guides/ollama.md",
+        "docs/MODEL_COST_OPTIMIZATION.md",
+        "docs/walkthroughs/model-egress.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-003",
+          "X-015"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-003",
+          "X-015"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-015"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/discovery/CLAUDE.md",
+        "scanner/src/mcp/server.js"
+      ],
+      "suites": [
+        "language-local-ai",
+        "language-llm-agent"
+      ],
+      "documents": [
+        "docs/guides/ollama.md",
+        "docs/walkthroughs/model-egress.md"
+      ]
+    },
+    {
+      "id": "CAP-007",
+      "kind": "doc-link",
+      "title": "Scan health and assurance modes",
+      "sources": [
+        "docs/walkthroughs/scan-health.md",
+        "docs/walkthroughs/assurance-modes.md",
+        "docs/troubleshooting/scan-health.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-007"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-007"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-007"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/pipeline/scan-health.js",
+        "scanner/src/pipeline/assurance-mode.js",
+        "scanner/src/pipeline/coverage-ledger.js"
+      ],
+      "suites": [
+        "language-assurance"
+      ],
+      "documents": [
+        "docs/walkthroughs/scan-health.md",
+        "docs/walkthroughs/assurance-modes.md",
+        "docs/troubleshooting/scan-health.md"
+      ]
+    },
+    {
+      "id": "CAP-008",
+      "kind": "doc-link",
+      "title": "Architecture, finding lifecycle, concepts and agent threat model",
+      "sources": [
+        "docs/architecture/finding-lifecycle.md",
+        "docs/ARCHITECTURE.md",
+        "docs/concepts.md",
+        "docs/AGENT_THREAT_MODEL.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-002",
+          "CORE-003"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-001",
+          "CORE-003"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/pipeline/producer-registry.js",
+        "scanner/src/pipeline/finding-schema.js",
+        "scanner/src/dataflow/CLAUDE.md"
+      ],
+      "suites": [
+        "language-contracts",
+        "haskell-ir"
+      ],
+      "documents": [
+        "docs/architecture/finding-lifecycle.md",
+        "docs/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "id": "CAP-009",
+      "kind": "doc-link",
+      "title": "Data Flow Explorer, privacy flows and code boundaries",
+      "sources": [
+        "docs/guides/data-flow-explorer.md",
+        "docs/walkthroughs/privacy-data-flow.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-004",
+          "X-005",
+          "X-006"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-004",
+          "X-005",
+          "X-006"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-005"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/lineage/CLAUDE.md",
+        "scanner/src/server/http-server.js",
+        "scanner/src/dataflow/CLAUDE.md"
+      ],
+      "suites": [
+        "language-privacy-lineage",
+        "language-explorer",
+        "language-polyglot-bridges"
+      ],
+      "documents": [
+        "docs/guides/data-flow-explorer.md",
+        "docs/walkthroughs/privacy-data-flow.md"
+      ]
+    },
+    {
+      "id": "CAP-010",
+      "kind": "doc-link",
+      "title": "Compliance frameworks, coverage maps and OSCAL",
+      "sources": [
+        "docs/guides/compliance.md",
+        "docs/compliance/"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-011"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-011"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/report/oscal.js",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-compliance"
+      ],
+      "documents": [
+        "docs/guides/compliance.md"
+      ]
+    },
+    {
+      "id": "CAP-011",
+      "kind": "doc-link",
+      "title": "Risk in dollars and posture scenario disclosure",
+      "sources": [
+        "docs/guides/risk-dollars.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "DOC-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "DOC-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "Risk estimation is arithmetic over findings and a disclosed scenario; it has no host-specific execution path that differs on NixOS."
+      },
+      "entryPoints": [
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-evidence-posture"
+      ],
+      "documents": [
+        "docs/guides/risk-dollars.md"
+      ]
+    },
+    {
+      "id": "CAP-012",
+      "kind": "doc-link",
+      "title": "CI setup, severity and assurance gates, predeploy gate",
+      "sources": [
+        "docs/guides/ci-setup.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014",
+          "QA-004"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014",
+          "QA-004"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "QA-004"
+        ]
+      },
+      "entryPoints": [
+        "scripts/pre-push-gate.mjs",
+        "scanner/package.json",
+        "hooks/hooks.json"
+      ],
+      "suites": [
+        "language-package-ci",
+        "language-integrations"
+      ],
+      "documents": [
+        "docs/guides/ci-setup.md"
+      ]
+    },
+    {
+      "id": "CAP-013",
+      "kind": "doc-link",
+      "title": "Configuration, env vars, state, retention and governance",
+      "sources": [
+        "docs/reference/configuration.md",
+        "docs/governance/state-and-retention.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "CORE-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "CORE-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js",
+        "scanner/src/posture/attestation.js"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "docs/reference/configuration.md",
+        "docs/governance/state-and-retention.md"
+      ]
+    },
+    {
+      "id": "CAP-014",
+      "kind": "doc-link",
+      "title": "CLI, output schema and glossary: report and evidence formats",
+      "sources": [
+        "docs/reference/cli.md",
+        "docs/reference/output-schema.md",
+        "docs/reference/glossary.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-003",
+          "X-012",
+          "X-014"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-003",
+          "X-012",
+          "X-014"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js",
+        "scanner/src/pipeline/finding-schema.js"
+      ],
+      "suites": [
+        "language-report-formats",
+        "language-contracts"
+      ],
+      "documents": [
+        "docs/reference/cli.md",
+        "docs/reference/output-schema.md",
+        "docs/reference/glossary.md"
+      ]
+    },
+    {
+      "id": "CAP-015",
+      "kind": "doc-link",
+      "title": "Examples gallery",
+      "sources": [
+        "docs/examples/README.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-002",
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-doc-examples-metrics",
+        "language-end-to-end"
+      ],
+      "documents": [
+        "docs/examples/README.md"
+      ],
+      "baselineRefs": [
+        "BASE-010"
+      ]
+    },
+    {
+      "id": "CAP-016",
+      "kind": "doc-link",
+      "title": "Metrics and scorecard",
+      "sources": [
+        "docs/METRICS.md",
+        "docs/SCORECARD.md",
+        "docs/language-support.md",
+        "docs/language-toolchain.json"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "Accuracy metrics are measured per language corpus, not per host operating system; NixOS host behavior is covered by the runtime suite instead."
+      },
+      "entryPoints": [
+        "scanner/package.json"
+      ],
+      "suites": [
+        "language-accuracy-regression",
+        "language-doc-examples-metrics"
+      ],
+      "documents": [
+        "docs/METRICS.md",
+        "docs/SCORECARD.md",
+        "docs/language-support.md",
+        "docs/language-toolchain.json"
+      ],
+      "baselineRefs": [
+        "BASE-009"
+      ],
+      "requirements": null
+    },
+    {
+      "id": "CAP-017",
+      "kind": "doc-link",
+      "title": "Harness compatibility: Claude Code, Codex, Cursor, Gemini CLI",
+      "sources": [
+        "docs/HARNESS_COMPATIBILITY.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-014"
+        ]
+      },
+      "entryPoints": [
+        ".claude-plugin/plugin.json",
+        "scanner/src/mcp/server.js",
+        "scanner/src/lsp/server.js"
+      ],
+      "suites": [
+        "language-integrations"
+      ],
+      "documents": [
+        "docs/HARNESS_COMPATIBILITY.md"
+      ]
+    },
+    {
+      "id": "CAP-018",
+      "kind": "doc-link",
+      "title": "Documentation index, positioning, roadmap and contributor map",
+      "sources": [
+        "docs/README.md",
+        "docs/POSITIONING.md",
+        "docs/ROADMAP.md",
+        "CLAUDE.md",
+        "docs/guides/loop-engineering.md"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-001",
+          "DOC-003"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-001",
+          "DOC-003"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "DOC-001",
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "scanner/package.json"
+      ],
+      "suites": [
+        "language-doc-coverage",
+        "loop-runbook"
+      ],
+      "documents": [
+        "docs/README.md",
+        "docs/POSITIONING.md",
+        "docs/ROADMAP.md",
+        "CLAUDE.md",
+        "docs/guides/loop-engineering.md"
+      ]
+    },
+    {
+      "id": "CAP-101",
+      "kind": "command",
+      "title": "secure: router to the next best action",
+      "sources": [
+        "command:secure"
+      ],
+      "modes": [],
+      "modesJustification": "Router with flags (--tour, --help, --daily) and no named modes.",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-002",
+          "X-014"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-002",
+          "X-014"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-014"
+        ]
+      },
+      "entryPoints": [
+        "commands/secure.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-integrations"
+      ],
+      "documents": [
+        "commands/secure.md",
+        "docs/reference/cli.md"
+      ]
+    },
+    {
+      "id": "CAP-102",
+      "kind": "command",
+      "title": "find-and-fix-everything: scan then fix in one command",
+      "sources": [
+        "command:find-and-fix-everything"
+      ],
+      "modes": [],
+      "modesJustification": "One-shot command that chains scan and fix; it takes flags only.",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-010",
+          "X-009"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-010",
+          "X-009"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/find-and-fix-everything.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-end-to-end"
+      ],
+      "documents": [
+        "commands/find-and-fix-everything.md",
+        "docs/reference/cli.md"
+      ]
+    },
+    {
+      "id": "CAP-103",
+      "kind": "command",
+      "title": "scan: full, diff, watch, baseline, archaeology, scanner-meta",
+      "sources": [
+        "command:scan"
+      ],
+      "modes": [
+        "full",
+        "diff",
+        "watch",
+        "baseline",
+        "archaeology",
+        "scanner-meta"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-002",
+          "X-013",
+          "X-007"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "CORE-002",
+          "X-013",
+          "X-007"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/scan.md",
+        "scanner/src/engine.js",
+        "scanner/src/posture/watch-mode.js"
+      ],
+      "suites": [
+        "language-scan-modes"
+      ],
+      "documents": [
+        "commands/scan.md",
+        "docs/guides/scanning.md"
+      ],
+      "baselineRefs": [
+        "BASE-006"
+      ]
+    },
+    {
+      "id": "CAP-104",
+      "kind": "command",
+      "title": "triage: decisions, validation, red-team, exploit and deep review",
+      "sources": [
+        "command:triage"
+      ],
+      "modes": [
+        "id",
+        "show",
+        "explain",
+        "validate",
+        "tournament",
+        "red-team",
+        "exploit",
+        "query",
+        "deep"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "X-009",
+          "X-015"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "X-009",
+          "X-015"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/triage.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-proof-remediation"
+      ],
+      "documents": [
+        "commands/triage.md",
+        "docs/reference/cli.md"
+      ]
+    },
+    {
+      "id": "CAP-105",
+      "kind": "command",
+      "title": "fix: single, all, pr, sca, compliance, rotate-secret, vault, harden, trim, generate",
+      "sources": [
+        "command:fix"
+      ],
+      "modes": [
+        "id",
+        "all",
+        "pr",
+        "sca",
+        "compliance",
+        "rotate-secret",
+        "vault",
+        "harden",
+        "trim",
+        "generate"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-010",
+          "X-001",
+          "X-009"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-010",
+          "X-001",
+          "X-009"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/fix.md",
+        "scanner/src/mcp/server.js"
+      ],
+      "suites": [
+        "haskell-remediation",
+        "nix-remediation"
+      ],
+      "documents": [
+        "commands/fix.md",
+        "docs/guides/fixing-vulnerabilities.md"
+      ]
+    },
+    {
+      "id": "CAP-106",
+      "kind": "command",
+      "title": "posture: status, report-card, harness, trend, threat, playbook, mgmt, cache",
+      "sources": [
+        "command:posture"
+      ],
+      "modes": [
+        "status",
+        "report-card",
+        "harness",
+        "trend",
+        "threat",
+        "playbook",
+        "mgmt",
+        "cache"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "DOC-002"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-008",
+          "DOC-002"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/posture.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-evidence-posture"
+      ],
+      "documents": [
+        "commands/posture.md",
+        "docs/reference/cli.md"
+      ]
+    },
+    {
+      "id": "CAP-107",
+      "kind": "command",
+      "title": "compliance: report, walkthrough, attestation, audit, pr, privacy",
+      "sources": [
+        "command:compliance"
+      ],
+      "modes": [
+        "report",
+        "walkthrough",
+        "attestation",
+        "audit",
+        "pr",
+        "privacy"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-011",
+          "X-004"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-011",
+          "X-004"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/compliance.md",
+        "scanner/src/report/oscal.js"
+      ],
+      "suites": [
+        "language-compliance"
+      ],
+      "documents": [
+        "commands/compliance.md",
+        "docs/guides/compliance.md"
+      ]
+    },
+    {
+      "id": "CAP-108",
+      "kind": "command",
+      "title": "supply: check, sbom, cve-alerts, license",
+      "sources": [
+        "command:supply"
+      ],
+      "modes": [
+        "check",
+        "sbom",
+        "cve-alerts",
+        "license"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "HS-008",
+          "HS-009",
+          "X-010"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-008",
+          "NIX-009",
+          "X-010"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012"
+        ]
+      },
+      "entryPoints": [
+        "commands/supply.md",
+        "scanner/src/posture/sbom.js"
+      ],
+      "suites": [
+        "haskell-sca",
+        "nix-sca-patches"
+      ],
+      "documents": [
+        "commands/supply.md",
+        "docs/guides/sbom-and-ai-bom.md"
+      ]
+    },
+    {
+      "id": "CAP-109",
+      "kind": "command",
+      "title": "setup: hooks, ci, predeploy, bodyguard, destructive-guard, model-optimizer",
+      "sources": [
+        "command:setup"
+      ],
+      "modes": [
+        "hooks",
+        "ci",
+        "predeploy",
+        "bodyguard",
+        "destructive-guard",
+        "model-optimizer"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014",
+          "QA-004"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-014",
+          "QA-004"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "QA-004"
+        ]
+      },
+      "entryPoints": [
+        "commands/setup.md",
+        "hooks/hooks.json",
+        "scripts/pre-push-gate.mjs"
+      ],
+      "suites": [
+        "language-package-ci"
+      ],
+      "documents": [
+        "commands/setup.md",
+        "docs/guides/ci-setup.md"
+      ]
+    },
+    {
+      "id": "CAP-110",
+      "kind": "command",
+      "title": "labs: claude-audit, model-rescan, synthesize-rule, cross-repo, risk-dollars, time-to-fix, llm",
+      "sources": [
+        "command:labs"
+      ],
+      "modes": [
+        "claude-audit",
+        "model-rescan",
+        "synthesize-rule",
+        "cross-repo",
+        "risk-dollars",
+        "time-to-fix",
+        "llm"
+      ],
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-015",
+          "X-008"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-015",
+          "X-008"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-015"
+        ]
+      },
+      "entryPoints": [
+        "commands/labs.md",
+        "scanner/src/discovery/CLAUDE.md"
+      ],
+      "suites": [
+        "language-local-ai"
+      ],
+      "documents": [
+        "commands/labs.md",
+        "docs/guides/ollama.md"
+      ]
+    },
+    {
+      "id": "CAP-111",
+      "kind": "command",
+      "title": "hunt (CLI only): model discovery gated by the deterministic engine",
+      "sources": [
+        "command:hunt"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command with a --lens flag and no named modes.",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-015",
+          "X-003"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-015",
+          "X-003"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-015"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/discovery/CLAUDE.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-local-ai"
+      ],
+      "documents": [
+        "README.md",
+        "docs/reference/cli.md"
+      ]
+    },
+    {
+      "id": "CAP-112",
+      "kind": "command",
+      "title": "dataflow: export, diff, watch, scenario, impact, observations, twin",
+      "sources": [
+        "command:dataflow"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-005"
+        ]
+      },
+      "entryPoints": [
+        "commands/dataflow.md",
+        "scanner/src/lineage/CLAUDE.md"
+      ],
+      "suites": [
+        "language-explorer"
+      ],
+      "documents": [
+        "commands/dataflow.md",
+        "docs/guides/data-flow-explorer.md"
+      ]
+    },
+    {
+      "id": "CAP-113",
+      "kind": "command",
+      "title": "governance: recipient profile edits",
+      "sources": [
+        "command:governance"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/governance.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/governance.md",
+        "docs/governance/state-and-retention.md"
+      ]
+    },
+    {
+      "id": "CAP-114",
+      "kind": "command",
+      "title": "remediation: open, track, verify and reopen remediation items",
+      "sources": [
+        "command:remediation"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-009",
+          "X-016"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-009",
+          "X-016"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/remediation.md",
+        "scanner/src/engine.js"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/remediation.md",
+        "docs/governance/state-and-retention.md"
+      ]
+    },
+    {
+      "id": "CAP-115",
+      "kind": "command",
+      "title": "federate: cross-repo links between graph nodes",
+      "sources": [
+        "command:federate"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/federate.md",
+        "scanner/src/lineage/CLAUDE.md"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/federate.md",
+        "docs/guides/data-flow-explorer.md"
+      ]
+    }
+  ],
+  "docReviews": {
+    "schema": 1,
+    "purpose": "Every affected document (PRD section 10) has either mapped edits or an explicit current-content review outcome. Checked by scanner/test/language/language-doc-coverage.test.js.",
+    "entries": [
+      {
+        "path": "README.md",
+        "outcome": "edited",
+        "basis": "Documentation links, a generated per-capability support table, honest limits, and the language-coverage wording no longer claims a hardcoded total."
+      },
+      {
+        "path": "docs/README.md",
+        "outcome": "edited",
+        "basis": "Full-index links for the Haskell, Nix/NixOS, NixOS-install and loop pages, the support record and the toolchain record."
+      },
+      {
+        "path": "docs/guides/haskell.md",
+        "outcome": "created",
+        "basis": "Install and default scan, Cabal/Stack/plan inputs, generated model tables, web models, advisories and SBOM, fixes, partial scans, tool needs, limits."
+      },
+      {
+        "path": "docs/guides/nix-nixos.md",
+        "outcome": "created",
+        "basis": "Scope vocabulary, flake and legacy scanning, effective configuration, generated rule tables, closure import, evaluation, fixes, limits."
+      },
+      {
+        "path": "docs/guides/nixos-install.md",
+        "outcome": "created",
+        "basis": "Running the scanner on a NixOS host, offline use, architecture matrix; states plainly what could not be verified here."
+      },
+      {
+        "path": "docs/guides/loop-engineering.md",
+        "outcome": "created",
+        "basis": "The bounded background-loop runbook with every command, the progress model, recovery and tool troubleshooting."
+      },
+      {
+        "path": "docs/guides/quickstart.md",
+        "outcome": "edited",
+        "basis": "A minimal Haskell and Nix example with real exit codes."
+      },
+      {
+        "path": "docs/guides/scanning.md",
+        "outcome": "edited",
+        "basis": "Discovery, exclusions, modes, suppression forms, partial coverage and exit/assurance semantics for the new languages."
+      },
+      {
+        "path": "docs/guides/fixing-vulnerabilities.md",
+        "outcome": "edited",
+        "basis": "Haskell and Nix fixers, tiers, gates and dependency upgrades."
+      },
+      {
+        "path": "docs/walkthroughs/verified-remediation.md",
+        "outcome": "edited",
+        "basis": "The same gates for the new languages and a rejected Haskell fix."
+      },
+      {
+        "path": "docs/guides/sbom-and-ai-bom.md",
+        "outcome": "edited",
+        "basis": "Hackage purls, declared versus resolved, Nix inputs and closure, patch-aware identities, AI-BOM statuses and labels."
+      },
+      {
+        "path": "docs/guides/leaked-secrets.md",
+        "outcome": "edited",
+        "basis": "Haskell literals and history, Nix store/build/log exposure, runtime alternatives, rotation."
+      },
+      {
+        "path": "docs/guides/data-flow-explorer.md",
+        "outcome": "edited",
+        "basis": "Real Haskell and Nix field journeys with destinations and evidence grade."
+      },
+      {
+        "path": "docs/walkthroughs/privacy-data-flow.md",
+        "outcome": "edited",
+        "basis": "The same journey in Haskell and Nix."
+      },
+      {
+        "path": "docs/walkthroughs/model-egress.md",
+        "outcome": "edited",
+        "basis": "Redaction of split literals, bounded context, closure-digest cache keys, timeout and unavailable-endpoint status."
+      },
+      {
+        "path": "docs/guides/ollama.md",
+        "outcome": "edited",
+        "basis": "Local-only validation, fix and hunt for the new languages, and the explicit degraded status."
+      },
+      {
+        "path": "docs/walkthroughs/scan-health.md",
+        "outcome": "edited",
+        "basis": "The language conditions and limitations table with a real captured partial scan."
+      },
+      {
+        "path": "docs/walkthroughs/assurance-modes.md",
+        "outcome": "edited",
+        "basis": "How the three modes treat language conditions."
+      },
+      {
+        "path": "docs/walkthroughs/finding-evidence.md",
+        "outcome": "edited",
+        "basis": "Language, capability, scope, uncertainty and original-location fields."
+      },
+      {
+        "path": "docs/guides/finding-provenance.md",
+        "outcome": "edited",
+        "basis": "Introduction attribution for code and effective options, with captured results and limits."
+      },
+      {
+        "path": "docs/guides/risk-dollars.md",
+        "outcome": "edited",
+        "basis": "Scenario assumptions are preserved: no language-specific price."
+      },
+      {
+        "path": "docs/guides/compliance.md",
+        "outcome": "edited",
+        "basis": "Language evidence enters through family aliases; denominators and honesty unchanged."
+      },
+      {
+        "path": "docs/compliance/",
+        "outcome": "reviewed",
+        "basis": "These are per-framework coverage maps derived from the framework JSON. Haskell and Nix evidence enters through the family aliases in scanner/src/language/compliance-map.js, so no map gains or loses a control; the guide and OSCAL pages state the boundary."
+      },
+      {
+        "path": "docs/OSCAL.md",
+        "outcome": "edited",
+        "basis": "Language findings enter OSCAL by the same rule; an undecided control still carries no finding."
+      },
+      {
+        "path": "docs/guides/ci-setup.md",
+        "outcome": "edited",
+        "basis": "Strict assurance for the new languages, evaluation off by default, and this repository's own deadlined CI jobs."
+      },
+      {
+        "path": "docs/reference/cli.md",
+        "outcome": "edited",
+        "basis": "Behavior of fix, undo, hunt, ci and the baseline filter for the new languages, and the --to flag."
+      },
+      {
+        "path": "docs/reference/configuration.md",
+        "outcome": "edited",
+        "basis": "New environment variables, files read by exact path, and the persisted artifacts."
+      },
+      {
+        "path": "docs/reference/output-schema.md",
+        "outcome": "edited",
+        "basis": "Optional finding fields, languageCoverage, optionalModes and the support statuses."
+      },
+      {
+        "path": "docs/reference/glossary.md",
+        "outcome": "edited",
+        "basis": "Scope, boundary, closure, plan, freshness, tier, blocked and condition."
+      },
+      {
+        "path": "docs/ARCHITECTURE.md",
+        "outcome": "edited",
+        "basis": "The functional and configuration IRs, taint and lineage, uncertainty and optional execution boundaries."
+      },
+      {
+        "path": "docs/architecture/finding-lifecycle.md",
+        "outcome": "edited",
+        "basis": "The language branch of the lifecycle, producers, ledger and supply branch."
+      },
+      {
+        "path": "docs/concepts.md",
+        "outcome": "edited",
+        "basis": "Static, effective and runtime as different strengths of evidence."
+      },
+      {
+        "path": "docs/METRICS.md",
+        "outcome": "edited",
+        "basis": "A generated Haskell and Nix section with denominators, layers, families, corpus revision, date and tool availability."
+      },
+      {
+        "path": "docs/SCORECARD.md",
+        "outcome": "edited",
+        "basis": "A Haskell and Nix section rendered by the scorecard generator from the committed support registry."
+      },
+      {
+        "path": "docs/scorecard.json",
+        "outcome": "edited",
+        "basis": "Carries languageSupport, regenerated by npm run scorecard."
+      },
+      {
+        "path": "docs/AGENT_THREAT_MODEL.md",
+        "outcome": "edited",
+        "basis": "Parser, manifest, evaluation, shell, model, log and dashboard attack surfaces with the guarantee for each."
+      },
+      {
+        "path": "docs/DATA_FLOW_EXPLORER_THREAT_MODEL.md",
+        "outcome": "edited",
+        "basis": "Haskell and Nix flows add no asset class; the two labelling points are stated."
+      },
+      {
+        "path": "docs/governance/state-and-retention.md",
+        "outcome": "edited",
+        "basis": "The new artifacts with sensitivity, retention and reset behavior."
+      },
+      {
+        "path": "docs/troubleshooting/scan-health.md",
+        "outcome": "edited",
+        "basis": "Missing tool, stale data, conditional options, sandbox, model and size-cap remedies."
+      },
+      {
+        "path": "docs/examples/README.md",
+        "outcome": "edited",
+        "basis": "A Haskell and Nix gallery whose output blocks are generated from real runs."
+      },
+      {
+        "path": "examples/",
+        "outcome": "created",
+        "basis": "Controlled Haskell, NixOS, Haskell-on-Nix and polyglot projects, each with the counterpart the gallery needs."
+      },
+      {
+        "path": "docs/HARNESS_COMPATIBILITY.md",
+        "outcome": "edited",
+        "basis": "File filters per IDE, read/write tool behavior, hook and CLI parity."
+      },
+      {
+        "path": "ide/vscode/README.md",
+        "outcome": "edited",
+        "basis": "Activation for Haskell, Cabal and Nix."
+      },
+      {
+        "path": "ide/jetbrains/README.md",
+        "outcome": "edited",
+        "basis": "Language mappings and file-name patterns."
+      },
+      {
+        "path": "ide/nvim/README.md",
+        "outcome": "edited",
+        "basis": "Filetypes and project roots."
+      },
+      {
+        "path": "commands/fix.md",
+        "outcome": "edited",
+        "basis": "Language fix behavior and the --to flag."
+      },
+      {
+        "path": "commands/supply.md",
+        "outcome": "edited",
+        "basis": "Advisory snapshots and the not-assessed rule."
+      },
+      {
+        "path": "commands/scan.md",
+        "outcome": "edited",
+        "basis": "Language discovery and partial-coverage disclosure."
+      },
+      {
+        "path": "commands/secure.md",
+        "outcome": "reviewed",
+        "basis": "secure routes to the next action from the last scan and names no language; its behavior over Haskell and Nix findings is exercised through the CLI in test/language/language-end-to-end.test.js (CAP-101)."
+      },
+      {
+        "path": "commands/triage.md",
+        "outcome": "reviewed",
+        "basis": "triage operates on findings by id and is language-neutral; exercised for both ecosystems in CAP-104."
+      },
+      {
+        "path": "commands/posture.md",
+        "outcome": "reviewed",
+        "basis": "posture views are over the same scan state, which is produced for both ecosystems (CAP-013); no language-specific text is accurate to add."
+      },
+      {
+        "path": "commands/compliance.md",
+        "outcome": "reviewed",
+        "basis": "compliance evaluates the last scan and is language-neutral; the language mapping is documented in docs/guides/compliance.md and docs/OSCAL.md."
+      },
+      {
+        "path": "commands/setup.md",
+        "outcome": "reviewed",
+        "basis": "setup installs hooks and CI templates that already apply to every file type; the edit hook recognises the new languages (docs/HARNESS_COMPATIBILITY.md)."
+      },
+      {
+        "path": "commands/labs.md",
+        "outcome": "reviewed",
+        "basis": "labs workflows need a model session and name no language; model-assisted behavior for the new languages is documented in docs/walkthroughs/model-egress.md and docs/guides/ollama.md."
+      },
+      {
+        "path": "commands/dataflow.md",
+        "outcome": "reviewed",
+        "basis": "dataflow export/scenario/impact are language-neutral over the graph; the Haskell and Nix journeys are in docs/guides/data-flow-explorer.md."
+      },
+      {
+        "path": "commands/governance.md",
+        "outcome": "reviewed",
+        "basis": "governance edits recipient profiles and is language-neutral."
+      },
+      {
+        "path": "commands/remediation.md",
+        "outcome": "reviewed",
+        "basis": "remediation tracks items against an assessment and is language-neutral."
+      },
+      {
+        "path": "commands/federate.md",
+        "outcome": "reviewed",
+        "basis": "federate links graph nodes across repositories; endpoint scope and evidence fields are in docs/reference/cli.md."
+      },
+      {
+        "path": "commands/find-and-fix-everything.md",
+        "outcome": "reviewed",
+        "basis": "composes scan and fix; the language fixers are reached through fix (CAP-102)."
+      },
+      {
+        "path": "skills/",
+        "outcome": "reviewed",
+        "basis": "The skills (add-scan-rule, privacy-data-flow, secure-coding-guard, security-explain, security-fix-finding, security-rotate-leak, security-scan-on-deploy) describe workflows over the CLI and name no language list; the language-specific rule-adding workflow lives in scanner/src/language/CLAUDE.md."
+      },
+      {
+        "path": "CLAUDE.md",
+        "outcome": "edited",
+        "basis": "Repository map rows for the language directory, the support bench, the loop, the doc generators and examples."
+      },
+      {
+        "path": "scanner/CLAUDE.md",
+        "outcome": "edited",
+        "basis": "Pointer to the language guide and the new test scopes."
+      },
+      {
+        "path": "scanner/src/language/CLAUDE.md",
+        "outcome": "created",
+        "basis": "Invariants, module map, test scopes, generated docs and how to add a rule."
+      },
+      {
+        "path": "scanner/src/dataflow/CLAUDE.md",
+        "outcome": "edited",
+        "basis": "The generated Haskell catalog and its two annotation-based sources."
+      },
+      {
+        "path": "scanner/src/lineage/CLAUDE.md",
+        "outcome": "edited",
+        "basis": "The Haskell and Nix views and the unknown coverage tier."
+      },
+      {
+        "path": "scanner/src/mcp/CLAUDE.md",
+        "outcome": "edited",
+        "basis": "Language context for the diff, verify and synthesize tools, and what apply_fix does not do."
+      },
+      {
+        "path": "scanner/src/discovery/CLAUDE.md",
+        "outcome": "edited",
+        "basis": "Nix partitioning and redaction of hunter prompts."
+      },
+      {
+        "path": "scanner/src/sast/CLAUDE.md",
+        "outcome": "reviewed",
+        "basis": "Haskell and Nix rules live in scanner/src/language/, not src/sast/, so the SAST rule guide is unchanged; the language guide says where to add them."
+      },
+      {
+        "path": "scanner/src/posture/CLAUDE.md",
+        "outcome": "reviewed",
+        "basis": "The posture pipeline is language-neutral; the language artifacts and their registration are documented in scanner/src/language/CLAUDE.md and docs/governance/state-and-retention.md."
+      },
+      {
+        "path": "CHANGELOG.md",
+        "outcome": "edited",
+        "basis": "A concrete entry of what was completed and what remains blocked; written against the final evidence."
+      },
+      {
+        "path": "docs/ROADMAP.md",
+        "outcome": "edited",
+        "basis": "Remaining truthful limitations: the ghc, nix and NixOS host verification."
+      }
+    ]
+  }
+}

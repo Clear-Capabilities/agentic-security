@@ -1,0 +1,64 @@
+{
+  "schema": "agentic-security/language-support-perf@1",
+  "measuredAt": "2026-10-04",
+  "profile": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "logicalCpus": 8,
+    "memoryGiB": 16,
+    "node": "v24.20.0",
+    "referenceProfile": {
+      "cores": 4,
+      "memoryGiB": 8,
+      "os": "Linux/NixOS",
+      "note": "the PRD reference; any other host is an operational profile"
+    }
+  },
+  "fixture": {
+    "files": 2000,
+    "bytes": 21104020
+  },
+  "cold": [
+    {
+      "ms": 28490,
+      "rssBytes": 2000863232,
+      "exit": 3
+    },
+    {
+      "ms": 27984,
+      "rssBytes": 2008334336,
+      "exit": 3
+    },
+    {
+      "ms": 28275,
+      "rssBytes": 2007580672,
+      "exit": 3
+    }
+  ],
+  "warm": [
+    {
+      "ms": 27985,
+      "rssBytes": 2010038272,
+      "exit": 3
+    },
+    {
+      "ms": 28195,
+      "rssBytes": 2009497600,
+      "exit": 3
+    },
+    {
+      "ms": 27818,
+      "rssBytes": 2006302720,
+      "exit": 3
+    }
+  ],
+  "incremental": {
+    "ms": 1343,
+    "rssBytes": 360546304,
+    "exit": 3
+  },
+  "coldMaxMs": 28490,
+  "coldP95Ms": 28490,
+  "warmP95Ms": 28195,
+  "peakRssBytes": 2010038272
+}

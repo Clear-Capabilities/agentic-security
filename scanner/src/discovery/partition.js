@@ -12,6 +12,7 @@
 // components share a file they are merged, otherwise the same source lands in
 // two hunters' context and the convergence this module exists to prevent
 // comes straight back.
+import { buildImportGraph } from '../language/discovery.js';
 import * as crypto from 'node:crypto';
 
 export function focusAreaId(files) {
@@ -86,6 +87,33 @@ export function partitionCallGraph(callGraph, opts = {}) {
     const kept = areas.slice(0, maxAreas - 1);
     const tail = areas.slice(maxAreas - 1);
     kept.push(build(tail.flatMap(a => a.files), 'misc'));
+    areas = kept;
+  }
+  return areas;
+}
+
+/**
+ * Focus areas for Nix configuration, which has no call graph: files joined by `imports` / path references form one
+ * area, so a NixOS entry point and the modules that decide its options are hunted together. Same shape as a call-graph
+ * area (`functions` is empty: a Nix file has none).
+ */
+export function partitionNixFiles(fileContents, opts = {}) {
+  const maxAreas = Number.isInteger(opts.maxAreas) && opts.maxAreas > 0 ? opts.maxAreas : 8;
+  const nix = {};
+  for (const [f, t] of Object.entries(fileContents || {})) if (/\.nix$/i.test(f) && typeof t === 'string') nix[f] = t;
+  const files = Object.keys(nix).sort();
+  if (!files.length) return [];
+  const { graph } = buildImportGraph(nix);
+  const dsu = makeDSU();
+  for (const f of files) dsu.find(f);
+  for (const [f, deps] of graph) for (const d of deps) dsu.union(f, d);
+  const groups = new Map();
+  for (const f of files) { const r = dsu.find(f); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(f); }
+  let areas = [...groups.values()].map((g) => { const sorted = [...g].sort(); return { id: focusAreaId(sorted), label: labelFor(sorted), files: sorted, functions: [], size: sorted.length, language: 'nix' }; });
+  areas.sort((a, b) => b.size - a.size || (a.id < b.id ? -1 : 1));
+  if (areas.length > maxAreas) {
+    const kept = areas.slice(0, maxAreas - 1); const tail = areas.slice(maxAreas - 1).flatMap((a) => a.files).sort();
+    kept.push({ id: focusAreaId(tail), label: 'misc', files: tail, functions: [], size: tail.length, language: 'nix' });
     areas = kept;
   }
   return areas;

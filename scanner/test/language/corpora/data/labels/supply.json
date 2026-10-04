@@ -1,0 +1,1354 @@
+[
+ {
+  "id": "hsx-309a2d1fa7",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "aeson",
+     "constraint": ">=2.1.2.1",
+     "scope": "library"
+    },
+    {
+     "name": "containers",
+     "constraint": "^>=0.6.7",
+     "scope": "library"
+    },
+    {
+     "name": "persistent",
+     "constraint": "==2.14.6.0",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-f6f75b49f0",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    },
+    {
+     "name": "servant",
+     "version": "0.20.1"
+    },
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-35b0f182bd",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    },
+    {
+     "name": "http-client",
+     "version": "0.7.14"
+    },
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-c7281b0179",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "persistent",
+     "constraint": ">=2.14.6.0 && <2.15",
+     "scope": "library"
+    },
+    {
+     "name": "yesod-core",
+     "constraint": ">=1.6.25.1",
+     "scope": "library"
+    },
+    {
+     "name": "aeson",
+     "constraint": "^>=2.1.2.1",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-a45c87745c",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    },
+    {
+     "name": "lens",
+     "version": "5.2.3"
+    },
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-340d9a5898",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    },
+    {
+     "name": "text",
+     "version": "2.0.2"
+    },
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-2a458dd8b8",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "aeson",
+     "constraint": "==2.1.2.1",
+     "scope": "library"
+    },
+    {
+     "name": "containers",
+     "constraint": ">=0.6.7 && <0.7",
+     "scope": "library"
+    },
+    {
+     "name": "persistent",
+     "constraint": ">=2.14.6.0",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-2380a9178b",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    },
+    {
+     "name": "servant",
+     "version": "0.20.1"
+    },
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-b6c250d36d",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    },
+    {
+     "name": "http-client",
+     "version": "0.7.14"
+    },
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-e4d2ad499c",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "persistent",
+     "constraint": "^>=2.14.6.0",
+     "scope": "library"
+    },
+    {
+     "name": "yesod-core",
+     "constraint": "==1.6.25.1",
+     "scope": "library"
+    },
+    {
+     "name": "aeson",
+     "constraint": ">=2.1.2.1 && <2.2",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-db73a67a8e",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    },
+    {
+     "name": "lens",
+     "version": "5.2.3"
+    },
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-5fe9be2d0e",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    },
+    {
+     "name": "text",
+     "version": "2.0.2"
+    },
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-a1fa5d8ba2",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "aeson",
+     "constraint": ">=2.1.2.1",
+     "scope": "library"
+    },
+    {
+     "name": "containers",
+     "constraint": "^>=0.6.7",
+     "scope": "library"
+    },
+    {
+     "name": "persistent",
+     "constraint": "==2.14.6.0",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-86e1a10de2",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    },
+    {
+     "name": "servant",
+     "version": "0.20.1"
+    },
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-a3477a5f41",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    },
+    {
+     "name": "http-client",
+     "version": "0.7.14"
+    },
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-8009b103c2",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "persistent",
+     "constraint": ">=2.14.6.0 && <2.15",
+     "scope": "library"
+    },
+    {
+     "name": "yesod-core",
+     "constraint": ">=1.6.25.1",
+     "scope": "library"
+    },
+    {
+     "name": "aeson",
+     "constraint": "^>=2.1.2.1",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-d93255c587",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    },
+    {
+     "name": "lens",
+     "version": "5.2.3"
+    },
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-c0bcc9faef",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    },
+    {
+     "name": "text",
+     "version": "2.0.2"
+    },
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-25fecab149",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "aeson",
+     "constraint": "==2.1.2.1",
+     "scope": "library"
+    },
+    {
+     "name": "containers",
+     "constraint": ">=0.6.7 && <0.7",
+     "scope": "library"
+    },
+    {
+     "name": "persistent",
+     "constraint": ">=2.14.6.0",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-44d4ed58bd",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    },
+    {
+     "name": "servant",
+     "version": "0.20.1"
+    },
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-67af99ef9b",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    },
+    {
+     "name": "http-client",
+     "version": "0.7.14"
+    },
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "hsx-738724f9cb",
+  "ecosystem": "haskell",
+  "kind": "cabal",
+  "expected": {
+   "resolution": "declared-ranges",
+   "packages": [
+    {
+     "name": "persistent",
+     "constraint": "^>=2.14.6.0",
+     "scope": "library"
+    },
+    {
+     "name": "yesod-core",
+     "constraint": "==1.6.25.1",
+     "scope": "library"
+    },
+    {
+     "name": "aeson",
+     "constraint": ">=2.1.2.1 && <2.2",
+     "scope": "test"
+    }
+   ]
+  },
+  "files": [
+   "app.cabal"
+  ]
+ },
+ {
+  "id": "hsx-f3fdc5e659",
+  "ecosystem": "haskell",
+  "kind": "freeze",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "cryptonite",
+     "version": "0.30"
+    },
+    {
+     "name": "lens",
+     "version": "5.2.3"
+    },
+    {
+     "name": "bytestring",
+     "version": "0.11.5.3"
+    }
+   ]
+  },
+  "files": [
+   "cabal.project.freeze"
+  ]
+ },
+ {
+  "id": "hsx-7a346082fa",
+  "ecosystem": "haskell",
+  "kind": "stack",
+  "expected": {
+   "resolution": "resolved-exact",
+   "packages": [
+    {
+     "name": "conduit",
+     "version": "1.3.5"
+    },
+    {
+     "name": "text",
+     "version": "2.0.2"
+    },
+    {
+     "name": "warp",
+     "version": "3.3.31"
+    }
+   ]
+  },
+  "files": [
+   "stack.yaml"
+  ]
+ },
+ {
+  "id": "nxx-be4a1f5591",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "nixpkgs",
+     "rev": "ab837737da37725a83a581efbb7824cba4dc444a",
+     "pinned": true
+    },
+    {
+     "name": "flake-utils",
+     "rev": "cef68d031e7058ad41d4a58df57111e0b5d469d2",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "e99a925c4a4bdc439da95935b694746c718d27fa",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-395ab59414",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "home-manager",
+     "pinned": false
+    },
+    {
+     "name": "sops-nix",
+     "pinned": false
+    },
+    {
+     "name": "impermanence",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-6cbc9b045e",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "flake-utils",
+     "rev": "e36432cc5df1618f862396b1552450845aa5a833",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "187d7f85af9fbb2a64ba794eeaa9578cd7e85b71",
+     "pinned": true
+    },
+    {
+     "name": "nixpkgs",
+     "rev": "e74b08f342ef0b7a2a48a707e4931eb65295e26d",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "disko",
+     "input": "flake-utils",
+     "to": "flake-utils"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-b48033ccb6",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "sops-nix",
+     "rev": "28c58baaec0cb21d74fc671c59eddea54f62052c",
+     "pinned": true
+    },
+    {
+     "name": "impermanence",
+     "rev": "969948090779ccaf8a4f92afed25f669cc1fb0f0",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "e47f9099962d1ee1e82ca83893e210e455999848",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-44ce12a99f",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "disko",
+     "pinned": false
+    },
+    {
+     "name": "nixpkgs",
+     "pinned": false
+    },
+    {
+     "name": "flake-utils",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-2441f5079c",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "impermanence",
+     "rev": "f4a044eec486a909a69e10a8d0708694f3a60159",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "1d0044468f8bddacaf4b3acce1bcc11ff80a7f1c",
+     "pinned": true
+    },
+    {
+     "name": "sops-nix",
+     "rev": "b65c26fa0f43e04f4eff92f89d7e2e4a32907939",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "home-manager",
+     "input": "impermanence",
+     "to": "impermanence"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-b1577d1955",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "nixpkgs",
+     "rev": "889921f7b403175918e3287a977afca5781c5f3d",
+     "pinned": true
+    },
+    {
+     "name": "flake-utils",
+     "rev": "ce9334ea75415ab72538d60fbe4d72ebe1c9be2e",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "0136a2812b0dd84021c260aedc78656a222561f0",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-4348c54411",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "home-manager",
+     "pinned": false
+    },
+    {
+     "name": "sops-nix",
+     "pinned": false
+    },
+    {
+     "name": "impermanence",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-74395b508f",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "flake-utils",
+     "rev": "0571bbad28599ffeaed849fef860dec6d62c803f",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "0641a5676adc416f7f05bf146c723aef04a89c51",
+     "pinned": true
+    },
+    {
+     "name": "nixpkgs",
+     "rev": "757238ed7899d517b307fdabe1b0b65d2f7bcb8e",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "disko",
+     "input": "flake-utils",
+     "to": "flake-utils"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-59b1153ebf",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "sops-nix",
+     "rev": "1f021e9cca2297000983ceec7e92dbea0d796e5b",
+     "pinned": true
+    },
+    {
+     "name": "impermanence",
+     "rev": "feba75c880cc96f8ad9b69ece46ebb2ac0fbda83",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "fda75e5fa786d325bd17aaded982baa0b148cc33",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-bee1917ea2",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "disko",
+     "pinned": false
+    },
+    {
+     "name": "nixpkgs",
+     "pinned": false
+    },
+    {
+     "name": "flake-utils",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-99efb4e59d",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "impermanence",
+     "rev": "59d2df8f0dc2778209027d6e8e215c143c067d7c",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "2e1e5a04c41235f4bcca491a1d94577b01325c98",
+     "pinned": true
+    },
+    {
+     "name": "sops-nix",
+     "rev": "1e47bc612e4359145528a0af2d298f516126e43d",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "home-manager",
+     "input": "impermanence",
+     "to": "impermanence"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-65ef933b4a",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "nixpkgs",
+     "rev": "fd30bef86b98dc6b240366048f1e03f9ebf4d7d4",
+     "pinned": true
+    },
+    {
+     "name": "flake-utils",
+     "rev": "816e652c88b70ecfa5e2bf902bc9876313bac325",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "bfcf81865979435aab59388b082b5d948337c4e8",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-b3816f47ca",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "home-manager",
+     "pinned": false
+    },
+    {
+     "name": "sops-nix",
+     "pinned": false
+    },
+    {
+     "name": "impermanence",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-669344598b",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "flake-utils",
+     "rev": "d871fc147e44b08f42faa47b0fc8552f175b6d12",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "66d90a5ca7e7427867c42c28409784afa731f531",
+     "pinned": true
+    },
+    {
+     "name": "nixpkgs",
+     "rev": "3c1cc554d98a9dc8137e50e78a1f096ee0a657ff",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "disko",
+     "input": "flake-utils",
+     "to": "flake-utils"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-b7de5abf00",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "sops-nix",
+     "rev": "b7ce09d66a9df4919198b99196f0b2cf1d23b813",
+     "pinned": true
+    },
+    {
+     "name": "impermanence",
+     "rev": "40c59657f108101fbf808db5c0a3219ab85c1484",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "79c93345edd76d3c08331a89f3fc0655302c99c2",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-7f38f06eea",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "disko",
+     "pinned": false
+    },
+    {
+     "name": "nixpkgs",
+     "pinned": false
+    },
+    {
+     "name": "flake-utils",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-b8043acd70",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "impermanence",
+     "rev": "d183b5a49512104ac2829340048d93142c4b9657",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "c8d6446bb068f0e31d6af4235b10cd5a34c9c1ef",
+     "pinned": true
+    },
+    {
+     "name": "sops-nix",
+     "rev": "17e29d8c702b274b6e23da5b7e78673b47150724",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "home-manager",
+     "input": "impermanence",
+     "to": "impermanence"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-fc4fcb916f",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "nixpkgs",
+     "rev": "8c4be6e01b1d528c1a5890ab9aa51a6f0de7b969",
+     "pinned": true
+    },
+    {
+     "name": "flake-utils",
+     "rev": "676b0bfc5bac4574ed6de02702c66934fff29cfa",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "88f4aa40ba4d2583ab902c35cd027503cbda3501",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-5a60d3de35",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "home-manager",
+     "pinned": false
+    },
+    {
+     "name": "sops-nix",
+     "pinned": false
+    },
+    {
+     "name": "impermanence",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-bf85c93f49",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "flake-utils",
+     "rev": "1f8e8e10a76e5bd6914583edcc547ce56682da15",
+     "pinned": true
+    },
+    {
+     "name": "disko",
+     "rev": "3067b1f51d3ceb9e8d57e47f98171a15d49cef21",
+     "pinned": true
+    },
+    {
+     "name": "nixpkgs",
+     "rev": "6fa4c4929b93d34b8c3eafc6903538924dc6d85b",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "disko",
+     "input": "flake-utils",
+     "to": "flake-utils"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-75bb7af737",
+  "ecosystem": "nix",
+  "kind": "locked",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "sops-nix",
+     "rev": "be2968403669ff9b26e4ff241c2d293b266030a2",
+     "pinned": true
+    },
+    {
+     "name": "impermanence",
+     "rev": "f732ce8dce8257a9b99ef840b61be7c1014a119e",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "700f0c0843c2a07ee5f1dc16d4026dc659c874c5",
+     "pinned": true
+    }
+   ],
+   "follows": []
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-4c131186c4",
+  "ecosystem": "nix",
+  "kind": "unpinned",
+  "expected": {
+   "resolution": "unresolved",
+   "inputs": [
+    {
+     "name": "disko",
+     "pinned": false
+    },
+    {
+     "name": "nixpkgs",
+     "pinned": false
+    },
+    {
+     "name": "flake-utils",
+     "pinned": false
+    }
+   ]
+  },
+  "files": [
+   "flake.nix"
+  ]
+ },
+ {
+  "id": "nxx-f7eab8d41c",
+  "ecosystem": "nix",
+  "kind": "follows",
+  "expected": {
+   "resolution": "locked",
+   "inputs": [
+    {
+     "name": "impermanence",
+     "rev": "d2b148fdcd6148f35bbe9c7a9de0725cbf6fd628",
+     "pinned": true
+    },
+    {
+     "name": "home-manager",
+     "rev": "46befb649bb4689d23f7ddad7bfee67be0963723",
+     "pinned": true
+    },
+    {
+     "name": "sops-nix",
+     "rev": "919188f7e0ce37447b4a37167c008088ef951efb",
+     "pinned": true
+    }
+   ],
+   "follows": [
+    {
+     "from": "home-manager",
+     "input": "impermanence",
+     "to": "impermanence"
+    }
+   ]
+  },
+  "files": [
+   "flake.lock",
+   "flake.nix"
+  ]
+ }
+]

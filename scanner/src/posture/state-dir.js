@@ -33,8 +33,11 @@ const PROJECT_MARKERS = [
   'build.gradle',
   'composer.json',
   'Gemfile',
+  // Haskell and Nix projects: without these a Cabal, Stack or flake project never got a state directory at all.
+  'cabal.project', 'stack.yaml', 'package.yaml', 'flake.nix', 'configuration.nix', 'default.nix', 'shell.nix',
   '.agentic-security',
 ];
+const PROJECT_MARKER_SUFFIX = /\.cabal$/;
 
 function _findProjectRoot(startDir) {
   let dir = path.resolve(startDir);
@@ -81,8 +84,23 @@ export function statePath(scanRoot, ...parts) {
 // Safety check: refuse to create .agentic-security/ unless the parent
 // directory has at least one project marker. Prevents littering when
 // resolution falls through to a non-project directory.
+// A state directory that is a SYMLINK is never safe: a hostile repository could point `.agentic-security` at a directory elsewhere
+// and have every evidence file written (or overwritten) through it. The state root, and any state directory below it, must be a real
+// directory (or not exist yet); a symlinked file inside it is refused by safeWriteState below.
+function _viaSymlink(dir) {
+  const segments = path.resolve(dir).split(path.sep);
+  const idx = segments.lastIndexOf(STATE_DIR_NAME);
+  if (idx < 0) return false;
+  for (let i = idx; i < segments.length; i++) {
+    const prefix = segments.slice(0, i + 1).join(path.sep) || path.sep;
+    try { if (fs.lstatSync(prefix).isSymbolicLink()) return true; } catch { return false; /* does not exist yet: nothing to follow */ }
+  }
+  return false;
+}
+
 export function isSafeStateDir(dir) {
   if (!dir) return false;
+  if (_viaSymlink(dir)) return false;
   const parent = path.dirname(dir);
   for (const m of PROJECT_MARKERS) {
     if (m === '.agentic-security') continue; // would be circular
@@ -90,6 +108,7 @@ export function isSafeStateDir(dir) {
       if (fs.existsSync(path.join(parent, m))) return true;
     } catch { /* ignore */ }
   }
+  try { if (fs.readdirSync(parent).some((n) => PROJECT_MARKER_SUFFIX.test(n))) return true; } catch { /* ignore */ }
   // A directory NESTED inside an already-valid state root is safe too.
   //
   // Without this the check only ever accepted `<project>/.agentic-security`
@@ -234,6 +253,8 @@ export function safeWriteState(filePath, content, { category } = {}) {
   }
   try {
     fs.mkdirSync(dir, { recursive: true });
+    // never write THROUGH a symlink: an attacker-placed link at the file's own path would redirect the write elsewhere
+    try { if (fs.lstatSync(filePath).isSymbolicLink()) return false; } catch { /* not there yet */ }
     fs.writeFileSync(filePath, content);
     return true;
   } catch {

@@ -171,7 +171,11 @@ function resolveSinkAtCallSite(calleeExpr, file) {
   const pool = justified.length > 1 ? justified : cands;
   const cats = [...new Set(pool.map((c) => c.decision.category))];
   if (cats.length === 1) {
-    return { ...pool[0], ambiguity: { resolvedBy: 'unanimous-category', alternatives: pool.slice(1).map((c) => c.entry.id).sort() } };
+    // Haskell: a security sink watches the QUERY/URL argument, a privacy sink watches the DATA argument. When both
+    // agree on the destination, the data-bearing (privacy) entry is the one a field-level flow can reach.
+    const dataBearing = /\.l?hs$/i.test(String(file)) ? pool.find((c) => c.entry.vuln && c.entry.vuln.cwe === 'CWE-359') : null;
+    const pick = dataBearing || pool[0];
+    return { ...pick, ambiguity: { resolvedBy: 'unanimous-category', alternatives: pool.filter((c) => c !== pick).map((c) => c.entry.id).sort() } };
   }
   const counts = new Map();
   for (const c of pool) counts.set(c.decision.category, (counts.get(c.decision.category) ?? 0) + 1);

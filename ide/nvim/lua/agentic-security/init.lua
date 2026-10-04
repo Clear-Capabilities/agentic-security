@@ -12,9 +12,11 @@ local default_opts = {
   filetypes = {
     "javascript", "typescript", "javascriptreact", "typescriptreact",
     "python", "java", "kotlin", "go", "ruby", "php",
+    -- Haskell, Cabal and Nix (the filetype names Neovim assigns)
+    "haskell", "lhaskell", "cabal", "cabalproject", "nix",
   },
   root_dir = function(fname)
-    local found = vim.fs.find({ ".git", "package.json", "pyproject.toml", "go.mod" }, {
+    local found = vim.fs.find({ ".git", "package.json", "pyproject.toml", "go.mod", "cabal.project", "stack.yaml", "package.yaml", "flake.nix", "configuration.nix" }, {
       upward = true, path = fname,
     })
     if found and found[1] then return vim.fs.dirname(found[1]) end

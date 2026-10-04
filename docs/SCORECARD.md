@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.153.2 |
-| Bundle SHA-256 | `dce16625abaef7a52aad4a8d0ca0402d22ea681c9a1479f7378401458e38d55e` |
-| Commit | `b6300558bbe5dbb86af0d53718264ad59f7b0562` |
+| Engine version | 0.154.0 |
+| Bundle SHA-256 | `e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849` |
+| Commit | `c3c65ae767bcfefb841a0339ad8a39f0047769e5` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-02T14:52:19.146Z |
+| Generated (UTC) | 2026-10-04T18:56:42.604Z |
 
 ## What these numbers are, and what they are not
 
@@ -206,14 +206,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 20 |
-| `scripts` | 30 |
+| `scripts` | 44 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 479 |
+| `scanner/src` | 544 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -230,7 +230,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 318/360 (88.3%) |
+| 239/417 (57.3%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -265,6 +265,60 @@ which — it exists so the trend is visible instead of assumed.
 `rule:`/`graph:` entry, regardless of whether it would clear on any given
 scan — this counts what the engine CAN evidence, not what it evidenced
 this run.
+
+## Haskell and Nix/NixOS support
+
+*Committed artifact:* `docs/language-support.json`, measured 2026-10-04 on node v24.20.0. It is read here, not re-measured by this command.
+
+Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
+is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
+separately (family-scoped scoring); the strict precision that counts it is stored in the registry. Denominators are cases, with
+TP/FP/FN/TN shown; a row without a denominator carries a different kind of evidence (parse counts, fix gates, manifests).
+
+### Haskell
+
+| Capability | Status | Layer | Cases | TP | FP | FN | TN | Precision | Recall | F1 | Families |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| parser | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| sast | supported | sast | 96 | 48 | 0 | 0 | 44 | 100.0% | 100.0% | 100.0% | 8 |
+| taint | supported | taint | 60 | 30 | 0 | 0 | 30 | 100.0% | 100.0% | 100.0% | 5 |
+| privacy-lineage | supported | — | — | 30 | 0 | 0 | 60 | 100.0% | 100.0% | 100.0% | — |
+| auth | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| sca | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| bom | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| fix | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| integration | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+
+Unknown and unmodelled cases: {"total":19,"disclosed":16,"withFinding":19,"silentClean":0,"requiredDisclosure":9,"requiredDisclosureMissing":0}.
+Metamorphic pairs: {"preserve":1,"change":1,"gate":{"change":1,"preserve":0.9},"ok":true,"broken":[]}.
+
+### Nix and NixOS
+
+| Capability | Status | Layer | Cases | TP | FP | FN | TN | Precision | Recall | F1 | Families |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| parser | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| config-sast | supported | sast | 132 | 66 | 0 | 0 | 66 | 100.0% | 100.0% | 100.0% | 11 |
+| config-taint | supported | taint | 12 | 6 | 0 | 0 | 6 | 100.0% | 100.0% | 100.0% | 1 |
+| privacy-lineage | supported | — | — | 30 | 0 | 0 | 60 | 100.0% | 100.0% | 100.0% | — |
+| sca | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| bom | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| fix | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| integration | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| nix-eval | blocked | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| nixos-host | blocked | — | — | — | — | — | — | ,  | ,  | ,  | — |
+
+Not supported here: nix-eval (blocked: nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-011.AC04)); nixos-host (blocked: nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012)).
+
+Unknown and unmodelled cases: {"total":17,"disclosed":17,"withFinding":17,"silentClean":0,"requiredDisclosure":0,"requiredDisclosureMissing":0}.
+Metamorphic pairs: {"preserve":1,"change":1,"gate":{"change":1,"preserve":0.9},"ok":true,"broken":[]}.
+
+Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=absent, nixos=absent, platform=darwin, arch=arm64.
+
+- The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.
+- No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
+- No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.
+- Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
+- Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
 
 ## Independent evaluation population — the number that matters
 

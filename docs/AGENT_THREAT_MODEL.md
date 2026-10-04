@@ -78,6 +78,21 @@ The LLM-prompt paths (path #3) and the enrichment-fetch paths (path #2) are the
 next wiring targets; `fenceUntrusted` and `isAllowedFetchHost` exist and are
 tested so those call sites can adopt them without new design work.
 
+## Haskell and Nix attack surfaces
+
+Hostile content a Haskell or Nix project can carry, and what bounds it:
+
+| Surface | Guarantee |
+|---|---|
+| Parsers | dependency-free, with node, depth, byte and time budgets; exceeding one yields a stated `budget_exceeded` or `unresolved`, never a hang. A tampered grammar table is `corrupt-grammar`, never executed. |
+| Project code | never run: no `Setup.hs`, Template Haskell, compiler plugin, `nix` evaluation or build in a default scan. |
+| Manifests and exports | read by exact path, size-capped, malformed ones are conditions; a closure export without matching provenance is refused. |
+| Symlinks | a `.agentic-security` directory or state file that is a symlink is refused; state is written with `O_NOFOLLOW`. A fix whose target escapes the project root is refused. |
+| Shell | no scanner step builds a shell command from project content; evaluation uses an argument vector in a sandbox. |
+| Model | excerpts are redacted (split credentials joined first) and bounded; model output cannot widen a fix beyond the gates. |
+| Logs and dashboard | output redacts credential values; the loop dashboard is loopback-only, read-only and host-checked. |
+| Optional evaluation | runs only when selected AND a sandbox probe proved isolation; offline, pure, deadline-, output- and memory-capped. |
+
 ## Non-goals
 
 - This layer does not replace the MCP/subagent **path-confinement** contract
