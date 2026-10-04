@@ -35,6 +35,11 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: Unit + integration test gate
         run: npm test
       - name: Build bundle
@@ -62,6 +67,11 @@ jobs:
       - run: node --version && npm --version
       - run: npm ci
         timeout-minutes: 10
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: Haskell suites
         run: npm run test:haskell
         timeout-minutes: 10
@@ -106,7 +116,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y libpq-dev
           cabal update
-          cabal install --lib --package-env=default --allow-newer scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
+          cabal install --lib --package-env=default --allow-newer --index-state=2026-10-04T17:05:37Z scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
         timeout-minutes: 25
       - run: npm ci
         timeout-minutes: 10

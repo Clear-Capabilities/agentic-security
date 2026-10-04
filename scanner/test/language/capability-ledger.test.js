@@ -13,6 +13,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   REPO_ROOT,
+  PRD_PATH,
+  PRD_SNAPSHOT_PATH,
   loadLedger,
   parsePrd,
   discoverCapabilities,
@@ -188,4 +190,15 @@ test('[CORE-001.AC03] relabeling a baseline metric as fresh, claiming implemente
   const stale = clone(ledger);
   stale.existingBehavior.find((b) => b.id === 'BASE-002').expect = 'present';
   assert.ok(checkBaselineSeparation(stale, REPO_ROOT).some((m) => m.includes('no longer true')));
+});
+
+test('[CORE-001.AC01] the committed PRD snapshot equals the PRD whenever both exist, and a clean checkout parses from the snapshot', () => {
+  const snap = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, PRD_SNAPSHOT_PATH), 'utf8'));
+  assert.ok(snap.ids.length >= 57 && Object.keys(snap.suiteByRequirement).length >= 57);
+  if (fs.existsSync(path.join(REPO_ROOT, PRD_PATH))) {
+    const p = parsePrd(REPO_ROOT);
+    assert.deepEqual(snap.ids, p.ids, 'the snapshot is stale: run node scripts/capability-ledger/check.mjs --write-snapshot');
+    assert.deepEqual(snap.suiteByRequirement, p.suiteByRequirement);
+    assert.deepEqual(snap.section3Ids, [...p.section3Ids].sort());
+  }
 });
