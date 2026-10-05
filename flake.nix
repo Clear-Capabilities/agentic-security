@@ -81,7 +81,7 @@
             testScript = ''
               machine.wait_for_unit("multi-user.target", timeout=3600)
               machine.succeed("test -f /etc/NIXOS")
-              machine.succeed("agentic-security --version")
+              machine.succeed("agentic-security version")
               machine.succeed("cp -r ${repo} /tmp/repo && chmod -R u+w /tmp/repo")
               machine.succeed("cd /tmp/repo && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t")
               machine.succeed("cd /tmp/repo/scanner && node --test test/nix/nixos-host-runtime.test.js", timeout=3600)

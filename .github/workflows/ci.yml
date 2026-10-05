@@ -150,6 +150,7 @@ jobs:
         with:
           node-version: '24'
       - name: Enable KVM for the VM test
+        if: matrix.system == 'x86_64-linux'
         working-directory: .
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -172,7 +173,9 @@ jobs:
         working-directory: .
         run: nix build .#agentic-security --no-link --print-out-paths
         timeout-minutes: 15
+      # x86_64 only: the arm runner has no /dev/kvm, and a software-emulated NixOS guest does not boot within any usable time (measured).
       - name: Controlled NixOS VM test (runs the NIX-012 suite inside a NixOS guest)
+        if: matrix.system == 'x86_64-linux'
         working-directory: .
         run: nix build .#checks.${{ matrix.system }}.nixos-host -L --no-link
         timeout-minutes: 30
