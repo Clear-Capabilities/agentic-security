@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.154.0 |
-| Bundle SHA-256 | `10366cb2c00a8240e0fa2737ddd7dd3460b34b234a227f7a1535e6f2706f7911` |
-| Commit | `bd9fb83f813c7a551a015cbd5767ddc493014a85` |
+| Engine version | 0.155.0 |
+| Bundle SHA-256 | `5b1c3482deb6bf15eb606402755278ad1e04a5b2e8b12c5b5246c5dcd4028b50` |
+| Commit | `753a2e60899fd04617d6b18c4ed2440e00801caa` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-05T02:22:33.343Z |
+| Generated (UTC) | 2026-10-05T17:47:43.949Z |
 
 ## What these numbers are, and what they are not
 
@@ -205,7 +205,7 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `hooks` | 20 |
+| `hooks` | 19 |
 | `scripts` | 45 |
 | `polyglot` fixture (expected 0) | 0 |
 
@@ -230,7 +230,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 248/417 (59.5%) |
+| 339/417 (81.3%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone

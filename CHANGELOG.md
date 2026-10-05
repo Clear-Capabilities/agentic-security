@@ -9,7 +9,7 @@
 > make the history less accurate, not more.
 
 
-## Unreleased - premortem remediation (trust boundary, unseen-shape measurement)
+## 0.155.0 - premortem remediation (trust boundary, unseen-shape measurement), NixOS VM check
 
 An adversarial premortem of 0.154.0 found the following; each is fixed here and covered by `test/language/language-trust-boundary.test.js`.
 
@@ -18,9 +18,9 @@ An adversarial premortem of 0.154.0 found the following; each is fixed here and 
 - **Completion honesty.** A release check (`completion-declared`) fails when `docs/completion-status.json` lists unverified requirements and the changelog has no paragraph naming them. Chrome-dependent export tests are a separate informational job rather than a silent skip.
 - **Nix package fix (found by the first hosted NixOS guest run).** The packaged `agentic-security-mcp` and `agentic-security-lsp` wrappers ran `bin/*.js`, which import `src/` and therefore npm dependencies the Nix package does not ship, so both would have crashed for a Nix user. They now run from the self-contained bundle, and the CLI gained an `lsp` subcommand (the same server the editor plugins start). The flake's package source is now exactly the files it installs, so an offline rebuild elsewhere reproduces the same derivation.
 - **Destructive-command guard.** `hooks/pre-bash-guard.js` judged `rm` by text, so it refused any absolute path (and `docker run --rm -v /abs/...`) while missing nothing it should. Deletion (`rm`, `rmdir`, `unlink`, `find -delete`) is now path-aware: targets are parsed and resolved (`~`, `$HOME`, relative paths, `cd`, symlinks) and allowed only strictly inside an allowed root (default `~/code`, set with `allowedRoots` in `.agentic-security/destructive-guard.json`). Anything outside, anything unresolvable (`$VAR`, command substitution, `xargs`) and the root itself is refused. It cannot see deletion done inside another program, so it guards against mistakes and is not a sandbox. Pinned by `test/pre-bash-guard.test.js`.
-- **Not done.** Peak scan memory is measured under a stated heap cap and was **not reduced**: a lazy-token experiment retained less but changed no measurement, so it was reverted. `flake.nix` is now locked (`flake.lock`) and was built and checked on aarch64-linux inside a `nixos/nix` container (Nix 2.35.2); x86_64-linux and darwin are declared but unbuilt. In that same container the NIX-011 suite passed 7 of 7. That is a run in a container, not controller-signed evidence, so the controller still lists NIX-011 as open until it runs where `nix` is on its own PATH.
+- **Not done.** Peak scan memory is measured under a stated heap cap and was **not reduced**: a lazy-token experiment retained less but changed no measurement, so it was reverted. `flake.nix` is now locked (`flake.lock`), built and checked on aarch64-linux in a `nixos/nix` container (Nix 2.35.2) and on x86_64-linux on a hosted runner; aarch64-darwin is declared but unbuilt, and x86_64-darwin is dropped (current nixpkgs no longer supports it).
 
-Partial release: the requirements NIX-011 (passed in a container, not controller-verified) and NIX-012 (needs a real NixOS host: its suite requires /etc/NIXOS) and REL-001 (a supervised final verification run) are not verified.
+Partial release: the loop controller lists NIX-011, NIX-012 and REL-001 as not verified. NIX-011 and NIX-012 passed on hosted CI in this release's pull request (the NIX-011 suite on Nix 2.24.10; the NIX-012 suite inside a real NixOS guest booted by the flake's `nixos-host` check on an x86_64 runner with KVM), but that is CI evidence, not controller-signed evidence, because the controller runs where `nix` and `/etc/NIXOS` are absent. The aarch64 NixOS guest was not run: the arm runner has no KVM and a software-emulated guest does not boot in any usable time. REL-001 is the controller's own final acceptance and needs those two to be controller-verified first.
 
 ## 0.154.0 - Haskell and Nix/NixOS support, with every limit stated
 

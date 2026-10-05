@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.154.0",
-    "bundleSha256": "10366cb2c00a8240e0fa2737ddd7dd3460b34b234a227f7a1535e6f2706f7911",
-    "commit": "bd9fb83f813c7a551a015cbd5767ddc493014a85",
+    "engineVersion": "0.155.0",
+    "bundleSha256": "5b1c3482deb6bf15eb606402755278ad1e04a5b2e8b12c5b5246c5dcd4028b50",
+    "commit": "753a2e60899fd04617d6b18c4ed2440e00801caa",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-05T02:22:33.343Z",
+    "generatedAt": "2026-10-05T17:47:43.949Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -585,14 +585,13 @@
     "measuredThisRun": true,
     "targets": {
       "hooks": {
-        "total": 20,
+        "total": 19,
         "byFile": {
           "conversation-context.js": 1,
           "lib/transcript.js": 1,
           "mascot.js": 1,
           "model-cost-advisor.js": 1,
           "post-edit-scan.js": 2,
-          "pre-bash-guard.js": 1,
           "pre-edit-bodyguard.js": 4,
           "session-start-self-check.js": 4,
           "session-stop-drift-check.js": 2,
@@ -857,7 +856,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 248,
+    "n": 339,
     "d": 417
   },
   "taintRecall": {
