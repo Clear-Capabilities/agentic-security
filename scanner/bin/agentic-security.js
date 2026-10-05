@@ -137,6 +137,7 @@ Commands:
   tickets sync --provider <p>  Two-way sync findings ↔ GitHub Issues / Linear / Jira
   digest --slack <webhook>     Vibecoder: send daily digest to Slack
   mcp                          Start the MCP stdio server (scan_diff, query_taint, explain_finding, apply_fix)
+  lsp                          Start the Language Server Protocol server on stdio (what the editor plugins run)
   validator-cache stats|gc     Inspect / prune .agentic-security/llm-cache/ (use --older-than <days> --dry-run)
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   ask "<question>" [target]    Bounded local-model Q&A with read-only tool access (requires AGENTIC_SECURITY_LLM_PRESET=ollama)
@@ -7054,6 +7055,13 @@ async function main() {
         const { runStdio } = await import('../src/mcp/stdio.js');
         const root = args.flags.root || process.env.AGENTIC_SECURITY_MCP_ROOT || process.cwd();
         runStdio({ sessionRoot: path.resolve(root) });
+        return;
+      }
+      case 'lsp':      {
+        // The same server as bin/agentic-security-lsp.js, reachable from the self-contained bundle: a package that ships only the bundle
+        // (the Nix package does) has no node_modules for the src/ entry point to import from.
+        const { startLspServer } = await import('../src/lsp/server.js');
+        startLspServer();
         return;
       }
       case 'explore':  process.exit(await cmdExplore(args));

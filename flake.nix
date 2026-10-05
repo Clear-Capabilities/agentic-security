@@ -18,12 +18,18 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
       forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      # The package source is exactly what the package installs, so the same files in another checkout (the NixOS VM test's copy) hash to
+      # the same store path and the same derivation, and an offline `nix build` there finds the output already built.
+      scannerSrc = pkgs: pkgs.lib.fileset.toSource {
+        root = ./scanner;
+        fileset = pkgs.lib.fileset.unions [ ./scanner/dist ./scanner/bin ./scanner/src ./scanner/package.json ];
+      };
     in {
       packages = forAll (pkgs: rec {
         agentic-security = pkgs.stdenvNoCC.mkDerivation {
           pname = "agentic-security-scanner";
           version = (builtins.fromJSON (builtins.readFile ./scanner/package.json)).version;
-          src = ./scanner;
+          src = scannerSrc pkgs;
           nativeBuildInputs = [ pkgs.makeWrapper ];
           dontBuild = true;
           installPhase = ''
@@ -33,10 +39,11 @@
             [ -d vendor ] && cp -r vendor $out/lib/agentic-security/ || true
             makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/agentic-security \
               --add-flags $out/lib/agentic-security/dist/agentic-security.mjs
+            # MCP and LSP run from the bundle, not bin/*.js: those import src/, which needs the npm dependencies this package does not ship.
             makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/agentic-security-mcp \
-              --add-flags $out/lib/agentic-security/bin/agentic-security-mcp.js
+              --add-flags "$out/lib/agentic-security/dist/agentic-security.mjs mcp"
             makeWrapper ${pkgs.nodejs_24}/bin/node $out/bin/agentic-security-lsp \
-              --add-flags $out/lib/agentic-security/bin/agentic-security-lsp.js
+              --add-flags "$out/lib/agentic-security/dist/agentic-security.mjs lsp"
             runHook postInstall
           '';
           meta = {
@@ -76,7 +83,7 @@
               nix.settings.flake-registry = "";
               virtualisation.memorySize = 3072;
               virtualisation.diskSize = 4096;
-              virtualisation.additionalPaths = [ nixpkgs.outPath self.packages.${system}.default pkgs.nodejs_24 ];
+              virtualisation.additionalPaths = [ nixpkgs.outPath self.packages.${system}.default self.devShells.${system}.default pkgs.nodejs_24 ];
             };
             testScript = ''
               machine.wait_for_unit("multi-user.target", timeout=3600)
