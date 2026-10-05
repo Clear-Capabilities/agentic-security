@@ -1,0 +1,8 @@
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.billing;
+in
+{
+  networking.hostName = "billing-u0";
+  environment.etc."billing.zip".source = pkgs.fetchzip { url = "https://example.org/billing-u0.zip"; };
+}

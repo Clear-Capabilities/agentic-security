@@ -19,14 +19,14 @@ __webpack_require__.d(__webpack_exports__, {
 
 // EXTERNAL MODULE: external "node:fs"
 var external_node_fs_ = __webpack_require__(73024);
-// EXTERNAL MODULE: ./src/posture/state-dir.js
-var state_dir = __webpack_require__(31174);
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
+// EXTERNAL MODULE: ./src/language/trusted-inputs.js
+var trusted_inputs = __webpack_require__(6342);
 // EXTERNAL MODULE: ./src/language/haskell-manifests.js
 var haskell_manifests = __webpack_require__(16522);
 // EXTERNAL MODULE: ./src/language/haskell-resolved-graph.js
 var haskell_resolved_graph = __webpack_require__(86359);
-// EXTERNAL MODULE: external "node:crypto"
-var external_node_crypto_ = __webpack_require__(77598);
 ;// CONCATENATED MODULE: ./src/language/nix-closure.js
 // Resolved derivation and closure inventory (NIX-008).
 //
@@ -1032,6 +1032,7 @@ function mergeEvaluationHealth(scanHealth, result) {
 
 
 
+
 const RESOLVED_PASS_VERSION = 'resolved-pass/1';
 
 const PLAN = /(?:^|\/)dist-newstyle\/cache\/plan\.json$/;
@@ -1071,6 +1072,12 @@ function resolvedHackageComponents(files) {
   const gaps = (g.gaps || []).map((x) => ({ kind: `resolved-${x.kind}`, detail: x.detail || x.message || x.kind, file: r.file }));
   const summary = { file: r.file, source: g.source, graphAvailable: g.graphAvailable, freshness: g.freshness, closure: g.closure, units: g.units ? g.units.length : null, edges: g.edges ? g.edges.length : null };
   if (!g.graphAvailable || g.freshness.status === 'stale') return { components: [], gaps, summary };
+  // The plan is a file in the scanned project. Where the project's own freeze file also pins a package, the two must agree: a plan that
+  // contradicts the freeze is stale or forged, and contributes no versions.
+  const frozen = new Map(((r.manifests && r.manifests.lockedPackages) || []).filter((l) => l.name && l.version).map((l) => [l.name, l.version]));
+  const clashes = (g.units || []).filter((u) => u.name && u.version && frozen.has(u.name) && frozen.get(u.name) !== u.version).map((u) => `${u.name} ${u.version} (plan) vs ${frozen.get(u.name)} (freeze)`);
+  if (clashes.length) { gaps.push({ kind: 'resolved-stale-plan-contradicts-freeze', detail: `the plan contradicts the freeze file (${clashes.slice(0, 3).join('; ')}): it is stale or forged, so no version was taken from it`, file: r.file }); return { components: [], gaps, summary }; }
+  gaps.push({ kind: 'resolved-project-supplied-plan', detail: 'the plan is a file in the scanned project: it is checked against the declared bounds and the freeze file, but whoever controls the project controls its contents', file: r.file });
   const SCOPE = { runtime: 'required', test: 'optional', benchmark: 'optional', setup: 'optional', 'build-tool': 'optional' };
   const direct = new Set((g.declared || []).map((d) => d.name));
   const components = [];
@@ -1084,24 +1091,39 @@ function resolvedHackageComponents(files) {
 }
 
 // ── Nix closure ──────────────────────────────────────────────────────────────────
-function loadNixExports(files) {
-  const exports = []; const sources = []; const problems = []; let expected = {};
-  for (const p of Object.keys(files).filter((x) => NIX_EXPORT.test(x)).sort()) {
-    const parsed = parseJson(files[p]);
-    sources.push(p);
-    if (!parsed.ok) { problems.push({ kind: 'malformed-export', file: p, detail: parsed.reason }); continue; }
+function loadNixExports(files, env = process.env) {
+  const exports = []; const sources = []; const problems = []; const trust = new Set();
+  const take = (label, text, origin) => {
+    sources.push(label);
+    const parsed = parseJson(text);
+    if (!parsed.ok) { problems.push({ kind: 'malformed-export', file: label, detail: parsed.reason }); return; }
     const j = parsed.value;
-    if (j && Array.isArray(j.exports)) { exports.push(...j.exports.filter((e) => e && typeof e === 'object')); if (j.expected && typeof j.expected === 'object') expected = { ...expected, ...j.expected }; }
+    trust.add(origin);
+    // NOTE: an `expected` block inside the file is IGNORED. The file is the thing under test, so it cannot also say what it should be
+    // checked against; what an export must match is derived by the scanner (below) or comes from the operator.
+    if (j && Array.isArray(j.exports)) exports.push(...j.exports.filter((e) => e && typeof e === 'object'));
     else if (j && typeof j === 'object' && j.schema && (j.data !== undefined || j.text !== undefined)) exports.push(j);
-    else exports.push({ text: files[p] });
+    else exports.push({ text });
+  };
+  if (env.AGENTIC_SECURITY_NIX_EXPORT) {
+    try { take(env.AGENTIC_SECURITY_NIX_EXPORT, (0,external_node_fs_.readFileSync)(env.AGENTIC_SECURITY_NIX_EXPORT, 'utf8'), 'operator'); }
+    catch (e) { sources.push(env.AGENTIC_SECURITY_NIX_EXPORT); problems.push({ kind: 'malformed-export', file: env.AGENTIC_SECURITY_NIX_EXPORT, detail: `unreadable: ${e.code || e.message}` }); }
   }
-  return { exports, sources, problems, expected };
+  for (const p of Object.keys(files).filter((x) => NIX_EXPORT.test(x)).sort()) take(p, files[p], 'project-supplied');
+  // What the export must have been made against: the real flake.lock of this project (a forged export cannot also forge that file's hash
+  // without the lock it claims to describe being the lock that is here).
+  const expected = {};
+  const lockPath = Object.keys(files).filter((p) => /(^|\/)flake\.lock$/.test(p)).sort((a, b) => a.length - b.length)[0];
+  if (lockPath) expected.flakeLockSha256 = (0,external_node_crypto_.createHash)('sha256').update(files[lockPath]).digest('hex');
+  else if (sources.length) problems.push({ kind: 'export-unverified', detail: 'there is no flake.lock to bind the export to, so it cannot be shown to describe this project' });
+  if (env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY) { try { expected.publicKeyPem = (0,external_node_fs_.readFileSync)(env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, 'utf8'); expected.requireSigned = true; } catch { problems.push({ kind: 'malformed-export', detail: 'the configured export public key is unreadable' }); } }
+  return { exports, sources, problems, expected, trust: [...trust] };
 }
 
 /** The imported closure (and each derivation's env block) for a file set, or null when there is no export. Cached per file set. */
 function nixClosureOf(files, { now = Date.now() } = {}) {
   return memoized(files, 'nix-closure', () => {
-    const { exports, sources, problems, expected } = loadNixExports(files);
+    const { exports, sources, problems, expected, trust } = loadNixExports(files);
     if (!sources.length) return null;
     const closure = importNixClosure({ exports, expected, now });
     const drvEnv = {};
@@ -1110,15 +1132,19 @@ function nixClosureOf(files, { now = Date.now() } = {}) {
       let data = ex.data; if (data === undefined && typeof ex.text === 'string') { const p = parseJson(ex.text); data = p.ok ? p.value : null; }
       for (const [k, v] of Object.entries(data || {})) if (v && v.env) drvEnv[k] = v.env;
     }
-    return { closure, drvEnv, sources, problems };
+    // A disclosure that says the export does not describe THIS project (another lock, another target, a bad or missing required
+    // signature) means its contents are not evidence about this build: it is refused, not merely labelled.
+    const REFUSE = new Set(['stale-export', 'foreign-target', 'foreign-revision', 'invalid-signature', 'unsigned']);
+    const refused = (closure.disclosures || []).filter((d) => REFUSE.has(d.kind));
+    return { closure, drvEnv, sources, problems, trust, refused };
   });
 }
 
 /** Advisory records for Nix: a snapshot named by AGENTIC_SECURITY_NIX_ADVISORIES or kept in the project state directory. */
 function configuredNixAdvisories(root, env = process.env, hackageDb = null) {
-  const path = env.AGENTIC_SECURITY_NIX_ADVISORIES || (root && (0,external_node_fs_.existsSync)((0,state_dir.statePath)(root, 'nix-advisories.json')) ? (0,state_dir.statePath)(root, 'nix-advisories.json') : null);
-  if (!path) return { data: null, reason: 'no Nix advisory snapshot is configured (set AGENTIC_SECURITY_NIX_ADVISORIES or provide nix-advisories.json in the project state directory)' };
-  let snap; try { snap = JSON.parse((0,external_node_fs_.readFileSync)(path, 'utf8')); } catch (e) { return { data: null, reason: `the Nix advisory snapshot is unreadable: ${e.code || e.message}` }; }
+  const sel = (0,trusted_inputs/* resolveOperatorSnapshot */.Rn)({ envVar: 'AGENTIC_SECURITY_NIX_ADVISORIES', fileName: 'nix-advisories.json', root, env });
+  if (!sel.path) return { data: null, reason: `no Nix advisory snapshot is configured (set AGENTIC_SECURITY_NIX_ADVISORIES, or place nix-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)${sel.projectLocalIgnored ? (0,trusted_inputs/* IGNORED_NOTE */.cY)('nix-advisories.json') : ''}` };
+  let snap; try { snap = JSON.parse((0,external_node_fs_.readFileSync)(sel.path, 'utf8')); } catch (e) { return { data: null, reason: `the Nix advisory snapshot is unreadable: ${e.code || e.message}` }; }
   const records = Array.isArray(snap) ? snap : (Array.isArray(snap.records) ? snap.records : []);
   return { data: new NixAdvisoryData({ records, hackage: hackageDb, source: 'pinned-snapshot', generatedAt: (snap && snap.generatedAt) || null }), reason: null };
 }
@@ -1134,9 +1160,11 @@ function _analyzeNixClosure(files, { scanRoot = null, env = process.env, now = D
   const adv = configuredNixAdvisories(scanRoot, env, hackage);
   let usage = null; try { usage = (0,haskell_supply/* collectUsage */.c$)(files); } catch { usage = null; }
   let matched = null;
-  try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
+  if (!c.refused.length) try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
   const gaps = [];
+  if (c.trust.includes('project-supplied') && !c.trust.includes('operator')) gaps.push({ kind: 'closure-project-supplied', detail: 'the closure export is a file in the scanned project, bound to its flake.lock but not signed: whoever controls the project controls its contents, so the ABSENCE of a finding for a component it lists is not evidence the real build is free of it (provide the export through AGENTIC_SECURITY_NIX_EXPORT, signed with AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, to have it treated as operator evidence)' });
   for (const d of c.closure.disclosures || []) gaps.push({ kind: `closure-${d.kind}`, detail: d.detail });
+  for (const d of c.refused) gaps.push({ kind: `closure-refused-${d.kind}`, detail: `${d.detail}; the export was REFUSED and contributes nothing` });
   for (const p of c.problems) gaps.push({ kind: `closure-${p.kind}`, detail: p.detail, file: p.file });
   if (!adv.data) gaps.push({ kind: 'closure-advisory-feed-unavailable', detail: `${adv.reason}. The closure's components were NOT checked against any advisory: the absence of findings is not a clean result.` });
   else if (adv.data.stale) gaps.push({ kind: 'closure-advisory-feed-stale', detail: `the Nix advisory snapshot is stale or undated (${adv.data.ageDays == null ? 'age unknown' : `${Math.floor(adv.data.ageDays)} day(s) old`})` });

@@ -67,7 +67,9 @@
     "jetbrains-plugin",
     "sard-blind-smoke",
     "sard-full-test-split",
-    "nixos-runtime"
+    "nixos-runtime (x86_64-linux)",
+    "nixos-runtime (aarch64-linux)",
+    "chrome-exports"
   ],
   "self": [
     "publish"

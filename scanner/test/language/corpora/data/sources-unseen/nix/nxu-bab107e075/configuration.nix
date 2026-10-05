@@ -1,0 +1,9 @@
+{ config, lib, pkgs, ... }:
+let
+  cfg = config.services.billing;
+in
+{
+  networking.hostName = "billing-u0";
+  services.nginx.enable = true;
+  services.nginx.virtualHosts."billing.example.org".sslCertificateKey = ./billing-u0.pem;
+}

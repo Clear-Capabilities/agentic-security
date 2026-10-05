@@ -3,11 +3,19 @@
 // most often regret. Either warn (default) or block.
 //
 // Behavior controlled by .agentic-security/destructive-guard.json:
-//   { "mode": "warn" | "block" | "off", "extraPatterns": [{...}] }
+//   { "mode": "warn" | "block" | "off", "allowedRoots": ["/abs/path", "~/code"], "disposableDirs": ["/abs/scratch"], "extraPatterns": [{...}] }
+//   allowedRoots: deletion is allowed strictly INSIDE these (the root itself is protected). disposableDirs: may be deleted wholesale.
+//
+// File deletion is PATH-AWARE, not a text match. `rm`, `rmdir`, `unlink` and `find -delete` targets are parsed out of the command,
+// resolved (~, $HOME, relative paths, `cd`, symlinks) and allowed ONLY when they are strictly inside an allowed root (default ~/code).
+// Anything outside, anything that cannot be resolved statically ($VAR, command substitution, xargs), and the allowed root itself are
+// blocked. It cannot see deletion done inside another program (node -e fs.rmSync, python shutil.rmtree): it guards against mistakes,
+// it is not a sandbox.
 //
 // CommonJS, no deps.
 'use strict';
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -30,20 +38,7 @@ function readStdinJSON() {
 // Each pattern: regex + plain-English explanation of WHY this is dangerous
 // + what to do instead. Severity drives block vs warn behavior.
 const PATTERNS = [
-  {
-    name: 'rm -rf on a parent / home / root directory',
-    severity: 'critical',
-    re: /\brm\s+(?:-[rfRv]+\s+|--recursive\s+|--force\s+){1,2}(?:\/|~|\.\.|\$HOME|\/tmp\b|\/var\b)/,
-    why: 'rm -rf in or above your home is irreversible. The agent may have computed a path that resolves higher than intended.',
-    instead: 'Delete a specific subdirectory by absolute path, or move it to /tmp first as a safety net.',
-  },
-  {
-    name: 'rm -rf without a specific target',
-    severity: 'critical',
-    re: /\brm\s+-[rfR]+\s*$/m,
-    why: 'rm -rf with no target left will likely target the current shell directory or trip a shell expansion.',
-    instead: 'Specify the exact path you want to delete.',
-  },
+  // File deletion (rm, rmdir, unlink, find -delete) is NOT matched here: see analyzeDeletes below, which is path-aware.
   {
     name: 'DROP TABLE / DROP DATABASE',
     severity: 'critical',
@@ -124,6 +119,179 @@ const PATTERNS = [
 ];
 
 
+// ── Path-aware deletion analysis ────────────────────────────────────────────
+const HOME = os.homedir();
+function expandHome(w) {
+  if (w === '~' || w === '$HOME' || w === '${HOME}') return HOME;
+  const m = /^(?:~|\$HOME|\$\{HOME\})\//.exec(w);
+  return m ? path.join(HOME, w.slice(m[0].length)) : w;
+}
+// realpath of the nearest existing ancestor plus the not-yet-existing remainder: a symlink inside an allowed root that points outside
+// cannot let a deletion escape, and a target that does not exist yet is judged by where it WOULD be.
+function realish(p) {
+  let cur = p; const rest = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync(cur), ...rest.slice().reverse()); } catch { /* keep climbing */ }
+    const up = path.dirname(cur);
+    if (up === cur) return p;
+    rest.push(path.basename(cur)); cur = up;
+  }
+}
+function allowedRootsFrom(cfg) {
+  const list = Array.isArray(cfg.allowedRoots) && cfg.allowedRoots.length ? cfg.allowedRoots : [path.join(HOME, 'code')];
+  return list.map((r) => expandHome(String(r))).filter((r) => path.isAbsolute(r)).map((r) => realish(path.resolve(r)));
+}
+
+// `disposableDirs`: directories that may be deleted wholesale, themselves included (scratch work areas). Unlike allowedRoots, where
+// the root itself is protected.
+function disposableFrom(cfg) {
+  return (Array.isArray(cfg.disposableDirs) ? cfg.disposableDirs : []).map((r) => expandHome(String(r))).filter((r) => path.isAbsolute(r) && path.resolve(r) !== path.parse(path.resolve(r)).root).map((r) => realish(path.resolve(r)));
+}
+
+function matchParen(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')') { depth--; if (depth === 0) return i; }
+  }
+  return src.length;
+}
+const isVarStart = (src, i) => src[i] === '$' && /[A-Za-z_{@*#?!0-9]/.test(src[i + 1] || '') && !/^\$(?:HOME|\{HOME\})(?![A-Za-z0-9_])/.test(src.slice(i, i + 8));
+
+// Quote-aware split of a shell command into segments of words. Heredoc bodies are skipped. $(...) and `...` bodies are returned
+// separately so they are analysed as commands too, and a word containing an unresolvable expansion is flagged `unresolved`.
+function splitShell(src) {
+  const segments = []; const subs = [];
+  let words = []; let cur = ''; let has = false; let unresolved = false;
+  const endWord = () => { if (has) words.push({ text: cur, unresolved }); cur = ''; has = false; unresolved = false; };
+  const endSeg = () => { endWord(); if (words.length) segments.push(words); words = []; };
+  const heredocs = [];
+  let i = 0; const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === '\n') {
+      endSeg(); i++;
+      while (heredocs.length) {
+        const h = heredocs.shift();
+        while (i < n) {
+          let j = src.indexOf('\n', i); if (j < 0) j = n;
+          const line = src.slice(i, j); i = Math.min(j + 1, n);
+          if ((h.strip ? line.trim() : line) === h.word) break;
+        }
+      }
+      continue;
+    }
+    if (c === '\\' && i + 1 < n) { if (src[i + 1] !== '\n') { cur += src[i + 1]; has = true; } i += 2; continue; }
+    if (c === '#' && !has) { while (i < n && src[i] !== '\n') i++; continue; }
+    if (c === "'") { const j = src.indexOf("'", i + 1); const end = j < 0 ? n : j; cur += src.slice(i + 1, end); has = true; i = end + 1; continue; }
+    if (c === '"') {
+      i++; has = true;
+      while (i < n && src[i] !== '"') {
+        if (src[i] === '\\' && i + 1 < n) { cur += src[i + 1]; i += 2; continue; }
+        if (src[i] === '$' && src[i + 1] === '(') { const e = matchParen(src, i + 1); subs.push(src.slice(i + 2, e)); cur += '$(...)'; unresolved = true; i = e + 1; continue; }
+        if (src[i] === '`') { const e = src.indexOf('`', i + 1); const end = e < 0 ? n : e; subs.push(src.slice(i + 1, end)); cur += '`...`'; unresolved = true; i = end + 1; continue; }
+        if (isVarStart(src, i)) unresolved = true;
+        cur += src[i]; i++;
+      }
+      i++; continue;
+    }
+    if (c === '$' && src[i + 1] === '(') { const e = matchParen(src, i + 1); subs.push(src.slice(i + 2, e)); cur += '$(...)'; has = true; unresolved = true; i = e + 1; continue; }
+    if (c === '`') { const e = src.indexOf('`', i + 1); const end = e < 0 ? n : e; subs.push(src.slice(i + 1, end)); cur += '`...`'; has = true; unresolved = true; i = end + 1; continue; }
+    if (isVarStart(src, i)) unresolved = true;
+    if (c === '<' && src[i + 1] === '<' && src[i + 2] !== '<') {
+      let j = i + 2; let strip = false; if (src[j] === '-') { strip = true; j++; }
+      while (src[j] === ' ' || src[j] === '\t') j++;
+      let q = null; if (src[j] === "'" || src[j] === '"') { q = src[j]; j++; }
+      let w = ''; while (j < n && !/[\s'";|&<>()]/.test(src[j])) { w += src[j]; j++; }
+      if (q && src[j] === q) j++;
+      if (w) heredocs.push({ word: w, strip });
+      endWord(); i = j; continue;
+    }
+    if (c === ';' || c === '|' || c === '&' || c === '(' || c === ')') { endSeg(); i++; continue; }
+    if (c === '>' || c === '<') { // a redirection is not a command word: skip the operator and its target
+      endWord(); i++; if (src[i] === '>' || src[i] === '&') i++; while (src[i] === ' ') i++;
+      while (i < n && !/[\s;|&()]/.test(src[i])) i++;
+      continue;
+    }
+    if (c === ' ' || c === '\t') { endWord(); i++; continue; }
+    cur += c; has = true; i++;
+  }
+  endSeg();
+  return { segments, subs };
+}
+
+const WRAPPERS = new Set(['sudo', 'doas', 'env', 'command', 'builtin', 'time', 'nohup', 'nice', 'exec', 'xargs', 'stdbuf', 'ionice']);
+const DELETERS = new Set(['rm', 'rmdir', 'unlink', 'shred', 'trash']);
+const base = (w) => path.basename(w);
+
+/**
+ * Every deletion target in `command` that is not strictly inside an allowed root, as [{ target, reason }].
+ * `startCwd` is where the hook runs; a `cd` between segments is followed when its argument is literal, and relative targets after a
+ * `cd` that cannot be resolved are refused rather than guessed.
+ */
+function analyzeDeletes(command, { roots, startCwd, disposable = [] }) {
+  const bad = []; const seen = new Set();
+  const run = (src, cwdIn, depth) => {
+    if (depth > 4) { bad.push({ target: '(nested)', reason: 'command substitution nested too deeply to check' }); return; }
+    const { segments, subs } = splitShell(src);
+    let cwd = cwdIn; // null = unknown
+    for (const sub of subs) run(sub, cwd, depth + 1);
+    for (const seg of segments) {
+      let k = 0; let viaXargs = false;
+      while (k < seg.length) {
+        const w = seg[k].text;
+        if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) { k++; continue; }
+        if (WRAPPERS.has(base(w))) { if (base(w) === 'xargs') viaXargs = true; k++; while (k < seg.length && /^-/.test(seg[k].text)) k++; continue; }
+        break;
+      }
+      if (k >= seg.length) continue;
+      const cmd = base(seg[k].text); const args = seg.slice(k + 1);
+      if (cmd === 'cd' || cmd === 'pushd') {
+        const t = args.find((a) => !/^-/.test(a.text));
+        if (!t) { cwd = HOME; continue; }
+        const dest = expandHome(t.text);
+        if (t.unresolved || t.text === '-' || (cwd === null && !path.isAbsolute(dest))) { cwd = null; continue; }
+        cwd = path.resolve(cwd || startCwd, dest);
+        continue;
+      }
+      let targets;
+      if (DELETERS.has(cmd)) {
+        targets = args.filter((a) => a.unresolved || !/^-/.test(a.text) || a.text === '-');
+      } else if (cmd === 'find') {
+        const deletes = args.some((a) => a.text === '-delete') || args.some((a, i) => /^-(?:exec|execdir|ok|okdir)$/.test(a.text) && DELETERS.has(base((args[i + 1] || {}).text || '')));
+        if (!deletes) continue;
+        targets = [];
+        for (const a of args) { if (!a.unresolved && /^[-!(]/.test(a.text)) break; targets.push(a); }
+        if (!targets.length) targets = [{ text: '.', unresolved: false }];
+      } else continue;
+      if (viaXargs && cmd !== 'find') { bad.push({ target: `${cmd} (via xargs)`, reason: 'targets come from standard input and cannot be checked; pass explicit paths' }); continue; }
+      if (!targets.length) {
+        if (/^-[a-zA-Z]*[rR]/.test((args.find((a) => /^-/.test(a.text)) || {}).text || '')) bad.push({ target: '(none)', reason: `${cmd} with a recursive flag and no target` });
+        continue;
+      }
+      for (const t of targets) {
+        const key = `${cwd}|${t.text}`; if (seen.has(key)) continue; seen.add(key);
+        if (t.unresolved) { bad.push({ target: t.text, reason: 'the target contains a variable or command substitution, so where it points cannot be checked' }); continue; }
+        const raw = expandHome(t.text);
+        if (!path.isAbsolute(raw) && cwd === null) { bad.push({ target: t.text, reason: 'a relative path after a `cd` whose destination cannot be determined' }); continue; }
+        const g = raw.search(/[*?[]/);
+        if (g >= 0 && /\.\./.test(raw.slice(g))) { bad.push({ target: t.text, reason: 'a glob that climbs with ..' }); continue; }
+        const literal = g < 0 ? raw : (raw.slice(0, raw.lastIndexOf('/', g) + 1) || '.');
+        const real = realish(path.resolve(cwd || startCwd, literal));
+        const strictlyInside = roots.some((r) => real !== r && real.startsWith(r + path.sep));
+        const globOfRoot = g >= 0 && roots.some((r) => real === r);   // `rm ~/code/*` deletes things inside the root, not the root
+        const inDisposable = disposable.some((r) => real === r || real.startsWith(r + path.sep));
+        if (!strictlyInside && !globOfRoot && !inDisposable) {
+          const isRoot = roots.includes(real);
+          bad.push({ target: t.text, reason: isRoot ? 'that is the allowed root itself, not something inside it' : `${real} is outside the allowed root(s): ${roots.join(', ')}` });
+        }
+      }
+    }
+  };
+  run(command, startCwd, 0);
+  return bad;
+}
+
 function formatViolation(cmd, violations, mode, willBlock) {
   const lines = [];
   const head = willBlock
@@ -150,7 +318,8 @@ function formatViolation(cmd, violations, mode, willBlock) {
 }
 
 
-(async () => {
+if (require.main !== module) module.exports = { analyzeDeletes, splitShell, allowedRootsFrom, disposableFrom };
+else (async () => {
   const cfg = readCfg();
   if (cfg.mode === 'off') process.exit(0);
 
@@ -164,6 +333,20 @@ function formatViolation(cmd, violations, mode, willBlock) {
   const violations = [];
   for (const p of PATTERNS) {
     if (p.re.test(cmd)) violations.push(p);
+  }
+  // Deletion is judged by where the targets resolve to, never by the text patterns above.
+  try {
+    const roots = allowedRootsFrom(cfg);
+    for (const d of analyzeDeletes(cmd, { roots, startCwd: cwd, disposable: disposableFrom(cfg) })) {
+      violations.push({
+        name: `delete outside the allowed root: ${String(d.target).slice(0, 80)}`,
+        severity: 'critical',
+        why: d.reason,
+        instead: `Deletion is only allowed strictly inside ${roots.join(', ')}. Delete it yourself in a terminal, or add its parent to "allowedRoots" in .agentic-security/destructive-guard.json.`,
+      });
+    }
+  } catch (e) {
+    violations.push({ name: 'delete check failed (blocked to be safe)', severity: 'critical', why: String(e && e.message), instead: 'Simplify the command.' });
   }
   for (const p of (cfg.extraPatterns || [])) {
     try {

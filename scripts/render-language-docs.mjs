@@ -89,6 +89,12 @@ const BLOCKS = {
     out.push('Layers are scored independently and a finding of a different family inside a case is counted separately, never as a miss or a hit of the family under test. The corpus is synthetic and template-generated, so these figures describe robustness over those shapes; they are not accuracy on arbitrary real-world code.');
     return out.join('\n');
   },
+  async 'completion-status'() {
+    const c = JSON.parse(readFileSync(join(ROOT, 'docs', 'completion-status.json'), 'utf8'));
+    if (!c.remaining.length) return `All ${c.requirements.total} requirements of the Haskell and Nix/NixOS programme are verified.`;
+    const rows = c.remaining.map((r) => [`\`${r.id}\``, r.state, String(r.blocker).replace(/\|/g, '/').slice(0, 160)]);
+    return [`**Partial release.** ${c.requirements.verified} of ${c.requirements.total} requirements of the programme are verified (${c.verifiedPercent}% by weight); the rest are open:`, '', table(['Requirement', 'State', 'Why it is open'], rows)].join('\n');
+  },
   async 'support-summary'() {
     const reg = JSON.parse(readFileSync(join(ROOT, 'docs', 'language-support.json'), 'utf8'));
     const out = [];
@@ -123,7 +129,7 @@ for (const [k, v] of Object.entries(FIX_BLOCKS)) BLOCKS[k] = async () => fixBloc
 const TARGETS = {
   'docs/guides/haskell.md': ['hs-models', 'ex-hs-vuln', 'ex-hs-fixed', 'ex-hs-partial', 'fix-hs-logging', 'fix-hs-sql', 'fix-hs-cmd'],
   'docs/guides/nix-nixos.md': ['nix-hardening', 'nix-build-trust', 'nix-secrets', 'ex-nix-vuln', 'ex-nix-fixed', 'ex-hn-vuln', 'fix-nix-ssh', 'fix-nix-secret'],
-  'README.md': ['support-summary'],
+  'README.md': ['completion-status', 'support-summary'],
   'docs/examples/README.md': ['ex-hs-vuln', 'ex-hs-partial', 'ex-nix-vuln', 'ex-hn-vuln', 'ex-pp', 'pp-facts', 'fix-nix-ssh', 'fix-hs-cmd'],
   'docs/METRICS.md': ['language-metrics'],
 };

@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { signLastScan } from '../../src/posture/integrity.js';
 import { statePath } from '../../src/posture/state-dir.js';
-import { probeChromeAvailable } from '../../src/ir/chrome-probe.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
@@ -23,8 +22,7 @@ const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 // Every format needs a real Chrome EXCEPT json/csv — image formats and
 // html (html itself doesn't need Chrome to GENERATE, only png/pdf/svg
 // do) are gated the same way export-image.test.js gates its own tests.
-const chrome = probeChromeAvailable();
-const itChrome = chrome.ok ? test : test.skip;
+import { chrome, itChrome } from '../helpers/chrome-gate.js';   // quarantined from the combined run: see test/helpers/chrome-gate.js
 
 function _mkTmpProject() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-dataflow-export-cli-'));

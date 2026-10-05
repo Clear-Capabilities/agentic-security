@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.154.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.155.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -404,6 +404,16 @@ evidence of its own kind; a capability that needs a tool this project was measur
 shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), [Nix and NixOS](docs/guides/nix-nixos.md) and
 [the support record](docs/language-support.md) before quoting any figure.
 
+<!-- generated:completion-status:start -->
+**Partial release.** 54 of 57 requirements of the programme are verified (94.5% by weight); the rest are open:
+
+| Requirement | State | Why it is open |
+| --- | --- | --- |
+| `NIX-011` | ready | not verified |
+| `NIX-012` | ready | not verified |
+| `REL-001` | ready | final-phase acceptance: needs a live controller and every other requirement verified |
+<!-- generated:completion-status:end -->
+
 <!-- generated:support-summary:start -->
 **Haskell**
 
@@ -413,7 +423,7 @@ shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), 
 | sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) |
 | taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
-| auth | supported | see the table |
+| auth | supported | P 100.0% / R 100.0% / F1 100.0% (12 TP, 0 FP, 0 FN) |
 | sca | supported | see the table |
 | bom | supported | see the table |
 | fix | supported | see the table |

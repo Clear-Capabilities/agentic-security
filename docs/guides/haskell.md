@@ -50,7 +50,7 @@ Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code *
 | high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-vuln:end -->
@@ -67,7 +67,7 @@ Captured from the built bundle on `examples/haskell-app/fixed`: exit code **0**,
 | info | `argument-injection` | CWE-88 | src/Main.hs:46 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-fixed:end -->
@@ -152,9 +152,11 @@ inventory and says it is not a closure. A freeze file alone is `lock_only`, neve
 **Advisories.** No advisory data ships inside the scanner and none is fetched during a scan. Provide a hash-pinned snapshot:
 
 ```bash
-export AGENTIC_SECURITY_HACKAGE_ADVISORIES=/path/to/hackage-advisories.json   # or keep it in .agentic-security/
+export AGENTIC_SECURITY_HACKAGE_ADVISORIES=/path/to/hackage-advisories.json   # or keep it in ~/.config/agentic-security/ (operator config)
 export AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256=<digest>                       # optional pin
 ```
+
+A snapshot inside the scanned project (`.agentic-security/`) is **ignored and the scan says so**: a project cannot vouch for its own advisories, so a hostile repository could otherwise ship an empty feed and make itself look clean. Only the environment variable or the operator configuration directory counts.
 
 With no snapshot the scan is `partial` and says "Haskell dependency vulnerabilities were not assessed": the absence of a
 finding is not a clean result. A stale snapshot is stated too. A matched finding carries the exact version, the advisory
@@ -238,7 +240,7 @@ Captured from the built bundle on `examples/haskell-app/partial`: exit code **3*
 | critical | `command-injection` | CWE-78 | src/Gen.hs:19 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
 
 Disclosed limits: `license-data-unavailable`, `opaque-boundary:cpp`, `opaque-boundary:ffi`, `opaque-boundary:th-splice`, `opaque-boundary:th-top-level-splice`, `unmodeled-imports`.
 <!-- generated:ex-hs-partial:end -->

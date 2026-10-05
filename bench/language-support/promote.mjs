@@ -14,6 +14,8 @@ import { buildRegistry, renderTable } from './registry-build.mjs';
 
 const RESULTS = path.join(REPO, 'bench', 'language-support', 'results');
 export const HOLDOUT = path.join(RESULTS, 'holdout.json');
+export const UNSEEN = path.join(RESULTS, 'unseen.json');
+export const loadUnseen = () => { if (!fs.existsSync(UNSEEN)) return null; const u = JSON.parse(fs.readFileSync(UNSEEN, 'utf8')); return { ...u, unseenRollup: (u.hashes || {}).unseenRollup || null }; };
 export const SUITES = path.join(RESULTS, 'suites.json');
 export const REGISTRY = path.join(REPO, 'docs', 'language-support.json');
 export const TABLE = path.join(REPO, 'docs', 'language-support.md');
@@ -36,7 +38,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   }
   const measurement = JSON.parse(fs.readFileSync(HOLDOUT, 'utf8'));
   const suites = JSON.parse(fs.readFileSync(SUITES, 'utf8'));
-  const { registry, allSupported } = buildRegistry(measurement, suites, currentFrozen(), probeTools());
+  const { registry, allSupported } = buildRegistry(measurement, suites, currentFrozen(), probeTools(), loadUnseen());
   fs.writeFileSync(REGISTRY, `${JSON.stringify(registry, null, 2)}\n`);
   fs.writeFileSync(TABLE, renderTable(registry));
   process.stdout.write(`registry written: ${path.relative(REPO, REGISTRY)}\nall required rows supported: ${allSupported}\n`);

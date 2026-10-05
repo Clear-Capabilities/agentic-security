@@ -9228,7 +9228,7 @@ function _deterministicFileTimings(timings) {
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   // X-010: Hackage and Nix components, dependency edges and target provenance. Kept beside (not inside) the ordinary
   // component list so the existing consumers are untouched; the BOM emitters and the SBOM diff read it explicitly.
-  let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
+  let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc&&!_nc.refused.length?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
   // SARD_80_F1 W5.41/W5.42 — unlike the ADD-only cross-file passes above,
@@ -11038,7 +11038,7 @@ function _deterministicFileTimings(timings) {
       _languageCoverage = (await assessLanguageAssurance({
         files: allFileContents, findings: finalFindings, timeoutMs: Number(env.AGENTIC_SECURITY_LANG_TIMEOUT_MS) || 0,
         disabled: [...String(env.AGENTIC_SECURITY_LANG_DISABLE || '').split(',').map(x => x.trim()).filter(Boolean), ...((_hasHaskellSource && !_deepEnabled) ? ['haskell:taint'] : [])],
-        advisoryDb: configuredAdvisoryDb(scanRoot).db,
+        ...(() => { const a = configuredAdvisoryDb(scanRoot); return { advisoryDb: a.db, advisoryReason: a.db ? null : a.reason }; })(),
         policyExcluded,
         sizeSkipped,
         supplyGaps: _languageSupplyGaps,

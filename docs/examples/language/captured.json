@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "engineVersion": "0.154.0",
-  "bundleSha256": "e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849",
+  "engineVersion": "0.155.0",
+  "bundleSha256": "5b1c3482deb6bf15eb606402755278ad1e04a5b2e8b12c5b5246c5dcd4028b50",
   "examples": {
     "haskell-app/vulnerable": {
       "exitCode": 3,
       "health": {
         "status": "partial",
         "conditions": [
-          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)"
         ]
       },
       "coverage": {
@@ -154,7 +154,7 @@
       "health": {
         "status": "partial",
         "conditions": [
-          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)"
         ]
       },
       "coverage": {
@@ -197,7 +197,7 @@
       "health": {
         "status": "partial",
         "conditions": [
-          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)"
         ]
       },
       "coverage": {
@@ -463,7 +463,7 @@
       "health": {
         "status": "partial",
         "conditions": [
-          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed",
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)",
           "1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph"
         ]
       },
@@ -574,7 +574,7 @@
       "health": {
         "status": "partial",
         "conditions": [
-          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed"
+          "no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)"
         ]
       },
       "coverage": {

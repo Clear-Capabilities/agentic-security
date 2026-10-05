@@ -94,6 +94,8 @@ const hh = (i) => { let s = ''; let x = i * 2654435761 % 4294967296; for (let j 
 const out = (i, n) => `/nix/store/${hh(i)}-${n}`;
 const drvp = (i, n) => `/nix/store/${hh(i + 500)}-${n}.drv`;
 const CURL_URL = 'https://github.com/curl/curl/releases/download/curl-8_7_1/curl-8.7.1.tar.xz';
+const LOCK_TEXT = '{"nodes":{"root":{}},"root":"root","version":7}\n';
+const LOCK_SHA = createHash('sha256').update(LOCK_TEXT).digest('hex');
 function closureExport() {
   const app = { path: out(1, 'app-1.0'), drv: drvp(1, 'app-1.0') };
   const curl = { path: out(10, 'curl-8.7.1'), drv: drvp(10, 'curl-8.7.1') };
@@ -102,14 +104,13 @@ function closureExport() {
     [curl.drv]: { outputs: { out: { path: curl.path } }, inputSrcs: [], inputDrvs: {}, system: 'x86_64-linux', builder: '/nix/store/bash', args: [], env: { name: 'curl-8.7.1', pname: 'curl', version: '8.7.1', out: curl.path, outputs: 'out', urls: CURL_URL } },
     [app.drv]: { outputs: { out: { path: app.path } }, inputSrcs: [], inputDrvs: { [curl.drv]: ['out'] }, system: 'x86_64-linux', builder: '/nix/store/bash', args: [], env: { name: 'app-1.0', pname: 'app', version: '1.0', out: app.path, buildInputs: curl.path } },
   };
-  const prov = (cmd) => ({ tool: 'nix', command: cmd, target: { system: 'x86_64-linux', installable: '.#app' }, revision: {}, flakeLockSha256: 'a'.repeat(64), generatedAt: nowIso() });
+  const prov = (cmd) => ({ tool: 'nix', command: cmd, target: { system: 'x86_64-linux', installable: '.#app' }, revision: {}, flakeLockSha256: LOCK_SHA, generatedAt: nowIso() });
   return {
     exports: [{ schema: 'nix-path-info-json', data: pathinfo, provenance: prov('nix path-info --json --recursive .#app') }, { schema: 'nix-derivation-show-json', data: drvs, provenance: prov('nix derivation show --recursive .#app') }],
-    expected: { system: 'x86_64-linux', installable: '.#app', flakeLockSha256: 'a'.repeat(64) },
   };
 }
 const curlAdvisory = { id: 'SYN-CURL-0001', aliases: ['CVE-2099-0001'], summary: 'synthetic curl advisory', published: '2026-01-01T00:00:00Z', modified: '2026-01-01T00:00:00Z', affected: [{ package: { ecosystem: 'GitHub', name: 'curl', purl: 'pkg:github/curl/curl' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '8.0.0' }, { fixed: '8.8.0' }] }] }] };
-const nixProject = () => project({ 'flake.nix': '{ outputs = { self }: { }; }\n', 'nix-export.json': closureExport() });
+const nixProject = () => project({ 'flake.nix': '{ outputs = { self }: { }; }\n', 'flake.lock': LOCK_TEXT, 'nix-export.json': closureExport() });
 
 test('[QA-005.AC04] a Nix closure export reaches the CLI: the closure is matched by upstream identity against the snapshot', () => {
   const dir = nixProject();

@@ -214,9 +214,9 @@ rules above, not here.
 
   An export without provenance, for another target, from another lock, or too old is **refused with a stated reason** and
   never half-used. Output-only `nix-store --query --requisites` text is accepted as a path list with no edges and is
-  labelled so. A malformed or oversized export is a scan-health condition. Nothing is run to produce or refresh it.
+  labelled so. A malformed or oversized export is a scan-health condition. Nothing is run to produce or refresh it. Trust: the freshness of a Nix export is derived by the scanner from the project's `flake.lock`, never read from the export; an export or plan that the project itself supplies is disclosed as project-supplied, and an operator-supplied one (environment variable) is the trusted path.
 - **Advisories.** Provide an OSV-style snapshot, either `AGENTIC_SECURITY_NIX_ADVISORIES=/path/to/advisories.json` or
-  `nix-advisories.json` in the project's `.agentic-security/` directory (operator configuration: `reset` keeps it). A
+  `nix-advisories.json` in the operator configuration directory (`$XDG_CONFIG_HOME/agentic-security/`). A copy inside the scanned project is ignored and reported: a project cannot vouch for its own advisories. A
   component is matched by its **upstream identity** (the source URL host and repository, an explicit purl or CPE), never by
   its Nix attribute name alone: a name-only or ambiguous identity yields a `candidate`, not a verdict. A backported patch
   counts only when its content hash is one the advisory lists as a fix; a patch merely named after a CVE is an unverified
@@ -277,7 +277,7 @@ Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit cod
 | critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:15 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
 - 1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph
 
 Disclosed limits: `license-data-unavailable`.

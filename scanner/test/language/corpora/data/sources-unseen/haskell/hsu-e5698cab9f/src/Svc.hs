@@ -1,0 +1,10 @@
+module UsersSvc where
+
+import qualified Data.ByteString as BS
+import System.IO (stdin)
+
+slurpAll :: IO BS.ByteString
+slurpAll = BS.hGet stdin 65536
+
+endpointPath :: String
+endpointPath = "/users/u0"

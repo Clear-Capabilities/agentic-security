@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, cpSync, rmSync, accessSync, constants } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -15,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SCANNER = join(ROOT, 'scanner');
 const FLAKE = readFileSync(join(ROOT, 'flake.nix'), 'utf8');
-const have = (bin) => spawnSync('/usr/bin/which', [bin], { encoding: 'utf8' }).status === 0;
+// Looks the binary up on PATH itself: NixOS has no /usr/bin/which, so a hard-coded path made every `have()` false on the platform this suite targets.
+const have = (bin) => (process.env.PATH || '').split(':').filter(Boolean).some((d) => { try { accessSync(join(d, bin), constants.X_OK); return true; } catch { return false; } });
 const onNixos = () => existsSync('/etc/NIXOS');
 
 test('[NIX-012.AC01] the flake packages the bundle with Node >=24 by store path, with no download, native build or FHS assumption', () => {
@@ -51,7 +52,8 @@ test('[NIX-012.AC02] MCP stdio and LSP framing answer an initialize request from
   const init = { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'smoke', version: '0' }, processId: null, rootUri: null } };
   const mcp = await rpcOnce(process.execPath, [join(SCANNER, 'dist', 'agentic-security.mjs'), 'mcp'], init, (r) => `${JSON.stringify(r)}\n`);
   assert.equal(mcp.timedOut, false, 'the MCP server did not answer'); assert.match(mcp.out, /"result"/);
-  const lsp = await rpcOnce(process.execPath, [join(SCANNER, 'bin', 'agentic-security-lsp.js')], init, (r) => { const b = JSON.stringify(r); return `Content-Length: ${Buffer.byteLength(b)}\r\n\r\n${b}`; });
+  // the package's wrapper runs the LSP from the bundle (bin/*.js import src/, which needs npm dependencies the package does not ship)
+  const lsp = await rpcOnce(process.execPath, [join(SCANNER, 'dist', 'agentic-security.mjs'), 'lsp'], init, (r) => { const b = JSON.stringify(r); return `Content-Length: ${Buffer.byteLength(b)}\r\n\r\n${b}`; });
   assert.equal(lsp.timedOut, false, 'the LSP server did not answer'); assert.match(lsp.out, /Content-Length: \d+/); assert.match(lsp.out, /"capabilities"/);
   // the core static scan does not need an optional tool
   const dir = mkdtempSync(join(tmpdir(), 'nixos-ex-')); cpSync(join(ROOT, 'examples', 'nixos-host', 'vulnerable'), dir, { recursive: true });
