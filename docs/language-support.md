@@ -6,35 +6,35 @@ A row is **supported** only from passing evidence of its own metric kind. Read t
 
 ## Haskell
 
-| Capability | Status | Evidence | Why not supported |
-|---|---|---|---|
-| parser | supported | 175/175 parsed; 0 crashed |  |
-| sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) |  |
-| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |  |
-| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |  |
-| auth | supported |  |  |
-| sca | supported | manifests 48/48; advisory ranges 28/28 |  |
-| bom | supported |  |  |
-| fix | supported | accepted 20/20; rejected 10/10; advertised 4/4 |  |
-| integration | supported |  |  |
+| Capability | Status | Evidence on the frozen holdout (95% intervals) | Unseen shapes | Why not supported |
+|---|---|---|---|---|
+| parser | supported | 175/175 parsed; 0 crashed |  |  |
+| sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) [P 92.6%-100.0%, R 92.6%-100.0%]; strict P 85.7% | BELOW TARGET: P 95.0% / R 79.2% / F1 86.4% (38 TP, 2 FP, 10 FN) |  |
+| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%]; strict P 100.0% | BELOW TARGET: P 77.8% / R 93.3% / F1 84.8% (28 TP, 8 FP, 2 FN) |  |
+| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
+| auth | supported | P 100.0% / R 100.0% / F1 100.0% (12 TP, 0 FP, 0 FN) [P 73.5%-100.0%, R 73.5%-100.0%] |  |  |
+| sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
+| bom | supported |  |  |  |
+| fix | supported | accepted 20/20; rejected 10/10; advertised 4/4 |  |  |
+| integration | supported |  |  |  |
 
 Unknown and unmodelled cases: 19 total, 0 silent-clean (false assurance), 0 undisclosed required boundary.
 Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this project's own gate; the PRD sets none).
 
 ## Nix and NixOS
 
-| Capability | Status | Evidence | Why not supported |
-|---|---|---|---|
-| parser | supported | 161/161 parsed; 0 crashed |  |
-| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) |  |
-| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) |  |
-| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |  |
-| sca | supported | manifests 48/48; advisory ranges 28/28 |  |
-| bom | supported |  |  |
-| fix | supported | accepted 20/20; rejected 10/10; advertised 8/8 |  |
-| integration | supported |  |  |
-| nix-eval | blocked |  | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-011.AC04) |
-| nixos-host | blocked |  | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012); no test-suite evidence was recorded for this capability |
+| Capability | Status | Evidence on the frozen holdout (95% intervals) | Unseen shapes | Why not supported |
+|---|---|---|---|---|
+| parser | supported | 161/161 parsed; 0 crashed |  |  |
+| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) [P 94.6%-100.0%, R 94.6%-100.0%]; strict P 100.0% | BELOW TARGET: P 86.1% / R 93.9% / F1 89.9% (62 TP, 10 FP, 4 FN) |  |
+| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) [P 54.1%-100.0%, R 54.1%-100.0%]; strict P 100.0% | meets targets: P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) |  |
+| privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
+| sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
+| bom | supported |  |  |  |
+| fix | supported | accepted 20/20; rejected 10/10; advertised 8/8 |  |  |
+| integration | supported |  |  |  |
+| nix-eval | blocked |  |  | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-011.AC04) |
+| nixos-host | blocked |  |  | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012); no test-suite evidence was recorded for this capability |
 
 Unknown and unmodelled cases: 17 total, 0 silent-clean (false assurance), 0 undisclosed required boundary.
 Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this project's own gate; the PRD sets none).
@@ -43,7 +43,8 @@ Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this 
 
 - The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.
 - No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
-- No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.
+- Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate.
 

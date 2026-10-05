@@ -404,6 +404,16 @@ evidence of its own kind; a capability that needs a tool this project was measur
 shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), [Nix and NixOS](docs/guides/nix-nixos.md) and
 [the support record](docs/language-support.md) before quoting any figure.
 
+<!-- generated:completion-status:start -->
+**Partial release.** 54 of 57 requirements of the programme are verified (94.5% by weight); the rest are open:
+
+| Requirement | State | Why it is open |
+| --- | --- | --- |
+| `NIX-011` | ready | not verified |
+| `NIX-012` | ready | not verified |
+| `REL-001` | ready | final-phase acceptance: needs a live controller and every other requirement verified |
+<!-- generated:completion-status:end -->
+
 <!-- generated:support-summary:start -->
 **Haskell**
 
@@ -413,7 +423,7 @@ shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), 
 | sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) |
 | taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) |
-| auth | supported | see the table |
+| auth | supported | P 100.0% / R 100.0% / F1 100.0% (12 TP, 0 FP, 0 FN) |
 | sca | supported | see the table |
 | bom | supported | see the table |
 | fix | supported | see the table |

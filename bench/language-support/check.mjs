@@ -4,7 +4,10 @@
 //
 //   node bench/language-support/check.mjs        # exit 0 when current, 1 otherwise
 import fs from 'node:fs';
-import { HOLDOUT, SUITES, REGISTRY, TABLE, currentFrozen } from './promote.mjs';
+import path from 'node:path';
+import { DATA } from './lib.mjs';
+const DATA_MANIFEST = path.join(DATA, 'manifest.json');
+import { HOLDOUT, SUITES, loadUnseen, REGISTRY, TABLE, currentFrozen } from './promote.mjs';
 import { buildRegistry, renderTable } from './registry-build.mjs';
 
 export function checkFreshness({ holdout = HOLDOUT, suites = SUITES, registryPath = REGISTRY, tablePath = TABLE, frozen = currentFrozen() } = {}) {
@@ -12,7 +15,7 @@ export function checkFreshness({ holdout = HOLDOUT, suites = SUITES, registryPat
   const measurement = JSON.parse(fs.readFileSync(holdout, 'utf8'));
   const sres = JSON.parse(fs.readFileSync(suites, 'utf8'));
   const stored = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-  const { registry } = buildRegistry(measurement, sres, frozen, sres.tools);
+  const { registry } = buildRegistry(measurement, sres, frozen, sres.tools, loadUnseen());
   const a = JSON.stringify(registry); const b = JSON.stringify(stored);
   if (a !== b) {
     for (const lang of Object.keys(registry.languages)) {
@@ -25,6 +28,8 @@ export function checkFreshness({ holdout = HOLDOUT, suites = SUITES, registryPat
   }
   if (fs.readFileSync(tablePath, 'utf8') !== renderTable(registry)) problems.push('docs/language-support.md is not the rendering of the registry (edited by hand, or stale)');
   for (const k of ['holdoutRollup', 'labelsSha256', 'privacyLabelsSha256']) if (measurement.hashes[k] !== frozen[k]) problems.push(`the stored measurement was taken on different data (${k})`);
+  const un = loadUnseen(); const want = (JSON.parse(fs.readFileSync(`${DATA_MANIFEST}`, 'utf8')).unseen || {}).rollup;
+  if (un && un.unseenRollup !== want) problems.push('the stored unseen-shape measurement was taken on different data than the corpus now holds (re-measure: node bench/language-support/measure.mjs --split unseen)');
   return problems;
 }
 

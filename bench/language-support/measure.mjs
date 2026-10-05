@@ -2,7 +2,7 @@
 // label-free sources, and scores with scanner/src/language/accuracy.js. The engine never sees a label, a case id or a split: each
 // case is written to an opaque scratch directory under its own source file name.
 //
-//   node bench/language-support/measure.mjs --split holdout|validation|train [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
+//   node bench/language-support/measure.mjs --split holdout|validation|train|unseen [--eco haskell|nix] [--suites detection,privacy,pairs,fixes,supply,parser] [--out file]
 //
 // Output carries confusion matrices per layer and per family, denominators, the unknown-case outcomes reported separately, and the
 // hashes of the label files and the frozen holdout, so a result can show it was measured on unchanged data.
@@ -46,6 +46,6 @@ out.corpusTotals = {};
   }
 }
 const manifest = readJson('manifest.json');
-out.hashes = { holdoutRollup: manifest.holdoutRollup, contentRollup: manifest.contentRollup, labelsSha256: sha(read(path.join(DATA, 'labels', 'cases.json'))), privacyLabelsSha256: sha(read(path.join(DATA, 'labels', 'privacy.json'))), manifestSha256: sha(read(path.join(DATA, 'manifest.json'))) };
+out.hashes = { unseenRollup: (manifest.unseen || {}).rollup || null, holdoutRollup: manifest.holdoutRollup, contentRollup: manifest.contentRollup, labelsSha256: sha(read(path.join(DATA, 'labels', 'cases.json'))), privacyLabelsSha256: sha(read(path.join(DATA, 'labels', 'privacy.json'))), manifestSha256: sha(read(path.join(DATA, 'manifest.json'))) };
 const dest = arg('out', null);
 if (dest) fs.writeFileSync(dest, `${JSON.stringify(out, null, 2)}\n`); else process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);

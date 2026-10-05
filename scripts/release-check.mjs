@@ -97,6 +97,12 @@ export const CHECKS = [
     remedy: 'Add a `## <version> — <title>` section to CHANGELOG.md and scanner/CHANGELOG.md.',
   },
   {
+    id: 'completion-declared',
+    title: 'A release with unfinished requirements says so, naming each one',
+    slow: false,
+    remedy: 'docs/completion-status.json lists requirements that are not verified. Either finish them, or put a "Partial release" paragraph naming every remaining ID in this version\'s CHANGELOG.md section and keep the README status block (node scripts/render-language-docs.mjs) in step.',
+  },
+  {
     id: 'doc-links',
     title: 'User-facing doc links resolve (README, docs/, commands/, skills/, agents/)',
     slow: false,
@@ -414,6 +420,25 @@ export function evaluateVersionConsistency({ sources }) {
  * copy means the copy is stale, not that someone forgot to write release
  * notes — so callers can supply a per-file `remedy` that says so.
  */
+/**
+ * A release must not read as complete when requirements are open. `status` is docs/completion-status.json (null when absent).
+ * Pure: the caller supplies the texts.
+ */
+export function evaluateCompletionDeclared({ version, status, changelogText, readmeText }) {
+  if (!status || !Array.isArray(status.remaining) || status.remaining.length === 0) return result();
+  const errors = [];
+  const ids = status.remaining.map((r) => r.id);
+  const m = new RegExp(`^## ${String(version).replace(/\./g, '\\.')}\\b[\\s\\S]*?(?=^## |$(?![\\s\\S]))`, 'm').exec(changelogText || '');
+  const section = m ? m[0] : '';
+  if (!section) errors.push(`CHANGELOG.md has no section for ${version}`);
+  else {
+    if (!/Partial release/.test(section)) errors.push(`${ids.length} requirement(s) are unverified (${ids.join(', ')}) but the ${version} changelog section does not say "Partial release"`);
+    for (const id of ids) if (!section.includes(id)) errors.push(`the ${version} changelog section does not name the open requirement ${id}`);
+  }
+  for (const id of ids) if (!(readmeText || '').includes(id)) errors.push(`README.md does not name the open requirement ${id} (run node scripts/render-language-docs.mjs)`);
+  return result(errors);
+}
+
 export function evaluateChangelogs({ version, changelogs }) {
   const errors = [];
   // Anchored heading match with a boundary so 1.2.30 never satisfies 1.2.3.
@@ -829,6 +854,13 @@ function main(argv) {
         content: readTextOrNull(path.join(REPO, rel)),
       })),
     });
+  });
+
+  evaluate('completion-declared', () => {
+    if (!version) return result(['Cannot check the completion declaration: no version could be determined.']);
+    let status = null;
+    try { status = JSON.parse(readTextOrNull(path.join(REPO, 'docs', 'completion-status.json')) || 'null'); } catch { return result(['docs/completion-status.json is not valid JSON']); }
+    return evaluateCompletionDeclared({ version, status, changelogText: readTextOrNull(path.join(REPO, 'CHANGELOG.md')), readmeText: readTextOrNull(path.join(REPO, 'README.md')) });
   });
 
   evaluate('doc-links', () => {

@@ -1,16 +1,15 @@
 {
-  "generatedAt": "2026-10-04T15:36:56.554Z",
-  "commit": "c3c65ae767bcfefb841a0339ad8a39f0047769e5",
+  "generatedAt": "2026-10-05T15:58:45.680Z",
+  "commit": "bd9fb83f813c7a551a015cbd5767ddc493014a85",
   "targets": {
     "hooks": {
-      "total": 20,
+      "total": 19,
       "byFile": {
         "conversation-context.js": 1,
         "lib/transcript.js": 1,
         "mascot.js": 1,
         "model-cost-advisor.js": 1,
         "post-edit-scan.js": 2,
-        "pre-bash-guard.js": 1,
         "pre-edit-bodyguard.js": 4,
         "session-start-self-check.js": 4,
         "session-stop-drift-check.js": 2,
@@ -18,7 +17,7 @@
       }
     },
     "scripts": {
-      "total": 44,
+      "total": 45,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -33,13 +32,14 @@
         "loop-engineering/lib/tap.mjs": 3,
         "nist-compliance/scan.py": 8,
         "owasp-llm-top10/scan.py": 1,
+        "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
         "self-test-runner.mjs": 2,
         "synthesize-detector.mjs": 7
       }
     },
     "scanner/src": {
-      "total": 544,
+      "total": 545,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -93,6 +93,7 @@
         "language/nix-script-taint.js": 2,
         "language/nixos-hardening.js": 1,
         "language/secrets.js": 1,
+        "language/support-registry.js": 1,
         "language/witness.js": 2,
         "leaderboard.js": 3,
         "lineage/CLAUDE.md": 2,

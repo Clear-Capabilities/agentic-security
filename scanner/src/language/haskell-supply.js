@@ -1,8 +1,8 @@
 // Haskell supply-chain orchestration for a project (HS-009): manifests -> components -> advisories + policy.
 // The pure logic lives in haskell-sca.js; this module only gathers inputs and shapes supply-chain entries.
 
-import { statePath } from '../posture/state-dir.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { resolveOperatorSnapshot, IGNORED_NOTE } from './trusted-inputs.js';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { buildHaskellIR } from './haskell-ir.js';
@@ -62,12 +62,12 @@ function mergeResolved(declared, resolved) {
 
 /** Advisory data configured for this scan: a hash-pinned snapshot from the environment or the project's state dir. */
 export function configuredAdvisoryDb(root, env = process.env) {
-  const path = env.AGENTIC_SECURITY_HACKAGE_ADVISORIES || (root && existsSync(statePath(root, 'hackage-advisories.json')) ? statePath(root, 'hackage-advisories.json') : null);
-  if (!path) return { db: null, reason: 'no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES or provide the hackage-advisories.json snapshot in the project state directory)' };
+  const sel = resolveOperatorSnapshot({ envVar: 'AGENTIC_SECURITY_HACKAGE_ADVISORIES', fileName: 'hackage-advisories.json', root, env });
+  if (!sel.path) return { db: null, reason: `no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)${sel.projectLocalIgnored ? IGNORED_NOTE('hackage-advisories.json') : ''}`, projectLocalIgnored: !!sel.projectLocalIgnored };
   let snap;
-  try { snap = JSON.parse(readFileSync(path, 'utf8')); } catch (e) { return { db: null, reason: `advisory snapshot unreadable: ${e.code || e.message}` }; }
+  try { snap = JSON.parse(readFileSync(sel.path, 'utf8')); } catch (e) { return { db: null, reason: `advisory snapshot unreadable: ${e.code || e.message}` }; }
   const r = loadAdvisorySnapshot(snap, { pinnedSha256: env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256 || null });
-  return r.ok ? { db: r.db, reason: null } : { db: null, reason: `advisory snapshot refused: ${r.reason}` };
+  return r.ok ? { db: r.db, reason: null, source: sel.source } : { db: null, reason: `advisory snapshot refused: ${r.reason}` };
 }
 
 /** Imports and import-qualified callees across the project's Haskell sources. */

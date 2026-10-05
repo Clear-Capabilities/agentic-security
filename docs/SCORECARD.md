@@ -10,14 +10,14 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.154.0 |
-| Bundle SHA-256 | `e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849` |
-| Commit | `c3c65ae767bcfefb841a0339ad8a39f0047769e5` |
+| Bundle SHA-256 | `10366cb2c00a8240e0fa2737ddd7dd3460b34b234a227f7a1535e6f2706f7911` |
+| Commit | `bd9fb83f813c7a551a015cbd5767ddc493014a85` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-04T18:56:42.604Z |
+| Generated (UTC) | 2026-10-05T02:22:33.343Z |
 
 ## What these numbers are, and what they are not
 
@@ -206,14 +206,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 20 |
-| `scripts` | 44 |
+| `scripts` | 45 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 544 |
+| `scanner/src` | 545 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -230,7 +230,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 239/417 (57.3%) |
+| 248/417 (59.5%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -283,7 +283,7 @@ TP/FP/FN/TN shown; a row without a denominator carries a different kind of evide
 | sast | supported | sast | 96 | 48 | 0 | 0 | 44 | 100.0% | 100.0% | 100.0% | 8 |
 | taint | supported | taint | 60 | 30 | 0 | 0 | 30 | 100.0% | 100.0% | 100.0% | 5 |
 | privacy-lineage | supported | — | — | 30 | 0 | 0 | 60 | 100.0% | 100.0% | 100.0% | — |
-| auth | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
+| auth | supported | sast | — | 12 | 0 | 0 | — | 100.0% | 100.0% | 100.0% | 2 |
 | sca | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
 | bom | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
 | fix | supported | — | — | — | — | — | — | ,  | ,  | ,  | — |
@@ -316,9 +316,10 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 
 - The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.
 - No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.
-- No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.
+- Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate.
 
 ## Independent evaluation population — the number that matters
 

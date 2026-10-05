@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.154.0",
-    "bundleSha256": "e460f63891e70f53f1a0d6061a5393cc92c5ade0ddde80bd8bfaf8eb00dbb849",
-    "commit": "c3c65ae767bcfefb841a0339ad8a39f0047769e5",
+    "bundleSha256": "10366cb2c00a8240e0fa2737ddd7dd3460b34b234a227f7a1535e6f2706f7911",
+    "commit": "bd9fb83f813c7a551a015cbd5767ddc493014a85",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-04T18:56:42.604Z",
+    "generatedAt": "2026-10-05T02:22:33.343Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 544,
+        "total": 545,
         "byFile": {
           "(deep-engine)": 1,
           "badge.js": 3,
@@ -654,6 +654,7 @@
           "language/nix-script-taint.js": 2,
           "language/nixos-hardening.js": 1,
           "language/secrets.js": 1,
+          "language/support-registry.js": 1,
           "language/witness.js": 2,
           "leaderboard.js": 3,
           "lineage/CLAUDE.md": 2,
@@ -827,7 +828,7 @@
         }
       },
       "scripts": {
-        "total": 44,
+        "total": 45,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -842,6 +843,7 @@
           "loop-engineering/lib/tap.mjs": 3,
           "nist-compliance/scan.py": 8,
           "owasp-llm-top10/scan.py": 1,
+          "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
           "self-test-runner.mjs": 2,
           "synthesize-detector.mjs": 7
@@ -855,7 +857,7 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 239,
+    "n": 248,
     "d": 417
   },
   "taintRecall": {
@@ -1029,9 +1031,10 @@
       "limits": [
         "The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.",
         "No real-world canary projects and no real advisory records beyond the pinned HSEC fixtures are in the measurement: real-project accuracy is NOT measured.",
-        "No GHC, cabal, stack or nix is installed where the measurement ran: compile-based verification, optional Nix evaluation and any NixOS host behaviour are blocked, never reported as passing.",
+        "Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.",
         "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
-        "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read."
+        "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.",
+        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate."
       ],
       "languages": {
         "haskell": {
@@ -1143,17 +1146,17 @@
               "status": "supported",
               "reasons": [],
               "evidence": {
-                "metric": "test-suite",
-                "layer": null,
-                "tp": null,
-                "fp": null,
-                "fn": null,
+                "metric": "auth-detection",
+                "layer": "sast",
+                "tp": 12,
+                "fp": 0,
+                "fn": 0,
                 "tn": null,
-                "precision": null,
-                "recall": null,
-                "f1": null,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
                 "cases": null,
-                "familyCount": null
+                "familyCount": 2
               }
             },
             {

@@ -67,7 +67,7 @@ test('[QA-004.AC02] the hosted CI workflow selects every new critical suite, and
   // the blocking tier lists the two that can run on a hosted runner without the network; Nix is informational by design
   const tiers = JSON.parse(read(join(ROOT, '.github', 'required-checks.json')));
   assert.ok(tiers.blocking.includes('language-suites') && tiers.blocking.includes('language-tools-ghc'));
-  assert.ok(tiers.informational.includes('nixos-runtime'));
+  assert.ok(['nixos-runtime (x86_64-linux)', 'nixos-runtime (aarch64-linux)'].every((n) => tiers.informational.includes(n)), 'both per-system nixos-runtime jobs are informational');
 });
 
 test('[QA-004.AC02] the local final gates (pre-push, release check, loop profile) select the new gates', () => {

@@ -308,7 +308,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all twenty-five checks in order', () => {
+test('release-gate — full run plans all twenty-six checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -348,7 +348,7 @@ test('release-gate — full run plans all twenty-five checks in order', () => {
   // the same single-author, no-second-review process bench/self-scan/
   // exists to guard against for detector findings, with no equivalent gate.
   const ids = plannedCheckIds({ fast: false });
-  assert.equal(ids.length, 25);
+  assert.equal(ids.length, 26);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -375,7 +375,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 11);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 14);
+  assert.equal(ids.length, 15);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, the doc-link gate, the two
@@ -593,4 +593,21 @@ test('M3: scorecardFacts() counts the real on-disk corpus so the population chec
   assert.ok(expected > 0, 'the real corpus must be non-empty for this test to mean anything');
   const facts = scorecardFacts('0.0.0-test');
   assert.equal(facts.actualCorpusEntries, expected);
+});
+
+// A release with open requirements must say so (the 0.154.0 premortem): the percentage is in the repository and the gate reads it.
+import { evaluateCompletionDeclared } from '../../scripts/release-check.mjs';
+test('release-gate — completion-declared: open requirements must be named in the changelog section and the README', () => {
+  const status = { remaining: [{ id: 'NIX-011' }, { id: 'REL-001' }] };
+  const readme = 'status: NIX-011 REL-001';
+  assert.equal(evaluateCompletionDeclared({ version: '1.2.3', status: null, changelogText: '', readmeText: '' }).ok, true, 'no programme file: nothing to declare');
+  assert.equal(evaluateCompletionDeclared({ version: '1.2.3', status: { remaining: [] }, changelogText: '', readmeText: '' }).ok, true, 'nothing open');
+  const good = '## 1.2.3 - x\n\nPartial release: NIX-011 and REL-001 are open.\n\n## 1.2.2 - old\n';
+  assert.equal(evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: good, readmeText: readme }).ok, true);
+  const silent = '## 1.2.3 - x\n\nEverything works.\n\n## 1.2.2 - old\nPartial release NIX-011 REL-001\n';
+  const r1 = evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: silent, readmeText: readme });
+  assert.equal(r1.ok, false); assert.ok(r1.errors.some((e) => /Partial release/.test(e)), 'another version\'s wording does not count');
+  const missing = '## 1.2.3 - x\n\nPartial release: NIX-011 is open.\n';
+  assert.ok(evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: missing, readmeText: readme }).errors.some((e) => /REL-001/.test(e)), 'every open id is named');
+  assert.equal(evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: good, readmeText: 'nothing here' }).ok, false, 'the README must name them too');
 });

@@ -526,5 +526,11 @@
   "nxp-fedf448092": "6ee78e6dc797f7995a7e646efa8678039121e285647d39a64f9034ef8b8500ef"
  },
  "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
- "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c"
+ "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+ "unseen": {
+  "version": "unseen-v1",
+  "cases": 300,
+  "rollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+  "note": "author-labelled shapes absent from every other split; measured once per promotion; never tuned against"
+ }
 }

@@ -1,0 +1,9 @@
+module UsersSvc where
+
+
+
+toPort :: String -> Int
+toPort raw = read raw + 1
+
+endpointPath :: String
+endpointPath = "/users/u0"

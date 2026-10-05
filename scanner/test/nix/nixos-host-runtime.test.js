@@ -6,7 +6,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, cpSync, rmSync, accessSync, constants } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -15,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SCANNER = join(ROOT, 'scanner');
 const FLAKE = readFileSync(join(ROOT, 'flake.nix'), 'utf8');
-const have = (bin) => spawnSync('/usr/bin/which', [bin], { encoding: 'utf8' }).status === 0;
+// Looks the binary up on PATH itself: NixOS has no /usr/bin/which, so a hard-coded path made every `have()` false on the platform this suite targets.
+const have = (bin) => (process.env.PATH || '').split(':').filter(Boolean).some((d) => { try { accessSync(join(d, bin), constants.X_OK); return true; } catch { return false; } });
 const onNixos = () => existsSync('/etc/NIXOS');
 
 test('[NIX-012.AC01] the flake packages the bundle with Node >=24 by store path, with no download, native build or FHS assumption', () => {

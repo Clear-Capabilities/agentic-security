@@ -18,6 +18,8 @@ export const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 export const read = (p) => fs.readFileSync(p, 'utf8');
 export const readJson = (rel) => JSON.parse(read(path.join(DATA, rel)));
 export const source = (eco, id, rel) => read(path.join(DATA, 'sources', eco, id, rel));
+/** Unseen-shape cases live in their own directory, so no existing label file or source directory changes. */
+export const unseenSource = (eco, id, rel) => read(path.join(DATA, 'sources-unseen', eco, id, rel));
 
 // Which layer is RESPONSIBLE for a family: declared here, never derived from engine output (see measure.mjs README).
 export const TAINT_FAMILIES = {

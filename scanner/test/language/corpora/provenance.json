@@ -114,6 +114,17 @@
       "holdoutRule": "Only the holdout cases of the listed families changed; every other holdout hash is identical to v1. None of the changed holdout cases was used to tune a detector.",
       "nixReason": "Same class of label-validity defect, found on the development splits: configurations where the service is not enabled (sshd, postgresql, nginx, doas, a systemd unit with no ExecStart/wantedBy), whose options are inert on NixOS; a \"safe\" ssh configuration that left PasswordAuthentication at its NixOS default (true); a \"least-capability\" service that still ran as root; a TLS \"vulnerable\" shape that used a /etc/ssl/private string path (a runtime path, not a defect) in place of a Nix path literal (copied into the store); and two shapes with attribute syntax that is not valid Nix (`systemd.services.${appName}-job`). Detector behaviour was not the reason for any of these edits. The dangerous-capability service shape also named no User, so the service ran as root as well as holding the capability (two defects in one case, against a one-defect-per-case design); it now names a non-root User. The root-login shape left PasswordAuthentication at its NixOS default (true), so it carried a second defect; it now disables password authentication so each vulnerable case seeds one defect.",
       "privacyReason": "The v1 Haskell privacy sources named functions that were never imported and one invented API (`postJson`), used an undefined `maskTail`, and unparenthesised accessor applications (`hashWith SHA256 email acct`); the sinks now use real imported APIs and the protections are well-formed. No holdout field changed split (the holdout fields are still ssn, address, passport)."
+    },
+    {
+      "version": "unseen-v1",
+      "date": "2026-10-04",
+      "changed": [
+        "unseen split added (labels/unseen.json, sources-unseen/): 300 author-labelled cases, 3 vulnerable and 3 safe NEW code shapes per family, 2 nouns each"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "Premortem finding: the train/validation/holdout splits share the same two vulnerable and two safe shapes per family, so a perfect holdout score measures robustness to renaming, not generalisation. These shapes are measured once per promotion and never tuned against.",
+      "labelReview": "After the first measurement every disagreement was reviewed on the merits of the code, independent of what the engine said. Two TEMPLATE defects were corrected (the engine was right in both): the safe unpinned-source shapes used an all-'A' placeholder digest, which is exactly the fake-hash value Nix prints for lib.fakeHash, and the safe ssh-access shapes left password authentication at its default (on). All other disagreements are engine gaps and were NOT changed: the labels stand and the numbers include them.",
+      "labelledBy": "the author of the shapes (not the regex reviewer that checks the other splits, which only knows the old shapes)"
     }
   ]
 }

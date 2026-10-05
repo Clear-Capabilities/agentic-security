@@ -5,7 +5,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportPng, exportPdf, exportSvg, _validTimeoutMs } from '../scripts/export-image.mjs';
-import { probeChromeAvailable } from '../src/ir/chrome-probe.mjs';
 
 test('_validTimeoutMs: direct input/output table pinning the 0-vs-default boundary', () => {
   // Found by a third scoped re-review: the outcome-based itChrome tests
@@ -38,8 +37,7 @@ const flagship = JSON.parse(fs.readFileSync(FLAGSHIP_PATH, 'utf8'));
 // when this environment doesn't have one, matching the probe's own
 // contract. This session's own machine IS confirmed to have Chrome; a
 // CI image without one should see honest skips, not false failures.
-const chrome = probeChromeAvailable();
-const itChrome = chrome.ok ? test : test.skip;
+import { chrome, itChrome } from './helpers/chrome-gate.js';   // quarantined from the combined run: see test/helpers/chrome-gate.js
 
 itChrome('exportPng: produces a real PNG at the requested dimensions', async () => {
   const r = await exportPng(flagship, { width: 1680, height: 945 });

@@ -9,6 +9,18 @@
 > make the history less accurate, not more.
 
 
+## Unreleased - premortem remediation (trust boundary, unseen-shape measurement)
+
+An adversarial premortem of 0.154.0 found the following; each is fixed here and covered by `test/language/language-trust-boundary.test.js`.
+
+- **Trust boundary.** Advisory snapshots are read only from the operator (environment variable or `$XDG_CONFIG_HOME/agentic-security/`). A snapshot inside the scanned project is ignored and the scan says so, so a repository can no longer ship an empty feed to look clean. Nix export freshness is derived by the scanner from `flake.lock`, project-supplied exports and plans are disclosed, a refused export contributes nothing, and a Cabal plan that contradicts the freeze file is flagged.
+- **Unseen-shape split.** The holdout shares its code shapes with development, so it measures robustness to renaming only. A new `unseen` split (300 author-labelled cases, 3 new vulnerable and 3 new safe shapes per family) is measured once and never tuned against. Its result is stored beside every holdout row with 95% Clopper-Pearson intervals and strict precision. It is **below target** for Haskell SAST (R 79.2%), Haskell taint (P 77.8%) and Nix config-sast (P 86.1%); those are engine gaps, not fixed here. The `auth` row is now promoted from its own holdout evidence.
+- **Completion honesty.** A release check (`completion-declared`) fails when `docs/completion-status.json` lists unverified requirements and the changelog has no paragraph naming them. Chrome-dependent export tests are a separate informational job rather than a silent skip.
+- **Destructive-command guard.** `hooks/pre-bash-guard.js` judged `rm` by text, so it refused any absolute path (and `docker run --rm -v /abs/...`) while missing nothing it should. Deletion (`rm`, `rmdir`, `unlink`, `find -delete`) is now path-aware: targets are parsed and resolved (`~`, `$HOME`, relative paths, `cd`, symlinks) and allowed only strictly inside an allowed root (default `~/code`, set with `allowedRoots` in `.agentic-security/destructive-guard.json`). Anything outside, anything unresolvable (`$VAR`, command substitution, `xargs`) and the root itself is refused. It cannot see deletion done inside another program, so it guards against mistakes and is not a sandbox. Pinned by `test/pre-bash-guard.test.js`.
+- **Not done.** Peak scan memory is measured under a stated heap cap and was **not reduced**: a lazy-token experiment retained less but changed no measurement, so it was reverted. `flake.nix` is now locked (`flake.lock`) and was built and checked on aarch64-linux inside a `nixos/nix` container (Nix 2.35.2); x86_64-linux and darwin are declared but unbuilt. In that same container the NIX-011 suite passed 7 of 7. That is a run in a container, not controller-signed evidence, so the controller still lists NIX-011 as open until it runs where `nix` is on its own PATH.
+
+Partial release: the requirements NIX-011 (passed in a container, not controller-verified) and NIX-012 (needs a real NixOS host: its suite requires /etc/NIXOS) and REL-001 (a supervised final verification run) are not verified.
+
 ## 0.154.0 - Haskell and Nix/NixOS support, with every limit stated
 
 Haskell and Nix/NixOS are now scanned by the same commands as every other language, with no compiler, no `nix` binary and no

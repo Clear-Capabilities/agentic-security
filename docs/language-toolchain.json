@@ -61,6 +61,13 @@
       "note": "development host of the loop run. GHC was installed late, so the compile criteria (HS-006.AC01) ran here; nix and NixOS were never available, so NIX-011 and NIX-012 could not be executed here"
     },
     {
+      "os": "linux aarch64 (nixos/nix container under Colima on the darwin host)",
+      "node": "24.21.0 (nixpkgs)",
+      "ghc": "absent",
+      "nix": "2.35.2",
+      "note": "NIX-011 suite passed 7 of 7 here; flake locked, built and checked (aarch64-linux only). Not NixOS: NIX-012's suite requires /etc/NIXOS and failed 3 of 4 here. Run in a container, not by the loop controller."
+    },
+    {
       "os": "ubuntu-latest",
       "node": "24",
       "ghc": "9.4.8",

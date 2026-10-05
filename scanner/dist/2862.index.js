@@ -261,14 +261,14 @@ async function assessLanguageAssurance(input = {}) {
   const scaRequired = (required.haskell || []).includes('sca') && !disabled.has('haskell:sca');
   if (present.has('haskell') && scaRequired && manifests.length) {
     const db = input.advisoryDb;
-    if (!db) conditions.push('no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed');
+    if (!db) conditions.push(`no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed${input.advisoryReason ? `. ${input.advisoryReason}` : ''}`);
     else if (db.stale) conditions.push(`the Hackage advisory snapshot is stale (${db.ageDays == null ? 'age unknown' : `${Math.floor(db.ageDays)} day(s) old`}, limit ${db.maxAgeDays})`);
   }
 
   // 3b. resolved dependency data and the Nix closure: a stale, malformed or unchecked input is stated, never silently dropped
   for (const g of input.supplyGaps || []) {
     if (!g || !g.kind) continue;
-    if (/unavailable|stale|malformed|failed|unverified/.test(g.kind)) conditions.push(`${g.kind.replace(/^(?:resolved|closure)-/, '')}: ${String(g.detail || '').slice(0, 220)}`);
+    if (/unavailable|stale|malformed|failed|unverified|refused|contradicts/.test(g.kind)) conditions.push(`${g.kind.replace(/^(?:resolved|closure)-/, '')}: ${String(g.detail || '').slice(0, 220)}`);
     else limitations.push({ kind: 'supply-gap', gap: g.kind, note: String(g.detail || '').slice(0, 220) });
   }
 

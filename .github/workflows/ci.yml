@@ -127,9 +127,19 @@ jobs:
   # NixOS architecture checks with a real Nix. INFORMATIONAL, like jetbrains-plugin: the installer and a channel fetch are network
   # events, so a failure here is more often the network than this code. The offline half (parser, module resolver, hardening rules,
   # isolated-evaluation harness with a fake evaluator) is blocking in language-suites. Nix is pinned to an exact release.
+  # NIX-012. The suite needs a real NixOS host (/etc/NIXOS), which a hosted Ubuntu runner is not, so the flake's `nixos-host` check boots a
+  # throwaway NixOS guest in QEMU and runs the suite inside it. The host never activates a configuration. x86_64 uses KVM; the arm runner
+  # covers aarch64. INFORMATIONAL until the job has a recorded green run: see .github/required-checks.json.
   nixos-runtime:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: nixos-runtime (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, system: x86_64-linux }
+          - { os: ubuntu-24.04-arm, system: aarch64-linux }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     continue-on-error: true
     defaults:
       run:
@@ -139,21 +149,33 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Enable KVM for the VM test
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          ls -l /dev/kvm
       - uses: cachix/install-nix-action@v31
         with:
           install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            system-features = nixos-test benchmark big-parallel kvm
       - run: nix --version
       - run: npm ci
         timeout-minutes: 10
       - name: Isolated evaluation harness against a real evaluator
         run: node --test test/nix/nix-eval-isolation.test.js
         timeout-minutes: 10
-      - name: The flake builds offline and the NixOS host suite runs (NIX-012)
-        run: |
-          nix flake lock ..
-          nix build ..#default --offline --no-link --print-out-paths
-          npm run test:nixos-host
+      - name: The flake builds from its committed lock
+        working-directory: .
+        run: nix build .#agentic-security --no-link --print-out-paths
         timeout-minutes: 15
+      - name: Controlled NixOS VM test (runs the NIX-012 suite inside a NixOS guest)
+        working-directory: .
+        run: nix build .#checks.${{ matrix.system }}.nixos-host -L --no-link
+        timeout-minutes: 30
       - name: The NixOS example scans, and the opt-in evaluation states what it did
         run: |
           set -o pipefail
@@ -164,6 +186,29 @@ jobs:
               if (!h.selected) process.exit(1);
             '
         timeout-minutes: 10
+
+  # The Chrome rendering tests (PNG/PDF/SVG export) are quarantined from `npm test`: see scanner/test/helpers/chrome-gate.js. They run
+  # here, deadlines unchanged, as their own job. INFORMATIONAL: their duration depends on Chrome and the runner, not on the code.
+  chrome-exports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: google-chrome --version
+      - run: npm ci
+        timeout-minutes: 10
+      - name: Chrome export tests (a run with Chrome unusable would skip them all, so the count is checked)
+        run: |
+          set -o pipefail
+          npm run test:chrome | tee /tmp/chrome.log
+          grep -q "^ℹ skipped 0" /tmp/chrome.log
+        timeout-minutes: 15
 
   # PRD F11.1 — the VS Code extension is a shipped surface and its bundle is
   # committed, so it can go stale exactly the way the scanner bundle can.

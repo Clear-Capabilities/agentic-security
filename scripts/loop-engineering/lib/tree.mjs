@@ -19,11 +19,19 @@ export function globToRegExp(glob) {
   return new RegExp(`^${re}$`);
 }
 
+// Outputs DERIVED from the evidence itself. Digesting them would make verification circular: writing "N requirements verified" would
+// invalidate the evidence that produced N. Nothing else is exempt, and neither can change what any requirement verified.
+export const DERIVED_FILES = new Set(['docs/completion-status.json']);
+const DERIVED_BLOCK = /<!-- generated:completion-status:start -->[\s\S]*?<!-- generated:completion-status:end -->/;
+export function digestBytes(rel, buf) {
+  return rel === 'README.md' ? Buffer.from(buf.toString('utf8').replace(DERIVED_BLOCK, '<!-- completion-status -->')) : buf;
+}
+
 export function listRepoFiles(repoRoot) {
   const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024, timeout: 60000 });
   const files = out.toString('utf8').split('\0').filter(Boolean);
   // Defence in depth: never digest controller state even if .gitignore is edited.
-  return [...new Set(files)].filter((f) => !f.startsWith('.loop-engineering/') && !f.startsWith('.git/')).sort();
+  return [...new Set(files)].filter((f) => !f.startsWith('.loop-engineering/') && !f.startsWith('.git/') && !DERIVED_FILES.has(f)).sort();
 }
 
 export class TreeIndex {
@@ -48,7 +56,7 @@ export class TreeIndex {
       const hit = cache[f];
       let sha;
       if (hit && hit.key === key) sha = hit.sha;
-      else { try { sha = sha256(readFileSync(abs)); } catch { continue; } }
+      else { try { sha = sha256(digestBytes(f, readFileSync(abs))); } catch { continue; } }
       newCache[f] = { key, sha };
       next.set(f, sha);
     }
