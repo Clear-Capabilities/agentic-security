@@ -125,6 +125,34 @@
       "reason": "Premortem finding: the train/validation/holdout splits share the same two vulnerable and two safe shapes per family, so a perfect holdout score measures robustness to renaming, not generalisation. These shapes are measured once per promotion and never tuned against.",
       "labelReview": "After the first measurement every disagreement was reviewed on the merits of the code, independent of what the engine said. Two TEMPLATE defects were corrected (the engine was right in both): the safe unpinned-source shapes used an all-'A' placeholder digest, which is exactly the fake-hash value Nix prints for lib.fakeHash, and the safe ssh-access shapes left password authentication at its default (on). All other disagreements are engine gaps and were NOT changed: the labels stand and the numbers include them.",
       "labelledBy": "the author of the shapes (not the regex reviewer that checks the other splits, which only knows the old shapes)"
+    },
+    {
+      "version": "shapedev-v1",
+      "date": "2026-10-05",
+      "changed": [
+        "the former unseen-v1 split is renamed shape-dev (labels/shape-dev.json, sources-shape-dev/, templates-shapedev.mjs): ids, sources and labels are byte-identical"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "The engine was changed to fix the gaps this set exposed (Haskell: randomness for a PIN, replicateM sized by parsed text, `!!` on caller lists, label=value logging, wrapper-style auth guards, `lookup` from a constant table, numeric results, host allow-lists; Nix: sudo extraRules NOPASSWD, a key written with writeText, the ext:NAME secret reference). A set that was used to change the engine no longer measures generalisation, so it is a development set.",
+      "knownAuthorErrors": [
+        "session-cookie u2 names its cookie 'usersses', which nothing in the code ties to a session (a label that depends on intent, not code)",
+        "html-injection u2 prints to stdout, which is not an HTML sink",
+        "several vulnerable Nix shapes carry a second real flaw (a service with no User runs as root; SSH password auth is on by default), so a correct extra finding scores as a false positive",
+        "path-traversal u2 has two real sinks and yields two findings"
+      ],
+      "labelledBy": "the author of the shapes"
+    },
+    {
+      "version": "unseen-v2",
+      "date": "2026-10-05",
+      "changed": [
+        "new unseen split (labels/unseen.json, sources-unseen/, templates-unseen.mjs): 300 author-labelled cases, 3 vulnerable and 3 safe NEW single-flaw shapes per family, 2 nouns each"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "Replaces unseen-v1 as the generalisation measure. Written after the engine fixes, from the vulnerability classes and not from the engine's rules; each shape has one flaw, and names say what the value is (the v1 author errors are listed under shapedev-v1).",
+      "measurement": "measured exactly once with the engine as it stood after the fixes, before any registry change; never tuned against. Any engine change motivated by a miss on this set moves it to shape-dev and requires unseen-v3.",
+      "holdoutUse": "promote.mjs re-measures the frozen holdout after the engine change (repeated holdout use, as the project documents); no engine change was made against the holdout.",
+      "labelledBy": "the author of the shapes"
     }
   ]
 }

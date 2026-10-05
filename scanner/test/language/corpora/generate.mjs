@@ -7,6 +7,7 @@
 // does not reproduce, so a mislabel has to survive two descriptions.
 
 import { HS_UNSEEN, NIX_UNSEEN, UNSEEN_VERSION, UNSEEN_HS_NOUNS, UNSEEN_NIX_NOUNS } from './templates-unseen.mjs';
+import { HS_SHAPEDEV, NIX_SHAPEDEV, SHAPEDEV_VERSION, SHAPEDEV_HS_NOUNS, SHAPEDEV_NIX_NOUNS } from './templates-shapedev.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -319,10 +320,12 @@ function buildBackport() {
   return { records, nixPatch };
 }
 
-// ── unseen shapes (templates-unseen.mjs): a third split with code forms absent from train, validation and holdout ──────────────────────
-function buildUnseen() {
+// ── shape sets: author-labelled code shapes absent from train, validation and holdout ───────────────────────────────────────────────────
+// `unseen` (templates-unseen.mjs, v2) is measured once and never tuned against. `shape-dev` (templates-shapedev.mjs, the former unseen-v1) was
+// used to change the engine and is kept as a regression set.
+function buildShapeSet({ split, hsT, nixT, hsNouns, nixNouns, idPrefix }) {
   const out = [];
-  for (const [eco, E, T, nouns] of [['haskell', ECOS.haskell, HS_UNSEEN, UNSEEN_HS_NOUNS], ['nix', ECOS.nix, NIX_UNSEEN, UNSEEN_NIX_NOUNS]]) {
+  for (const [eco, E, T, nouns] of [['haskell', ECOS.haskell, hsT, hsNouns], ['nix', ECOS.nix, nixT, nixNouns]]) {
     for (const family of Object.keys(T)) {
       for (const label of ['vulnerable', 'safe']) {
         const shapes = label === 'vulnerable' ? T[family].vuln.map((f) => [f, null]) : T[family].safe;
@@ -330,8 +333,8 @@ function buildUnseen() {
           for (let k = 0; k < 2; k++) {                                          // two nouns per shape
             const group = `${eco}|${family}|${label}|u${s}|${nouns[k].tbl}`;
             const source = gen(nouns[k], 0);
-            const c = { ecosystem: eco, family, label, group, split: 'unseen', nearMiss: near, shape: `u${s}`, labelledBy: 'author', j: 0, source };
-            c.id = `${E.prefix}u-${sha256(`${group}|${label}`).slice(0, 10)}`;
+            const c = { ecosystem: eco, family, label, group, split, nearMiss: near, shape: `u${s}`, labelledBy: 'author', j: 0, source };
+            c.id = `${E.prefix}${idPrefix}-${sha256(`${group}|${label}`).slice(0, 10)}`;
             c.path = E.main; c.cwe = CWE[family]; c.fingerprint = fingerprint(E.lang, source); c.normalized = normalizeSource(E.lang, source);
             out.push(c);
           }
@@ -339,13 +342,15 @@ function buildUnseen() {
       }
     }
   }
-  const ids = new Set(); for (const c of out) { if (ids.has(c.id)) throw new Error(`unseen id collision ${c.id}`); ids.add(c.id); }
+  const ids = new Set(); for (const c of out) { if (ids.has(c.id)) throw new Error(`${split} id collision ${c.id}`); ids.add(c.id); }
   return out;
 }
+const buildUnseen = () => buildShapeSet({ split: 'unseen', hsT: HS_UNSEEN, nixT: NIX_UNSEEN, hsNouns: UNSEEN_HS_NOUNS, nixNouns: UNSEEN_NIX_NOUNS, idPrefix: 'v' });
+const buildShapeDev = () => buildShapeSet({ split: 'shape-dev', hsT: HS_SHAPEDEV, nixT: NIX_SHAPEDEV, hsNouns: SHAPEDEV_HS_NOUNS, nixNouns: SHAPEDEV_NIX_NOUNS, idPrefix: 'u' });
 
 export function build() {
   const cases = [...buildCases('haskell'), ...buildCases('nix')];
-  return { cases, unseen: buildUnseen(), privacy: buildPrivacy(), supply: buildSupply(), fixes: buildFixes(), pairs: buildPairs(cases), backport: buildBackport() };
+  return { cases, unseen: buildUnseen(), shapeDev: buildShapeDev(), privacy: buildPrivacy(), supply: buildSupply(), fixes: buildFixes(), pairs: buildPairs(cases), backport: buildBackport() };
 }
 
 // ── materialise ──────────────────────────────────────────────────────────────
@@ -370,6 +375,8 @@ export function materialize(ds) {
   w('labels/cases.json', json(ds.cases.map(strip)));
   for (const c of ds.unseen) w(`sources-unseen/${c.ecosystem}/${c.id}/${c.path}`, c.source);
   w('labels/unseen.json', json(ds.unseen.map(strip)));
+  for (const c of ds.shapeDev) w(`sources-shape-dev/${c.ecosystem}/${c.id}/${c.path}`, c.source);
+  w('labels/shape-dev.json', json(ds.shapeDev.map(strip)));
   w('labels/privacy.json', json(ds.privacy.map(({ source, ...r }) => r)));
   w('labels/supply.json', json(ds.supply.map(({ files, ...r }) => ({ ...r, files: Object.keys(files) }))));
   w('labels/fixes.json', json(ds.fixes.map(({ before, after, ...r }) => r)));
@@ -386,12 +393,13 @@ export function materialize(ds) {
     holdoutHashes: hold,
     contentRollup: sha256(all.join('\n')),
     holdoutRollup: sha256(Object.entries(hold).map(([k, v]) => `${k}:${v}`).join('\n')),
-    unseen: { version: UNSEEN_VERSION, cases: ds.unseen.length, rollup: sha256(ds.unseen.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'author-labelled shapes absent from every other split; measured once per promotion; never tuned against' },
+    unseen: { version: UNSEEN_VERSION, cases: ds.unseen.length, rollup: sha256(ds.unseen.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'author-labelled single-flaw shapes written AFTER the fixes they would otherwise have motivated; measured once per promotion; never tuned against' },
+    shapeDev: { version: SHAPEDEV_VERSION, cases: ds.shapeDev.length, rollup: sha256(ds.shapeDev.map((c) => `${c.id}:${sha256(c.source)}:${c.label}`).sort().join('\n')), note: 'the former unseen-v1: used to change the engine, kept as a regression set; NOT a generalisation measure' },
   }));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ds = build();
   materialize(ds);
-  console.log(`wrote ${ds.cases.length} cases, ${ds.unseen.length} unseen, ${ds.privacy.length} privacy, ${ds.supply.length} supply, ${ds.fixes.length} fixes, ${ds.pairs.length} pairs`);
+  console.log(`wrote ${ds.cases.length} cases, ${ds.unseen.length} unseen, ${ds.shapeDev.length} shape-dev, ${ds.privacy.length} privacy, ${ds.supply.length} supply, ${ds.fixes.length} fixes, ${ds.pairs.length} pairs`);
 }

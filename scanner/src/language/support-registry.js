@@ -72,6 +72,10 @@ export function clopperPearson(k, n, alpha = 0.05) {
   const upper = k === n ? 1 : bisect((p) => binomTail(p, k + 1) >= 1 - alpha / 2, 0, 1);
   return [lower, upper];
 }
+// Every unseen shape is instantiated with TWO near-identical nouns, so those two cases are one observation, not two. The interval over
+// cases would be too narrow; this one is over shapes (counts halved, rounded), and is labelled so.
+const SHAPE_CLUSTER = 2;
+const ciShapes = (k, n) => { const r = clopperPearson(Math.round(k / SHAPE_CLUSTER), Math.max(1, Math.round(n / SHAPE_CLUSTER))); return r ? [Number(r[0].toFixed(4)), Number(r[1].toFixed(4))] : null; };
 const ci = (k, n) => { const r = clopperPearson(k, n); return r ? [Number(r[0].toFixed(4)), Number(r[1].toFixed(4))] : null; };
 const withInterval = (e) => (e && Number.isFinite(e.tp) ? { ...e, ci: { precision: ci(e.tp, e.tp + (e.fp || 0)), recall: ci(e.tp, e.tp + (e.fn || 0)), level: 0.95, method: 'Clopper-Pearson' } } : e);
 const pct = (x) => (x == null ? 'not measured' : `${(x * 100).toFixed(1)}%`);
@@ -230,7 +234,7 @@ export function evaluateSupport(language, input) {
     if (!(u.precision >= TARGETS.precision)) shortfalls.push(`precision ${pct(u.precision)} < ${pct(TARGETS.precision)}`);
     if (!(u.recall >= TARGETS.recall)) shortfalls.push(`recall ${pct(u.recall)} < ${pct(TARGETS.recall)}`);
     if (!(u.f1 >= TARGETS.f1)) shortfalls.push(`F1 ${pct(u.f1)} < ${pct(TARGETS.f1)}`);
-    r.generalization = { status: shortfalls.length ? 'below-target' : 'meets-targets', shortfalls, cases: u.cases, tp: u.tp, fp: u.fp, fn: u.fn, tn: u.tn, precision: u.precision, recall: u.recall, f1: u.f1, strictPrecision: u.strict && u.strict.precision, ci: { precision: ci(u.tp, u.tp + u.fp), recall: ci(u.tp, u.tp + u.fn), level: 0.95, method: 'Clopper-Pearson' } };
+    r.generalization = { status: shortfalls.length ? 'below-target' : 'meets-targets', shortfalls, cases: u.cases, tp: u.tp, fp: u.fp, fn: u.fn, tn: u.tn, precision: u.precision, recall: u.recall, f1: u.f1, strictPrecision: u.strict && u.strict.precision, ci: { precision: ciShapes(u.tp, u.tp + u.fp), recall: ciShapes(u.tp, u.tp + u.fn), level: 0.95, method: `Clopper-Pearson over shapes (${SHAPE_CLUSTER} near-identical cases per shape)` } };
     if (shortfalls.length) out.generalizationGaps.push(`${r.capability}: ${shortfalls.join(', ')}`);
   }
   // a capability whose tool is absent is blocked, not passed and not skipped

@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.155.0",
-    "bundleSha256": "5b1c3482deb6bf15eb606402755278ad1e04a5b2e8b12c5b5246c5dcd4028b50",
-    "commit": "753a2e60899fd04617d6b18c4ed2440e00801caa",
+    "engineVersion": "0.156.0",
+    "bundleSha256": "0a2964758166a064abed121aac59bc00ae7164617ba15deee3cf0781075eb4c7",
+    "commit": "997fc7db961a025140a1d996d52df98c8fe151a8",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-05T17:47:43.949Z",
+    "generatedAt": "2026-10-05T23:45:54.840Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -1007,7 +1007,7 @@
     },
     "languageSupport": {
       "source": "docs/language-support.json",
-      "generatedAt": "2026-10-04",
+      "generatedAt": "2026-10-05",
       "node": "v24.20.0",
       "tools": {
         "ghc": true,
@@ -1033,7 +1033,7 @@
         "Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.",
         "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
         "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.",
-        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate."
+        "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v2 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written after the fixes the earlier set motivated, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 set was used to change the engine and is a development set (shape-dev), not a generalisation measure."
       ],
       "languages": {
         "haskell": {
@@ -1045,14 +1045,16 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-04",
+            "measuredAt": "2026-10-05",
             "corpusVersion": "qa001-v2",
             "hashes": {
+              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
             },
             "corpusTotals": {
               "security": {
@@ -1259,14 +1261,16 @@
           },
           "measuredOn": {
             "split": "holdout",
-            "measuredAt": "2026-10-04",
+            "measuredAt": "2026-10-05",
             "corpusVersion": "qa001-v2",
             "hashes": {
+              "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+              "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
               "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
               "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
               "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
               "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-              "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+              "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
             },
             "corpusTotals": {
               "security": {

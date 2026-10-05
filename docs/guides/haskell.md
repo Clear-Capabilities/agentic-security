@@ -80,7 +80,7 @@ where a recognised guard sits on the path: an allow-list `elem`, an `isPrefixOf`
 a host-anchored URL prefix, or an option terminator `--` for argument injection (which lowers that class to informational).
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 141 sinks and 17 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 141 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -94,7 +94,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 
 
 Source provenances: cli (1), env (3), file-read (5), header (8), http-body (10), network (2), stdin (22), url-param (40).
 
-Sanitizer effects: other (1), path (4), xss (12).
+Sanitizer effects: * (10), other (1), path (4), xss (12).
 <!-- generated:hs-models:end -->
 
 A text-typed parameter of an **exported** function that nothing in the module calls is treated as caller-controlled text,

@@ -42,11 +42,11 @@ function identNames(e, out = new Set(), depth = 0) {
 const mentions = (e, vars) => { for (const n of identNames(e)) if (vars.has(n)) return true; return false; };
 
 /** Classify a condition over the value `vars`. -> {safeWhen, kind, families, needsCanon?, subject} | null */
-export function classifyCondition(c, vars) {
+export function classifyCondition(c, vars, derived = new Set()) {
   if (!c || typeof c !== 'object') return null;
   if (c.kind === 'binary') {
-    if (c.op === '&&') { const a = classifyCondition(c.left, vars); const b = classifyCondition(c.right, vars); return [a, b].find((x) => x && x.safeWhen === true) || null; }
-    if (c.op === '||') { const a = classifyCondition(c.left, vars); const b = classifyCondition(c.right, vars); return [a, b].find((x) => x && x.safeWhen === false) || null; }
+    if (c.op === '&&') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === true) || null; }
+    if (c.op === '||') { const a = classifyCondition(c.left, vars, derived); const b = classifyCondition(c.right, vars, derived); return [a, b].find((x) => x && x.safeWhen === false) || null; }
     if (c.op === '==' || c.op === '===') {
       const pair = (l, r) => l && l.kind === 'call' && /(?:^|\.)takeFileName$/.test(l.callee || '') && l.args && l.args[0] && r && r.kind === 'ident' && l.args[0].kind === 'ident' && l.args[0].name === r.name && vars.has(r.name);
       if (pair(c.left, c.right) || pair(c.right, c.left)) return { safeWhen: true, kind: 'bare-filename', families: ['path'], subject: (c.left.kind === 'ident' ? c.left : c.right).name };
@@ -56,7 +56,7 @@ export function classifyCondition(c, vars) {
   if (c.kind !== 'call') return null;
   const name = c.callee || '';
   const a = c.args || [];
-  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
+  if (name === 'not' || name === 'Prelude.not') { const inner = classifyCondition(a[0], vars, derived); return inner ? { ...inner, safeWhen: !inner.safeWhen } : null; }
   if (name === 'Data.List.isInfixOf' && isStr(a[0]) && a[0].value.includes('..') && a[1] && a[1].kind === 'ident' && vars.has(a[1].name)) {
     return { safeWhen: false, kind: 'traversal-check', families: ['path'], subject: a[1].name };
   }
@@ -69,6 +69,12 @@ export function classifyCondition(c, vars) {
   // `".." `elem` splitDirectories v`: the path has a parent-directory component (and `notElem` is the opposite)
   if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && isStr(a[0]) && a[0].value === '..' && a[1] && a[1].kind === 'call' && /(?:^|\.)(?:splitDirectories|splitPath)$/.test(a[1].callee || '') && a[1].args && a[1].args[0] && a[1].args[0].kind === 'ident' && vars.has(a[1].args[0].name)) {
     return { safeWhen: NOT_ELEM.has(name), kind: 'traversal-check', families: ['path'], subject: a[1].args[0].name };
+  }
+  // `uriRegName a `elem` ["api.example.com"]` where `a` was parsed from the checked URL: the host is on an allow-list, which is the
+  // URL family's control. Only a HOST accessor over a value derived from the checked one counts (a path or query allow-list does not).
+  if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'call' && /(?:^|\.)(?:uriRegName|uriAuthority|getHost)$/.test(a[0].callee || '') && a[0].args && a[0].args[0] && a[0].args[0].kind === 'ident'
+      && (vars.has(a[0].args[0].name) || derived.has(a[0].args[0].name)) && a[1] && a[1].kind === 'array' && a[1].elements.length && a[1].elements.every(isStr)) {
+    return { safeWhen: IS_ELEM.has(name), kind: 'host-allow-list', families: ['url'], subject: a[0].args[0].name };
   }
   if ((IS_ELEM.has(name) || NOT_ELEM.has(name)) && a[0] && a[0].kind === 'ident' && vars.has(a[0].name) && !mentions(a[1], vars)) {
     return { safeWhen: IS_ELEM.has(name), kind: 'allow-list', families: ['*'], subject: a[0].name };
@@ -280,10 +286,11 @@ export function judgeFinding(f, perFile) {
     // The sink argument may be a value BUILT from the checked one (`req <- parseUrlThrow target; httpLbs req m`): the
     // guard names the original, so the origins of the argument count as its subject too.
     for (const v of originsOf(fn, vars)) vars.add(v);
+    const derived = derivedFrom(fn, vars);   // values built FROM the checked one (`a` in `Just a <- parseURI url`)
     const facts = [...site.facts, ...cfgBranchFacts(fn, site.nodeId), ...exitGuardFacts(fn, site.nodeId)];
     let refuted = null;
     for (const fact of facts) {
-      const cls = classifyCondition(fact.cond, vars);
+      const cls = classifyCondition(fact.cond, vars, derived);
       if (!cls || cls.safeWhen !== fact.when) continue;
       if (!(cls.families.includes('*') || cls.families.includes(fam))) continue;          // wrong-context control
       if (cls.needsCanon && !isCanonical(fn, cls.subject)) { weak = { kind: cls.kind, line: fact.line || fn.line, reason: 'containment check on a path that was not canonicalised' }; continue; }

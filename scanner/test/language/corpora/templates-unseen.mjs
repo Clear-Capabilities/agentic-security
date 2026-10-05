@@ -1,24 +1,25 @@
-// QA-001 UNSEEN shapes (premortem remediation: generalisation beyond the template family).
+// QA-001 UNSEEN shapes, version unseen-v2.
 //
-// The development, validation and holdout splits all draw on the SAME two vulnerable and two safe code shapes per family (templates.mjs):
-// they differ only in the nouns. A score on them measures robustness to renaming, not generalisation. These are three further
-// vulnerable and three further safe shapes per family, written as different code forms (other APIs, other idioms, a helper in a `where`
-// clause, a point-free style, attribute-set versus dotted options, the legacy spelling of an option).
+// WHY A SECOND SET. unseen-v1 (now templates-shapedev.mjs) was used to change the engine, so it stopped measuring generalisation; v2 was
+// written AFTER those fixes, from the vulnerability classes and not from the engine's rules, to answer the same question again.
 //
-// RULES OF USE (they are what makes this split worth anything):
+// RULES OF USE (what makes this set worth anything):
 //   * Nothing in scanner/src may be tuned against these shapes. They are measured ONCE per promotion (bench/language-support/measure.mjs
-//     --split unseen), the result is stored, and a failure is a finding about the engine, not an invitation to fit it. If a shape is
-//     used to change the engine it stops being unseen and a NEW set must be written (bump UNSEEN_VERSION).
-//   * They are labelled by their author with the reason stated in the comment above each family, not by the regex reviewer that checks
-//     the other splits (that reviewer only knows the old shapes). The label is the property the code has, not what the engine says.
+//     --split unseen), the result is stored, and a miss is a finding about the engine, not an invitation to fit it. If a shape is used to
+//     change the engine, it joins the shape-dev set and a NEW unseen set (v3) must be written.
+//   * Each shape has ONE flaw (vulnerable) or none (safe). The v1 set taught us what happens otherwise: a shape that carries a second,
+//     real flaw makes a correct extra finding score as a false positive, and a name the code does not tie to its purpose (a cookie called
+//     "usersses") makes the label depend on the author's intent, not on the code. Names here say what the value is.
+//   * The label is the property the code has, stated by its author; it is not a regex reviewer's verdict.
 //   * Nothing here is read by scanner/src.
 
 import { HS_NOUNS, NIX_NOUNS } from './templates.mjs';
 import { sha256 } from './lib.mjs';
 
-const hash64 = (s) => Buffer.from(sha256(s), 'hex').toString('base64');   // a real-looking digest, never the all-A fake-hash placeholder
-export const UNSEEN_VERSION = 'unseen-v1';
+export const UNSEEN_VERSION = 'unseen-v2';
 export { HS_NOUNS as UNSEEN_HS_NOUNS, NIX_NOUNS as UNSEEN_NIX_NOUNS };
+
+const hash64 = (s) => Buffer.from(sha256(s), 'hex').toString('base64');   // a real-looking digest, never the all-A fake-hash placeholder
 
 const hs = (n, j, imports, body) => `module ${n.N}Svc where
 
@@ -27,655 +28,601 @@ ${imports.join('\n')}
 ${body}
 
 endpointPath :: String
-endpointPath = "/${n.tbl}/u${j}"
+endpointPath = "/${n.tbl}/v${j}"
 `;
 
-const nix = (n, j, lines, extraLet = '') => `{ config, lib, pkgs, ... }:
+const nix = (n, j, lines) => `{ config, lib, pkgs, ... }:
 let
-  cfg = config.services.${n.tbl};${extraLet}
+  cfg = config.services.${n.tbl};
 in
 {
-  networking.hostName = "${n.tbl}-u${j}";
+  networking.hostName = "${n.tbl}-v${j}";
 ${lines.map((l) => `  ${l}`).join('\n')}
 }
 `;
 
-const SCOTTY = ['import Web.Scotty', 'import Control.Monad.IO.Class (liftIO)', 'import Database.SQLite.Simple', 'import Network.HTTP.Types.Status (status401, status403)'];
+const SCOTTY = ['import Web.Scotty', 'import Control.Monad.IO.Class (liftIO)', 'import Database.SQLite.Simple', 'import Network.HTTP.Types.Status (status401, status403)', 'import Data.Maybe (isNothing)', 'import Control.Monad (when, unless)'];
+const AUTHED = `requireLogin :: ActionM Int
+requireLogin = do
+  h <- header "Authorization"
+  case h of
+    Nothing -> status status401 >> finish
+    Just _ -> pure 7`;
 
 // ── Haskell ──────────────────────────────────────────────────────────────────
 export const HS_UNSEEN = {
-  // vulnerable: the query text is built from the caller's value by formatting, a where-bound helper, or list concatenation, then run.
-  // safe: the value is a bound parameter (single, two-parameter, batch) and the statement text is a literal.
   'sql-injection': {
     vuln: [
-      (n, j) => hs(n, j, ['import Database.SQLite.Simple', 'import Data.String (fromString)', 'import Text.Printf (printf)'],
-        `findBy :: Connection -> String -> IO [Only String]
-findBy conn val = query_ conn (fromString (printf "SELECT ${n.col} FROM ${n.tbl} WHERE ${n.col} = '%s'" val))`),
-      (n, j) => hs(n, j, ['import Database.SQLite.Simple', 'import Data.String (fromString)'],
-        `countIn :: Connection -> String -> IO [Only Int]
-countIn conn table = query_ conn q
-  where
-    q = fromString ("SELECT count(*) FROM " ++ table)`),
-      (n, j) => hs(n, j, ['import Database.SQLite.Simple', 'import Data.String (fromString)'],
-        `wipe :: Connection -> String -> IO ()
-wipe conn who = execute_ conn . fromString $ concat ["DELETE FROM ${n.tbl} WHERE ${n.col} = '", who, "'"]`),
+      (n, j) => hs(n, j, ['import Database.PostgreSQL.Simple', 'import Database.PostgreSQL.Simple.Types (Query (..))', 'import qualified Data.ByteString.Char8 as BC'],
+        `lookupBy :: Connection -> String -> IO [Only String]
+lookupBy conn who = query_ conn (Query (BC.pack ("SELECT ${n.col} FROM ${n.tbl} WHERE ${n.col} = '" ++ who ++ "'")))`),
+      (n, j) => hs(n, j, ['import Database.SQLite.Simple', 'import Data.String (fromString)', 'import Data.List (intercalate)'],
+        `search :: Connection -> String -> IO [Only String]
+search conn term = query_ conn (fromString (intercalate " " ["SELECT", "${n.col}", "FROM", "${n.tbl}", "WHERE", "${n.col}", "LIKE", "'%" ++ term ++ "%'"]))`),
+      (n, j) => hs(n, j, ['import Database.Persist.Sql', 'import qualified Data.Text as T'],
+        `purge :: String -> SqlPersistT IO ()
+purge who = rawExecute (T.pack ("DELETE FROM ${n.tbl} WHERE ${n.col} = '" ++ who ++ "'")) []`),
     ],
     safe: [
       [(n, j) => hs(n, j, ['import Database.SQLite.Simple'],
-        `findBy :: Connection -> String -> IO [Only String]
-findBy conn val = query conn "SELECT ${n.col} FROM ${n.tbl} WHERE ${n.col} = ?" (Only val)`), 'parameterized'],
-      [(n, j) => hs(n, j, ['import Database.SQLite.Simple'],
-        `page :: Connection -> String -> Int -> IO [Only String]
-page conn val lim = query conn "SELECT ${n.col} FROM ${n.tbl} WHERE ${n.col} = ? LIMIT ?" (val, lim)`), 'parameterized'],
-      [(n, j) => hs(n, j, ['import Database.SQLite.Simple'],
-        `wipeAll :: Connection -> [String] -> IO ()
-wipeAll conn whos = executeMany conn "DELETE FROM ${n.tbl} WHERE ${n.col} = ?" (map Only whos)`), 'parameterized'],
+        `lookupBy :: Connection -> String -> IO [Only String]
+lookupBy conn who = queryNamed conn "SELECT ${n.col} FROM ${n.tbl} WHERE ${n.col} = :who" [":who" := who]`), 'parameterized'],
+      [(n, j) => hs(n, j, ['import Database.PostgreSQL.Simple'],
+        `record :: Connection -> String -> IO ()
+record conn who = do
+  _ <- execute conn "INSERT INTO ${n.tbl} (${n.col}) VALUES (?)" (Only who)
+  pure ()`), 'parameterized'],
+      [(n, j) => hs(n, j, ['import Database.Persist.Sql', 'import qualified Data.Text as T'],
+        `purge :: T.Text -> SqlPersistT IO ()
+purge who = rawExecute "DELETE FROM ${n.tbl} WHERE ${n.col} = ?" [PersistText who]`), 'parameterized'],
     ],
   },
   'command-injection': {
     vuln: [
+      (n, j) => hs(n, j, ['import System.Process', 'import Text.Printf (printf)'],
+        `listing :: String -> IO ()
+listing dir = callCommand (printf "ls -la %s" dir)`),
       (n, j) => hs(n, j, ['import System.Process'],
-        `probe :: String -> IO ()
-probe host = system ("ping -c1 " ++ host) >> pure ()`),
+        `searchLog :: String -> IO String
+searchLog pat = readCreateProcess (shell ("grep " ++ pat ++ " /var/log/${n.tbl}.log")) ""`),
       (n, j) => hs(n, j, ['import System.Process'],
-        `squash :: String -> IO String
-squash cmd = readProcess "sh" ["-c", unwords ["gzip", "-c", cmd]] ""`),
-      (n, j) => hs(n, j, ['import System.Process'],
-        `archive :: String -> IO ()
-archive file = callCommand $ unwords ["tar", "czf", "${n.tbl}.tgz", file]`),
+        `announce :: String -> IO ()
+announce msg = do
+  _ <- spawnCommand ("echo " ++ msg)
+  pure ()`),
     ],
     safe: [
       [(n, j) => hs(n, j, ['import System.Process'],
-        `probe :: String -> IO ()
-probe host = callProcess "ping" ["-c1", "--", host]`), 'argv-separator'],
+        `listing :: String -> IO ()
+listing dir = callProcess "ls" ["-la", "--", dir]`), 'argv-separator'],
       [(n, j) => hs(n, j, ['import System.Process'],
-        `squash :: String -> IO String
-squash file = readProcess "gzip" ["-c", "--", file] ""`), 'argv-separator'],
-      [(n, j) => hs(n, j, ['import System.Process', 'import Data.Maybe (fromMaybe)'],
-        `tools :: [(String, String)]
-tools = [("zip", "zip"), ("tar", "tar")]
-
-archive :: String -> IO ()
-archive choice = case lookup choice tools of
-  Just prog -> callProcess prog ["--version"]
-  Nothing -> pure ()`), 'guard'],
+        `searchLog :: String -> IO String
+searchLog pat = readProcess "grep" ["-F", "-e", pat, "/var/log/${n.tbl}.log"] ""`), 'argv-separator'],
+      [(n, j) => hs(n, j, ['import System.Process'],
+        `announce :: String -> IO ()
+announce msg = if msg \`elem\` ["start", "stop", "status"] then callCommand ("echo " ++ msg) else pure ()`), 'allowlist'],
     ],
   },
   'path-traversal': {
     vuln: [
-      (n, j) => hs(n, j, ['import System.IO'],
-        `store :: String -> String -> IO ()
-store name body = writeFile ("/srv/${n.tbl}/" ++ name) body`),
-      (n, j) => hs(n, j, ['import System.IO', 'import System.FilePath (joinPath)'],
-        `slurp :: String -> IO String
-slurp name = withFile (joinPath ["/srv/${n.tbl}", name]) ReadMode hGetContents'`),
-      (n, j) => hs(n, j, ['import System.Directory', 'import System.FilePath'],
-        `readIfThere :: String -> IO (Maybe String)
-readIfThere name = do
-  let p = "/srv/${n.tbl}" </> name
-  ok <- doesFileExist p
-  if ok then Just <$> readFile p else pure Nothing`),
+      (n, j) => hs(n, j, ['import qualified Data.Text as T', 'import qualified Data.Text.IO as TIO'],
+        `load :: T.Text -> IO T.Text
+load name = TIO.readFile (T.unpack name)`),
+      (n, j) => hs(n, j, ['import System.Directory (copyFile)'],
+        `stash :: String -> IO ()
+stash name = copyFile name "/srv/${n.tbl}/backup"`),
+      (n, j) => hs(n, j, ['import System.Directory (removeFile)'],
+        `drop' :: String -> IO ()
+drop' name = removeFile ("/srv/${n.tbl}/" ++ name)`),
     ],
     safe: [
-      [(n, j) => hs(n, j, ['import System.IO', 'import System.FilePath (takeFileName)'],
-        `store :: String -> String -> IO ()
-store name body = writeFile ("/srv/${n.tbl}/" ++ takeFileName name) body`), 'sanitizer'],
-      [(n, j) => hs(n, j, ['import System.IO', 'import System.FilePath (takeFileName, joinPath)'],
-        `slurp :: String -> IO String
-slurp name = withFile (joinPath ["/srv/${n.tbl}", takeFileName name]) ReadMode hGetContents'`), 'sanitizer'],
-      [(n, j) => hs(n, j, ['import System.Directory', 'import System.FilePath'],
-        `readIfThere :: String -> IO (Maybe String)
-readIfThere name
-  | ".." \`elem\` splitDirectories name = pure Nothing
-  | otherwise = do
-      let p = "/srv/${n.tbl}" </> name
-      ok <- doesFileExist p
-      if ok then Just <$> readFile p else pure Nothing`), 'guard'],
+      [(n, j) => hs(n, j, ['import qualified Data.ByteString as BS', 'import System.FilePath (takeBaseName)'],
+        `load :: String -> IO BS.ByteString
+load name = BS.readFile ("/srv/${n.tbl}/" ++ takeBaseName name ++ ".dat")`), 'sanitizer'],
+      [(n, j) => hs(n, j, ['import System.Directory (copyFile)', 'import System.FilePath (splitDirectories)', 'import Control.Monad (when)'],
+        `stash :: String -> IO ()
+stash name = do
+  when (".." \`elem\` splitDirectories name) (ioError (userError "bad path"))
+  copyFile ("/srv/${n.tbl}/" ++ name) "/srv/${n.tbl}/backup"`), 'guard'],
+      [(n, j) => hs(n, j, ['import System.Directory (removeFile)', 'import System.FilePath (takeFileName)'],
+        `drop' :: String -> IO ()
+drop' name = removeFile ("/srv/${n.tbl}/" ++ takeFileName name)`), 'sanitizer'],
     ],
   },
   ssrf: {
     vuln: [
-      (n, j) => hs(n, j, ['import Network.HTTP.Conduit (simpleHttp)'],
-        `grab :: String -> IO ()
-grab url = simpleHttp url >>= print`),
-      (n, j) => hs(n, j, ['import Network.HTTP.Simple'],
-        `ping :: String -> IO ()
-ping url = do
+      (n, j) => hs(n, j, ['import Network.HTTP.Client', 'import Network.HTTP.Client.TLS (tlsManagerSettings)'],
+        `fetch :: String -> IO ()
+fetch url = do
+  mgr <- newManager tlsManagerSettings
   req <- parseRequest url
-  resp <- httpBS req
-  print (getResponseStatusCode resp)`),
-      (n, j) => hs(n, j, ['import qualified Network.Wreq as W'],
-        `pull :: String -> IO ()
-pull url = W.get url >>= \\r -> print (r W.^. W.responseStatus)`),
+  _ <- httpLbs req mgr
+  pure ()`),
+      (n, j) => hs(n, j, ['import qualified Network.Wreq as W', 'import Control.Lens ((&), (.~))'],
+        `fetch :: String -> IO ()
+fetch url = do
+  r <- W.getWith (W.defaults & W.checkResponse .~ Nothing) url
+  print (r W.^. W.responseStatus)`),
+      (n, j) => hs(n, j, ['import Network.HTTP.Conduit'],
+        `ping :: String -> IO ()
+ping url = parseUrlThrow url >>= \\req -> newManager tlsManagerSettings >>= httpNoBody req >> pure ()`),
     ],
     safe: [
+      [(n, j) => hs(n, j, ['import Network.HTTP.Conduit (simpleHttp)'],
+        `fetch :: String -> IO ()
+fetch url = if url \`elem\` ["https://status.${n.tbl}.example.com/health", "https://status.${n.tbl}.example.com/ready"] then simpleHttp url >>= print else pure ()`), 'allowlist'],
+      [(n, j) => hs(n, j, ['import Network.HTTP.Simple'],
+        `fetch :: Int -> IO ()
+fetch itemId = do
+  req <- parseRequest ("https://api.${n.tbl}.example.com/items/" ++ show itemId)
+  resp <- httpBS req
+  print (getResponseStatusCode resp)`), 'fixed-host'],
       [(n, j) => hs(n, j, ['import Network.HTTP.Conduit (simpleHttp)', 'import Data.List (isPrefixOf)'],
-        `grab :: String -> IO ()
-grab url
-  | "https://assets.${n.tbl}.example.com/" \`isPrefixOf\` url = simpleHttp url >>= print
-  | otherwise = pure ()`), 'allowlist'],
-      [(n, j) => hs(n, j, ['import Network.HTTP.Simple', 'import Network.URI'],
         `ping :: String -> IO ()
-ping url = case parseURI url >>= uriAuthority of
-  Just a | uriRegName a \`elem\` ["status.${n.tbl}.example.com"] -> do
-    req <- parseRequest url
-    resp <- httpBS req
-    print (getResponseStatusCode resp)
-  _ -> pure ()`), 'allowlist'],
-      [(n, j) => hs(n, j, ['import qualified Network.Wreq as W'],
-        `pull :: String -> IO ()
-pull item = W.get ("https://api.${n.tbl}.example.com/items/" ++ show (length item)) >>= \\r -> print (r W.^. W.responseStatus)`), 'allowlist'],
+ping url
+  | "https://hooks.${n.tbl}.example.com/" \`isPrefixOf\` url = simpleHttp url >>= print
+  | otherwise = ioError (userError "host not allowed")`), 'allowlist'],
     ],
   },
   'html-injection': {
     vuln: [
-      (n, j) => hs(n, j, ['import qualified Lucid as L'],
-        `badge :: String -> L.Html ()
-badge name = L.p_ (L.toHtmlRaw ("hello " ++ name))`),
-      (n, j) => hs(n, j, ['import Text.Blaze.Html (preEscapedToHtml)', 'import Text.Blaze.Html.Renderer.String (renderHtml)'],
-        `render :: String -> String
-render note = renderHtml (preEscapedToHtml (note ++ "<hr>"))`),
-      (n, j) => hs(n, j, [],
-        `snippet :: String -> String
-snippet who = "<div class=\\"${n.tbl}\\">" <> who <> "</div>"
-
-emit :: String -> IO ()
-emit = putStrLn . snippet`),
+      (n, j) => hs(n, j, ['import Web.Scotty', 'import qualified Data.Text.Lazy as TL'],
+        `main :: IO ()
+main = scotty 3000 $ get "/hello/:who" $ do
+  who <- param "who"
+  html (TL.pack ("<h1>Hello " ++ who ++ "</h1>"))`),
+      (n, j) => hs(n, j, ['import qualified Text.Blaze.Html as H', 'import Text.Blaze.Html5 (preEscapedToHtml)'],
+        `banner :: String -> H.Html
+banner msg = preEscapedToHtml msg`),
+      (n, j) => hs(n, j, ['import qualified Lucid as L', 'import qualified Data.Text as T'],
+        `note :: T.Text -> L.Html ()
+note body = L.div_ [] (L.toHtmlRaw body)`),
     ],
     safe: [
-      [(n, j) => hs(n, j, ['import qualified Lucid as L'],
-        `badge :: String -> L.Html ()
-badge name = L.p_ (L.toHtml ("hello " ++ name))`), 'escaper'],
-      [(n, j) => hs(n, j, ['import Text.Blaze.Html (toHtml)', 'import Text.Blaze.Html.Renderer.String (renderHtml)'],
-        `render :: String -> String
-render note = renderHtml (toHtml (note ++ " - ${n.tbl}"))`), 'escaper'],
-      [(n, j) => hs(n, j, ['import qualified Text.Blaze.Html5 as H'],
-        `snippet :: String -> H.Html
-snippet who = H.div (H.toHtml who)`), 'escaper'],
+      [(n, j) => hs(n, j, ['import Web.Scotty', 'import qualified Data.Text.Lazy as TL'],
+        `main :: IO ()
+main = scotty 3000 $ get "/hello/:who" $ do
+  who <- param "who"
+  text (TL.pack ("Hello " ++ who))`), 'plain-text'],
+      [(n, j) => hs(n, j, ['import qualified Text.Blaze.Html as H', 'import Text.Blaze.Html5 (toHtml)'],
+        `banner :: String -> H.Html
+banner msg = H.p (toHtml msg)`), 'escaper'],
+      [(n, j) => hs(n, j, ['import qualified Lucid as L', 'import qualified Data.Text as T'],
+        `note :: T.Text -> L.Html ()
+note body = L.div_ [] (L.toHtml body)`), 'escaper'],
     ],
   },
   'weak-password-hash': {
     vuln: [
-      (n, j) => hs(n, j, ['import qualified Crypto.Hash.MD5 as MD5', 'import qualified Data.ByteString.Char8 as BC'],
-        `store :: String -> BC.ByteString
-store pw = MD5.hash (BC.pack pw)`),
+      (n, j) => hs(n, j, ['import qualified Crypto.Hash.MD5 as MD5', 'import qualified Data.ByteString.Lazy.Char8 as BL'],
+        `storePassword :: String -> BL.ByteString
+storePassword password = BL.fromStrict (MD5.hashlazy (BL.pack password))`),
+      (n, j) => hs(n, j, ['import qualified Crypto.Hash.SHA256 as SHA256', 'import qualified Data.ByteString.Char8 as BC'],
+        `digestPassword :: String -> BC.ByteString
+digestPassword password = SHA256.hash (BC.pack password)`),
       (n, j) => hs(n, j, ['import qualified Crypto.Hash.SHA1 as SHA1', 'import qualified Data.ByteString.Char8 as BC'],
-        `digest :: String -> BC.ByteString
-digest pw = SHA1.hash (BC.pack (pw ++ "${n.tbl}"))`),
-      (n, j) => hs(n, j, ['import Crypto.Hash (hashWith, SHA1 (..))', 'import qualified Data.ByteString.Char8 as BC'],
-        `fingerprint :: String -> String
-fingerprint pw = show (hashWith SHA1 (BC.pack pw))`),
+        `legacyHash :: String -> String -> BC.ByteString
+legacyHash salt pwd = SHA1.hash (BC.pack (salt ++ pwd))`),
     ],
     safe: [
+      [(n, j) => hs(n, j, ['import qualified Crypto.KDF.PBKDF2 as PBKDF2', 'import Crypto.Hash.Algorithms (SHA256 (..))', 'import qualified Data.ByteString.Char8 as BC'],
+        `storePassword :: BC.ByteString -> String -> BC.ByteString
+storePassword salt password = PBKDF2.fastPBKDF2_SHA256 (PBKDF2.Parameters { PBKDF2.iterCounts = 600000, PBKDF2.outputLength = 32 }) (BC.pack password) salt`), 'kdf'],
       [(n, j) => hs(n, j, ['import Crypto.BCrypt', 'import qualified Data.ByteString.Char8 as BC'],
-        `store :: String -> IO (Maybe BC.ByteString)
-store pw = hashPasswordUsingPolicy slowerBcryptHashingPolicy (BC.pack pw)`), 'kdf'],
-      [(n, j) => hs(n, j, ['import Crypto.Scrypt', 'import qualified Data.ByteString.Char8 as BC'],
-        `digest :: String -> IO EncryptedPass
-digest pw = encryptPassIO' defaultParams (Pass (BC.pack pw))`), 'kdf'],
-      [(n, j) => hs(n, j, ['import qualified Crypto.KDF.Argon2 as Argon2', 'import qualified Data.ByteString.Char8 as BC'],
-        `fingerprint :: BC.ByteString -> String -> Either String BC.ByteString
-fingerprint salt pw = Argon2.hash Argon2.defaultOptions (BC.pack pw) salt 32`), 'kdf'],
+        `digestPassword :: String -> IO (Maybe BC.ByteString)
+digestPassword password = hashPasswordUsingPolicy fastBcryptHashingPolicy (BC.pack password)`), 'kdf'],
+      [(n, j) => hs(n, j, ['import qualified Crypto.Hash.SHA256 as SHA256', 'import qualified Data.ByteString.Char8 as BC'],
+        `checksum :: BC.ByteString -> BC.ByteString
+checksum payload = SHA256.hash payload`), 'not-a-password'],
     ],
   },
   'weak-randomness': {
     vuln: [
       (n, j) => hs(n, j, ['import System.Random'],
-        `pin :: IO Int
-pin = randomRIO (100000, 999999)`),
+        `newSessionToken :: IO String
+newSessionToken = do
+  sessionToken <- fmap (take 24 . randomRs ('a', 'z')) newStdGen
+  pure sessionToken`),
+      (n, j) => hs(n, j, ['import System.CPUTime (getCPUTime)'],
+        `makeNonce :: IO Integer
+makeNonce = getCPUTime`),
       (n, j) => hs(n, j, ['import System.Random'],
-        `secret :: IO String
-secret = getStdGen >>= \\g -> pure (take 12 (randomRs ('a', 'z') g))`),
-      (n, j) => hs(n, j, ['import System.Random', 'import Data.Word (Word64)'],
-        `session :: IO Word64
-session = do
-  g <- newStdGen
-  pure (fst (random g))`),
+        `resetCode :: IO Int
+resetCode = randomRIO (100000, 999999)`),
     ],
     safe: [
-      [(n, j) => hs(n, j, ['import System.Entropy (getEntropy)', 'import qualified Data.ByteString as BS'],
-        `pin :: IO BS.ByteString
-pin = getEntropy 8`), 'csprng'],
       [(n, j) => hs(n, j, ['import Crypto.Random (getRandomBytes)', 'import qualified Data.ByteString as BS'],
-        `secret :: IO BS.ByteString
-secret = getRandomBytes 24`), 'csprng'],
-      [(n, j) => hs(n, j, ['import Crypto.Random', 'import qualified Data.ByteString as BS'],
-        `session :: IO BS.ByteString
-session = do
-  drg <- getSystemDRG
-  pure (fst (randomBytesGenerate 16 drg))`), 'csprng'],
+        `newSessionToken :: IO BS.ByteString
+newSessionToken = getRandomBytes 24`), 'csprng'],
+      [(n, j) => hs(n, j, ['import System.Entropy (getEntropy)', 'import qualified Data.ByteString as BS'],
+        `makeNonce :: IO BS.ByteString
+makeNonce = getEntropy 12`), 'csprng'],
+      [(n, j) => hs(n, j, ['import System.Random'],
+        `shuffleSeed :: IO Int
+shuffleSeed = randomRIO (1, 6)`), 'not-a-secret'],
     ],
   },
   'resource-limits': {
     vuln: [
-      (n, j) => hs(n, j, ['import System.IO'],
-        `slurpAll :: IO String
-slurpAll = hGetContents stdin`),
-      (n, j) => hs(n, j, ['import qualified Data.ByteString as BS', 'import System.IO (stdin)'],
-        `slurpBytes :: IO BS.ByteString
-slurpBytes = BS.hGetContents stdin`),
-      (n, j) => hs(n, j, ['import Control.Monad (replicateM)'],
-        `readLines :: String -> IO [String]
-readLines count = replicateM (read count) getLine`),
+      (n, j) => hs(n, j, ['import qualified Data.ByteString.Lazy as BL', 'import System.IO (stdin)'],
+        `slurp :: IO BL.ByteString
+slurp = BL.hGetContents stdin`),
+      (n, j) => hs(n, j, ['import Network.Wai (Request, strictRequestBody)', 'import qualified Data.ByteString.Lazy as BL'],
+        `receive :: Request -> IO BL.ByteString
+receive req = strictRequestBody req`),
+      (n, j) => hs(n, j, ['import qualified Data.Text.IO as TIO', 'import qualified Data.Text as T'],
+        `slurpText :: IO T.Text
+slurpText = TIO.getContents`),
     ],
     safe: [
+      [(n, j) => hs(n, j, ['import qualified Data.ByteString.Lazy as BL', 'import System.IO (stdin)'],
+        `slurp :: IO BL.ByteString
+slurp = fmap (BL.take 65536) (BL.hGetContents stdin)`), 'bound'],
       [(n, j) => hs(n, j, ['import qualified Data.ByteString as BS', 'import System.IO (stdin)'],
-        `slurpAll :: IO BS.ByteString
-slurpAll = BS.hGet stdin 65536`), 'bound'],
-      [(n, j) => hs(n, j, [],
-        `slurpBytes :: IO String
-slurpBytes = fmap (take 4096) getContents`), 'bound'],
-      [(n, j) => hs(n, j, ['import Control.Monad (replicateM)'],
-        `readLines :: String -> IO [String]
-readLines count = replicateM (min 100 (read count)) getLine`), 'bound'],
+        `receive :: IO BS.ByteString
+receive = BS.hGet stdin 4096`), 'bound'],
+      [(n, j) => hs(n, j, ['import qualified Data.Text.IO as TIO', 'import qualified Data.Text as T'],
+        `slurpText :: IO T.Text
+slurpText = fmap (T.take 8192) TIO.getContents`), 'bound'],
     ],
   },
   'parser-safety': {
     vuln: [
+      (n, j) => hs(n, j, [],
+        `firstWord :: [String] -> String
+firstWord ws = head ws`),
       (n, j) => hs(n, j, ['import Data.Maybe (fromJust)'],
-        `lookupKey :: String -> [(String, String)] -> String
-lookupKey k env = fromJust (lookup k env)`),
+        `setting :: String -> [(String, String)] -> String
+setting key table = fromJust (lookup key table)`),
       (n, j) => hs(n, j, [],
-        `toPort :: String -> Int
-toPort raw = read raw + 1`),
-      (n, j) => hs(n, j, [],
-        `firstArg :: [String] -> String
-firstArg args = args !! 0`),
+        `parseCount :: String -> Int
+parseCount s = read s`),
     ],
     safe: [
       [(n, j) => hs(n, j, [],
-        `lookupKey :: String -> [(String, String)] -> String
-lookupKey k env = maybe "" id (lookup k env)`), 'total-parser'],
-      [(n, j) => hs(n, j, ['import Text.Read (readMaybe)'],
-        `toPort :: String -> Maybe Int
-toPort raw = fmap (+ 1) (readMaybe raw)`), 'total-parser'],
-      [(n, j) => hs(n, j, ['import Data.Maybe (listToMaybe)'],
-        `firstArg :: [String] -> Maybe String
-firstArg = listToMaybe`), 'total-parser'],
+        `firstWord :: [String] -> String
+firstWord ws = case ws of
+  (w : _) -> w
+  [] -> ""`), 'total-parser'],
+      [(n, j) => hs(n, j, [],
+        `setting :: String -> [(String, String)] -> String
+setting key table = maybe "" id (lookup key table)`), 'total-parser'],
+      [(n, j) => hs(n, j, ['import Text.Read (readMaybe)', 'import Data.Maybe (fromMaybe)'],
+        `parseCount :: String -> Int
+parseCount s = fromMaybe 0 (readMaybe s)`), 'total-parser'],
     ],
   },
   'sensitive-logging': {
     vuln: [
+      (n, j) => hs(n, j, ['import Control.Monad.Logger', 'import qualified Data.Text as T'],
+        `onLogin :: T.Text -> T.Text -> LoggingT IO ()
+onLogin user password = logInfoN ("login " <> user <> " password=" <> password)`),
+      (n, j) => hs(n, j, ['import Debug.Trace (trace)'],
+        `checkSecret :: String -> Bool
+checkSecret secret = trace ("secret was " ++ secret) (length secret > 8)`),
       (n, j) => hs(n, j, ['import System.IO'],
-        `trace :: String -> IO ()
-trace tok = hPutStrLn stderr ("token=" ++ tok)`),
-      (n, j) => hs(n, j, [],
-        `dump :: String -> String -> IO ()
-dump user password = print (user, password)`),
-      (n, j) => hs(n, j, [],
-        `journal :: String -> IO ()
-journal secret = appendFile "${n.tbl}-journal.log" ("secret: " ++ secret ++ "\\n")`),
+        `dumpCredentials :: String -> IO ()
+dumpCredentials token = hPrint stderr token`),
     ],
     safe: [
+      [(n, j) => hs(n, j, ['import Control.Monad.Logger', 'import qualified Data.Text as T'],
+        `onLogin :: T.Text -> T.Text -> LoggingT IO ()
+onLogin user _ = logInfoN ("login " <> user)`), 'redaction'],
+      [(n, j) => hs(n, j, ['import Debug.Trace (trace)'],
+        `checkSecret :: String -> Bool
+checkSecret secret = trace ("secret length " ++ show (length secret)) (length secret > 8)`), 'redaction'],
       [(n, j) => hs(n, j, ['import System.IO'],
-        `trace :: String -> IO ()
-trace tok = hPutStrLn stderr ("token length=" ++ show (length tok))`), 'redaction'],
-      [(n, j) => hs(n, j, [],
-        `dump :: String -> String -> IO ()
-dump user _ = print (user, "[redacted]" :: String)`), 'redaction'],
-      [(n, j) => hs(n, j, [],
-        `redact :: String -> String
-redact = const "***"
-
-journal :: String -> IO ()
-journal secret = appendFile "${n.tbl}-journal.log" ("secret: " ++ redact secret ++ "\\n")`), 'redaction'],
+        `dumpCredentials :: String -> IO ()
+dumpCredentials user = hPutStrLn stderr ("lookup for " ++ user)`), 'not-sensitive'],
     ],
   },
-  // vulnerable: a state-changing route with no credential check. safe: the same route behind a credential check written three ways.
   'route-authentication': {
     vuln: [
       (n, j) => hs(n, j, SCOTTY,
         `main :: IO ()
-main = scotty 3000 $ do
-  delete "/${n.tbl}/:id" $ do
+main = scotty 3000 $
+  put "/${n.tbl}/:id" $ do
     rid <- param "id"
-    conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ?" (Only (rid :: Int)))
-    text "gone"`),
-      (n, j) => hs(n, j, SCOTTY,
-        `main :: IO ()
-main = scotty 3000 $ do
-  post "/${n.tbl}/note" $ do
     body <- param "body"
-    liftIO (appendFile "${n.tbl}.log" (body :: String))
-    text "ok"`),
+    conn <- liftIO (open "${n.tbl}.db")
+    liftIO (execute conn "UPDATE ${n.tbl} SET ${n.col} = ? WHERE id = ?" (body :: String, rid :: Int))
+    text "saved"`),
       (n, j) => hs(n, j, SCOTTY,
         `main :: IO ()
-main = scotty 3000 $ do
-  patch "/${n.tbl}/flag" $ do
+main = scotty 3000 $
+  post "/${n.tbl}/import" $ do
+    rows <- jsonData
     conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute_ conn "UPDATE ${n.tbl}_settings SET enabled = 0")
-    text "off"`),
+    liftIO (mapM_ (\\r -> execute conn "INSERT INTO ${n.tbl} (${n.col}) VALUES (?)" (Only (r :: String))) rows)
+    text "imported"`),
+      (n, j) => hs(n, j, SCOTTY,
+        `main :: IO ()
+main = scotty 3000 $
+  delete "/${n.tbl}/all" $ do
+    conn <- liftIO (open "${n.tbl}.db")
+    liftIO (execute_ conn "DELETE FROM ${n.tbl}")
+    text "cleared"`),
     ],
     safe: [
       [(n, j) => hs(n, j, SCOTTY,
-        `requireAuth :: ActionM ()
-requireAuth = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure ()
-
-main :: IO ()
-main = scotty 3000 $ do
-  delete "/${n.tbl}/:id" $ do
-    requireAuth
+        `main :: IO ()
+main = scotty 3000 $
+  put "/${n.tbl}/:id" $ do
+    h <- header "Authorization"
+    when (isNothing h) (status status401 >> finish)
     rid <- param "id"
-    conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ?" (Only (rid :: Int)))
-    text "gone"`), 'auth-guard'],
-      [(n, j) => hs(n, j, [...SCOTTY, 'import Control.Monad (when)'],
-        `requireToken :: ActionM ()
-requireToken = do
-  k <- header "Authorization"
-  when (k == Nothing) (status status401 >> finish)
-
-main :: IO ()
-main = scotty 3000 $ do
-  post "/${n.tbl}/note" $ do
-    requireToken
     body <- param "body"
-    liftIO (appendFile "${n.tbl}.log" (body :: String))
-    text "ok"`), 'auth-guard'],
+    conn <- liftIO (open "${n.tbl}.db")
+    liftIO (execute conn "UPDATE ${n.tbl} SET ${n.col} = ? WHERE id = ?" (body :: String, rid :: Int))
+    text "saved"`), 'auth-guard'],
       [(n, j) => hs(n, j, SCOTTY,
-        `guarded :: ActionM () -> ActionM ()
-guarded act = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> act
+        `${AUTHED}
 
 main :: IO ()
-main = scotty 3000 $ do
-  patch "/${n.tbl}/flag" $ guarded $ do
+main = scotty 3000 $
+  post "/${n.tbl}/import" $ do
+    _ <- requireLogin
+    rows <- jsonData
     conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute_ conn "UPDATE ${n.tbl}_settings SET enabled = 0")
-    text "off"`), 'auth-guard'],
+    liftIO (mapM_ (\\r -> execute conn "INSERT INTO ${n.tbl} (${n.col}) VALUES (?)" (Only (r :: String))) rows)
+    text "imported"`), 'auth-guard'],
+      [(n, j) => hs(n, j, SCOTTY,
+        `main :: IO ()
+main = scotty 3000 $
+  delete "/${n.tbl}/all" $ do
+    mk <- header "X-Api-Key"
+    case mk of
+      Nothing -> status status403 >> finish
+      Just _ -> do
+        conn <- liftIO (open "${n.tbl}.db")
+        liftIO (execute_ conn "DELETE FROM ${n.tbl}")
+        text "cleared"`), 'auth-guard'],
     ],
   },
-  // vulnerable: authenticated, but the object is chosen by a client-supplied id with no ownership condition.
   'object-authorization': {
     vuln: [
       (n, j) => hs(n, j, SCOTTY,
-        `requireAuth :: ActionM ()
-requireAuth = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure ()
+        `${AUTHED}
 
 main :: IO ()
-main = scotty 3000 $ do
-  delete "/${n.tbl}/:id" $ do
-    requireAuth
-    oid <- param "id"
-    conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ?" (Only (oid :: Int)))
-    text "gone"`),
-      (n, j) => hs(n, j, SCOTTY,
-        `requireAuth :: ActionM ()
-requireAuth = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure ()
-
-main :: IO ()
-main = scotty 3000 $ do
-  get "/${n.tbl}/:id/export" $ do
-    requireAuth
+main = scotty 3000 $
+  get "/${n.tbl}/:id" $ do
+    _ <- requireLogin
     oid <- param "id"
     conn <- liftIO (open "${n.tbl}.db")
     rows <- liftIO (query conn "SELECT ${n.col} FROM ${n.tbl} WHERE id = ?" (Only (oid :: Int)))
     json (rows :: [Only String])`),
       (n, j) => hs(n, j, SCOTTY,
-        `requireAuth :: ActionM ()
-requireAuth = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure ()
+        `${AUTHED}
 
 main :: IO ()
-main = scotty 3000 $ do
-  post "/${n.tbl}/:id/archive" $ do
-    requireAuth
+main = scotty 3000 $
+  put "/${n.tbl}/:id" $ do
+    _ <- requireLogin
+    oid <- param "id"
+    body <- param "body"
+    conn <- liftIO (open "${n.tbl}.db")
+    liftIO (execute conn "UPDATE ${n.tbl} SET ${n.col} = ? WHERE id = ?" (body :: String, oid :: Int))
+    text "saved"`),
+      (n, j) => hs(n, j, SCOTTY,
+        `${AUTHED}
+
+main :: IO ()
+main = scotty 3000 $
+  delete "/${n.tbl}/:id" $ do
+    _ <- requireLogin
     oid <- param "id"
     conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "UPDATE ${n.tbl} SET archived = 1 WHERE id = ?" (Only (oid :: Int)))
-    text "archived"`),
+    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ?" (Only (oid :: Int)))
+    text "gone"`),
     ],
     safe: [
       [(n, j) => hs(n, j, SCOTTY,
-        `requireUser :: ActionM Int
-requireUser = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure 1
+        `${AUTHED}
 
 main :: IO ()
-main = scotty 3000 $ do
-  delete "/${n.tbl}/:id" $ do
-    uid <- requireUser
+main = scotty 3000 $
+  get "/${n.tbl}/:id" $ do
+    uid <- requireLogin
     oid <- param "id"
     conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ? AND owner = ?" (oid :: Int, uid))
-    text "gone"`), 'owner-scope'],
-      [(n, j) => hs(n, j, SCOTTY,
-        `requireUser :: ActionM Int
-requireUser = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure 1
-
-main :: IO ()
-main = scotty 3000 $ do
-  get "/${n.tbl}/:id/export" $ do
-    uid <- requireUser
-    oid <- param "id"
-    conn <- liftIO (open "${n.tbl}.db")
-    rows <- liftIO (query conn "SELECT ${n.col} FROM ${n.tbl} WHERE id = ? AND owner = ?" (oid :: Int, uid))
+    rows <- liftIO (query conn "SELECT ${n.col} FROM ${n.tbl} WHERE id = ? AND owner_id = ?" (oid :: Int, uid))
     json (rows :: [Only String])`), 'owner-scope'],
       [(n, j) => hs(n, j, SCOTTY,
-        `requireUser :: ActionM Int
-requireUser = do
-  h <- header "Authorization"
-  case h of
-    Nothing -> status status401 >> finish
-    Just _ -> pure 1
+        `${AUTHED}
 
 main :: IO ()
-main = scotty 3000 $ do
-  post "/${n.tbl}/:id/archive" $ do
-    uid <- requireUser
+main = scotty 3000 $
+  put "/${n.tbl}/:id" $ do
+    uid <- requireLogin
+    oid <- param "id"
+    body <- param "body"
+    conn <- liftIO (open "${n.tbl}.db")
+    liftIO (execute conn "UPDATE ${n.tbl} SET ${n.col} = ? WHERE id = ? AND owner_id = ?" (body :: String, oid :: Int, uid))
+    text "saved"`), 'owner-scope'],
+      [(n, j) => hs(n, j, SCOTTY,
+        `${AUTHED}
+
+main :: IO ()
+main = scotty 3000 $
+  delete "/${n.tbl}/:id" $ do
+    uid <- requireLogin
     oid <- param "id"
     conn <- liftIO (open "${n.tbl}.db")
-    liftIO (execute conn "UPDATE ${n.tbl} SET archived = 1 WHERE id = ? AND owner = ?" (oid :: Int, uid))
-    text "archived"`), 'owner-scope'],
+    liftIO (execute conn "DELETE FROM ${n.tbl} WHERE id = ? AND owner_id = ?" (oid :: Int, uid))
+    text "gone"`), 'owner-scope'],
     ],
   },
   'session-cookie': {
     vuln: [
       (n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie { setCookieName = "${n.tbl}sid", setCookieHttpOnly = False }`),
+        `sessionCookie :: SetCookie
+sessionCookie = defaultSetCookie { setCookieName = "sessionid" }`),
       (n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie { setCookieName = "${n.tbl}tok", setCookieSameSite = Just sameSiteNone }`),
+        `authTokenCookie :: SetCookie
+authTokenCookie = defaultSetCookie { setCookieName = "auth_token", setCookieSecure = False, setCookieHttpOnly = True }`),
       (n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie
-  { setCookieName = "${n.tbl}ses"
-  , setCookiePath = Just "/"
-  }`),
+        `loginCookie :: SetCookie
+loginCookie = defaultSetCookie { setCookieName = "login_token", setCookieSecure = True, setCookieHttpOnly = False }`),
     ],
     safe: [
       [(n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie
-  { setCookieName = "${n.tbl}sid"
-  , setCookieHttpOnly = True
-  , setCookieSecure = True
-  , setCookieSameSite = Just sameSiteStrict
-  }`), 'hardened-attrs'],
+        `sessionCookie :: SetCookie
+sessionCookie = defaultSetCookie { setCookieName = "sessionid", setCookieHttpOnly = True, setCookieSecure = True, setCookieSameSite = Just sameSiteLax }`), 'hardened-attrs'],
       [(n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie { setCookieName = "${n.tbl}tok", setCookieSecure = True, setCookieHttpOnly = True, setCookieSameSite = Just sameSiteLax }`), 'hardened-attrs'],
+        `authTokenCookie :: SetCookie
+authTokenCookie = defaultSetCookie { setCookieSecure = True, setCookieName = "auth_token", setCookieHttpOnly = True }`), 'hardened-attrs'],
       [(n, j) => hs(n, j, ['import Web.Cookie'],
-        `cookie :: SetCookie
-cookie = defaultSetCookie { setCookiePath = Just "/", setCookieHttpOnly = True, setCookieName = "${n.tbl}ses", setCookieSecure = True, setCookieSameSite = Just sameSiteStrict }`), 'hardened-attrs'],
+        `themeCookie :: SetCookie
+themeCookie = defaultSetCookie { setCookieName = "theme_preference" }`), 'not-a-session'],
     ],
   },
 };
 
 // ── Nix ──────────────────────────────────────────────────────────────────────
 export const NIX_UNSEEN = {
-  // vulnerable: a module option value reaches a shell command by interpolation into a script body (preStart, script, activation text).
-  // safe: the value is quoted with escapeShellArg(s) or reaches the process only through the environment.
   'script-interpolation': {
     vuln: [
-      (n, j) => nix(n, j, [`systemd.services.${n.tbl}-clean.preStart = ''rm -rf \${cfg.workDir}'';`]),
-      (n, j) => nix(n, j, [`systemd.services.${n.tbl}-sync.script = ''\${pkgs.coreutils}/bin/cp \${cfg.source} /var/lib/${n.tbl}'';`]),
-      (n, j) => nix(n, j, [`system.activationScripts.${n.tbl}.text = "chown \${cfg.owner} /var/lib/${n.tbl}";`]),
+      (n, j) => nix(n, j, [`systemd.services.${n.tbl}-fetch.script = "\${pkgs.curl}/bin/curl -fsS \${cfg.url} -o /var/lib/${n.tbl}/data";`]),
+      (n, j) => nix(n, j, [`systemd.services.${n.tbl}-run.serviceConfig.ExecStart = pkgs.writeShellScript "${n.tbl}-run" "echo \${cfg.message}";`]),
+      (n, j) => nix(n, j, [`environment.etc."${n.tbl}-cleanup.sh".text = "#!/bin/sh\\nrm -rf \${cfg.stateDir}";`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}-clean.preStart = ''rm -rf \${lib.escapeShellArg cfg.workDir}'';`]), 'escaper'],
-      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}-sync.script = ''\${pkgs.coreutils}/bin/cp \${lib.escapeShellArg cfg.source} /var/lib/${n.tbl}'';`]), 'escaper'],
-      [(n, j) => nix(n, j, [`system.activationScripts.${n.tbl}.text = "chown \${lib.escapeShellArgs [ cfg.owner ]} /var/lib/${n.tbl}";`]), 'escaper'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}-fetch.script = "\${pkgs.curl}/bin/curl -fsS \${lib.escapeShellArg cfg.url} -o /var/lib/${n.tbl}/data";`]), 'escaper'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}-run.serviceConfig.ExecStart = pkgs.writeShellScript "${n.tbl}-run" "echo \${lib.escapeShellArg cfg.message}";`]), 'escaper'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}-run.environment.TARGET_DIR = cfg.stateDir;`, `systemd.services.${n.tbl}-run.script = ''rm -rf "$TARGET_DIR"'';`]), 'env-passing'],
     ],
   },
   'secret-in-store': {
     vuln: [
-      (n, j) => nix(n, j, [`services.${n.tbl}.settings.password = "example-placeholder-${n.tbl}-u${j}";`]),
-      (n, j) => nix(n, j, [`networking.wireless.networks."${n.tbl}-net".psk = "example-placeholder-${n.tbl}-u${j}";`]),
-      (n, j) => nix(n, j, [`services.${n.tbl}.apiToken = "example-placeholder-${n.tbl}-u${j}";`]),
+      (n, j) => nix(n, j, [`services.${n.tbl}.settings.adminPassword = "correct-horse-${n.tbl}-v${j}";`]),
+      (n, j) => nix(n, j, [`users.users.${n.tbl}-svc.password = "correct-horse-${n.tbl}-v${j}";`]),
+      (n, j) => nix(n, j, [`environment.variables.${n.tbl.toUpperCase()}_API_KEY = "correct-horse-${n.tbl}-v${j}";`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, [`services.${n.tbl}.settings.passwordFile = "/run/secrets/${n.tbl}-u${j}";`]), 'runtime-path'],
-      [(n, j) => nix(n, j, [`networking.wireless.networks."${n.tbl}-net".pskRaw = "ext:${n.tbl}_psk";`, `networking.wireless.environmentFile = "/run/secrets/wireless-u${j}.env";`]), 'runtime-path'],
-      [(n, j) => nix(n, j, [`services.${n.tbl}.apiTokenFile = "/run/credentials/${n.tbl}-u${j}.token";`]), 'runtime-path'],
+      [(n, j) => nix(n, j, [`services.${n.tbl}.settings.adminPasswordFile = "/run/secrets/${n.tbl}-admin";`]), 'runtime-path'],
+      [(n, j) => nix(n, j, [`users.users.${n.tbl}-svc.hashedPasswordFile = "/run/secrets/${n.tbl}-svc.hash";`]), 'runtime-path'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig.EnvironmentFile = "/run/secrets/${n.tbl}.env";`]), 'runtime-path'],
     ],
   },
   'unpinned-source': {
     vuln: [
-      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.tar".source = builtins.fetchTarball "https://example.org/${n.tbl}-u${j}.tar.gz";`]),
-      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.git".source = builtins.fetchGit { url = "https://example.org/${n.tbl}.git"; ref = "master"; };`]),
-      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.zip".source = pkgs.fetchzip { url = "https://example.org/${n.tbl}-u${j}.zip"; };`]),
+      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.src".source = pkgs.fetchFromGitHub { owner = "example"; repo = "${n.tbl}"; rev = "main"; };`]),
+      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.json".source = builtins.fetchurl "https://example.org/${n.tbl}-v${j}.json";`]),
+      (n, j) => nix(n, j, [`environment.etc."${n.tbl}.conf".source = pkgs.fetchurl { url = "https://example.org/${n.tbl}-v${j}.conf"; };`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.tar".source = builtins.fetchTarball { url = "https://example.org/${n.tbl}-u${j}.tar.gz"; sha256 = "sha256-${hash64(n.tbl + "tar" + j)}"; };`]), 'content-pin'],
-      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.git".source = pkgs.fetchgit { url = "https://example.org/${n.tbl}.git"; rev = "0123456789abcdef0123456789abcdef01234567"; hash = "sha256-${hash64(n.tbl + "git" + j)}"; };`]), 'content-pin'],
-      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.zip".source = pkgs.fetchzip { url = "https://example.org/${n.tbl}-u${j}.zip"; hash = "sha256-${hash64(n.tbl + "zip" + j)}"; };`]), 'content-pin'],
+      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.src".source = pkgs.fetchFromGitHub { owner = "example"; repo = "${n.tbl}"; rev = "0123456789abcdef0123456789abcdef01234567"; hash = "sha256-${hash64(n.tbl + "gh" + j)}"; };`]), 'content-pin'],
+      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.json".source = builtins.fetchurl { url = "https://example.org/${n.tbl}-v${j}.json"; sha256 = "sha256-${hash64(n.tbl + "json" + j)}"; };`]), 'content-pin'],
+      [(n, j) => nix(n, j, [`environment.etc."${n.tbl}.conf".source = pkgs.fetchurl { url = "https://example.org/${n.tbl}-v${j}.conf"; hash = "sha256-${hash64(n.tbl + "conf" + j)}"; };`]), 'content-pin'],
     ],
   },
   'binary-cache-trust': {
     vuln: [
-      (n, j) => nix(n, j, ['nix.settings.substituters = [ "https://cache.nixos.org" "http://cache.internal.example.org" ];']),
-      (n, j) => nix(n, j, ['nix.extraOptions = "require-sigs = false";']),
-      (n, j) => nix(n, j, ['nix.settings = { require-sigs = false; };']),
+      (n, j) => nix(n, j, ['nix.settings.substituters = lib.mkForce [ "http://mirror.example.org/cache" ];']),
+      (n, j) => nix(n, j, ['nix.settings.require-sigs = false;']),
+      (n, j) => nix(n, j, ['nix.settings."require-sigs" = false;']),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['nix.settings.substituters = [ "https://cache.nixos.org" "https://cache.internal.example.org" ];']), 'tls-cache'],
+      [(n, j) => nix(n, j, ['nix.settings.substituters = lib.mkForce [ "https://mirror.example.org/cache" ];']), 'tls-cache'],
       [(n, j) => nix(n, j, ['nix.settings.require-sigs = true;']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['nix.settings = { require-sigs = lib.mkForce true; };']), 'mkForce'],
+      [(n, j) => nix(n, j, ['nix.settings."require-sigs" = true;']), 'hardened-setting'],
     ],
   },
   'trusted-users': {
     vuln: [
-      (n, j) => nix(n, j, ['nix.settings.trusted-users = [ "@wheel" ];']),
-      (n, j) => nix(n, j, ['nix.settings.trusted-users = [ "*" ];']),
-      (n, j) => nix(n, j, ['nix.extraOptions = "trusted-users = root *";']),
+      (n, j) => nix(n, j, ['nix.settings.trusted-users = [ "root" "@wheel" ];']),
+      (n, j) => nix(n, j, ['nix.settings.trusted-users = [ "@users" ];']),
+      (n, j) => nix(n, j, ['nix.settings = { trusted-users = [ "*" ]; };']),
     ],
     safe: [
       [(n, j) => nix(n, j, ['nix.settings.trusted-users = [ "root" ];']), 'scoped-users'],
-      [(n, j) => nix(n, j, ['nix.settings.trusted-users = [ ];']), 'scoped-users'],
-      [(n, j) => nix(n, j, ['nix.settings = { trusted-users = lib.mkForce [ "root" ]; };']), 'mkForce'],
+      [(n, j) => nix(n, j, ['nix.settings.trusted-users = lib.mkDefault [ "root" ];']), 'scoped-users'],
+      [(n, j) => nix(n, j, ['nix.settings = { trusted-users = [ ]; };']), 'scoped-users'],
     ],
   },
   'native-eval': {
     vuln: [
-      (n, j) => nix(n, j, ['nix.extraOptions = "allow-unsafe-native-code-during-evaluation = true";']),
-      (n, j) => nix(n, j, [`nix.settings.plugin-files = [ "/opt/${n.tbl}/u${j}.so" ];`]),
-      (n, j) => nix(n, j, ['nix.settings = { allow-unsafe-native-code-during-evaluation = true; };']),
+      (n, j) => nix(n, j, ['nix.settings."allow-unsafe-native-code-during-evaluation" = true;']),
+      (n, j) => nix(n, j, ["nix.extraOptions = ''", `  plugin-files = /opt/${n.tbl}/v${j}.so`, "'';"]),
+      (n, j) => nix(n, j, [`nix.settings.plugin-files = [ "/opt/${n.tbl}/hook-v${j}.so" ];`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['nix.extraOptions = "allow-unsafe-native-code-during-evaluation = false";']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['nix.settings."allow-unsafe-native-code-during-evaluation" = false;']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ["nix.extraOptions = ''", '  keep-going = true', "'';"]), 'unrelated-setting'],
       [(n, j) => nix(n, j, ['nix.settings.plugin-files = [ ];']), 'empty-list'],
-      [(n, j) => nix(n, j, ['nix.settings = { allow-unsafe-native-code-during-evaluation = lib.mkForce false; };']), 'mkForce'],
     ],
   },
   'sandbox-trust': {
     vuln: [
-      (n, j) => nix(n, j, ['nix.settings.sandbox = "relaxed";']),
-      (n, j) => nix(n, j, ['nix.extraOptions = "sandbox = false";']),
-      (n, j) => nix(n, j, ['nix.settings = { sandbox = false; };']),
+      (n, j) => nix(n, j, ['nix.settings.sandbox = lib.mkForce false;']),
+      (n, j) => nix(n, j, ["nix.extraOptions = ''", '  sandbox = relaxed', "'';"]),
+      (n, j) => nix(n, j, ['nix.settings."sandbox" = false;']),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['nix.settings.sandbox = true;']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['nix.extraOptions = "sandbox = true";']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['nix.settings = { sandbox = lib.mkForce true; };']), 'mkForce'],
+      [(n, j) => nix(n, j, ['nix.settings.sandbox = lib.mkForce true;']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ["nix.extraOptions = ''", '  sandbox = true', "'';"]), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['nix.settings."sandbox" = true;']), 'hardened-setting'],
     ],
   },
   'ssh-access': {
     vuln: [
-      (n, j) => nix(n, j, ['services.openssh = { enable = true; settings = { PermitRootLogin = "yes"; }; };']),
-      (n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings.PermitEmptyPasswords = true;']),
-      (n, j) => nix(n, j, ['services.openssh = {', '  enable = true;', '  settings.PasswordAuthentication = true;', '};']),
+      (n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings.PasswordAuthentication = false;', 'services.openssh.settings.PermitRootLogin = "yes";']),
+      (n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings.PermitRootLogin = "no";', 'services.openssh.settings.PasswordAuthentication = true;']),
+      (n, j) => nix(n, j, ['services.openssh = {', '  enable = true;', '  settings = { PermitRootLogin = "no"; PasswordAuthentication = false; PermitEmptyPasswords = true; };', '};']),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['services.openssh = { enable = true; settings = { PermitRootLogin = "no"; PasswordAuthentication = false; }; };']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings.PermitEmptyPasswords = false;', 'services.openssh.settings.PasswordAuthentication = false;']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['services.openssh = {', '  enable = true;', '  settings.PasswordAuthentication = lib.mkForce false;', '};']), 'mkForce'],
+      [(n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings.PasswordAuthentication = false;', 'services.openssh.settings.PermitRootLogin = "no";']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['services.openssh = {', '  enable = true;', '  settings = { PermitRootLogin = "prohibit-password"; PasswordAuthentication = false; };', '};']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['services.openssh.enable = true;', 'services.openssh.settings = { PasswordAuthentication = false; PermitRootLogin = "no"; PermitEmptyPasswords = false; };']), 'hardened-setting'],
     ],
   },
   'service-privilege': {
     vuln: [
-      (n, j) => nix(n, j, [`systemd.services.${n.tbl} = { wantedBy = [ "multi-user.target" ]; serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "root"; }; };`]),
-      (n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig.ExecStart = "\${pkgs.hello}/bin/hello";`, `systemd.services.${n.tbl}.serviceConfig.AmbientCapabilities = [ "CAP_SYS_ADMIN" ];`]),
-      (n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig.ExecStart = "\${pkgs.hello}/bin/hello";`, `systemd.services.${n.tbl}.serviceConfig.NoNewPrivileges = false;`]),
+      (n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "root"; NoNewPrivileges = true; };`]),
+      (n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "${n.tbl}-svc"; NoNewPrivileges = true; CapabilityBoundingSet = [ "CAP_SYS_ADMIN" ]; };`]),
+      (n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "${n.tbl}-svc"; NoNewPrivileges = false; };`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, [`systemd.services.${n.tbl} = { wantedBy = [ "multi-user.target" ]; serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; DynamicUser = true; }; };`]), 'scoped-service'],
-      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig.ExecStart = "\${pkgs.hello}/bin/hello";`, `systemd.services.${n.tbl}.serviceConfig.User = "${n.tbl}-svc";`, `systemd.services.${n.tbl}.serviceConfig.CapabilityBoundingSet = [ "" ];`]), 'scoped-service'],
-      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig.ExecStart = "\${pkgs.hello}/bin/hello";`, `systemd.services.${n.tbl}.serviceConfig.NoNewPrivileges = true;`, `systemd.services.${n.tbl}.serviceConfig.DynamicUser = true;`]), 'scoped-service'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; DynamicUser = true; NoNewPrivileges = true; };`]), 'scoped-service'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "${n.tbl}-svc"; NoNewPrivileges = true; CapabilityBoundingSet = [ "" ]; };`]), 'scoped-service'],
+      [(n, j) => nix(n, j, [`systemd.services.${n.tbl}.serviceConfig = { ExecStart = "\${pkgs.hello}/bin/hello"; User = "${n.tbl}-svc"; NoNewPrivileges = true; ProtectSystem = "strict"; };`]), 'scoped-service'],
     ],
   },
   'firewall-exposure': {
     vuln: [
-      (n, j) => nix(n, j, ['networking.firewall = { enable = false; };']),
-      (n, j) => nix(n, j, ['services.postgresql.enable = true;', 'services.postgresql.authentication = "host all all 0.0.0.0/0 trust";']),
-      (n, j) => nix(n, j, ['services.postgresql.enable = true;', 'services.postgresql.settings.listen_addresses = "0.0.0.0";']),
+      (n, j) => nix(n, j, ['networking.firewall.enable = lib.mkForce false;']),
+      (n, j) => nix(n, j, ['networking.firewall.enable = true;', 'networking.firewall.allowedTCPPortRanges = [ { from = 1; to = 65535; } ];']),
+      (n, j) => nix(n, j, ['networking.firewall.enable = true;', 'services.mysql.enable = true;', 'networking.firewall.allowedTCPPorts = [ 3306 ];']),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['networking.firewall = { enable = true; allowedTCPPorts = [ 443 ]; };']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['services.postgresql.enable = true;', 'services.postgresql.authentication = "local all all peer";']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['services.postgresql.enable = true;', 'services.postgresql.settings.listen_addresses = "127.0.0.1";']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['networking.firewall.enable = lib.mkForce true;']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['networking.firewall.enable = true;', 'networking.firewall.allowedTCPPorts = [ 80 443 ];']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['networking.firewall.enable = true;', 'services.mysql.enable = true;', 'networking.firewall.interfaces."lo".allowedTCPPorts = [ 3306 ];']), 'hardened-setting'],
     ],
   },
   'privilege-escalation-policy': {
     vuln: [
-      (n, j) => nix(n, j, ['security.sudo = { wheelNeedsPassword = false; };']),
-      (n, j) => nix(n, j, ['security.sudo.extraRules = [ { users = [ "' + 'ops" ]; commands = [ { command = "ALL"; options = [ "NOPASSWD" ]; } ]; } ];']),
-      (n, j) => nix(n, j, ['security.doas.enable = true;', 'security.doas.extraRules = [ { groups = [ "wheel" ]; noPass = true; } ];']),
+      (n, j) => nix(n, j, ['security.sudo.extraConfig = "%wheel ALL=(ALL) NOPASSWD: ALL";']),
+      (n, j) => nix(n, j, ['security.doas.enable = true;', 'security.doas.extraConfig = "permit nopass :wheel";']),
+      (n, j) => nix(n, j, ['security.sudo.wheelNeedsPassword = lib.mkForce false;']),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['security.sudo = { wheelNeedsPassword = true; };']), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['security.sudo.extraRules = [ { users = [ "ops" ]; commands = [ { command = "/run/current-system/sw/bin/systemctl restart ' + n.tbl + '"; } ]; } ];']), 'scoped-command'],
-      [(n, j) => nix(n, j, ['security.doas.enable = true;', 'security.doas.extraRules = [ { groups = [ "wheel" ]; command = "/run/current-system/sw/bin/switch-to-configuration"; } ];']), 'scoped-command'],
+      [(n, j) => nix(n, j, ['security.sudo.extraConfig = "Defaults timestamp_timeout=5";']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['security.doas.enable = true;', 'security.doas.extraConfig = "permit persist :wheel";']), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['security.sudo.wheelNeedsPassword = true;']), 'hardened-setting'],
     ],
   },
   'tls-secret-runtime': {
     vuln: [
-      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = pkgs.writeText "${n.tbl}-u${j}.key" "placeholder";`]),
-      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org" = { forceSSL = false; enableACME = false; };`]),
-      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = ./${n.tbl}-u${j}.pem;`]),
+      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = builtins.toFile "${n.tbl}-v${j}.key" "placeholder";`]),
+      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = "\${./${n.tbl}-v${j}.pem}";`]),
+      (n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".forceSSL = false;`]),
     ],
     safe: [
-      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = "/run/credentials/${n.tbl}-u${j}.key";`]), 'runtime-path'],
-      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org" = { forceSSL = true; enableACME = true; };`]), 'hardened-setting'],
-      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = "/run/secrets/${n.tbl}-u${j}.pem";`]), 'runtime-path'],
+      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".sslCertificateKey = "/run/credentials/nginx.service/${n.tbl}-v${j}.key";`]), 'runtime-path'],
+      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org".forceSSL = true;`]), 'hardened-setting'],
+      [(n, j) => nix(n, j, ['services.nginx.enable = true;', `services.nginx.virtualHosts."${n.tbl}.example.org" = { enableACME = true; forceSSL = true; };`]), 'hardened-setting'],
     ],
   },
 };

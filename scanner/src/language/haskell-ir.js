@@ -545,8 +545,15 @@ class FnLowerer {
       const mem = { kind: 'member', object: obj, prop: r.name };
       return argAsts.length === 1 ? mem : { kind: 'call', callee: '<indirect>', args: [mem, ...argAsts.slice(1).map((a) => this.lowerExpr(a, ln))], hs: { status: 'unknown', reason: 'field-applied' } };
     }
-    const args = argAsts.map((a) => this.lowerExpr(a, ln));
+    let args = argAsts.map((a) => this.lowerExpr(a, ln));
+    // `lookup key table` returns an element OF the table: the key chooses which, it is not where the value comes from. Only the table
+    // flows to the result, so a constant table gives a constant result however tainted the key is.
+    let selector = null;
+    if (f.name === 'lookup' && args.length === 2 && (r.kind === 'builtin' || r.kind === 'external')) { selector = args[0]; args = [args[1]]; }
     const hs = { via };
+    // The key stays on the call as `hs.selector`: taint ignores it (it only chooses), but a rule asking "does caller text decide whether
+    // this fails" (fromJust (lookup key t)) still sees it.
+    if (selector) hs.selector = selector;
     let callee = f.qual ? `${f.qual}.${f.name}` : f.name;
     const arity = (r.kind === 'def' && r.def.kind === 'fun') ? r.def.arity : (r.kind === 'localfn' ? r.arity : -1);
     if ((r.kind === 'def' && r.def.kind === 'fun') || r.kind === 'localfn') {

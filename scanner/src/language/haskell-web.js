@@ -201,6 +201,9 @@ function handlerFacts(ctx, fn) {
       if (e.kind === 'union' && e.hs && e.hs.branchConds) for (const bc of e.hs.branchConds) conds.push(bc.cond);
     }
   }
+  // Program order is SOURCE order. A wrapper guard (`guarded $ do ...`) encloses the statements it protects, but the lowering emits
+  // those statements as earlier control-flow nodes than the call that contains them, so node order would make the guard look late.
+  ordered.sort((a, b) => (Number.isFinite(a.line) && Number.isFinite(b.line) ? a.line - b.line : 0));
   const isGuardCall = (c) => {
     if (GUARD_PRIMITIVES.has(c.callee)) return true;
     if (c.hs && c.hs.status === 'resolved' && c.hs.target) return guardSummary(ctx, ctx.fnByQid.get(c.hs.target)).auth;
