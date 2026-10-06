@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.157.0 - hosted verification for the suites that need Nix or NixOS
+
+NIX-011 needs `nix` and NIX-012 needs a booted NixOS, which a developer's laptop often lacks, so the loop controller could only ever report them as blocked. This release lets the controller run them on a GitHub-hosted runner and record the outcome as evidence, bound to the exact commit.
+
+- **Hosted-CI executor** (`scripts/loop-engineering/lib/remote.mjs`, `.github/workflows/verify-remote.yml`). A suite whose profile entry has a `remote` block runs on a hosted runner when the required tool is missing locally. The controller refuses unless the tree is clean and HEAD is the tip of a pushed branch, dispatches the committed workflow with the commit, the requirement, the watch globs and a nonce, finds ITS run by the nonce, requires the runner's digest of the watched files to equal its own (the runner uses `scripts/loop-engineering/digest.mjs`, the controller's own code), reads per-leg TAP, and requires every leg to pass every criterion. Evidence is labelled `controller+hosted-ci` with the run id, artifact digest and a limitation line; it is never presented as a local run. A failed run, a wrong commit or digest, a missing leg or file, a hash mismatch or a skipped test fails closed; if the preflight cannot be met the requirement is blocked, not passed.
+- **NixOS guests.** The NIX-012 suite runs under a TAP reporter inside each guest and the output is copied out. NIX-012 has two legs: an x86_64 guest on KVM, and an aarch64 guest emulated in software on the x86_64 host (the criterion allows "actual tested emulation"; arm runners have no KVM). The test driver's fixed five-minute shell wait is stretched for the emulated guest, and the guest test asserts `uname -m`, so a leg's name cannot be a false label.
+- **Docs.** `docs/guides/loop-engineering.md` has a "Hosted verification" section stating what the mode requires and what it trusts (GitHub's account of what ran, and the committed workflow).
+
+This entry deliberately says nothing about how many requirements are verified: that number is derived from the controller's evidence and is in `docs/completion-status.json` and the README status block.
+
 ## 0.156.0 - the three below-target rows fixed, measured on a fresh unseen set
 
 0.155.0 reported Haskell SAST recall (79.2%), Haskell taint precision (77.8%) and Nix config-sast precision (86.1%) below target on shapes the templates did not contain, while the frozen holdout said 100%. Each gap was read against the code and fixed in the engine, not in the scoring.
