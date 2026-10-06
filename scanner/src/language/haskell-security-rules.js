@@ -57,10 +57,14 @@ const STRONG_KDF = /^(?:Crypto\.KDF\.BCrypt\.|Crypto\.Argon2\.|Crypto\.Scrypt\.|
 const UNSAFE_CALLS = { 'System.IO.Unsafe.unsafePerformIO': 'unsafePerformIO', 'System.IO.Unsafe.unsafeInterleaveIO': 'unsafeInterleaveIO', 'System.IO.Unsafe.unsafeDupablePerformIO': 'unsafeDupablePerformIO', 'Unsafe.Coerce.unsafeCoerce': 'unsafeCoerce' };
 
 const TIME_SOURCES = new Set(['Data.Time.Clock.POSIX.getPOSIXTime', 'Data.Time.Clock.getCurrentTime', 'System.CPUTime.getCPUTime']);
-const SECURITY_FN = /(?:token|nonce|secret|otp|csrf|session|salt|apikey|resetcode|passcode|verification)/i;
+const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|salt|apikey|resetcode|passcode|verification)/i;
+// Short credential words that would over-match as substrings (`spin`, `mapping`, `keyboard`): matched as whole camelCase / snake_case words.
+const SECURITY_WORDS = new Set(['pin', 'password', 'passwd', 'credential', 'credentials']);
+const SECURITY_FN = { test: (name) => SECURITY_FN_SUBSTR.test(name) || String(name).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).some((w) => SECURITY_WORDS.has(w)) };
 const INPUT_READS = new Set(['Prelude.getContents', 'System.IO.getContents', 'System.IO.hGetContents', 'Data.ByteString.getContents', 'Data.ByteString.hGetContents', 'Data.ByteString.Char8.getContents', 'Data.ByteString.Char8.hGetContents', 'Data.ByteString.Lazy.getContents', 'Data.ByteString.Lazy.hGetContents', 'Data.ByteString.Lazy.Char8.getContents', 'Data.ByteString.Lazy.Char8.hGetContents', 'Data.Text.IO.getContents', 'Data.Text.IO.hGetContents', 'Data.Text.Lazy.IO.getContents', 'Data.Text.Lazy.IO.hGetContents']);
 const BOUNDING = /(?:^|\.)(?:take|hGetSome|hGet|splitAt|limit|limitedRead)$/;
-const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate']);
+// `replicateM n getLine` reads n lines: the count is an allocation (and an input loop) sized by whoever supplied n.
+const ALLOCATORS = new Set(['replicate', 'Prelude.replicate', 'Data.List.replicate', 'Data.ByteString.replicate', 'Data.ByteString.Char8.replicate', 'Data.ByteString.Lazy.replicate', 'Data.Text.replicate', 'Data.Vector.replicate', 'Control.Monad.replicateM', 'Control.Monad.replicateM_', 'Data.Vector.replicateM', 'Data.List.genericReplicate']);
 const CLAMPS = /^(?:(?:Prelude|Data\.Ord)\.)?(?:min|clamp)$/;
 const PARTIALS = new Set(['read', 'Prelude.read', 'head', 'Prelude.head', 'Data.List.head', 'tail', 'Prelude.tail', 'Data.List.tail', 'last', 'Prelude.last', 'Data.List.last', 'init', 'Prelude.init', 'Data.List.init', 'Data.Maybe.fromJust', 'fromJust']);
 const SESSION_COOKIE = /(?:sess|sid|token|tok|auth|jwt|csrf|login|remember|secret)/i;
@@ -77,6 +81,7 @@ const kids = (e) => {
   for (const k of ['left', 'right', 'object', 'value', 'callee']) if (e[k] && typeof e[k] === 'object') out.push(e[k]);
   for (const k of ['args', 'elements', 'branches', 'parts']) if (Array.isArray(e[k])) out.push(...e[k]);
   if (Array.isArray(e.props)) for (const p of e.props) if (p && p.value) out.push(p.value);
+  if (e.hs && e.hs.selector && typeof e.hs.selector === 'object') out.push(e.hs.selector);   // `lookup key t`: the key decides the outcome
   return out;
 };
 
@@ -210,6 +215,11 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
               continue;
             }
+            // `xs !! n` raises on a short list: a partial function, written as an operator, applied to caller-supplied text
+            if (e.kind === 'binary' && e.op === '!!' && e.left && mentionsText(e.left)) {
+              emit('hs-partial-function-on-input', file, e.line || node.line, { detail: '!! on a caller-supplied list', evidence: { partial: '!!' } });
+              continue;
+            }
             if (e.kind !== 'call' || typeof e.callee !== 'string') continue;
             const c = e.callee;
             const line = e.line || node.line;
@@ -301,7 +311,18 @@ export function analyzeHaskellRules(files, opts = {}) {
             // a file append is a log only when its path says so (a log, audit or trace file)
             if (sink.channel === 'file') { const p = (e.args || [])[0]; if (!(p && p.kind === 'literal' && /(?:log|audit|trace|journal)/i.test(String(p.value)))) continue; }
             let hit = null;
+            // a labelled value: a literal that names a credential ("token=", "password: ") followed by a non-literal operand
+            if (!hit) {
+              for (const x of walk(arg)) {
+                if (x.kind === 'binary' && x.hs && x.hs.concat && x.left && x.left.kind === 'literal' && typeof x.left.value === 'string' && /^\s*[\w .-]*(?:pass(?:word|wd|phrase)?|pwd|secret|token|api_?key|authorization|bearer|private_?key|session_?id)[\w .-]*\s*[=:]\s*$/i.test(x.left.value) && x.right && x.right.kind !== 'literal') {
+                  const lab = x.left.value.replace(/[=:\s]+$/, '').trim();
+                  hit = { name: lab, low: LOW_ENTROPY.test(lab), hashed: false, var: lab };
+                  break;
+                }
+              }
+            }
             for (const n of names(arg)) {
+              if (hit) break;
               const bare = n.replace(/^\./, '');
               if (sensitive.has(n)) hit = { ...sensitive.get(n), var: n };
               else if (SENSITIVE.test(bare) && !/^[A-Z][A-Za-z0-9_.]*\./.test(n)) hit = { name: bare, low: LOW_ENTROPY.test(bare), hashed: false, var: n };

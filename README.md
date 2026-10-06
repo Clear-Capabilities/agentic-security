@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.155.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.156.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -444,7 +444,7 @@ shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), 
 | nix-eval | blocked | nix is not available on the measuring host: a successful controlled evaluation needs a real nix binary (NIX-01 |
 | nixos-host | blocked | nixos is not available on the measuring host: the complete scanner must run on a NixOS host (NIX-012) |
 
-Measured 2026-10-04 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
+Measured 2026-10-05 on the synthetic, template-generated corpus described in [Haskell and Nix support](docs/language-support.md); the corpus is synthetic and template-generated (qa-001).
 <!-- generated:support-summary:end -->
 
 Honest limits: the corpus behind these numbers is synthetic and template-generated, so a score of 100% describes robustness

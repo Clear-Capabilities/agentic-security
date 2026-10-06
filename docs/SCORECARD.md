@@ -9,15 +9,15 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.155.0 |
-| Bundle SHA-256 | `5b1c3482deb6bf15eb606402755278ad1e04a5b2e8b12c5b5246c5dcd4028b50` |
-| Commit | `753a2e60899fd04617d6b18c4ed2440e00801caa` |
+| Engine version | 0.156.0 |
+| Bundle SHA-256 | `0a2964758166a064abed121aac59bc00ae7164617ba15deee3cf0781075eb4c7` |
+| Commit | `997fc7db961a025140a1d996d52df98c8fe151a8` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-05T17:47:43.949Z |
+| Generated (UTC) | 2026-10-05T23:45:54.840Z |
 
 ## What these numbers are, and what they are not
 
@@ -268,7 +268,7 @@ this run.
 
 ## Haskell and Nix/NixOS support
 
-*Committed artifact:* `docs/language-support.json`, measured 2026-10-04 on node v24.20.0. It is read here, not re-measured by this command.
+*Committed artifact:* `docs/language-support.json`, measured 2026-10-05 on node v24.20.0. It is read here, not re-measured by this command.
 
 Every row is **supported** only from passing evidence of its own metric kind. Layers are scored independently (the taint layer
 is the injection families, the SAST layer is every other family) and a finding of a different family inside a case is counted
@@ -319,7 +319,7 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 - Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
-- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate.
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v2 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written after the fixes the earlier set motivated, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 set was used to change the engine and is a development set (shape-dev), not a generalisation measure.
 
 ## Independent evaluation population — the number that matters
 

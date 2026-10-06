@@ -1,7 +1,7 @@
 {
   "schema": "agentic-security/language-support@1",
   "version": "language-support/1",
-  "generatedAt": "2026-10-04",
+  "generatedAt": "2026-10-05",
   "node": "v24.20.0",
   "targets": {
     "precision": 0.9,
@@ -26,14 +26,16 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-10-04",
+        "measuredAt": "2026-10-05",
         "corpusVersion": "qa001-v2",
         "hashes": {
+          "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+          "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
           "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
           "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
           "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
           "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-          "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+          "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
         },
         "corpusTotals": {
           "security": {
@@ -165,30 +167,28 @@
             }
           },
           "generalization": {
-            "status": "below-target",
-            "shortfalls": [
-              "recall 79.2% < 85.0%"
-            ],
+            "status": "meets-targets",
+            "shortfalls": [],
             "cases": 96,
-            "tp": 38,
-            "fp": 2,
-            "fn": 10,
-            "tn": 42,
-            "precision": 0.95,
-            "recall": 0.7916666666666666,
-            "f1": 0.8636363636363635,
-            "strictPrecision": 0.8260869565217391,
+            "tp": 44,
+            "fp": 4,
+            "fn": 4,
+            "tn": 44,
+            "precision": 0.9166666666666666,
+            "recall": 0.9166666666666666,
+            "f1": 0.9166666666666666,
+            "strictPrecision": 0.88,
             "ci": {
               "precision": [
-                0.8308,
-                0.9939
+                0.73,
+                0.9897
               ],
               "recall": [
-                0.6501,
-                0.8953
+                0.73,
+                0.9897
               ],
               "level": 0.95,
-              "method": "Clopper-Pearson"
+              "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
             }
           }
         },
@@ -269,30 +269,28 @@
             }
           },
           "generalization": {
-            "status": "below-target",
-            "shortfalls": [
-              "precision 77.8% < 90.0%"
-            ],
+            "status": "meets-targets",
+            "shortfalls": [],
             "cases": 60,
             "tp": 28,
-            "fp": 8,
+            "fp": 2,
             "fn": 2,
-            "tn": 24,
-            "precision": 0.7777777777777778,
+            "tn": 28,
+            "precision": 0.9333333333333333,
             "recall": 0.9333333333333333,
-            "f1": 0.8484848484848485,
-            "strictPrecision": 0.7777777777777778,
+            "f1": 0.9333333333333333,
+            "strictPrecision": 0.875,
             "ci": {
               "precision": [
-                0.6085,
-                0.8988
+                0.6805,
+                0.9983
               ],
               "recall": [
-                0.7793,
-                0.9918
+                0.6805,
+                0.9983
               ],
               "level": 0.95,
-              "method": "Clopper-Pearson"
+              "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
             }
           }
         },
@@ -436,10 +434,7 @@
         "notSupported": [],
         "dataOk": true
       },
-      "generalizationGaps": [
-        "sast: recall 79.2% < 85.0%",
-        "taint: precision 77.8% < 90.0%"
-      ],
+      "generalizationGaps": [],
       "metamorphic": {
         "preserve": 1,
         "change": 1,
@@ -559,14 +554,16 @@
       },
       "measuredOn": {
         "split": "holdout",
-        "measuredAt": "2026-10-04",
+        "measuredAt": "2026-10-05",
         "corpusVersion": "qa001-v2",
         "hashes": {
+          "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+          "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
           "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
           "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
           "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
           "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-          "manifestSha256": "fabb9ac174a692a13306740f8b125c2624a4aa713cd92d61fec98717dd8f99cd"
+          "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
         },
         "corpusTotals": {
           "security": {
@@ -725,30 +722,28 @@
             }
           },
           "generalization": {
-            "status": "below-target",
-            "shortfalls": [
-              "precision 86.1% < 90.0%"
-            ],
+            "status": "meets-targets",
+            "shortfalls": [],
             "cases": 132,
-            "tp": 62,
-            "fp": 10,
-            "fn": 4,
-            "tn": 64,
-            "precision": 0.8611111111111112,
-            "recall": 0.9393939393939394,
-            "f1": 0.8985507246376813,
-            "strictPrecision": 0.8611111111111112,
+            "tp": 64,
+            "fp": 0,
+            "fn": 2,
+            "tn": 66,
+            "precision": 1,
+            "recall": 0.9696969696969697,
+            "f1": 0.9846153846153847,
+            "strictPrecision": 1,
             "ci": {
               "precision": [
-                0.7594,
-                0.9313
+                0.8911,
+                1
               ],
               "recall": [
-                0.852,
-                0.9832
+                0.8424,
+                0.9992
               ],
               "level": 0.95,
-              "method": "Clopper-Pearson"
+              "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
             }
           }
         },
@@ -806,15 +801,15 @@
             "strictPrecision": 1,
             "ci": {
               "precision": [
-                0.5407,
+                0.2924,
                 1
               ],
               "recall": [
-                0.5407,
+                0.2924,
                 1
               ],
               "level": 0.95,
-              "method": "Clopper-Pearson"
+              "method": "Clopper-Pearson over shapes (2 near-identical cases per shape)"
             }
           }
         },
@@ -952,9 +947,7 @@
         ],
         "dataOk": true
       },
-      "generalizationGaps": [
-        "config-sast: precision 86.1% < 90.0%"
-      ],
+      "generalizationGaps": [],
       "metamorphic": {
         "preserve": 1,
         "change": 1,
@@ -989,7 +982,7 @@
     "split": "unseen",
     "measuredAt": "2026-10-05",
     "corpusVersion": "qa001-v2",
-    "unseenRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531"
+    "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8"
   },
   "limits": [
     "The corpus is synthetic and template-generated (QA-001): holdout cases vary nouns, fields and paths over the SAME shapes as the development cases, so a holdout score measures robustness to those variations, not accuracy on arbitrary real-world code.",
@@ -997,7 +990,7 @@
     "Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.",
     "Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.",
     "Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.",
-    "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen split, 3 new vulnerable and 3 new safe code forms per family, author-labelled, measured once and never tuned against) are reported beside it: where they fall below the same targets the row says so, and that gap is the better estimate of accuracy on code the templates did not anticipate."
+    "The \"supported\" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v2 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written after the fixes the earlier set motivated, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 set was used to change the engine and is a development set (shape-dev), not a generalisation measure."
   ],
   "verified": {
     "ok": true,

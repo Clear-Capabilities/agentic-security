@@ -140,6 +140,31 @@ const hasPathNode = (n, depth = 0) => {
   for (const k of Object.keys(n)) { const v = n[k]; if (Array.isArray(v)) { if (v.some((x) => hasPathNode(x, depth + 1))) return true; } else if (v && typeof v === 'object' && hasPathNode(v, depth + 1)) return true; }
   return false;
 };
+// An expression that CREATES a store file from its arguments (`pkgs.writeText "k" "…"`): used as a key/cert option it puts the secret in the store
+// exactly as a path literal does.
+const STORE_WRITERS = new Set(['writeText', 'writeTextFile', 'writeTextDir', 'writeScript', 'writeScriptBin', 'toFile', 'copyPathToStore', 'runCommand', 'runCommandLocal']);
+const isStoreCopy = (n, depth = 0) => {
+  if (!n || typeof n !== 'object' || depth > 12) return false;
+  if (n.type === 'app') { let h = n; while (h && h.type === 'app') h = h.fn; return !!h && ((h.type === 'select' && h.attrpath && h.attrpath.length && STORE_WRITERS.has(h.attrpath[h.attrpath.length - 1].name)) || (h.type === 'ident' && STORE_WRITERS.has(h.name))); }
+  return false;
+};
+const strOf = (n) => (n && n.type === 'string' && typeof n.literal === 'string' ? n.literal : null);
+// sudo `extraRules`: a rule is NOPASSWD for ALL when one of its `commands` is ALL (or a {command = "ALL"; options = [ "NOPASSWD" ]}) with the NOPASSWD tag.
+const sudoRulesNopasswdAll = (node) => {
+  if (!node || node.type !== 'list') return false;
+  for (const rule of node.items || []) {
+    const cmds = attrOf(rule, 'commands');
+    if (!cmds || !cmds.value || cmds.value.type !== 'list') continue;
+    for (const c of cmds.value.items || []) {
+      if (c.type !== 'attrset') continue;
+      const command = attrOf(c, 'command'); const options = attrOf(c, 'options');
+      const all = command && strOf(command.value) === 'ALL';
+      const nopass = options && options.value && options.value.type === 'list' && (options.value.items || []).some((x) => strOf(x) === 'NOPASSWD');
+      if (all && nopass) return true;
+    }
+  }
+  return false;
+};
 const attrOf = (set, name) => (set && set.type === 'attrset' ? (set.bindings || []).find((b) => b.kind === 'attr' && b.path && b.path.length === 1 && b.path[0].name === name) : null);
 const isTrueNode = (n) => !!n && n.type === 'ident' && n.name === 'true';
 
@@ -291,6 +316,12 @@ export function analyzeNixosHardening(opts, extra = {}) {
       }
     }
 
+    const sudoRules = nixos('security.sudo.extraRules');
+    if (sudoRules && sudoState !== 'inactive' && sudoState !== 'unknown' && sudoRulesNopasswdAll(rhsNodeOf(sudoRules, opts.files))) {
+      addFinding('sudo-nopasswd-all', { anchor: anchorOf(sudoRules), scope: 'security.sudo.extraRules', state: sudoState === 'conditional' ? 'conditional' : 'active', uncertain: false, evidence: [evidenceOf(sudoRules)] });
+      entryPoints.push({ id: 'sudo-nopasswd-all', kind: 'sudo-nopasswd', state: sudoState === 'conditional' ? 'conditional' : 'active', privilege: 'root', evidence: [evidenceOf(sudoRules)] });
+    }
+
     const doasEnable = nixos('security.doas.enable');
     const doasState = stateOf(doasEnable);
     const doasCfg = note(nixos('security.doas.extraConfig'), 'doas');
@@ -356,7 +387,7 @@ export function analyzeNixosHardening(opts, extra = {}) {
       const st = nginxState === 'conditional' ? 'conditional' : 'active';
       for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^services\.nginx\.virtualHosts\..+\.(?:sslCertificateKey|sslTrustedCertificate)$/.test(x.path))) {
         const node = rhsNodeOf(o, opts.files);
-        if (node && hasPathNode(node)) addFinding('tls-key-in-store', { anchor: anchorOf(o), scope: o.path, state: st, uncertain: false, evidence: [evidenceOf(o)] });
+        if (node && (hasPathNode(node) || isStoreCopy(node))) addFinding('tls-key-in-store', { anchor: anchorOf(o), scope: o.path, state: st, uncertain: false, evidence: [evidenceOf(o)] });
         else if (view(o).state === 'known' && typeof view(o).value === 'string') controls.push({ control: 'tls-key-runtime-path', option: o.path, applies: true });
       }
       for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^services\.nginx\.virtualHosts\..+\.forceSSL$/.test(x.path))) {

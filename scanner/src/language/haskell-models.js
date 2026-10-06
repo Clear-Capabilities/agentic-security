@@ -163,6 +163,14 @@ san('Text.Blaze', ['toMarkup', 'toValue', 'text', 'string', 'lazyText'], ['xss']
 san('Lucid', ['toHtml', 'toHtmlRaw_'], ['xss'], 'Lucid.toHtml escapes');
 san('System.FilePath', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');
 san('System.FilePath.Posix', ['takeFileName', 'takeBaseName'], ['path'], 'drops every directory component');
+// A function whose result is a number or a boolean cannot carry caller text: nothing of the argument survives (`show (length x)`).
+const ALL_FAMILIES = ['*'];
+san('Prelude', ['length', 'null', 'fromEnum'], ALL_FAMILIES, 'returns a number or boolean: no caller text survives');
+san('Data.List', ['length', 'genericLength'], ALL_FAMILIES, 'returns a number: no caller text survives');
+san('Data.Foldable', ['length', 'null'], ALL_FAMILIES, 'returns a number or boolean: no caller text survives');
+san('Data.Text', ['length'], ALL_FAMILIES, 'returns a number: no caller text survives');
+san('Data.ByteString', ['length'], ALL_FAMILIES, 'returns a number: no caller text survives');
+san('Data.Char', ['ord'], ALL_FAMILIES, 'returns a number: no caller text survives');
 san('Database.PostgreSQL.Simple', ['Only'], [], 'binds a parameter; it is a safe argument position, not a query-text sanitizer');
 
 export const HS_SOURCES = Object.freeze(SRC);

@@ -1,0 +1,580 @@
+{
+  "schema": "agentic-security/language-support-measurement@2",
+  "split": "shape-dev",
+  "measuredAt": "2026-10-05",
+  "corpusVersion": "qa001-v2",
+  "ecosystems": {
+    "haskell": {
+      "detection": {
+        "cases": 156,
+        "scored": 156,
+        "advisoryFindingsNotScored": 4,
+        "layers": {
+          "sast": {
+            "cases": 96,
+            "tp": 44,
+            "fp": 0,
+            "fn": 4,
+            "tn": 44,
+            "precision": 1,
+            "recall": 0.9166666666666666,
+            "f1": 0.9565217391304348,
+            "measured": true,
+            "families": {
+              "weak-password-hash": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "weak-randomness": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "resource-limits": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "parser-safety": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "sensitive-logging": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "route-authentication": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "object-authorization": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "session-cookie": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hsu-d9e50754bd",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hsu-9fec491fd4",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hsu-5b622385f8",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsu-4b2f14f91e",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              }
+            ],
+            "strays": [],
+            "crossFamilyFindingsNotScored": 6,
+            "strict": {
+              "fp": 6,
+              "precision": 0.88,
+              "f1": 0.8979591836734694
+            }
+          },
+          "taint": {
+            "cases": 60,
+            "tp": 28,
+            "fp": 2,
+            "fn": 2,
+            "tn": 30,
+            "precision": 0.9333333333333333,
+            "recall": 0.9333333333333333,
+            "f1": 0.9333333333333333,
+            "measured": true,
+            "families": {
+              "sql-injection": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "command-injection": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "path-traversal": {
+                "tp": 6,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.75,
+                "recall": 1,
+                "f1": 0.8571428571428571,
+                "measured": true
+              },
+              "ssrf": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "html-injection": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              }
+            },
+            "misses": [
+              {
+                "case": "hsu-cf84a1ceb6",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hsu-bc9a75d067",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              }
+            ],
+            "strays": [
+              {
+                "file": "hsu-74b6f96af3/src/Svc.hs",
+                "line": 10,
+                "cwe": "CWE-22"
+              },
+              {
+                "file": "hsu-6ec3217b59/src/Svc.hs",
+                "line": 10,
+                "cwe": "CWE-22"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 0,
+            "strict": {
+              "fp": 2,
+              "precision": 0.9333333333333333,
+              "f1": 0.9333333333333333
+            }
+          }
+        },
+        "perFamilyCases": {
+          "sql-injection": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "command-injection": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "path-traversal": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "ssrf": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "html-injection": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "weak-password-hash": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "weak-randomness": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "resource-limits": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "parser-safety": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "sensitive-logging": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "route-authentication": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "object-authorization": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "session-cookie": {
+            "vulnerable": 6,
+            "safe": 6
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    },
+    "nix": {
+      "detection": {
+        "cases": 144,
+        "scored": 144,
+        "advisoryFindingsNotScored": 0,
+        "layers": {
+          "sast": {
+            "cases": 132,
+            "tp": 66,
+            "fp": 8,
+            "fn": 0,
+            "tn": 66,
+            "precision": 0.8918918918918919,
+            "recall": 1,
+            "f1": 0.9428571428571428,
+            "measured": true,
+            "families": {
+              "secret-in-store": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "unpinned-source": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "binary-cache-trust": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "trusted-users": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "native-eval": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "sandbox-trust": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "ssh-access": {
+                "tp": 6,
+                "fp": 4,
+                "fn": 0,
+                "precision": 0.6,
+                "recall": 1,
+                "f1": 0.7499999999999999,
+                "measured": true
+              },
+              "service-privilege": {
+                "tp": 6,
+                "fp": 4,
+                "fn": 0,
+                "precision": 0.6,
+                "recall": 1,
+                "f1": 0.7499999999999999,
+                "measured": true
+              },
+              "firewall-exposure": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "privilege-escalation-policy": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              },
+              "tls-secret-runtime": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "misses": [],
+            "strays": [
+              {
+                "file": "nxu-4f3f07a783/configuration.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nxu-4296c23308/configuration.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nxu-37cac8b151/configuration.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nxu-99165f5bcf/configuration.nix",
+                "line": 1,
+                "cwe": "CWE-307"
+              },
+              {
+                "file": "nxu-81caca3288/configuration.nix",
+                "line": 7,
+                "cwe": "CWE-250"
+              },
+              {
+                "file": "nxu-8db896fd28/configuration.nix",
+                "line": 7,
+                "cwe": "CWE-250"
+              },
+              {
+                "file": "nxu-13954bc675/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-269"
+              },
+              {
+                "file": "nxu-e89565afa4/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-269"
+              }
+            ],
+            "crossFamilyFindingsNotScored": 0,
+            "strict": {
+              "fp": 8,
+              "precision": 0.8918918918918919,
+              "f1": 0.9428571428571428
+            }
+          },
+          "taint": {
+            "cases": 12,
+            "tp": 6,
+            "fp": 0,
+            "fn": 0,
+            "tn": 6,
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "measured": true,
+            "families": {
+              "script-interpolation": {
+                "tp": 6,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1,
+                "recall": 1,
+                "f1": 1,
+                "measured": true
+              }
+            },
+            "misses": [],
+            "strays": [],
+            "crossFamilyFindingsNotScored": 0,
+            "strict": {
+              "fp": 0,
+              "precision": 1,
+              "f1": 1
+            }
+          }
+        },
+        "perFamilyCases": {
+          "script-interpolation": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "secret-in-store": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "unpinned-source": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "binary-cache-trust": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "trusted-users": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "native-eval": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "sandbox-trust": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "ssh-access": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "service-privilege": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "firewall-exposure": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "privilege-escalation-policy": {
+            "vulnerable": 6,
+            "safe": 6
+          },
+          "tls-secret-runtime": {
+            "vulnerable": 6,
+            "safe": 6
+          }
+        },
+        "unknownOutcomes": {
+          "total": 0,
+          "disclosed": 0,
+          "withFinding": 0,
+          "silentClean": 0,
+          "requiredDisclosure": 0,
+          "requiredDisclosureMissing": 0
+        }
+      }
+    }
+  },
+  "corpusTotals": {
+    "haskell": {
+      "security": {
+        "vulnerable": 260,
+        "safe": 260,
+        "unknown": 52,
+        "families": 13
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    },
+    "nix": {
+      "security": {
+        "vulnerable": 240,
+        "safe": 240,
+        "unknown": 52,
+        "families": 12
+      },
+      "privacy": {
+        "positives": 100,
+        "negatives": 200
+      }
+    }
+  },
+  "hashes": {
+    "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
+    "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
+    "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
+    "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
+    "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+  }
+}

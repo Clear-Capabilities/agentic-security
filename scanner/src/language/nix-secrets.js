@@ -67,6 +67,8 @@ export function plausibleSecret(v) {
   if (/^\/(?:run|var|etc|nix|home|usr|opt|tmp)\//.test(t) || /^\.{0,2}\//.test(t)) return false;
   if (/^(?:https?|file|unix):\/\/[^:@\s]*$/.test(t)) return false;
   if (/^\$\{|^\$[A-Za-z_]/.test(t)) return false;
+  // wpa_supplicant's `ext:NAME` is a REFERENCE to a variable supplied at runtime (networking.wireless.environmentFile), not a value
+  if (/^ext:[A-Za-z0-9_.-]+$/.test(t)) return false;
   return true;
 }
 
