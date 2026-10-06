@@ -139,7 +139,7 @@ jobs:
           - { os: ubuntu-latest, system: x86_64-linux }
           - { os: ubuntu-24.04-arm, system: aarch64-linux }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 240
     continue-on-error: true
     defaults:
       run:
@@ -177,8 +177,25 @@ jobs:
       - name: Controlled NixOS VM test (runs the NIX-012 suite inside a NixOS guest)
         if: matrix.system == 'x86_64-linux'
         working-directory: .
-        run: nix build .#checks.${{ matrix.system }}.nixos-host -L --no-link
+        run: |
+          set -o pipefail
+          nix build .#checks.${{ matrix.system }}.nixos-host -L --out-link result-host
+          cat result-host/nixos-host-${{ matrix.system }}.tap
         timeout-minutes: 30
+      # NIX-012.AC03: "an aarch64-linux runner or actual tested emulation". The arm runner has no KVM, so the aarch64 guest is emulated (qemu
+      # TCG) on the x86_64 KVM host. It is slow by nature; the driver's shell wait is stretched in flake.nix. The build step registers the
+      # aarch64 user-mode emulator so the few aarch64 derivations (the package, the dev shell) can be built on this host.
+      - name: Emulated aarch64 NixOS guest (runs the NIX-012 suite inside it)
+        if: matrix.system == 'x86_64-linux'
+        working-directory: .
+        run: |
+          set -o pipefail
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          sudo sh -c 'echo "extra-platforms = aarch64-linux" >> /etc/nix/nix.conf'
+          sudo systemctl restart nix-daemon
+          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link result-aarch64
+          cat result-aarch64/nixos-host-aarch64-linux.tap
+        timeout-minutes: 150
       - name: The NixOS example scans, and the opt-in evaluation states what it did
         run: |
           set -o pipefail

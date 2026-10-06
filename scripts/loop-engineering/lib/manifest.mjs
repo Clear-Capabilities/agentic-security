@@ -50,6 +50,7 @@ export function buildRequirements({ parsed, profile, repoRoot }) {
         args: suite.kind === 'node-test' ? ['--test', ...suite.files] : [],
         files: suite.files || [], expectedExitCode: 0, timeoutSeconds: suite.timeoutSeconds,
         ...(suite.requiresTools ? { requiresTools: suite.requiresTools } : {}),
+        ...(suite.remote ? { remote: suite.remote } : {}),
       },
       ...(r.extra ? { addedAfterBaseline: true } : {}),
     });
