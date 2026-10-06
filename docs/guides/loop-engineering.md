@@ -88,7 +88,7 @@ not a pass.
 | the model tool is not logged in | the run records an `auth-missing` blocker and does **not** prompt: a blocked requirement waits for you |
 | a required tool (`nix`, `ghc`, `cabal`, `stack`) is absent | the requirement's criteria are `blocked` with the tool named, and `retry` re-checks it once you install it |
 | permission is denied to the worker | a `permission-denied` blocker with the denied tool; the worker never receives a prompt (`permissionMode: dontAsk`) |
-| the model budget is reached | the run stops in `paused-budget`; raising the budget is an explicit profile edit followed by a new `init` |
+| the model budget is reached | the run stops in `paused-budget` **when it next needs a worker attempt**; raising the budget is an explicit profile edit followed by a new `init`. Re-validating evidence and the final phase cost no model spend and still run, so a run that has finished its model work can still verify its result |
 
 ## Recovery
 

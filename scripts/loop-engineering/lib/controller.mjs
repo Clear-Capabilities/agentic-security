@@ -221,6 +221,14 @@ export class Controller {
     const L = this.limits;
     if (this.wallUsedMs() >= L.runWallSeconds * 1000) return `run wall-clock budget of ${L.runWallSeconds}s is exhausted`;
     if (this.S.budgets.attemptsUsed >= L.runMaxAttempts) return `run attempt budget of ${L.runMaxAttempts} is exhausted`;
+    return null;
+  }
+
+  // The model-spend cap is enforced where model spend can happen (before a worker attempt), not as a gate on everything. Re-validating
+  // evidence and running the final phase cost no model spend, and stopping them at an exhausted spend cap would leave a run that has
+  // finished all its model work unable to ever verify its result. The cap itself is unchanged.
+  modelBudgetProblem() {
+    const L = this.limits;
     const remaining = L.claudeBudgetUsd - this.S.budgets.usdUsed;
     if (remaining < (L.minAttemptBudgetUsd ?? 1)) return `Claude spend budget exhausted (used about $${this.S.budgets.usdUsed.toFixed(2)} of $${L.claudeBudgetUsd}; token-derived amounts are estimates, not exact charges)`;
     return null;
@@ -591,6 +599,8 @@ export class Controller {
           if (pre.evidence.result === 'blocked') { st.state = 'blocked'; st.blockers.push({ ...(pre.evidence.blocker || { type: 'external' }), at: nowIso() }); this.checkpoint(`${req.id} blocked (${pre.evidence.blocker?.type})`); continue; }
           this.lastVerifyReq = req.id;
           if (this.S.runBlockers.some((b) => GLOBAL_BLOCKERS.has(b.type))) { st.state = 'pending'; await this.afterNoWork(); if (this.terminalDecision) { exitStatus = this.terminalDecision; break; } continue; }
+          const mb = this.modelBudgetProblem();
+          if (mb) { st.state = 'pending'; this.settleTerminal('paused-budget', mb); exitStatus = 'paused-budget'; break; }
           const attempt = await this.runWorker(req, candidate);
           if (attempt.kind === 'worker-unavailable') { st.state = 'pending'; continue; }
           await this.settleAttempt(req, attempt);

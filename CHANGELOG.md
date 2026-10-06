@@ -17,6 +17,8 @@ NIX-011 needs `nix` and NIX-012 needs a booted NixOS, which a developer's laptop
 - **NixOS guests.** The NIX-012 suite runs under a TAP reporter inside each guest and the output is copied out. NIX-012 has two legs: an x86_64 guest on KVM, and an aarch64 guest emulated in software on the x86_64 host (the criterion allows "actual tested emulation"; arm runners have no KVM). The test driver's fixed five-minute shell wait is stretched for the emulated guest, and the guest test asserts `uname -m`, so a leg's name cannot be a false label.
 - **Docs.** `docs/guides/loop-engineering.md` has a "Hosted verification" section stating what the mode requires and what it trusts (GitHub's account of what ran, and the committed workflow).
 
+- **The model-spend cap gates model work only.** The controller checked its $50 model budget at the top of its loop, so a run that had spent it could not even re-validate stale evidence or run the final phase, neither of which uses the model. The cap is unchanged and still refuses any further worker attempt; the wall-clock and attempt budgets still gate everything.
+
 This entry deliberately says nothing about how many requirements are verified: that number is derived from the controller's evidence and is in `docs/completion-status.json` and the README status block.
 
 ## 0.156.0 - the three below-target rows fixed, measured on a fresh unseen set
