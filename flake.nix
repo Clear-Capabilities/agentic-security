@@ -65,7 +65,18 @@
       # the locked input. Linux only (a NixOS guest), x86_64 with KVM on hosted runners, aarch64 where an arm runner or emulation exists.
       checks = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
         let
-          pkgs = nixpkgs.legacyPackages.${system};
+          # The NixOS test driver waits at most 10 x 30 s for a guest's shell. A guest emulated in software (an aarch64 guest on an
+          # x86_64 host) boots slower than that, so the wait is stretched; a guest on KVM is unaffected, it is simply ready sooner.
+          hostPkgs = import nixpkgs {
+            inherit system;
+            overlays = [ (final: prev: {
+              # makeOverridable keeps `.override` (which the test framework calls) on the patched package
+              nixos-test-driver = final.lib.makeOverridable (args: (prev.nixos-test-driver.override args).overridePythonAttrs (old: {
+                postPatch = (old.postPatch or "") + "\n  f=$(find . -path '*test_driver/machine/__init__.py' | head -1)\n  sed -i 's/for _ in range(10):/for _ in range(180):/' \"$f\"\n  grep -q 'range(180)' \"$f\" || { echo 'driver patch did not apply'; exit 1; }\n";
+              })) { };
+            }) ];
+          };
+          pkgs = hostPkgs;
           repo = pkgs.lib.fileset.toSource {
             root = ./.;
             fileset = pkgs.lib.fileset.unions [
@@ -74,16 +85,18 @@
               ./scanner/test/nix/nixos-host-runtime.test.js
             ];
           };
-        in {
-          nixos-host = pkgs.testers.runNixOSTest {
-            name = "agentic-security-nixos-host";
+          # `guest` is the guest's architecture; when it differs from the host the guest is emulated (qemu TCG), which the criterion
+          # NIX-012.AC03 calls "actual tested emulation".
+          mkHostTest = guest: hostPkgs.testers.runNixOSTest {
+            name = "agentic-security-nixos-host-${guest}";
+            node.pkgs = nixpkgs.lib.mkForce nixpkgs.legacyPackages.${guest};
             nodes.machine = { pkgs, ... }: {
-              environment.systemPackages = [ self.packages.${system}.default pkgs.nodejs_24 pkgs.git pkgs.which ];
+              environment.systemPackages = [ self.packages.${guest}.default pkgs.nodejs_24 pkgs.git pkgs.which ];
               nix.settings.experimental-features = [ "nix-command" "flakes" ];
               nix.settings.flake-registry = "";
               virtualisation.memorySize = 3072;
               virtualisation.diskSize = 4096;
-              virtualisation.additionalPaths = [ nixpkgs.outPath self.packages.${system}.default self.devShells.${system}.default pkgs.nodejs_24 ];
+              virtualisation.additionalPaths = [ nixpkgs.outPath self.packages.${guest}.default self.devShells.${guest}.default pkgs.nodejs_24 ];
             };
             testScript = ''
               machine.wait_for_unit("multi-user.target", timeout=3600)
@@ -91,10 +104,15 @@
               machine.succeed("agentic-security version")
               machine.succeed("cp -r ${repo} /tmp/repo && chmod -R u+w /tmp/repo")
               machine.succeed("cd /tmp/repo && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t")
-              machine.succeed("cd /tmp/repo/scanner && node --test test/nix/nixos-host-runtime.test.js", timeout=3600)
+              # The suite runs INSIDE the guest with a TAP reporter; its output is copied out so a verifier can read per-test results.
+              status, _ = machine.execute("cd /tmp/repo/scanner && node --test --test-reporter=tap test/nix/nixos-host-runtime.test.js > /tmp/nixos-host-${guest}.tap 2>&1", timeout=5400)
+              machine.copy_from_machine("/tmp/nixos-host-${guest}.tap")
+              assert status == 0, "the NIX-012 suite failed inside the guest (see nixos-host-${guest}.tap)"
             '';
           };
-        });
+        in {
+          nixos-host = mkHostTest system;
+        } // (if system == "x86_64-linux" then { nixos-host-aarch64-emulated = mkHostTest "aarch64-linux"; } else { }));
 
       # Noninteractive by design: use `nix develop --command <cmd>`; nothing here prompts or activates a configuration.
       devShells = forAll (pkgs: {
