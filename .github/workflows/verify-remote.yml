@@ -109,9 +109,9 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          nix build .#checks.x86_64-linux.nixos-host -L --out-link "$OUT/result" > "$OUT/build-x86_64.log" 2>&1
+          nix build .#checks.x86_64-linux.nixos-host -L --out-link /tmp/nixresult-x86 > "$OUT/build-x86_64.log" 2>&1
           echo $? > "$OUT/x86.exit"
-          cp "$OUT/result/nixos-host-x86_64-linux.tap" "$OUT/nixos-x86_64.tap" 2>/dev/null || : > "$OUT/nixos-x86_64.tap"
+          cp /tmp/nixresult-x86/nixos-host-x86_64-linux.tap "$OUT/nixos-x86_64.tap" 2>/dev/null || : > "$OUT/nixos-x86_64.tap"
         timeout-minutes: 90
       - name: Describe the leg
         run: |
@@ -166,9 +166,9 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link "$OUT/result" > "$OUT/build-aarch64.log" 2>&1
+          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link /tmp/nixresult-aarch64 > "$OUT/build-aarch64.log" 2>&1
           echo $? > "$OUT/aarch64.exit"
-          cp "$OUT/result/nixos-host-aarch64-linux.tap" "$OUT/nixos-aarch64.tap" 2>/dev/null || : > "$OUT/nixos-aarch64.tap"
+          cp /tmp/nixresult-aarch64/nixos-host-aarch64-linux.tap "$OUT/nixos-aarch64.tap" 2>/dev/null || : > "$OUT/nixos-aarch64.tap"
         timeout-minutes: 300
       - name: Describe the leg
         run: |
@@ -206,6 +206,7 @@ jobs:
             for (const d of fs.existsSync("legs") ? fs.readdirSync("legs") : []) {
               const dir = path.join("legs", d);
               for (const f of fs.readdirSync(dir)) {
+                if (!fs.statSync(path.join(dir, f)).isFile()) continue;   // only files: a symlink to a store directory is not evidence
                 fs.copyFileSync(path.join(dir, f), path.join("verify", f));
                 if (/^leg-.*\.json$/.test(f)) legs.push(JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")));
                 if (f === "digest.json") digest = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")).digest;
