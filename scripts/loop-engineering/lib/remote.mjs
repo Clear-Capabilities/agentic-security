@@ -30,8 +30,26 @@ export const REMOTE_VERSION = '1';
 const defaultRun = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', timeout: opts.timeoutMs || 120_000, maxBuffer: 64 * 1024 * 1024, cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// A reset connection is not a verdict. Single-shot calls (dispatch, download) are retried a few times with a short backoff; a call that
+// still fails is reported as what it is. Polling calls already tolerate a failed poll.
+const TRANSIENT = /connection reset|ECONNRESET|ETIMEDOUT|EOF|timed? ?out|temporarily unavailable|502|503|504|TLS handshake|i\/o timeout/i;
+function retrying(run, tries = 4, backoffMs = 5000) {
+  return (cmd, args, opts) => {
+    let last;
+    for (let i = 0; i < tries; i++) {
+      try { return run(cmd, args, opts); } catch (e) {
+        last = e;
+        if (!TRANSIENT.test(String(e.stderr || e.message))) throw e;
+        if (i < tries - 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoffMs * (i + 1));
+      }
+    }
+    throw last;
+  };
+}
+
 /** Can a remote run be started from this checkout? Returns {ok, reason?, sha?, branch?, repo?}. */
-export function remotePreflight({ repoRoot, workflow, run = defaultRun }) {
+export function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun }) {
+  const run = retrying(rawRun, 3, 3000);
   const git = (...a) => run('git', a, { cwd: repoRoot }).trim();
   let dirty;
   try { dirty = git('status', '--porcelain', '--untracked-files=all'); } catch (e) { return { ok: false, reason: `git status failed: ${String(e.message).slice(0, 120)}` }; }
@@ -54,7 +72,8 @@ export function remotePreflight({ repoRoot, workflow, run = defaultRun }) {
  *   { status: 'ok'|'failed'|'unavailable', reason, criteria, counts, remote, files: [{path, sha256, bytes}], limitations }
  * `watchDigest` is the digest of the requirement's watched files computed LOCALLY; the runner must reproduce it.
  */
-export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run = defaultRun, now = Date.now, pollMs = 20_000, logger = () => {} }) {
+export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run: rawRun = defaultRun, now = Date.now, pollMs = 20_000, logger = () => {}, retryBackoffMs = 5000 }) {
+  const run = retrying(rawRun, 4, retryBackoffMs);
   const pre = remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run });
   if (!pre.ok) return { status: 'unavailable', reason: `hosted-CI verification is not possible: ${pre.reason}`, criteria: failAll(req, `hosted-CI verification is not possible: ${pre.reason}`), counts: zero(), files: [], limitations: [] };
 

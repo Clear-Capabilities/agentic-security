@@ -165,3 +165,23 @@ test('an exhausted model-spend cap blocks model work only; the wall-clock and at
   assert.match(Controller.prototype.budgetProblem.call(mk({ wallUsedMs: 2_000_000 })), /wall-clock budget/);
   assert.match(Controller.prototype.budgetProblem.call(mk({ attemptsUsed: 10 })), /attempt budget/);
 });
+
+test('a reset connection on dispatch or download is retried; a real error is not', async () => {
+  let resets = 2;
+  const f = fake(); const base = f.run;
+  const flaky = (cmd, args, o) => {
+    if (cmd === 'gh' && (args[0] === 'workflow' || (args[0] === 'run' && args[1] === 'download')) && resets > 0) { resets--; const e = new Error('x'); e.stderr = 'read tcp: connection reset by peer'; throw e; }
+    return base(cmd, args, o);
+  };
+  const dir = mkdtempSync(join(tmpdir(), 'loop-remote-'));
+  mkdirSync(join(dir, 'ev'), { recursive: true });
+  try {
+    let t = 0;
+    const r = await runRemote({ repoRoot: dir, evidenceDir: join(dir, 'ev'), req: REQ, watch: WATCH, watchDigest: DIGEST, remoteCfg: CFG, evaluateCriteria, run: flaky, now: () => (t += 1000), pollMs: 1, retryBackoffMs: 1 });
+    assert.equal(r.status, 'ok', r.reason);
+    // a non-transient failure is surfaced at once
+    const denied = (cmd, args, o) => { if (cmd === 'gh' && args[0] === 'workflow') { const e = new Error('x'); e.stderr = 'HTTP 403: Resource not accessible'; throw e; } return base(cmd, args, o); };
+    const r2 = await runRemote({ repoRoot: dir, evidenceDir: join(dir, 'ev'), req: REQ, watch: WATCH, watchDigest: DIGEST, remoteCfg: CFG, evaluateCriteria, run: denied, now: () => (t += 1000), pollMs: 1, retryBackoffMs: 1 });
+    assert.equal(r2.status, 'failed'); assert.match(r2.reason, /could not dispatch.*403/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
