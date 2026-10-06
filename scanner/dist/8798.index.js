@@ -174,8 +174,10 @@ function judgeFixWitness(before, after) {
 function haskellRunner() {
   const p = which('runghc') || which('runhaskell');
   if (!p) return { available: false, reason: 'no Haskell toolchain (runghc) on PATH; witnesses for Haskell findings are unavailable here' };
-  const v = (0,node_child_process__WEBPACK_IMPORTED_MODULE_3__.spawnSync)(p, ['--version'], { encoding: 'utf8', timeout: 10_000 });
-  return v.status === 0 ? { available: true, path: p, version: String(v.stdout || v.stderr).trim() } : { available: false, reason: 'the Haskell runner did not start' };
+  // GHC's first start on a cold, loaded machine (a CI runner) has taken more than 10 s; a probe that gives up there reports a toolchain
+  // that is installed as absent, and the answer then differs between two calls in one run.
+  const v = (0,node_child_process__WEBPACK_IMPORTED_MODULE_3__.spawnSync)(p, ['--version'], { encoding: 'utf8', timeout: 60_000 });
+  return v.status === 0 ? { available: true, path: p, version: String(v.stdout || v.stderr).trim() } : { available: false, reason: v.error && v.error.code === 'ETIMEDOUT' ? 'the Haskell runner did not start within 60 s' : 'the Haskell runner did not start' };
 }
 
 /**

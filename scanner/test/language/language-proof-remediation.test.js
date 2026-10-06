@@ -85,11 +85,13 @@ test('[X-009.AC01] proveFinding records execution-proven only for a marker, with
 });
 
 test('[X-009.AC01] a Haskell witness needs a toolchain: without one it is unavailable, never proof', async () => {
+  // availability is decided ONCE: two probes in one test can disagree on a loaded machine, and then the assertion tests the probe, not the witness
+  const available = haskellRunner().available;
   const r = runHaskellWitness('main :: IO ()\nmain = writeFile "PROVEN" "x"\n');
-  if (haskellRunner().available) assert.ok(['reproduced', 'invalid'].includes(r.status));
-  else { assert.equal(r.status, 'unavailable'); assert.match(r.reason, /no Haskell toolchain/); }
+  if (available) assert.ok(['reproduced', 'invalid'].includes(r.status), `status ${r.status}: ${r.reason || ''}`);
+  else { assert.equal(r.status, 'unavailable'); assert.match(r.reason, /no Haskell toolchain|did not start/); }
   const p = await proveFinding({ id: 'h', file: 'A.hs', parser: 'IR-TAINT', poc: { lang: 'haskell', code: 'main :: IO ()\nmain = pure ()\n' } });
-  if (!haskellRunner().available) { assert.equal(p.proofTier, 'taint-proven'); assert.equal(p.proofEvidence.witnessStatus, 'unavailable'); assert.equal(p.proofEvidence.ran, false); }
+  if (!available) { assert.equal(p.proofTier, 'taint-proven'); assert.equal(p.proofEvidence.witnessStatus, 'unavailable'); assert.equal(p.proofEvidence.ran, false); }
 });
 
 test('[X-009.AC01] the fix lifecycle runs a witness before and after, and blocks a patch that still reproduces', async () => {
