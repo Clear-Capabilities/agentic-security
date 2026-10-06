@@ -152,3 +152,16 @@ test('when remote verification is not possible the requirement is blocked, not f
   assert.equal(r.status, 'unavailable'); assert.match(r.reason, /not possible/);
   assert.ok(r.criteria.every((c) => c.state === 'fail'));
 });
+
+// ── the model-spend cap and the run budgets (controller.mjs) ─────────────────────────────────────────────────────────────────────────
+import { Controller } from '../lib/controller.mjs';
+
+test('an exhausted model-spend cap blocks model work only; the wall-clock and attempt budgets still gate everything', () => {
+  const mk = (budgets, limits = {}) => ({ limits: { runWallSeconds: 1000, runMaxAttempts: 10, claudeBudgetUsd: 50, minAttemptBudgetUsd: 1, ...limits }, S: { budgets: { wallUsedMs: 0, segmentStartedAt: null, attemptsUsed: 0, usdUsed: 0, ...budgets } }, wallUsedMs() { return this.S.budgets.wallUsedMs; } });
+  const spent = mk({ usdUsed: 50.59 });
+  assert.equal(Controller.prototype.budgetProblem.call(spent), null, 'revalidation and the final phase cost no model spend');
+  assert.match(Controller.prototype.modelBudgetProblem.call(spent), /Claude spend budget exhausted/, 'a worker attempt is still refused');
+  assert.equal(Controller.prototype.modelBudgetProblem.call(mk({ usdUsed: 10 })), null);
+  assert.match(Controller.prototype.budgetProblem.call(mk({ wallUsedMs: 2_000_000 })), /wall-clock budget/);
+  assert.match(Controller.prototype.budgetProblem.call(mk({ attemptsUsed: 10 })), /attempt budget/);
+});
