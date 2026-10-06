@@ -117,8 +117,31 @@ Delete a finished run's directory to reclaim space; the manifest and evidence of
 | Tool | Used for | When absent | Troubleshooting |
 |---|---|---|---|
 | `ghc`, `cabal` | HS-006.AC01 (route fixtures compile), compile checks of fixes | the criterion is `blocked` naming the tool | install a GHC; `retry --requirement HS-006` re-checks; `compileOperationMaxSeconds` bounds one compile |
-| `nix` | NIX-011 (isolated evaluation), NIX-012 (NixOS host and VM checks) | `blocked`, naming the tool | needs the sandbox probe to pass too; `vmOperationMaxSeconds` bounds a VM operation |
+| `nix` | NIX-011 (isolated evaluation), NIX-012 (NixOS host and VM checks) | the suite is run on a GitHub-hosted runner (see "Hosted verification" below); if that is not possible it is `blocked`, naming the tool | needs the sandbox probe to pass too; `vmOperationMaxSeconds` bounds a VM operation |
 | `stack` | resolved Stack export checks | those checks report not-run | none needed for default scans |
+
+## Hosted verification
+
+A suite whose profile entry has a `remote` block (NIX-011, NIX-012) is run on a GitHub-hosted runner when the tool it needs is missing
+on the controller's machine. This exists because NIX-012 needs a booted NixOS and NIX-011 needs `nix`, and a developer's laptop
+often has neither. The evidence it produces is labelled: `invoker: controller+hosted-ci`, a `remote` block (run id and URL, commit,
+artifact digest, one entry per leg) and a limitation line saying the suite did not run on this host. It is never presented as a local run.
+
+What the controller requires before it accepts a hosted run:
+
+1. A **clean working tree** and a HEAD that is the tip of a **pushed branch**: the runner tests a commit, so what it tests is exactly what is on disk here.
+2. The committed `.github/workflows/verify-remote.yml`, dispatched on that branch with the commit, the requirement, the watch globs and a
+   **nonce**. The controller finds its own run by the nonce, not "the latest run", and requires the workflow that ran to be the one at that commit.
+3. A `meta.json` from the runner whose **digest of the watched files equals the controller's own** (the runner computes it with
+   `scripts/loop-engineering/digest.mjs`, the code the controller uses), so the two sides tested the same bytes.
+4. A TAP file **per declared leg** whose hash matches the one recorded. NIX-011 has one leg; NIX-012 has two: an x86_64 NixOS guest on
+   KVM and an aarch64 guest emulated in software (the criterion allows "actual tested emulation"; the arm runners have no KVM).
+5. The TAP is judged exactly as a local run is (a tagged test per criterion; failed, skipped and untagged tests fail it), and **every leg must pass every criterion**.
+
+Anything else (a failed run, a wrong commit, a different digest, a missing leg or file, a hash mismatch, a skipped test) fails closed.
+If the preflight cannot be met (dirty tree, commit not pushed, `gh` missing or not logged in) the requirement is `blocked` with the
+reason, not failed and not passed. `LOOP_REMOTE_VERIFY=0` turns the mode off. It trusts GitHub's account of what ran and the committed
+workflow; it is not a substitute for a local run where a local run is possible.
 
 An optional evaluator that is selected but cannot prove its isolation, or exceeds its deadline, is reported as
 `unsupported`, `blocked` or `timed_out` in the scan health; it is never a silent pass, and the loop treats the dependent

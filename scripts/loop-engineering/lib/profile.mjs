@@ -66,6 +66,15 @@ export function validateProfile(p, repoRoot) {
       for (const f of s.files || []) if (!f.endsWith('.test.js') || f.startsWith('/') || f.includes('..')) problems.push(`suite ${name}: bad test file path "${f}"`);
     }
   }
+  for (const [name, s] of Object.entries(p.suites || {})) {
+    if (!s.remote) continue;
+    const r = s.remote;
+    if (typeof r.workflow !== 'string' || !/^[A-Za-z0-9._-]+\.yml$/.test(r.workflow)) problems.push(`suite ${name}: remote.workflow must be a workflow file name`);
+    if (!['nix', 'nixos'].includes(r.target)) problems.push(`suite ${name}: remote.target must be nix or nixos`);
+    if (!Array.isArray(r.legs) || !r.legs.length || r.legs.some((l) => typeof l !== 'string' || !l)) problems.push(`suite ${name}: remote.legs must name at least one leg`);
+    if (!Number.isInteger(r.timeoutSeconds) || r.timeoutSeconds <= 0) problems.push(`suite ${name}: remote.timeoutSeconds must be a positive integer`);
+    if (!(s.requiresTools || []).length) problems.push(`suite ${name}: remote is only reached when a required tool is missing, so requiresTools must name one`);
+  }
   for (const g of [...(p.baselineGates || []), ...(p.finalGates || [])]) checkCmd(`gate ${g.id}`, g);
   if (!p.watch || !p.watch.LOOP) problems.push('watch globs missing');
   if (problems.length) throw new ProfileError(problems);

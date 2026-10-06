@@ -440,7 +440,15 @@
       "timeoutSeconds": 900,
       "requiresTools": [
         "nix"
-      ]
+      ],
+      "remote": {
+        "workflow": "verify-remote.yml",
+        "target": "nix",
+        "legs": [
+          "nix"
+        ],
+        "timeoutSeconds": 5400
+      }
     },
     "nixos-host-runtime": {
       "kind": "node-test",
@@ -452,7 +460,16 @@
       "timeoutSeconds": 1800,
       "requiresTools": [
         "nix"
-      ]
+      ],
+      "remote": {
+        "workflow": "verify-remote.yml",
+        "target": "nixos",
+        "legs": [
+          "x86_64-linux",
+          "aarch64-linux-emulated"
+        ],
+        "timeoutSeconds": 21600
+      }
     },
     "language-secrets": {
       "kind": "node-test",

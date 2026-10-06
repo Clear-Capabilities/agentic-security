@@ -191,7 +191,7 @@ export class Controller {
     if (st.state === 'retry-wait') { st.nextEligibleAt = 0; return 'backoff-skipped'; }
     if (['timed-out', 'stale'].includes(st.state)) { st.state = 'pending'; return 'requeued'; }
     if (['blocked', 'failed'].includes(st.state)) {
-      const external = st.blockers.length && st.blockers.every((b) => ['missing-tool', 'permission-denied', 'network-unavailable', 'auth-missing', 'external'].includes(b.type));
+      const external = st.blockers.length && st.blockers.every((b) => ['missing-tool', 'remote-unavailable', 'permission-denied', 'network-unavailable', 'auth-missing', 'external'].includes(b.type));
       if (!external) return `refused:${st.blockers.map((b) => b.type).join(',') || 'attempt-cap'} (retry caps are not bypassed; revise the profile and re-init to change them)`;
       st.state = 'pending'; st.blockers = st.blockers.map((b) => ({ ...b, reevaluated: true }));
       return 'requeued';

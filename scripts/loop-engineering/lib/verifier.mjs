@@ -15,6 +15,7 @@ import { parseTap } from './tap.mjs';
 import { sha256, readJson, nowIso } from './util.mjs';
 import { writeEvidence, verifierHash, requirementHash, effectiveWatch, VERIFIER_VERSION } from './evidence.mjs';
 import { registerOpLease } from './oplease.mjs';
+import { runRemote } from './remote.mjs';
 import { mkdirSync, readFileSync } from 'node:fs';
 
 export function toolAvailable(name) {
@@ -60,6 +61,7 @@ export async function verifyRequirement(ctx, req, opts = {}) {
   const limitations = [];
   let criteria, counts = { tests: 0, pass: 0, fail: 0, skipped: 0 };
   let run = null, result = 'fail', blocker = null, reason = null;
+  let remoteRecord = null, remoteFiles = [];
   const logPath = join(L.evidenceDir, req.id, `${String(Date.now())}.log`);
 
   const missingFiles = v.files.filter((f) => !existsSync(resolve(cwdAbs, f)));
@@ -67,6 +69,17 @@ export async function verifyRequirement(ctx, req, opts = {}) {
   if (missingFiles.length) {
     reason = `suite file(s) do not exist yet: ${missingFiles.join(', ')}`;
     criteria = failAll(req, reason);
+  } else if (missingTools.length && v.remote && !opts.noRemote && process.env.LOOP_REMOTE_VERIFY !== '0') {
+    // The tool is not here but a declared hosted-CI executor has it: run the suite there, bound to this exact commit and tree.
+    const rr = await runRemote({
+      repoRoot, evidenceDir: join(L.evidenceDir, req.id), req, watch, watchDigest: before, remoteCfg: v.remote, evaluateCriteria,
+      logger: opts.logger,
+    });
+    criteria = rr.criteria; counts = rr.counts; remoteRecord = rr.remote || null; remoteFiles = rr.files || [];
+    limitations.push(...(rr.limitations || []));
+    if (rr.status === 'ok') result = 'pass';
+    else if (rr.status === 'unavailable') { result = 'blocked'; blocker = { type: 'remote-unavailable', tools: missingTools }; reason = rr.reason; limitations.push(`required tool(s) unavailable here (${missingTools.join(', ')}) and ${rr.reason}`); }
+    else { result = 'fail'; reason = rr.reason; }
   } else if (missingTools.length) {
     result = 'blocked'; blocker = { type: 'missing-tool', tools: missingTools };
     reason = `required tool(s) unavailable: ${missingTools.join(', ')}`;
@@ -113,7 +126,7 @@ export async function verifyRequirement(ctx, req, opts = {}) {
   const logSha = run && existsSync(logPath) ? sha256(readFileSync(logPath)) : null;
   const envelope = {
     schemaVersion: 1, requirement: req.id, phase: opts.phase || 'requirement', attempt: opts.attempt ?? null,
-    invoker: ctx.invoker || 'controller', result, reason,
+    invoker: remoteRecord ? 'controller+hosted-ci' : (ctx.invoker || 'controller'), result, reason,
     createdAt: nowIso(),
     verifier: { version: VERIFIER_VERSION, hash: verifierHash() },
     manifest: { version: manifest.manifestVersion, acceptanceHash: manifest.acceptanceHash, requirementHash: requirementHash(req) },
@@ -123,13 +136,14 @@ export async function verifyRequirement(ctx, req, opts = {}) {
     suiteFilesDigest: sha256(v.files.map((f) => { try { return sha256(readFileSync(resolve(cwdAbs, f))); } catch { return 'missing'; } }).join('')),
     environment: environmentInfo(),
     exec: {
-      argv: [v.executable, ...argv.slice(1)], cwd: v.cwd, startedAt, endedAt: nowIso(), expectedExitCode: v.expectedExitCode, timeoutSeconds: v.timeoutSeconds,
-      exitCode: run?.exitCode ?? null, signal: run?.signal ?? null, outcome: run ? run.outcome : (blocker ? 'blocked' : 'not-run'), durationMs: run?.durationMs ?? 0,
+      argv: remoteRecord ? ['hosted-ci', v.remote.workflow, String(remoteRecord.runId)] : [v.executable, ...argv.slice(1)], cwd: v.cwd, startedAt, endedAt: nowIso(), expectedExitCode: v.expectedExitCode, timeoutSeconds: v.timeoutSeconds,
+      exitCode: run?.exitCode ?? (remoteRecord ? (result === 'pass' ? 0 : 1) : null), signal: run?.signal ?? null, outcome: run ? run.outcome : (remoteRecord ? 'hosted-ci' : (blocker ? 'blocked' : 'not-run')), durationMs: run?.durationMs ?? 0,
       orphansKilled: run?.orphansKilled?.length ?? 0, peakRssKb: run?.peakRssKb ?? 0,
     },
     counts, criteria,
     ...(blocker ? { blocker } : {}),
-    logs: run ? { combined: { path: logPath, sha256: logSha, bytes: run.bytes.stdout + run.bytes.stderr } } : {},
+    logs: run ? { combined: { path: logPath, sha256: logSha, bytes: run.bytes.stdout + run.bytes.stderr } } : Object.fromEntries(remoteFiles.map((f, i) => [`remote${i}`, f])),
+    ...(remoteRecord ? { remote: remoteRecord } : {}),
     limitations,
   };
   const out = writeEvidence(L, req.id, envelope, key);

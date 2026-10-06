@@ -101,6 +101,8 @@
             testScript = ''
               machine.wait_for_unit("multi-user.target", timeout=3600)
               machine.succeed("test -f /etc/NIXOS")
+              # the leg's name is a claim about the guest; check it (an "aarch64" leg that was really x86 would be a false label)
+              machine.succeed("test \"$(uname -m)\" = \"${if guest == "aarch64-linux" then "aarch64" else "x86_64"}\"")
               machine.succeed("agentic-security version")
               machine.succeed("cp -r ${repo} /tmp/repo && chmod -R u+w /tmp/repo")
               machine.succeed("cd /tmp/repo && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t")
