@@ -9,6 +9,10 @@
 > make the history less accurate, not more.
 
 
+## 0.157.2 - the npm package description names Haskell and Nix/NixOS
+
+npm cuts a package description at 255 characters, and in 0.157.1 the Haskell and Nix/NixOS sentence sat past the cut, so the registry never showed it. The description is now 234 characters with both languages inside the limit. No scanner behaviour changed.
+
 ## 0.157.1 - `ci` summary adds up; Haskell and Nix/NixOS shown in the language table, the npm README and the manifests
 
 One scanner fix, otherwise documentation and metadata.
