@@ -10,18 +10,18 @@
   "hostedVerification": [
     {
       "id": "NIX-011",
-      "runId": 37557551607,
-      "runUrl": "https://github.com/Clear-Capabilities/agentic-security/actions/runs/37557551607",
-      "sha": "257759ce1b3516243b56586f949b7fa9f50de05f",
+      "runId": 37692088360,
+      "runUrl": "https://github.com/Clear-Capabilities/agentic-security/actions/runs/37692088360",
+      "sha": "973e77949235e5a5efa58ff472c5ffdaa3900137",
       "legs": [
         "nix"
       ]
     },
     {
       "id": "NIX-012",
-      "runId": 37557624938,
-      "runUrl": "https://github.com/Clear-Capabilities/agentic-security/actions/runs/37557624938",
-      "sha": "257759ce1b3516243b56586f949b7fa9f50de05f",
+      "runId": 37692191429,
+      "runUrl": "https://github.com/Clear-Capabilities/agentic-security/actions/runs/37692191429",
+      "sha": "973e77949235e5a5efa58ff472c5ffdaa3900137",
       "legs": [
         "x86_64-linux",
         "aarch64-linux-emulated"
