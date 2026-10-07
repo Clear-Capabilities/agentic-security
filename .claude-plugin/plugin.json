@@ -48,7 +48,10 @@
     "jailbreak",
     "llm-eval",
     "adversarial-testing",
-    "ai-safety"
+    "ai-safety",
+    "haskell",
+    "nix",
+    "nixos"
   ],
   "mcpServers": {
     "agentic-security": {
