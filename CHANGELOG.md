@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.157.1 - Haskell and Nix/NixOS shown in the language table, the npm README and the manifests
+
+Documentation and metadata only; no scanner behaviour changed.
+
+- **README language table** lists Haskell and Nix/NixOS beside the nine first-class languages, linking to their guides and to the per-capability support record.
+- **The npm package has a README.** `scanner/README.md` is new (the package page was empty); it states the supported languages, that both are scanned statically, and the limits of the measurement.
+- **Manifests.** `haskell`, `nix` and `nixos` keywords on the plugin and marketplace manifests, and a Haskell/Nix line in the scanner package description.
+
+This entry makes no claim about how many requirements are verified: that number is derived from the controller's evidence for the exact tree it ran on, and this release has not had a new controller pass.
+
 ## 0.157.0 - hosted verification for the suites that need Nix or NixOS
 
 NIX-011 needs `nix` and NIX-012 needs a booted NixOS, which a developer's laptop often lacks, so the loop controller could only ever report them as blocked. This release lets the controller run them on a GitHub-hosted runner and record the outcome as evidence, bound to the exact commit.
