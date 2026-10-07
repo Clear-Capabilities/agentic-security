@@ -405,13 +405,7 @@ shown as **blocked**, never as passing. Read [Haskell](docs/guides/haskell.md), 
 [the support record](docs/language-support.md) before quoting any figure.
 
 <!-- generated:completion-status:start -->
-**Partial release.** 54 of 57 requirements of the programme are verified (94.5% by weight); the rest are open:
-
-| Requirement | State | Why it is open |
-| --- | --- | --- |
-| `NIX-011` | ready | not verified |
-| `NIX-012` | ready | not verified |
-| `REL-001` | ready | final-phase acceptance: needs a live controller and every other requirement verified |
+All 57 requirements of the Haskell and Nix/NixOS programme are verified by the loop controller. `NIX-011` and `NIX-012` (which need Nix, and a booted NixOS guest for NIX-012) were verified on GitHub-hosted runners by the controller's hosted-CI executor, bound to the exact commit (legs: nix, x86_64-linux, aarch64-linux-emulated), not on the developer's machine; the evidence says so.
 <!-- generated:completion-status:end -->
 
 <!-- generated:support-summary:start -->
