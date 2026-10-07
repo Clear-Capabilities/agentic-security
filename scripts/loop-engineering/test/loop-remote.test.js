@@ -61,14 +61,14 @@ async function go(f, extra = {}) {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-test('preflight: a dirty tree, an unpushed commit, an uncommitted workflow and an unusable gh each refuse, with the remedy', () => {
-  const ok = remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake().run });
+test('preflight: a dirty tree, an unpushed commit, an uncommitted workflow and an unusable gh each refuse, with the remedy', async () => {
+  const ok = await remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake().run });
   assert.equal(ok.ok, true); assert.equal(ok.sha, SHA); assert.equal(ok.branch, 'main'); assert.equal(ok.repo, 'org/repo');
-  assert.match(remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ dirty: ' M a.js\n' }).run }).reason, /uncommitted or untracked/);
-  assert.match(remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ branches: `${'b'.repeat(40)}\trefs/heads/main\n` }).run }).reason, /not the tip of any pushed branch/);
-  assert.match(remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ tracked: false }).run }).reason, /not committed/);
+  assert.match((await remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ dirty: ' M a.js\n' }).run })).reason, /uncommitted or untracked/);
+  assert.match((await remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ branches: `${'b'.repeat(40)}\trefs/heads/main\n` }).run })).reason, /not the tip of any pushed branch/);
+  assert.match((await remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: fake({ tracked: false }).run })).reason, /not committed/);
   const noGh = fake(); const orig = noGh.run;
-  assert.match(remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: (c, a, o) => { if (c === 'gh') throw new Error('gh: command not found'); return orig(c, a, o); } }).reason, /gh is not usable/);
+  assert.match((await remotePreflight({ repoRoot: '.', workflow: 'verify-remote.yml', run: (c, a, o) => { if (c === 'gh') throw new Error('gh: command not found'); return orig(c, a, o); } })).reason, /gh is not usable/);
 });
 
 test('a run on the right commit, over the same bytes, with every test passing, is verified, and the evidence says it ran remotely', async () => {
@@ -184,4 +184,15 @@ test('a reset connection on dispatch or download is retried; a real error is not
     const r2 = await runRemote({ repoRoot: dir, evidenceDir: join(dir, 'ev'), req: REQ, watch: WATCH, watchDigest: DIGEST, remoteCfg: CFG, evaluateCriteria, run: denied, now: () => (t += 1000), pollMs: 1, retryBackoffMs: 1 });
     assert.equal(r2.status, 'failed'); assert.match(r2.reason, /could not dispatch.*403/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('deadlines use a monotonic clock: a wall-clock jump (the machine sleeping) cannot expire them', async () => {
+  const realNow = Date.now; let calls = 0;
+  Date.now = () => realNow() + (++calls > 2 ? 86_400_000 : 0);   // the wall clock leaps a day forward after the run starts
+  const dir = mkdtempSync(join(tmpdir(), 'loop-remote-'));
+  mkdirSync(join(dir, 'ev'), { recursive: true });
+  try {
+    const r = await runRemote({ repoRoot: dir, evidenceDir: join(dir, 'ev'), req: REQ, watch: WATCH, watchDigest: DIGEST, remoteCfg: CFG, evaluateCriteria, run: fake().run, pollMs: 1 });
+    assert.equal(r.status, 'ok', r.reason);
+  } finally { Date.now = realNow; rmSync(dir, { recursive: true, force: true }); }
 });

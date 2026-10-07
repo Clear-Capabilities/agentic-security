@@ -91,7 +91,10 @@ const BLOCKS = {
   },
   async 'completion-status'() {
     const c = JSON.parse(readFileSync(join(ROOT, 'docs', 'completion-status.json'), 'utf8'));
-    if (!c.remaining.length) return `All ${c.requirements.total} requirements of the Haskell and Nix/NixOS programme are verified.`;
+    if (!c.remaining.length) {
+      const h = c.hostedVerification || [];
+      return `All ${c.requirements.total} requirements of the Haskell and Nix/NixOS programme are verified by the loop controller.${h.length ? ` ${h.map((x) => `\`${x.id}\``).join(' and ')} (${h.length === 1 ? 'which needs' : 'which need'} Nix, and a booted NixOS guest for NIX-012) ${h.length === 1 ? 'was' : 'were'} verified on GitHub-hosted runners by the controller's hosted-CI executor, bound to the exact commit (legs: ${[...new Set(h.flatMap((x) => x.legs))].join(', ')}), not on the developer's machine; the evidence says so.` : ''}`;
+    }
     const rows = c.remaining.map((r) => [`\`${r.id}\``, r.state, String(r.blocker).replace(/\|/g, '/').slice(0, 160)]);
     return [`**Partial release.** ${c.requirements.verified} of ${c.requirements.total} requirements of the programme are verified (${c.verifiedPercent}% by weight); the rest are open:`, '', table(['Requirement', 'State', 'Why it is open'], rows)].join('\n');
   },
