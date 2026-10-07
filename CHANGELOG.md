@@ -9,9 +9,11 @@
 > make the history less accurate, not more.
 
 
-## 0.157.1 - Haskell and Nix/NixOS shown in the language table, the npm README and the manifests
+## 0.157.1 - `ci` summary adds up; Haskell and Nix/NixOS shown in the language table, the npm README and the manifests
 
-Documentation and metadata only; no scanner behaviour changed.
+One scanner fix, otherwise documentation and metadata.
+
+- **`agentic-security ci` prints every severity.** The summary line tallied `info` findings but never printed them, so a scan with info findings showed a total that did not equal the listed counts (the README example read 45 findings beside counts summing to 33). The line now ends `· N info`, and `test/ci.test.js` pins that the printed counts sum to the total and match `findings.json`. The README, `docs/guides/ci-setup.md` and `docs/walkthroughs/assurance-modes.md` examples were re-captured from a real run of the demo app (44 findings: 3 critical, 6 high, 7 medium, 16 low, 12 info).
 
 - **README language table** lists Haskell and Nix/NixOS beside the nine first-class languages, linking to their guides and to the per-capability support record.
 - **The npm package has a README.** `scanner/README.md` is new (the package page was empty); it states the supported languages, that both are scanned statically, and the limits of the measurement.

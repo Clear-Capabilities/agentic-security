@@ -113,6 +113,24 @@ test('ci writes findings.{json,sarif,junit.xml} to .agentic-security/', async ()
   assert.match(xml, /^<\?xml version="1\.0"/);
 });
 
+// The summary line's per-severity counts must add up to its total. The CLI used to tally `info`
+// findings but never print them, so a scan with info findings read "45 findings" next to counts
+// summing to 33. Checked against findings.json too, so a count that is printed but wrong also fails.
+test('ci summary line: the per-severity counts add up to the total and match findings.json', async () => {
+  if (!fs.existsSync(cli)) { console.warn('dist/ not built; skipping ci test'); return; }
+  const dir = await copyFixture();
+  const r = runCi(dir, ['--fail-on', 'none']);
+  const m = /\[ci\] (\d+) findings — (\d+) critical · (\d+) high · (\d+) medium · (\d+) low · (\d+) info/.exec(r.stderr);
+  assert.ok(m, `summary line must list every severity including info; stderr=${r.stderr}`);
+  const [total, ...parts] = m.slice(1).map(Number);
+  assert.equal(parts.reduce((a, b) => a + b, 0), total, `severity counts ${parts} must sum to ${total}`);
+  const doc = JSON.parse(await fsp.readFile(path.join(dir, '.agentic-security', 'findings.json'), 'utf8'));
+  const list = Array.isArray(doc) ? doc : doc.findings;
+  const by = (s) => list.filter((f) => f.severity === s).length;
+  assert.deepEqual(parts, ['critical', 'high', 'medium', 'low', 'info'].map(by), 'printed counts match the written findings');
+  assert.equal(total, list.length, 'printed total matches the written findings');
+});
+
 // Stage 5 correctness audit: cmdScan computes and attaches scan.attestation
 // (the R4 tamper-evidence digest — "attests what actually ships") right
 // before writing its own artifacts, but cmdCi duplicates cmdScan's

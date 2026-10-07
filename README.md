@@ -61,7 +61,7 @@ npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assuranc
 ```text
 $ agentic-security ci examples/demo-app --assurance strict
 [ci] full scan (no baseline ref detected)
-[ci] 45 findings — 3 critical · 6 high · 7 medium · 17 low
+[ci] 44 findings — 3 critical · 6 high · 7 medium · 16 low · 12 info
 [ci] ⚠ scan-health=partial — EPSS exploit-probability data is stale (20699 day(s) old)
 [ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}
 [ci] fail-on=critical  scan-exit=3
