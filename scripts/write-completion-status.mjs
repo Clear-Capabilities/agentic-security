@@ -8,7 +8,7 @@
 //
 //   node scripts/write-completion-status.mjs            # reads `run.mjs status --json`, writes docs/completion-status.json
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,5 +28,14 @@ const out = {
   })),
 };
 void open;
+// Requirements whose newest evidence came from a hosted runner rather than this machine: stated, not implied. The evidence file is local
+// (.loop-engineering is git-ignored), so this is read when the status is generated and carried here for readers and CI.
+const hosted = s.requirements.filter((x) => x.state === 'verified' && x.evidence && x.evidence.file).flatMap((x) => {
+  try {
+    const ev = JSON.parse(readFileSync(x.evidence.file, 'utf8'));
+    return ev.remote ? [{ id: x.id, runId: ev.remote.runId, runUrl: ev.remote.runUrl, sha: ev.remote.sha, legs: (ev.remote.legs || []).map((l) => l.name) }] : [];
+  } catch { return []; }
+});
+out.hostedVerification = hosted;
 writeFileSync(join(ROOT, 'docs', 'completion-status.json'), `${JSON.stringify(out, null, 2)}\n`);
 console.log(`docs/completion-status.json: ${out.requirements.verified}/${out.requirements.total} verified, ${out.remaining.length} open`);

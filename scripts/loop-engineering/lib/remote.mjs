@@ -18,7 +18,8 @@
 // WHAT IT CANNOT DO. It trusts GitHub's account of what ran, and the committed workflow. It does not make hosted CI a substitute for a
 // local run where a local run is possible: it is only reached when a required tool is missing here.
 
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { mkdirSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -27,20 +28,28 @@ import { parseTap } from './tap.mjs';
 
 export const REMOTE_VERSION = '1';
 
-const defaultRun = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', timeout: opts.timeoutMs || 120_000, maxBuffer: 64 * 1024 * 1024, cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+// ASYNC, never execFileSync: a synchronous call freezes the controller's event loop (and its heartbeat) for as long as GitHub takes to answer.
+const defaultRun = (cmd, args, opts = {}) => new Promise((resolve, reject) => {
+  execFile(cmd, args, { encoding: 'utf8', timeout: opts.timeoutMs || 120_000, maxBuffer: 64 * 1024 * 1024, cwd: opts.cwd }, (err, stdout, stderr) => {
+    if (err) { err.stderr = err.stderr || stderr; reject(err); } else resolve(stdout);
+  });
+});
+// A MONOTONIC clock for every deadline in this file. Date.now() jumps when the machine sleeps, so a 10-minute wait can expire before the
+// process has polled once; performance.now() does not advance while the machine is asleep, so a deadline measures time the controller was running.
+const monotonic = () => performance.now();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A reset connection is not a verdict. Single-shot calls (dispatch, download) are retried a few times with a short backoff; a call that
 // still fails is reported as what it is. Polling calls already tolerate a failed poll.
 const TRANSIENT = /connection reset|ECONNRESET|ETIMEDOUT|EOF|timed? ?out|temporarily unavailable|502|503|504|TLS handshake|i\/o timeout/i;
 function retrying(run, tries = 4, backoffMs = 5000) {
-  return (cmd, args, opts) => {
+  return async (cmd, args, opts) => {
     let last;
     for (let i = 0; i < tries; i++) {
-      try { return run(cmd, args, opts); } catch (e) {
+      try { return await run(cmd, args, opts); } catch (e) {
         last = e;
         if (!TRANSIENT.test(String(e.stderr || e.message))) throw e;
-        if (i < tries - 1) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoffMs * (i + 1));
+        if (i < tries - 1) await sleep(backoffMs * (i + 1));
       }
     }
     throw last;
@@ -48,22 +57,22 @@ function retrying(run, tries = 4, backoffMs = 5000) {
 }
 
 /** Can a remote run be started from this checkout? Returns {ok, reason?, sha?, branch?, repo?}. */
-export function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun }) {
+export async function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun }) {
   const run = retrying(rawRun, 3, 3000);
-  const git = (...a) => run('git', a, { cwd: repoRoot }).trim();
+  const git = async (...a) => String(await run('git', a, { cwd: repoRoot })).trim();
   let dirty;
-  try { dirty = git('status', '--porcelain', '--untracked-files=all'); } catch (e) { return { ok: false, reason: `git status failed: ${String(e.message).slice(0, 120)}` }; }
+  try { dirty = await git('status', '--porcelain', '--untracked-files=all'); } catch (e) { return { ok: false, reason: `git status failed: ${String(e.message).slice(0, 120)}` }; }
   if (dirty) return { ok: false, reason: 'the working tree has uncommitted or untracked files: a remote run tests a commit, so commit (or discard) them first' };
-  const sha = git('rev-parse', 'HEAD');
+  const sha = await git('rev-parse', 'HEAD');
   let branches = '';
-  try { branches = run('git', ['ls-remote', '--heads', 'origin'], { cwd: repoRoot, timeoutMs: 60_000 }); } catch (e) { return { ok: false, reason: `could not read the remote's branches: ${String(e.message).slice(0, 120)}` }; }
+  try { branches = String(await run('git', ['ls-remote', '--heads', 'origin'], { cwd: repoRoot, timeoutMs: 60_000 })); } catch (e) { return { ok: false, reason: `could not read the remote's branches: ${String(e.message).slice(0, 120)}` }; }
   const tip = branches.split('\n').map((l) => l.trim().split(/\s+/)).filter((p) => p[0] === sha).map((p) => p[1].replace(/^refs\/heads\//, ''));
   if (!tip.length) return { ok: false, reason: `HEAD ${sha.slice(0, 12)} is not the tip of any pushed branch: push it first (the workflow is dispatched on a branch whose tip is exactly this commit)` };
   let tracked = '';
-  try { tracked = git('ls-files', '--error-unmatch', `.github/workflows/${workflow}`); } catch { /* handled below */ }
+  try { tracked = await git('ls-files', '--error-unmatch', `.github/workflows/${workflow}`); } catch { /* handled below */ }
   if (!tracked) return { ok: false, reason: `.github/workflows/${workflow} is not committed` };
   let repo = null;
-  try { repo = run('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], { cwd: repoRoot, timeoutMs: 60_000 }).trim(); } catch (e) { return { ok: false, reason: `gh is not usable (is it installed and logged in?): ${String(e.message).slice(0, 120)}` }; }
+  try { repo = String(await run('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], { cwd: repoRoot, timeoutMs: 60_000 })).trim(); } catch (e) { return { ok: false, reason: `gh is not usable (is it installed and logged in?): ${String(e.message).slice(0, 120)}` }; }
   return { ok: true, sha, branch: tip.includes('main') ? 'main' : tip[0], repo };
 }
 
@@ -72,16 +81,16 @@ export function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun }
  *   { status: 'ok'|'failed'|'unavailable', reason, criteria, counts, remote, files: [{path, sha256, bytes}], limitations }
  * `watchDigest` is the digest of the requirement's watched files computed LOCALLY; the runner must reproduce it.
  */
-export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run: rawRun = defaultRun, now = Date.now, pollMs = 20_000, logger = () => {}, retryBackoffMs = 5000 }) {
+export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run: rawRun = defaultRun, now = monotonic, pollMs = 20_000, logger = () => {}, retryBackoffMs = 5000 }) {
   const run = retrying(rawRun, 4, retryBackoffMs);
-  const pre = remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run });
+  const pre = await remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run });
   if (!pre.ok) return { status: 'unavailable', reason: `hosted-CI verification is not possible: ${pre.reason}`, criteria: failAll(req, `hosted-CI verification is not possible: ${pre.reason}`), counts: zero(), files: [], limitations: [] };
 
   const nonce = randomBytes(6).toString('hex');
   const watchJson = JSON.stringify(watch);
   const dispatchedAt = now();
   try {
-    run('gh', ['workflow', 'run', remoteCfg.workflow, '--ref', pre.branch, '-f', `requirement=${req.id}`, '-f', `sha=${pre.sha}`, '-f', `watch=${watchJson}`, '-f', `nonce=${nonce}`, '-f', `target=${remoteCfg.target}`], { cwd: repoRoot, timeoutMs: 60_000 });
+    await run('gh', ['workflow', 'run', remoteCfg.workflow, '--ref', pre.branch, '-f', `requirement=${req.id}`, '-f', `sha=${pre.sha}`, '-f', `watch=${watchJson}`, '-f', `nonce=${nonce}`, '-f', `target=${remoteCfg.target}`], { cwd: repoRoot, timeoutMs: 60_000 });
   } catch (e) { return fail(req, `could not dispatch ${remoteCfg.workflow}: ${String(e.stderr || e.message).slice(0, 200)}`); }
   logger(`dispatched ${remoteCfg.workflow} for ${req.id} at ${pre.sha.slice(0, 12)} (nonce ${nonce})`);
 
@@ -91,7 +100,7 @@ export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest
   while (now() < appearBy && !runInfo) {
     await sleep(Math.min(pollMs, 5000));
     let list = [];
-    try { list = JSON.parse(run('gh', ['run', 'list', '--workflow', remoteCfg.workflow, '--branch', pre.branch, '--event', 'workflow_dispatch', '--limit', '30', '--json', 'databaseId,displayTitle,headSha,createdAt,url'], { cwd: repoRoot, timeoutMs: 60_000 })); } catch { /* retry */ }
+    try { list = JSON.parse(await run('gh', ['run', 'list', '--workflow', remoteCfg.workflow, '--branch', pre.branch, '--event', 'workflow_dispatch', '--limit', '30', '--json', 'databaseId,displayTitle,headSha,createdAt,url'], { cwd: repoRoot, timeoutMs: 60_000 })); } catch { /* retry */ }
     runInfo = list.find((r) => String(r.displayTitle || '').includes(nonce)) || null;
   }
   if (!runInfo) return fail(req, `no run carrying nonce ${nonce} appeared within 10 minutes`);
@@ -100,7 +109,7 @@ export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest
   const deadline = dispatchedAt + (remoteCfg.timeoutSeconds || 3600) * 1000;
   let state = null;
   for (;;) {
-    try { state = JSON.parse(run('gh', ['run', 'view', String(runInfo.databaseId), '--json', 'status,conclusion,headSha,url'], { cwd: repoRoot, timeoutMs: 60_000 })); } catch { state = null; }
+    try { state = JSON.parse(await run('gh', ['run', 'view', String(runInfo.databaseId), '--json', 'status,conclusion,headSha,url'], { cwd: repoRoot, timeoutMs: 60_000 })); } catch { state = null; }
     if (state && state.status === 'completed') break;
     if (now() > deadline) return fail(req, `run ${runInfo.databaseId} did not finish within ${remoteCfg.timeoutSeconds || 3600} s (the run was left to finish; it is not cancelled)`);
     await sleep(pollMs);
@@ -108,13 +117,13 @@ export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest
   if (state.headSha !== pre.sha) return fail(req, `run ${runInfo.databaseId} executed ${String(state.headSha).slice(0, 12)}, not ${pre.sha.slice(0, 12)}`);
 
   // download and read what the runner produced
-  const dest = join(evidenceDir, `${now()}-remote`);
+  const dest = join(evidenceDir, `${Date.now()}-remote`);
   mkdirSync(dest, { recursive: true, mode: 0o700 });
-  try { run('gh', ['run', 'download', String(runInfo.databaseId), '-n', `verify-${req.id}`, '-D', dest], { cwd: repoRoot, timeoutMs: 300_000 }); } catch (e) { return fail(req, `could not download the verification artifact of run ${runInfo.databaseId}: ${String(e.stderr || e.message).slice(0, 160)}`); }
+  try { await run('gh', ['run', 'download', String(runInfo.databaseId), '-n', `verify-${req.id}`, '-D', dest], { cwd: repoRoot, timeoutMs: 300_000 }); } catch (e) { return fail(req, `could not download the verification artifact of run ${runInfo.databaseId}: ${String(e.stderr || e.message).slice(0, 160)}`); }
   let artifactDigest = null;
   try {
     const repoSlug = pre.repo;
-    const arts = JSON.parse(run('gh', ['api', `repos/${repoSlug}/actions/runs/${runInfo.databaseId}/artifacts`], { cwd: repoRoot, timeoutMs: 60_000 }));
+    const arts = JSON.parse(await run('gh', ['api', `repos/${repoSlug}/actions/runs/${runInfo.databaseId}/artifacts`], { cwd: repoRoot, timeoutMs: 60_000 }));
     const a = (arts.artifacts || []).find((x) => x.name === `verify-${req.id}`);
     artifactDigest = a && a.digest ? a.digest : null;
   } catch { /* the digest is extra evidence; its absence is recorded as null */ }
