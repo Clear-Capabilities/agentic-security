@@ -1373,7 +1373,7 @@ async function cmdCi(args) {
     ? `[ci] ⚠ scan-health=${_health.status} — ${(_health.conditions || [])[0] || 'analysis did not complete cleanly'}${(_health.conditions || []).length > 1 ? ` (+${_health.conditions.length - 1} more)` : ''}\n`
     : `[ci] scan-health=${_health && _health.status ? _health.status : 'unknown'}\n`;
   process.stderr.write(
-    `[ci] ${findings.length} findings — ${sev.critical} critical · ${sev.high} high · ${sev.medium} medium · ${sev.low} low\n` +
+    `[ci] ${findings.length} findings — ${sev.critical} critical · ${sev.high} high · ${sev.medium} medium · ${sev.low} low · ${sev.info} info\n` +
     _healthLine +
     (_canWriteCi
       ? `[ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}\n`

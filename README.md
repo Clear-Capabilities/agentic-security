@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.157.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.157.1-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -28,7 +28,7 @@ Prove what's fixed.
 
 Five capabilities, each answering a question a plain vulnerability scanner doesn't:
 
-**Find It.** A 12-pillar deterministic scan — SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ — across 9 first-class languages. Where a data flow is involved, the finding carries `chain[]`, a real hop-by-hop path from where tainted data entered to where it reached the sink — not just a line number.
+**Find It.** A 12-pillar deterministic scan — SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ — across 9 first-class languages plus Haskell and Nix/NixOS (each measured per capability). Where a data flow is involved, the finding carries `chain[]`, a real hop-by-hop path from where tainted data entered to where it reached the sink — not just a line number.
 
 **Prove It.** A scan reports on itself, not just on your code. The `scanHealth` object tracks whether every analyzer actually finished — files scanned, analyzers completed vs. failed vs. timed out, feed freshness (KEV/EPSS/calibration) — and `toShipVerdict()` folds that into the one-screen answer everyone actually reads: `✅ Safe to deploy` only when there are zero actionable findings **and** the scan itself completed cleanly. Zero findings from an incomplete scan is `⚠️ Scan incomplete — cannot confirm safe to deploy`, never a false green light. See [Findings vs. assurance](#findings-vs-assurance) below.
 
@@ -61,7 +61,7 @@ npx @clear-capabilities/agentic-security-scanner ci examples/demo-app --assuranc
 ```text
 $ agentic-security ci examples/demo-app --assurance strict
 [ci] full scan (no baseline ref detected)
-[ci] 45 findings — 3 critical · 6 high · 7 medium · 17 low
+[ci] 44 findings — 3 critical · 6 high · 7 medium · 16 low · 12 info
 [ci] ⚠ scan-health=partial — EPSS exploit-probability data is stale (20699 day(s) old)
 [ci] artifacts: .agentic-security/findings.{json,sarif,junit.xml}
 [ci] fail-on=critical  scan-exit=3
@@ -381,7 +381,7 @@ found it. Full guide, including the 8 GB / 16 GB RAM profiles and Gemma 4 —
 
 ## Language coverage
 
-Nine languages have the full flow engine plus structural detectors, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes. Haskell and Nix/NixOS are covered separately, with their status measured per capability (below).
+Nine languages have the full flow engine plus structural detectors, with cross-language detectors for the OWASP-relevant injection and crypto-misuse classes. **Haskell and Nix/NixOS are supported too**: both are scanned statically (no compiler, no `nix`, no network), with their status measured per capability in [Haskell and Nix/NixOS](#haskell-and-nixnixos) below and in [the support record](docs/language-support.md).
 
 | Language | Vuln-class coverage |
 |----------|---------------------|
@@ -394,6 +394,8 @@ Nine languages have the full flow engine plus structural detectors, with cross-l
 | PHP | full |
 | C# | full |
 | Rust | full (flow engine + structural) |
+| Haskell | SAST, taint, web routes and auth, privacy lineage, Cabal/Stack SCA + SBOM, verified fixes: [guide](docs/guides/haskell.md), status per capability [below](#haskell-and-nixnixos) |
+| Nix / NixOS | flake and NixOS-module config analysis (static, declared, effective), hardening, secrets, build trust, SCA + SBOM, verified fixes: [guide](docs/guides/nix-nixos.md), status per capability [below](#haskell-and-nixnixos) |
 
 Detected across these languages: SQL injection, command injection, path traversal, LDAP injection, XPath injection, reflected XSS, SSRF, XXE, code injection (eval / SpEL / Groovy / Roslyn / template), insecure deserialization, hardcoded secrets, weak password hashing, weak ciphers (DES/RC4/Blowfish/ECB), static/zero IV, insecure randomness, CSRF, open redirect, HTTP response splitting, unrestricted file upload, missing authentication on state-changing routes, broken object/function-level authorization (BOLA/BFLA), and ReDoS — plus the JS/Python-specific classes (prototype pollution, mass assignment) and the LLM/agent-tool surface.
 
