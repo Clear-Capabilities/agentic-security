@@ -20,6 +20,7 @@
 
 import { AdvisoryDb, matchComponent as matchHackage, reachability as hackageReachability, licensePolicy, hackagePurl, normalizeAdvisory } from './haskell-sca.js';
 import { parseVersion as parsePvp } from './haskell-manifests.js';
+import { advisorySeverity, NO_RATING_BASIS } from './cvss.js';
 import { parseNix } from './nix-parser.js';
 
 export const NIX_SCA_VERSION = 'nix-sca/1';
@@ -86,7 +87,7 @@ export function normalizeGenericAdvisory(rec) {
       fixPatches: ((a.database_specific && a.database_specific.fix_patches) || (rec.database_specific && rec.database_specific.fix_patches) || []).map((p) => ({ name: p.name || null, sha256: p.sha256 ? sha(p.sha256) : null })),
     });
   }
-  return { id: rec.id, ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
+  return { id: rec.id, severityInfo: advisorySeverity(rec), ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
 }
 
 export class NixAdvisoryData {
@@ -297,7 +298,7 @@ export function matchNixVulnerabilities(opts = {}) {
         const st = decide(r, pe, ident);
         matched = true;
         if (haskellUsage) { const rr = hackageReachability(node.pname, haskellUsage.imports, haskellUsage.callees, symbols[adv.id] || null); tiers.reachability = { import: rr.import, function: rr.function, basis: rr.reason }; }
-        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
+        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases, severityInfo: adv.severityInfo }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
       }
     }
     // generic records by PURL / CPE; only authoritative identities are matched, candidates are leads
@@ -340,10 +341,14 @@ function finding(base, adv, status, reason, extra, { kev, epss }) {
   const kevHit = cves.length ? (kev ? cves.some((c) => kev.has(c)) : 'unknown') : 'not-applicable';
   const ep = cves.map((c) => epss && epss[c]).filter((x) => typeof x === 'number');
   const level = { affected: 'high', 'possibly-affected': 'medium', candidate: 'low', 'backported-verified': 'info', fixed: 'info', unknown: 'low', 'not-affected': 'info' }[status] || 'low';
+  // The advisory's own rating applies only where the package is judged vulnerable; the other statuses keep their fixed,
+  // lower levels (a verified backport must never be raised by the upstream score).
+  const sev = adv.severityInfo || { level: null, score: null, basis: NO_RATING_BASIS };
+  const rated = !!sev.level && (status === 'affected' || status === 'possibly-affected');
   return {
     type: 'vulnerable_dep', ecosystem: 'nix', language: 'nix', capability: 'sca', analysisKind: 'application', evidenceKind: 'closure',
     name: base.name, version: base.version, osvId: adv.id, ids: adv.ids || [adv.id], cveAliases: cves, summary: adv.summary || '',
-    status, matchStatus: status, matchReason: reason, severity: level, severityBasis: 'the advisory carries no severity rating',
+    status, matchStatus: status, matchReason: reason, severity: rated ? sev.level : level, severityBasis: rated ? sev.basis : sev.level ? `the match status "${status}" fixes this level; the advisory rating (${sev.basis}) is not applied` : sev.basis, ...(rated ? { severityScore: sev.score } : {}),
     nixBuild: base.nixBuild, identity: base.identity, tiers: base.tiers, feed: base.feed,
     kev: kevHit, epss: ep.length ? Math.max(...ep) : 'unknown',
     fixedIn: extra.fixedIn || [], patchEvidence: extra.patchEvidence || { verified: null, claims: [] }, dataSource: { feed: extra.source || base.feed.source, ecosystem: extra.ecosystem || null, identityBasis: extra.identityBasis || null, identityAuthority: extra.identityAuthority || null, feedStatus: base.feed.status },
