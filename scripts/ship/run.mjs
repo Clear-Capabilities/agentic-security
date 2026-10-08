@@ -49,7 +49,13 @@ export async function runShip(ctx, opts = {}) {
       const remote = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
       if (remote === head) return 'already on origin';
       const r = sh('git', [...CRED, 'push', '-u', 'origin', branch], { timeoutMs: 60 * 60 * 1000, stream: true });
-      if (r.code !== 0) throw new Stop('push', `git push failed (the pre-push gate or the remote refused): ${(r.err || r.out).trim().split('\n').slice(-6).join(' | ').slice(0, 400)}`);
+      if (r.code !== 0) {
+        const text = `${r.err}\n${r.out}`;
+        // the gate prints one `FAIL  <check>` line per failed check: name them, not just the last lines of noise
+        const failed = [...new Set(text.split('\n').filter((l) => /^FAIL\s/.test(l)).map((l) => l.replace(/^FAIL\s+/, '').trim()))];
+        const why = failed.length ? `failed checks: ${failed.join('; ')}` : text.trim().split('\n').slice(-6).join(' | ');
+        throw new Stop('push', `git push failed (the pre-push gate or the remote refused): ${why.slice(0, 400)}`);
+      }
       return `pushed ${head.slice(0, 8)}`;
     });
 

@@ -124,7 +124,12 @@ export class ShipState {
   constructor(path, now = () => Date.now()) { this.path = path; this.now = now; this.data = { phases: {}, started: this.now(), events: [] }; }
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
-  set(patch) { Object.assign(this.data, patch, { updated: this.now() }); this.save(); }
+  // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
+  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed'];
+  set(patch) {
+    for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
+    this.data.updated = this.now(); this.save();
+  }
   begin(phase, detail = null) { this.data.current = phase; this.data.phases[phase] = { ...(this.data.phases[phase] || {}), state: 'running', startedAt: this.now(), detail }; this.data.updated = this.now(); this.save(); }
   note(phase, detail) { this.data.phases[phase] = { ...(this.data.phases[phase] || {}), detail }; this.data.updated = this.now(); this.save(); }
   finish(phase, ok, detail = null) {

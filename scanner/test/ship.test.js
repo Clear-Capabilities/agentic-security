@@ -107,6 +107,17 @@ test('state: saved atomically, reloaded, and phase timings recorded', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('state: only the recorded keys can be set; a hostile key is ignored and cannot reach the prototype', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ship-keys-'));
+  const s = new ShipState(path.join(dir, 's.json'));
+  s.set(JSON.parse('{"__proto__": {"polluted": true}, "evil": 1, "tag": "v1.2.3", "pr": 7}'));
+  assert.equal(s.data.tag, 'v1.2.3');
+  assert.equal(s.data.pr, 7);
+  assert.equal(s.data.evil, undefined, 'an unknown key is not recorded');
+  assert.equal({}.polluted, undefined, 'the prototype is untouched');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 // ── the whole flow, against a scripted git and gh ──────────────────────────────────────────────────────────────
 
 const HEAD = 'a'.repeat(40), MERGE = 'b'.repeat(40);
@@ -255,6 +266,17 @@ test('flow: a version on npm without a provenance attestation fails the run', as
   const r = await runShip(ctx, {});
   assert.equal(r.ok, false); assert.equal(r.phase, 'npm');
   assert.match(r.message, /WITHOUT a provenance attestation/);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+});
+
+test('flow: a push the gate refuses names the failed checks, not just the last lines of output', async () => {
+  const w = world(); const base = w.sh;
+  w.sh = (cmd, args) => (cmd === 'git' && args.includes('push') && !args.includes('v1.2.3') ? { code: 1, out: '', err: 'PASS  Working tree matches\nFAIL  Self-scan precision baseline holds\nSKIP  other\npre-push gate FAILED in 520s\n' } : base(cmd, args));
+  const ctx = ctxFor(w);
+  const r = await runShip(ctx, {});
+  assert.equal(r.ok, false); assert.equal(r.phase, 'push');
+  assert.match(r.message, /failed checks: Self-scan precision baseline holds/);
+  assert.equal(ran(w, /pr create/).length, 0, 'nothing is opened after a refused push');
   fs.rmSync(ctx._dir, { recursive: true, force: true });
 });
 

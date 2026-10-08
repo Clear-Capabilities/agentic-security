@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-08T15:31:57.535Z",
-  "commit": "93d39b67b8334491f567e82a4f96d51dfac5dcdf",
+  "generatedAt": "2026-10-08T23:47:52.219Z",
+  "commit": "599f5332b727f6b49615548b625c6a85a19742d4",
   "targets": {
     "hooks": {
       "total": 19,
@@ -17,7 +17,7 @@
       }
     },
     "scripts": {
-      "total": 46,
+      "total": 50,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -35,7 +35,9 @@
         "owasp-llm-top10/scan.py": 1,
         "release-check.mjs": 1,
         "rotate-key-auto.py": 1,
+        "run-unit-tests.mjs": 1,
         "self-test-runner.mjs": 2,
+        "ship.mjs": 3,
         "synthesize-detector.mjs": 7
       }
     },
