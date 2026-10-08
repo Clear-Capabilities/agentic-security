@@ -110,7 +110,15 @@ export const CHECKS = [
     title: 'Built bundle matches its SHA-256 sidecar',
     remedy: 'Run `npm run build` in scanner/ and commit both ' +
       'dist/agentic-security.mjs and dist/agentic-security.mjs.sha256. ' +
-      '(This is what catches "edited src/, forgot to rebuild".)',
+      '(This only proves the two files agree with EACH OTHER; the next check compares them to the source.)',
+  },
+  {
+    // The check hosted CI runs ("Verify committed bundle matches source"). bundle-integrity above cannot catch an edit to src/ after the last build,
+    // because the stale bundle still matches its own sidecar. 0.159.0 passed this gate and then failed CI exactly that way.
+    id: 'bundle-matches-source',
+    title: 'Committed bundle equals a fresh build of the source',
+    npmScript: 'check:bundle-source',
+    remedy: 'Run `npm run build` in scanner/ and commit dist/agentic-security.mjs and dist/agentic-security.mjs.sha256 (the source changed since the last build).',
   },
   {
     id: 'package-contents',
