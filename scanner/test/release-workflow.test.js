@@ -60,10 +60,17 @@ test('the publish step runs --ignore-scripts, so prepublishOnly cannot re-run th
 
 test('the steps --ignore-scripts is standing in for still run explicitly, and run first', () => {
   const wf = readWorkflow();
-  const order = ['name: Build the bundle', 'name: Sync scanner changelog', 'name: Release gate', 'run: npm publish'];
+  // The gate is now its own job (parallel legs) and `publish` depends on it; the
+  // build, changelog sync and artifact verification repeat inside `publish`, on
+  // the runner that packs the tarball. Order is checked within that job.
+  const publishJob = wf.slice(wf.indexOf('\n  publish:\n'));
+  assert.ok(publishJob.length > 0, 'expected a `publish:` job');
+  assert.ok(wf.indexOf('name: Release gate') !== -1 && wf.indexOf('name: Release gate') < wf.indexOf('\n  publish:\n'),
+    'the gate legs must live in a job before `publish`');
+  const order = ['name: Build the bundle', 'name: Sync scanner changelog', 'name: Verify the artifact to be published', 'run: npm publish'];
   const positions = order.map((marker) => {
-    const i = wf.indexOf(marker);
-    assert.ok(i !== -1, `expected to find "${marker}" in release.yml`);
+    const i = publishJob.indexOf(marker);
+    assert.ok(i !== -1, `expected to find "${marker}" in release.yml's publish job`);
     return i;
   });
   for (let i = 1; i < positions.length; i++) {

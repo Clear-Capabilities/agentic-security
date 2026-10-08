@@ -22,8 +22,39 @@
 # PRD R1 lets the release gate reuse a verdict the pre-push gate produced for
 # identical inputs. That cache is per-machine by design and must never cross to
 # CI: a runner is a different machine, and the whole point of hosted CI is to
-# prove the release works somewhere other than the maintainer's laptop. This job
-# always runs every check for real.
+# prove the release works somewhere other than the maintainer's laptop. Every
+# gate leg below always runs every check in its group for real.
+#
+# THE SHAPE: A PARALLEL GATE, THEN A SMALL PUBLISH JOB
+# ----------------------------------------------------
+# The gate used to be one sequential step that took 25 minutes on v0.158.0
+# (the test suite 14.9 of them, five benches 1 to 2.5 each). It is now the
+# `gate` job, a matrix of independent legs that run at the same time:
+#
+#   - the test suite in four shards (`--group tests --shard i/4`),
+#   - two groups of benches (`benches-a`, `benches-b`),
+#   - `rest`: every other check (version/changelog/bundle/package-contents,
+#     catalog freshness, dependency currency, hosted CI on this commit, ...).
+#
+# What each leg runs is defined in ONE place, RELEASE_GROUPS in
+# scripts/release-check.mjs. `rest` is computed there as the complement of the
+# named groups, so a newly added check runs by default and can never be dropped
+# by forgetting to edit this file. Every leg runs `release-check.mjs --no-cache`
+# and fails closed exactly like the old single run. `fail-fast` is on, so one red
+# leg cancels the others instead of burning minutes on a release that is already
+# dead. scanner/test/release-workflow-structure.test.js pins all of this.
+#
+# The `publish` job `needs` the whole `gate` job, so it starts only when EVERY
+# leg is green. It is the only job with `id-token: write`. A gate leg runs code
+# from the repository's test suite and benches; it has no ability to mint the
+# OIDC token that publishes, which is the point of keeping the two apart. The
+# publish job re-checks the bytes it is about to ship on its own runner
+# (`--only bundle-integrity,package-contents`: the freshly built bundle against
+# the committed SHA-256 sidecar, and the package shape), because the publish
+# runner builds its own copy and nothing proven on another runner covers it.
+#
+# The file name must stay `release.yml`: the npm trusted publisher is
+# configured for this workflow filename.
 name: release
 
 on:
@@ -37,24 +68,119 @@ on:
         type: boolean
         default: true
 
+# The default for every job. The gate legs inherit exactly this and nothing more.
 permissions:
   contents: read
   checks: read    # the gate reads check runs for HEAD; it passed on the default
                   # token without this, but depending on an undeclared default
                   # is how a tightened default becomes a mystery failure later
-  id-token: write # required for npm provenance (OIDC)
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  publish:
+  # Check-run names matter here: the `rest` leg's remote-ci-green check reads the
+  # check runs on this commit, which include these very legs while they run. Each
+  # leg's name below is therefore listed under `self` in
+  # .github/required-checks.json (a test keeps the two in step), or the gate
+  # would wait on its own siblings forever.
+  gate:
+    name: gate (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      checks: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { name: 'tests 1/4', group: tests, shard: '1/4' }
+          - { name: 'tests 2/4', group: tests, shard: '2/4' }
+          - { name: 'tests 3/4', group: tests, shard: '3/4' }
+          - { name: 'tests 4/4', group: tests, shard: '4/4' }
+          - { name: 'benches-a', group: benches-a, shard: '' }
+          - { name: 'benches-b', group: benches-b, shard: '' }
+          - { name: 'rest', group: rest, shard: '' }
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # release-check inspects history and origin/main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 'lts/*'
+          registry-url: 'https://registry.npmjs.org'
+
+      # The Nix script witnesses need a real confinement primitive, as in ci.yml's test job; hosted runners restrict unprivileged user
+      # namespaces by default, so the same host policy relaxation is applied here for the gate's `npm test`.
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+
+      # Checked here as well as in `publish`, so a mismatched tag fails in
+      # seconds instead of after the whole gate has run.
+      - name: Tag must match the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./scanner/package.json').version")
+          echo "tag=$TAG package=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG does not match scanner/package.json version $PKG"
+            exit 1
+          fi
+
+      - name: Install scanner dependencies
+        working-directory: scanner
+        run: npm ci
+
+      # release-check's nist-catalog-freshness check shells out to
+      # build-catalog.py, which needs openpyxl to read the source workbook.
+      # A hosted runner has no reason to carry it by default — it's not a
+      # scanning dependency (see that script's own header), only a rebuild
+      # one — so it must be installed explicitly here or this check can never
+      # pass on a clean runner.
+      - name: Install NIST catalog rebuild dependency
+        run: pip3 install --quiet openpyxl
+
+      - name: Build the bundle
+        working-directory: scanner
+        run: npm run build
+
+      - name: Sync scanner changelog
+        run: node scripts/sync-scanner-changelog.mjs
+
+      # This leg's slice of the gate, with caching disabled. A red check stops
+      # the publish. --allow-unverified-ci is deliberately NOT passed: this job
+      # IS running in CI, and the hosted-CI check (in the `rest` leg) reads the
+      # status of the commit being released, which must already be green.
+      # GATE_SHARD is empty for every leg except the test shards; the flag is
+      # added only when it is set.
+      - name: Release gate (${{ matrix.name }})
+        working-directory: scanner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTIC_SECURITY_GATE_NO_CACHE: '1'
+          GATE_GROUP: ${{ matrix.group }}
+          GATE_SHARD: ${{ matrix.shard }}
+        run: node ../scripts/release-check.mjs --no-cache --group "$GATE_GROUP" ${GATE_SHARD:+--shard "$GATE_SHARD"}
+
+  publish:
+    # Starts only when every leg of the gate job passed.
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: read
+      id-token: write # required for npm provenance (OIDC); this is the ONLY job that has it
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -76,26 +202,9 @@ jobs:
             console.log('npm', v, ok ? '(supports OIDC publishing)' : '(TOO OLD)');
             if(!ok) process.exit(1);"
 
-      # The Nix script witnesses need a real confinement primitive, as in ci.yml's test job; hosted runners restrict unprivileged user
-      # namespaces by default, so the same host policy relaxation is applied here for the gate's `npm test`.
-      - name: Allow unprivileged user namespaces
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
-          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
-          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
-
       - name: Install scanner dependencies
         working-directory: scanner
         run: npm ci
-
-      # release-check's nist-catalog-freshness check shells out to
-      # build-catalog.py, which needs openpyxl to read the source workbook.
-      # A hosted runner has no reason to carry it by default — it's not a
-      # scanning dependency (see that script's own header), only a rebuild
-      # one — so it must be installed explicitly here or this check can never
-      # pass on a clean runner.
-      - name: Install NIST catalog rebuild dependency
-        run: pip3 install --quiet openpyxl
 
       # The tag is the release's identity. If it disagrees with the version being
       # published, stop before anything is built — a mismatch here means the tag
@@ -118,51 +227,51 @@ jobs:
       - name: Sync scanner changelog
         run: node scripts/sync-scanner-changelog.mjs
 
-      # The full gate, with caching disabled. A red gate stops the publish.
-      # --allow-unverified-ci is deliberately NOT passed: this job IS running in
-      # CI, and the hosted-CI check reads the status of the commit being
-      # released, which must already be green.
-      - name: Release gate
+      # The bytes about to be published, verified on THIS runner. The gate legs
+      # proved the same two properties on their own runners; this runner built
+      # its own bundle, so it proves them again for the artifact it will pack:
+      # the bundle against the committed SHA-256 sidecar, and the package shape.
+      # Seconds, not minutes, which is why it can run here rather than being
+      # trusted from another machine.
+      - name: Verify the artifact to be published
         working-directory: scanner
-        env:
-          GH_TOKEN: ${{ github.token }}
-          AGENTIC_SECURITY_GATE_NO_CACHE: '1'
-        run: node ../scripts/release-check.mjs --no-cache
+        run: node ../scripts/release-check.mjs --no-cache --only bundle-integrity,package-contents
 
       # --ignore-scripts IS LOAD-BEARING, not an optimization added lightly.
       # Without it, `npm publish` runs prepublishOnly a SECOND time — the exact
       # same `npm run build && sync-scanner-changelog.mjs && release-check.mjs`
-      # the three steps above this one just ran — and release-check.mjs alone
-      # measured 280-320s. That is not caching-avoidable: this workflow always
-      # passes --no-cache (see the file header — a cross-machine cache would
-      # reintroduce the reproducibility claim this project explicitly does not
-      # make), so a second uncached gate run was ~300s spent proving something
-      # already proven seconds earlier, on the same commit, same checkout, same
-      # runner. --ignore-scripts is safe here specifically because it is not
+      # the steps above this one just ran, and a full release-check.mjs run
+      # measured 280-320s even before this gate was split. That is not
+      # caching-avoidable: this workflow always passes --no-cache (see the file
+      # header — a cross-machine cache would reintroduce the reproducibility
+      # claim this project explicitly does not make), so a second uncached gate
+      # run would be many minutes spent re-proving, on one runner, what the
+      # gate job already proved on the same commit. --ignore-scripts is safe here specifically because it is not
       # safe in general: prepublishOnly is what makes a LOCAL `npm publish`
       # trustworthy without a human running the gate first (see the root
       # CLAUDE.md's "Two publish paths" section — scanner/package.json's
       # prepublishOnly MUST stay wired for that path). This job is not that
-      # path: it already built the bundle, synced the changelog, and ran the
-      # full uncached gate as explicit, individually-visible steps immediately
+      # path: the `gate` job it depends on ran the full uncached gate as
+      # individually visible legs, and this job built the bundle, synced the
+      # changelog and re-verified the artifact as explicit steps immediately
       # above. Skipping the redundant rerun changes nothing about what gets
       # packed — prepublishOnly produces no artifact that is not already on
       # disk from those steps.
       #
-      # GH_TOKEN stays set here even though release-check.mjs no longer runs in
-      # this step — kept for the OIDC/gh-cli environment this step still needs
-      # for its own diagnostics on failure, and because a step that quietly
-      # loses a token it used to need is easy to miss when scanning a diff.
+      # GH_TOKEN stays set here for the OIDC/gh-cli environment this step still
+      # needs for its own diagnostics on failure, and because a step that
+      # quietly loses a token it used to need is easy to miss when scanning a
+      # diff.
       #
       # PUBLISHED VIA TRUSTED PUBLISHING (OIDC) — deliberately no NODE_AUTH_TOKEN.
       #
       # npm authenticates this publish from the `id-token: write` OIDC claim
-      # above, matched against the trusted publisher configured on the package
-      # (organization, repository and THIS workflow filename). Nothing long-lived
-      # is stored in repository secrets, so there is no credential to rotate,
-      # leak, or scope wrongly — and npm can attest that the artifact was
-      # published by this repo running this workflow, rather than by whoever
-      # happened to hold a token.
+      # this job (and only this job) holds, matched against the trusted
+      # publisher configured on the package (organization, repository and THIS
+      # workflow filename). Nothing long-lived is stored in repository secrets,
+      # so there is no credential to rotate, leak, or scope wrongly — and npm
+      # can attest that the artifact was published by this repo running this
+      # workflow, rather than by whoever happened to hold a token.
       #
       # NODE_AUTH_TOKEN MUST STAY ABSENT. npm prefers an explicit token when one
       # is present, which silently disables OIDC and reintroduces every failure
