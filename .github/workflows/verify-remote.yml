@@ -47,7 +47,17 @@ jobs:
           mkdir -p "$OUT"
           node scripts/loop-engineering/digest.mjs "$WATCH" > "$OUT/digest.json"
           cat "$OUT/digest.json"
-      - uses: cachix/install-nix-action@v31
+      - name: Install Nix (attempt 1)
+        id: nix_install_1
+        uses: cachix/install-nix-action@v31
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+      - name: Install Nix (attempt 2, only when attempt 1 failed or timed out)
+        if: steps.nix_install_1.outcome != 'success'
+        uses: cachix/install-nix-action@v31
+        timeout-minutes: 10
         with:
           install_url: https://releases.nixos.org/nix/nix-2.24.10/install
       - run: npm ci
@@ -72,8 +82,10 @@ jobs:
               toolVersions: { nix: cp.execSync("nix --version").toString().trim(), node: process.version } };
             fs.writeFileSync(out + "/leg-nix.json", JSON.stringify(leg));
           '
+        timeout-minutes: 5
       - uses: actions/upload-artifact@v4
         with: { name: leg-nix, path: /tmp/verify-out, if-no-files-found: error }
+        timeout-minutes: 10
 
   nixos-x86:
     if: inputs.target == 'nixos'
@@ -99,7 +111,23 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           ls -l /dev/kvm
-      - uses: cachix/install-nix-action@v31
+      # Two bounded attempts. The installer is a network download that has hung before; a hang becomes a 10 minute failure of
+      # attempt 1 and attempt 2 runs. BOTH attempts stay visible in the log; attempt 2 is skipped when attempt 1 succeeds, and a
+      # failure of attempt 2 fails the job.
+      - name: Install Nix (attempt 1)
+        id: nix_install_1
+        uses: cachix/install-nix-action@v31
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            system-features = nixos-test benchmark big-parallel kvm
+      - name: Install Nix (attempt 2, only when attempt 1 failed or timed out)
+        if: steps.nix_install_1.outcome != 'success'
+        uses: cachix/install-nix-action@v31
+        timeout-minutes: 10
         with:
           install_url: https://releases.nixos.org/nix/nix-2.24.10/install
           extra_nix_config: |
@@ -124,13 +152,15 @@ jobs:
               toolVersions: { nix: cp.execSync("nix --version").toString().trim(), node: process.version } };
             fs.writeFileSync(out + "/leg-x86_64-linux.json", JSON.stringify(leg));
           '
+        timeout-minutes: 5
       - uses: actions/upload-artifact@v4
         with: { name: leg-x86_64-linux, path: /tmp/verify-out, if-no-files-found: error }
+        timeout-minutes: 10
 
   nixos-aarch64-emulated:
     if: inputs.target == 'nixos'
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v7
         with: { ref: '${{ inputs.sha }}' }
@@ -151,7 +181,23 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           ls -l /dev/kvm
-      - uses: cachix/install-nix-action@v31
+      # Two bounded attempts. The installer is a network download that has hung before; a hang becomes a 10 minute failure of
+      # attempt 1 and attempt 2 runs. BOTH attempts stay visible in the log; attempt 2 is skipped when attempt 1 succeeds, and a
+      # failure of attempt 2 fails the job.
+      - name: Install Nix (attempt 1)
+        id: nix_install_1
+        uses: cachix/install-nix-action@v31
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            system-features = nixos-test benchmark big-parallel kvm
+      - name: Install Nix (attempt 2, only when attempt 1 failed or timed out)
+        if: steps.nix_install_1.outcome != 'success'
+        uses: cachix/install-nix-action@v31
+        timeout-minutes: 10
         with:
           install_url: https://releases.nixos.org/nix/nix-2.24.10/install
           extra_nix_config: |
@@ -162,14 +208,28 @@ jobs:
           docker run --privileged --rm tonistiigi/binfmt --install arm64
           sudo sh -c 'echo "extra-platforms = aarch64-linux" >> /etc/nix/nix.conf'
           sudo systemctl restart nix-daemon
+        timeout-minutes: 15
       - name: Emulated aarch64 NixOS guest (qemu TCG) runs the NIX-012 suite inside it
         continue-on-error: true
+        # At most two attempts, never silent: a failed first attempt keeps its own log and exit code in the uploaded evidence
+        # (build-aarch64-attempt1.log, aarch64.attempt1.exit) and is announced here, and the leg's recorded exit code is the SECOND
+        # attempt's, so a retry can never present a failure as a pass without that being on the record.
         run: |
           set +e
-          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link /tmp/nixresult-aarch64 > "$OUT/build-aarch64.log" 2>&1
-          echo $? > "$OUT/aarch64.exit"
+          timeout 150m nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link /tmp/nixresult-aarch64 > "$OUT/build-aarch64.log" 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning title=emulated aarch64 attempt 1 FAILED::exit $rc; its log is kept as build-aarch64-attempt1.log in the evidence. Retrying once."
+            cp "$OUT/build-aarch64.log" "$OUT/build-aarch64-attempt1.log"
+            echo "$rc" > "$OUT/aarch64.attempt1.exit"
+            echo '--- tail of the attempt 1 log ---'; tail -n 60 "$OUT/build-aarch64-attempt1.log"
+            timeout 150m nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link /tmp/nixresult-aarch64 > "$OUT/build-aarch64.log" 2>&1
+            rc=$?
+            echo "attempt 2 exit: $rc"
+          fi
+          echo $rc > "$OUT/aarch64.exit"
           cp /tmp/nixresult-aarch64/nixos-host-aarch64-linux.tap "$OUT/nixos-aarch64.tap" 2>/dev/null || : > "$OUT/nixos-aarch64.tap"
-        timeout-minutes: 300
+        timeout-minutes: 330
       - name: Describe the leg
         run: |
           node -e '
@@ -181,8 +241,10 @@ jobs:
               toolVersions: { nix: cp.execSync("nix --version").toString().trim(), node: process.version, emulation: "qemu-system-aarch64 TCG on an x86_64 KVM host" } };
             fs.writeFileSync(out + "/leg-aarch64-linux-emulated.json", JSON.stringify(leg));
           '
+        timeout-minutes: 5
       - uses: actions/upload-artifact@v4
         with: { name: leg-aarch64-linux-emulated, path: /tmp/verify-out, if-no-files-found: error }
+        timeout-minutes: 10
 
   collect:
     needs: [nix, nixos-x86, nixos-aarch64-emulated]
@@ -192,6 +254,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: legs }
+        timeout-minutes: 10
       - name: Assemble meta.json (what ran, at which commit, over which bytes)
         env:
           WATCH: '${{ inputs.watch }}'
@@ -220,3 +283,4 @@ jobs:
           '
       - uses: actions/upload-artifact@v4
         with: { name: 'verify-${{ inputs.requirement }}', path: verify, if-no-files-found: error }
+        timeout-minutes: 10

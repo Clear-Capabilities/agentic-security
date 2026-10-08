@@ -361,3 +361,418 @@ test('the two new guards run before the expensive suites', () => {
   assert.ok(ids.indexOf('test-suite') > ids.indexOf('push-blast-radius'),
     'a guard that runs after the suites cannot save the minutes it exists to save');
 });
+
+// =========================================================================
+// Per-check verdict cache. Every test below drives the REAL buildScopedCache /
+// executeChecks / computeScopedKey with injected facts and fake checks; the
+// real gate is never run. Each rule is pinned in BOTH directions: the thing
+// that must hit does, and the thing that must not, does not.
+// =========================================================================
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
+import { buildScopedCache, PURE_BENCHES } from '../../scripts/pre-push-gate.mjs';
+import { executeChecks } from '../../scripts/gate-run-checks.mjs';
+import {
+  computeScopedKey, loadCache, scopedRecordId, cachingDisabled, digestScope, CACHE_FILE,
+} from '../../scripts/gate-verdict-cache.mjs';
+import { scopeFor, pathInScope } from '../../scripts/gate-check-scopes.mjs';
+import { analyseTrace } from '../../scripts/gate-trace-reads.mjs';
+
+const KEY = 'test-hmac-key';
+const signer = (body) => crypto.createHmac('sha256', KEY).update(body).digest('hex');
+const CLOCK = new Date('2026-10-07T12:00:00.000Z');
+const NARROW = { all: false, usesHistory: false, writesRepo: false, include: ['scanner/', 'bench/x/'] };
+
+function mkRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ppg-cache-'));
+  const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+  put('scanner/package.json', '{"name":"x"}');
+  put('scanner/src/a.js', 'export const a = 1;\n');
+  put('scanner/dist/agentic-security.mjs', 'bundle-v1');
+  put('bench/x/run.js', 'run();\n');
+  put('docs/notes.txt', 'unrelated\n');
+  put('README.md', 'readme\n');
+  return { dir, put };
+}
+function walkFiles(dir, base = dir, acc = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === '.agentic-security') continue;
+    const abs = path.join(dir, e.name);
+    if (e.isDirectory()) walkFiles(abs, base, acc); else acc.push(path.relative(base, abs));
+  }
+  return acc.sort();
+}
+const FAKE = { id: 'fake-bench', title: 'Fake bench', npmScript: 'bench:fake' };
+const PASS = { ok: true, errors: [], warnings: [] };
+function cacheFor(dir, argv = [], extra = {}) {
+  const inputs = { files: () => walkFiles(dir), headSha: 'h1', bundleSha: 'bundle1', python: 'py1', command: 'node fake.js', scope: () => NARROW, ...(extra.inputs || {}) };
+  return buildScopedCache(argv, { repo: dir, env: extra.env || {}, signer, inputs, now: () => CLOCK });
+}
+/** Run the fake check through the real executor. `outcome` decides pass/fail; `calls` records real runs. */
+async function gate(dir, { argv = [], extra = {}, outcome = PASS, hook = null } = {}) {
+  const calls = [];
+  const logs = [];
+  const entries = await executeChecks({
+    checks: [FAKE], scoped: cacheFor(dir, argv, extra), legacy: null, log: (l) => logs.push(l), now: () => CLOCK.getTime() + 60000,
+    runCheck: async (c) => { calls.push(c.id); if (hook) hook(); return outcome; },
+  });
+  return { calls, logs, entries };
+}
+
+test('cache: a second run with every input unchanged is a HIT, announced loudly, and does not run the check', async () => {
+  const { dir } = mkRepo();
+  const first = await gate(dir);
+  assert.deepEqual(first.calls, ['fake-bench']);
+  assert.equal(first.entries[0].cached, undefined);
+  const second = await gate(dir);
+  assert.deepEqual(second.calls, [], 'the check must not run on a hit');
+  assert.match(second.entries[0].cached, /^cached \(inputs unchanged since 2026-10-07T12:00:00\.000Z\)$/);
+  assert.ok(second.logs.some((l) => /cached \(inputs unchanged since/.test(l)), 'the hit must be printed, not silent');
+  assert.equal(second.entries[0].result.ok, true);
+});
+
+test('cache: touching a file without changing its bytes still hits (content, not mtime)', async () => {
+  const { dir } = mkRepo();
+  await gate(dir);
+  const f = path.join(dir, 'scanner/src/a.js');
+  fs.utimesSync(f, new Date(2030, 0, 1), new Date(2030, 0, 1));
+  assert.deepEqual((await gate(dir)).calls, []);
+});
+
+test('cache: a change to an in-scope file invalidates, including a same-length edit', async () => {
+  for (const [rel, text] of [['scanner/src/a.js', 'export const a = 2;\n'], ['bench/x/run.js', 'runZ();\n']]) {
+    const { dir } = mkRepo();
+    await gate(dir);
+    fs.writeFileSync(path.join(dir, rel), text);
+    assert.deepEqual((await gate(dir)).calls, ['fake-bench'], `${rel} changed, so the check must re-run`);
+  }
+});
+
+test('cache: adding or deleting an in-scope file invalidates', async () => {
+  const a = mkRepo();
+  await gate(a.dir);
+  a.put('scanner/src/new.js', 'x\n');
+  assert.deepEqual((await gate(a.dir)).calls, ['fake-bench'], 'an added file is an input');
+  const b = mkRepo();
+  await gate(b.dir);
+  fs.rmSync(path.join(b.dir, 'bench/x/run.js'));
+  assert.deepEqual((await gate(b.dir)).calls, ['fake-bench'], 'a removed file is an input');
+});
+
+test('cache: a change OUTSIDE the declared scope does not invalidate (that is the point of scoping)', async () => {
+  const { dir, put } = mkRepo();
+  await gate(dir);
+  put('docs/notes.txt', 'edited prose\n');
+  put('README.md', 'edited\n');
+  assert.deepEqual((await gate(dir)).calls, [], 'prose outside every scope must not cost a re-run');
+});
+
+test('cache: the bundle, node version, python version, command, environment and (for history readers) HEAD each invalidate', async () => {
+  const cases = [
+    ['bundle', { inputs: { bundleSha: 'bundle2' } }],
+    ['node version', { inputs: { nodeVersion: 'v99.0.0' } }],
+    ['python version', { inputs: { python: 'py2' } }],
+    ['the check script / arguments', { inputs: { command: 'node fake.js --other' } }],
+    ['AGENTIC_SECURITY_* environment', { env: { AGENTIC_SECURITY_DEEP: '1' } }],
+    ['ambient CI variable', { env: { CI: 'true' } }],
+  ];
+  for (const [what, extra] of cases) {
+    const { dir } = mkRepo();
+    await gate(dir);
+    assert.deepEqual((await gate(dir, { extra })).calls, ['fake-bench'], `a changed ${what} must invalidate`);
+  }
+  // HEAD matters only to a check whose scope says it reads history, and must NOT matter to one that does not.
+  const hist = { inputs: { scope: () => ({ ...NARROW, usesHistory: true }) } };
+  const h = mkRepo();
+  await gate(h.dir, { extra: hist });
+  assert.deepEqual((await gate(h.dir, { extra: { inputs: { ...hist.inputs, headSha: 'h2' } } })).calls, ['fake-bench'], 'HEAD changed for a history reader');
+  const n = mkRepo();
+  await gate(n.dir);
+  assert.deepEqual((await gate(n.dir, { extra: { inputs: { headSha: 'h2' } } })).calls, [], 'HEAD changed for a content-only check: same bytes, still a hit');
+});
+
+test("cache: the gate's own code, the bundle and the engine are inputs of every cacheable check", () => {
+  for (const c of CHECKS.filter((x) => x.npmScript)) {
+    const sc = scopeFor(c.id);
+    for (const f of ['scripts/pre-push-gate.mjs', 'scripts/gate-verdict-cache.mjs', 'scripts/gate-check-scopes.mjs', 'scripts/gate-run-checks.mjs', 'scanner/package.json', 'scanner/dist/agentic-security.mjs', 'scanner/src/engine.js']) {
+      assert.ok(pathInScope(sc, f), `${c.id} must be invalidated by a change to ${f}`);
+    }
+  }
+});
+
+test('cache: a tampered, hand-edited or unsigned cache file is refused and the check runs', async () => {
+  const mutate = [
+    ['a record edited to look newer', (doc) => { doc.records[scopedRecordId('fake-bench')].at = '2026-10-07T12:30:00.000Z'; }],
+    ['a record whose key was swapped', (doc) => { doc.records[scopedRecordId('fake-bench')].key = 'f'.repeat(64); }],
+    ['a forged extra record', (doc) => { doc.records[scopedRecordId('other')] = { checkId: 'x', verdict: 'pass' }; }],
+    ['the signature stripped', (doc) => { delete doc.signature; }],
+  ];
+  for (const [what, fn] of mutate) {
+    const { dir } = mkRepo();
+    await gate(dir);
+    const p = path.join(dir, CACHE_FILE);
+    const doc = JSON.parse(fs.readFileSync(p, 'utf8'));
+    fn(doc);
+    fs.writeFileSync(p, JSON.stringify(doc));
+    const r = await gate(dir);
+    assert.deepEqual(r.calls, ['fake-bench'], `${what}: a cache that does not verify must not be trusted`);
+  }
+  const { dir } = mkRepo();
+  await gate(dir);
+  fs.writeFileSync(path.join(dir, CACHE_FILE), '{not json');
+  assert.deepEqual((await gate(dir)).calls, ['fake-bench'], 'unparseable cache runs the check');
+});
+
+test('cache: a cache signed with a different key is refused', async () => {
+  const { dir } = mkRepo();
+  await gate(dir);
+  const other = (body) => crypto.createHmac('sha256', 'someone-elses-key').update(body).digest('hex');
+  const ctx = buildScopedCache([], { repo: dir, env: {}, signer: other, inputs: { files: () => walkFiles(dir), headSha: 'h1', bundleSha: 'bundle1', python: 'py1', command: 'c', scope: () => NARROW } });
+  assert.equal(ctx.rejected, 'signature mismatch');
+  assert.deepEqual(ctx.records, {});
+});
+
+test('cache: a FAILING check is never cached, so a fix is picked up at once', async () => {
+  const { dir } = mkRepo();
+  const bad = { ok: false, errors: ['exited 1'], warnings: [] };
+  assert.deepEqual((await gate(dir, { outcome: bad })).calls, ['fake-bench']);
+  assert.deepEqual(loadCache(dir, { signer }).records, {}, 'nothing may be recorded for a failure');
+  assert.deepEqual((await gate(dir, { outcome: bad })).calls, ['fake-bench'], 'it runs again');
+  assert.deepEqual((await gate(dir)).calls, ['fake-bench'], 'and when it is fixed it runs and passes');
+  assert.deepEqual((await gate(dir)).calls, [], 'only then does the pass hit');
+});
+
+test('cache: a check that passes but rewrites its own inputs is not cached', async () => {
+  const { dir } = mkRepo();
+  const r = await gate(dir, { hook: () => fs.writeFileSync(path.join(dir, 'scanner/src/a.js'), `mutated ${Math.random()}\n`) });
+  assert.ok(r.logs.some((l) => /NOT cached/.test(l)));
+  assert.deepEqual(loadCache(dir, { signer }).records, {});
+});
+
+test('cache: --no-cache, AGENTIC_SECURITY_GATE_NO_CACHE and hosted CI always run everything, even over a valid cache', async () => {
+  const { dir } = mkRepo();
+  await gate(dir);
+  assert.deepEqual((await gate(dir)).calls, [], 'sanity: the cache is valid and would hit');
+  assert.equal(cacheFor(dir, ['--no-cache']), null);
+  assert.equal(cacheFor(dir, [], { env: { AGENTIC_SECURITY_GATE_NO_CACHE: '1' } }), null);
+  assert.equal(cacheFor(dir, [], { env: { GITHUB_ACTIONS: 'true' } }), null);
+  assert.equal(cachingDisabled([], {}), false);
+  const calls = [];
+  await executeChecks({ checks: [FAKE], scoped: cacheFor(dir, ['--no-cache']), log: () => {}, runCheck: async (c) => { calls.push(c.id); return PASS; } });
+  assert.deepEqual(calls, ['fake-bench'], '--no-cache runs the check');
+});
+
+test('cache: a --no-cache run does not write a cache either', async () => {
+  const { dir } = mkRepo();
+  await executeChecks({ checks: [FAKE], scoped: cacheFor(dir, ['--no-cache']), log: () => {}, runCheck: async () => PASS });
+  assert.equal(fs.existsSync(path.join(dir, CACHE_FILE)), false);
+});
+
+test('cache: an unreadable in-scope file yields NO key (run the check), never a partial digest', () => {
+  if (process.getuid && process.getuid() === 0) return; // root reads anything; the property is untestable there
+  const { dir } = mkRepo();
+  const f = path.join(dir, 'scanner/src/a.js');
+  fs.chmodSync(f, 0o000);
+  try {
+    const k = computeScopedKey({ check: FAKE, command: 'c', repo: dir, files: walkFiles(dir), headSha: 'h', bundleSha: 'b', python: 'p', scope: NARROW });
+    assert.equal(k, null);
+  } finally { fs.chmodSync(f, 0o644); }
+  const again = computeScopedKey({ check: FAKE, command: 'c', repo: dir, files: walkFiles(dir), headSha: 'h', bundleSha: 'b', python: 'p', scope: NARROW });
+  assert.ok(again && again.key, 'readable again, the key exists');
+});
+
+test('cache: a missing bundle or script text yields no key', () => {
+  const { dir } = mkRepo();
+  assert.equal(computeScopedKey({ check: FAKE, command: 'c', repo: dir, files: walkFiles(dir), headSha: 'h', bundleSha: null, python: 'p', scope: NARROW }), null);
+  assert.equal(computeScopedKey({ check: FAKE, command: null, repo: dir, files: walkFiles(dir), headSha: 'h', bundleSha: 'b', python: 'p', scope: NARROW }), null);
+});
+
+test('cache: a symlink retargeted to different bytes invalidates', async () => {
+  const { dir } = mkRepo();
+  fs.writeFileSync(path.join(dir, 'bench/x/one.txt'), '1');
+  fs.writeFileSync(path.join(dir, 'bench/x/two.txt'), '2');
+  fs.symlinkSync('one.txt', path.join(dir, 'bench/x/link'));
+  await gate(dir);
+  fs.rmSync(path.join(dir, 'bench/x/link'));
+  fs.symlinkSync('two.txt', path.join(dir, 'bench/x/link'));
+  assert.deepEqual((await gate(dir)).calls, ['fake-bench']);
+});
+
+test('scopes: digests differ exactly when in-scope content differs', () => {
+  const { dir, put } = mkRepo();
+  const d0 = digestScope(dir, NARROW, { files: walkFiles(dir) });
+  put('docs/notes.txt', 'changed');
+  assert.equal(digestScope(dir, NARROW, { files: walkFiles(dir) }).digest, d0.digest);
+  put('bench/x/run.js', 'changed');
+  assert.notEqual(digestScope(dir, NARROW, { files: walkFiles(dir) }).digest, d0.digest);
+});
+
+// ----------------------------------------------------------- parallel groups
+test('parallel: members of one group overlap in time; everything else stays serial', async () => {
+  const mk = (id, g) => ({ id, title: id, npmScript: `s:${id}`, ...(g ? { parallelGroup: g } : {}) });
+  let running = 0; let peak = 0;
+  const order = [];
+  const runCheck = async (c) => {
+    order.push(`start:${c.id}`);
+    running++; peak = Math.max(peak, running);
+    await new Promise((r) => setTimeout(r, 25));
+    running--; order.push(`end:${c.id}`);
+    return PASS;
+  };
+  const entries = await executeChecks({ checks: [mk('a'), mk('b', 'G'), mk('c', 'G'), mk('d', 'G'), mk('e')], log: () => {}, runCheck });
+  assert.deepEqual(entries.map((e) => e.id), ['a', 'b', 'c', 'd', 'e'], 'results come back in declared order');
+  assert.equal(peak, 3, 'the three group members ran together, nothing else did');
+  assert.ok(order.indexOf('end:a') < order.indexOf('start:b'), 'a finishes before the group starts');
+  assert.ok(order.indexOf('end:d') < order.indexOf('start:e'), 'the group finishes before e starts');
+});
+
+test('parallel: a failure inside a group is reported, every member is reported, and later checks do not run', async () => {
+  const mk = (id, g) => ({ id, title: id, npmScript: `s:${id}`, ...(g ? { parallelGroup: g } : {}) });
+  const ran = [];
+  const entries = await executeChecks({
+    checks: [mk('b', 'G'), mk('c', 'G'), mk('z')], log: () => {},
+    runCheck: async (c) => { ran.push(c.id); return c.id === 'c' ? { ok: false, errors: ['boom'], warnings: [] } : PASS; },
+  });
+  assert.deepEqual(ran.sort(), ['b', 'c']);
+  assert.deepEqual(entries.map((e) => [e.id, e.result.ok]), [['b', true], ['c', false]]);
+});
+
+test('parallel: a check that throws is a failure, not a skip', async () => {
+  const entries = await executeChecks({ checks: [{ id: 'q', title: 'q', npmScript: 's' }], log: () => {}, runCheck: async () => { throw new Error('spawn exploded'); } });
+  assert.equal(entries[0].result.ok, false);
+  assert.match(entries[0].result.errors[0], /spawn exploded/);
+});
+
+test('parallel: only checks traced as writing nothing inside the repository are grouped, and no big suite is', () => {
+  const grouped = CHECKS.filter((c) => c.parallelGroup);
+  assert.ok(grouped.length >= 2);
+  for (const c of grouped) {
+    assert.equal(c.parallelGroup, PURE_BENCHES);
+    assert.equal(scopeFor(c.id).writesRepo, false, `${c.id} is in a parallel group without a recorded writesRepo:false`);
+  }
+  for (const id of ['test-suite', 'ci-parity', 'corpus-gate', 'self-scan-gate', 'layer-recall-gate']) {
+    assert.ok(!CHECKS.find((c) => c.id === id).parallelGroup, `${id} writes scan state and must stay serial`);
+  }
+  // a group must be contiguous, or the executor would run its members apart
+  const idx = grouped.map((c) => CHECKS.indexOf(c));
+  assert.equal(idx[idx.length - 1] - idx[0], idx.length - 1, 'group members must be adjacent');
+});
+
+test('cache: the in-process guards are never cached', async () => {
+  const calls = [];
+  const guard = { id: 'worktree-matches-push', title: 'g' }; // no npmScript
+  const { dir } = mkRepo();
+  const scoped = cacheFor(dir);
+  for (let i = 0; i < 2; i++) await executeChecks({ checks: [guard], scoped, log: () => {}, runCheck: async (c) => { calls.push(c.id); return PASS; } });
+  assert.deepEqual(calls, ['worktree-matches-push', 'worktree-matches-push']);
+  assert.deepEqual(loadCache(dir, { signer }).records, {});
+});
+
+// --------------------------------------------------------- trace analysis
+test('trace analysis: a read outside the scope, VCS use on this repo, and a write inside it are each reported', () => {
+  const repo = '/r';
+  const lines = [
+    { op: 'readFileSync', path: '/r/scanner/src/x.js', kind: 'fs' },
+    { op: 'readFileSync', path: '/r/ide/secret.json', kind: 'fs' },
+    { op: 'spawnSync', cmd: 'git', args: ['log'], cwd: '/r/scanner', kind: 'spawn' },
+    { op: 'spawnSync', cmd: 'git', args: ['clone', 'x', 'y'], cwd: '/r/scanner', kind: 'spawn' },
+    { op: 'writeFileSync', path: '/r/bench/mutation/out.json', kind: 'write' },
+    { op: 'writeFileSync', path: '/tmp/elsewhere', kind: 'write' },
+  ].map((o) => JSON.stringify(o));
+  const a = analyseTrace(lines, scopeFor('mutation-gate'), repo);
+  assert.deepEqual(a.outside, ['ide/secret.json']);
+  assert.equal(a.repoGit.length, 1, 'clone builds a new repository and is not a read of this one');
+  assert.deepEqual(a.writes, ['bench/mutation/out.json']);
+  const clean = analyseTrace([JSON.stringify({ op: 'readFileSync', path: '/r/bench/mutation/runner.mjs', kind: 'fs' })], scopeFor('mutation-gate'), repo);
+  assert.deepEqual(clean.outside, []);
+});
+
+// ------------------------------------------------- hidden scan state, ineligible checks
+import { execFileSync } from 'node:child_process';
+import { wipeIgnoredState } from '../../scripts/gate-verdict-cache.mjs';
+
+test('cache: checks whose scan state was never traced are ineligible for the per-check cache and fall back to the whole-tree one', async () => {
+  for (const id of ['test-suite', 'ci-parity', 'self-scan-gate']) {
+    assert.equal(scopeFor(id).scoped, false, `${id} must not get a scoped key`);
+  }
+  assert.equal(scopeFor('a-check-nobody-traced').scoped, false, 'an unlisted check defaults to no scoped key');
+  const { dir } = mkRepo();
+  const calls = [];
+  const ineligible = { id: 'test-suite', title: 't', npmScript: 'test' };
+  const scoped = buildScopedCache([], { repo: dir, env: {}, signer, inputs: { files: () => walkFiles(dir), headSha: 'h', bundleSha: 'b', python: 'p', command: 'c' } });
+  for (let i = 0; i < 2; i++) await executeChecks({ checks: [ineligible], scoped, log: () => {}, runCheck: async (c) => { calls.push(c.id); return PASS; } });
+  assert.deepEqual(calls, ['test-suite', 'test-suite'], 'ineligible means it always runs under the scoped cache');
+  assert.deepEqual(loadCache(dir, { signer }).records, {}, 'and nothing is recorded for it');
+});
+
+function mkGitRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ppg-state-'));
+  const env = { ...process.env };
+  for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete env[k];
+  const git = (...a) => execFileSync('git', a, { cwd: dir, env, stdio: 'pipe' });
+  git('init', '-q');
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.agentic-security/\n');
+  fs.mkdirSync(path.join(dir, 'bench/cve-replay/e1/pre/.agentic-security'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'bench/cve-replay/e1/pre/.agentic-security/rules.yml'), 'disable: [x]\n');
+  fs.writeFileSync(path.join(dir, 'bench/cve-replay/e1/pre/app.js'), 'x\n');
+  fs.mkdirSync(path.join(dir, 'other/.agentic-security'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'other/.agentic-security/keep.json'), '{}');
+  return { dir, git };
+}
+
+test('cache: gitignored scan state under a cleanState root is removed before keying; sources and other roots are untouched', () => {
+  const { dir } = mkGitRepo();
+  const n = wipeIgnoredState(dir, ['bench/cve-replay/']);
+  assert.equal(n, 1);
+  assert.equal(fs.existsSync(path.join(dir, 'bench/cve-replay/e1/pre/.agentic-security')), false, 'stale rules override is gone');
+  assert.equal(fs.existsSync(path.join(dir, 'bench/cve-replay/e1/pre/app.js')), true, 'sources survive');
+  assert.equal(fs.existsSync(path.join(dir, 'other/.agentic-security/keep.json')), true, 'outside the root, state is not touched');
+});
+
+test('cache: a .agentic-security directory that is NOT ignored is never deleted', () => {
+  const { dir, git } = mkGitRepo();
+  fs.writeFileSync(path.join(dir, '.gitignore'), '');
+  const n = wipeIgnoredState(dir, ['bench/cve-replay/']);
+  assert.equal(n, 0, 'unignored content is real input and is left for the file digest to cover');
+  assert.equal(fs.existsSync(path.join(dir, 'bench/cve-replay/e1/pre/.agentic-security/rules.yml')), true);
+  void git;
+});
+
+test('cache: a stale rules override planted before a run cannot survive into a cached verdict', async () => {
+  // The scenario the wipe exists for: a hand-written rules.yml in a corpus tree changes what the bench measures but is invisible to a
+  // file listing. After the wipe it cannot be there at key time, so the same key can never describe two different measured states.
+  const { dir } = mkGitRepo();
+  const scope = { scoped: true, all: false, usesHistory: false, cleanState: ['bench/cve-replay/'], include: ['bench/cve-replay/'] };
+  const listing = () => ['.gitignore', 'bench/cve-replay/e1/pre/app.js'];
+  const ctx = buildScopedCache([], { repo: dir, env: {}, signer, inputs: { files: listing, headSha: 'h', bundleSha: 'b', python: 'p', command: 'c', scope: () => scope } });
+  const k = ctx.keyFor({ id: 'corpus-gate', npmScript: 'x' });
+  assert.ok(k && k.key);
+  assert.equal(fs.existsSync(path.join(dir, 'bench/cve-replay/e1/pre/.agentic-security')), false);
+});
+
+test('trace analysis: scan state read outside a cleanState root, and writes outside it, fail verification', () => {
+  const repo = '/r';
+  const scope = { ...scopeFor('corpus-gate') };
+  const ok = analyseTrace([
+    { op: 'readFileSync', path: '/r/bench/cve-replay/e1/pre/.agentic-security/rules.yml', kind: 'fs' },
+    { op: 'writeFileSync', path: '/r/bench/cve-replay/e1/pre/.agentic-security/last-scan.json', kind: 'write' },
+  ].map((o) => JSON.stringify(o)), scope, repo);
+  assert.deepEqual(ok.stateReads, []);
+  assert.deepEqual(ok.writesOutside, []);
+  const bad = analyseTrace([
+    { op: 'readFileSync', path: '/r/.agentic-security/rules.yml', kind: 'fs' },
+    { op: 'writeFileSync', path: '/r/docs/generated.md', kind: 'write' },
+  ].map((o) => JSON.stringify(o)), scope, repo);
+  assert.deepEqual(bad.stateReads, ['.agentic-security/rules.yml']);
+  assert.deepEqual(bad.writesOutside, ['docs/generated.md']);
+});
+
+test('cache wiring: with NO injected bundle or python, the real facts are read and a key exists (a misnamed field made every key null once)', () => {
+  const { dir } = mkRepo();
+  // only the file listing and scope are injected; the bundle hash, python version and revision come from the real repository
+  const ctx = buildScopedCache([], { repo: dir, env: {}, signer, inputs: { files: () => walkFiles(dir), command: 'c', scope: () => NARROW } });
+  const k = ctx.keyFor(FAKE);
+  assert.ok(k && /^[0-9a-f]{64}$/.test(k.key), 'a key must be producible from the real bundle and python');
+});

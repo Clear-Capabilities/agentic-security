@@ -55,9 +55,19 @@ on:
 permissions:
   contents: read
 
+env:
+  # Bounded network behaviour for every `npm ci` below. npm's defaults retry twice but allow five minutes per request, so a stalled
+  # registry connection looked like a hang. A 60 s request deadline with five retries turns a stall into a quick, automatic retry, and
+  # the step-level `timeout-minutes` on each install is the backstop if the registry is down entirely.
+  NPM_CONFIG_FETCH_TIMEOUT: '60000'
+  NPM_CONFIG_FETCH_RETRIES: '5'
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '2000'
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '30000'
+
 jobs:
   dependency-currency:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -66,6 +76,7 @@ jobs:
       - name: Install scanner/ dependencies
         working-directory: scanner
         run: npm ci
+        timeout-minutes: 10
       # ide/vscode is installed on demand by the check itself
       # (dependency-currency.mjs's gatherTreeFacts / dependenciesInstalled) —
       # no separate install step needed here.
