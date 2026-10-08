@@ -50,7 +50,7 @@ Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code *
 | high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-vuln:end -->
@@ -67,7 +67,7 @@ Captured from the built bundle on `examples/haskell-app/fixed`: exit code **0**,
 | info | `argument-injection` | CWE-88 | src/Main.hs:46 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-fixed:end -->
@@ -79,8 +79,15 @@ The taint engine follows a value from a source to a sink through your functions 
 where a recognised guard sits on the path: an allow-list `elem`, an `isPrefixOf` on a fixed directory with `..` excluded,
 a host-anchored URL prefix, or an option terminator `--` for argument injection (which lowers that class to informational).
 
+A sink is checked at the argument that carries the dangerous value, which is not always the first: for `Network.Wreq.getWith opts url`
+it is `url`, so a tainted URL is reported as SSRF and tainted *options* on a constant URL are not (the `Session` forms take the URL
+after the session). When one flaw reaches two nested sinks on a line (`readCreateProcess (shell cmd)`: `shell` builds the command,
+`readCreateProcess` runs it) it is reported once, at the inner sink, and the outer one is recorded on the finding (`alsoSink`,
+`dedupedVulns`); two independent sinks on one line stay two findings. A request body read whole with no size limit
+(`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
+
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 141 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 165 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
@@ -89,7 +96,7 @@ The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 
 | `llm-prompt` | CWE-1427 | 5 | `Network.HTTP.Conduit.setRequestBodyJSON`, `Network.HTTP.Conduit.setRequestBodyLBS`, `Network.HTTP.Simple.setRequestBodyJSON`, ... |
 | `path` | CWE-22 | 39 | `Data.ByteString.Lazy.appendFile`, `Data.ByteString.Lazy.readFile`, `Data.ByteString.Lazy.writeFile`, ... |
 | `sql` | CWE-89 | 28 | `Database.MySQL.Simple.execute`, `Database.MySQL.Simple.executeMany`, `Database.MySQL.Simple.execute_`, ... |
-| `url` | CWE-918 | 28 | `Network.HTTP.Client.httpLbs`, `Network.HTTP.Client.httpNoBody`, `Network.HTTP.Client.parseRequest`, ... |
+| `url` | CWE-918 | 52 | `Network.HTTP.Client.httpLbs`, `Network.HTTP.Client.httpNoBody`, `Network.HTTP.Client.parseRequest`, ... |
 | `xss` | CWE-79 | 23 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
 Source provenances: cli (1), env (3), file-read (5), header (8), http-body (10), network (2), stdin (22), url-param (40).
@@ -111,7 +118,7 @@ declared but not applied to the handler earns no credit.
 <!-- web-framework-table:start -->
 | Framework | Package | Tested versions | Routes read from | Authentication evidence |
 |---|---|---|---|---|
-| Scotty | `scotty` | 0.12, 0.20 | `get`/`post`/`put`/`delete`/`patch` calls and `middleware` | a guard function that reads a credential and rejects, `basicAuth` middleware |
+| Scotty | `scotty` | 0.12, 0.20 | `get`/`post`/`put`/`delete`/`patch` calls and `middleware` | a guard function that reads a credential and rejects, a credential check written inside the handler itself (see below), `basicAuth` middleware |
 | WAI/Warp | `wai` | 3.2 | `case (requestMethod req, pathInfo req) of` routers, `run` installing a middleware | a middleware that reads a credential and rejects, installed in the `run` expression |
 | Servant | `servant-server` | 0.19, 0.20 | the `type API = ... :> ... :<|> ...` description | `BasicAuth`, `AuthProtect`, `Auth` combinators in the type |
 | Yesod | `yesod` | 1.6 | `[parseRoutes| ... |]` text | `isAuthorized` clauses, `requireAuthId`/`requireAuth` in a handler |
@@ -131,6 +138,15 @@ they are reported as `unknown` coverage and as a gap, never omitted.
 | Privileged route without a role or permission check | CWE-285 | admin-shaped route, authenticated, no role check |
 | State-changing route authenticated by a cookie with no CSRF protection | CWE-352 | cookie/session credential, no CSRF check (header-token APIs are not CSRF-exposed) |
 
+**A guard written inside the handler.** A guard does not have to be a separate function. A handler that reads a credential
+(`header "Authorization"`, a cookie, an API-key header) and then rejects before its first sensitive operation is
+authenticated, in each of the ways this is usually written: `when (isNothing h) (status status401 >> finish)`, a `when`
+with a `do` block, a `case` on the header, or `status` and `finish` as separate statements. Two things keep this from being
+a loophole. In Scotty, `status status401` only sets the response code and the handler keeps running, so an inline check
+counts only if a stopping call (`finish`, `raise`, ...) follows before the first sensitive operation. And the check must
+read a real credential header and run *before* the write: `header "X-Request-Id"` is not authentication, and a check
+after the write is reported as too late.
+
 ## Dependencies, advisories and the software bill of materials
 
 The declared inventory comes from the manifests: every dependency with its scope (library, executable, test-suite,
@@ -149,12 +165,41 @@ A plan is checked for freshness against the project (compiler, flags, local pack
 stale plan contributes **no versions at all** and is reported as a scan-health condition; a missing one leaves the declared
 inventory and says it is not a closure. A freeze file alone is `lock_only`, never a closure.
 
-**Advisories.** No advisory data ships inside the scanner and none is fetched during a scan. Provide a hash-pinned snapshot:
+**Advisories.** No advisory data ships inside the scanner. A scan reads its advisories from one of two places, and never from the
+scanned project:
 
-```bash
-export AGENTIC_SECURITY_HACKAGE_ADVISORIES=/path/to/hackage-advisories.json   # or keep it in ~/.config/agentic-security/ (operator config)
-export AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256=<digest>                       # optional pin
-```
+1. **A hash-pinned snapshot you provide** (the default; fully offline):
+
+   ```bash
+   export AGENTIC_SECURITY_HACKAGE_ADVISORIES=/path/to/hackage-advisories.json   # or keep it in ~/.config/agentic-security/ (operator config)
+   export AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256=<digest>                       # optional pin
+   ```
+
+2. **The live feed** (opt in; needs the network). Set `AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1` and the scan looks up the
+   packages it is about to evaluate in the OSV `Hackage` ecosystem (the HSEC advisories and their aliases) before it matches
+   anything, and keeps the result in `hackage-advisories.json` in the operator configuration directory (mode 0600):
+
+   ```bash
+   export AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1
+   agentic-security scan .
+   ```
+
+   What it will and will not do:
+   - It is off unless you turn it on, and `AGENTIC_SECURITY_OFFLINE=1` (or `--no-network`) always wins. A snapshot named by
+     `AGENTIC_SECURITY_HACKAGE_ADVISORIES` is used as given and never refreshed over.
+   - It looks up declared and frozen dependencies, transitive ones when a plan is present, and Haskell packages inside an
+     imported [Nix closure](nix-nixos.md). A package already looked up in the last 24 hours is not asked for again.
+   - **It records what it covered.** The snapshot lists each package it actually queried and when. A package it could not
+     fully look up (a record that failed to download, a package with more advisories than one page) is **not covered**, and the
+     scan reports it as `feed-incomplete` (unknown) with an `advisory-feed-incomplete` scan-health condition. It is never
+     reported as having no advisories. A package last looked up longer ago than the age limit reads `feed-stale` for the same reason.
+   - **If the feed cannot be reached,** the previous snapshot is left in place and used, with its age stated. With no previous
+     snapshot the scan is `partial` and says why ("Live feed: failed, ...").
+   - Everything from the network is treated as untrusted: package names and advisory ids are validated before they reach a URL,
+     a record that is not the one requested is dropped, responses are size-bounded, and a cached file whose records no longer
+     match their recorded hashes is discarded and fetched again.
+   - It has been tested against a stand-in server that serves the real pinned HSEC records. It has not been measured against
+     the live service on real projects.
 
 A snapshot inside the scanned project (`.agentic-security/`) is **ignored and the scan says so**: a project cannot vouch for its own advisories, so a hostile repository could otherwise ship an empty feed and make itself look clean. Only the environment variable or the operator configuration directory counts.
 
@@ -240,7 +285,7 @@ Captured from the built bundle on `examples/haskell-app/partial`: exit code **3*
 | critical | `command-injection` | CWE-78 | src/Gen.hs:19 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `opaque-boundary:cpp`, `opaque-boundary:ffi`, `opaque-boundary:th-splice`, `opaque-boundary:th-top-level-splice`, `unmodeled-imports`.
 <!-- generated:ex-hs-partial:end -->
@@ -257,7 +302,7 @@ ordinary calls. Unresolved constructs make the file `unresolved` in scan health,
 | Compile check of a fix (`compile: true`) | `ghc` on `PATH` | reported as not run |
 | The criterion that every route fixture compiles (HS-006.AC01) | `ghc` | the criterion **fails**; the support registry marks `auth` as `blocked` on a host without it |
 | Resolved dependency graph | a plan or Stack export in the project | declared inventory only, stated |
-| Advisory matching | a snapshot you provide | `partial`, stated |
+| Advisory matching | a snapshot you provide, or the opt-in live feed (network) | `partial`, stated |
 
 The measured status of each capability, with its denominators, is in [Haskell and Nix support](../language-support.md).
 
@@ -267,6 +312,10 @@ The measured status of each capability, with its denominators, is in [Haskell an
 - A flow through an imported module with no security model is widened and disclosed on the finding.
 - Template Haskell splices, quasi-quotes other than the web routers, CPP branches and foreign calls are boundaries.
 - Weak-randomness detection keys on the function and time-source names; a rename of a security-shaped function can lose it.
+- The live advisory feed (`AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1`) has been tested against a stand-in server that serves the real
+  pinned HSEC records, not against the live service on real projects. A package it could not cover is reported unknown.
+- A credential check written inside a route handler counts as a guard only for the shapes described above (a credential header read,
+  then a rejection that stops the handler, before the first sensitive operation); other ways of writing one are still reported.
 - The measured numbers come from a synthetic, template-generated corpus; they describe robustness over those shapes, not
   accuracy on arbitrary real projects.
 

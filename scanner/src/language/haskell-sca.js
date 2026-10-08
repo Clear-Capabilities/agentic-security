@@ -147,8 +147,12 @@ const fixedVersions = (ranges) => [...new Set((ranges || []).flatMap((r) => (r.e
 
 // ── advisory database (pinned snapshot / records) ────────────────────────────
 export class AdvisoryDb {
-  constructor({ records = [], source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30, integrity = null } = {}) {
+  constructor({ records = [], source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30, integrity = null, covered = null } = {}) {
     this.source = source;
+    // `covered` is {package: ISO time it was last queried}. null means the snapshot makes no per-package claim (a hand-built or
+    // operator-pinned snapshot): every package is then treated as covered, as it always was.
+    this.covered = covered && typeof covered === 'object' ? covered : null;
+    this.now = now;
     this.generatedAt = generatedAt;
     this.integrity = integrity;
     this.problems = [];
@@ -167,6 +171,13 @@ export class AdvisoryDb {
     this.maxAgeDays = maxAgeDays;
   }
   forPackage(name) { return this.byPackage.get(name) || []; }
+  /** 'covered' | 'uncovered' | 'stale' for a package; always 'covered' when the snapshot makes no per-package claim. */
+  coverage(name) {
+    if (!this.covered) return 'covered';
+    const t = Date.parse(this.covered[name]);
+    if (!Number.isFinite(t)) return 'uncovered';
+    return (this.now - t) / 86400000 > this.maxAgeDays ? 'stale' : 'covered';
+  }
 }
 
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
@@ -185,7 +196,7 @@ export function loadAdvisorySnapshot(snapshot, { pinnedSha256 = null, signature 
     if (!want) return refuse(`record ${rec.id} has no recorded hash`);
     if (sha256(JSON.stringify(rec)) !== want) return refuse(`record ${rec.id} does not match its recorded hash`);
   }
-  const body = JSON.stringify({ schema: snapshot.schema, generatedAt: snapshot.generatedAt, records: snapshot.records, recordHashes: snapshot.recordHashes });
+  const body = snapshotBody(snapshot);
   const digest = sha256(body);
   if (pinnedSha256 && digest !== pinnedSha256) return refuse('snapshot hash does not match the pinned value');
   let signed = false;
@@ -197,7 +208,7 @@ export function loadAdvisorySnapshot(snapshot, { pinnedSha256 = null, signature 
       signed = true;
     } catch (e) { return refuse(`signature check failed: ${e.message}`); }
   }
-  const db = new AdvisoryDb({ records: snapshot.records, source: 'snapshot', generatedAt: snapshot.generatedAt, now, maxAgeDays, integrity: { sha256: digest, hashPinned: !!pinnedSha256, signed } });
+  const db = new AdvisoryDb({ records: snapshot.records, source: 'snapshot', generatedAt: snapshot.generatedAt, now, maxAgeDays, integrity: { sha256: digest, hashPinned: !!pinnedSha256, signed }, covered: snapshot.covered || null });
   return { ok: true, db, digest };
 }
 
@@ -205,7 +216,8 @@ export function buildSnapshot(records, generatedAt) {
   const recordHashes = Object.fromEntries(records.map((r) => [r.id, sha256(JSON.stringify(r))]));
   return { schema: 1, generatedAt, records, recordHashes };
 }
-export const snapshotBody = (s) => JSON.stringify({ schema: s.schema, generatedAt: s.generatedAt, records: s.records, recordHashes: s.recordHashes });
+// `covered` joins the hashed body only when present, so a snapshot without it keeps the digest it always had.
+export const snapshotBody = (s) => JSON.stringify({ schema: s.schema, generatedAt: s.generatedAt, records: s.records, recordHashes: s.recordHashes, ...(s.covered ? { covered: s.covered } : {}) });
 
 // ── matching ─────────────────────────────────────────────────────────────────
 /**
@@ -251,6 +263,8 @@ export function evaluateComponents(components, db, opts = {}) {
   for (const comp of components) {
     const base = { name: comp.name, version: comp.version || null, declaredRange: comp.declaredRange || null, scope: comp.scope || null, target: comp.target || null, purl: hackagePurl(comp.name, comp.version || null) };
     if (!db) { statuses.push({ ...base, status: 'feed-unavailable' }); continue; }
+    const cov = db.coverage(comp.name);
+    if (cov !== 'covered') { statuses.push({ ...base, status: cov === 'stale' ? 'feed-stale' : 'feed-incomplete', reason: cov === 'stale' ? 'this package was last looked up longer ago than the feed age limit; the absence of advisories is not evidence' : 'the advisory feed never covered this package; the absence of advisories is not evidence' }); continue; }
     const hits = db.forPackage(comp.name);
     if (!hits.length) { statuses.push({ ...base, status: 'no-advisories', feed: feed.status }); continue; }
     let any = false;

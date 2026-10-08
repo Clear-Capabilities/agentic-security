@@ -82,6 +82,8 @@ imports only**. Each option is decided by module-system priority (`mkForce` 50, 
 `mkOverride N`), `mkMerge` and `mkIf` conditions it can judge (booleans, `!`, `&&`, `||`, `==`, `config.<option>`,
 `pkgs.stdenv.isLinux` from the target system). Then:
 
+- a list or attribute set is evaluated only when **every element is statically known** (`[ { from = 1; to = 65535; } ]` is; a
+  list holding a `config.<option>` reference, an interpolated string or a `rec` set is not, and stays `unknown` as a whole);
 - an undecidable condition keeps the value `conditional`; equal-priority disagreement is `conflict`; nothing is guessed;
 - a missing setting gets a default only when the option catalog proves it for the release in force, else `unknown`;
 - the release comes from the target or the flake's `nixpkgs` input, never from `system.stateVersion`;
@@ -95,7 +97,7 @@ Judged against the effective configuration, never raw text. Enabled, listening a
 is merely declared is not a finding, and reachability is always `unknown` (only the host firewall is modelled).
 
 <!-- generated:nix-hardening:start -->
-21 rules, judged against the effective configuration:
+22 rules, judged against the effective configuration:
 
 | Rule | Family | CWE | Severity | Finding |
 | --- | --- | --- | --- | --- |
@@ -104,6 +106,7 @@ is merely declared is not a finding, and reachability is always `unknown` (only 
 | `ssh-empty-passwords` | ssh-access | CWE-258 | high | SSH permits empty passwords |
 | `firewall-disabled` | firewall-exposure | CWE-284 | high | Host firewall is disabled |
 | `firewall-sensitive-port` | firewall-exposure | CWE-668 | high | Firewall opens a database or administration port on every interface |
+| `firewall-wide-port-range` | firewall-exposure | CWE-668 | high | Firewall opens a very wide port range on every interface |
 | `listener-all-interfaces` | firewall-exposure | CWE-668 | medium | Service is configured to listen on every interface |
 | `listener-trust-auth` | firewall-exposure | CWE-306 | high | Database authentication is "trust" for a network-wide address range |
 | `service-runs-as-root` | service-identity | CWE-250 | medium | systemd service runs as root |
@@ -121,6 +124,22 @@ is merely declared is not a finding, and reachability is always `unknown` (only 
 | `container-privileged` | container-declaration | CWE-250 | high | OCI container is declared privileged or with a dangerous mount |
 | `container-host-network` | container-declaration | CWE-668 | medium | OCI container shares the host network namespace |
 <!-- generated:nix-hardening:end -->
+
+**Firewall port ranges.** `networking.firewall.allowedTCPPortRanges` and `allowedUDPPortRanges` open ports exactly as the
+single-port lists do, and are judged the same way:
+
+| Range opened on every interface | Result |
+|---|---|
+| every port (`from <= 1` and `to >= 65535`) | `firewall-wide-port-range`, **high**: a firewall that is off in everything but name |
+| ten thousand ports or more | `firewall-wide-port-range`, **medium** |
+| a smaller range that contains a database or administration port (PostgreSQL 5432, Redis 6379, ...) | `firewall-sensitive-port` for each such port, with the range recorded |
+| a smaller range with no such port (a peer-to-peer client's 6881-6999, say) | nothing |
+| a range under `networking.firewall.interfaces.<name>.` | nothing: interface-scoped ingress is restrictive |
+
+A service port that falls inside a global range is reported `open-in-firewall`, not `firewall-closed`. A range option that
+cannot be read as `{ from, to }` integers (a `config.` reference inside, say) is **not** read as closed: every firewall
+conclusion becomes `unknown` and a `firewall-port-ranges-unevaluated` gap is recorded, so the absence of a finding is never
+presented as a clean result.
 
 Container findings are about **declarations** only; a Nix-built or declared OCI image is not scanned
 (`container-image-scan` is listed as a limitation).
@@ -220,7 +239,7 @@ rules above, not here.
   component is matched by its **upstream identity** (the source URL host and repository, an explicit purl or CPE), never by
   its Nix attribute name alone: a name-only or ambiguous identity yields a `candidate`, not a verdict. A backported patch
   counts only when its content hash is one the advisory lists as a fix; a patch merely named after a CVE is an unverified
-  claim and the finding stays `possibly-affected`. Wrapped Haskell packages reuse the Hackage matcher. With no snapshot the
+  claim and the finding stays `possibly-affected`. Wrapped Haskell packages reuse the Hackage matcher and the same Hackage advisory data, including the opt-in live feed described in the [Haskell guide](haskell.md#dependencies-advisories-and-the-software-bill-of-materials); a Hackage package that feed did not cover is reported unknown, not clean. With no snapshot the
   scan is `partial` and says the closure was **not checked**, which is not a clean result.
 - **License data** is not present in these records, so no license policy is applied and the scan says so.
 
@@ -277,7 +296,7 @@ Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit cod
 | critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:15 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 - 1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph
 
 Disclosed limits: `license-data-unavailable`.

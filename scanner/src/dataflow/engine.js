@@ -1148,6 +1148,7 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
           // Haskell: two sinks of the same kind on one line (`if b then f (clean x) else f x`) are distinct
           // sites; without a site key they share an id and one silently replaces the other.
           ...(/\.(?:hs|lhs)$/i.test(_currentFile || '') ? { siteKey: _siteKey(taintedArgExpr) } : {}),
+          ...(/\.(?:hs|lhs)$/i.test(_currentFile || '') && taintedArgExpr && taintedArgExpr.kind === 'call' ? { _argCallee: taintedArgExpr.callee } : {}),
           kind: 'taint',
           sinkId: e.id,
           vuln: e.vuln?.name || 'Tainted Sink',
@@ -1783,6 +1784,26 @@ function step(node, stateIn, callContext) {
 // state, never into the SummaryCache key (that stays exactly what the caller
 // supplied). Returns the ORIGINAL Set unchanged when there's nothing to add,
 // so callers that never touch annotation-shaped params pay zero extra cost.
+// Haskell: a sink whose tainted argument IS a call to another sink of the same CWE on the same line is one flaw reported twice
+// (`readCreateProcess (shell cmd)`: `shell` builds the command, `readCreateProcess` runs it). The INNER sink is kept, because it is
+// where the tainted text enters the command; the outer one is recorded on it, never dropped silently. Only a nested pair collapses:
+// two independent sinks on one line (`if b then f (clean x) else f x`) have different arguments and stay two findings, so a
+// discharged sink still cannot absorb its unprotected sibling.
+function _collapseNestedHsSinks(all) {
+  const base = (c) => String(c && typeof c === 'object' ? (c.name || c.text || '') : (c ?? '')).split('.').pop();
+  for (let i = all.length - 1; i >= 0; i--) {
+    const f = all[i];
+    if (f._argCallee === undefined || !/\.(?:hs|lhs)$/i.test(f.file || '')) continue;
+    const want = base(f._argCallee);
+    const inner = want && all.find((g) => g !== f && g.file === f.file && g.line === f.line && g.cwe === f.cwe && g.callee !== undefined && base(g.callee) === want);
+    if (!inner) continue;
+    inner.dedupedVulns = [...new Set([...(inner.dedupedVulns || []), f.vuln])];
+    inner.alsoSink = [...new Set([...(inner.alsoSink || []), base(f.callee)])];
+    all.splice(i, 1);
+  }
+  for (const f of all) if (f._argCallee !== undefined) delete f._argCallee;
+}
+
 // Short stable fingerprint of an argument expression (ignores line numbers and IR bookkeeping).
 function _siteKey(expr) {
   let h = 5381;
@@ -2575,6 +2596,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     if (dg[f.severity]) f.severity = dg[f.severity];
   }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
+  _collapseNestedHsSinks(all);
   return all;
 
   // Dedup + map a raw findings array (from analyzeFunction's callContext)
@@ -2654,6 +2676,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
         // rebuilding the SMT path-feasibility mechanism (next-gen taint
         // capability #5) to depend on a REAL slice for a sound proof.
         ...(f.argIndex !== undefined ? { argIndex: f.argIndex } : {}),
+        ...(f._argCallee !== undefined ? { _argCallee: f._argCallee } : {}),
         // callee: kept as plain `callee` (not underscore-prefixed) to match
         // backward.js's own contract, which reads `f.callee` on both real and
         // fake-fixture findings throughout its module and test suite. It is

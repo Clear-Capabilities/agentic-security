@@ -438,7 +438,7 @@ Captured from the built bundle on `examples/haskell-app/vulnerable`: exit code *
 | high | `missing-authentication` | CWE-306 | src/Main.hs:38 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-hs-vuln:end -->
@@ -456,7 +456,7 @@ Captured from the built bundle on `examples/haskell-app/partial`: exit code **3*
 | critical | `command-injection` | CWE-78 | src/Gen.hs:19 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `opaque-boundary:cpp`, `opaque-boundary:ffi`, `opaque-boundary:th-splice`, `opaque-boundary:th-top-level-splice`, `unmodeled-imports`.
 <!-- generated:ex-hs-partial:end -->
@@ -530,7 +530,7 @@ Captured from the built bundle on `examples/haskell-on-nix/vulnerable`: exit cod
 | critical | `multi-sink-taint-chain` | CWE-20 | src/Main.hs:15 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 - 1 Nix build-trust finding(s) rest on an unresolved branch or partial module graph
 
 Disclosed limits: `license-data-unavailable`.
@@ -549,7 +549,7 @@ Captured from the built bundle on `examples/polyglot-privacy`: exit code **2**, 
 | high | `prompt-injection-untrusted-text-in-a-mod` | CWE-1427 | src/Sync.hs:30 |
 
 Scan-health conditions:
-- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)
+- no Hackage advisory snapshot is loaded: Haskell dependency vulnerabilities were not assessed. no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME) To fetch advisories from the OSV Hackage feed instead, set AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1 (network, opt-in).
 
 Disclosed limits: `license-data-unavailable`, `unmodeled-imports`.
 <!-- generated:ex-pp:end -->

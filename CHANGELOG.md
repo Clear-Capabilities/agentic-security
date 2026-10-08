@@ -9,6 +9,26 @@
 > make the history less accurate, not more.
 
 
+## 0.158.0 - live Hackage advisories (opt in), and the detection gaps the second unseen set found
+
+Two things, both in the Haskell and Nix/NixOS work.
+
+**A live Hackage advisory feed.** Until now Haskell dependency scanning matched correctly but only against a snapshot you supplied. Set `AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1` and a scan looks up the packages it is about to evaluate in the OSV `Hackage` ecosystem, keeping the result in the operator configuration directory (mode 0600), never the scanned project.
+- **Off by default.** It needs the network, `AGENTIC_SECURITY_OFFLINE=1` / `--no-network` always wins, and a snapshot you name with `AGENTIC_SECURITY_HACKAGE_ADVISORIES` is used as given and never refreshed over.
+- **It records what it covered.** A package it could not fully look up is reported `feed-incomplete` (unknown), never as having no advisories, and coverage older than the age limit reads `feed-stale`. This holds for the Nix matcher too: a Haskell package wrapped in a Nix closure that the feed did not cover is now `unknown`. Before this release that path would have said "no advisory in the supplied feed matches this version" for a package the feed never looked at; the closure's Haskell package names are now also fed to the lookup.
+- **Failure degrades.** An unreachable feed keeps the previous snapshot and states its age; with none the scan is `partial` and says why.
+- **Untrusted input is bounded.** Package names and advisory ids are validated before they reach a URL, a record that is not the one asked for is dropped, responses are size-bounded, and a cache whose records no longer match their hashes is discarded.
+- It has been tested against a stand-in server that serves the real pinned HSEC records. It has not been measured against the live service on real projects.
+
+**Detection gaps, fixed as general capabilities** (none of the fixtures used to prove them is a corpus case; each fix is pinned in both directions):
+- `Network.Wreq.getWith opts url` and the other `*With`, custom-method and `Session` forms were checked at the options argument, so the URL was never examined and tainted options were treated as SSRF. The URL position is now modelled per function (the sink list grew from 8 to 32 entries).
+- A credential check written inside a route handler (reads `Authorization`, rejects with a 401 and stops the handler, before the first sensitive operation) is recognised as a guard. A check that does not stop the handler, reads a non-credential header, or runs after the write is still reported.
+- One flaw reached through nested sinks (`readCreateProcess (shell cmd)`) is reported once; the outer sink is recorded on the finding. Independent sinks on one line stay separate.
+- Reading a request body whole with no size limit is CWE-770, like the sibling unbounded-read rules (it was CWE-400).
+- NixOS `allowedTCPPortRanges` / `allowedUDPPortRanges` are evaluated: a range that opens every port is a high finding (`firewall-wide-port-range`), ten thousand or more ports medium, a sensitive port inside a smaller range is still caught, an interface-scoped range is not global, and a range that cannot be evaluated is disclosed instead of read as closed. A service port inside a global range is reported open in the firewall. The option evaluator now reads a list or attribute set when every element is statically known.
+
+This entry makes no claim about how many requirements are verified, or about precision on the fixes above: the unseen set they came from is consumed, so a new number needs a fresh one.
+
 ## 0.157.2 - the npm package description names Haskell and Nix/NixOS
 
 npm cuts a package description at 255 characters, and in 0.157.1 the Haskell and Nix/NixOS sentence sat past the cut, so the registry never showed it. The description is now 234 characters with both languages inside the limit. No scanner behaviour changed.

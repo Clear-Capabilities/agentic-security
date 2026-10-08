@@ -54,9 +54,10 @@ CI environment that doesn't invoke the CLI flags:
 
 | Variable | Effect |
 |---|---|
-| `AGENTIC_SECURITY_HACKAGE_ADVISORIES` | Path to a hash-pinned Hackage advisory snapshot. Without it (and without `hackage-advisories.json` in the state directory) Haskell dependencies are **not assessed** and the scan is `partial`. |
+| `AGENTIC_SECURITY_HACKAGE_ADVISORIES` | Path to a hash-pinned Hackage advisory snapshot. Without it (and without `hackage-advisories.json` in the operator configuration directory, `$XDG_CONFIG_HOME/agentic-security/`; a copy inside the scanned project is ignored) and without the live feed below, Haskell dependencies are **not assessed** and the scan is `partial`. |
 | `AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256` | Optional digest the snapshot must match. |
-| `AGENTIC_SECURITY_NIX_ADVISORIES` | Path to an OSV-style snapshot (`[...]` or `{generatedAt, records}`) for the Nix closure. Without it (and without `nix-advisories.json` in the state directory) an exported closure is **not checked**, and the scan says so. |
+| `AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE` | `1` fetches Hackage advisories from the OSV `Hackage` ecosystem during a scan and keeps them in `hackage-advisories.json` in the operator configuration directory (mode 0600). Off by default; needs the network; ignored under `AGENTIC_SECURITY_OFFLINE` / `--no-network`, and never refreshes over a snapshot named by `AGENTIC_SECURITY_HACKAGE_ADVISORIES`. Records which packages it covered: one it could not look up is reported unknown, never clean. See the [Haskell guide](../guides/haskell.md#dependencies-advisories-and-the-software-bill-of-materials). |
+| `AGENTIC_SECURITY_NIX_ADVISORIES` | Path to an OSV-style snapshot (`[...]` or `{generatedAt, records}`) for the Nix closure. Without it (and without `nix-advisories.json` in the operator configuration directory; a copy inside the scanned project is ignored) an exported closure is **not checked**, and the scan says so. |
 | `AGENTIC_SECURITY_NIX_EVAL` | `1` selects the opt-in, sandboxed evaluation. Off by default: a default scan never starts `nix`. |
 | `AGENTIC_SECURITY_NIX_TARGET` | The flake output attribute to evaluate when evaluation is selected. Without it the evaluation reports `blocked`. |
 | `AGENTIC_SECURITY_NIX_SYSTEM` | The system for the evaluation target (default: the target's own). |

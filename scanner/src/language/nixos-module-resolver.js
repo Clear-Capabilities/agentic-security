@@ -306,6 +306,27 @@ class Resolver {
         return v.known && typeof v.value === 'boolean' ? known(!v.value) : UNK;
       }
       case 'binop': return this.evalBinop(n, env);
+      // A list or attribute set is known only when EVERY element is statically known (so `[ { from = 1; to = 65535; } ]` is, and a list
+      // containing `config.x` or an interpolated string is not). Bounded; recursive sets and dynamic attribute names stay unknown.
+      case 'list': {
+        if (n.items.length > 256) return UNK;
+        const out = [];
+        for (const it of n.items) { const v = this.evalExpr(it, env); if (!v.known) return UNK; out.push(v.value); }
+        return known(out);
+      }
+      case 'attrset': {
+        if (n.rec || n.errors || n.bindings.length > 256) return UNK;
+        const out = {};
+        for (const b of n.bindings) {
+          if (b.kind !== 'attr' || !b.path.length || !b.path.every((seg) => seg.kind === 'static' && typeof seg.name === 'string')) return UNK;
+          const v = this.evalExpr(b.value, env);
+          if (!v.known) return UNK;
+          let at = out;
+          for (const seg of b.path.slice(0, -1)) { if (typeof at[seg.name] !== 'object' || at[seg.name] === null) at[seg.name] = {}; at = at[seg.name]; }
+          at[b.path[b.path.length - 1].name] = v.value;
+        }
+        return known(out);
+      }
       case 'select': {
         const flags = platformFlags(this.target.system);
         const b = unparen(n.base);
@@ -360,7 +381,11 @@ class Resolver {
         const out = [];
         for (const it of s.items) {
           const v = it.type === 'string' && !it.interpolated ? known(it.literal) : it.type === 'number' || it.type === 'bool' ? known(it.value) : UNK;
-          if (!v.known) return UNK;
+          if (!v.known) {
+            // Not a list of scalars (for example a list of attribute sets): evaluate the whole expression from its source instead.
+            const ast = this.parseAt(def.file, def.valueSpan);
+            return ast ? this.evalExpr(ast, { file: def.file, namespace: def.namespace, scope: def.scope }) : UNK;
+          }
           out.push(v.value);
         }
         return known(out);

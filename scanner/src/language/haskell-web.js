@@ -221,6 +221,32 @@ function handlerFacts(ctx, fn) {
   };
   const guardIdx = ordered.findIndex((o) => isGuardCall(o.call));
   const sensIdx = ordered.findIndex((o) => isSensitive(o.call));
+  // An INLINE guard: the handler itself reads a credential and, before any sensitive operation, rejects. Scotty's `status` only sets the
+  // code and the handler keeps running, so there a halting call (`finish`, `raise`, ...) must follow, still before the sensitive step;
+  // a WAI response, a Servant throwError or a Yesod permissionDenied ends the handler by itself.
+  // `finish` is usually a bare operand (`status status401 >> finish`, `when bad finish`), which the IR records as an identifier
+  // rather than a call, so halting points are collected from both, by source line.
+  const HALT = /^Web\.Scotty(?:\.Trans)?\.(?:finish|raise|raiseStatus|redirect)$/;
+  const haltLines = [];
+  for (const n of nodes) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
+    if ((e.kind === 'call' ? e.callee : e.kind === 'ident' ? e.name : null) && HALT.test(e.kind === 'call' ? e.callee : e.name)) haltLines.push(Number.isFinite(e.line) ? e.line : n.line);
+  }
+  const sensLine = sensIdx >= 0 ? ordered[sensIdx].line : Infinity;
+  const haltsAfter = (line) => haltLines.some((h) => Number.isFinite(h) && h >= line && h < sensLine);
+  // The complete call list (not the node walk, which does not descend into case alternatives), ordered by source line.
+  const allCalls = callsOf(fn).filter((c) => typeof c.callee === 'string' && Number.isFinite(c.line)).sort((x, y) => x.line - y.line);
+  let inlineIdx = -1, inlineKind = null, inlineLine = null, inlineCallee = null;
+  for (let i = 0; i < allCalls.length && inlineIdx < 0; i++) {
+    const k = credentialKind(allCalls[i]);
+    if (!k) continue;
+    for (let j = i + 1; j < allCalls.length && allCalls[j].line < sensLine; j++) {
+      const r = allCalls[j];
+      if (!isRejection(r)) continue;
+      const setsStatusOnly = /^Web\.Scotty(?:\.Trans)?\.status$/.test(r.callee);
+      if (setsStatusOnly && !haltsAfter(allCalls[i].line)) continue;   // an identifier carries its enclosing node's line, so position is judged from the credential read
+      inlineIdx = j; inlineKind = k; inlineLine = r.line; inlineCallee = allCalls[i].callee; break;
+    }
+  }
   const principals = new Set();
   for (const a of assigns) if (a.source.kind === 'call' && isGuardCall(a.source)) principals.add(a.target);
   // ids read from the request
@@ -232,7 +258,7 @@ function handlerFacts(ctx, fn) {
       if (nm && /id$/i.test(nm)) idVars.add(a.target);
     }
   }
-  return { ordered, guardIdx, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
+  return { ordered, guardIdx, inlineIdx, inlineKind, inlineLine, inlineCallee, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
 }
 
 function hasOwnership(ctx, facts) {
@@ -277,6 +303,8 @@ function analyzeRoute(ctx, route, handlerFn, opts) {
       R.auth = { status: 'authenticated', kind: (sub.kinds && sub.kinds[0]) || null, evidence: [{ kind: 'handler-guard', callee: g.callee, line: facts.ordered[facts.guardIdx].line }] };
       (sub.kinds || []).forEach((k) => R.credentialKinds.add(k));
     }
+  } else if (facts.inlineIdx >= 0) {
+    R.auth = { status: 'authenticated', kind: facts.inlineKind, evidence: [{ kind: 'inline-guard', callee: facts.inlineCallee, line: facts.inlineLine }] };
   } else R.auth = { status: 'none', kind: null, evidence: [] };
   // role
   const roleCall = facts.ordered.find((o) => ROLE_CALL.test(o.call.callee || ''));
