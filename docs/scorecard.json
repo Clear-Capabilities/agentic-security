@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.159.0",
-    "bundleSha256": "b3c135db908e67031ddd3d8d6c92c3d306a328bdfd8c348c1777ba8bb4bee097",
-    "commit": "0940bd3cae96c6eede4e7cda4c4c8467ec405497",
+    "bundleSha256": "6a0bcec455607538bd4485ce3b9cd5a266f51daf636b0ef6260cdc3bacf01776",
+    "commit": "74cff402de56fd2c41519493b6087bee2fff5589",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-08T14:59:23.608Z",
+    "generatedAt": "2026-10-08T22:07:15.072Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -599,7 +599,7 @@
         }
       },
       "scanner/src": {
-        "total": 550,
+        "total": 548,
         "byFile": {
           "(deep-engine)": 1,
           "badge.js": 3,
@@ -637,7 +637,7 @@
           "language/bridges.js": 1,
           "language/context.js": 3,
           "language/discovery.js": 1,
-          "language/fix-lifecycle.js": 4,
+          "language/fix-lifecycle.js": 2,
           "language/haskell-cpp.js": 3,
           "language/haskell-fix.js": 2,
           "language/haskell-ir.js": 8,
@@ -828,7 +828,7 @@
         }
       },
       "scripts": {
-        "total": 48,
+        "total": 46,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -836,7 +836,6 @@
           "calibration-holdout-check.mjs": 1,
           "capability-ledger/check.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
-          "gate-trace-reads.mjs": 2,
           "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
           "loop-engineering/lib/claude.mjs": 1,
@@ -859,8 +858,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 341,
-    "d": 420
+    "n": 340,
+    "d": 419
   },
   "taintRecall": {
     "measuredThisRun": true,
