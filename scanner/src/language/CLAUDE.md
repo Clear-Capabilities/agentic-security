@@ -49,6 +49,13 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
   quote, literal, documented setting or restricted option update; a quasi-quote only when it is a raw-string or non-interpolating quoter. The
   accepted kinds (`th-safe-splice`, `quasiquote-inert`) are disclosed, never in the adapter's opaque set, and `preprocessForSyntax` feeds the same
   decisions to the semantic IR. Widening any allowlist needs a both-directions test in `test/haskell/haskell-boundaries.test.js`.
+- **The Nix feed is the same contract over a different source.** `nix-advisory-feed.js` uses the NVD CVE API 2.0 keyed by CPE
+  `vendor:product` (OSV has no nixpkgs ecosystem), behind `AGENTIC_SECURITY_NIX_ADVISORIES_LIVE=1`. Coverage is per CPE identity
+  (`NixAdvisoryData.cpeCoverage`), and `nix-sca.js` reports an uncovered identity, or a component with no CPE, as `unknown` with
+  `feedCoverage: 'incomplete'`, never `not-affected`. A snapshot with no `covered` table (pinned, hand-written) is matched exactly as
+  before. The prefetch (`prefetchNixAdvisoryFeed`, `resolved-pass.js`) asks only for identities `closureIdentities` says the matcher
+  will use; metadata comes only from the operator (`AGENTIC_SECURITY_NIX_META`). NVD is rate limited (5/30 s keyless): never raise
+  the request caps or lower the spacing in `nix-advisory-feed.js` without re-reading the NVD limits.
 - **Pragma** (`pragma.js`): comment-aware, line-scoped, exact rule-id match, logged. A line-less finding cannot be suppressed.
 
 ## Module map
@@ -61,6 +68,8 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
 | Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
 | Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
 | Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-eval-forms.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
+| Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
+| Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-advisory-feed.js`, `nix-eval-isolation.js`, `nix-fix.js` |
 | Measurement | `accuracy.js` (family-scoped scoring, per-layer), `support-registry.js` (status rules, promotion refusals, frozen-hash demotion) |
 
 Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell-view.js`, `lineage/nix-view.js`,

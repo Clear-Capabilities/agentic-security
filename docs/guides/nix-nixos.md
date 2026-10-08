@@ -278,6 +278,30 @@ rules above, not here.
   counts only when its content hash is one the advisory lists as a fix; a patch merely named after a CVE is an unverified
   claim and the finding stays `possibly-affected`. Wrapped Haskell packages reuse the Hackage matcher and the same Hackage advisory data, including the opt-in live feed described in the [Haskell guide](haskell.md#dependencies-advisories-and-the-software-bill-of-materials); a Hackage package that feed did not cover is reported unknown, not clean. With no snapshot the
   scan is `partial` and says the closure was **not checked**, which is not a clean result.
+- **Live advisories for the closure's upstream software (opt-in).** OSV has no nixpkgs ecosystem, so this feed uses the NVD
+  CVE API 2.0, queried by CPE `vendor:product`. Set `AGENTIC_SECURITY_NIX_ADVISORIES_LIVE=1` and it fetches, before the scan,
+  the CVEs for every CPE identity the imported closure declares, and keeps them in `nix-advisories.json` in the operator
+  configuration directory (mode 0600, never the scanned project). It is off by default, needs the network, is ignored under
+  `AGENTIC_SECURITY_OFFLINE` / `--no-network`, never refreshes over a snapshot named by `AGENTIC_SECURITY_NIX_ADVISORIES`,
+  and never overwrites a hand-written `nix-advisories.json`.
+  - *Where the CPE comes from.* A derivation export carries no `meta`, so name the metadata yourself with
+    `AGENTIC_SECURITY_NIX_META=/path/meta.json` (operator-only; a project cannot supply it): either `{pname: meta}` or the
+    `nix-env -qa --meta --json` shape. A single `meta.identifiers.cpe` is an explicit identity; several `possibleCPEs` are
+    leads, so the result is `candidate`, never a verdict. A name alone is never matched.
+  - *Coverage is recorded.* The snapshot lists each CPE identity it read in full and when. An identity it did not read, read
+    only in part, or read longer ago than the age limit is reported **unknown** (`closure-advisory-feed-incomplete`), never
+    clean. So is a component with no CPE at all: this feed is keyed by CPE, and a source URL or purl alone is not something it
+    can look up. An unreachable or throttling service leaves the previous snapshot in place with its age stated.
+  - *Rate limits.* NVD allows 5 requests per rolling 30 seconds without an API key and 50 with one. A free key
+    (`AGENTIC_SECURITY_NVD_API_KEY`, sent as a header, never in a URL) is recommended for anything beyond a handful of
+    packages. Requests are spaced at 6.5 s (keyless) or 0.7 s (keyed), a throttling response ends the run without retrying,
+    and a scan makes at most 20 (keyless) or 120 (keyed) requests, so a large closure fills in over several scans. An
+    identity is re-read at most once per 24 hours.
+  - *What it does NOT cover.* Identities without a CPE (purl or source-URL only); products with more than 6000 CVEs (for
+    example the Linux kernel), which are reported not covered rather than truncated; operating-system or hardware conditions
+    on a combined NVD configuration (a match is made on the component alone, so such a finding may be broader than the
+    advisory); fix-patch evidence (NVD carries none, so a backported patch stays an unverified claim); severity (not taken from NVD).
+    NVD is also not the whole picture for a nixpkgs package: distribution-specific fixes are not in it.
 - **License data** is not present in these records, so no license policy is applied and the scan says so.
 
 ## Fixes
