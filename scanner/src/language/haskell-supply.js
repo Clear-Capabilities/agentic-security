@@ -53,6 +53,24 @@ export function hackageComponents(files) {
       versionSource: lock ? { file: lock.file, line: lock.line || null } : null,
     });
   }
+  // Cabal chooses ONE version of a package for every component of a .cabal file, so a use with no bound inherits the unconditional bounds the
+  // same manifest declares for that package elsewhere (a library that pins `aeson >=2.2.5.1` next to a test suite that just says `aeson`).
+  // Conditional bounds (flags, os, compiler) are not in force everywhere and are not inherited; neither is a bound from another manifest.
+  const boundsIn = new Map();
+  for (const d of manifests.dependencies || []) {
+    if (!d.declaredRange || (d.conditions && d.conditions.length) || defined.has(d.name)) continue;
+    const k = `${d.manifest}\u0000${d.name}`;
+    if (!boundsIn.has(k)) boundsIn.set(k, []);
+    if (!boundsIn.get(k).includes(d.declaredRange)) boundsIn.get(k).push(d.declaredRange);
+  }
+  for (const c of seen.values()) {
+    if (!c.unbounded) continue;
+    const rs = boundsIn.get(`${c.manifest}\u0000${c.name}`);
+    if (!rs) continue;
+    c.declaredRange = rs.length === 1 ? rs[0] : rs.map((r) => `(${r})`).join(' && ');
+    c.unbounded = false;
+    c.rangeInheritedFromSibling = true;
+  }
   return { components: [...seen.values()], manifests };
 }
 

@@ -146,6 +146,24 @@ test('[live-feed-scan] a freeze file resolves only manifests at or below its own
   assert.equal(near, '2.2.3.0', 'the nearest enclosing freeze wins');
 });
 
+// Found by adjudicating the live run: a package's test suite that lists `aeson` with no bound, next to a library that bounds it to a fixed range,
+// raised a possibly-affected finding for a version the solver can never pick (7 of 273 package/advisory groups in the corpus). Cabal chooses ONE
+// version of a package for every component of a .cabal file, so an unbounded use inherits the unconditional bounds its siblings declare.
+test('[live-feed-scan] an unbounded use inherits the unconditional bounds the same manifest declares elsewhere', () => {
+  const comps = (cabal) => hackageComponents({ 'app.cabal': cabal }).components.filter((c) => c.name === 'aeson');
+  const safe = comps('name: app\nversion: 1\nlibrary\n  build-depends: base, aeson >=2.2.5.1 && <3\ntest-suite t\n  type: exitcode-stdio-1.0\n  main-is: M.hs\n  build-depends: base, aeson\n');
+  assert.ok(safe.every((c) => c.declaredRange === '>=2.2.5.1 && <3' && !c.unbounded), JSON.stringify(safe.map((c) => [c.scope, c.declaredRange, c.unbounded])));
+  const db = new AdvisoryDb({ records: REAL, source: 'pinned-fixture', generatedAt: '2026-10-01T00:00:00Z', now: Date.parse('2026-10-03T00:00:00Z') });
+  const f = evaluateComponents(safe, db).findings.filter((x) => x.osvId === 'HSEC-2026-0007');
+  assert.equal(f.length, 0, 'every use is bounded to a fixed range: nothing to report');
+  // a conditional sibling is not in force everywhere, so it is NOT inherited
+  const cond = comps('name: app\nversion: 1\nflag f\n  default: False\nlibrary\n  if flag(f)\n    build-depends: base, aeson\n  else\n    build-depends: base, aeson >=2.2.5.1\n');
+  assert.ok(cond.some((c) => c.unbounded), 'the unbounded branch keeps its meaning');
+  // a bound declared in a DIFFERENT manifest is not inherited either
+  const other = hackageComponents({ 'a/a.cabal': 'name: a\nversion: 1\nlibrary\n  build-depends: base, aeson >=2.2.5.1\n', 'b/b.cabal': 'name: b\nversion: 1\ntest-suite t\n  type: exitcode-stdio-1.0\n  main-is: M.hs\n  build-depends: base, aeson\n' }).components.filter((c) => c.name === 'aeson');
+  assert.ok(other.some((c) => c.unbounded && c.manifest === 'b/b.cabal'));
+});
+
 // Found by the live run: scanning aeson-2.3.2.0 itself reported its own test suite's `build-depends: aeson` against the aeson advisories, and
 // cabal-install's tree reported `cabal-install`. A dependency on a package this project DEFINES is the workspace package, not a Hackage
 // dependency, and an advisory about the project's own (fixed) version is not a finding about a dependency.

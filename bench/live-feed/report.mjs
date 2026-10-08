@@ -135,7 +135,8 @@ async function finish(ctx) {
     L.push('');
   }
 
-  if (results.limits || (adj && adj.limits)) { L.push('## Limits', ''); for (const l of [...(adj ? adj.limits || [] : []), ...(results.limits || [])]) L.push(`- ${l}`); L.push(''); }
+  const notes = join(HERE, 'notes.md');
+  if (existsSync(notes)) { L.push(readFileSync(notes, 'utf8').trim(), ''); }
   writeFileSync(join(HERE, 'RESULTS.md'), `${L.join('\n')}\n`);
   console.log(`wrote RESULTS.md and results.json summary (${ok.length} projects, ${failed.length} failed)`);
 }
