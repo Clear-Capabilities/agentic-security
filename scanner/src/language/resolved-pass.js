@@ -16,7 +16,8 @@ import { resolveOperatorSnapshot, IGNORED_NOTE } from './trusted-inputs.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { buildResolvedGraph } from './haskell-resolved-graph.js';
 import { importNixClosure } from './nix-closure.js';
-import { NixAdvisoryData, matchNixVulnerabilities, overlayEvidence, HASKELL_ENV_HINTS } from './nix-sca.js';
+import { NixAdvisoryData, matchNixVulnerabilities, overlayEvidence, closureIdentities, HASKELL_ENV_HINTS } from './nix-sca.js';
+import { loadLiveSnapshot, SNAPSHOT_SCHEMA as NIX_LIVE_SCHEMA, refreshNixAdvisories, liveFeedEnabled as nixLiveEnabled, getLastRefresh as nixLastRefresh, FEED_ENV as NIX_FEED_ENV } from './nix-advisory-feed.js';
 import { configuredAdvisoryDb, collectUsage, manifestFiles } from './haskell-supply.js';
 import { runIsolatedEval, mergeEvaluationHealth, _which } from './nix-eval-isolation.js';
 
@@ -140,8 +141,56 @@ export function configuredNixAdvisories(root, env = process.env, hackageDb = nul
   const sel = resolveOperatorSnapshot({ envVar: 'AGENTIC_SECURITY_NIX_ADVISORIES', fileName: 'nix-advisories.json', root, env });
   if (!sel.path) return { data: null, reason: `no Nix advisory snapshot is configured (set AGENTIC_SECURITY_NIX_ADVISORIES, or place nix-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)${sel.projectLocalIgnored ? IGNORED_NOTE('nix-advisories.json') : ''}` };
   let snap; try { snap = JSON.parse(readFileSync(sel.path, 'utf8')); } catch (e) { return { data: null, reason: `the Nix advisory snapshot is unreadable: ${e.code || e.message}` }; }
+  if (snap && snap.schema === NIX_LIVE_SCHEMA) {
+    // A snapshot the live feed wrote: its records must match their hashes, and it carries which CPE identities it actually read.
+    const live = loadLiveSnapshot(snap);
+    if (!live.ok) return { data: null, reason: `the live Nix advisory snapshot was refused: ${live.reason}` };
+    return { data: new NixAdvisoryData({ records: live.records, hackage: hackageDb, source: sel.source === 'env' ? 'pinned-snapshot' : 'nvd-live-feed', generatedAt: live.generatedAt, covered: live.covered }), reason: null };
+  }
   const records = Array.isArray(snap) ? snap : (Array.isArray(snap.records) ? snap.records : []);
   return { data: new NixAdvisoryData({ records, hackage: hackageDb, source: 'pinned-snapshot', generatedAt: (snap && snap.generatedAt) || null }), reason: null };
+}
+
+/**
+ * Package metadata for the closure (meta.identifiers, knownVulnerabilities, license), from a file the OPERATOR names in
+ * AGENTIC_SECURITY_NIX_META: either `{pname: meta}` or the `nix-env -qa --meta --json` shape (`{attr: {pname, meta}}`). It is never
+ * read from the scanned project, because metadata decides which upstream identity a component is matched under.
+ */
+export function configuredNixMeta(env = process.env) {
+  const p = env.AGENTIC_SECURITY_NIX_META;
+  if (!p) return { meta: {}, reason: null };
+  let raw;
+  try { const text = readFileSync(p, 'utf8'); if (text.length > (32 << 20)) return { meta: {}, reason: 'the Nix metadata file is larger than 32 MB and was not read' }; raw = JSON.parse(text); } catch (e) { return { meta: {}, reason: `the Nix metadata file is unreadable: ${e.code || e.message}` }; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { meta: {}, reason: 'the Nix metadata file is not a JSON object' };
+  const meta = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!v || typeof v !== 'object') continue;
+    const m = v.meta && typeof v.meta === 'object' ? v.meta : v;
+    const name = typeof v.pname === 'string' && v.pname ? v.pname : k.split('.').pop();
+    if (/^[\w.+-]{1,100}$/.test(name) && !Object.prototype.hasOwnProperty.call(meta, name)) meta[name] = m;
+  }
+  return { meta, reason: null };
+}
+
+/**
+ * The async step before a scan's synchronous passes: when the live Nix feed is enabled, make sure the operator snapshot covers every
+ * CPE identity the imported closure declares. Does nothing, and costs nothing, unless the feed is enabled. Never throws.
+ */
+export async function prefetchNixAdvisoryFeed(files, { env = process.env, ...opts } = {}) {
+  if (!nixLiveEnabled(env)) return null;
+  try {
+    const c = nixClosureOf(files, opts.now ? { now: opts.now } : {});
+    if (!c || (c.refused && c.refused.length)) return null;
+    const { cpes } = closureIdentities({ closure: c.closure, drvEnv: c.drvEnv, meta: configuredNixMeta(env).meta, overlays: overlayEvidence(files) });
+    if (!cpes.length) return null;
+    return await refreshNixAdvisories(cpes, { env, ...opts });
+  } catch (e) { return { status: 'failed', detail: `the feed step failed: ${String((e && e.message) || e).slice(0, 120)}` }; }
+}
+
+function nixLiveFeedNote(env) {
+  const r = nixLastRefresh();
+  if (r && r.status !== 'disabled') return ` Live feed: ${r.status}, ${r.detail}.`;
+  return env[NIX_FEED_ENV] === '1' ? '' : ` To fetch advisories for the closure's upstream software from the NVD instead, set ${NIX_FEED_ENV}=1 (network, opt-in).`;
 }
 
 /** Closure statuses and findings, with every disclosure the import and the feed produced. */
@@ -153,16 +202,21 @@ function _analyzeNixClosure(files, { scanRoot = null, env = process.env, now = D
   if (!c) return null;
   const hackage = configuredAdvisoryDb(scanRoot, env).db;
   const adv = configuredNixAdvisories(scanRoot, env, hackage);
+  if (!adv.data) adv.reason = `${adv.reason}${nixLiveFeedNote(env)}`;
+  const nm = configuredNixMeta(env);
   let usage = null; try { usage = collectUsage(files); } catch { usage = null; }
   let matched = null;
-  if (!c.refused.length) try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
+  if (!c.refused.length) try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, meta: nm.meta, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
   const gaps = [];
   if (c.trust.includes('project-supplied') && !c.trust.includes('operator')) gaps.push({ kind: 'closure-project-supplied', detail: 'the closure export is a file in the scanned project, bound to its flake.lock but not signed: whoever controls the project controls its contents, so the ABSENCE of a finding for a component it lists is not evidence the real build is free of it (provide the export through AGENTIC_SECURITY_NIX_EXPORT, signed with AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, to have it treated as operator evidence)' });
   for (const d of c.closure.disclosures || []) gaps.push({ kind: `closure-${d.kind}`, detail: d.detail });
   for (const d of c.refused) gaps.push({ kind: `closure-refused-${d.kind}`, detail: `${d.detail}; the export was REFUSED and contributes nothing` });
   for (const p of c.problems) gaps.push({ kind: `closure-${p.kind}`, detail: p.detail, file: p.file });
   if (!adv.data) gaps.push({ kind: 'closure-advisory-feed-unavailable', detail: `${adv.reason}. The closure's components were NOT checked against any advisory: the absence of findings is not a clean result.` });
-  else if (adv.data.stale) gaps.push({ kind: 'closure-advisory-feed-stale', detail: `the Nix advisory snapshot is stale or undated (${adv.data.ageDays == null ? 'age unknown' : `${Math.floor(adv.data.ageDays)} day(s) old`})` });
+  if (nm.reason) gaps.push({ kind: 'closure-meta-unreadable', detail: nm.reason });
+  const notCovered = ((matched && matched.statuses) || []).filter((x) => x.feedCoverage === 'incomplete');
+  if (adv.data && notCovered.length) gaps.push({ kind: 'closure-advisory-feed-incomplete', detail: `${notCovered.length} component(s) were not covered by the live advisory feed (${[...new Set(notCovered.map((x) => x.name))].slice(0, 5).join(', ')}${notCovered.length > 5 ? ', ...' : ''}): their status is unknown, and the absence of findings for them is not a clean result.` });
+  if (!adv.data) { /* reported above */ } else if (adv.data.stale) gaps.push({ kind: 'closure-advisory-feed-stale', detail: `the Nix advisory snapshot is stale or undated (${adv.data.ageDays == null ? 'age unknown' : `${Math.floor(adv.data.ageDays)} day(s) old`})` });
   const findings = ((matched && matched.findings) || []).filter((f) => ACTIONABLE.has(f.status)).map((f) => ({ ...f, file: c.sources[0], line: 1 }));
   return { status: c.closure.status, claims: c.closure.claims, sources: c.sources, summary: matched ? matched.summary : null, feed: matched ? matched.feed : null, statuses: matched ? matched.statuses : [], findings, gaps, licenses: matched ? matched.licenses : null, closure: c.closure };
 }
