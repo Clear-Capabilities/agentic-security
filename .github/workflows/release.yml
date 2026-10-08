@@ -46,6 +46,13 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Bounded network behaviour for every `npm ci` below. npm's defaults retry twice but allow five minutes per request, so a stalled
+  # registry connection looked like a hang. A 60 s request deadline with five retries turns a stall into a quick, automatic retry, and
+  # the step-level `timeout-minutes` on each install is the backstop if the registry is down entirely.
+  NPM_CONFIG_FETCH_TIMEOUT: '60000'
+  NPM_CONFIG_FETCH_RETRIES: '5'
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '2000'
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '30000'
 
 jobs:
   publish:
@@ -75,6 +82,7 @@ jobs:
             const ok = a>11 || (a===11 && (b>5 || (b===5 && c>=1)));
             console.log('npm', v, ok ? '(supports OIDC publishing)' : '(TOO OLD)');
             if(!ok) process.exit(1);"
+        timeout-minutes: 5
 
       # The Nix script witnesses need a real confinement primitive, as in ci.yml's test job; hosted runners restrict unprivileged user
       # namespaces by default, so the same host policy relaxation is applied here for the gate's `npm test`.
@@ -87,6 +95,7 @@ jobs:
       - name: Install scanner dependencies
         working-directory: scanner
         run: npm ci
+        timeout-minutes: 10
 
       # release-check's nist-catalog-freshness check shells out to
       # build-catalog.py, which needs openpyxl to read the source workbook.
@@ -95,7 +104,8 @@ jobs:
       # one — so it must be installed explicitly here or this check can never
       # pass on a clean runner.
       - name: Install NIST catalog rebuild dependency
-        run: pip3 install --quiet openpyxl
+        run: pip3 install --quiet --retries 5 --timeout 30 openpyxl
+        timeout-minutes: 5
 
       # The tag is the release's identity. If it disagrees with the version being
       # published, stop before anything is built — a mismatch here means the tag
@@ -114,6 +124,7 @@ jobs:
       - name: Build the bundle
         working-directory: scanner
         run: npm run build
+        timeout-minutes: 10
 
       - name: Sync scanner changelog
         run: node scripts/sync-scanner-changelog.mjs
@@ -128,6 +139,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AGENTIC_SECURITY_GATE_NO_CACHE: '1'
         run: node ../scripts/release-check.mjs --no-cache
+        timeout-minutes: 30
 
       # --ignore-scripts IS LOAD-BEARING, not an optimization added lightly.
       # Without it, `npm publish` runs prepublishOnly a SECOND time — the exact

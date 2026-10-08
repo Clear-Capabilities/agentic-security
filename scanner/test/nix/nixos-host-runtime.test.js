@@ -19,6 +19,14 @@ const FLAKE = readFileSync(join(ROOT, 'flake.nix'), 'utf8');
 const have = (bin) => (process.env.PATH || '').split(':').filter(Boolean).some((d) => { try { accessSync(join(d, bin), constants.X_OK); return true; } catch { return false; } });
 const onNixos = () => existsSync('/etc/NIXOS');
 
+// Every wait in this suite was tuned for native or KVM speed. The flake's emulated-aarch64 check (nixos-host-aarch64-emulated) runs the same code
+// in a guest that qemu interprets in software, where Node starts and a nixpkgs evaluation runs many times slower, so the fixed budgets below were
+// a race against the runner's speed rather than a statement about the code. That check exports AGENTIC_SECURITY_TEST_TIMEOUT_SCALE; unset it is 1,
+// which leaves every budget exactly as it was. Clamped to 1..20 so a typo can neither shrink a budget nor remove its bound.
+const rawScale = Number(process.env.AGENTIC_SECURITY_TEST_TIMEOUT_SCALE);
+const SCALE = Number.isFinite(rawScale) && rawScale >= 1 && rawScale <= 20 ? rawScale : 1;
+const T = (ms) => ms * SCALE;
+
 test('[NIX-012.AC01] the flake packages the bundle with Node >=24 by store path, with no download, native build or FHS assumption', () => {
   assert.match(FLAKE, /nodejs_24/); assert.match(FLAKE, /makeWrapper \$\{pkgs\.nodejs_24\}\/bin\/node/);
   assert.ok(!/\/usr\/bin\/env|\/bin\/sh -c|npm (?:install|ci)|fetchurl|fetchTarball|builtins\.fetch/.test(FLAKE.replace(/#.*$/gm, '')), 'the package must not fetch or assume an FHS path');
@@ -28,18 +36,18 @@ test('[NIX-012.AC01] the flake packages the bundle with Node >=24 by store path,
   const nix = have('nix');
   assert.ok(nix, 'REQUIRED: a nix binary is needed to build the package and run it on a controlled project; none is available on this host');
   assert.ok(onNixos(), 'REQUIRED: a clean supported NixOS environment (/etc/NIXOS) is needed; this host is not NixOS');
-  const b = spawnSync('nix', ['build', `${ROOT}#default`, '--offline', '--no-link', '--print-out-paths'], { encoding: 'utf8', timeout: 900000 });
+  const b = spawnSync('nix', ['build', `${ROOT}#default`, '--offline', '--no-link', '--print-out-paths'], { encoding: 'utf8', timeout: T(900000) });
   assert.equal(b.status, 0, b.stderr.slice(-400));
   const out = b.stdout.trim().split('\n')[0];
   const dir = mkdtempSync(join(tmpdir(), 'nixos-ex-')); cpSync(join(ROOT, 'examples', 'haskell-app', 'vulnerable'), dir, { recursive: true });
   try {
-    const r = spawnSync(join(out, 'bin', 'agentic-security'), ['scan', dir, '--format', 'json', '--no-state'], { encoding: 'utf8', timeout: 300000, env: { PATH: '' } });
+    const r = spawnSync(join(out, 'bin', 'agentic-security'), ['scan', dir, '--format', 'json', '--no-state'], { encoding: 'utf8', timeout: T(300000), env: { PATH: '' } });
     assert.ok([2, 3].includes(r.status), r.stderr.slice(-300));
     assert.ok(JSON.parse(r.stdout).findings.length >= 3);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-function rpcOnce(cmd, args, request, frame, timeoutMs = 20000) {
+function rpcOnce(cmd, args, request, frame, timeoutMs = T(20000)) {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: SCANNER });
     let out = ''; const t = setTimeout(() => { p.kill('SIGKILL'); resolve({ out, timedOut: true }); }, timeoutMs);
@@ -58,7 +66,7 @@ test('[NIX-012.AC02] MCP stdio and LSP framing answer an initialize request from
   // the core static scan does not need an optional tool
   const dir = mkdtempSync(join(tmpdir(), 'nixos-ex-')); cpSync(join(ROOT, 'examples', 'nixos-host', 'vulnerable'), dir, { recursive: true });
   try {
-    const r = spawnSync(process.execPath, [join(SCANNER, 'dist', 'agentic-security.mjs'), 'scan', dir, '--format', 'json', '--no-state'], { encoding: 'utf8', timeout: 240000, env: { PATH: '' } });
+    const r = spawnSync(process.execPath, [join(SCANNER, 'dist', 'agentic-security.mjs'), 'scan', dir, '--format', 'json', '--no-state'], { encoding: 'utf8', timeout: T(240000), env: { PATH: '' } });
     assert.equal(r.status, 2, r.stderr.slice(-300));
     assert.ok(JSON.parse(r.stdout).findings.length >= 5, 'a scan with nothing on PATH still finds the problems');
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -71,7 +79,7 @@ test('[NIX-012.AC03] current stable NixOS on x86_64-linux and an aarch64-linux r
 
 test('[NIX-012.AC04] dev-shell commands are noninteractive and bounded, and a controlled VM test never activates configuration on the host', () => {
   assert.ok(have('nix'), 'REQUIRED: a nix binary is needed to run the dev shell; none is available on this host');
-  const r = spawnSync('nix', ['develop', ROOT, '--offline', '--command', 'node', '--version'], { encoding: 'utf8', timeout: 300000, stdio: ['ignore', 'pipe', 'pipe'] });
+  const r = spawnSync('nix', ['develop', ROOT, '--offline', '--command', 'node', '--version'], { encoding: 'utf8', timeout: T(300000), stdio: ['ignore', 'pipe', 'pipe'] });
   assert.equal(r.status, 0, r.stderr.slice(-300)); assert.match(r.stdout, /^v24\./);
   assert.ok(!/nixos-rebuild|switch-to-configuration/.test(FLAKE.replace(/#.*$/gm, '')), 'the flake never activates a configuration');
 });

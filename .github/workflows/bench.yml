@@ -56,10 +56,18 @@ permissions:
 # June 16, 2026 forced migration; drop it once nothing in this file warns.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Bounded network behaviour for every `npm ci` below. npm's defaults retry twice but allow five minutes per request, so a stalled
+  # registry connection looked like a hang. A 60 s request deadline with five retries turns a stall into a quick, automatic retry, and
+  # the step-level `timeout-minutes` on each install is the backstop if the registry is down entirely.
+  NPM_CONFIG_FETCH_TIMEOUT: '60000'
+  NPM_CONFIG_FETCH_RETRIES: '5'
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '2000'
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '30000'
 
 jobs:
   synthetic-bench:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -69,15 +77,19 @@ jobs:
       - name: Install scanner deps
         working-directory: scanner
         run: npm ci
+        timeout-minutes: 10
       - name: Build scanner bundle
         working-directory: scanner
         run: npm run build
+        timeout-minutes: 10
       - name: Run unit tests
         working-directory: scanner
         run: npm test
+        timeout-minutes: 45
       - name: Run synthetic F1 bench (strict)
         working-directory: scanner
         run: node test/benchmark/bench.js --strict-no-unknown
+        timeout-minutes: 15
       - name: Upload synthetic FP/FN registry
         if: always()
         uses: actions/upload-artifact@v7
@@ -87,9 +99,11 @@ jobs:
             scanner/test/benchmark/bench-fps.json
             scanner/test/benchmark/bench-fns.json
             scanner/test/benchmark/baseline.json
+        timeout-minutes: 10
 
   realworld-bench:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     # Deliberately NOT `needs: synthetic-bench` (removed 2026-09-12, SARD
     # premortem finding F12). Both are already `informational` in
     # required-checks.json — a `needs:` dependency between two non-blocking
@@ -110,6 +124,7 @@ jobs:
       - name: Install scanner deps
         working-directory: scanner
         run: npm ci
+        timeout-minutes: 10
       # Cache the cloned benchmark repos across runs (keyed on the manifest
       # SHA — bumping any pinned commit invalidates the cache).
       - name: Cache benchmark repos
@@ -153,6 +168,7 @@ jobs:
           set -e
           head -200 /tmp/realworld.json
           echo "bench exit code: $(cat /tmp/realworld.exit)"
+        timeout-minutes: 90
       - name: Enforce per-app F1 floors
         run: |
           node -e '
@@ -228,12 +244,14 @@ jobs:
             }
             process.exit(failed ? 1 : 0);
           '
+        timeout-minutes: 10
       - name: Upload realworld results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: bench-realworld-${{ github.run_id }}
           path: /tmp/realworld.json
+        timeout-minutes: 10
 
   # SARD_AGENTIC_SECURITY_PRD.md Phase 10 — deliberately SEPARATE from
   # `realworld-bench` above, not folded into it. `realworld-bench`'s own
@@ -255,6 +273,7 @@ jobs:
   # optional.
   sard-blind-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -264,6 +283,7 @@ jobs:
       - name: Install scanner deps
         working-directory: scanner
         run: npm ci
+        timeout-minutes: 10
       - name: Cache Juliet Java clone
         uses: actions/cache@v6
         with:
@@ -272,6 +292,7 @@ jobs:
       - name: Run SARD blind smoke (5 representative CWEs)
         working-directory: scanner
         run: npm run bench:sard:smoke
+        timeout-minutes: 30
       - name: Upload SARD smoke report
         if: always()
         uses: actions/upload-artifact@v7
@@ -280,6 +301,7 @@ jobs:
           # Per bench/README.md's policy, these numbers are never committed —
           # this artifact is a run-scoped CI download, not a repo file.
           path: bench/sard/reports/latest.json
+        timeout-minutes: 10
       # Adversarial-premortem remediation (F13): compare-baseline.mjs's own
       # header has said since it was written that a hosted CI environment
       # wanting this gate "needs to persist baseline.json as a build
