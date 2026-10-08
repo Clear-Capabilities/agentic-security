@@ -82,6 +82,15 @@ jobs:
         working-directory: scanner
         run: npm run build
         timeout-minutes: 10
+      # The full suite includes witnesses that execute inside a real confinement primitive (an unprivileged user namespace). Hosted runners
+      # restrict those by default, so without this step the X-009 tests fail here with "a confinement primitive is required for witnesses to
+      # count": the same host policy relaxation ci.yml's test job applies.
+      - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+        timeout-minutes: 2
       - name: Run unit tests
         working-directory: scanner
         run: npm test

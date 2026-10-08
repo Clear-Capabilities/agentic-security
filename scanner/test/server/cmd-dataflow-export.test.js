@@ -24,6 +24,11 @@ const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 // do) are gated the same way export-image.test.js gates its own tests.
 import { chrome, itChrome } from '../helpers/chrome-gate.js';   // quarantined from the combined run: see test/helpers/chrome-gate.js
 
+// A render in a real headless Chrome on a loaded hosted runner, at up to 3360x1890, can exceed the 20 s these tests used to allow: spawnSync then
+// kills the process (status null) and the test reports "null !== 0", which looks like a logic failure. The limit is a backstop, not a budget.
+const CHROME_TIMEOUT_MS = 120_000;
+
+
 function _mkTmpProject() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-dataflow-export-cli-'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
@@ -146,7 +151,7 @@ itChrome('dataflow export: --format png --size 2x writes a real 3360x1890 PNG (A
   _writeSignedGraph(root);
   const outFile = path.join(root, 'out.png');
   try {
-    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--size', '2x', '--output', outFile], { encoding: 'utf8', timeout: 20_000 });
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--size', '2x', '--output', outFile], { encoding: 'utf8', timeout: CHROME_TIMEOUT_MS });
     assert.equal(r.status, 0, r.stderr);
     const data = fs.readFileSync(outFile);
     assert.equal(data.readUInt32BE(16), 3360);
@@ -161,7 +166,7 @@ itChrome('dataflow export: --format png default size is the AC-23 standard 1680x
   _writeSignedGraph(root);
   const outFile = path.join(root, 'out.png');
   try {
-    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--output', outFile], { encoding: 'utf8', timeout: 20_000 });
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'png', '--output', outFile], { encoding: 'utf8', timeout: CHROME_TIMEOUT_MS });
     assert.equal(r.status, 0, r.stderr);
     const data = fs.readFileSync(outFile);
     assert.equal(data.readUInt32BE(16), 1680);
@@ -176,7 +181,7 @@ itChrome('dataflow export: --format pdf writes a real PDF', () => {
   _writeSignedGraph(root);
   const outFile = path.join(root, 'out.pdf');
   try {
-    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'pdf', '--output', outFile], { encoding: 'utf8', timeout: 20_000 });
+    const r = spawnSync(process.execPath, [CLI, 'dataflow', 'export', root, '--format', 'pdf', '--output', outFile], { encoding: 'utf8', timeout: CHROME_TIMEOUT_MS });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(fs.readFileSync(outFile).subarray(0, 5).toString('utf8'), '%PDF-');
   } finally {
