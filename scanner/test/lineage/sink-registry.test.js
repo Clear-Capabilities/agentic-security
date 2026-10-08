@@ -523,12 +523,15 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // from language/haskell-models.js: SQL/URL/path/XSS/prompt sinks are modeled categories, CWE-78/CWE-88 process
   // sinks are `unsupported`). Re-measured directly against the live catalog, not hand-summed.
   // 448 -> 454, 299 -> 305 modeled: six Haskell text-output XSS sinks (`hs.htmlSkeleton`), modeled as `log` destinations.
-  assert.equal(SINKS.length, 454);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 305);
+  // 454 -> 478, 305 -> 329 modeled: the wreq SSRF sinks were corrected from 8 entries (all at argument 0, which for `getWith opts url` is the
+  // OPTIONS, so the URL was never checked) to 32 (the URL position per function, the `options`/`patch`/custom-method forms and the Session
+  // module). SSRF URL sinks are a modeled category. Re-measured against the live catalog, not hand-summed.
+  assert.equal(SINKS.length, 478);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 329);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 134);
-  assert.equal(305 + 6 + 9 + 134, SINKS.length);
+  assert.equal(329 + 6 + 9 + 134, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {

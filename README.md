@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.157.2-blue)]()
+[![Version](https://img.shields.io/badge/version-0.158.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -444,8 +444,8 @@ Measured 2026-10-05 on the synthetic, template-generated corpus described in [Ha
 <!-- generated:support-summary:end -->
 
 Honest limits: the corpus behind these numbers is synthetic and template-generated, so a score of 100% describes robustness
-over those shapes and is **not** a claim about arbitrary real-world Haskell or Nix; no real-world project set and no
-advisory feed beyond a pinned fixture were measured; and nothing here says a NixOS host was exercised.
+over those shapes and is **not** a claim about arbitrary real-world Haskell or Nix; no real-world project set was measured, and the opt-in live Hackage advisory feed
+(`AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1`) has been tested only against a stand-in server serving the real pinned records; and nothing here says a NixOS host was exercised.
 
 The detectors are precision-first: parameterized queries, escaped output, allow-list guards, CSPRNG-derived IVs, framework CSRF middleware, and token-auth schemes are recognized and **not** flagged.
 

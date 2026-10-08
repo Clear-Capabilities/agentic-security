@@ -127,6 +127,21 @@ test('[NIX-009.AC01] wrapped Haskell packages reuse the Hackage version logic wi
   assert.deepEqual(stat(mk('1.9.1'), 'xml-conduit'), [], '1.9.1 == 1.9.1.0');
 });
 
+test('[NIX-009.AC01] a wrapped Haskell package the Hackage feed never covered (or covered too long ago) is unknown, not "no advisory matches"', () => {
+  const hs = { pname: 'xml-conduit', version: '1.9.1.0', env: { libraryHaskellDepends: 'x', isLibrary: '1' } };   // a version OUTSIDE every affected range
+  const db = (covered) => new AdvisoryDb({ records: HSEC, source: 'osv-live', generatedAt: '2026-10-02T00:00:00Z', now: NOW, covered });
+  const status = (covered) => run([hs], data([], { hackage: db(covered) })).statuses.find((x) => x.name === 'xml-conduit');
+  assert.equal(status({ 'xml-conduit': '2026-10-02T00:00:00Z' }).status, 'not-affected', 'covered and outside the range: a real clean verdict');
+  const never = status({ aeson: '2026-10-02T00:00:00Z' });
+  assert.equal(never.status, 'unknown', 'a feed that never looked this package up cannot clear it');
+  assert.match(never.reason, /never covered this package/);
+  assert.equal(never.feedCoverage, 'incomplete');
+  const old = status({ 'xml-conduit': '2026-05-01T00:00:00Z' });
+  assert.equal(old.status, 'unknown', 'coverage older than the age limit cannot clear it either');
+  assert.match(old.reason, /longer ago than its age limit/);
+  assert.equal(status(null).status, 'not-affected', 'a snapshot that makes no per-package claim behaves as it always did');
+});
+
 test('[NIX-009.AC02] a nixpkgs commit or a store hash is never an upstream version, and is never queried', () => {
   assert.match(isNotAnUpstreamVersion('a'.repeat(40)), /git revision/);
   assert.match(isNotAnUpstreamVersion(hh(3)), /store-path hash/);

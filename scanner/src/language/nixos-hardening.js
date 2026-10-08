@@ -37,6 +37,7 @@ export const HARDENING_RULES = Object.freeze({
   'ssh-empty-passwords': { family: 'ssh-access', cwe: 'CWE-258', severity: 'high', ruleVersion: 1, vuln: 'SSH permits empty passwords', why: 'An account with an empty password becomes a login with no secret at all.', fix: 'Remove services.openssh.settings.PermitEmptyPasswords or set it to false.' },
   'firewall-disabled': { family: 'firewall-exposure', cwe: 'CWE-284', severity: 'high', ruleVersion: 1, vuln: 'Host firewall is disabled', why: 'With the NixOS firewall off every listening service is open on every interface, and the only barrier left is whatever network sits in front of the host.', fix: 'Remove networking.firewall.enable = false and open only the ports each service needs.' },
   'firewall-sensitive-port': { family: 'firewall-exposure', cwe: 'CWE-668', severity: 'high', ruleVersion: 1, vuln: 'Firewall opens a database or administration port on every interface', why: 'Database, cache and container-control ports are not designed to face untrusted networks; a global allow rule exposes them wherever the host is routable.', fix: 'Remove the port from networking.firewall.allowedTCPPorts/allowedUDPPorts, or scope it with networking.firewall.interfaces.<name>.allowedTCPPorts to a private interface.' },
+  'firewall-wide-port-range': { family: 'firewall-exposure', cwe: 'CWE-668', severity: 'high', ruleVersion: 1, vuln: 'Firewall opens a very wide port range on every interface', why: 'A range that spans every port (or ten thousand or more) is a firewall that is off in everything but name: whatever listens inside it, now or after the next package change, is reachable.', fix: 'Replace the range with the specific ports the services need in networking.firewall.allowedTCPPorts, or scope a genuinely needed range with networking.firewall.interfaces.<name>.allowedTCPPortRanges to a private interface.' },
   'listener-all-interfaces': { family: 'firewall-exposure', cwe: 'CWE-668', severity: 'medium', ruleVersion: 1, vuln: 'Service is configured to listen on every interface', why: 'Binding all interfaces widens the set of networks that can reach the service beyond the host itself.', fix: 'Leave the listener on localhost, or restrict listen addresses and the firewall to the interface that needs access.' },
   'listener-trust-auth': { family: 'firewall-exposure', cwe: 'CWE-306', severity: 'high', ruleVersion: 1, vuln: 'Database authentication is "trust" for a network-wide address range', why: 'A trust rule for 0.0.0.0/0 lets any client that reaches the port in as any user without a password.', fix: 'Use scram-sha-256 in services.postgresql.authentication and limit the address range.' },
   'service-runs-as-root': { family: 'service-identity', cwe: 'CWE-250', severity: 'medium', ruleVersion: 1, vuln: 'systemd service runs as root', why: 'A compromise of a root service is a compromise of the host; a dedicated or dynamic user confines it.', fix: 'Set serviceConfig.DynamicUser = true or serviceConfig.User to a dedicated account, and add NoNewPrivileges and ProtectSystem.' },
@@ -189,14 +190,31 @@ export function analyzeNixosHardening(opts, extra = {}) {
   const allowedUdp = view(note(nixos('networking.firewall.allowedUDPPorts'), 'firewall'));
   const globalPorts = (v) => (v.state === 'known' ? asList(v.value) : v.state === 'conditional' ? asList(v.definiteItems) : []);
   const allowedAll = new Set([...globalPorts(allowedTcp), ...globalPorts(allowedUdp)]);
-  const allowedKnown = allowedTcp.state === 'known' && allowedUdp.state === 'known';
+  // Port RANGES open ports exactly like single ports do. A range option that cannot be evaluated makes every firewall conclusion
+  // `unknown` (never "closed"), and a range that cannot be read as {from, to} integers is disclosed, not skipped.
+  const tcpRangesRes = note(nixos('networking.firewall.allowedTCPPortRanges'), 'firewall');
+  const udpRangesRes = note(nixos('networking.firewall.allowedUDPPortRanges'), 'firewall');
+  const readRanges = (res) => {
+    const v = view(res);
+    if (v.state !== 'known') return { state: v.state === 'conditional' ? 'conditional' : 'unknown', ranges: [] };
+    const ranges = [];
+    for (const it of asList(v.value)) {
+      if (!it || !Number.isInteger(it.from) || !Number.isInteger(it.to) || it.to < it.from) return { state: 'unknown', ranges: [] };
+      ranges.push({ from: it.from, to: it.to });
+    }
+    return { state: 'known', ranges, definite: v.definite };
+  };
+  const tcpRanges = readRanges(tcpRangesRes);
+  const udpRanges = readRanges(udpRangesRes);
+  const inTcpRange = (port) => tcpRanges.ranges.some((r) => port >= r.from && port <= r.to);
+  const allowedKnown = allowedTcp.state === 'known' && allowedUdp.state === 'known' && tcpRanges.state === 'known' && udpRanges.state === 'known';
   const interfaceScoped = cfg.options.filter((o) => o.namespace === 'nixos' && /^networking\.firewall\.interfaces\.[^.]+\.allowedTCPPorts$/.test(o.path));
 
   /** Host-firewall ingress for a TCP port; internet reachability itself is never decided. */
   function ingressFor(port, { openFirewallRes } = {}) {
     if (fwOff === 'yes') return 'firewall-disabled';
     if (fwOn !== 'yes') return 'unknown';
-    if (allowedAll.has(port)) return 'open-in-firewall';
+    if (allowedAll.has(port) || inTcpRange(port)) return 'open-in-firewall';
     if (openFirewallRes) {
       const o = judge(openFirewallRes, (x) => x === true);
       if (o === 'yes') return 'open-in-firewall';
@@ -410,6 +428,23 @@ export function analyzeNixosHardening(opts, extra = {}) {
     const ports = [...new Set(candidates)].filter((p) => SENSITIVE_PORTS.has(p));
     for (const port of ports) {
       addFinding('firewall-sensitive-port', { anchor: anchorOf(res), scope: `${res.path}:${port}`, state: v.state === 'known' ? 'active' : 'conditional', uncertain: !v.definite, evidence: [evidenceOf(res)], extra: { port, portService: SENSITIVE_PORTS.get(port), exposure: { enabled: 'unknown', listening: 'unknown', ingress: fwOff === 'yes' ? 'firewall-disabled' : 'open-in-firewall', reachable: 'unknown' } } });
+    }
+  }
+  // Port ranges opened on every interface.
+  for (const [res, rg, proto] of [[tcpRangesRes, tcpRanges, 'tcp'], [udpRangesRes, udpRanges, 'udp']]) {
+    if (!res) continue;
+    if (rg.state !== 'known') {
+      if (res.status === 'set' || res.status === 'conditional') gaps.push({ kind: 'firewall-port-ranges-unevaluated', option: res.path, purpose: 'firewall', reason: `the ${proto} port ranges could not be evaluated to {from, to} integers, so no conclusion about them is drawn (this is not a clean result)` });
+      continue;
+    }
+    for (const r of rg.ranges) {
+      const span = r.to - r.from + 1;
+      const full = r.from <= 1 && r.to >= 65535;
+      if (full || span >= 10000) {
+        addFinding('firewall-wide-port-range', { severity: full ? 'high' : 'medium', anchor: anchorOf(res), scope: `${res.path}:${r.from}-${r.to}`, state: 'active', uncertain: !rg.definite, evidence: [evidenceOf(res)], extra: { portRange: { from: r.from, to: r.to, span, protocol: proto, everyPort: full }, exposure: { enabled: 'unknown', listening: 'unknown', ingress: fwOff === 'yes' ? 'firewall-disabled' : 'open-in-firewall', reachable: 'unknown' } } });
+      } else if (proto === 'tcp') {
+        for (const [port, svc] of SENSITIVE_PORTS) if (port >= r.from && port <= r.to) addFinding('firewall-sensitive-port', { anchor: anchorOf(res), scope: `${res.path}:${port}`, state: 'active', uncertain: !rg.definite, evidence: [evidenceOf(res)], extra: { port, portService: svc, viaRange: { from: r.from, to: r.to }, exposure: { enabled: 'unknown', listening: 'unknown', ingress: fwOff === 'yes' ? 'firewall-disabled' : 'open-in-firewall', reachable: 'unknown' } } });
+      }
     }
   }
   for (const o of interfaceScoped) {

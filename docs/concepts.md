@@ -119,7 +119,7 @@ policy](walkthroughs/model-egress.md).
 
 **Works fully disconnected.** `--no-network` (or `AGENTIC_SECURITY_OFFLINE`)
 skips every network dependency the scanner would otherwise reach for — OSV,
-registry, and EPSS lookups for SCA — per the [Configuration
+registry, and EPSS lookups for SCA, and the opt-in live Hackage advisory feed — per the [Configuration
 reference](reference/configuration.md). Combined with never setting
 `AGENTIC_SECURITY_LLM_ENDPOINT` (which already keeps every LLM-driven
 feature a no-op on its own), a scan run this way never dials out at all:

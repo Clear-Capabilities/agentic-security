@@ -102,7 +102,7 @@ export class NixAdvisoryData {
 }
 
 // ── upstream identity ────────────────────────────────────────────────────────
-const HASKELL_ENV_HINTS = ['libraryHaskellDepends', 'setupHaskellDepends', 'executableHaskellDepends', 'isLibrary', 'isExecutable', 'enableSeparateDataOutput', 'compilerName', 'enableLibraryProfiling'];
+export const HASKELL_ENV_HINTS = ['libraryHaskellDepends', 'setupHaskellDepends', 'executableHaskellDepends', 'isLibrary', 'isExecutable', 'enableSeparateDataOutput', 'compilerName', 'enableLibraryProfiling'];
 function purlFromUrl(u) {
   const m = /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/#?]+?)(?:\.git)?(?:\/|$)/.exec(u || '');
   if (m) return { purl: `pkg:github/${m[1].toLowerCase()}/${m[2].toLowerCase()}`, host: 'github' };
@@ -280,9 +280,14 @@ export function matchNixVulnerabilities(opts = {}) {
     if (!data) { push({ status: 'unknown', reason: 'no advisory feed was supplied: absence of a match is not a clean result' }); summary.unmapped++; continue; }
     if (ident.versionRejected && !ident.haskell && !(node.upstream && node.upstream.rev)) { push({ status: 'unknown', reason: `the version cannot be queried: ${ident.versionRejected}` }); summary.unmapped++; continue; }
 
-    let matched = false; let mapped = false;
+    let matched = false; let mapped = false; let hackageGap = null;
     // Hackage (wrapped Haskell packages): reuse the PVP matcher
-    if (ident.haskell && data.hackage && ident.version && parsePvp(ident.version)) {
+    if (ident.haskell && data.hackage && ident.version && parsePvp(ident.version) && data.hackage.coverage(node.pname) !== 'covered') {
+      // A feed that never looked up this package (or looked too long ago) says nothing about it: that is unknown, not "no advisory matches".
+      hackageGap = data.hackage.coverage(node.pname) === 'stale'
+        ? 'the Hackage advisory feed last covered this package longer ago than its age limit: the absence of a match is not a clean result'
+        : 'the Hackage advisory feed never covered this package: the absence of a match is not a clean result';
+    } else if (ident.haskell && data.hackage && ident.version && parsePvp(ident.version)) {
       mapped = true;
       for (const { adv, aff } of data.hackage.forPackage(node.pname)) {
         if (adv.withdrawn) continue;
@@ -316,6 +321,7 @@ export function matchNixVulnerabilities(opts = {}) {
       }
     }
     if (matched) summary.matched++;
+    else if (hackageGap) { summary.unmapped++; push({ status: 'unknown', reason: hackageGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
     else if (mapped) { summary.mappedNoMatch++; push({ status: 'not-affected', reason: 'mapped to an upstream identity and no advisory in the supplied feed matches this version' }, { identityMapped: true }); }
     else { summary.unmapped++; push({ status: 'unknown', reason: ident.ambiguous ? 'the upstream identity is ambiguous: no verdict' : 'the upstream identity could not be mapped to anything an advisory is keyed by' }, { identityMapped: false }); }
   }

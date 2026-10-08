@@ -10,6 +10,7 @@ export const modules = {
 __webpack_require__.d(__webpack_exports__, {
   analyzeNixClosure: () => (/* binding */ analyzeNixClosure),
   nixClosureOf: () => (/* binding */ nixClosureOf),
+  nixHaskellPackageNames: () => (/* binding */ nixHaskellPackageNames),
   resolvedHackageComponents: () => (/* binding */ resolvedHackageComponents),
   resolvedHaskellGraph: () => (/* binding */ resolvedHaskellGraph),
   runSelectedNixEval: () => (/* binding */ runSelectedNixEval)
@@ -647,9 +648,14 @@ function matchNixVulnerabilities(opts = {}) {
     if (!data) { push({ status: 'unknown', reason: 'no advisory feed was supplied: absence of a match is not a clean result' }); summary.unmapped++; continue; }
     if (ident.versionRejected && !ident.haskell && !(node.upstream && node.upstream.rev)) { push({ status: 'unknown', reason: `the version cannot be queried: ${ident.versionRejected}` }); summary.unmapped++; continue; }
 
-    let matched = false; let mapped = false;
+    let matched = false; let mapped = false; let hackageGap = null;
     // Hackage (wrapped Haskell packages): reuse the PVP matcher
-    if (ident.haskell && data.hackage && ident.version && (0,haskell_manifests/* parseVersion */.ot)(ident.version)) {
+    if (ident.haskell && data.hackage && ident.version && (0,haskell_manifests/* parseVersion */.ot)(ident.version) && data.hackage.coverage(node.pname) !== 'covered') {
+      // A feed that never looked up this package (or looked too long ago) says nothing about it: that is unknown, not "no advisory matches".
+      hackageGap = data.hackage.coverage(node.pname) === 'stale'
+        ? 'the Hackage advisory feed last covered this package longer ago than its age limit: the absence of a match is not a clean result'
+        : 'the Hackage advisory feed never covered this package: the absence of a match is not a clean result';
+    } else if (ident.haskell && data.hackage && ident.version && (0,haskell_manifests/* parseVersion */.ot)(ident.version)) {
       mapped = true;
       for (const { adv, aff } of data.hackage.forPackage(node.pname)) {
         if (adv.withdrawn) continue;
@@ -683,6 +689,7 @@ function matchNixVulnerabilities(opts = {}) {
       }
     }
     if (matched) summary.matched++;
+    else if (hackageGap) { summary.unmapped++; push({ status: 'unknown', reason: hackageGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
     else if (mapped) { summary.mappedNoMatch++; push({ status: 'not-affected', reason: 'mapped to an upstream identity and no advisory in the supplied feed matches this version' }, { identityMapped: true }); }
     else { summary.unmapped++; push({ status: 'unknown', reason: ident.ambiguous ? 'the upstream identity is ambiguous: no verdict' : 'the upstream identity could not be mapped to anything an advisory is keyed by' }, { identityMapped: false }); }
   }
@@ -724,8 +731,8 @@ function licenseReport(nodes, meta, policy) {
 
 
 
-// EXTERNAL MODULE: ./src/language/haskell-supply.js
-var haskell_supply = __webpack_require__(86349);
+// EXTERNAL MODULE: ./src/language/haskell-supply.js + 1 modules
+var haskell_supply = __webpack_require__(43436);
 // EXTERNAL MODULE: external "node:child_process"
 var external_node_child_process_ = __webpack_require__(31421);
 // EXTERNAL MODULE: external "node:net"
@@ -1118,6 +1125,14 @@ function loadNixExports(files, env = process.env) {
   else if (sources.length) problems.push({ kind: 'export-unverified', detail: 'there is no flake.lock to bind the export to, so it cannot be shown to describe this project' });
   if (env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY) { try { expected.publicKeyPem = (0,external_node_fs_.readFileSync)(env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, 'utf8'); expected.requireSigned = true; } catch { problems.push({ kind: 'malformed-export', detail: 'the configured export public key is unreadable' }); } }
   return { exports, sources, problems, expected, trust: [...trust] };
+}
+
+/** Names of the Haskell packages inside an imported Nix closure (derivations whose env carries Haskell build attributes). */
+function nixHaskellPackageNames(files, opts = {}) {
+  const c = nixClosureOf(files, opts);
+  if (!c || (c.refused && c.refused.length)) return [];
+  const nodes = (c.closure && c.closure.nodes) || [];
+  return [...new Set(nodes.filter((n) => n.pname && n.deriver && c.drvEnv[n.deriver] && HASKELL_ENV_HINTS.some((k) => k in c.drvEnv[n.deriver])).map((n) => n.pname))];
 }
 
 /** The imported closure (and each derivation's env block) for a file set, or null when there is no export. Cached per file set. */

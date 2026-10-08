@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { buildHaskellIR } from './haskell-ir.js';
+import { getLastRefresh, refreshHackageAdvisories, liveFeedEnabled, FEED_ENV } from './haskell-advisory-feed.js';
 import { AdvisoryDb, loadAdvisorySnapshot, evaluateComponents, reachability, nearNameCandidates, sourceIntegrity, lifecycle, licensePolicy, hackagePurl, GHC_BOOT_PACKAGES } from './haskell-sca.js';
 
 const MANIFEST = /(?:^|\/)(?:[^/]+\.cabal|cabal\.project(?:\.[a-z]+)?|package\.yaml|stack\.yaml|stack\.yaml\.lock)$/;
@@ -61,13 +62,38 @@ function mergeResolved(declared, resolved) {
 }
 
 /** Advisory data configured for this scan: a hash-pinned snapshot from the environment or the project's state dir. */
+/** The live-feed sentence appended to a "no advisory data" reason: what the refresh did, or how to turn it on. */
+function liveFeedNote(env) {
+  const r = getLastRefresh();
+  if (r && r.status !== 'disabled') return ` Live feed: ${r.status}, ${r.detail}.`;
+  return env[FEED_ENV] === '1' ? '' : ` To fetch advisories from the OSV Hackage feed instead, set ${FEED_ENV}=1 (network, opt-in).`;
+}
+
 export function configuredAdvisoryDb(root, env = process.env) {
+  const c = _configuredAdvisoryDb(root, env);
+  return c.db ? c : { ...c, reason: `${c.reason}${liveFeedNote(env)}` };
+}
+function _configuredAdvisoryDb(root, env = process.env) {
   const sel = resolveOperatorSnapshot({ envVar: 'AGENTIC_SECURITY_HACKAGE_ADVISORIES', fileName: 'hackage-advisories.json', root, env });
   if (!sel.path) return { db: null, reason: `no advisory snapshot configured (set AGENTIC_SECURITY_HACKAGE_ADVISORIES, or place hackage-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)${sel.projectLocalIgnored ? IGNORED_NOTE('hackage-advisories.json') : ''}`, projectLocalIgnored: !!sel.projectLocalIgnored };
   let snap;
   try { snap = JSON.parse(readFileSync(sel.path, 'utf8')); } catch (e) { return { db: null, reason: `advisory snapshot unreadable: ${e.code || e.message}` }; }
   const r = loadAdvisorySnapshot(snap, { pinnedSha256: env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_SHA256 || null });
   return r.ok ? { db: r.db, reason: null, source: sel.source } : { db: null, reason: `advisory snapshot refused: ${r.reason}` };
+}
+
+/**
+ * The async step before a scan's synchronous passes: when the live feed is enabled, make sure the operator snapshot covers every
+ * Hackage package this scan will evaluate (declared, frozen, transitive when a plan is present, and Haskell packages inside an imported Nix closure). Does nothing, and costs nothing
+ * (no manifest parsing), unless the feed is enabled. Never throws.
+ */
+export async function prefetchHackageFeed(files, { env = process.env, resolvedComponents = [], extraNames = [], ...opts } = {}) {
+  if (!liveFeedEnabled(env)) return null;
+  try {
+    const names = [...hackageComponents(files).components, ...resolvedComponents].map((c) => c.name).concat(extraNames);
+    if (!names.length) return null;
+    return await refreshHackageAdvisories(names, { env, ...opts });
+  } catch (e) { return { status: 'failed', detail: `the feed step failed: ${String((e && e.message) || e).slice(0, 120)}` }; }
 }
 
 /** Imports and import-qualified callees across the project's Haskell sources. */
@@ -101,6 +127,8 @@ export function analyzeHaskellSupply(files, { db = undefined, root = null, env =
   out.feed = ev.feed;
   if (!db) out.gaps.push({ kind: 'advisory-feed-unavailable', detail: `${feedReason || ev.feed.detail}. ${components.length} Hackage dependencies were NOT checked against any advisory: the absence of findings is not a clean result.` });
   else if (ev.feed.status === 'stale-cache') out.gaps.push({ kind: 'advisory-feed-stale', detail: ev.feed.detail });
+  const notCovered = ev.statuses.filter((x) => x.status === 'feed-incomplete' || x.status === 'feed-stale');
+  if (db && notCovered.length) out.gaps.push({ kind: 'advisory-feed-incomplete', detail: `${notCovered.length} Hackage package(s) were not covered by the advisory feed (${[...new Set(notCovered.map((x) => x.name))].slice(0, 5).join(', ')}${notCovered.length > 5 ? ', ...' : ''}): their status is unknown, and the absence of findings for them is not a clean result.` });
   const unresolved = components.filter((c) => !c.version);
   if (unresolved.length) out.gaps.push({ kind: 'unresolved-dependency-versions', detail: `${unresolved.length} dependency version(s) are only declared ranges (${unresolved.slice(0, 5).map((c) => c.name).join(', ')}${unresolved.length > 5 ? ', ...' : ''}); generate a Cabal plan or a Stack export to resolve them` });
 

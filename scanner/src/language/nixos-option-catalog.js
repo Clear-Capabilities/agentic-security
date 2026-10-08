@@ -37,6 +37,7 @@ const NIXOS_OPTIONS = {
   'security.sudo.extraConfig': { type: 'lines', default: same('') },
   'security.sudo.execWheelOnly': { type: 'bool', default: same(false) },
   'networking.firewall.allowedTCPPortRanges': { type: 'listOf', default: same([]) },
+  'networking.firewall.allowedUDPPortRanges': { type: 'listOf', default: same([]) },
   'users.mutableUsers': { type: 'bool', default: same(true) },
   'nix.settings.sandbox': { type: 'bool', default: same(true) },
   'nix.settings.trusted-users': { type: 'listOf', default: same(['root']) },

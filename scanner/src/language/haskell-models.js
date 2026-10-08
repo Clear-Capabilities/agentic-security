@@ -40,7 +40,7 @@ export const HS_PACKAGES = Object.freeze({
   yesod: { modules: ['Yesod.Core', 'Yesod'], tested: ['1.6'] },
   'http-client': { modules: ['Network.HTTP.Client', 'Network.HTTP.Client.TLS'], tested: ['0.7'] },
   'http-conduit': { modules: ['Network.HTTP.Simple', 'Network.HTTP.Conduit'], tested: ['2.3'] },
-  wreq: { modules: ['Network.Wreq'], tested: ['0.5'] },
+  wreq: { modules: ['Network.Wreq', 'Network.Wreq.Session'], tested: ['0.5'] },
   'blaze-html': { modules: ['Text.Blaze', 'Text.Blaze.Html', 'Text.Blaze.Html5', 'Text.Blaze.Internal'], tested: ['0.9'] },
   lucid: { modules: ['Lucid', 'Lucid.Base'], tested: ['2.11'] },
   shakespeare: { modules: ['Text.Hamlet', 'Text.Shakespeare'], tested: ['2.0'] },
@@ -127,7 +127,13 @@ sink('Network.HTTP.Simple', ['httpBS', 'httpLBS', 'httpJSON', 'httpNoBody', 'htt
 sink('Network.HTTP.Conduit', ['simpleHttp', 'parseRequest', 'parseUrlThrow', 'parseRequest_', 'httpLbs'], { ...SSRF, package: 'http-conduit' });
 sink('Network.HTTP.Client', ['parseRequest', 'parseUrlThrow', 'parseRequest_', 'requestFromURI'], { ...SSRF, package: 'http-client' });
 sink('Network.HTTP.Client', ['httpLbs', 'httpNoBody', 'withResponse', 'responseOpen'], { ...SSRF, argIndex: 0, package: 'http-client' });
-sink('Network.Wreq', ['get', 'post', 'put', 'delete', 'head', 'getWith', 'postWith', 'putWith'], { ...SSRF, argIndex: 0, package: 'wreq' });
+// wreq: where the URL sits depends on the function. `get url`, but `getWith opts url` (the first argument is the Options, not the target),
+// `customMethod method url`, `customMethodWith method opts url`; the Session forms take the session before the URL.
+sink('Network.Wreq', ['get', 'post', 'put', 'delete', 'head', 'options', 'patch'], { ...SSRF, argIndex: 0, package: 'wreq' });
+sink('Network.Wreq', ['getWith', 'postWith', 'putWith', 'deleteWith', 'headWith', 'optionsWith', 'patchWith', 'customMethod', 'customPayloadMethod'], { ...SSRF, argIndex: 1, package: 'wreq' });
+sink('Network.Wreq', ['customMethodWith', 'customPayloadMethodWith'], { ...SSRF, argIndex: 2, package: 'wreq' });
+sink('Network.Wreq.Session', ['get', 'post', 'put', 'delete', 'head', 'options', 'patch'], { ...SSRF, argIndex: 1, package: 'wreq' });
+sink('Network.Wreq.Session', ['getWith', 'postWith', 'putWith', 'deleteWith', 'headWith', 'optionsWith', 'patchWith'], { ...SSRF, argIndex: 2, package: 'wreq' });
 
 // CWE-1427. Untrusted text placed in a model request body. The call is an ordinary HTTP body setter, so the
 // finding is kept only for a file that shows AI evidence (an AI endpoint, model literal or SDK import):

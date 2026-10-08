@@ -16,7 +16,7 @@ import { resolveOperatorSnapshot, IGNORED_NOTE } from './trusted-inputs.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { buildResolvedGraph } from './haskell-resolved-graph.js';
 import { importNixClosure } from './nix-closure.js';
-import { NixAdvisoryData, matchNixVulnerabilities, overlayEvidence } from './nix-sca.js';
+import { NixAdvisoryData, matchNixVulnerabilities, overlayEvidence, HASKELL_ENV_HINTS } from './nix-sca.js';
 import { configuredAdvisoryDb, collectUsage, manifestFiles } from './haskell-supply.js';
 import { runIsolatedEval, mergeEvaluationHealth, _which } from './nix-eval-isolation.js';
 
@@ -105,6 +105,14 @@ function loadNixExports(files, env = process.env) {
   else if (sources.length) problems.push({ kind: 'export-unverified', detail: 'there is no flake.lock to bind the export to, so it cannot be shown to describe this project' });
   if (env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY) { try { expected.publicKeyPem = readFileSync(env.AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, 'utf8'); expected.requireSigned = true; } catch { problems.push({ kind: 'malformed-export', detail: 'the configured export public key is unreadable' }); } }
   return { exports, sources, problems, expected, trust: [...trust] };
+}
+
+/** Names of the Haskell packages inside an imported Nix closure (derivations whose env carries Haskell build attributes). */
+export function nixHaskellPackageNames(files, opts = {}) {
+  const c = nixClosureOf(files, opts);
+  if (!c || (c.refused && c.refused.length)) return [];
+  const nodes = (c.closure && c.closure.nodes) || [];
+  return [...new Set(nodes.filter((n) => n.pname && n.deriver && c.drvEnv[n.deriver] && HASKELL_ENV_HINTS.some((k) => k in c.drvEnv[n.deriver])).map((n) => n.pname))];
 }
 
 /** The imported closure (and each derivation's env block) for a file set, or null when there is no export. Cached per file set. */
