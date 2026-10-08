@@ -21,20 +21,36 @@ export function hackageComponents(files) {
   const mf = manifestFiles(files);
   if (!mf.length) return { components: [], manifests: null };
   const manifests = analyzeHaskellManifests(mf);
-  const locked = new Map();
-  const lockedAt = new Map();
-  for (const l of manifests.lockedPackages || []) { locked.set(l.name, l.version); if (l.version && l.file) lockedAt.set(l.name, { file: l.file, line: l.line || null }); }
+  // A freeze or lock file resolves the manifests at or below its own directory (that is what a Cabal project or Stack project root means), and the
+  // nearest enclosing one wins. Applying one repository-wide made a release builder's freeze (builders/linux.armv6hf/) the "resolved" version of
+  // the root package: found by the live Hackage feed bench.
+  const dirOf = (p) => (typeof p === 'string' && p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+  const covers = (lockFile, manifest) => { const base = dirOf(lockFile); const m = dirOf(manifest); return base === '' || m === base || m.startsWith(`${base}/`); };
+  const lockedFor = (name, manifest) => {
+    let best = null;
+    for (const l of manifests.lockedPackages || []) {
+      if (l.name !== name || !l.version || !l.file || !covers(l.file, manifest)) continue;
+      if (!best || dirOf(l.file).length >= dirOf(best.file).length) best = l;
+    }
+    return best;
+  };
+  // Packages this project DEFINES (a .cabal file or an hpack package.yaml in the scanned tree). A `build-depends` on one of them resolves to the
+  // workspace package, not to Hackage; reporting it would raise advisories about the project's own (usually fixed) version as if it were a
+  // dependency. Found by the live Hackage feed bench (aeson's own test suite depends on aeson).
+  const defined = new Set([...(manifests.packages || []), ...(manifests.hpack || [])].map((p) => p.name).filter(Boolean));
   const seen = new Map();
   for (const d of manifests.dependencies || []) {
-    const resolved = locked.get(d.name) || d.exactPin || null;
-    const key = `${d.name}@${d.scope || 'runtime'}`;
+    if (defined.has(d.name)) continue;
+    const lock = lockedFor(d.name, d.manifest);
+    const resolved = (lock && lock.version) || d.exactPin || null;
+    const key = `${d.name}@${d.scope || 'runtime'}@${resolved || ''}`;   // a covered (resolved) use is not merged into an uncovered one
     if (seen.has(key)) continue;
     seen.set(key, {
       ecosystem: 'hackage', name: d.name, version: resolved, declaredRange: d.declaredRange || null, unbounded: !resolved && !d.declaredRange && d.rangeKind === 'unbounded',
-      resolution: locked.has(d.name) ? 'freeze' : (d.exactPin ? 'exact-pin' : 'unresolved'),
+      resolution: lock ? 'freeze' : (d.exactPin ? 'exact-pin' : 'unresolved'),
       scope: d.scope || 'runtime', engineScope: SCOPE[d.scope] || 'required', target: d.component || null, componentKind: d.componentKind || null,
       manifest: d.manifest, line: d.line, ghcComponent: GHC_BOOT_PACKAGES.has(d.name),
-      versionSource: locked.has(d.name) && lockedAt.has(d.name) ? lockedAt.get(d.name) : null,
+      versionSource: lock ? { file: lock.file, line: lock.line || null } : null,
     });
   }
   return { components: [...seen.values()], manifests };

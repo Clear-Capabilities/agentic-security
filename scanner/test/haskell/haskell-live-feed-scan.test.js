@@ -129,3 +129,37 @@ test('[live-feed-scan] offline mode makes no registry-metadata request (npm, PyP
     if (saved.off === undefined) delete process.env.AGENTIC_SECURITY_OFFLINE; else process.env.AGENTIC_SECURITY_OFFLINE = saved.off;
   }
 });
+
+// Found by adjudicating the live run: ShellCheck's only freeze file is builders/linux.armv6hf/cabal.project.freeze, a freeze for one release
+// builder. It was applied to the ROOT ShellCheck.cabal, so "aeson 2.2.3.0" was reported as the resolved version (status `affected`) of a
+// package whose own manifest only declares a range (it should be `possibly-affected`). A freeze or lock file resolves the manifests at or below
+// its own directory, not every manifest in the repository.
+test('[live-feed-scan] a freeze file resolves only manifests at or below its own directory', () => {
+  const cabal = (name) => `name: ${name}\nversion: 1\nlibrary\n  build-depends: base, aeson >=1 && <3\n`;
+  const freeze = 'constraints: any.aeson ==2.2.3.0\n';
+  const ver = (files, manifest) => hackageComponents(files).components.find((c) => c.name === 'aeson' && c.manifest === manifest).version;
+  assert.equal(ver({ 'Root.cabal': cabal('root'), 'builders/arm/cabal.project.freeze': freeze }, 'Root.cabal'), null, 'a builder-specific freeze in a subdirectory does not resolve the root package');
+  assert.equal(ver({ 'cabal.project.freeze': freeze, 'pkg/a.cabal': cabal('a') }, 'pkg/a.cabal'), '2.2.3.0', 'a root freeze resolves a package below it');
+  assert.equal(ver({ 'server/cabal.project.freeze': freeze, 'server/s.cabal': cabal('s') }, 'server/s.cabal'), '2.2.3.0', 'a freeze next to the manifest resolves it');
+  assert.equal(ver({ 'server/cabal.project.freeze': freeze, 'client/c.cabal': cabal('c') }, 'client/c.cabal'), null, 'a sibling directory is not covered');
+  const near = ver({ 'cabal.project.freeze': 'constraints: any.aeson ==1.0.0.0\n', 'server/cabal.project.freeze': freeze, 'server/s.cabal': cabal('s') }, 'server/s.cabal');
+  assert.equal(near, '2.2.3.0', 'the nearest enclosing freeze wins');
+});
+
+// Found by the live run: scanning aeson-2.3.2.0 itself reported its own test suite's `build-depends: aeson` against the aeson advisories, and
+// cabal-install's tree reported `cabal-install`. A dependency on a package this project DEFINES is the workspace package, not a Hackage
+// dependency, and an advisory about the project's own (fixed) version is not a finding about a dependency.
+test('[live-feed-scan] a dependency on a package the project itself defines is not a Hackage dependency', () => {
+  const files = {
+    'aeson.cabal': 'name: aeson\nversion: 2.3.2.0\nlibrary\n  build-depends: base, text\ntest-suite t\n  type: exitcode-stdio-1.0\n  main-is: M.hs\n  build-depends: aeson, text\n',
+    'sub/package.yaml': 'name: sub\nversion: 1\ndependencies:\n- base\n- aeson\n- sub-extra\nlibrary:\n  source-dirs: src\n',
+    'sub-extra/sub-extra.cabal': 'name: sub-extra\nversion: 1\nlibrary\n  build-depends: base\n',
+  };
+  const names = hackageComponents(files).components.map((c) => c.name);
+  assert.ok(!names.includes('aeson'), 'aeson is defined by this project');
+  assert.ok(!names.includes('sub-extra'), 'sub-extra is defined by this project');
+  assert.ok(names.includes('text') && names.includes('base'), 'real third-party dependencies are kept');
+  // the opposite direction: the same dependency in a project that does NOT define it is still a dependency
+  const other = hackageComponents({ 'app.cabal': 'name: app\nversion: 1\nlibrary\n  build-depends: base, aeson\n' }).components.map((c) => c.name);
+  assert.ok(other.includes('aeson'));
+});
