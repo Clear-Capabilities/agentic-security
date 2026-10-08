@@ -39,11 +39,27 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
 |---|---|
 | Shared | `discovery.js` (sources, manifests, explicit exports, exclusions, import graph, invalidation digests), `contracts.js`, `assurance.js` (scan-health inputs, conditions, limitations), `engine-pass.js` (language supply chain wired into the engine), `resolved-pass.js` (plan / Stack export / Nix closure / opt-in evaluation reachable from the CLI), `context.js` (project context for partial scans, fix previews and dependency upgrades, model prompt extras), `state-artifacts.js`, `pragma.js`, `secrets.js`, `bom.js`, `bom-validate.js`, `aibom.js`, `compliance-map.js`, `bridges.js`, `witness.js`, `fix-lifecycle.js` (the one fix lifecycle: path, syntax, rescan, compile, backup, history, undo) |
 | Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
-| Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
+| Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-eval-forms.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
 | Measurement | `accuracy.js` (family-scoped scoring, per-layer), `support-registry.js` (status rules, promotion refusals, frozen-hash demotion) |
 
 Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell-view.js`, `lineage/nix-view.js`,
 `ir/` Haskell/Nix adapters, `report/` format handling, `egress/redact.js`, `llm-validator/`, `discovery/` (hunt partitions Nix).
+
+## NixOS option evaluator (soundness rules)
+
+`nixos-module-resolver.js` `evalExpr` is a soundness-first subset; `nixos-eval-forms.js` holds its value classes and the
+**allow-list** of library functions (there is no deny-list to forget an entry in). Rules to keep when extending it:
+
+- **Any unknown part makes the whole value unknown.** Never default, never pick a branch you cannot decide.
+- **Scope is a correctness issue.** Lexical bindings (let, lambda) beat every `with`; innermost `with` beats outer; the module's
+  own `let`s are IR bindings (`ir.bindings`, `scope: 'let'`) and are used only when unique in the file, not also a function
+  parameter, not in a `rec` set, and when their `letSpan` encloses `env.pos` (the absolute span of the text being evaluated).
+  `evalSpan` on a definition (set by `nix-ir.js` when a leaf sits under let/with/assert only) makes the resolver evaluate the
+  whole wrapper. A priority/condition/merge combinator clears it, because those are the collector's job.
+- **Final values must be plain data** (`sealed`/`isPlain`): a closure, partial application or namespace is `unknown`. A
+  priority wrapper inside a value is unknown (priority is not recoverable); at the top of a definition the collector reads it.
+- **Bounded**: `maxEvaluations`, `maxExprDepth`, `maxValueSize` are caps that surface as `truncated`, not as a guess.
+- Assumption stated, not proven: `lib` is nixpkgs' `lib` whenever the module declares a `lib` parameter and the file does not rebind it.
 
 ## Tests and benches
 

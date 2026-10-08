@@ -84,12 +84,49 @@ imports only**. Each option is decided by module-system priority (`mkForce` 50, 
 
 - a list or attribute set is evaluated only when **every element is statically known** (`[ { from = 1; to = 65535; } ]` is; a
   list holding a `config.<option>` reference, an interpolated string or a `rec` set is not, and stays `unknown` as a whole);
+  **any unknown part makes the whole value unknown**, nothing is ever guessed (see "What the evaluator runs" below);
 - an undecidable condition keeps the value `conditional`; equal-priority disagreement is `conflict`; nothing is guessed;
 - a missing setting gets a default only when the option catalog proves it for the release in force, else `unknown`;
 - the release comes from the target or the flake's `nixpkgs` input, never from `system.stateVersion`;
 - dynamic attributes, overlays, an opaque parent, a partial module graph or a cycle end as stated caveats that clear
   `definite` and become scan-health conditions;
 - Home Manager is a separate namespace, scoped per user.
+
+### What the evaluator runs
+
+A value is computed statically from exactly these forms, and from nothing else. Anything outside the list is `unknown`, and
+the option is reported as such rather than guessed.
+
+- **Literals and operators:** booleans, `null`, integers (safe-integer range only), floats, strings, lists, attribute sets;
+  `!`, `&&`, `||`, `->`, `==`/`!=` (structural, attribute order ignored, functions never compared), `++`, `//`, `+` (integers
+  or strings), `-`, `*`, unary `-`, and `<` `>` `<=` `>=` on integers. There is no division and no path arithmetic.
+- **Binding forms:** `let ... in` (lazy, with `inherit x;` and `inherit (lib) x;`), `with` over a known attribute set or over
+  `lib` / `builtins`, `if/then/else` on a known condition (only the chosen branch is evaluated), `assert` on a known `true`,
+  lambdas (`x: ...`, `{ a, b ? 1, ... }: ...`, `args@{ ... }: ...`) applied to known arguments, partial application, and
+  selection `x.a.b` / `x.a or d` on a known attribute set. A binding of a dotted name (`let a.b = 1;`), a duplicate binding or an
+  `inherit` from anything but `lib` / `builtins` makes the whole `let` unknown.
+- **Scoping follows Nix:** an inner binding shadows an outer one, a lambda parameter shadows a `let`, a lexical binding wins
+  over every `with`, and the innermost `with` wins over an outer one. A file-level `let` name is used only when that `let`
+  encloses the expression, no other binding or function parameter of the file shares the name, and the expression is not
+  inside a `rec` set. A local binding named `config` or `pkgs` is not the module argument.
+- **Library functions (a closed allow-list, over fully known arguments):** `lib.optionals`, `lib.optional`,
+  `lib.optionalAttrs`, `lib.optionalString`, `lib.concatStringsSep`, `lib.concatMapStringsSep`, `lib.hasPrefix`,
+  `lib.hasSuffix`, `lib.boolToString`, `lib.mkMerge` (over plain lists only), `map`, `filter`, `elem`, `length`, `concatLists`,
+  `concatMap` (as `lib.<f>` or `builtins.<f>`, `lib.strings.<f>`, `lib.lists.<f>`, or through `with lib;` / `inherit (lib)`),
+  `builtins.hasAttr`, `toString` (strings, integers, booleans, null). `lib` must be the module's own `lib` argument and not
+  rebound in the file.
+- **String interpolation** when every interpolated part is a known string (an integer or a derivation is not).
+- **`config.<option>`** reads, `cfg.x` through a `let cfg = config.a.b;` alias, `pkgs.stdenv.isLinux`-style flags from the target
+  system, and `target.args`, as before.
+- **Priority wrappers.** `lib.mkDefault`, `mkForce`, `mkOverride N`, `mkBefore`, `mkAfter` around a definition are read by the
+  module resolver, so `lib.mkDefault (base ++ lib.optionals cond [ 80 ])` is a priority-1000 definition of the computed list.
+  A wrapper **inside** an evaluated value (`let p = lib.mkDefault [ 22 ]; in p`) is `unknown`: a priority cannot be recovered
+  from a value. A `let`, `with` or `assert` that wraps a definition is evaluated as a whole, so its bindings apply to the value.
+
+Never evaluated: `import`, `fetch*`, `readFile`, `toFile`, `getEnv`, `currentSystem`, `trace`, `throw`, path values, `rec`
+sets, dynamic attribute names, derivations, and any library function not listed above. Evaluation is bounded: the step budget
+(`maxEvaluations`), expression nesting (`maxExprDepth`, so runaway recursion stops) and result size (`maxValueSize`) each end as
+`unknown` plus a `truncated` entry, never as a partial answer.
 
 ## Hardening rules
 
