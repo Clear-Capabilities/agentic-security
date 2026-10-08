@@ -177,3 +177,18 @@ export async function refreshHackageAdvisories(names, opts = {}) {
     packages: wanted.length, requested: need.length, fetched: fetched.size, records: records.size, uncovered, failures: failures.slice(0, 10), path, cacheProblem: cur.problem,
   });
 }
+
+/**
+ * The scan-health view of this feed, in the shape language/assurance.js takes for an optional mode: `selected` is whether the operator
+ * opted in, `result` is what the refresh did (absent when none happened, which assurance reports as "selected but did not run").
+ * Outcomes that mean the feed answered are `ok`; a partial refresh is `partial` (some packages stay unknown) and is not dressed as success.
+ */
+export function liveFeedOptionalState(env = process.env, refresh = getLastRefresh()) {
+  if (env[FEED_ENV] !== '1') return { selected: false };
+  if (!refresh) return { selected: true, result: undefined };
+  const ok = new Set(['refreshed', 'current', 'nothing-to-do']);
+  if (ok.has(refresh.status)) return { selected: true, result: { status: 'ok' } };
+  if (refresh.status === 'partial') return { selected: true, result: { status: 'partial', reason: refresh.detail } };
+  if (refresh.status === 'failed') return { selected: true, result: { status: 'failed', reason: refresh.detail } };
+  return { selected: true, result: { status: refresh.status, ran: false, reason: refresh.detail } };
+}

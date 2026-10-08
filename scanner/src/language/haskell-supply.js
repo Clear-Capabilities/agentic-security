@@ -30,7 +30,7 @@ export function hackageComponents(files) {
     const key = `${d.name}@${d.scope || 'runtime'}`;
     if (seen.has(key)) continue;
     seen.set(key, {
-      ecosystem: 'hackage', name: d.name, version: resolved, declaredRange: d.declaredRange || null,
+      ecosystem: 'hackage', name: d.name, version: resolved, declaredRange: d.declaredRange || null, unbounded: !resolved && !d.declaredRange && d.rangeKind === 'unbounded',
       resolution: locked.has(d.name) ? 'freeze' : (d.exactPin ? 'exact-pin' : 'unresolved'),
       scope: d.scope || 'runtime', engineScope: SCOPE[d.scope] || 'required', target: d.component || null, componentKind: d.componentKind || null,
       manifest: d.manifest, line: d.line, ghcComponent: GHC_BOOT_PACKAGES.has(d.name),

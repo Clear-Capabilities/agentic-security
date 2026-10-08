@@ -231,14 +231,16 @@ export function matchComponent(aff, comp) {
     if (inside === null) return { status: 'unknown', reason: `"${comp.version}" is not a Cabal version` };
     return inside ? { status: 'affected', reason: 'the resolved version is inside an affected range' } : { status: 'not-affected', reason: 'the resolved version is outside every affected range' };
   }
-  if (comp.declaredRange) {
-    const declared = rangeToIntervals(comp.declaredRange);
+  // `unbounded` = the manifest declared the dependency with NO version bound (`build-depends: aeson`), which in Cabal means "any version".
+  // That is a declared range like any other (it overlaps an advisory, so possibly-affected), not an absent one.
+  if (comp.declaredRange || comp.unbounded) {
+    const declared = comp.declaredRange ? rangeToIntervals(comp.declaredRange) : [iv(null, false, null, false)];
     if (declared === null) return { status: 'unknown', reason: 'the declared range could not be parsed' };
     if (!declared.length) return { status: 'unknown', reason: 'the declared range admits no version' };
     const overlap = intervalsOverlap(declared, aff.intervals);
     if (!overlap) return { status: 'not-affected', reason: 'no version allowed by the declared range is affected' };
     const subset = declared.every((d) => aff.intervals.some((a) => !isEmpty(intersectIntervals(d, a)) && containsInterval(a, d)));
-    return subset ? { status: 'affected', reason: 'every version allowed by the declared range is affected' } : { status: 'possibly-affected', reason: 'the declared range allows both affected and unaffected versions; no resolved version is known' };
+    return subset ? { status: 'affected', reason: 'every version allowed by the declared range is affected' } : { status: 'possibly-affected', reason: comp.declaredRange ? 'the declared range allows both affected and unaffected versions; no resolved version is known' : 'the dependency is declared with no version bound, so any version may be selected; no resolved version is known' };
   }
   return { status: 'unknown', reason: 'neither a resolved version nor a declared range is known' };
 }
@@ -282,7 +284,7 @@ export function evaluateComponents(components, db, opts = {}) {
         osvId: adv.canonicalId, ids: adv.ids, cveAliases: adv.cveAliases, ghsaAliases: adv.ghsaAliases,
         summary: adv.summary, fixedIn: aff.fixedIn, unfixed: aff.unfixed, references: adv.references.slice(0, 5),
         severity: 'medium', severityBasis: 'the advisory carries no severity rating',
-        matchStatus: m.status, matchReason: m.reason, resolution: comp.version ? 'resolved' : (comp.declaredRange ? 'declared-range' : 'none'),
+        matchStatus: m.status, matchReason: m.reason, resolution: comp.version ? 'resolved' : (comp.declaredRange ? 'declared-range' : (comp.unbounded ? 'declared-unbounded' : 'none')),
         scope: comp.scope || null, target: comp.target || null, purl: base.purl, ghcComponent: ghc,
         ...(ghc ? { remediation: `${comp.name} is provided by the compiler: upgrade GHC (the fix is in ${comp.name} ${aff.fixedIn.join(', ') || '(no fixed version published)'}), not a Cabal dependency bound.` } : { remediation: aff.fixedIn.length ? `Upgrade ${comp.name} to ${aff.fixedIn.join(' or ')}.` : `No fixed version of ${comp.name} is published; remove or replace the dependency.` }),
         kev: kevHit, epss: epssVals.length ? Math.max(...epssVals) : 'unknown',
