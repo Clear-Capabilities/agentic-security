@@ -107,7 +107,7 @@ A bundle PROVES its contents are unmodified since signing. It does NOT prove the
 
 ### Two publish paths, and only one carries provenance
 
-- **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` on a clean runner and publishes with `npm publish --provenance`, so the artifact carries a verifiable link back to this repository and commit. Needs the `NPM_TOKEN` repository secret.
+- **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` as parallel `gate` legs on clean runners (the test suite in four shards, two bench groups, and `rest`, defined by `RELEASE_GROUPS` in `scripts/release-check.mjs`, where `rest` is the computed complement so a new check can never be dropped), then a `publish` job that `needs` every leg re-verifies the bundle and package shape and runs `npm publish --provenance` via npm trusted publishing (OIDC, no token); only `publish` holds `id-token: write`, so the artifact carries a verifiable link back to this repository and commit.
 - **Local `npm publish`.** Still supported and still fully gated by `prepublishOnly`. It produces **no provenance attestation** — npm requires a trusted CI publisher with OIDC for that. Use it when you must; prefer the tag.
 
 `workflow_dispatch` on the release workflow runs the gate and `npm pack --dry-run` without publishing, which is the cheapest way to check a release would go out cleanly.

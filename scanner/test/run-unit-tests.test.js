@@ -8,7 +8,11 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered } from '../../scripts/run-unit-tests.mjs';
+import { spawnSync } from 'node:child_process';
+import {
+  SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered,
+  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS,
+} from '../../scripts/run-unit-tests.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(HERE, '..');
@@ -58,9 +62,12 @@ test('cpp-dataflow and python are deliberately excluded, and still run in `npm t
   // batch it.
   const pkg = readPkg();
   assert.ok(!SCOPES.includes('cpp-dataflow'));
-  assert.match(pkg.scripts.test, /cpp-dataflow\.test\.js/, 'cpp-dataflow.test.js must still run somewhere in `npm test`');
+  // The extras moved into `test:extras`, which run-unit-tests.mjs runs after the main list
+  // (in shard 1 only when sharded), so `npm test` still reaches every one of them.
+  assert.match(pkg.scripts['test:extras'], /cpp-dataflow\.test\.js/, 'cpp-dataflow.test.js must still run in test:extras');
+  assert.match(pkg.scripts['test:extras'], /test:python\b/, 'test:python must still run in test:extras');
   assert.match(pkg.scripts.test, /run-unit-tests\.mjs/, '`npm test` must invoke the combined runner');
-  assert.match(pkg.scripts.test, /test:python\b/, 'test:python must still run in `npm test`');
+  assert.deepEqual(EXTRA_STEPS.map((e) => e.script), ['test:extras'], 'the runner must run test:extras after the main list');
 });
 
 test('extractFiles finds every file reference and nothing else', () => {
@@ -71,4 +78,62 @@ test('extractFiles finds every file reference and nothing else', () => {
   );
   assert.deepEqual(extractFiles(''), []);
   assert.deepEqual(extractFiles(undefined), []);
+});
+
+// ------------------------------------------------------------------ sharding
+test('parseShard accepts i/N and rejects everything else', () => {
+  assert.deepEqual(parseShard('2/4'), { index: 2, total: 4 });
+  for (const bad of ['', '0/4', '5/4', '1/0', 'a/b', '1-4', '1/4/2', '-1/4', '1.5/4', undefined]) {
+    assert.throws(() => parseShard(bad), /invalid shard/, `must reject ${JSON.stringify(bad)}`);
+  }
+});
+
+test('resolveShard: flag wins over the variable, neither means unsharded', () => {
+  assert.equal(resolveShard([], {}), null);
+  assert.deepEqual(resolveShard([], { AGENTIC_SECURITY_TEST_SHARD: '3/4' }), { index: 3, total: 4 });
+  assert.deepEqual(resolveShard(['--shard', '1/2'], { AGENTIC_SECURITY_TEST_SHARD: '3/4' }), { index: 1, total: 2 });
+  assert.throws(() => resolveShard(['--shard'], {}), /needs a value/);
+});
+
+for (const total of [1, 2, 3, 4, 5, 8]) {
+  test(`across shards 1..${total} every test file runs exactly once and the extra steps run once`, () => {
+    const files = unionFiles(readPkg());
+    const seen = new Map();
+    let extraRuns = 0;
+    for (let index = 1; index <= total; index++) {
+      const shard = { index, total };
+      for (const f of assignShard(files, shard)) seen.set(f, (seen.get(f) || 0) + 1);
+      extraRuns += extraStepsForShard(shard).length;
+    }
+    assert.deepEqual([...seen.keys()].sort(), [...files].sort(), 'no file may be skipped');
+    for (const [f, n] of seen) assert.equal(n, 1, `${f} ran ${n} times`);
+    assert.equal(extraRuns, EXTRA_STEPS.length, 'the extra steps must run in exactly one shard');
+    assert.equal(extraStepsForShard(null).length, EXTRA_STEPS.length, 'unsharded runs the extras');
+    assert.equal(extraStepsForShard({ index: 1, total }).length, EXTRA_STEPS.length, 'shard 1 owns the extras');
+  });
+}
+
+test('every shard of 4 is non-empty and within one file of balanced', () => {
+  const files = unionFiles(readPkg());
+  const sizes = [1, 2, 3, 4].map((index) => assignShard(files, { index, total: 4 }).length);
+  assert.ok(sizes.every((n) => n > 0));
+  assert.ok(Math.max(...sizes) - Math.min(...sizes) <= 1, `sizes ${sizes}`);
+});
+
+test('--list-shard prints the assignment through the real CLI and runs nothing', () => {
+  const files = unionFiles(readPkg());
+  const script = path.resolve(HERE, '..', '..', 'scripts', 'run-unit-tests.mjs');
+  const printed = [];
+  let stepLines = 0;
+  for (let i = 1; i <= 4; i++) {
+    const r = spawnSync(process.execPath, [script, '--list-shard', `${i}/4`], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    for (const line of r.stdout.split('\n').filter(Boolean)) {
+      if (line.startsWith('step: ')) stepLines++; else printed.push(line);
+    }
+  }
+  assert.deepEqual(printed.sort(), [...files].sort());
+  assert.equal(stepLines, 1, 'the extra step is listed under exactly one shard');
+  const bad = spawnSync(process.execPath, [script, '--list-shard', '9/4'], { encoding: 'utf8' });
+  assert.notEqual(bad.status, 0);
 });

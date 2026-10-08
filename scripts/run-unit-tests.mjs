@@ -54,6 +54,20 @@
 // check to appear in the derived list (see extractFiles below), and directly
 // by requiring node --test itself to report zero failures.
 
+// SHARDING (release gate)
+// -----------------------
+// The hosted release gate runs this file once per shard, in parallel jobs, so
+// the dominant cost of a release is a fraction of the serial run. The shard
+// comes from AGENTIC_SECURITY_TEST_SHARD=i/N or `--shard i/N` (the flag wins).
+// Shard i runs the files at positions i-1, i-1+N, i-1+2N ... of the derived
+// list (`assignShard`): a pure function of the list, so every file lands in
+// exactly one shard and a test proves it. The partition is computed here rather
+// than delegated to node's own --test-shard so `--list-shard i/N` can print the
+// assignment without spawning anything, and so the "every file exactly once"
+// claim is checkable offline. The EXTRA steps (`test:extras`: cpp-dataflow, the
+// fault-injection suites, python) run in shard 1 ONLY, or unsharded. With no
+// shard set this behaves exactly as `npm test` always did.
+
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -121,7 +135,7 @@ export function unionFiles(pkg, scopes = SCOPES) {
 // fifteen minutes that would starve every other test of CPU inside the combined run; the pre-push gate and release check run them too. `nixos-host` is the NixOS package and host suite (NIX-012): it fails
 // without a NixOS host and a nix binary, so it runs on one (`npm run test:nixos-host`): an unavailable tool is a FAILED criterion there, never a skip, so
 // they are run where the tools exist (`npm run test:language-tools`) and are part of the loop verifier and the release gate.
-export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity', 'loop', 'language-stress', 'language-tools', 'language-gates', 'language-slow', 'nixos-host'] } = {}) {
+export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity', 'extras', 'loop', 'language-stress', 'language-tools', 'language-gates', 'language-slow', 'nixos-host'] } = {}) {
   const covered = new Set(unionFiles(pkg, scopes));
   const missing = [];
   for (const [key, value] of Object.entries(pkg.scripts || {})) {
@@ -134,7 +148,42 @@ export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['c
   return missing;
 }
 
-function main() {
+/** `i/N` -> { index: i, total: N }; throws on anything that is not 1 <= i <= N, integers. */
+export function parseShard(spec) {
+  const m = /^(\d+)\/(\d+)$/.exec(String(spec ?? '').trim());
+  if (!m) throw new Error(`invalid shard "${spec}": expected i/N, for example 2/4`);
+  const index = Number(m[1]);
+  const total = Number(m[2]);
+  if (total < 1 || index < 1 || index > total) {
+    throw new Error(`invalid shard "${spec}": need 1 <= i <= N`);
+  }
+  return { index, total };
+}
+
+/** The files shard `index` of `total` runs: positions index-1, index-1+total, ... of `files`. */
+export function assignShard(files, { index, total }) {
+  return files.filter((_, pos) => pos % total === index - 1);
+}
+
+/** The steps that run after the main list. Exactly one shard (the first) owns them. */
+export const EXTRA_STEPS = [{ label: 'test:extras (cpp-dataflow, fault-injection, python)', script: 'test:extras' }];
+
+export function extraStepsForShard(shard) {
+  return !shard || shard.index === 1 ? EXTRA_STEPS : [];
+}
+
+/** Resolve the shard from argv and env. The flag wins over the variable; null when neither is set. */
+export function resolveShard(argv = [], env = process.env) {
+  const i = argv.indexOf('--shard');
+  if (i !== -1) {
+    if (!argv[i + 1]) throw new Error('--shard needs a value such as 2/4');
+    return parseShard(argv[i + 1]);
+  }
+  const fromEnv = env.AGENTIC_SECURITY_TEST_SHARD;
+  return fromEnv ? parseShard(fromEnv) : null;
+}
+
+function main(argv = process.argv.slice(2)) {
   const pkg = readPkg();
 
   const missing = assertAllTestFilesCovered(pkg);
@@ -154,8 +203,33 @@ function main() {
     process.exit(1);
   }
 
-  const r = spawnSync(process.execPath, ['--test', ...files], { cwd: SCANNER, stdio: 'inherit' });
-  process.exit(r.status ?? 1);
+  const li = argv.indexOf('--list-shard');
+  if (li !== -1) {
+    // Print the assignment and run nothing.
+    const shard = parseShard(argv[li + 1]);
+    for (const f of assignShard(files, shard)) process.stdout.write(`${f}\n`);
+    for (const e of extraStepsForShard(shard)) process.stdout.write(`step: ${e.script}\n`);
+    process.exit(0);
+  }
+
+  const shard = resolveShard(argv);
+  const mine = shard ? assignShard(files, shard) : files;
+  if (!mine.length) {
+    process.stderr.write(`run-unit-tests.mjs: shard ${shard.index}/${shard.total} has no files, refusing to report a vacuous pass.\n`);
+    process.exit(1);
+  }
+  if (shard) process.stderr.write(`run-unit-tests.mjs: shard ${shard.index}/${shard.total}: ${mine.length} of ${files.length} test files\n`);
+
+  const r = spawnSync(process.execPath, ['--test', ...mine], { cwd: SCANNER, stdio: 'inherit' });
+  if (r.status !== 0) process.exit(r.status ?? 1);
+
+  for (const step of extraStepsForShard(shard)) {
+    const e = spawnSync('npm', ['run', step.script], { cwd: SCANNER, stdio: 'inherit' });
+    if (e.status !== 0) process.exit(e.status ?? 1);
+  }
+  process.exit(0);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { main(); } catch (e) { process.stderr.write(`run-unit-tests.mjs: ${e.message}\n`); process.exit(1); }
+}
