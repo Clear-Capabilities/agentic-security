@@ -33,6 +33,15 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
   The snapshot lives in the operator configuration directory, never the project (`trusted-inputs.js`).
 - **Auth guards must stop the handler.** In `haskell-web.js` a Scotty `status 40x` only sets the code, so both the named-guard path (`guardSummary`) and the inline path (`handlerFacts`) need a halting call (`finish`, `raise`, `raiseStatus`, `redirect`; `finish` is an IR identifier with no line of its own). WAI, Servant and Yesod inline guards order the credential READ against the first sensitive call, because a tail-position rejection reports the enclosing line (a disclosed gap, pinned in `test/haskell/haskell-web-guards.test.js`). A WAI `responseLBS` rejection counts only when handed back (`respond`/`return`).
 - **Severity is the advisory's own** (`cvss.js`): CVSS v3.x base score, else a named `database_specific.severity`, else `medium` with the basis stated. Never guess from an unparseable or v4 vector.
+- **Option fixes work on the effective configuration, across files.** `nix-fix.js` edits EVERY contributing definition of an option
+  (all winners at the winning priority, plus conditional branches holding the weak literal), never one line: editing one of two
+  equal-priority winners turns a finding into a module-system conflict that a rescan alone reports as "fixed". Verification is
+  the `effective` gate (`makeEffectiveCheck`: resolve the option again over the patched tree). A plan may carry `edits` (several
+  files); `runFixLifecycle` applies them through `writeManyWithBackup` (checks everything and backs up everything before the
+  first write, rolls back on a failed write) and records one history entry per file sharing `languageGroupId`; `undoFix` and
+  `posture/fix-history.js` `undoLast`/`revertEntryById` restore a group as a unit. A winner outside the root or not a single
+  literal is refused with an `override` suggestion (`overrideSuggestion`), never an automatic edit. Any new consumer of a fix
+  plan (LSP, MCP, CLI) must honour `plan.edits`: `apply_fix` writes one file, so a multi-file fix is not offered there.
 - **Pragma** (`pragma.js`): comment-aware, line-scoped, exact rule-id match, logged. A line-less finding cannot be suppressed.
 
 ## Module map

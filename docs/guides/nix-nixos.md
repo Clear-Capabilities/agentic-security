@@ -269,6 +269,46 @@ FULL (full-source-edit): services.openssh.settings.PermitRootLogin = "yes" -> "n
 ```
 <!-- generated:fix-nix-ssh:end -->
 
+### Fixes that span several files
+
+A NixOS option is judged on the effective configuration, so the definition that matters is often not in the file the finding
+points at. A fix therefore works from every definition that contributes to the effective value, not from one line:
+
+- **The winner is in an imported module.** That module is edited; the entry configuration is not touched.
+- **Several files define the option at the winning priority.** They all agree today (a plain `"yes"` in two modules is
+  legal), but the module system rejects a mix of values, so editing one file would turn a finding into a configuration that
+  no longer evaluates. All of them are edited together, or none is.
+- **A stronger definition (`mkForce`, `mkOverride`) lives elsewhere.** That definition is the one edited. Weaker definitions it
+  overrides are left alone and listed in the notes. Asking for a fix on a definition that something else overrides is refused,
+  naming the definition that wins.
+- **A conditional definition (`mkIf`, `if`).** The branch that holds the weak literal is edited, and the fix is accepted only if
+  the patched configuration can no longer produce the weak value under any branch.
+
+Verification is on the effective value, not just on the finding disappearing. After the edit the option is resolved again over
+the patched tree and must be a decided value equal to the intended one (or, for a conditional option, must not include the weak
+value among its possible values). A rescan that merely stops reporting the finding is not enough.
+
+Every touched file is backed up first and nothing is written until all of them have been checked (inside the project root,
+unchanged on disk since planning). If a write fails part way, the files already written are put back and the result says
+whether that rollback was complete. The history gets one entry per file, grouped, and both `agentic-security undo` and the
+backup-level undo restore the whole group as a unit: every backup is read before the first restore, and a failed restore puts
+the earlier ones back.
+
+**What it refuses**, with the reason stated and no file written:
+
+| Situation | Result |
+|---|---|
+| The winning definition is outside the project root (an import of `../shared/ssh.nix`, say) | refused; the override line to add to the entry module is offered as a suggestion, never applied |
+| The winning definition is not a single literal, or is built by a function or a merge | refused, same suggestion |
+| The definition you chose is overridden by a stronger one | refused, names the definition that wins |
+| A file changed on disk since the fix was planned | refused before any write |
+| The patched configuration would not have the intended effective value (a conflict, a branch that still produces the weak value) | blocked, nothing applied |
+| Any target that would leave the project root | blocked by the path gate |
+
+The suggested override line uses the weakest wrapper that actually wins: a plain assignment when every existing definition is
+weaker than plain, `lib.mkForce` when a plain definition is the strongest, and `lib.mkOverride <n>` just below anything
+stronger than that. It is a suggestion for a human to review, and `lib` must be among the module arguments.
+
 A finding that needs a human decision is reported as guidance and exits non-zero, rather than being patched:
 
 <!-- generated:fix-nix-secret:start -->

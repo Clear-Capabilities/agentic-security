@@ -98,6 +98,8 @@ export async function languageFixPreview(finding, files, { apply = false, root =
     status: res.status, applied: res.applied === true, backup: res.backup || null,
     label: plan.label || null, tier: res.tier || plan.tier || null,
     file: plan.file, before: plan.before, after: plan.after,
+    // A fix that spans several files lists every one of them; `file`/`before`/`after` stay the first for single-file callers.
+    edits: Array.isArray(plan.edits) && plan.edits.length > 1 ? plan.edits.map((e) => ({ file: e.file, before: e.before, after: e.after })) : null,
     diff: res.preview || hsDiff(plan.file, plan.before, plan.after),
     gates: res.gates || null, reason: (res.status === 'verified' || res.status === 'applied') ? null : (res.reason || null),
     explanation: plan.explanation || null, consequences: res.consequences || plan.consequences || [],

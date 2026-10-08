@@ -1079,7 +1079,9 @@ export const synthesize_fix = {
             const proj = lc.loadLanguageProject(ctx.sessionRoot);
             const prev = await lc.languageFixPreview(f, proj.files);
             languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
-            if (prev.ok) autofix = { deterministic: true, ruleId: f.rule || f.family || null, patch: prev.after, file: prev.file, label: prev.label || null, verified: true };
+            // apply_fix writes ONE file; a fix that spans several files must go through the CLI lifecycle (atomic, grouped undo).
+            if (prev.ok && prev.edits) languageFix.multiFile = prev.edits.map((e) => e.file);
+            else if (prev.ok) autofix = { deterministic: true, ruleId: f.rule || f.family || null, patch: prev.after, file: prev.file, label: prev.label || null, verified: true };
           }
         } catch { /* best-effort: the preview is advisory */ }
       }

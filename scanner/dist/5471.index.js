@@ -1,3 +1,27 @@
+export const id = 5471;
+export const ids = [5471];
+export const modules = {
+
+/***/ 65471:
+/***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   startLspServer: () => (/* binding */ startLspServer)
+/* harmony export */ });
+/* unused harmony export _internals */
+/* harmony import */ var _language_discovery_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(37447);
+/* harmony import */ var _language_context_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(46793);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(76760);
+/* harmony import */ var node_readline__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(80481);
+/* harmony import */ var _runScan_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(5950);
+/* harmony import */ var _posture_custom_rules_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(21493);
+/* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(92582);
+/* harmony import */ var _mcp_redact_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(59884);
+/* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(5261);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_runScan_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_8__]);
+([_runScan_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_8__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
 // Minimal LSP server for agentic-security.
 //
 // Speaks the Language Server Protocol over stdio. On every textDocument/
@@ -13,16 +37,16 @@
 // Wire-format: vscode-jsonrpc framing (Content-Length headers). Stateless
 // per file — no incremental analysis yet.
 
-import { isLanguageManifest } from '../language/discovery.js';
-import { withLanguageContext, loadLanguageProject, languageOfFinding, languageFixPreview, minimalEdit } from '../language/context.js';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as readline from 'node:readline';
-import { runScan } from '../runScan.js';
-import { resetCustomRulesBudget } from '../posture/custom-rules.js';
-import { withStateWritesDisabled } from '../posture/state-dir.js';
-import { redactFinding } from '../mcp/redact.js';
-import { _remediationOf } from '../report/index.js';
+
+
+
+
+
+
+
+
+
+
 
 const PROTOCOL_VERSION = '3.17';
 const SERVER_NAME = 'agentic-security-lsp';
@@ -42,7 +66,7 @@ function uriToPath(uri) {
 function pathToUri(p) {
   if (!p) return null;
   if (p.startsWith('file://')) return p;
-  return 'file://' + encodeURI(path.resolve(p));
+  return 'file://' + encodeURI(node_path__WEBPACK_IMPORTED_MODULE_3__.resolve(p));
 }
 
 function sevToLsp(sev) {
@@ -78,14 +102,14 @@ function findingToDiagnostic(f) {
   // set `remediation`, while ~127 of engine.js's own detectors set a `fix`
   // STRING field instead. _remediationOf carries the same precedence
   // report/index.js already established for this exact split (CMP-3).
-  const remediation = _remediationOf(f);
+  const remediation = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_8__/* ._remediationOf */ .uV)(f);
   return {
     range: _rangeOf(f),
     severity: sevToLsp(f.severity),
     source: 'agentic-security',
     code: f.cwe || f.family || 'finding',
     // carried back by the client in codeAction requests, so a fix is offered for exactly this finding
-    data: { id: f.id || null, stableId: f.stableId || null, rule: f.rule || null, family: f.family || null, language: f.language || languageOfFinding(f) || null },
+    data: { id: f.id || null, stableId: f.stableId || null, rule: f.rule || null, family: f.family || null, language: f.language || (0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.languageOfFinding)(f) || null },
     message: `${f.vuln || 'Security finding'}${remediation ? '\n\n' + remediation : ''}`.slice(0, 2000),
     tags: [],
   };
@@ -120,7 +144,7 @@ const DEP_BASE_NAMES = new Set([
 const DEP_EXT_RE = /\.(?:proto|graphql|gql|tf|cabal)$/i;
 // Haskell and Nix project manifests and lock files (cabal.project*, stack.yaml*, package.yaml, flake.lock, ...) are
 // recognised by the shared language discovery module, never by a second list here.
-const _isLanguageDep = (base) => isLanguageManifest(base);
+const _isLanguageDep = (base) => (0,_language_discovery_js__WEBPACK_IMPORTED_MODULE_0__/* .isLanguageManifest */ .mD)(base);
 const DEP_NAME_RE = /(?:openapi|swagger)\.(?:ya?ml|json)$/i;
 
 let _depCache = { rootDir: null, depFileContents: {} };
@@ -131,18 +155,18 @@ function _loadDepFileContents(rootDir) {
   const skipDirs = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'target', 'vendor', '.bench-cache']);
   function walk(dir) {
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try { entries = node_fs__WEBPACK_IMPORTED_MODULE_2__.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       if (skipDirs.has(e.name)) continue;
-      const full = path.join(dir, e.name);
+      const full = node_path__WEBPACK_IMPORTED_MODULE_3__.join(dir, e.name);
       if (e.isDirectory()) { walk(full); continue; }
       if (!e.isFile()) continue;
       const base = e.name;
       if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base) || _isLanguageDep(base)) {
         let stat;
-        try { stat = fs.statSync(full); } catch { continue; }
+        try { stat = node_fs__WEBPACK_IMPORTED_MODULE_2__.statSync(full); } catch { continue; }
         if (stat.size > 500_000) continue;
-        try { out[path.relative(rootDir, full)] = fs.readFileSync(full, 'utf8'); }
+        try { out[node_path__WEBPACK_IMPORTED_MODULE_3__.relative(rootDir, full)] = node_fs__WEBPACK_IMPORTED_MODULE_2__.readFileSync(full, 'utf8'); }
         catch { /* skip unreadable */ }
       }
     }
@@ -154,25 +178,25 @@ function _loadDepFileContents(rootDir) {
 
 async function scanFile(uri) {
   const filePath = uriToPath(uri);
-  if (!filePath || !fs.existsSync(filePath)) return;
+  if (!filePath || !node_fs__WEBPACK_IMPORTED_MODULE_2__.existsSync(filePath)) return;
   // Incremental scan (premortem 2R4.5 / 2R-10): hand runScan a single-file
   // fileContents map for the saved code, AND a cached set of dep-manifest /
   // schema files so SCA + cross-language passes have their inputs. Without
   // depFileContents, the LSP path would silently drop CVE / OpenAPI / proto
   // findings on the saved file.
   try {
-    const rel = path.relative(_rootDir, filePath);
-    const content = fs.readFileSync(filePath, 'utf8');
+    const rel = node_path__WEBPACK_IMPORTED_MODULE_3__.relative(_rootDir, filePath);
+    const content = node_fs__WEBPACK_IMPORTED_MODULE_2__.readFileSync(filePath, 'utf8');
     let fileContents = { [rel]: content };
     let depFileContents = _loadDepFileContents(_rootDir);
     // Haskell/Nix: scan the saved file together with the modules it imports and the ones that import it (bounded).
-    const lc = withLanguageContext(_rootDir, fileContents, depFileContents);
+    const lc = (0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.withLanguageContext)(_rootDir, fileContents, depFileContents);
     fileContents = lc.fileContents; depFileContents = lc.depFileContents;
     // Premortem 4R-12 + 4R-15: reset the per-process custom-rules budget at
     // the start of each LSP scan. Each save is a logical scan session; without
     // the reset, a long-lived LSP server would accumulate budget across saves
     // and eventually start skipping custom rules.
-    resetCustomRulesBudget(_rootDir);
+    (0,_posture_custom_rules_js__WEBPACK_IMPORTED_MODULE_6__/* .resetCustomRulesBudget */ .zO)(_rootDir);
     // PRD R1 (docs/DETECTION_GAP_REMEDIATION_PRD.md): deep mode is
     // default-on for the interactive CLI scan but was never requested here,
     // so every on-save diagnostic pass was regex/AST-only — blind to any bug
@@ -204,8 +228,8 @@ async function scanFile(uri) {
     // would make stays suppressed, but the provenance disk cache stays live so
     // repeated saves of the same file are not each paying the full uncached
     // resolution cost.
-    const { scan } = await withStateWritesDisabled(() =>
-      runScan(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true }),
+    const { scan } = await (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_7__/* .withStateWritesDisabled */ .Ao)(() =>
+      (0,_runScan_js__WEBPACK_IMPORTED_MODULE_5__.runScan)(_rootDir, { fileContents, depFileContents, deep: true, deepInCi: true }),
       { exceptCategories: ['provenance-cache'] });
     // Stage 6 correctness audit: this only ever read scan.findings (the SAST
     // channel). scan.secrets and scan.logicVulns are separate arrays on the
@@ -220,7 +244,7 @@ async function scanFile(uri) {
     // doesn't open the other.
     const findings = [...(scan.findings || []), ...(scan.secrets || []), ...(scan.logicVulns || [])]
       .filter(f => f.file === rel)
-      .map(f => redactFinding(f));
+      .map(f => (0,_mcp_redact_js__WEBPACK_IMPORTED_MODULE_9__/* .redactFinding */ .lE)(f));
     await publishDiagnostics(uri, findings);
   } catch (e) {
     process.stderr.write(`agentic-security-lsp: scan failed: ${e.message}\n`);
@@ -263,15 +287,15 @@ async function codeActionsFor(params) {
   const actions = [];
   for (const d of diags) {
     const f = stored.find((x) => x && x.id === d.data.id);
-    if (!f || !languageOfFinding(f)) continue;
-    if (!files) files = loadLanguageProject(_rootDir).files;
+    if (!f || !(0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.languageOfFinding)(f)) continue;
+    if (!files) files = (0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.loadLanguageProject)(_rootDir).files;
     let prev;
-    try { prev = await languageFixPreview(f, files); } catch (e) { prev = { ok: false, reason: String((e && e.message) || e) }; }
+    try { prev = await (0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.languageFixPreview)(f, files); } catch (e) { prev = { ok: false, reason: String((e && e.message) || e) }; }
     if (prev && prev.ok && prev.file) {
       // A fix that spans several files (the winning definitions of one option) is ONE workspace edit over all of them: offering
       // only the first file would leave the configuration in a state the verification never saw.
       const changes = {};
-      for (const e of (prev.edits || [{ file: prev.file, before: prev.before, after: prev.after }])) changes[pathToUri(path.join(_rootDir, e.file))] = [minimalEdit(e.before, e.after)];
+      for (const e of (prev.edits || [{ file: prev.file, before: prev.before, after: prev.after }])) changes[pathToUri(node_path__WEBPACK_IMPORTED_MODULE_3__.join(_rootDir, e.file))] = [(0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.minimalEdit)(e.before, e.after)];
       actions.push({
         title: `Fix${prev.label ? ` (${prev.label})` : ''}: ${f.vuln || f.rule || 'finding'}`,
         kind: 'quickfix', diagnostics: [d], isPreferred: false,
@@ -316,20 +340,20 @@ async function handleMessage(msg) {
       // would otherwise re-scan thousands of files per save.
       const savedPath = uriToPath(uri);
       if (savedPath && _depCache.rootDir === _rootDir) {
-        const base = path.basename(savedPath);
+        const base = node_path__WEBPACK_IMPORTED_MODULE_3__.basename(savedPath);
         if (DEP_BASE_NAMES.has(base) || DEP_EXT_RE.test(base) || DEP_NAME_RE.test(base) || _isLanguageDep(base)) {
           try {
-            const rel = path.relative(_rootDir, savedPath);
-            const st = fs.statSync(savedPath);
+            const rel = node_path__WEBPACK_IMPORTED_MODULE_3__.relative(_rootDir, savedPath);
+            const st = node_fs__WEBPACK_IMPORTED_MODULE_2__.statSync(savedPath);
             if (st.size <= 500_000) {
-              _depCache.depFileContents[rel] = fs.readFileSync(savedPath, 'utf8');
+              _depCache.depFileContents[rel] = node_fs__WEBPACK_IMPORTED_MODULE_2__.readFileSync(savedPath, 'utf8');
             } else {
               delete _depCache.depFileContents[rel];
             }
           } catch {
             // File vanished between save event and stat — drop from cache.
             try {
-              const rel = path.relative(_rootDir, savedPath);
+              const rel = node_path__WEBPACK_IMPORTED_MODULE_3__.relative(_rootDir, savedPath);
               delete _depCache.depFileContents[rel];
             } catch {}
           }
@@ -351,7 +375,7 @@ async function handleMessage(msg) {
   return null;
 }
 
-export function startLspServer() {
+function startLspServer() {
   let buffer = Buffer.alloc(0);
   let expected = -1;
   process.stdin.on('data', async (chunk) => {
@@ -414,4 +438,11 @@ if (import.meta.main ?? (import.meta.url === `file://${process.argv[1]}`)) {
 
 function _setRootDir(dir) { _rootDir = dir; _depCache = { rootDir: null, depFileContents: {} }; }
 
-export const _internals = { findingToDiagnostic, scanFile, uriToPath, pathToUri, _diagnosticsByUri, _setRootDir };
+const _internals = { findingToDiagnostic, scanFile, uriToPath, pathToUri, _diagnosticsByUri, _setRootDir };
+
+__webpack_async_result__();
+} catch(e) { __webpack_async_result__(e); } });
+
+/***/ })
+
+};
