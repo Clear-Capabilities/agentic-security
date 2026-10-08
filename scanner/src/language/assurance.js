@@ -19,6 +19,7 @@
 
 import { runLanguageAnalysis, reconcileLanguageLedger, languageHealth } from './contracts.js';
 import { createHaskellAdapter } from './haskell-adapter.js';
+import { deriveCppContext } from './haskell-cpp.js';
 import { createNixAdapter } from './nix-adapter.js';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { packageOfModule } from './haskell-models.js';
@@ -71,14 +72,21 @@ export async function assessLanguageAssurance(input = {}) {
   // 1. parse adapters over every language source
   // Boundaries that do not make a file unresolved but that a reader must be told about: CPP (every branch was parsed, the
   // chosen one is not known) and FFI (the foreign code is not analysed).
+  const DISCLOSED_KINDS = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert']);
   const disclosed = new Map();   // boundary kind -> {count, files:Set}
   const projectModules = new Set(); const importedModules = new Map();   // module -> files
   const onParse = (file, parse) => {
     if (parse && parse.module && parse.module.name) projectModules.add(parse.module.name);
     for (const i of (parse && parse.imports) || []) if (i && i.module) { const e = importedModules.get(i.module) || new Set(); e.add(file); importedModules.set(i.module, e); }
-    for (const b of (parse && parse.boundaries) || []) if (b.kind === 'cpp' || b.kind === 'ffi') { const e = disclosed.get(b.kind) || { count: 0, files: new Set() }; e.count += b.count || 1; e.files.add(file); disclosed.set(b.kind, e); }
+    for (const b of (parse && parse.boundaries) || []) {
+      if (!DISCLOSED_KINDS.has(b.kind)) continue;
+      const e = disclosed.get(b.kind) || { count: 0, files: new Set(), decided: 0, undecided: 0, assumptions: new Set() };
+      e.count += b.count || 1; e.files.add(file);
+      if (b.kind === 'cpp') { e.decided += b.decided || 0; e.undecided += b.undecided || 0; for (const a of b.assumptions || []) e.assumptions.add(a); }
+      disclosed.set(b.kind, e);
+    }
   };
-  const adapters = input.adapters || [createHaskellAdapter({ onParse }), createNixAdapter()];
+  const adapters = input.adapters || [createHaskellAdapter({ onParse, cpp: deriveCppContext(files) }), createNixAdapter()];
   const run = await runLanguageAnalysis({ files, adapters, timeoutMs: input.timeoutMs || 0 });
   const reconcile = reconcileLanguageLedger(run.ledger, files);
   const base = languageHealth({ ledger: run.ledger, outcomes: run.outcomes });
@@ -97,8 +105,17 @@ export async function assessLanguageAssurance(input = {}) {
     for (const o of opaque) { const k = String(o.detail).replace(/^opaque-boundary:\s*/, ''); kinds[k] = (kinds[k] || 0) + 1; }
     for (const [k, n] of Object.entries(kinds).sort()) limitations.push({ kind: 'opaque-boundary', boundary: k, count: n, note: 'a documented limit of static analysis: this code is not analysed, and is not reported clean' });
   }
-  const DISCLOSED_NOTE = { cpp: 'preprocessor conditionals: every branch was parsed, but which branch is compiled is not known', ffi: 'foreign declarations: the foreign code is not analysed and its effects are not modelled' };
-  for (const [k, e] of [...disclosed.entries()].sort()) limitations.push({ kind: 'opaque-boundary', boundary: k, count: e.count, files: [...e.files].sort().slice(0, 20), note: `a documented limit of static analysis (${DISCLOSED_NOTE[k]})` });
+  const DISCLOSED_NOTE = {
+    cpp: 'preprocessor conditionals: a conditional the file or the project decides keeps only its live branch, every other one keeps all of its branches, and which branch is compiled is then not known',
+    ffi: 'foreign declarations: the foreign code is not analysed and its effects are not modelled',
+    'th-safe-splice': 'declaration-level Template Haskell splices of a known generator applied to names and literals only: assumed to be the upstream generator, nothing is run and the generated declarations are not modelled',
+    'quasiquote-inert': 'quasi-quotes of a known raw-string or non-interpolating quoter: read as a string literal on the assumption that the quoter is the upstream one',
+  };
+  for (const [k, e] of [...disclosed.entries()].sort()) {
+    const extra = k === 'cpp' ? { decidedConditionals: e.decided, undecidedConditionals: e.undecided, ...(e.assumptions.size ? { assumptions: [...e.assumptions].sort() } : {}) } : {};
+    const assumed = k === 'cpp' && e.assumptions.size ? `; some conditionals were decided on a stated project assumption (${[...e.assumptions].sort().join(', ')}), so a branch dead under it was not analysed` : '';
+    limitations.push({ kind: 'opaque-boundary', boundary: k, count: e.count, files: [...e.files].sort().slice(0, 20), ...extra, note: `a documented limit of static analysis (${DISCLOSED_NOTE[k]}${assumed})` });
+  }
   // Imported modules this scan has no model for: their functions are ordinary, opaque calls (never a source, sink or
   // sanitizer), so a taint flow through them is widened and disclosed on the finding. Listed so a reader knows how much of the
   // import surface the models cover. A limitation, not a condition: most real projects import unmodelled modules.

@@ -25,6 +25,8 @@
 // named and no partial analysis, and never throws into the caller.
 
 import { loadHaskellGrammar } from './haskell-grammar.js';
+import { evaluateCppLines } from './haskell-cpp.js';
+import { classifySafeSplice, classifyInertQuasiQuote } from './haskell-boundaries.js';
 
 export const DEFAULT_PARSE_BUDGETS = Object.freeze({
   maxBytes: 4 * 1024 * 1024,
@@ -35,6 +37,10 @@ export const DEFAULT_PARSE_BUDGETS = Object.freeze({
   deadlineMs: 8000,
   maxErrors: 200,
 });
+
+// Boundaries that are disclosed but do not make a file incomplete: the content was either parsed (cpp, ffi) or matched
+// by a closed, sound pattern and stated as an assumption (see haskell-boundaries.js).
+export const NON_OPAQUE_BOUNDARIES = new Set(['cpp', 'ffi', 'th-safe-splice', 'quasiquote-inert']);
 
 class BudgetError extends Error {
   constructor(budget, limit) {
@@ -157,48 +163,55 @@ function unwrapLiterate(source) {
   return { code: out, style: latex ? 'latex' : 'bird' };
 }
 
-function stripDirectives(code, dialect, grammar, loc) {
+function stripDirectives(code, dialect, grammar, loc, cppCtx) {
   const cppNames = new Set(grammar.cppDirectives);
   const lines = code.split('\n');
   const directives = [];
-  const depthAtLine = new Int32Array(lines.length + 2);
-  let depth = 0;
-  let off = 0;
+  // Physical line offsets into the ORIGINAL text, so directive spans stay exact.
+  const starts = new Array(lines.length);
+  { let o = 0; for (let i = 0; i < lines.length; i++) { starts[i] = o; o += lines[i].length + 1; } }
+  // Group directive lines (a trailing backslash continues the directive onto the next physical line).
+  const groups = new Map();
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
     const m = /^#\s*([A-Za-z]+)/.exec(line);
     const shebang = i === 0 && line.startsWith('#!');
     const hscLine = dialect === 'hsc' && /^#/.test(line);
-    if (shebang || hscLine || (m && cppNames.has(m[1]))) {
-      const name = shebang ? 'shebang' : (m ? m[1] : 'hsc');
-      directives.push({ name, line: i + 1, span: loc.span(off, off + line.length) });
-      if (name === 'if' || name === 'ifdef' || name === 'ifndef') depth++;
-      else if (name === 'endif' && depth > 0) depth--;
-      depthAtLine[i + 1] = depth;
-      let cur = blank(line);
-      // A directive continued with a trailing backslash swallows the next line too.
-      let k = i;
-      while (/\\\r?$/.test(lines[k]) && k + 1 < lines.length) {
-        k++;
-        cur += '\n' + blank(lines[k]);
-        depthAtLine[k + 1] = depth;
-      }
-      if (k > i) {
-        off += lines[i].length + 1;
-        for (let q = i + 1; q <= k; q++) off += lines[q].length + 1;
-        lines.splice(i, k - i + 1, ...cur.split('\n'));
-        i = k;
-        continue;
-      }
-      lines[i] = cur;
-      line = cur;
-    } else {
-      depthAtLine[i + 1] = depth;
-      if (dialect === 'hsc') lines[i] = line.replace(/#\{[^}\n]*\}/g, (s) => ' '.repeat(s.length));
-    }
-    off += line.length + 1;
+    if (!(shebang || hscLine || (m && cppNames.has(m[1])))) continue;
+    const name = shebang ? 'shebang' : (m ? m[1] : 'hsc');
+    let k = i;
+    let text = line;
+    while (/\\\r?$/.test(lines[k]) && k + 1 < lines.length) { k++; text += ' ' + lines[k].replace(/\r$/, ''); }
+    groups.set(i, { name, text: text.replace(/\\\r?(?= )/g, ' '), last: k });
+    directives.push({ name, line: i + 1, span: loc.span(starts[i], starts[i] + line.length) });
+    i = k;
   }
-  return { code: lines.join('\n'), directives, depthAtLine };
+  let evalOut = null;
+  let depthAtLine = new Int32Array(lines.length + 2);
+  let outLines = lines;
+  if (dialect !== 'hsc' && groups.size) {
+    evalOut = evaluateCppLines(lines, (i) => { const g = groups.get(i); return g && g.name !== 'shebang' ? g : null; }, cppCtx || {});
+    outLines = evalOut.lines.slice();
+    depthAtLine = evalOut.maybeDepth;
+  } else {
+    outLines = lines.slice();
+    let depth = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const g = groups.get(i);
+      if (g) {
+        if (g.name === 'if' || g.name === 'ifdef' || g.name === 'ifndef') depth++;
+        else if (g.name === 'endif' && depth > 0) depth--;
+        for (let q = i; q <= g.last; q++) depthAtLine[q + 1] = depth;
+        i = g.last;
+      } else {
+        depthAtLine[i + 1] = depth;
+        if (dialect === 'hsc') outLines[i] = lines[i].replace(/#\{[^}\n]*\}/g, (x) => ' '.repeat(x.length));
+      }
+    }
+  }
+  for (const [i, g] of groups) for (let q = i; q <= g.last; q++) outLines[q] = blank(lines[q]);
+  const cpp = evalOut ? { decided: evalOut.decided, undecided: evalOut.undecided, deadLines: evalOut.deadLines } : { decided: [], undecided: [], deadLines: 0 };
+  return { code: outLines.join('\n'), directives, depthAtLine, cpp };
 }
 
 // ── lexer ──────────────────────────────────────────────────────────────────
@@ -436,7 +449,7 @@ function emptyResult(file, dialect) {
   return {
     language: 'haskell', file, dialect, ok: false, status: 'failed', complete: false,
     module: null, imports: [], functions: [], signatures: [], declarations: [], calls: [], expressions: [],
-    records: [], doBlocks: [], comments: [], pragmas: [], errors: [], boundaries: [], uncertainty: [], gaps: [],
+    records: [], doBlocks: [], comments: [], pragmas: [], errors: [], boundaries: [], blankRanges: [], uncertainty: [], gaps: [],
     stats: { bytes: 0, tokens: 0, steps: 0 },
   };
 }
@@ -462,7 +475,7 @@ export function parseHaskell(source, opts = {}) {
   }
   const started = Date.now();
   const ctx = {
-    grammar: g.grammar, budgets, steps: 0,
+    grammar: g.grammar, budgets, steps: 0, cpp: opts.cpp || null,
     tick() {
       this.steps++;
       if (this.steps > budgets.maxSteps) throw new BudgetError('maxSteps', budgets.maxSteps);
@@ -475,7 +488,7 @@ export function parseHaskell(source, opts = {}) {
     res.stats.steps = ctx.steps;
     res.status = res.errors.length ? 'parsed_with_errors' : 'parsed';
     res.ok = true;
-    res.complete = res.errors.length === 0 && !res.boundaries.some((b) => b.kind !== 'cpp' && b.kind !== 'ffi');
+    res.complete = res.errors.length === 0 && !res.boundaries.some((b) => !NON_OPAQUE_BOUNDARIES.has(b.kind));
   } catch (e) {
     const fresh = emptyResult(file, dialect);
     fresh.stats = { ...res.stats, steps: ctx.steps };
@@ -503,11 +516,18 @@ function analyze(source, file, dialect, ctx, res) {
     code = lit.code;
     res.dialect = lit.style === 'latex' ? 'literate-latex' : 'literate-bird';
   }
-  const pre = stripDirectives(code, dialect, g, loc);
+  const pre = stripDirectives(code, dialect, g, loc, ctx.cpp);
   code = pre.code;
   const cppLines = pre.directives.filter((d) => d.name !== 'shebang');
+  // The preprocessed text (directives and dead branches overwritten in place) for the semantic IR; not serialised with the result.
+  Object.defineProperty(res, '_preprocessed', { value: code, enumerable: false, configurable: true });
   if (cppLines.length && dialect !== 'hsc') {
-    res.boundaries.push({ kind: 'cpp', span: cppLines[0].span, detail: `${cppLines.length} preprocessor line(s) removed in place; every conditional branch was parsed`, count: cppLines.length });
+    const cd = pre.cpp;
+    const parts = [`${cppLines.length} preprocessor line(s) removed in place`];
+    if (cd.decided.length) parts.push(`${cd.decided.length} conditional(s) decided (${cd.deadLines} dead line(s) overwritten with spaces)`);
+    parts.push(cd.undecided.length ? `${cd.undecided.length} conditional(s) could not be decided, so every possible branch was parsed` : 'no conditional was left undecided');
+    const assumptions = [...new Set(cd.decided.flatMap((d) => (d.basis || []).filter((b) => b !== 'file')))].sort();
+    res.boundaries.push({ kind: 'cpp', span: cppLines[0].span, detail: parts.join('; '), count: cppLines.length, decided: cd.decided.length, undecided: cd.undecided.length, deadLines: cd.deadLines, assumptions, decisions: cd.decided, undecidedAt: cd.undecided.map((u) => u.line) });
   }
   if (dialect === 'hsc') {
     res.boundaries.push({ kind: 'hsc', span: loc.span(0, Math.min(source.length, 1)), detail: 'hsc2hs source: # directives and #{...} blanked in place, never run through hsc2hs' });
@@ -652,6 +672,7 @@ function analyze(source, file, dialect, ctx, res) {
   const spanOf = (a, b) => loc.span(T[a].s, T[Math.max(a, b - 1)].e);
   const condAt = (t) => pre.depthAtLine[t.line] > 0;
   const topRanges = [];
+  const spliceItems = [];
 
   const registerFunction = (key, rec) => {
     let f = fnIndex.get(key);
@@ -865,7 +886,9 @@ function analyze(source, file, dialect, ctx, res) {
     }
     if (mark < 0) {
       if (c.scope === 'top' && ctx.th) {
-        res.boundaries.push({ kind: 'th-top-level-splice', span: spanOf(a, b), detail: 'top-level Template Haskell splice; declarations it generates are not visible' });
+        const bnd = { kind: 'th-top-level-splice', span: spanOf(a, b), detail: 'top-level Template Haskell splice; declarations it generates are not visible' };
+        res.boundaries.push(bnd);
+        spliceItems.push({ a, b, bnd });
         return;
       }
       errors.push({ kind: 'expected-declaration', offset: T[a].s, endOffset: T[b - 1].e, detail: 'item is neither a binding nor a signature' });
@@ -1022,6 +1045,41 @@ function analyze(source, file, dialect, ctx, res) {
     else scanItem(w.role, w.a, w.b, w);
   }
 
+  function absorbSafeBoundaries() {
+    if (!spliceItems.length && !res.boundaries.some((x) => x.kind === 'quasiquote')) return;
+    const defined = new Set();
+    for (const f of res.functions) if (f.name) defined.add(f.name);
+    for (const d of res.declarations) if (d.name) defined.add(d.name);
+    for (const sg of res.signatures) for (const n of sg.names) defined.add(n);
+    const absorbed = [];
+    for (const it of spliceItems) {
+      const r = classifySafeSplice(T, it.a, it.b, match, res.imports, defined);
+      if (!r) continue;
+      const from = T[it.a].s; const to = T[it.b - 1].e;
+      absorbed.push({ from, to });
+      Object.assign(it.bnd, {
+        kind: 'th-safe-splice',
+        detail: `declaration-level splice of ${[...new Set(r.generators)].join(', ')}: names and literals only, no project-controlled string reaches it; ASSUMED to be the upstream generator from ${r.modules.join(' / ')}, and the declarations it generates are not modelled`,
+        generators: [...new Set(r.generators)], assumption: 'upstream-generator',
+      });
+      res.blankRanges.push({ kind: 'th-safe-splice', startOffset: from, endOffset: to });
+    }
+    const inside = (b) => absorbed.some((x) => b.span.startOffset >= x.from && b.span.endOffset <= x.to);
+    res.boundaries = res.boundaries.filter((b) => !((b.kind === 'th-name-quote' || b.kind === 'th-splice' || b.kind === 'quasiquote') && inside(b)));
+    for (const b of res.boundaries) {
+      if (b.kind !== 'quasiquote') continue;
+      const body = source.slice(b.span.startOffset, b.span.endOffset);
+      const bar = body.indexOf('|');
+      const inner = bar < 0 ? '' : body.slice(bar + 1, body.endsWith('|]') ? -2 : undefined);
+      const r = classifyInertQuasiQuote(b.quoter, inner, res.imports, defined);
+      if (!r) continue;
+      b.kind = 'quasiquote-inert';
+      b.detail = `quasi-quote [${r.quoter}|...|] is a string literal (no interpolation); ASSUMED to be the upstream quoter from ${r.modules.join(' / ')}`;
+      b.assumption = 'upstream-quoter';
+      res.blankRanges.push({ kind: 'quasiquote-inert', startOffset: b.span.startOffset, endOffset: b.span.endOffset });
+    }
+  }
+
   // ── errors → withheld calls ──
   const bad = [];
   for (const e of errors) {
@@ -1063,6 +1121,9 @@ function analyze(source, file, dialect, ctx, res) {
   }
   if (total > outErrors.length) res.errors.push({ kind: 'errors-truncated', detail: `${total - outErrors.length} further syntax error(s) not listed` });
 
+  // ── safe generative splices and inert quasi-quotes (disclosed assumptions, not opaque boundaries) ──
+  absorbSafeBoundaries();
+
   // ── uncertainty ──
   if (res.boundaries.some((x) => x.kind === 'cpp' || x.kind === 'hsc')) res.uncertainty.push({ kind: 'preprocessed' });
   if (res.boundaries.some((x) => x.kind === 'generated' || x.kind.startsWith('th-') || x.kind === 'quasiquote')) res.uncertainty.push({ kind: 'generated-source' });
@@ -1070,4 +1131,27 @@ function analyze(source, file, dialect, ctx, res) {
   res.functions.sort((x, y) => x.span.startOffset - y.span.startOffset);
   res.calls.sort((x, y) => x.span.startOffset - y.span.startOffset);
   void cut;
+}
+
+const IR_PREPROCESS_GUARD = /^[ \t]*#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b|\bTemplateHaskell\b|\bQuasiQuotes\b/m;
+
+/**
+ * Source for the semantic IR's own parser, which knows neither CPP nor Template Haskell. Length-preserving: CPP directives and
+ * dead branches become spaces; a safe declaration splice becomes spaces; an inert quasi-quote becomes a string literal of the
+ * same length. Anything else (an undecided conditional's branches, an opaque splice or quasi-quote) is left exactly as written.
+ * Returns the input unchanged when it has nothing to preprocess or cannot be parsed.
+ */
+export function preprocessForSyntax(source, opts = {}) {
+  if (typeof source !== 'string' || !IR_PREPROCESS_GUARD.test(source)) return source;
+  let r;
+  try { r = parseHaskell(source, { file: opts.file, cpp: opts.cpp }); } catch { return source; }
+  if (!r || !r.ok || typeof r._preprocessed !== 'string' || r._preprocessed.length !== source.length) return source;
+  let out = r._preprocessed;
+  for (const b of r.blankRanges || []) {
+    const seg = out.slice(b.startOffset, b.endOffset);
+    let repl = blank(seg);
+    if (b.kind === 'quasiquote-inert' && repl.length >= 2) repl = `"${repl.slice(1, -1)}"`;
+    out = out.slice(0, b.startOffset) + repl + out.slice(b.endOffset);
+  }
+  return out;
 }

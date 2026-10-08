@@ -25,6 +25,8 @@
 
 import { createHash } from 'node:crypto';
 import { parseSyntax, groupDecls, patternVars } from './haskell-syntax.js';
+import { preprocessForSyntax } from './haskell-parser.js';
+import { deriveCppContext } from './haskell-cpp.js';
 import { isKnownApi, isSourceApi, qualifyAmbiguous } from './haskell-models.js';
 
 export const HS_IR_LIMITS = Object.freeze({
@@ -98,8 +100,8 @@ function callerControlledParams(fn, sig, exported) {
 }
 
 // ── module table ─────────────────────────────────────────────────────────────
-function buildModuleInfo(file, src) {
-  const parse = parseSyntax(src);
+function buildModuleInfo(file, src, cpp) {
+  const parse = parseSyntax(preprocessForSyntax(src, { file, cpp }));
   const groups = groupDecls(parse.decls);
   const name = parse.module && parse.module.name ? parse.module.name : 'Main';
   const mod = {
@@ -1174,9 +1176,10 @@ export function buildHaskellIR(fileContents) {
 function buildHaskellIRUncached(fileContents) {
   const proj = new Project();
   const files = Object.keys(fileContents || {}).filter((f) => /\.hs$/i.test(f)).sort();
+  const cppCtx = deriveCppContext(fileContents || {});
   for (const file of files) {
     try {
-      const mod = buildModuleInfo(file, fileContents[file]);
+      const mod = buildModuleInfo(file, fileContents[file], cppCtx);
       proj.modules.set(mod.name === 'Main' && proj.modules.has('Main') ? `Main@${file}` : mod.name, mod);
       for (const e of mod.parse.errors) proj.diagnostics.push({ file, line: e.line, kind: e.kind, detail: e.detail });
     } catch (err) {

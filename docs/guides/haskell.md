@@ -317,9 +317,57 @@ Scan-health conditions:
 Disclosed limits: `license-data-unavailable`, `opaque-boundary:cpp`, `opaque-boundary:ffi`, `opaque-boundary:th-splice`, `opaque-boundary:th-top-level-splice`, `unmodeled-imports`.
 <!-- generated:ex-hs-partial:end -->
 
-`opaque-boundary:th-splice`, `opaque-boundary:cpp` and `opaque-boundary:ffi` mean the scanner saw the construct and could
-not see through it; `unmodeled-imports` lists imported modules with no security model, whose functions are analysed as
-ordinary calls. Unresolved constructs make the file `unresolved` in scan health, and `ci --assurance strict` fails on that.
+`opaque-boundary:th-splice` means the scanner saw the construct and could not see through it; `unmodeled-imports` lists
+imported modules with no security model, whose functions are analysed as ordinary calls. Unresolved constructs make the
+file `unresolved` in scan health, and `ci --assurance strict` fails on that.
+
+Four boundaries are disclosed but do **not** make the file `unresolved`, because the scanner either parsed what is behind them
+or matched them against a closed pattern and states the assumption:
+
+| Disclosed limit | What the scanner did | What it still does not know |
+|---|---|---|
+| `opaque-boundary:cpp` | Evaluated each `#if` / `#ifdef` / `#ifndef` / `#elif` it can decide and kept only the live branch (the dead branch is overwritten with spaces, so locations stay exact). A conditional it cannot decide keeps **every** branch, and its calls are marked conditional. | Which branch the undecided conditionals compile to. The limitation reports how many conditionals were decided and how many were not. |
+| `opaque-boundary:ffi` | Parsed the foreign declaration's own Haskell signature. | The foreign code. |
+| `opaque-boundary:th-safe-splice` | Recognised a declaration-level splice of a known generator applied only to names and literals, and analysed the file. | The declarations the generator produces. It is **assumed** to be the upstream generator. |
+| `opaque-boundary:quasiquote-inert` | Read a raw-string or non-interpolating quasi-quote as a string literal. | Nothing about the text, which is treated like any string; the quoter is **assumed** to be the upstream one. |
+
+What decides a CPP conditional, and on what basis (the basis is recorded on each decision):
+
+- **The file itself.** `#define` and `#undef` in the same file, integer literals (`#if 0`, `#if 1`), `defined(X)`, and the usual
+  operators with three-valued logic (`defined(X) && 0` is false whatever `X` is; `defined(X) || 1` is true; `defined(X) && 1` is
+  undecided). A macro the file never mentions is **undecided**, never zero: a build flag or the compiler may define it. A `#define`
+  inside an undecided branch makes the macro undecided afterwards. Function-like macros and expressions the evaluator cannot read
+  are undecided.
+- **The project's compiler.** `__GLASGOW_HASKELL__`, `MIN_VERSION_GLASGOW_HASKELL` and the boot-package `MIN_VERSION_base` are judged
+  only against a compiler the project states: `with-compiler: ghc-X.Y.Z` in `cabal.project` is a pin, and `tested-with: GHC == X.Y.Z`
+  lines in a `.cabal` file are used only when every listed version agrees and every item is an exact version (a range is never turned
+  into a version). A decision resting on `tested-with` is reported as an assumption in the limitation, because the project merely
+  claims it was tested there. Without a stated compiler these stay undecided. `base` is compared at major.minor only, since its patch
+  level varies inside one GHC series.
+- **The project's dependency bounds.** `MIN_VERSION_pkg(a,b,c)` is judged against the hull of the `build-depends` ranges of every
+  component in the project's `.cabal` files (a built version must satisfy its component's range). A package with no bound, or one the
+  project does not list, decides nothing.
+
+What a safe declaration splice is, exactly. The generator must be **imported** from the module that defines it (with the import list
+exposing it) and must not be defined in the file; every argument must be a name quote (`''T`), a string or integer literal, a
+constructor, a documented settings value (`defaultOptions`, `sqlSettings`, `lensRules`, ...), an option-record update restricted to
+documented fields with pure helper values (`drop 4`, `map toLower`), or a list of such applications. The generators are
+`makeLenses`, `makeClassy`, `makeFields`, `makePrisms`, `makeClassyPrisms`, `makeWrapped`, `makeLensesWith` (lens); `deriveJSON`,
+`deriveToJSON`, `deriveFromJSON` (aeson); `deriveSafeCopy`, `deriveSafeCopySimple` (safecopy); `mkPersist`, `mkMigrate`, `mkSave`,
+`mkDeleteCascade`, `share` with `persistLowerCase` / `persistUpperCase` (persistent); `makeAcidic` (acid-state). Anything else stays
+opaque exactly as before: `$(runIO ...)`, `$(embedFile ...)`, a user-defined splice, `qRunIO`, an argument that is a variable, a call,
+a lambda or a nested splice, a generator that is shadowed, hidden or not imported, and one unsafe splice in a file keeps that file
+`unresolved` even when its other splices are safe.
+
+Quasi-quotes: `[r|...|]` (raw string) is inert whatever the body says. `[i|...|]`, `[iii|...|]`, `[__i|...|]`, `[iTrim|...|]`,
+`[here|...|]` and `[hereLit|...|]` are inert only when the body has no interpolation marker (`#{`, `${`, `$(`, `$name`), because the
+interpolated expression is code that can carry taint; with one, the boundary stays. The quoter must be imported from its upstream
+module and not shadowed. Every other quasi-quote (a query language, a template, a router) stays opaque.
+
+The semantic IR that drives taint and the security rules reads the same decisions: CPP directives and dead branches, a safe splice
+and an inert quasi-quote are neutralised in place before it parses the file, so a flow written next to them is no longer lost to a
+syntax error, a finding in a dead branch is not reported, and a finding in an undecided branch **is** (nothing is dropped because a
+condition could not be decided).
 
 ## What needs a tool
 
@@ -337,7 +385,9 @@ The measured status of each capability, with its denominators, is in [Haskell an
 
 - Static analysis of the source as written: no type checking, no instance resolution, no evaluation of laziness.
 - A flow through an imported module with no security model is widened and disclosed on the finding.
-- Template Haskell splices, quasi-quotes other than the web routers, CPP branches and foreign calls are boundaries.
+- Template Haskell splices and quasi-quotes are boundaries except the closed set described above (known generators over names and literals, raw-string and non-interpolating quoters); those are analysed under a stated assumption that the name is the upstream one. Nothing is ever run, so what a splice generates is not modelled even when it is accepted.
+- A CPP conditional is decided only from the file, a stated compiler and the project's dependency bounds; a macro set by a build flag or the environment is undecided and both branches are analysed. A `tested-with` decision is a project claim, not a pin, and is reported as an assumption: a branch dead under it was not analysed.
+- Foreign calls are boundaries: the foreign code is not analysed.
 - Weak-randomness detection keys on the function and time-source names; a rename of a security-shaped function can lose it.
 - The live advisory feed (`AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE=1`) has been tested against a stand-in server that serves the real
   pinned HSEC records, not against the live service on real projects. A package it could not cover is reported unknown.
