@@ -134,7 +134,7 @@ export function deriveCppContext(files = {}) {
         const m = /^\s*with-compiler\s*:\s*ghc-(\d+(?:\.\d+)+)\s*$/im.exec(text);
         if (m) pinned.push(toNums(parseVersion(m[1])));
       } else if (/\.cabal$/i.test(file)) {
-        const tw = /^tested-with\s*:((?:.*\n?)(?:[ \t]+.*\n?)*)/im.exec(text);
+        const tw = /^tested-with\s*:([^\n]*(?:\n[ \t]+[^\n]*)*)/im.exec(text);
         if (tw) {
           const body = tw[1];
           for (const part of body.split(',').map((s) => s.trim()).filter(Boolean)) {

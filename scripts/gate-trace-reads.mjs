@@ -85,7 +85,8 @@ function main(argv) {
     process.stderr.write(`check ${id}: exit ${r.status}\n`);
     if (r.status !== 0) { process.stderr.write('the check itself failed; a trace of a failing run proves nothing\n'); return 1; }
   }
-  const lines = fs.existsSync(out) ? fs.readFileSync(out, 'utf8').split('\n').filter(Boolean) : [];
+  let lines = [];
+  try { lines = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean); } catch { /* no trace file: reported as an empty trace below */ }
   if (lines.length === 0) { process.stderr.write('empty trace: the tracer did not engage, so nothing is verified\n'); return 1; }
   const scope = scopeFor(id);
   const a = analyseTrace(lines, scope);

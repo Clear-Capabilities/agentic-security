@@ -12,6 +12,7 @@
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { statePath } from '../posture/state-dir.js';
 import { maybeEncryptForWrite, maybeDecryptForRead } from '../posture/encryption-provider.js';
 import { recordExternalFix, markRevertedByBackup } from '../posture/fix-history.js';
@@ -33,7 +34,7 @@ const safeRel = (root, rel) => { const p = join(root, rel); if (!p.startsWith(jo
 /** Save the pre-image of `rel` (customer source: it follows the encryption policy) and return its backup. Writes nothing to the target. */
 function saveBackup(root, rel, before, after) {
   const target = safeRel(root, rel);
-  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `${Date.now().toString(36)}-${randomBytes(5).toString('hex')}`;
   const dir = statePath(root, 'fix-backups', id);
   const disk = existsSync(target) ? readFileSync(target, 'utf8') : null;
   if (disk !== before) throw new Error('the file changed on disk since the fix was planned; refusing to overwrite');
@@ -83,7 +84,7 @@ export function writeManyWithBackup(root, edits, hooks = {}) {
       throw e;
     }
   }
-  const groupId = `g${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const groupId = `g${Date.now().toString(36)}-${randomBytes(5).toString('hex')}`;
   const dir = statePath(root, 'fix-backups', groupId);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'meta.json'), JSON.stringify({ file: members[0].file, group: members.map((m) => ({ id: m.id, file: m.file })), appliedAt: new Date().toISOString() }));
