@@ -37,9 +37,15 @@ node bench/live-feed/run.mjs plan
 node bench/live-feed/run.mjs scan                    # add --shard 0/4 --results shard-0.json to run slices in parallel, then:
 node bench/live-feed/run.mjs merge shard-0.json shard-1.json ...   # writes bench/live-feed/results.json
 
-# 4. Tables
-node bench/live-feed/run.mjs report
+# 4. The adjudication sample (seeded, stratified; assigns no verdicts), then your own verdicts in adjudication.json, then the tables
+node bench/live-feed/run.mjs sample --records <records.json>   # records.json = the OSV records the scans fetched (they are in each run's hackage-advisories.json)
+node bench/live-feed/run.mjs report                            # RESULTS.md and the summary block of results.json (hand-written notes.md is appended)
 ```
+
+`RESULTS.md` was produced with `--shard k/5` (five scans in parallel), `--timeout-min 10`, `--pause-ms 1500`. A scan that exceeds the budget in its cold
+phase is re-run, in every phase, on a manifests-only copy of the same project (`reducedTree: true` in `results.json`): the feed, TTL and offline figures stay
+valid, the scan times do not. `run.mjs reeval` re-evaluates the statuses of an existing run against the snapshots it wrote, with the code as it is now,
+and keeps the scan-time statuses as `statusesAtScan`.
 
 `scan` options: `--only id,id`, `--limit N`, `--shard k/n`, `--results FILE`, `--resume`, `--timeout-min N` (per scan, default 20),
 `--keep-work` (keep each scan's JSON output), `--skip-repeats` (cold scan only).
