@@ -23,7 +23,7 @@ for (const [rel, text] of Object.entries({ ...tree.fileContents, ...tree.depFile
 const { analyzeLanguageSupplyChain } = await import(pathToFileURL(join(scannerRoot, 'src/language/engine-pass.js')).href);
 const { snapshotPath } = await import(pathToFileURL(join(scannerRoot, 'src/language/haskell-advisory-feed.js')).href);
 const r = analyzeLanguageSupplyChain(files, { scanRoot: dir });
-const hs = r.haskell || { statuses: [], components: [], gaps: [], feed: null };
+const hs = { statuses: [], components: [], gaps: [], supplyChain: [], feed: null, ...(r.haskell || {}) };
 
 const comps = hs.components || [];
 const byStatus = {};

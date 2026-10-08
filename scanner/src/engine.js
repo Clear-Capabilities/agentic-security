@@ -8436,6 +8436,9 @@ function genHAR(routes,sources){const baseUrl="http://localhost:3000";const entr
 
 async function queryRegistries(components){
   const infoMap=new Map();
+  // Registry metadata (latest version, deprecation, age) is optional enrichment. Offline mode (--no-network, --deterministic, AGENTIC_SECURITY_OFFLINE=1)
+  // must not touch the network for it: found by the live Hackage feed bench, where an "offline" scan still fetched registry.npmjs.org/jquery.
+  if(process.env.AGENTIC_SECURITY_OFFLINE==='1')return infoMap;
   const npmNames=[...new Set(components.filter(c=>c.ecosystem==='npm').map(c=>c.name))];
   const pypiNames=[...new Set(components.filter(c=>c.ecosystem==='pypi').map(c=>c.name))];
   const CHUNK=8;

@@ -15,6 +15,7 @@ import { normalizeFindings } from '../../src/report/index.js';
 import { liveFeedOptionalState } from '../../src/language/haskell-advisory-feed.js';
 import { AdvisoryDb, evaluateComponents } from '../../src/language/haskell-sca.js';
 import { hackageComponents } from '../../src/language/haskell-supply.js';
+import { queryRegistries } from '../../src/engine.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'hackage-advisories', 'records');
 const REAL = readdirSync(DIR).filter((f) => f.endsWith('.json')).sort().map((f) => JSON.parse(readFileSync(join(DIR, f), 'utf8')));
@@ -105,4 +106,26 @@ test('[live-feed-scan] a dependency declared with no version bound is any-versio
   // and a resolved version still wins over the unbounded declaration
   const resolved = evaluateComponents([{ ...aeson, version: '2.1.0.0' }], db).statuses.find((x) => x.advisory === 'HSEC-2023-0001');
   assert.equal(resolved.status, 'not-affected');
+});
+
+// Found by the live run: with --no-network AND with AGENTIC_SECURITY_OFFLINE=1, a scan of a project that vendors a JavaScript library (hledger-web
+// ships jquery) still made real requests to registry.npmjs.org (and pypi.org, crates.io, search.maven.org for other manifests). The OSV lookups
+// honoured offline mode; the registry-metadata lookups did not.
+test('[live-feed-scan] offline mode makes no registry-metadata request (npm, PyPI, crates.io, Maven)', async () => {
+  const comps = [{ ecosystem: 'npm', name: 'jquery', version: '3.0.0' }, { ecosystem: 'pypi', name: 'requests', version: '2.0.0' }, { ecosystem: 'cargo', name: 'serde', version: '1.0.0' }, { ecosystem: 'maven', name: 'x', group: 'g', version: '1' }];
+  const saved = { fetch: globalThis.fetch, off: process.env.AGENTIC_SECURITY_OFFLINE };
+  const urls = [];
+  globalThis.fetch = async (u) => { urls.push(String(u)); return { ok: false, status: 404, json: async () => ({}), text: async () => '' }; };
+  try {
+    process.env.AGENTIC_SECURITY_OFFLINE = '1';
+    const info = await queryRegistries(comps);
+    assert.deepEqual(urls, [], `offline must not touch the network: ${urls.join(', ')}`);
+    assert.equal(info.size, 0);
+    delete process.env.AGENTIC_SECURITY_OFFLINE;
+    await queryRegistries(comps);
+    assert.ok(urls.some((u) => u.startsWith('https://registry.npmjs.org/')), 'online, the lookup still happens (the test would otherwise prove nothing)');
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.off === undefined) delete process.env.AGENTIC_SECURITY_OFFLINE; else process.env.AGENTIC_SECURITY_OFFLINE = saved.off;
+  }
 });
