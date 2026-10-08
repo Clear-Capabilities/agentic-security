@@ -292,11 +292,14 @@ async function codeActionsFor(params) {
     let prev;
     try { prev = await (0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.languageFixPreview)(f, files); } catch (e) { prev = { ok: false, reason: String((e && e.message) || e) }; }
     if (prev && prev.ok && prev.file) {
-      const target = pathToUri(node_path__WEBPACK_IMPORTED_MODULE_3__.join(_rootDir, prev.file));
+      // A fix that spans several files (the winning definitions of one option) is ONE workspace edit over all of them: offering
+      // only the first file would leave the configuration in a state the verification never saw.
+      const changes = {};
+      for (const e of (prev.edits || [{ file: prev.file, before: prev.before, after: prev.after }])) changes[pathToUri(node_path__WEBPACK_IMPORTED_MODULE_3__.join(_rootDir, e.file))] = [(0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.minimalEdit)(e.before, e.after)];
       actions.push({
         title: `Fix${prev.label ? ` (${prev.label})` : ''}: ${f.vuln || f.rule || 'finding'}`,
         kind: 'quickfix', diagnostics: [d], isPreferred: false,
-        edit: { changes: { [target]: [(0,_language_context_js__WEBPACK_IMPORTED_MODULE_1__.minimalEdit)(prev.before, prev.after)] } },
+        edit: { changes },
         data: { stableId: f.stableId || null, verified: { syntax: true, rescan: true } },
       });
     } else {

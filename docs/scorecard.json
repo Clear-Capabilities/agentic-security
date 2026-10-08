@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.158.0",
-    "bundleSha256": "18b81da52b654c93c6240dfc2909e049da0accb60cd1b2a8dca439d05cca7fd9",
-    "commit": "69fe36e148d9f94e768387f694070dac946e86ff",
+    "engineVersion": "0.159.0",
+    "bundleSha256": "b3c135db908e67031ddd3d8d6c92c3d306a328bdfd8c348c1777ba8bb4bee097",
+    "commit": "0940bd3cae96c6eede4e7cda4c4c8467ec405497",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-08T02:09:26.309Z",
+    "generatedAt": "2026-10-08T14:59:23.608Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -599,7 +599,7 @@
         }
       },
       "scanner/src": {
-        "total": 545,
+        "total": 550,
         "byFile": {
           "(deep-engine)": 1,
           "badge.js": 3,
@@ -637,7 +637,8 @@
           "language/bridges.js": 1,
           "language/context.js": 3,
           "language/discovery.js": 1,
-          "language/fix-lifecycle.js": 2,
+          "language/fix-lifecycle.js": 4,
+          "language/haskell-cpp.js": 3,
           "language/haskell-fix.js": 2,
           "language/haskell-ir.js": 8,
           "language/haskell-llm.js": 1,
@@ -827,7 +828,7 @@
         }
       },
       "scripts": {
-        "total": 45,
+        "total": 48,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -835,6 +836,8 @@
           "calibration-holdout-check.mjs": 1,
           "capability-ledger/check.mjs": 1,
           "detector-fuzz-runner.mjs": 3,
+          "gate-trace-reads.mjs": 2,
+          "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
           "loop-engineering/lib/claude.mjs": 1,
           "loop-engineering/lib/controller.mjs": 4,
@@ -856,8 +859,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 251,
-    "d": 417
+    "n": 341,
+    "d": 420
   },
   "taintRecall": {
     "measuredThisRun": true,

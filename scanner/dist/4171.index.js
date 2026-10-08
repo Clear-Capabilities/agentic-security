@@ -14,14 +14,14 @@ __webpack_require__.d(__webpack_exports__, {
 
 // UNUSED EXPORTS: nixosEntries
 
-// EXTERNAL MODULE: ./src/language/resolved-pass.js + 3 modules
-var resolved_pass = __webpack_require__(38551);
+// EXTERNAL MODULE: ./src/language/resolved-pass.js + 4 modules
+var resolved_pass = __webpack_require__(37033);
 // EXTERNAL MODULE: ./src/language/nix-build-trust.js
 var nix_build_trust = __webpack_require__(36668);
 // EXTERNAL MODULE: ./src/language/discovery.js
 var discovery = __webpack_require__(30951);
-// EXTERNAL MODULE: ./src/language/haskell-supply.js + 1 modules
-var haskell_supply = __webpack_require__(43436);
+// EXTERNAL MODULE: ./src/language/haskell-supply.js
+var haskell_supply = __webpack_require__(86349);
 // EXTERNAL MODULE: ./src/language/nix-script-taint.js
 var nix_script_taint = __webpack_require__(11793);
 // EXTERNAL MODULE: ./src/language/nix-secrets.js
