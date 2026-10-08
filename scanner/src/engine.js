@@ -8436,6 +8436,9 @@ function genHAR(routes,sources){const baseUrl="http://localhost:3000";const entr
 
 async function queryRegistries(components){
   const infoMap=new Map();
+  // Registry metadata (latest version, deprecation, age) is optional enrichment. Offline mode (--no-network, --deterministic, AGENTIC_SECURITY_OFFLINE=1)
+  // must not touch the network for it: found by the live Hackage feed bench, where an "offline" scan still fetched registry.npmjs.org/jquery.
+  if(process.env.AGENTIC_SECURITY_OFFLINE==='1')return infoMap;
   const npmNames=[...new Set(components.filter(c=>c.ecosystem==='npm').map(c=>c.name))];
   const pypiNames=[...new Set(components.filter(c=>c.ecosystem==='pypi').map(c=>c.name))];
   const CHUNK=8;
@@ -11032,6 +11035,7 @@ function _deterministicFileTimings(timings) {
     if (Object.keys(allFileContents).some(f => /\.(?:l?hs|hs-boot|hsc|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project|package\.yaml|stack\.yaml)/i.test(f))) {
       const { assessLanguageAssurance } = await import('./language/assurance.js');
       const { configuredAdvisoryDb } = await import('./language/haskell-supply.js');
+      const { liveFeedOptionalState } = await import('./language/haskell-advisory-feed.js');
       const env = process.env;
       const { resolvedHackageComponents, analyzeNixClosure, runSelectedNixEval } = await import('./language/resolved-pass.js');
       let _languageSupplyGaps = [];
@@ -11045,7 +11049,7 @@ function _deterministicFileTimings(timings) {
         sizeSkipped,
         supplyGaps: _languageSupplyGaps,
         licenseUnavailable: ((_languageBom && _languageBom.components) || []).filter((c) => c && !c.license && !(Array.isArray(c.licenses) && c.licenses.length)).length,
-        optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': { selected: false } },
+        optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': liveFeedOptionalState(env)},
       })).languageCoverage;
     }
   } catch (e) { _languageCoverage = { totals: null, byKind: null, conditions: [`language assurance could not be computed: ${String((e && e.message) || e)}`] }; }

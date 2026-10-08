@@ -101,6 +101,7 @@ Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell
 | Stress | `npm run test:language-stress` | offline scale and a peak-memory ceiling; excluded from `npm test` (it must own the machine) |
 | Needs a compiler | `npm run test:language-tools` | HS-006.AC01 and the support gate; excluded from `npm test`; **fails** without `ghc` |
 | Support registry | `npm run bench:language-support:check` | recomputes the registry from the STORED measurement; fails on any difference |
+| Live feed | `npm run bench:live-feed -- <fetch\|plan\|scan\|merge\|sample\|report>` | `bench/live-feed/`: the opt-in Hackage feed against real projects and real OSV. Needs the network and is NOT in `npm test` or any gate. `RESULTS.md` is a dated measurement; labels in it are model-assessed |
 
 The support registry is measured **once per promotion** on a frozen holdout (`bench/language-support/promote.mjs`); never tune
 against the holdout, and any further holdout run counts as repeated use. A change to the engine, the corpus or a label changes the
