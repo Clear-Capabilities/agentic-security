@@ -13,7 +13,8 @@ export const HASKELL_PARSE_PRODUCER = 'language:haskell-parse';
 
 // Boundaries whose content the parser could not see. cpp and ffi are disclosed on
 // the parse result but do not make the file unresolved: both CPP branches are
-// parsed and a foreign declaration's own Haskell signature is.
+// parsed and a foreign declaration's own Haskell signature is. `th-safe-splice` and `quasiquote-inert` are matched by a
+// closed, sound pattern (haskell-boundaries.js) and stay disclosed as assumptions; every other TH/quasi-quote boundary is opaque.
 const OPAQUE_BOUNDARIES = new Set(['th-splice', 'th-quote', 'th-name-quote', 'th-top-level-splice', 'quasiquote', 'hsc', 'generated']);
 
 export function ensureHaskellParseProducer() {
@@ -24,7 +25,7 @@ export function ensureHaskellParseProducer() {
 }
 
 /**
- * @param {{grammarSource?:Function, budgets?:object, mode?:string, onParse?:(file:string, parse:object)=>void}} [opts]
+ * @param {{grammarSource?:Function, budgets?:object, mode?:string, cpp?:object, onParse?:(file:string, parse:object)=>void}} [opts]
  */
 export function createHaskellAdapter(opts = {}) {
   ensureHaskellParseProducer();
@@ -33,7 +34,7 @@ export function createHaskellAdapter(opts = {}) {
     language: 'haskell',
     hasGrammar: () => loadHaskellGrammar({ grammarSource: opts.grammarSource }).available,
     analyze(file, content) {
-      const parse = parseHaskell(content, { file, grammarSource: opts.grammarSource, budgets: opts.budgets, mode: opts.mode });
+      const parse = parseHaskell(content, { file, grammarSource: opts.grammarSource, budgets: opts.budgets, mode: opts.mode, cpp: opts.cpp });
       if (typeof opts.onParse === 'function') opts.onParse(file, parse);
       if (parse.status === 'budget_exceeded' && parse.budget && parse.budget.name === 'deadlineMs') {
         throw Object.assign(new Error(`Haskell parser deadline exceeded for ${file}`), { code: 'LANG_TIMEOUT' });
