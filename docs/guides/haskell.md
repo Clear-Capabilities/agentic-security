@@ -147,6 +147,25 @@ counts only if a stopping call (`finish`, `raise`, ...) follows before the first
 read a real credential header and run *before* the write: `header "X-Request-Id"` is not authentication, and a check
 after the write is reported as too late.
 
+The same holds for a shared guard function: a named `requireAuth` that reads a credential and only calls `status status401` does not
+protect the handlers that call it, because the handler keeps running; it needs a stopping call (`finish`, `raise`, `raiseStatus`,
+`redirect`) in the same function. `raiseStatus status401 ...` rejects and stops by itself.
+
+The inline shape is recognised for every framework where it is idiomatic, not only Scotty:
+
+| Framework | Credential read | Rejection that ends the handler |
+|---|---|---|
+| WAI | `lookup "Authorization" (requestHeaders req)` (or `hAuthorization`, `hCookie`) | `respond (responseLBS status401 ...)`, handed back |
+| Servant | a handler argument bound to `Header "Authorization"` (or `Cookie`, an API-key header), examined in the body | `throwError err401` (also `err403`, with or without a record update) |
+| Yesod | `maybeAuthId`, `maybeAuth`, `lookupHeader "Authorization"`, `lookupBearerAuth`, `lookupBasicAuth` | `notAuthenticated`, `permissionDenied` |
+
+Each keeps the same negatives: a header that is not a credential, a rejection with no credential read, a check that runs after the
+first sensitive operation, and a response that is built but never handed back. One limit is stated plainly: for these three
+frameworks the IR reports a call in tail position (the last statement, a case alternative) at the enclosing line, so what is ordered
+against the first sensitive operation is the credential *read*, not the rejection. A handler that reads the credential first, writes,
+and only then rejects is therefore still credited as a guard (pinned in `test/haskell/haskell-web-guards.test.js` so closing the gap is
+deliberate).
+
 ## Dependencies, advisories and the software bill of materials
 
 The declared inventory comes from the manifests: every dependency with its scope (library, executable, test-suite,
@@ -207,6 +226,14 @@ With no snapshot the scan is `partial` and says "Haskell dependency vulnerabilit
 finding is not a clean result. A stale snapshot is stated too. A matched finding carries the exact version, the advisory
 ids and aliases, the affected range and where the version came from, plus an import- or function-level reachability tier
 that never claims more than the evidence (`unknown` unless the import is seen).
+
+**Severity comes from the advisory.** A finding's severity is the advisory's own: the CVSS v3.0/v3.1 base score is computed from the
+vector the record carries (on the record or on its `affected` entry; the highest score wins) and mapped critical at 9.0 or above,
+high at 7.0, medium at 4.0, low above 0. Without a usable vector, a recognised `database_specific.severity` name is used. The
+finding records `severityScore` and a `severityBasis` such as "CVSS v3.1 base score 7.5 from the advisory". Nothing is invented:
+a CVSS v4 vector (not scored by this tool), a malformed vector, or an unrecognised name keeps the default `medium` and the basis
+says why. In a Nix closure the advisory rating applies to a package judged affected or possibly affected; a fixed or
+backport-verified package keeps its lower status level and is never raised by the upstream rating.
 
 `--format cyclonedx` and `--format spdx` list the Hackage components as `pkg:hackage/<name>@<version>`, with scopes and
 dependency edges when a plan is present. License data is not available for Hackage records, so no license policy is

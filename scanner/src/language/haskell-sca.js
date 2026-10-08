@@ -19,6 +19,7 @@
 // response). The wire query is built here so its exact shape is testable.
 
 import { createHash, createVerify } from 'node:crypto';
+import { advisorySeverity, NO_RATING_BASIS } from './cvss.js';
 import { parseVersion, compareVersions, parseVersionRange, caretUpperBound } from './haskell-manifests.js';
 
 export const HS_SCA_VERSION = 'haskell-sca/1';
@@ -140,7 +141,7 @@ export function normalizeAdvisory(rec) {
     id: rec.id, canonicalId, ids, cveAliases: ids.filter((x) => /^CVE-/.test(x)), ghsaAliases: ids.filter((x) => /^GHSA-/.test(x)),
     summary: rec.summary || '', details: rec.details || '', published: rec.published || null, modified: rec.modified || null,
     withdrawn: rec.withdrawn || null, references: (rec.references || []).map((r) => r.url).filter(Boolean),
-    severity: rec.severity || [], affected, problems,
+    severity: rec.severity || [], severityInfo: advisorySeverity(rec), affected, problems,
   };
 }
 const fixedVersions = (ranges) => [...new Set((ranges || []).flatMap((r) => (r.events || []).filter((e) => 'fixed' in e).map((e) => e.fixed)))];
@@ -275,13 +276,14 @@ export function evaluateComponents(components, db, opts = {}) {
       statuses.push({ ...base, status: ghc && m.status !== 'not-affected' ? `ghc-component:${m.status}` : m.status, advisory: adv.canonicalId, reason: m.reason, ghcComponent: ghc });
       if (m.status === 'not-affected') continue;
       any = true;
+      const sev = adv.severityInfo || { level: null, score: null, basis: NO_RATING_BASIS };
       const kevHit = adv.cveAliases.length ? (opts.kev ? adv.cveAliases.some((c) => opts.kev.has(c)) : 'unknown') : 'not-applicable';
       const epssVals = adv.cveAliases.map((c) => opts.epss && opts.epss[c]).filter((x) => typeof x === 'number');
       findings.push({
         type: 'vulnerable_dep', ecosystem: 'hackage', name: comp.name, version: comp.version || null, declaredRange: comp.declaredRange || null,
         osvId: adv.canonicalId, ids: adv.ids, cveAliases: adv.cveAliases, ghsaAliases: adv.ghsaAliases,
         summary: adv.summary, fixedIn: aff.fixedIn, unfixed: aff.unfixed, references: adv.references.slice(0, 5),
-        severity: 'medium', severityBasis: 'the advisory carries no severity rating',
+        severity: sev.level || 'medium', severityBasis: sev.basis, severityScore: sev.score ?? null,
         matchStatus: m.status, matchReason: m.reason, resolution: comp.version ? 'resolved' : (comp.declaredRange ? 'declared-range' : 'none'),
         scope: comp.scope || null, target: comp.target || null, purl: base.purl, ghcComponent: ghc,
         ...(ghc ? { remediation: `${comp.name} is provided by the compiler: upgrade GHC (the fix is in ${comp.name} ${aff.fixedIn.join(', ') || '(no fixed version published)'}), not a Cabal dependency bound.` } : { remediation: aff.fixedIn.length ? `Upgrade ${comp.name} to ${aff.fixedIn.join(' or ')}.` : `No fixed version of ${comp.name} is published; remove or replace the dependency.` }),
