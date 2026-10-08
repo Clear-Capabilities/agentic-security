@@ -31,6 +31,15 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
   queried (`covered`); a package it did not cover is `feed-incomplete` and a stale one `feed-stale`, in BOTH matchers
   (`evaluateComponents` and `nix-sca.js`). Any new consumer of an `AdvisoryDb` must check `db.coverage(name)` before saying "no advisory".
   The snapshot lives in the operator configuration directory, never the project (`trusted-inputs.js`).
+- **Option fixes work on the effective configuration, across files.** `nix-fix.js` edits EVERY contributing definition of an option
+  (all winners at the winning priority, plus conditional branches holding the weak literal), never one line: editing one of two
+  equal-priority winners turns a finding into a module-system conflict that a rescan alone reports as "fixed". Verification is
+  the `effective` gate (`makeEffectiveCheck`: resolve the option again over the patched tree). A plan may carry `edits` (several
+  files); `runFixLifecycle` applies them through `writeManyWithBackup` (checks everything and backs up everything before the
+  first write, rolls back on a failed write) and records one history entry per file sharing `languageGroupId`; `undoFix` and
+  `posture/fix-history.js` `undoLast`/`revertEntryById` restore a group as a unit. A winner outside the root or not a single
+  literal is refused with an `override` suggestion (`overrideSuggestion`), never an automatic edit. Any new consumer of a fix
+  plan (LSP, MCP, CLI) must honour `plan.edits`: `apply_fix` writes one file, so a multi-file fix is not offered there.
 - **Pragma** (`pragma.js`): comment-aware, line-scoped, exact rule-id match, logged. A line-less finding cannot be suppressed.
 
 ## Module map

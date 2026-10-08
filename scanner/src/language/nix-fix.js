@@ -24,7 +24,8 @@ import { analyzeNixScripts } from './nix-script-taint.js';
 import { analyzeNixSecrets } from './nix-secrets.js';
 import { analyzeNixBuildTrust } from './nix-build-trust.js';
 import { analyzeNixosHardening } from './nixos-hardening.js';
-import { runFixLifecycle, unifiedDiff, writeWithBackup, undoFix } from './fix-lifecycle.js';
+import { runFixLifecycle, unifiedDiff, writeWithBackup, undoFix, isRootRelativePath } from './fix-lifecycle.js';
+import { resolveNixosConfig } from './nixos-module-resolver.js';
 import { parseFlakeLock } from './nix-inventory.js';
 
 export const NIX_FIX_VERSION = 'nix-fix/1';
@@ -55,30 +56,137 @@ const MANUAL = {
 };
 const HASH_MANUAL = new Set(['nix-fetch-missing-hash', 'nix-fetch-fake-hash', 'nix-fetch-floating-rev']);
 
-function planOptionFix(finding, files, fx, source) {
+// The option each hardening rule judges. Used to pick the right evidence record when a finding carries several.
+const OPTION_OF = {
+  'ssh-root-login': 'services.openssh.settings.PermitRootLogin',
+  'ssh-password-auth': 'services.openssh.settings.PasswordAuthentication',
+  'ssh-empty-passwords': 'services.openssh.settings.PermitEmptyPasswords',
+  'firewall-disabled': 'networking.firewall.enable',
+  'nix-require-sigs-disabled': 'nix.settings.require-sigs',
+  'nix-sandbox-disabled': 'nix.settings.sandbox',
+  'nix-accept-flake-config': 'nix.settings.accept-flake-config',
+};
+// The literal each rule treats as the weakness: the one a conditional branch must hold to be edited.
+const BAD_OF = { 'ssh-root-login': '"yes"', 'ssh-password-auth': 'true', 'ssh-empty-passwords': 'true', 'firewall-disabled': 'false', 'nix-require-sigs-disabled': 'false', 'nix-sandbox-disabled': 'false', 'nix-accept-flake-config': 'true' };
+const literalValue = (to) => (to.startsWith('"') ? to.slice(1, -1) : to === 'true');
+
+/** The module a human should put an override line in: the entry configuration. */
+const entryOf = (files, opts) => (opts && opts.entry) || (files['configuration.nix'] !== undefined ? 'configuration.nix' : null);
+
+/**
+ * The override line to ADD to the entry module when no definition can be edited. A plain assignment conflicts with an
+ * equal-priority definition, so the wrapper is chosen from the strongest competing priority: nothing when every
+ * definition is weaker than plain, mkForce when plain is the strongest, mkOverride just below anything stronger.
+ */
+function overrideSuggestion(option, fx, sources, files, opts) {
+  const prios = sources.map((s) => s.priority).filter((n) => Number.isFinite(n));
+  const strongest = prios.length ? Math.min(...prios) : 100;
+  const base = { file: entryOf(files, opts), option, automatic: false };
+  if (strongest > 100) return { ...base, line: `${option} = ${fx.to};`, priority: 100, note: 'every existing definition is weaker than a plain assignment, so no override wrapper is needed.' };
+  if (strongest > 50) return { ...base, line: `${option} = lib.mkForce ${fx.to};`, priority: 50, note: 'a plain assignment would conflict with the existing definition at the same priority, so mkForce is required. `lib` must be among the module arguments.' };
+  if (strongest > 1) return { ...base, line: `${option} = lib.mkOverride ${strongest - 1} ${fx.to};`, priority: strongest - 1, note: `an existing definition already uses priority ${strongest}, so the override must be stronger than it. \`lib\` must be among the module arguments.` };
+  return { ...base, line: null, priority: null, note: 'an existing definition uses the strongest possible priority; nothing can override it from another module.' };
+}
+
+const refuse = (status, reason, extra = {}) => ({ ok: false, status, tier: status === 'blocked' ? TIERS.blocked : TIERS.guidance, reason, ...extra });
+
+/**
+ * Edit the single literal that defines `option` at `file`:`line` in `text`. When several bindings share the line (the branches
+ * of one `if`), the one holding the weak literal `bad` is preferred. `skip` reports a definition that already holds the safe value.
+ */
+function literalEdit(file, text, line, option, fx, bad) {
+  const parse = parseNix(text, { file });
+  if (!parse.ast) return { ok: false, reason: `${file} does not parse` };
+  const ir = buildNixIR(parse, { file, source: text });
+  const re = fx.kind === 'bool' ? /\b(?:true|false)\b/g : /"(?:[^"\\]|\\.)*"/g;
+  const cands = ir.bindings.filter((b) => b.pathText === option && b.valueSpan && b.span);
+  const onLine = cands.filter((b) => b.span.startLine === line);
+  const within = cands.filter((b) => b.span.startLine <= line && b.span.endLine >= line);
+  const pool = onLine.length ? onLine : (within.length ? within : (cands.length === 1 ? cands : []));
+  const litOf = (b) => { const t = text.slice(b.valueSpan.startOffset, b.valueSpan.endOffset).match(re) || []; return t.length === 1 ? t[0] : null; };
+  const hit = (bad && pool.find((b) => litOf(b) === bad)) || pool.find((b) => litOf(b) !== null && litOf(b) !== fx.to) || pool[0] || null;
+  if (!hit) return { ok: false, reason: `no literal definition of ${option} was found at ${file}:${line}: it may be set by a function, an import or an attribute-set merge` };
+  const vs = hit.valueSpan;
+  const current = text.slice(vs.startOffset, vs.endOffset);
+  const lits = current.match(re) || [];
+  if (lits.length !== 1) return { ok: false, reason: `the definition of ${option} at ${file}:${hit.span.startLine} is not a single literal (${current.trim().slice(0, 60)}): the edit would have to choose a branch` };
+  if (lits[0] === fx.to) return { ok: true, skip: true, line: hit.span.startLine };
+  const next = current.replace(re, fx.to);
+  return { ok: true, after: splice(text, vs.startOffset, vs.endOffset, next), from: current.trim(), to: next.trim(), line: hit.span.startLine, literal: lits[0] };
+}
+
+function planOptionFix(finding, files, fx, source, opts = {}) {
   // `optionEvidence` is the option-level evidence a scan carries; `evidence` is that same array on a finding that comes
   // straight from the hardening analysis (the scan's own `evidence` field is the list of detectors that agreed).
   const evList = Array.isArray(finding.optionEvidence) ? finding.optionEvidence : (Array.isArray(finding.evidence) ? finding.evidence.filter((e) => e && typeof e === 'object') : []);
-  const evidence = evList[0] || null;
+  const evidence = evList.find((e) => e && e.option === OPTION_OF[finding.rule]) || evList[0] || null;
   const option = (evidence && evidence.option) || finding.subject;
-  const winner = evidence && (evidence.sources || []).find((s) => s.role === 'winner');
-  const file = source ? source.file : (winner ? winner.file : finding.file);
-  const line = source ? source.line : (winner ? winner.line : finding.line);
-  const text = files[file];
-  if (typeof text !== 'string') return { ok: false, status: 'blocked', tier: TIERS.blocked, reason: `the defining file ${file} is not in the supplied tree` };
-  const parse = parseNix(text, { file });
-  if (!parse.ast) return { ok: false, status: 'blocked', tier: TIERS.blocked, reason: `${file} does not parse` };
-  const ir = buildNixIR(parse, { file, source: text });
-  const cands = ir.bindings.filter((b) => b.pathText === option && b.valueSpan);
-  const hit = cands.find((b) => b.span && Math.abs(b.span.startLine - line) <= 0) || cands.find((b) => b.span && b.span.startLine <= line && b.span.endLine >= line) || (cands.length === 1 ? cands[0] : null);
-  if (!hit) return { ok: false, status: 'manual', tier: TIERS.guidance, reason: `no literal definition of ${option} was found at ${file}:${line}: it may be set by a function, an import or an attribute-set merge`, proposal: { option, set: fx.to } };
-  const vs = hit.valueSpan;
-  const current = text.slice(vs.startOffset, vs.endOffset);
-  const re = fx.kind === 'bool' ? /\b(?:true|false)\b/g : /"(?:[^"\\]|\\.)*"/g;
-  const lits = current.match(re) || [];
-  if (lits.length !== 1) return { ok: false, status: 'manual', tier: TIERS.guidance, reason: `the definition of ${option} is not a single literal (${current.slice(0, 60)}): the edit would have to choose a branch`, proposal: { option, set: fx.to } };
-  const next = current.replace(re, fx.to);
-  return { ok: true, file, before: text, after: splice(text, vs.startOffset, vs.endOffset, next), ruleId: `nix-set-${option}`, label: 'FULL', explanation: `${option} = ${current.trim()} -> ${next.trim()} at ${file}:${hit.span.startLine}, the definition that wins by priority.`, consequences: fx.consequences, tier: TIERS.edit, behavior: { kind: 'option', option, from: current.trim(), to: next.trim() } };
+  const sources = (evidence && Array.isArray(evidence.sources)) ? evidence.sources : [];
+  const bad = BAD_OF[finding.rule] || null;
+  const proposal = (extra = {}) => ({ option, set: fx.to, ...extra });
+
+  // Findings that carry no per-definition evidence keep the single-file behaviour: edit the reported line.
+  if (!sources.length) {
+    const file = source ? source.file : finding.file;
+    const line = source ? source.line : finding.line;
+    if (typeof files[file] !== 'string') return refuse('blocked', `the defining file ${file} is not in the supplied tree`);
+    const r = literalEdit(file, files[file], line, option, fx, bad);
+    if (!r.ok) return refuse(/does not parse/.test(r.reason) ? 'blocked' : 'manual', r.reason, { proposal: proposal() });
+    if (r.skip) return refuse('manual', `the definition of ${option} at ${file}:${r.line} already holds ${fx.to}`, { proposal: proposal() });
+    return optionPlanResult(option, fx, [{ file, before: files[file], after: r.after, from: r.from, to: r.to, line: r.line }], [], bad);
+  }
+
+  // Everything that contributes to the effective value: the definitions that win, and those that apply only under a
+  // condition. Definitions another one overrides do not contribute and are left alone.
+  const live = sources.filter((s) => s.role === 'winner' || s.role === 'conditional');
+  const shadowed = sources.filter((s) => s.role === 'shadowed');
+  const override = () => overrideSuggestion(option, fx, sources, files, opts);
+  if (!live.length) return refuse('manual', `no contributing definition of ${option} could be identified`, { proposal: proposal({ override: override() }) });
+
+  // The caller chose a definition that another one overrides: changing it cannot change the effective value.
+  if (source) {
+    const chosen = sources.find((s) => s.file === source.file && s.line === source.line);
+    if (chosen && chosen.role === 'shadowed') {
+      const by = live.map((w) => `${w.file}:${w.line} (${w.priorityLabel || w.priority})`).join(', ');
+      return refuse('blocked', `${source.file}:${source.line} is overridden by ${by}: editing it would leave the effective value of ${option} unchanged`, { proposal: proposal({ editInstead: live.map((w) => ({ file: w.file, line: w.line })), override: override() }) });
+    }
+  }
+
+  // Every contributing definition must be editable: inside the project, present, a single literal. Several definitions at the
+  // winning priority agree today and the module system rejects a mix, so they are all changed or none is. A conditional
+  // branch is edited only where it holds the weak literal; the verification then proves every branch is safe.
+  const working = { ...files };
+  const edits = [];
+  for (const w of live) {
+    if (!isRootRelativePath(w.file)) return refuse('manual', `the winning definition of ${option} is in ${w.file}, outside the project root, so it is not edited`, { proposal: proposal({ outsideRoot: w.file, override: override() }) });
+    if (typeof working[w.file] !== 'string') return refuse('manual', `the winning definition of ${option} is in ${w.file}, which is not in the supplied tree`, { proposal: proposal({ override: override() }) });
+    const r = literalEdit(w.file, working[w.file], w.line, option, fx, bad);
+    if (!r.ok) return refuse(/does not parse/.test(r.reason) ? 'blocked' : 'manual', r.reason, { proposal: proposal({ override: override() }) });
+    if (r.skip || (w.role === 'conditional' && bad && r.literal !== bad)) continue;
+    const prior = edits.find((e) => e.file === w.file);
+    if (prior) prior.after = r.after; else edits.push({ file: w.file, before: working[w.file], after: r.after, from: r.from, to: r.to, line: r.line });
+    working[w.file] = r.after;
+  }
+  if (!edits.length) return refuse('manual', `no contributing definition of ${option} holds the weak value, so there is nothing to edit`, { proposal: proposal({ override: override() }) });
+  return optionPlanResult(option, fx, edits, shadowed, bad);
+}
+
+function optionPlanResult(option, fx, edits, shadowed, bad = null) {
+  const first = edits[0];
+  const where = edits.map((e) => `${e.file}:${e.line}`).join(', ');
+  const multi = edits.length > 1;
+  const notes = [...fx.consequences];
+  if (shadowed.length) notes.push(`Weaker definitions of ${option} remain at ${shadowed.map((s) => `${s.file}:${s.line}`).join(', ')}; they are overridden and unchanged.`);
+  if (multi) notes.push(`${edits.length} files are edited together (${edits.map((e) => e.file).join(', ')}) because each holds a definition at the winning priority; undo restores all of them.`);
+  return {
+    ok: true, file: first.file, before: first.before, after: first.after,
+    edits: edits.map((e) => ({ file: e.file, before: e.before, after: e.after })),
+    ruleId: `nix-set-${option}`, label: 'FULL',
+    explanation: `${option} = ${first.from} -> ${first.to} at ${where}, the definition${multi ? 's' : ''} that win${multi ? '' : 's'} by priority.`,
+    consequences: notes, tier: TIERS.edit,
+    behavior: { kind: 'option', option, from: first.from, to: first.to, files: edits.map((e) => e.file) },
+    expectEffective: { option, value: literalValue(fx.to), ...(bad ? { bad: literalValue(bad) } : {}) },
+  };
 }
 
 function planTransportFix(finding, files) {
@@ -170,7 +278,7 @@ export function planNixFix(finding, files, opts = {}) {
   const r = finding.rule;
   if (r === 'nix-shell-injection' || r === 'nix-escape-wrong-context') return planShellFix(finding, files);
   if (r === 'nix-service-env-shell') return planEnvQuoteFix(finding, files);
-  if (OPTION_FIXES[r]) return planOptionFix(finding, files, OPTION_FIXES[r], opts.source || null);
+  if (OPTION_FIXES[r]) return planOptionFix(finding, files, OPTION_FIXES[r], opts.source || null, opts);
   if (TRANSPORT_RULES.has(r)) return planTransportFix(finding, files);
   if (MANUAL[r]) return { ok: false, status: 'manual', tier: TIERS.guidance, reason: 'moving a secret out of the store changes where the credential lives and who can read it: it needs a human migration, never an automatic rewrite', proposal: { steps: MANUAL[r], rotate: r !== 'nix-secret-log', manager: 'sops-nix or agenix' } };
   if (HASH_MANUAL.has(r)) return { ok: false, status: 'manual', tier: TIERS.blocked, reason: 'the correct hash or revision can only be obtained by fetching the source, which a scan never does; a placeholder hash would be a fabricated value', proposal: { steps: ['Run `nix-prefetch-url` / `nix store prefetch-file` (or build once with lib.fakeHash and read the reported hash) from a trusted machine.', 'Pin a full revision, not a branch.', 'Paste the real hash.'], neverDo: 'insert a made-up or all-zero hash' } };
@@ -193,16 +301,46 @@ export async function rescanNix(files) {
 }
 const matchKey = (f) => `${f.rule || f.cwe}|${f.subject || f.attrPath || ''}|${f.file}`;
 const syntaxGate = (plan) => {
-  const a = parseNix(plan.before, { file: plan.file }); const b = parseNix(plan.after, { file: plan.file });
-  const na = (a.errors || []).length, nb = (b.errors || []).length;
-  return { ok: !!b.ast && nb <= na, errorsBefore: na, errorsAfter: nb, detail: nb <= na ? 'no new syntax errors' : `${nb - na} new syntax error(s)` };
+  const edits = Array.isArray(plan.edits) && plan.edits.length ? plan.edits : [{ file: plan.file, before: plan.before, after: plan.after }];
+  let na = 0; let nb = 0; let ok = true;
+  for (const e of edits) {
+    const a = parseNix(e.before, { file: e.file }); const b = parseNix(e.after, { file: e.file });
+    na += (a.errors || []).length; nb += (b.errors || []).length;
+    if (!b.ast || (b.errors || []).length > (a.errors || []).length) ok = false;
+  }
+  return { ok, errorsBefore: na, errorsAfter: nb, detail: ok ? 'no new syntax errors' : `${nb - na} new syntax error(s)` };
 };
+
+/**
+ * The effective-configuration gate of an option fix. The rescan only proves a finding stopped being REPORTED, and an edit that
+ * leaves two equal-priority definitions disagreeing does that too (the module system then rejects the configuration). So the
+ * option is resolved again over the patched tree and must be a decided `set` value equal to the intended one.
+ */
+function makeEffectiveCheck(entry) {
+  return (plan, patched) => {
+    const want = plan.expectEffective;
+    if (!want) return { ok: true, ran: false, detail: 'not an option fix' };
+    const multi = Array.isArray(plan.edits) && plan.edits.length > 1;
+    if (!entry) return multi ? { ok: false, ran: false, detail: `no entry configuration was found to resolve ${want.option} over the patched tree, and ${plan.edits.length} files were edited` } : { ok: true, ran: false, detail: 'no entry configuration to resolve; the single definition was edited in place' };
+    const nixOnly = Object.fromEntries(Object.entries(patched).filter(([p, t]) => /\.nix$/.test(p) && typeof t === 'string'));
+    let res;
+    try { res = resolveNixosConfig({ entry, files: nixOnly }).lookup(want.option); } catch (e) { return { ok: false, ran: true, detail: `the patched configuration could not be resolved (${e.message})` }; }
+    // A value that depends on a condition has no single answer; the fix holds when NO branch can still produce the weak value.
+    if (res && res.status === 'conditional' && Array.isArray(res.possibleValues) && res.possibleValues.length && want.bad !== undefined) {
+      if (res.possibleValues.includes(want.bad)) return { ok: false, ran: true, option: want.option, detail: `${want.option} can still be ${JSON.stringify(want.bad)} under some condition after the patch` };
+      return { ok: true, ran: true, option: want.option, possibleValues: res.possibleValues, detail: `${want.option} is conditional and no branch can produce ${JSON.stringify(want.bad)} (possible: ${res.possibleValues.map((v) => JSON.stringify(v)).join(', ')})` };
+    }
+    if (!res || res.status !== 'set') return { ok: false, ran: true, option: want.option, status: res && res.status, detail: `${want.option} is "${res && res.status}" after the patch${res && res.reason ? ` (${res.reason})` : ''}, not a decided value` };
+    if (res.value !== want.value) return { ok: false, ran: true, option: want.option, detail: `${want.option} is ${JSON.stringify(res.value)} after the patch, not ${JSON.stringify(want.value)}` };
+    return { ok: true, ran: true, option: want.option, value: res.value, detail: `${want.option} resolves to ${JSON.stringify(res.value)} over the patched tree` };
+  };
+}
 
 /** Validate (and optionally apply) a fix through the shared lifecycle. */
 export async function validateNixFix(finding, o) {
   const plan = planNixFix(finding, o.files, o);
   if (!plan.ok) return { status: plan.status || 'unsupported', applied: false, tier: plan.tier, reason: plan.reason, proposal: plan.proposal || null, ...plan };
-  const res = await runFixLifecycle({ plan, files: o.files, finding, matchKey, rescan: o.rescan || rescanNix, syntax: syntaxGate, behaviorCheck: o.behaviorCheck, witness: o.witness, requireWitness: o.requireWitness, apply: o.apply, root: o.root });
+  const res = await runFixLifecycle({ plan, files: o.files, finding, matchKey, rescan: o.rescan || rescanNix, syntax: syntaxGate, behaviorCheck: o.behaviorCheck, effectiveCheck: makeEffectiveCheck(entryOf(o.files, o)), writeFile: o.writeFile, witness: o.witness, requireWitness: o.requireWitness, apply: o.apply, root: o.root });
   return { ...res, consequences: plan.consequences || [], tier: res.status === 'blocked' ? TIERS.blocked : plan.tier, explanation: plan.explanation };
 }
 

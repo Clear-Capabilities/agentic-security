@@ -147,10 +147,11 @@ test('[NIX-010.AC02] a syntactically correct edit to a SHADOWED definition is no
   assert.equal(ok.status, 'verified'); assert.equal(ok.plan.file, 'b.nix'); assert.match(ok.plan.after, /mkForce "no"/);
   // the stale/naive edit: change the loser in a.nix. It parses, it looks right, and changes nothing.
   const shadowed = await validateNixFix(f, { files, source: { file: 'a.nix', line: 3 } });
-  assert.equal(shadowed.status, 'blocked'); assert.match(shadowed.reason, /still reported/);
-  assert.equal(shadowed.gates.syntax.ok, true, 'the edit is syntactically fine');
-  assert.equal(shadowed.gates.rescan.originalGone, false);
+  // Multi-file fixes (nix-fix-multifile.test.js) moved this refusal from the rescan gate ("still reported") to the planner,
+  // which now knows the chosen definition is overridden and names the one that wins; nothing is edited either way.
+  assert.equal(shadowed.status, 'blocked'); assert.match(shadowed.reason, /overridden by b\.nix:3/);
   assert.equal(shadowed.applied, false);
+  assert.ok(!('after' in shadowed), 'no edit is produced for an overridden definition');
   // conditional scope: only the branch that carries the insecure literal is edited, the other branch is untouched,
   // and the rescan (not the edit) decides whether the finding is gone
   const cond = { 'configuration.nix': '{ config, lib, ... }:\n{\n  services.openssh.enable = true;\n  services.openssh.settings.PermitRootLogin = if config.x.dev then "yes" else "no";\n}\n' };
