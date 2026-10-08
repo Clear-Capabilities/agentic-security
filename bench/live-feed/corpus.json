@@ -1,0 +1,775 @@
+{
+ "schema": 1,
+ "note": "Projects were chosen by availability and by wanting a spread of dependency counts and resolution kinds, NOT at random. `resolution` says how component versions are known: declared = only Cabal ranges; freeze = cabal.project.freeze in the tarball; lock = stack.yaml.lock in the tarball; cabal-plan = the harness generates dist-newstyle/cache/plan.json with `cabal build --dry-run` at the pinned indexState (same tarball as the declared entry of the same name; counted as a separate scan).",
+ "indexState": "2026-10-08T02:30:50Z",
+ "projects": [
+  {
+   "id": "hackage-aeson-2.3.2.0",
+   "name": "aeson",
+   "version": "2.3.2.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/aeson-2.3.2.0/aeson-2.3.2.0.tar.gz"
+   },
+   "sha256": "c30d187d60fb81b0f93f72442ee6b1abd2709fc3b5e3befcf4173f6b30983458",
+   "bytes": 342460,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-pandoc-3.12.1",
+   "name": "pandoc",
+   "version": "3.12.1",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/pandoc-3.12.1/pandoc-3.12.1.tar.gz"
+   },
+   "sha256": "b37833ca08e7bf58ce4cf7901d358d8dd401213250309824fdb8045fc51788ed",
+   "bytes": 8652089,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-servant-server-0.20.3.0",
+   "name": "servant-server",
+   "version": "0.20.3.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/servant-server-0.20.3.0/servant-server-0.20.3.0.tar.gz"
+   },
+   "sha256": "30560af5d2597ae361711de8302617de3bfb3e01f10180ff48a331bbe8e49915",
+   "bytes": 60887,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-warp-3.4.16",
+   "name": "warp",
+   "version": "3.4.16",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/warp-3.4.16/warp-3.4.16.tar.gz"
+   },
+   "sha256": "7dd09b9f2f868e4647fe96162f063a99da791a0e57479d1ea74b210ecb8b2f17",
+   "bytes": 87194,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-scotty-0.30",
+   "name": "scotty",
+   "version": "0.30",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/scotty-0.30/scotty-0.30.tar.gz"
+   },
+   "sha256": "df90a8842400708e1314caaf0a7f0a026e214f3d5f98b7722edecc2e14fa4c4b",
+   "bytes": 88727,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-conduit-1.3.6.1",
+   "name": "conduit",
+   "version": "1.3.6.1",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/conduit-1.3.6.1/conduit-1.3.6.1.tar.gz"
+   },
+   "sha256": "69902af03ea7e4cb982fa83da42afe36973b62d0a52ea140ae5362e52854ba3f",
+   "bytes": 89114,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-http-conduit-2.3.9.1",
+   "name": "http-conduit",
+   "version": "2.3.9.1",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/http-conduit-2.3.9.1/http-conduit-2.3.9.1.tar.gz"
+   },
+   "sha256": "13046d15ecd2332a5b80c8a34a6a1b6b8eecefce9d5c57e3413312b8c11641af",
+   "bytes": 29275,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-xml-conduit-1.10.1.0",
+   "name": "xml-conduit",
+   "version": "1.10.1.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/xml-conduit-1.10.1.0/xml-conduit-1.10.1.0.tar.gz"
+   },
+   "sha256": "118ada3837b80c6327b11449bdab50d620043731be2b2494eadcd8e854bff83f",
+   "bytes": 46026,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-tls-2.4.9",
+   "name": "tls",
+   "version": "2.4.9",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/tls-2.4.9/tls-2.4.9.tar.gz"
+   },
+   "sha256": "e87c26d47c44e3c860d49518c197ec95be1dde90115db76faa3537191f793c25",
+   "bytes": 222441,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-persistent-2.18.1.0",
+   "name": "persistent",
+   "version": "2.18.1.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/persistent-2.18.1.0/persistent-2.18.1.0.tar.gz"
+   },
+   "sha256": "d3d42f8db94936847c53942ae0ed66f49a343095d761736dbaf9104690723e7a",
+   "bytes": 191892,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-postgresql-simple-0.7.0.1",
+   "name": "postgresql-simple",
+   "version": "0.7.0.1",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/postgresql-simple-0.7.0.1/postgresql-simple-0.7.0.1.tar.gz"
+   },
+   "sha256": "597cf320650318d6033ee538b19eb28e43f02b88590baae7272bc21275f3ab99",
+   "bytes": 98300,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-hakyll-4.17.0.0",
+   "name": "hakyll",
+   "version": "4.17.0.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/hakyll-4.17.0.0/hakyll-4.17.0.0.tar.gz"
+   },
+   "sha256": "a02ae25cce5a1a64d1c0d0d1cac4290916e3839578c57f7efa999b1f4d56673e",
+   "bytes": 135588,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-shake-0.19.9",
+   "name": "shake",
+   "version": "0.19.9",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/shake-0.19.9/shake-0.19.9.tar.gz"
+   },
+   "sha256": "4176d6e38c3b7813f019f2377466d9f01db842056eec1cdaa8a23b80ceddcb8a",
+   "bytes": 268241,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-cmark-gfm-0.2.6",
+   "name": "cmark-gfm",
+   "version": "0.2.6",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/cmark-gfm-0.2.6/cmark-gfm-0.2.6.tar.gz"
+   },
+   "sha256": "958cfb3bd54b1bfa9e1e2d9cd1748e76c10d2b30a3cceeab3f6a852205c1a869",
+   "bytes": 210356,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-git-annex-10.20261006",
+   "name": "git-annex",
+   "version": "10.20261006",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/git-annex-10.20261006/git-annex-10.20261006.tar.gz"
+   },
+   "sha256": "f2f275f8b1bef3ab482935cde137a59a815886e5edc7545171c2081a9bf64a9c",
+   "bytes": 1591565,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-crypton-2.1.7",
+   "name": "crypton",
+   "version": "2.1.7",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/crypton-2.1.7/crypton-2.1.7.tar.gz"
+   },
+   "sha256": "c03049b84713a6f9c8a5468b6def4d9221778421fda43d9d6164b362b16109c8",
+   "bytes": 2338021,
+   "resolution": "declared"
+  },
+  {
+   "id": "hackage-dhall-1.42.3",
+   "name": "dhall",
+   "version": "1.42.3",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/dhall-1.42.3/dhall-1.42.3.tar.gz"
+   },
+   "sha256": "cbb5612d9c55b9b3fa07ab73b72e6445875a6f53283f29979f164a9b3b067a00",
+   "bytes": 861906,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-pandoc-3.12.1",
+   "name": "pandoc",
+   "version": "3.12.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/jgm/pandoc",
+    "url": "https://github.com/jgm/pandoc/archive/refs/tags/3.12.1.tar.gz"
+   },
+   "sha256": "cf9b3725b90e471aa70c99ac3b351adcb6e40cd904d36fcbb0f70d712e135686",
+   "bytes": 9184297,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-hledger-1.52.4",
+   "name": "hledger",
+   "version": "1.52.4",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/simonmichael/hledger",
+    "url": "https://github.com/simonmichael/hledger/archive/refs/tags/1.52.4.tar.gz"
+   },
+   "sha256": "42806ef717db4dfecba6a2bfa326d97036ea946e4810dd0b7421ed4980f1d4aa",
+   "bytes": 3743536,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-shellcheck-v0.11.0",
+   "name": "shellcheck",
+   "version": "v0.11.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/koalaman/shellcheck",
+    "url": "https://github.com/koalaman/shellcheck/archive/refs/tags/v0.11.0.tar.gz"
+   },
+   "sha256": "8b07554f92e4fbfc33f1539a1f475f21c6503ceae8f806efcc518b1f529f7102",
+   "bytes": 467540,
+   "resolution": "freeze"
+  },
+  {
+   "id": "app-postgrest-v16.4",
+   "name": "postgrest",
+   "version": "v16.4",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/PostgREST/postgrest",
+    "url": "https://github.com/PostgREST/postgrest/archive/refs/tags/v16.4.tar.gz"
+   },
+   "sha256": "303a4d9d32a9183247f5bb48ed4179e23954c73cfbf69ebcff9f5ce3f12905f3",
+   "bytes": 1882932,
+   "resolution": "freeze"
+  },
+  {
+   "id": "app-haskell-language-server-2.15.0.0",
+   "name": "haskell-language-server",
+   "version": "2.15.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/haskell/haskell-language-server",
+    "url": "https://github.com/haskell/haskell-language-server/archive/refs/tags/2.15.0.0.tar.gz"
+   },
+   "sha256": "ca5e7637ea62cf8d1223fcba63f64b77924e85ccfb5b716075d030e272f1fbbe",
+   "bytes": 7388490,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-purescript-v0.15.16",
+   "name": "purescript",
+   "version": "v0.15.16",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/purescript/purescript",
+    "url": "https://github.com/purescript/purescript/archive/refs/tags/v0.15.16.tar.gz"
+   },
+   "sha256": "36abaef46aa3cd0316d924c872987aa186d95654d05aa66060948ab47b161f18",
+   "bytes": 891651,
+   "resolution": "lock"
+  },
+  {
+   "id": "app-dhall-haskell-1.42.2",
+   "name": "dhall-haskell",
+   "version": "1.42.2",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/dhall-lang/dhall-haskell",
+    "url": "https://github.com/dhall-lang/dhall-haskell/archive/refs/tags/1.42.2.tar.gz"
+   },
+   "sha256": "009bcefc65a45018884edf02f728a641692e7251d876be83d5e07c00ecd6abde",
+   "bytes": 926838,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-agda-v2.8.0.2",
+   "name": "agda",
+   "version": "v2.8.0.2",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/agda/agda",
+    "url": "https://github.com/agda/agda/archive/refs/tags/v2.8.0.2.tar.gz"
+   },
+   "sha256": "c29ee2c06a7feb812fcb7f0543a2ddf800a9f806d09cc7813cee9c733a169b6d",
+   "bytes": 5006742,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-stack-v3.11.1",
+   "name": "stack",
+   "version": "v3.11.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/commercialhaskell/stack",
+    "url": "https://github.com/commercialhaskell/stack/archive/refs/tags/v3.11.1.tar.gz"
+   },
+   "sha256": "388916c20e2a9e9d343ef40c0c31fbb664cdbf302122ded8508ded8f765cbb4f",
+   "bytes": 4892332,
+   "resolution": "lock"
+  },
+  {
+   "id": "app-cabal-cabal-install-v3.18.2.0",
+   "name": "cabal",
+   "version": "cabal-install-v3.18.2.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/haskell/cabal",
+    "url": "https://github.com/haskell/cabal/archive/refs/tags/cabal-install-v3.18.2.0.tar.gz"
+   },
+   "sha256": "4af446dc7a0caca6c42497ffd50a80d8efbc9bc6de4751ed00fafb3e81696779",
+   "bytes": 4303973,
+   "resolution": "freeze"
+  },
+  {
+   "id": "app-hlint-v3.10",
+   "name": "hlint",
+   "version": "v3.10",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/ndmitchell/hlint",
+    "url": "https://github.com/ndmitchell/hlint/archive/refs/tags/v3.10.tar.gz"
+   },
+   "sha256": "e2a43c6e3981a182fcf4abcb83e2aad948bf8475c570011fb31a902b64bcec4a",
+   "bytes": 206237,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-ormolu-0.9.0.0",
+   "name": "ormolu",
+   "version": "0.9.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/tweag/ormolu",
+    "url": "https://github.com/tweag/ormolu/archive/refs/tags/0.9.0.0.tar.gz"
+   },
+   "sha256": "ec54aa0fae2c6dff5c920ce28b76a366747b90719bd2c5015df18f5bdd8e04e0",
+   "bytes": 474622,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-fourmolu-v0.21.0.0",
+   "name": "fourmolu",
+   "version": "v0.21.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/fourmolu/fourmolu",
+    "url": "https://github.com/fourmolu/fourmolu/archive/refs/tags/v0.21.0.0.tar.gz"
+   },
+   "sha256": "63a2244fa316ea8f3965cb7d5406f6ae0cff8461934e80b70c75570e88441d91",
+   "bytes": 706397,
+   "resolution": "lock"
+  },
+  {
+   "id": "app-xmonad-v0.18.1",
+   "name": "xmonad",
+   "version": "v0.18.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/xmonad/xmonad",
+    "url": "https://github.com/xmonad/xmonad/archive/refs/tags/v0.18.1.tar.gz"
+   },
+   "sha256": "df58d25fbdfc37c515bae174b513577914a20a5dba4a7b654096ac43485f8220",
+   "bytes": 111592,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-kmonad-0.4.5",
+   "name": "kmonad",
+   "version": "0.4.5",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/kmonad/kmonad",
+    "url": "https://github.com/kmonad/kmonad/archive/refs/tags/0.4.5.tar.gz"
+   },
+   "sha256": "a9cb50db4820fa5b72c7d543585875b37d69b55e7c0f4fd3cc3950f51d24bb56",
+   "bytes": 143587,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-ghcup-hs-v0.2.6.2",
+   "name": "ghcup-hs",
+   "version": "v0.2.6.2",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/haskell/ghcup-hs",
+    "url": "https://github.com/haskell/ghcup-hs/archive/refs/tags/v0.2.6.2.tar.gz"
+   },
+   "sha256": "a8b4657d235bb14fb8c4ed33cc3059297fbbb2dd98e239f4629c1ed1632041ed",
+   "bytes": 1714475,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-hadolint-v2.15.1",
+   "name": "hadolint",
+   "version": "v2.15.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/hadolint/hadolint",
+    "url": "https://github.com/hadolint/hadolint/archive/refs/tags/v2.15.1.tar.gz"
+   },
+   "sha256": "52fbc1c8a4558f89e3b0c9d905e62016cf58ae842f9fa3ac93c56bb45f8c9ddb",
+   "bytes": 376764,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-hnix-0.17.0",
+   "name": "hnix",
+   "version": "0.17.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/haskell-nix/hnix",
+    "url": "https://github.com/haskell-nix/hnix/archive/refs/tags/0.17.0.tar.gz"
+   },
+   "sha256": "84045942ff5c63e3e0902e39112a7dc9710cf260314a4238447f2c6e0c4b8e5d",
+   "bytes": 350310,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-wire-server-v2026-10-05",
+   "name": "wire-server",
+   "version": "v2026-10-05",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/wireapp/wire-server",
+    "url": "https://github.com/wireapp/wire-server/archive/refs/tags/v2026-10-05.tar.gz"
+   },
+   "sha256": "d7246fab07af02d2350b2c049eb6dc857a389ae7b71e4ab5eac2b43aa376de12",
+   "bytes": 7667040,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-cardano-node-11.1.3",
+   "name": "cardano-node",
+   "version": "11.1.3",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/input-output-hk/cardano-node",
+    "url": "https://github.com/input-output-hk/cardano-node/archive/refs/tags/11.1.3.tar.gz"
+   },
+   "sha256": "11b1805bdbd5f5ac68073f176920f59e9cd1171c47a31b4de3cbffa43c9736b7",
+   "bytes": 6674211,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-liquidhaskell-v0.9.14.1",
+   "name": "liquidhaskell",
+   "version": "v0.9.14.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/ucsd-progsys/liquidhaskell",
+    "url": "https://github.com/ucsd-progsys/liquidhaskell/archive/refs/tags/v0.9.14.1.tar.gz"
+   },
+   "sha256": "8bfe137f42126f93a149c72f682e4ed4a05416ea3e52fa8e78d4e788b02291e1",
+   "bytes": 34032312,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-summoner-v2.2.0.0",
+   "name": "summoner",
+   "version": "v2.2.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/kowainik/summoner",
+    "url": "https://github.com/kowainik/summoner/archive/refs/tags/v2.2.0.0.tar.gz"
+   },
+   "sha256": "6d38a5e48fa6ffc1cc4b9d490e60a8d354e7414ba31e7d3ed4c0c7af3590d9b0",
+   "bytes": 92458,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-obelisk-v1.3.0.0",
+   "name": "obelisk",
+   "version": "v1.3.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/obsidiansystems/obelisk",
+    "url": "https://github.com/obsidiansystems/obelisk/archive/refs/tags/v1.3.0.0.tar.gz"
+   },
+   "sha256": "b237ed6c5da69efa5928cf0381183cfe3efcf176675809f24d239d9f02f06575",
+   "bytes": 10856641,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-emanote-1.4.0.0",
+   "name": "emanote",
+   "version": "1.4.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/srid/emanote",
+    "url": "https://github.com/srid/emanote/archive/refs/tags/1.4.0.0.tar.gz"
+   },
+   "sha256": "5e442f99415b2e45efdf66330a40cfed5255fe4d20518155d1fda44806f6b08d",
+   "bytes": 828978,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-pandoc-2.11.4",
+   "name": "pandoc",
+   "version": "2.11.4",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/jgm/pandoc",
+    "url": "https://github.com/jgm/pandoc/archive/refs/tags/2.11.4.tar.gz"
+   },
+   "sha256": "448aac5c3b35ba0005c7c9a08b7058a8ea6687cbb1b6efaea1f1fce922eb7c2f",
+   "bytes": 13001077,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-hledger-1.20",
+   "name": "hledger",
+   "version": "1.20",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/simonmichael/hledger",
+    "url": "https://github.com/simonmichael/hledger/archive/refs/tags/1.20.tar.gz"
+   },
+   "sha256": "4324a815c7f06b2aa358dc02ac07d2da3b0b1ad1922a39d49db23dbcf1f2e6b9",
+   "bytes": 1904923,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-shellcheck-v0.7.2",
+   "name": "shellcheck",
+   "version": "v0.7.2",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/koalaman/shellcheck",
+    "url": "https://github.com/koalaman/shellcheck/archive/refs/tags/v0.7.2.tar.gz"
+   },
+   "sha256": "5911f6133951d0ba6d643025bc50f2afb6c6f66d7225dc3d42e8845bfdf74c3c",
+   "bytes": 225199,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-postgrest-v7.0.1",
+   "name": "postgrest",
+   "version": "v7.0.1",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/PostgREST/postgrest",
+    "url": "https://github.com/PostgREST/postgrest/archive/refs/tags/v7.0.1.tar.gz"
+   },
+   "sha256": "12f621065b17934c474c85f91ad7b276bff46f684a5f49795b10b39eaacfdcaa",
+   "bytes": 611294,
+   "resolution": "lock"
+  },
+  {
+   "id": "app-purescript-v0.14.0",
+   "name": "purescript",
+   "version": "v0.14.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/purescript/purescript",
+    "url": "https://github.com/purescript/purescript/archive/refs/tags/v0.14.0.tar.gz"
+   },
+   "sha256": "e5d3e3f3f33b8165b77e5d916bae33f31a7e63239381704f16ec4c04bbaac5af",
+   "bytes": 663183,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-dhall-haskell-1.38.0",
+   "name": "dhall-haskell",
+   "version": "1.38.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/dhall-lang/dhall-haskell",
+    "url": "https://github.com/dhall-lang/dhall-haskell/archive/refs/tags/1.38.0.tar.gz"
+   },
+   "sha256": "5e8d9ba55ebd481ea8f43ca725df69191ba12332450ed4a5c64710fdc94b9822",
+   "bytes": 841864,
+   "resolution": "declared"
+  },
+  {
+   "id": "app-graphql-engine-v2.0.0",
+   "name": "graphql-engine",
+   "version": "v2.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/hasura/graphql-engine",
+    "url": "https://github.com/hasura/graphql-engine/archive/refs/tags/v2.0.0.tar.gz"
+   },
+   "sha256": "fbadfc498de62f51ab24cee9498bb1cce001dbdd282582feb17056d7e297bbca",
+   "bytes": 34928426,
+   "resolution": "freeze"
+  },
+  {
+   "id": "hackage-aeson-2.3.2.0+plan",
+   "name": "aeson",
+   "version": "2.3.2.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/aeson-2.3.2.0/aeson-2.3.2.0.tar.gz"
+   },
+   "sha256": "c30d187d60fb81b0f93f72442ee6b1abd2709fc3b5e3befcf4173f6b30983458",
+   "bytes": 342460,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-aeson-2.3.2.0"
+  },
+  {
+   "id": "hackage-warp-3.4.16+plan",
+   "name": "warp",
+   "version": "3.4.16",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/warp-3.4.16/warp-3.4.16.tar.gz"
+   },
+   "sha256": "7dd09b9f2f868e4647fe96162f063a99da791a0e57479d1ea74b210ecb8b2f17",
+   "bytes": 87194,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-warp-3.4.16"
+  },
+  {
+   "id": "hackage-megaparsec-9.8.3+plan",
+   "name": "megaparsec",
+   "version": "9.8.3",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/megaparsec-9.8.3/megaparsec-9.8.3.tar.gz"
+   },
+   "sha256": "9436ab45f7ff186a13320641af023bcfa2b84cc4ccefac5e50a7a8ee366bcf8b",
+   "bytes": 72647,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-megaparsec-9.8.3"
+  },
+  {
+   "id": "hackage-http-client-0.7.19+plan",
+   "name": "http-client",
+   "version": "0.7.19",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/http-client-0.7.19/http-client-0.7.19.tar.gz"
+   },
+   "sha256": "a02c1be082e8f48c959ac7150a48a405f8d4383e0942639481e84b220f29ad61",
+   "bytes": 96836,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-http-client-0.7.19"
+  },
+  {
+   "id": "hackage-hakyll-4.17.0.0+plan",
+   "name": "hakyll",
+   "version": "4.17.0.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/hakyll-4.17.0.0/hakyll-4.17.0.0.tar.gz"
+   },
+   "sha256": "a02ae25cce5a1a64d1c0d0d1cac4290916e3839578c57f7efa999b1f4d56673e",
+   "bytes": 135588,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-hakyll-4.17.0.0"
+  },
+  {
+   "id": "hackage-xml-conduit-1.10.1.0+plan",
+   "name": "xml-conduit",
+   "version": "1.10.1.0",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/xml-conduit-1.10.1.0/xml-conduit-1.10.1.0.tar.gz"
+   },
+   "sha256": "118ada3837b80c6327b11449bdab50d620043731be2b2494eadcd8e854bff83f",
+   "bytes": 46026,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-xml-conduit-1.10.1.0"
+  },
+  {
+   "id": "hackage-yaml-0.11.11.2+plan",
+   "name": "yaml",
+   "version": "0.11.11.2",
+   "kind": "hackage-package",
+   "source": {
+    "type": "hackage",
+    "url": "https://hackage.haskell.org/package/yaml-0.11.11.2/yaml-0.11.11.2.tar.gz"
+   },
+   "sha256": "ee74923ee5b0fef74413c58aaa20ea59baf5d29d256a62fb47cc279570d9dc2f",
+   "bytes": 31926,
+   "resolution": "cabal-plan",
+   "tarballId": "hackage-yaml-0.11.11.2"
+  },
+  {
+   "id": "app-ormolu-0.9.0.0+plan",
+   "name": "ormolu",
+   "version": "0.9.0.0",
+   "kind": "application",
+   "source": {
+    "type": "git-archive",
+    "repo": "https://github.com/tweag/ormolu",
+    "url": "https://github.com/tweag/ormolu/archive/refs/tags/0.9.0.0.tar.gz"
+   },
+   "sha256": "ec54aa0fae2c6dff5c920ce28b76a366747b90719bd2c5015df18f5bdd8e04e0",
+   "bytes": 474622,
+   "resolution": "cabal-plan",
+   "tarballId": "app-ormolu-0.9.0.0"
+  }
+ ]
+}

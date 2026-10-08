@@ -31,6 +31,31 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
   queried (`covered`); a package it did not cover is `feed-incomplete` and a stale one `feed-stale`, in BOTH matchers
   (`evaluateComponents` and `nix-sca.js`). Any new consumer of an `AdvisoryDb` must check `db.coverage(name)` before saying "no advisory".
   The snapshot lives in the operator configuration directory, never the project (`trusted-inputs.js`).
+- **Auth guards must stop the handler.** In `haskell-web.js` a Scotty `status 40x` only sets the code, so both the named-guard path (`guardSummary`) and the inline path (`handlerFacts`) need a halting call (`finish`, `raise`, `raiseStatus`, `redirect`; `finish` is an IR identifier with no line of its own). WAI, Servant and Yesod inline guards order the credential READ against the first sensitive call, because a tail-position rejection reports the enclosing line (a disclosed gap, pinned in `test/haskell/haskell-web-guards.test.js`). A WAI `responseLBS` rejection counts only when handed back (`respond`/`return`).
+- **Severity is the advisory's own** (`cvss.js`): CVSS v3.x base score, else a named `database_specific.severity`, else `medium` with the basis stated. Never guess from an unparseable or v4 vector.
+- **Option fixes work on the effective configuration, across files.** `nix-fix.js` edits EVERY contributing definition of an option
+  (all winners at the winning priority, plus conditional branches holding the weak literal), never one line: editing one of two
+  equal-priority winners turns a finding into a module-system conflict that a rescan alone reports as "fixed". Verification is
+  the `effective` gate (`makeEffectiveCheck`: resolve the option again over the patched tree). A plan may carry `edits` (several
+  files); `runFixLifecycle` applies them through `writeManyWithBackup` (checks everything and backs up everything before the
+  first write, rolls back on a failed write) and records one history entry per file sharing `languageGroupId`; `undoFix` and
+  `posture/fix-history.js` `undoLast`/`revertEntryById` restore a group as a unit. A winner outside the root or not a single
+  literal is refused with an `override` suggestion (`overrideSuggestion`), never an automatic edit. Any new consumer of a fix
+  plan (LSP, MCP, CLI) must honour `plan.edits`: `apply_fix` writes one file, so a multi-file fix is not offered there.
+- **Boundaries are narrowed only by sound, closed rules.** `haskell-cpp.js` decides a CPP conditional only from the file, a project-stated
+  compiler (`with-compiler` pin; `tested-with` only when every item is an exact version and all agree, recorded as an assumption) or the hull
+  of cabal `build-depends` bounds; an unknown macro is undecided, never 0, and an undecided conditional keeps every branch. `haskell-boundaries.js`
+  accepts a TH declaration splice only when the generator is IMPORTED from its upstream module (not shadowed/hidden) and every token is a name
+  quote, literal, documented setting or restricted option update; a quasi-quote only when it is a raw-string or non-interpolating quoter. The
+  accepted kinds (`th-safe-splice`, `quasiquote-inert`) are disclosed, never in the adapter's opaque set, and `preprocessForSyntax` feeds the same
+  decisions to the semantic IR. Widening any allowlist needs a both-directions test in `test/haskell/haskell-boundaries.test.js`.
+- **The Nix feed is the same contract over a different source.** `nix-advisory-feed.js` uses the NVD CVE API 2.0 keyed by CPE
+  `vendor:product` (OSV has no nixpkgs ecosystem), behind `AGENTIC_SECURITY_NIX_ADVISORIES_LIVE=1`. Coverage is per CPE identity
+  (`NixAdvisoryData.cpeCoverage`), and `nix-sca.js` reports an uncovered identity, or a component with no CPE, as `unknown` with
+  `feedCoverage: 'incomplete'`, never `not-affected`. A snapshot with no `covered` table (pinned, hand-written) is matched exactly as
+  before. The prefetch (`prefetchNixAdvisoryFeed`, `resolved-pass.js`) asks only for identities `closureIdentities` says the matcher
+  will use; metadata comes only from the operator (`AGENTIC_SECURITY_NIX_META`). NVD is rate limited (5/30 s keyless): never raise
+  the request caps or lower the spacing in `nix-advisory-feed.js` without re-reading the NVD limits.
 - **Pragma** (`pragma.js`): comment-aware, line-scoped, exact rule-id match, logged. A line-less finding cannot be suppressed.
 
 ## Module map
@@ -38,12 +63,33 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
 | Group | Files |
 |---|---|
 | Shared | `discovery.js` (sources, manifests, explicit exports, exclusions, import graph, invalidation digests), `contracts.js`, `assurance.js` (scan-health inputs, conditions, limitations), `engine-pass.js` (language supply chain wired into the engine), `resolved-pass.js` (plan / Stack export / Nix closure / opt-in evaluation reachable from the CLI), `context.js` (project context for partial scans, fix previews and dependency upgrades, model prompt extras), `state-artifacts.js`, `pragma.js`, `secrets.js`, `bom.js`, `bom-validate.js`, `aibom.js`, `compliance-map.js`, `bridges.js`, `witness.js`, `fix-lifecycle.js` (the one fix lifecycle: path, syntax, rescan, compile, backup, history, undo) |
-| Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
+| Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `cvss.js` (CVSS v3.x base-score calculator and advisory-severity selection, shared by the Haskell and Nix matchers; v4 is not scored and says so), `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
+| Haskell | `haskell-parser.js`, `haskell-cpp.js` (three-valued CPP conditional evaluation + project context from cabal), `haskell-boundaries.js` (closed set of safe TH declaration splices and inert quasi-quotes), `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
 | Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
+| Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
+| Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-eval-forms.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-eval-isolation.js`, `nix-fix.js` |
+| Haskell | `haskell-parser.js`, `haskell-grammar.js`, `haskell-adapter.js`, `haskell-ir.js`, `haskell-models.js` (the single registry of sources, sinks, sanitizers; `dataflow/catalog-haskell.js` is generated from it), `haskell-guards.js`, `haskell-security-rules.js`, `haskell-web.js`, `haskell-findings.js`, `haskell-syntax.js`, `haskell-sweep.js`, `haskell-disclosure.js`, `haskell-llm.js`, `haskell-manifests.js`, `haskell-resolved-graph.js`, `haskell-sca.js`, `haskell-advisory-feed.js` (the opt-in live Hackage feed: OSV fetch, per-package coverage, operator-only snapshot), `haskell-supply.js`, `haskell-fix.js` |
+| Nix | `nix-parser.js`, `nix-grammar.js`, `nix-ir.js`, `nix-adapter.js`, `nixos-module-resolver.js`, `nixos-option-catalog.js`, `nixos-hardening.js`, `nix-build-trust.js`, `nix-secrets.js`, `nix-script-taint.js`, `nix-privacy.js`, `nix-agents.js`, `nix-inventory.js`, `nix-closure.js`, `nix-sca.js`, `nix-advisory-feed.js`, `nix-eval-isolation.js`, `nix-fix.js` |
 | Measurement | `accuracy.js` (family-scoped scoring, per-layer), `support-registry.js` (status rules, promotion refusals, frozen-hash demotion) |
 
 Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell-view.js`, `lineage/nix-view.js`,
 `ir/` Haskell/Nix adapters, `report/` format handling, `egress/redact.js`, `llm-validator/`, `discovery/` (hunt partitions Nix).
+
+## NixOS option evaluator (soundness rules)
+
+`nixos-module-resolver.js` `evalExpr` is a soundness-first subset; `nixos-eval-forms.js` holds its value classes and the
+**allow-list** of library functions (there is no deny-list to forget an entry in). Rules to keep when extending it:
+
+- **Any unknown part makes the whole value unknown.** Never default, never pick a branch you cannot decide.
+- **Scope is a correctness issue.** Lexical bindings (let, lambda) beat every `with`; innermost `with` beats outer; the module's
+  own `let`s are IR bindings (`ir.bindings`, `scope: 'let'`) and are used only when unique in the file, not also a function
+  parameter, not in a `rec` set, and when their `letSpan` encloses `env.pos` (the absolute span of the text being evaluated).
+  `evalSpan` on a definition (set by `nix-ir.js` when a leaf sits under let/with/assert only) makes the resolver evaluate the
+  whole wrapper. A priority/condition/merge combinator clears it, because those are the collector's job.
+- **Final values must be plain data** (`sealed`/`isPlain`): a closure, partial application or namespace is `unknown`. A
+  priority wrapper inside a value is unknown (priority is not recoverable); at the top of a definition the collector reads it.
+- **Bounded**: `maxEvaluations`, `maxExprDepth`, `maxValueSize` are caps that surface as `truncated`, not as a guess.
+- Assumption stated, not proven: `lib` is nixpkgs' `lib` whenever the module declares a `lib` parameter and the file does not rebind it.
 
 ## Tests and benches
 
@@ -55,6 +101,7 @@ Related, outside this directory: `dataflow/catalog-haskell.js`, `lineage/haskell
 | Stress | `npm run test:language-stress` | offline scale and a peak-memory ceiling; excluded from `npm test` (it must own the machine) |
 | Needs a compiler | `npm run test:language-tools` | HS-006.AC01 and the support gate; excluded from `npm test`; **fails** without `ghc` |
 | Support registry | `npm run bench:language-support:check` | recomputes the registry from the STORED measurement; fails on any difference |
+| Live feed | `npm run bench:live-feed -- <fetch\|plan\|scan\|merge\|sample\|report>` | `bench/live-feed/`: the opt-in Hackage feed against real projects and real OSV. Needs the network and is NOT in `npm test` or any gate. `RESULTS.md` is a dated measurement; labels in it are model-assessed |
 
 The support registry is measured **once per promotion** on a frozen holdout (`bench/language-support/promote.mjs`); never tune
 against the holdout, and any further holdout run counts as repeated use. A change to the engine, the corpus or a label changes the

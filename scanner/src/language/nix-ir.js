@@ -165,21 +165,23 @@ class IrBuilder {
     if (depth > this.b.maxIrDepth) { this.budget('maxIrDepth'); return []; }
     switch (n.type) {
       case 'attrset': return this.flattenAttrs(n, ctx, depth);
+      // `evalWrap` remembers the OUTERMOST let/with that wraps a leaf value (through nothing but let, with, assert and parentheses), so
+      // the module resolver can evaluate the whole wrapper with correct scoping instead of the bare body. Any other combinator clears it.
       case 'let': {
         const out = this.recordScoped(n, 'let', ctx);
-        return out.concat(this.flatten(n.body, ctx, depth + 1));
+        return out.concat(this.flatten(n.body, { ...ctx, evalWrap: ctx.evalWrap || { span: n.span, withs: ctx.withs } }, depth + 1));
       }
-      case 'with': return this.flatten(n.body, { ...ctx, withs: [...ctx.withs, this.snippet(n.env)] }, depth + 1);
-      case 'assert': return this.flatten(n.body, ctx, depth + 1);
+      case 'with': return this.flatten(n.body, { ...ctx, withs: [...ctx.withs, this.snippet(n.env)], evalWrap: ctx.evalWrap || { span: n.span, withs: ctx.withs } }, depth + 1);
+      case 'assert': return this.flatten(n.body, { ...ctx, evalWrap: ctx.evalWrap || { span: n.span, withs: ctx.withs } }, depth + 1);
       case 'if': {
         const c = { kind: 'if', span: n.cond.span, text: this.snippet(n.cond) };
-        return this.flatten(n.then, { ...ctx, conditions: [...ctx.conditions, { ...c, branch: 'then' }] }, depth + 1)
-          .concat(this.flatten(n.else, { ...ctx, conditions: [...ctx.conditions, { ...c, branch: 'else' }] }, depth + 1));
+        return this.flatten(n.then, { ...ctx, evalWrap: null, conditions: [...ctx.conditions, { ...c, branch: 'then' }] }, depth + 1)
+          .concat(this.flatten(n.else, { ...ctx, evalWrap: null, conditions: [...ctx.conditions, { ...c, branch: 'else' }] }, depth + 1));
       }
       case 'binop':
         if (n.op === '//') {
-          const left = this.flatten(n.left, ctx, depth + 1);
-          const right = this.flatten(n.right, ctx, depth + 1);
+          const left = this.flatten(n.left, { ...ctx, evalWrap: null }, depth + 1);
+          const right = this.flatten(n.right, { ...ctx, evalWrap: null }, depth + 1);
           const over = new Set();
           for (const r of right) if (r.path.length > ctx.prefix.length && r.path[ctx.prefix.length] !== null) over.add(r.path[ctx.prefix.length]);
           const kept = [];
@@ -196,17 +198,17 @@ class IrBuilder {
         const name = calleeName(fn);
         if (name === 'mkMerge' && args.length === 1 && unparen(args[0]).type === 'list') {
           let out = [];
-          for (const it of unparen(args[0]).items) out = out.concat(this.flatten(it, { ...ctx, merge: 'mkMerge' }, depth + 1));
+          for (const it of unparen(args[0]).items) out = out.concat(this.flatten(it, { ...ctx, evalWrap: null, merge: 'mkMerge' }, depth + 1));
           return out;
         }
         if (COND_WRAPPERS.has(name) && args.length === 2) {
           const cond = { kind: name, span: args[0].span, text: this.snippet(args[0]), branch: 'then' };
-          return this.flatten(args[1], { ...ctx, conditions: [...ctx.conditions, cond] }, depth + 1);
+          return this.flatten(args[1], { ...ctx, evalWrap: null, conditions: [...ctx.conditions, cond] }, depth + 1);
         }
         if (PRIORITY_WRAPPERS.has(name) && args.length >= 1) {
           // mkOverride carries its numeric priority as the first argument; keep it so the module resolver can rank it
           const priorityArg = name === 'mkOverride' && args.length >= 2 ? this.summarize(args[0]) : null;
-          return this.flatten(args[args.length - 1], { ...ctx, priority: name, priorityArg }, depth + 1);
+          return this.flatten(args[args.length - 1], { ...ctx, evalWrap: null, priority: name, priorityArg }, depth + 1);
         }
         // a file that is just `mkDerivation { ... }` / `callPackage ./x.nix { ... }`: the last attrset argument is the configuration
         if (!ctx.prefix.length && args.length) {
@@ -229,6 +231,8 @@ class IrBuilder {
       withs: ctx.withs, overridden: false, update: false, callee: ctx.callee || null,
     });
     if (rec && ctx.priorityArg) rec.priorityArg = ctx.priorityArg;
+    if (rec && ctx.evalWrap) { rec.evalSpan = ctx.evalWrap.span; rec.evalWiths = ctx.evalWrap.withs; }
+    if (rec && ctx.inRec) rec.inRec = true;
     if (rec && n.type === 'lambda') this.noteBoundaryLambda(n, ctx);
     return rec ? [rec] : [];
   }
@@ -262,7 +266,7 @@ class IrBuilder {
       if (dynamic) {
         for (const s of b.path) if (s.kind !== 'static') this.gap('dynamic-attribute', `attribute name computed at evaluation time (${this.snippet({ start: s.span.startOffset, end: s.span.endOffset }) || 'interpolated'})`, s.span);
       }
-      const sub = { ...ctx, prefix: [...ctx.prefix, ...segs], span: b.span, origin: 'attr' };
+      const sub = { ...ctx, prefix: [...ctx.prefix, ...segs], span: b.span, origin: 'attr', evalWrap: null, inRec: ctx.inRec || !!n.rec };
       out = out.concat(this.flatten(b.value, sub, depth + 1));
     }
     return out;
@@ -280,7 +284,7 @@ class IrBuilder {
         continue;
       }
       const { path: segs, dynamic } = staticPath(b.path);
-      const r = this.addBinding({ path: segs, pathText: segs.map((p) => (p === null ? '${...}' : p)).join('.'), value: this.summarize(b.value), span: b.span, valueSpan: b.value.span, origin: 'let', scope, dynamic, conditions: ctx.conditions, priority: null, merge: null, withs: ctx.withs, overridden: false, update: false });
+      const r = this.addBinding({ letSpan: n.span, path: segs, pathText: segs.map((p) => (p === null ? '${...}' : p)).join('.'), value: this.summarize(b.value), span: b.span, valueSpan: b.value.span, origin: 'let', scope, dynamic, conditions: ctx.conditions, priority: null, merge: null, withs: ctx.withs, overridden: false, update: false });
       if (r) out.push(r);
       if (dynamic) this.gap('dynamic-attribute', 'dynamic attribute name in let binding', b.span);
     }

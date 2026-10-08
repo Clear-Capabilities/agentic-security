@@ -17,8 +17,11 @@ globalThis.fetch = async (url) => {
   return { ok: false, status: 404, json: async () => ({}) };
 };
 
-// Prime OFFLINE so OSV / KEV / EPSS don't fire during these unit tests.
-process.env.AGENTIC_SECURITY_OFFLINE = '1';
+// These tests exercise the registry-metadata lookup itself, so they run ONLINE with `fetch` stubbed above: only queryRegistries is called
+// (never the OSV, KEV or EPSS paths), so nothing else can fire. They used to set OFFLINE to keep those quiet, which only worked because the
+// registry lookups ignored offline mode; they no longer do (see test/haskell/haskell-live-feed-scan.test.js, which pins that offline mode
+// makes no registry request and that online it still does).
+delete process.env.AGENTIC_SECURITY_OFFLINE;
 
 const { queryRegistries } = await import('../src/engine.js');
 

@@ -542,7 +542,10 @@ export function normalizeFindings(scan){
       version: sc.version,
       cveAliases: sc.cveAliases || [],
       osvId: sc.osvId || null,
-      advisory: sc.advisory || sc.description || '',
+      advisory: sc.advisory || sc.description || sc.summary || '',
+      // Hackage (and any matcher that decides from ranges): WHY the dependency matched. Without these a `possibly-affected` finding
+      // (only a declared range is known) reads exactly like an `affected` one (the resolved version is inside the range).
+      ...(sc.matchStatus ? { matchStatus: sc.matchStatus, matchReason: sc.matchReason || null, declaredRange: sc.declaredRange || null, resolution: sc.resolution || null, ghcComponent: sc.ghcComponent === true } : {}),
       fixedIn: sc.range || (Array.isArray(sc.fixedIn) && sc.fixedIn.length ? sc.fixedIn : null),
       ...(Number.isInteger(sc.line) && sc.line > 0 ? { declaringLine: sc.line, declaringFile: sc.file || null } : {}),
       // Feat-9: real-world risk signals

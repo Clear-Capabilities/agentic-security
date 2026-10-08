@@ -1,0 +1,348 @@
+{
+ "assessor": "Claude Sonnet 5.5, the model that wrote and ran this harness, so not independent of the code under test",
+ "assessedAt": "2026-10-08",
+ "sampling": "The sample is drawn by `sample.mjs` with seed 20261007, stratified by status (quota {\"affected-resolved\":7,\"affected-declared\":3,\"possibly-affected\":10,\"not-affected\":8,\"unknown\":4,\"ghc\":8}, at most 3 rows per project, duplicate rows collapsed), from the final scan's re-evaluated statuses. Pool sizes before drawing: {\"ghc\":198,\"possibly-affected\":82,\"not-affected\":51,\"affected-declared\":7,\"affected-resolved\":9}. The \"unknown\" stratum is empty because no row was unknown in the final run (the 159 unknown rows of the first pass were the unbounded-dependency defect, fixed). The quota for affected-resolved (7) could not be met: only 9 such rows exist in the corpus.",
+ "verdictMeaning": "correct = the status given is the one the advisory record's affected events and the manifest / freeze / plan evidence support. incorrect = it is not. cannot-tell = the record and the evidence do not decide it. A verdict is NOT a statement that the vulnerable code is reachable or that the platform condition (e.g. Windows-only) holds.",
+ "items": [
+  {
+   "project": "app-graphql-engine-v2.0.0",
+   "package": "aeson",
+   "versionOrRange": "1.5.5.1",
+   "advisory": "HSEC-2023-0001",
+   "status": "affected",
+   "stratum": "affected-resolved",
+   "verdict": "correct",
+   "reason": "aeson 1.5.5.1 is pinned by server/cabal.project.freeze (next to graphql-engine.cabal); affected is [0.4.0.0, 2.0.1.0), 1.5.5.1 is inside."
+  },
+  {
+   "project": "app-graphql-engine-v2.0.0",
+   "package": "x509",
+   "versionOrRange": "1.7.5",
+   "advisory": "HSEC-2026-0008",
+   "status": "affected",
+   "stratum": "affected-resolved",
+   "verdict": "correct",
+   "reason": "x509 1.7.5 is pinned by the same freeze; the record lists x509 as affected from 1.4.0 with no fix, so 1.7.5 is affected."
+  },
+  {
+   "project": "app-graphql-engine-v2.0.0",
+   "package": "x509-store",
+   "versionOrRange": "1.6.7",
+   "advisory": "HSEC-2025-0006",
+   "status": "affected",
+   "stratum": "affected-resolved",
+   "verdict": "correct",
+   "reason": "x509-store 1.6.7 is pinned by the freeze; affected from 0.1 with no fix."
+  },
+  {
+   "project": "hackage-hakyll-4.17.0.0+plan",
+   "package": "crypton-x509",
+   "versionOrRange": "1.7.7",
+   "advisory": "HSEC-2026-0008",
+   "status": "affected",
+   "stratum": "affected-resolved",
+   "verdict": "correct",
+   "reason": "crypton-x509 1.7.7 is in the cabal plan (plan.json lists it); affected is [1.7.6, 1.9.1)."
+  },
+  {
+   "project": "hackage-hakyll-4.17.0.0+plan",
+   "package": "crypton-x509-validation",
+   "versionOrRange": "1.6.14",
+   "advisory": "HSEC-2026-0008",
+   "status": "affected",
+   "stratum": "affected-resolved",
+   "verdict": "correct",
+   "reason": "crypton-x509-validation 1.6.14 is in the cabal plan; affected is [1.6.12, 1.9.1)."
+  },
+  {
+   "project": "app-pandoc-2.11.4",
+   "package": "aeson",
+   "versionOrRange": ">= 0.7 && < 1.6",
+   "advisory": "HSEC-2023-0001",
+   "status": "affected",
+   "stratum": "affected-declared",
+   "verdict": "correct",
+   "reason": "pandoc.cabal declares aeson >= 0.7 && < 1.6, wholly inside [0.4.0.0, 2.0.1.0): every allowed version is affected."
+  },
+  {
+   "project": "app-hnix-0.17.0",
+   "package": "aeson",
+   "versionOrRange": ">= 1.4.2 && < 1.6 || >= 2.0 && < 2.2",
+   "advisory": "HSEC-2026-0007",
+   "status": "affected",
+   "stratum": "affected-declared",
+   "verdict": "correct",
+   "reason": "hnix.cabal declares aeson >= 1.4.2 && < 1.6 || >= 2.0 && < 2.2; both arms are inside [0.12.0.0, 2.2.5.1): every allowed version is affected."
+  },
+  {
+   "project": "app-dhall-haskell-1.38.0",
+   "package": "aeson",
+   "versionOrRange": ">= 1.4.6.0 && < 1.6",
+   "advisory": "HSEC-2023-0001",
+   "status": "affected",
+   "stratum": "affected-declared",
+   "verdict": "correct",
+   "reason": "dhall-json declares aeson >= 1.4.6.0 && < 1.6, wholly inside [0.4.0.0, 2.0.1.0): every allowed version is affected."
+  },
+  {
+   "project": "app-cabal-cabal-install-v3.18.2.0",
+   "package": "aeson",
+   "versionOrRange": "^>=1.5.2.0 || ^>=2.0.3.0 || ^>=2.1.0.0 || ^>=2.2.0.0",
+   "advisory": "HSEC-2023-0001",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "bootstrap/cabal-bootstrap-gen.cabal declares aeson ^>=1.5.2.0 || ^>=2.0.3.0 || ^>=2.1.0.0 || ^>=2.2.0.0; the first arm is below the 2.0.1.0 fix and the rest are above it, so the range straddles the fix: possibly-affected."
+  },
+  {
+   "project": "hackage-http-conduit-2.3.9.1",
+   "package": "aeson",
+   "versionOrRange": "(no bound)",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "no bound at all in http-conduit.cabal (test suite under flag(aeson)); any version may be chosen, some in [0.12.0.0, 2.2.5.1). The library arm is >= 0.8, also possibly-affected."
+  },
+  {
+   "project": "app-ormolu-0.9.0.0",
+   "package": "aeson",
+   "versionOrRange": ">=2.2 && <3",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "extract-hackage-info.cabal (ormolu) declares aeson >=2.2 && <3; [2.2, 2.2.5.1) is affected and [2.2.5.1, 3) is not: possibly-affected."
+  },
+  {
+   "project": "app-fourmolu-v0.21.0.0",
+   "package": "aeson",
+   "versionOrRange": ">=2.2 && <3",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "fourmolu's extract-hackage-info.cabal declares aeson >=2.2 && <3 (the main fourmolu.cabal has >=1.0 && <3.0); same straddle as the ormolu row."
+  },
+  {
+   "project": "app-hledger-1.52.4",
+   "package": "aeson",
+   "versionOrRange": ">=1 && <2.4",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "hledger declares aeson >=1 && <2.4; overlaps [0.12.0.0, 2.2.5.1) and extends past the fix."
+  },
+  {
+   "project": "hackage-scotty-0.30",
+   "package": "aeson",
+   "versionOrRange": ">= 0.6.2.1 && < 2.3",
+   "advisory": "HSEC-2023-0001",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "scotty declares aeson >= 0.6.2.1 && < 2.3; overlaps [0.4.0.0, 2.0.1.0) and extends past the fix."
+  },
+  {
+   "project": "app-hlint-v3.10",
+   "package": "aeson",
+   "versionOrRange": "(no bound)",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "hlint.cabal says aeson >= 1.3 but cc/engine.cabal (a separate manifest) says aeson with no bound; the bound is not shared across manifests, and either reading is possibly-affected."
+  },
+  {
+   "project": "app-cabal-cabal-install-v3.18.2.0",
+   "package": "aeson",
+   "versionOrRange": "^>=1.5.2.0 || ^>=2.0.3.0 || ^>=2.1.0.0 || ^>=2.2.0.0",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "the same cabal-bootstrap-gen range as row 9 against the 2026 aeson advisory: ^>=2.2.0.0 is [2.2.0.0, 2.3), which straddles 2.2.5.1."
+  },
+  {
+   "project": "hackage-git-annex-10.20261006",
+   "package": "aeson",
+   "versionOrRange": "(>= 2.0.0)",
+   "advisory": "HSEC-2023-0001",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "git-annex declares aeson (>= 2.0.0); only [2.0.0, 2.0.1.0) is affected by HSEC-2023-0001, so the range barely overlaps but does overlap."
+  },
+  {
+   "project": "hackage-http-conduit-2.3.9.1",
+   "package": "aeson",
+   "versionOrRange": ">= 0.8",
+   "advisory": "HSEC-2026-0007",
+   "status": "possibly-affected",
+   "stratum": "possibly-affected",
+   "verdict": "correct",
+   "reason": "http-conduit library arm declares aeson >= 0.8 (under flag(aeson)); overlaps [0.12.0.0, 2.2.5.1) and extends past the fix."
+  },
+  {
+   "project": "hackage-megaparsec-9.8.3+plan",
+   "package": "aeson",
+   "versionOrRange": "2.3.2.0",
+   "advisory": "HSEC-2026-0007",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "megaparsec plan resolves aeson 2.3.2.0, at or above the 2.2.5.1 fix: not-affected."
+  },
+  {
+   "project": "hackage-tls-2.4.9",
+   "package": "crypton-x509-store",
+   "versionOrRange": ">=1.9 && <1.10",
+   "advisory": "HSEC-2025-0006",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "tls declares crypton-x509-store >=1.9 && <1.10; the advisory covers [1.6.9, 1.6.12): disjoint."
+  },
+  {
+   "project": "app-pandoc-3.12.1",
+   "package": "base",
+   "versionOrRange": ">= 4.18 && < 5",
+   "advisory": "HSEC-2024-0006",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "pandoc declares base >= 4.18; the advisory covers only [4.15.0.0, 4.15.1.0): disjoint."
+  },
+  {
+   "project": "hackage-postgresql-simple-0.7.0.1",
+   "package": "aeson",
+   "versionOrRange": ">=2.1.2.1 && <2.3",
+   "advisory": "HSEC-2023-0001",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "postgresql-simple declares aeson >=2.1.2.1 && <2.3; HSEC-2023-0001 ends at 2.0.1.0: disjoint."
+  },
+  {
+   "project": "app-hadolint-v2.15.1",
+   "package": "base",
+   "versionOrRange": ">=4.20.1 && <5",
+   "advisory": "HSEC-2024-0006",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "hadolint declares base >=4.20.1; disjoint from [4.15.0.0, 4.15.1.0)."
+  },
+  {
+   "project": "app-hledger-1.20",
+   "package": "base",
+   "versionOrRange": ">=4.9 && <4.15",
+   "advisory": "HSEC-2024-0006",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "hledger 1.20 declares base >=4.9 && <4.15, which excludes 4.15.0.0 (the only affected base): not-affected."
+  },
+  {
+   "project": "app-stack-v3.11.1",
+   "package": "aeson",
+   "versionOrRange": ">= 2.0.3.0",
+   "advisory": "HSEC-2023-0001",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "stack declares aeson >= 2.0.3.0, above the 2.0.1.0 fix of HSEC-2023-0001: not-affected for this advisory."
+  },
+  {
+   "project": "hackage-warp-3.4.16+plan",
+   "package": "text-iso8601",
+   "versionOrRange": "0.2.0.0",
+   "advisory": "HSEC-2026-0007",
+   "status": "not-affected",
+   "stratum": "not-affected",
+   "verdict": "correct",
+   "reason": "warp plan resolves text-iso8601 0.2.0.0, above the 0.1.1.2 fix: not-affected."
+  },
+  {
+   "project": "hackage-xml-conduit-1.10.1.0+plan",
+   "package": "base",
+   "versionOrRange": ">= 4.12 && < 5",
+   "advisory": "HSEC-2023-0007",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "xml-conduit declares base >= 4.12 && < 5; HSEC-2023-0007 is unfixed from 3.0.3.1, so every allowed base is affected (ghc-component: fix is a compiler upgrade)."
+  },
+  {
+   "project": "hackage-warp-3.4.16",
+   "package": "base",
+   "versionOrRange": ">=4.8 && <5",
+   "advisory": "HSEC-2023-0007",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "warp declares base >=4.8 && <5; same unfixed advisory, every allowed base is affected."
+  },
+  {
+   "project": "app-obelisk-v1.3.0.0",
+   "package": "process",
+   "versionOrRange": "1.6.13.2",
+   "advisory": "HSEC-2024-0003",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "obelisk-selftest.cabal pins process == 1.6.13.2, inside [1.0.0.0, 1.6.23.0): affected. (The record text says the fix landed in 1.6.19.0 while its ranges say 1.6.23.0; 1.6.13.2 is affected under both.)"
+  },
+  {
+   "project": "hackage-persistent-2.18.1.0",
+   "package": "base",
+   "versionOrRange": "(>=4.11.1.0 && <5) && (>=4.9 && <5)",
+   "advisory": "HSEC-2023-0007",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "persistent: two unconditional bounds in one manifest (>=4.11.1.0 && <5 and >=4.9 && <5) are intersected; all allowed base versions are affected by the unfixed advisory."
+  },
+  {
+   "project": "hackage-hakyll-4.17.0.0",
+   "package": "process",
+   "versionOrRange": ">= 1.6 && < 1.7",
+   "advisory": "HSEC-2024-0003",
+   "status": "ghc-component:possibly-affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "hakyll declares process >= 1.6 && < 1.7; [1.6, 1.6.23.0) is affected, [1.6.23.0, 1.7) is not: possibly-affected."
+  },
+  {
+   "project": "app-liquidhaskell-v0.9.14.1",
+   "package": "base",
+   "versionOrRange": "(>= 4.11.1.0 && < 5) && (>= 4.8.1.0 && < 5)",
+   "advisory": "HSEC-2023-0007",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "liquidhaskell: two unconditional bounds intersected to (>= 4.11.1.0 && < 5); all allowed base versions are affected by the unfixed advisory."
+  },
+  {
+   "project": "app-shellcheck-v0.7.2",
+   "package": "base",
+   "versionOrRange": ">= 4.8.0.0 && < 5",
+   "advisory": "HSEC-2024-0006",
+   "status": "ghc-component:possibly-affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "ShellCheck 0.7.2 declares base >= 4.8.0.0 && < 5; contains 4.15.0.0 and unaffected versions: possibly-affected."
+  },
+  {
+   "project": "hackage-cmark-gfm-0.2.6",
+   "package": "base",
+   "versionOrRange": ">=4.5 && < 5.0",
+   "advisory": "HSEC-2023-0007",
+   "status": "ghc-component:affected",
+   "stratum": "ghc",
+   "verdict": "correct",
+   "reason": "cmark-gfm declares base >=4.5 && < 5.0; every allowed base is >= 3.0.3.1, so affected by the unfixed advisory."
+  }
+ ]
+}

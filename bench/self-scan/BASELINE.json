@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-05T15:58:45.680Z",
-  "commit": "bd9fb83f813c7a551a015cbd5767ddc493014a85",
+  "generatedAt": "2026-10-08T15:31:57.535Z",
+  "commit": "93d39b67b8334491f567e82a4f96d51dfac5dcdf",
   "targets": {
     "hooks": {
       "total": 19,
@@ -17,7 +17,7 @@
       }
     },
     "scripts": {
-      "total": 45,
+      "total": 46,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -25,6 +25,7 @@
         "calibration-holdout-check.mjs": 1,
         "capability-ledger/check.mjs": 1,
         "detector-fuzz-runner.mjs": 3,
+        "gate-verdict-cache.mjs": 1,
         "llm-cost-ceiling.py": 1,
         "loop-engineering/lib/claude.mjs": 1,
         "loop-engineering/lib/controller.mjs": 4,
@@ -39,7 +40,7 @@
       }
     },
     "scanner/src": {
-      "total": 545,
+      "total": 548,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -78,6 +79,7 @@
         "language/context.js": 3,
         "language/discovery.js": 1,
         "language/fix-lifecycle.js": 2,
+        "language/haskell-cpp.js": 3,
         "language/haskell-fix.js": 2,
         "language/haskell-ir.js": 8,
         "language/haskell-llm.js": 1,

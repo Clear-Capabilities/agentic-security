@@ -53,13 +53,16 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { runPackageContentsCheck } from './package-contents-check.mjs';
 import { signLastScan } from '../scanner/src/posture/integrity.js';
 import {
   gatherKeyParts, computeVerdictKey, loadCache, recordVerdict,
-  evaluateCachedVerdict, renderProvenance, cachingDisabled,
+  evaluateCachedVerdict, cachingDisabled,
+  computeScopedKey, listWorkingTreeFiles, npmScriptBody, scopedRecordId, pythonVersion, wipeIgnoredState,
 } from './gate-verdict-cache.mjs';
+import { scopeFor } from './gate-check-scopes.mjs';
+import { executeChecks } from './gate-run-checks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -76,6 +79,14 @@ export const BYPASS_HINT =
 // Check registry. Order is the execution order and the printed order, and it
 // is cheapest-first on purpose. `remedy` is what a human should do.
 // ---------------------------------------------------------------------------
+
+/**
+ * Checks that carry the same `parallelGroup` run at the same time. Membership is a CLAIM about shared mutable state, so it is
+ * earned, not assumed: every member's scope (gate-check-scopes.mjs) must say `writesRepo: false`, and that is checked against a
+ * real traced run by `node scripts/gate-trace-reads.mjs <id> --verify`, which fails if the check writes anywhere inside this
+ * repository. These four write only to unique OS temp directories and npm's own log. The big suites are deliberately NOT here.
+ */
+export const PURE_BENCHES = 'write-free-benches';
 
 export const CHECKS = [
   {
@@ -154,6 +165,7 @@ export const CHECKS = [
     id: 'mutation-gate',
     title: 'Metamorphic + adversarial mutation gate holds',
     npmScript: 'bench:mutation:check',
+    parallelGroup: PURE_BENCHES,
     remedy: 'Run `npm run bench:mutation:check` in scanner/ — a detector is keying ' +
       'on syntax rather than semantics. See the printed case for which mutant flipped.',
   },
@@ -164,6 +176,7 @@ export const CHECKS = [
     id: 'protection-verdict-gate',
     title: 'False-protected release gate holds (transit/atRest verdicts)',
     npmScript: 'bench:protection-verdict:check',
+    parallelGroup: PURE_BENCHES,
     remedy: 'Run `npm run bench:protection-verdict:check` in scanner/ — a protection ' +
       'verdict is asserting `protected` without real evidence. See the printed case for ' +
       'which mutant failed to flip.',
@@ -178,6 +191,7 @@ export const CHECKS = [
     id: 'provenance-accuracy-gate',
     title: 'Known-origin provenance accuracy baseline holds',
     npmScript: 'bench:provenance-accuracy:check',
+    parallelGroup: PURE_BENCHES,
     remedy: 'Run `npm run bench:provenance-accuracy:check` in scanner/ and resolve the ' +
       'drift (fix the regression, or re-baseline only if the change is intended).',
   },
@@ -532,6 +546,33 @@ function runNpmGate(script) {
   return evaluateCheckOutcome({ label, exitCode: r.status });
 }
 
+/**
+ * The same check run concurrently with others. Output is captured and printed as one block when it finishes, so two checks'
+ * lines never interleave. A spawn failure resolves to "no exit status", which evaluateCheckOutcome turns into a FAILURE.
+ */
+function runNpmGateAsync(script) {
+  const label = `npm run ${script}`;
+  process.stderr.write(`  running ${label} (concurrently) …\n`);
+  return new Promise((resolve) => {
+    let out = '';
+    let settled = false;
+    const done = (code) => {
+      if (settled) return;
+      settled = true;
+      process.stderr.write(`  ---- ${label} output ----\n${out}${out.endsWith('\n') || out === '' ? '' : '\n'}`);
+      resolve(evaluateCheckOutcome({ label, exitCode: code }));
+    };
+    let child;
+    try {
+      child = spawn('npm', ['run', script], { cwd: SCANNER, shell: false, env: envWithoutGitContext(), stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch { done(null); return; }
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('error', () => done(null));
+    child.on('close', (code) => done(code));
+  });
+}
+
 // --- PRD R1: verdict cache -------------------------------------------------
 //
 // This gate is the PRODUCER. It runs the slow checks for real and records each
@@ -539,6 +580,49 @@ function runNpmGate(script) {
 // about the same commit. It reads the cache too — repeated pushes of an
 // unchanged commit are common enough to be worth it — but the value is mostly
 // downstream. See scripts/gate-verdict-cache.mjs for why this is safe.
+/**
+ * The per-check scoped cache (see gate-verdict-cache.mjs, "PER-CHECK SCOPED KEYS"), or null when caching is off. Off means:
+ * `--no-cache`, AGENTIC_SECURITY_GATE_NO_CACHE=1, or hosted CI (GITHUB_ACTIONS), where a cache written by some other run must never
+ * stand in for running the checks. `keyFor` is evaluated at the moment of each check, over the tree as it is THEN.
+ */
+export function buildScopedCache(argv, { repo = REPO, env = process.env, signer = cacheSigner, inputs = {}, now = () => new Date() } = {}) {
+  if (cachingDisabled(argv, env)) return null;
+  const loaded = loadCache(repo, { signer });
+  // `inputs` lets the tests inject each fact the key is made of; production leaves it empty and every fact is read for real.
+  const ctx = {
+    records: loaded.records,
+    rejected: loaded.rejected || null,
+    // Whether this check takes part in the per-check cache at all (see gate-check-scopes.mjs `scoped`).
+    eligible: (check) => (inputs.scope ? inputs.scope(check) : scopeFor(check.id)).scoped !== false,
+    keyFor: (check) => {
+      const sc = inputs.scope ? inputs.scope(check) : scopeFor(check.id);
+      if (sc.scoped === false) return null;
+      if ((sc.cleanState || []).length && wipeIgnoredState(repo, sc.cleanState) === null) return null;
+      const head = inputs.headSha !== undefined ? { status: 0, stdout: inputs.headSha }
+        : run('git', ['rev-parse', 'HEAD'], { cwd: repo, env: envWithoutGitContext() });
+      return computeScopedKey({
+        check,
+        command: inputs.command !== undefined ? inputs.command : npmScriptBody(check.npmScript),
+        repo, env,
+        files: inputs.files ? inputs.files() : listWorkingTreeFiles(repo),
+        headSha: head.status === 0 ? String(head.stdout).trim() : null,
+        bundleSha: inputs.bundleSha !== undefined ? inputs.bundleSha : bundleHashes().bundleSha256,
+        python: inputs.python !== undefined ? inputs.python : pythonVersion(),
+        nodeVersion: inputs.nodeVersion,
+        scope: sc,
+      });
+    },
+    record: (check, keyInfo, durationMs) => {
+      const ok = recordVerdict(repo, {
+        checkId: scopedRecordId(check.id), key: keyInfo.key, commitSha: null, by: 'pre-push', durationMs,
+      }, { signer, now });
+      if (ok) ctx.records = loadCache(repo, { signer }).records;
+      return ok;
+    },
+  };
+  return ctx;
+}
+
 function gateCacheContext(argv) {
   if (cachingDisabled(argv)) return { enabled: false, key: null, records: {} };
   const parts = gatherKeyParts({ repo: REPO });
@@ -647,7 +731,7 @@ function installHook() {
 // Runner
 // ---------------------------------------------------------------------------
 
-export function main(argv = []) {
+export async function main(argv = []) {
   const out = process.stderr;
   if (argv.includes('--install-hook')) return installHook();
 
@@ -692,60 +776,51 @@ export function main(argv = []) {
     out.write(`  (verdict cache discarded: ${cacheCtx.rejected} — checks will run)\n`);
   }
 
-  const entries = [];
-  for (const check of CHECKS) {
-    // Only the slow, deterministic-on-inputs checks are cacheable. The two
-    // leading guards inspect the CURRENT working tree and refs, which are not
-    // in the key, so caching them would be wrong; bundle-integrity and
-    // package-contents are already sub-second.
-    const cacheable = Boolean(check.npmScript);
-    if (cacheable && cacheCtx.enabled) {
+  const scopedCtx = buildScopedCache(argv);
+  if (scopedCtx && scopedCtx.rejected) {
+    out.write(`  (verdict cache discarded: ${scopedCtx.rejected} — checks will run)\n`);
+  }
+  if (!scopedCtx) out.write('  (verdict cache OFF for this run: every check will run)\n');
+
+  const legacy = cacheCtx.enabled ? {
+    hit: (check) => {
       const rec = cacheCtx.records[check.id];
-      const verdict = evaluateCachedVerdict({ record: rec, key: cacheCtx.key, checkId: check.id });
-      if (verdict.usable) {
-        entries.push({ ...check, result: result(), cached: renderProvenance(rec) });
-        continue;
+      return evaluateCachedVerdict({ record: rec, key: cacheCtx.key, checkId: check.id }).usable ? rec : null;
+    },
+    record: (check, durationMs) => recordVerdict(REPO, {
+      checkId: check.id, key: cacheCtx.key, commitSha: cacheCtx.commitSha, by: 'pre-push', durationMs,
+    }, { signer: cacheSigner }),
+  } : null;
+
+  const entries = await executeChecks({
+    checks: CHECKS,
+    scoped: scopedCtx,
+    legacy,
+    log: (line) => out.write(`${line}\n`),
+    runCheck: async (check, { parallel }) => {
+      if (check.id === 'worktree-matches-push') {
+        const porcelain = porcelainStatus();
+        // Cannot read status => cannot know what is being tested. Rule 1 applies.
+        return porcelain === null
+          ? result(['`git status --porcelain` could not be read, so it is unknown whether ' +
+            'the suites would test the same content as the pushed commit — an ' +
+            'unverifiable gate is not a passing gate.'])
+          : evaluateWorktreeMatchesPush(porcelain);
       }
-    }
-    let r;
-    if (check.id === 'worktree-matches-push') {
-      const porcelain = porcelainStatus();
-      // Cannot read status => cannot know what is being tested. Rule 1 applies.
-      r = porcelain === null
-        ? result(['`git status --porcelain` could not be read, so it is unknown whether ' +
-          'the suites would test the same content as the pushed commit — an ' +
-          'unverifiable gate is not a passing gate.'])
-        : evaluateWorktreeMatchesPush(porcelain);
-    } else if (check.id === 'push-blast-radius') {
-      const b = pushBase(scope.gated);
-      if (!b.measured) {
-        r = evaluatePushBlastRadius({ measured: false });
-      } else {
+      if (check.id === 'push-blast-radius') {
+        const b = pushBase(scope.gated);
+        if (!b.measured) return evaluatePushBlastRadius({ measured: false });
         const stats = deletionStats(b.base, 'HEAD');
-        r = stats === null
+        return stats === null
           ? result([`could not diff HEAD against ${String(b.base).slice(0, 12)} to measure ` +
             'how much this push deletes — an unverifiable gate is not a passing gate.'])
           : evaluatePushBlastRadius({ ...stats, base: b.base });
       }
-    } else if (check.id === 'bundle-integrity') {
-      r = evaluateBundleIntegrity(bundleHashes());
-    } else if (check.id === 'package-contents') {
-      r = runPackageContentsCheck(REPO);
-    } else {
-      const startedCheck = Date.now();
-      r = runNpmGate(check.npmScript);
-      // Record the PASS so the release gate does not re-derive it minutes later.
-      // Only a pass: a cached failure would strand a developer who has fixed it.
-      if (r.ok && cacheCtx.enabled) {
-        recordVerdict(REPO, {
-          checkId: check.id, key: cacheCtx.key, commitSha: cacheCtx.commitSha,
-          by: 'pre-push', durationMs: Date.now() - startedCheck,
-        }, { signer: cacheSigner });
-      }
-    }
-    entries.push({ ...check, result: r });
-    if (!r.ok) break; // fastest-fail-first: no point burning minutes after a failure.
-  }
+      if (check.id === 'bundle-integrity') return evaluateBundleIntegrity(bundleHashes());
+      if (check.id === 'package-contents') return runPackageContentsCheck(REPO);
+      return parallel ? runNpmGateAsync(check.npmScript) : runNpmGate(check.npmScript);
+    },
+  });
   // Any check we never reached is reported, so the summary is never mistaken
   // for "everything passed".
   const ranIds = new Set(entries.map(e => e.id));
@@ -785,5 +860,5 @@ export function main(argv = []) {
 
 // Only run when executed directly, so importing for tests has no side effects.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

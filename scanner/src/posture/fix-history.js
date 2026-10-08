@@ -362,7 +362,7 @@ export async function applyFix({ scanRoot, file, originalContent, newContent, fi
  * MITIGATION, WORKAROUND) and the gates it passed are kept on the entry beside the timestamp. No second write happens
  * here; `backup.original` is the file the lifecycle saved before it wrote.
  */
-export async function recordExternalFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fixLabel = null, verification = null, backup = null, source = 'language-lifecycle', findingProvenance = null }) {
+export async function recordExternalFix({ scanRoot, file, originalContent, newContent, findingId, ruleId, vuln, stableId, fixLabel = null, verification = null, backup = null, source = 'language-lifecycle', findingProvenance = null, languageGroupId = null }) {
   return _withLogLock(scanRoot, async () => {
     if (!ensure(scanRoot)) return null;
     const log = readLog(scanRoot);
@@ -376,6 +376,7 @@ export async function recordExternalFix({ scanRoot, file, originalContent, newCo
       appliedAt: new Date().toISOString(), status: 'applied', reverted: false, attemptOrdinal: priorAttempts + 1,
       provenanceAtFix: _snapshotProvenanceAtFix(findingProvenance, new Date().toISOString()),
       fixLabel, verification, source, languageBackupId: backup ? backup.id : null,
+      ...(languageGroupId ? { languageGroupId } : {}),
     };
     log.push(entry);
     await _writeLogAndSync(scanRoot, log);
@@ -517,13 +518,38 @@ async function _revertEntryInner(scanRoot, entry) {
   return entry;
 }
 
+// A multi-file language fix is recorded as one entry per file sharing `languageGroupId`. They are reverted as a unit: every
+// backup is read first, and if a restore fails the files already restored are put back, so a half-undone fix is never left.
+async function _revertGroupInner(scanRoot, entries) {
+  const items = [];
+  for (const entry of entries) {
+    const bak = path.resolve(scanRoot, entry.backupPath);
+    if (!fs.existsSync(bak)) return { error: `backup missing: ${bak}` };
+    const abs = path.resolve(scanRoot, entry.file);
+    items.push({ entry, abs, original: await fsp.readFile(bak, 'utf8'), current: fs.existsSync(abs) ? await fsp.readFile(abs, 'utf8') : null });
+  }
+  const done = [];
+  for (const it of items) {
+    try { await _writeAtomicAndSync(it.abs, it.original); done.push(it); } catch (err) {
+      const failed = [];
+      for (const d of done.reverse()) { try { if (d.current !== null) await _writeAtomicAndSync(d.abs, d.current); } catch { failed.push(d.entry.file); } }
+      return { error: `group undo failed at ${it.entry.file} (${err.message}); ${failed.length ? `ROLLBACK INCOMPLETE for ${failed.join(', ')}` : 'no file was changed'}` };
+    }
+  }
+  const now = new Date().toISOString();
+  for (const it of items) { it.entry.reverted = true; it.entry.revertedAt = now; }
+  return items[items.length - 1].entry;
+}
+const _groupOf = (log, entry) => (entry.languageGroupId ? log.filter((e) => e.languageGroupId === entry.languageGroupId && !e.reverted) : null);
+
 // Revert the most recent un-reverted fix. Returns the entry or null.
 export async function undoLast(scanRoot) {
   return _withLogLock(scanRoot, async () => {
     const log = readLog(scanRoot);
     for (let i = log.length - 1; i >= 0; i--) {
       if (!log[i].reverted) {
-        const result = await _revertEntryInner(scanRoot, log[i]);
+        const group = _groupOf(log, log[i]);
+        const result = group ? await _revertGroupInner(scanRoot, group) : await _revertEntryInner(scanRoot, log[i]);
         if (!result.error) await _writeLogAndSync(scanRoot, log);
         return result;
       }
@@ -550,7 +576,8 @@ export async function revertEntryById(scanRoot, entryId) {
     const entry = log.find(e => e.id === entryId);
     if (!entry) return { error: `no such history entry: ${entryId}` };
     if (entry.reverted) return entry;
-    const result = await _revertEntryInner(scanRoot, entry);
+    const group = _groupOf(log, entry);
+    const result = group ? await _revertGroupInner(scanRoot, group) : await _revertEntryInner(scanRoot, entry);
     if (!result.error) await _writeLogAndSync(scanRoot, log);
     return result;
   });

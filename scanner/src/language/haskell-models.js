@@ -235,13 +235,14 @@ export const HS_WEB_FRAMEWORKS = Object.freeze({
   yesod: { modules: ['Yesod', 'Yesod.Core', 'Yesod.Auth'], package: 'yesod', tested: ['1.6'] },
 });
 export const HS_WEB_APIS = Object.freeze([
-  ...E('Web.Scotty', ['get', 'post', 'put', 'delete', 'patch', 'options', 'addroute', 'matchAny', 'middleware', 'scotty', 'scottyApp', 'status', 'finish', 'raise', 'redirect', 'text', 'json', 'html', 'file', 'setHeader', 'header', 'headers', 'param', 'params', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData', 'files', 'rescue', 'liftIO', 'notFound']),
-  ...E('Web.Scotty.Trans', ['get', 'post', 'put', 'delete', 'patch', 'middleware', 'scottyT', 'status', 'finish', 'raise', 'redirect', 'text', 'json', 'html', 'header', 'param', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData']),
+  ...E('Web.Scotty', ['get', 'post', 'put', 'delete', 'patch', 'options', 'addroute', 'matchAny', 'middleware', 'scotty', 'scottyApp', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'file', 'setHeader', 'header', 'headers', 'param', 'params', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData', 'files', 'rescue', 'liftIO', 'notFound']),
+  ...E('Web.Scotty.Trans', ['get', 'post', 'put', 'delete', 'patch', 'middleware', 'scottyT', 'status', 'finish', 'raise', 'raiseStatus', 'redirect', 'text', 'json', 'html', 'header', 'param', 'captureParam', 'queryParam', 'formParam', 'body', 'jsonData']),
   ...E('Network.Wai', ['pathInfo', 'requestMethod', 'requestHeaders', 'responseLBS', 'queryString', 'rawPathInfo']),
   ...E('Network.Wai.Handler.Warp', ['run', 'runSettings']),
   ...E('Network.HTTP.Types', ['status200', 'status201', 'status400', 'status401', 'status403', 'status404', 'unauthorized401', 'forbidden403', 'methodGet', 'methodPost', 'methodPut', 'methodDelete', 'hAuthorization', 'hCookie']),
   ...E('Network.Wai.Middleware.HttpAuth', ['basicAuth', 'extractBasicAuth']),
-  ...E('Yesod.Core', ['requireAuthId', 'requireAuth', 'maybeAuthId', 'maybeAuth', 'permissionDenied', 'notAuthenticated', 'lookupGetParam', 'lookupPostParam', 'runInputPost', 'runInputGet', 'getYesod', 'redirect']),
+  ...E('Yesod.Core', ['requireAuthId', 'requireAuth', 'maybeAuthId', 'maybeAuth', 'permissionDenied', 'notAuthenticated', 'lookupHeader', 'lookupBearerAuth', 'lookupBasicAuth', 'lookupGetParam', 'lookupPostParam', 'runInputPost', 'runInputGet', 'getYesod', 'redirect']),
+  ...E('Yesod', ['requireAuthId', 'requireAuth', 'maybeAuthId', 'maybeAuth', 'permissionDenied', 'notAuthenticated', 'lookupHeader', 'lookupBearerAuth', 'lookupBasicAuth']),
   ...E('Yesod.Auth', ['requireAuthId', 'requireAuth', 'maybeAuthId', 'maybeAuth', 'isAdmin']),
   ...E('Servant', ['throwError', 'err401', 'err403', 'err404']),
   ...E('Servant.Server', ['throwError', 'err401', 'err403', 'err404', 'serve']),

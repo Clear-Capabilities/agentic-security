@@ -84,12 +84,49 @@ imports only**. Each option is decided by module-system priority (`mkForce` 50, 
 
 - a list or attribute set is evaluated only when **every element is statically known** (`[ { from = 1; to = 65535; } ]` is; a
   list holding a `config.<option>` reference, an interpolated string or a `rec` set is not, and stays `unknown` as a whole);
+  **any unknown part makes the whole value unknown**, nothing is ever guessed (see "What the evaluator runs" below);
 - an undecidable condition keeps the value `conditional`; equal-priority disagreement is `conflict`; nothing is guessed;
 - a missing setting gets a default only when the option catalog proves it for the release in force, else `unknown`;
 - the release comes from the target or the flake's `nixpkgs` input, never from `system.stateVersion`;
 - dynamic attributes, overlays, an opaque parent, a partial module graph or a cycle end as stated caveats that clear
   `definite` and become scan-health conditions;
 - Home Manager is a separate namespace, scoped per user.
+
+### What the evaluator runs
+
+A value is computed statically from exactly these forms, and from nothing else. Anything outside the list is `unknown`, and
+the option is reported as such rather than guessed.
+
+- **Literals and operators:** booleans, `null`, integers (safe-integer range only), floats, strings, lists, attribute sets;
+  `!`, `&&`, `||`, `->`, `==`/`!=` (structural, attribute order ignored, functions never compared), `++`, `//`, `+` (integers
+  or strings), `-`, `*`, unary `-`, and `<` `>` `<=` `>=` on integers. There is no division and no path arithmetic.
+- **Binding forms:** `let ... in` (lazy, with `inherit x;` and `inherit (lib) x;`), `with` over a known attribute set or over
+  `lib` / `builtins`, `if/then/else` on a known condition (only the chosen branch is evaluated), `assert` on a known `true`,
+  lambdas (`x: ...`, `{ a, b ? 1, ... }: ...`, `args@{ ... }: ...`) applied to known arguments, partial application, and
+  selection `x.a.b` / `x.a or d` on a known attribute set. A binding of a dotted name (`let a.b = 1;`), a duplicate binding or an
+  `inherit` from anything but `lib` / `builtins` makes the whole `let` unknown.
+- **Scoping follows Nix:** an inner binding shadows an outer one, a lambda parameter shadows a `let`, a lexical binding wins
+  over every `with`, and the innermost `with` wins over an outer one. A file-level `let` name is used only when that `let`
+  encloses the expression, no other binding or function parameter of the file shares the name, and the expression is not
+  inside a `rec` set. A local binding named `config` or `pkgs` is not the module argument.
+- **Library functions (a closed allow-list, over fully known arguments):** `lib.optionals`, `lib.optional`,
+  `lib.optionalAttrs`, `lib.optionalString`, `lib.concatStringsSep`, `lib.concatMapStringsSep`, `lib.hasPrefix`,
+  `lib.hasSuffix`, `lib.boolToString`, `lib.mkMerge` (over plain lists only), `map`, `filter`, `elem`, `length`, `concatLists`,
+  `concatMap` (as `lib.<f>` or `builtins.<f>`, `lib.strings.<f>`, `lib.lists.<f>`, or through `with lib;` / `inherit (lib)`),
+  `builtins.hasAttr`, `toString` (strings, integers, booleans, null). `lib` must be the module's own `lib` argument and not
+  rebound in the file.
+- **String interpolation** when every interpolated part is a known string (an integer or a derivation is not).
+- **`config.<option>`** reads, `cfg.x` through a `let cfg = config.a.b;` alias, `pkgs.stdenv.isLinux`-style flags from the target
+  system, and `target.args`, as before.
+- **Priority wrappers.** `lib.mkDefault`, `mkForce`, `mkOverride N`, `mkBefore`, `mkAfter` around a definition are read by the
+  module resolver, so `lib.mkDefault (base ++ lib.optionals cond [ 80 ])` is a priority-1000 definition of the computed list.
+  A wrapper **inside** an evaluated value (`let p = lib.mkDefault [ 22 ]; in p`) is `unknown`: a priority cannot be recovered
+  from a value. A `let`, `with` or `assert` that wraps a definition is evaluated as a whole, so its bindings apply to the value.
+
+Never evaluated: `import`, `fetch*`, `readFile`, `toFile`, `getEnv`, `currentSystem`, `trace`, `throw`, path values, `rec`
+sets, dynamic attribute names, derivations, and any library function not listed above. Evaluation is bounded: the step budget
+(`maxEvaluations`), expression nesting (`maxExprDepth`, so runaway recursion stops) and result size (`maxValueSize`) each end as
+`unknown` plus a `truncated` entry, never as a partial answer.
 
 ## Hardening rules
 
@@ -241,6 +278,30 @@ rules above, not here.
   counts only when its content hash is one the advisory lists as a fix; a patch merely named after a CVE is an unverified
   claim and the finding stays `possibly-affected`. Wrapped Haskell packages reuse the Hackage matcher and the same Hackage advisory data, including the opt-in live feed described in the [Haskell guide](haskell.md#dependencies-advisories-and-the-software-bill-of-materials); a Hackage package that feed did not cover is reported unknown, not clean. With no snapshot the
   scan is `partial` and says the closure was **not checked**, which is not a clean result.
+- **Live advisories for the closure's upstream software (opt-in).** OSV has no nixpkgs ecosystem, so this feed uses the NVD
+  CVE API 2.0, queried by CPE `vendor:product`. Set `AGENTIC_SECURITY_NIX_ADVISORIES_LIVE=1` and it fetches, before the scan,
+  the CVEs for every CPE identity the imported closure declares, and keeps them in `nix-advisories.json` in the operator
+  configuration directory (mode 0600, never the scanned project). It is off by default, needs the network, is ignored under
+  `AGENTIC_SECURITY_OFFLINE` / `--no-network`, never refreshes over a snapshot named by `AGENTIC_SECURITY_NIX_ADVISORIES`,
+  and never overwrites a hand-written `nix-advisories.json`.
+  - *Where the CPE comes from.* A derivation export carries no `meta`, so name the metadata yourself with
+    `AGENTIC_SECURITY_NIX_META=/path/meta.json` (operator-only; a project cannot supply it): either `{pname: meta}` or the
+    `nix-env -qa --meta --json` shape. A single `meta.identifiers.cpe` is an explicit identity; several `possibleCPEs` are
+    leads, so the result is `candidate`, never a verdict. A name alone is never matched.
+  - *Coverage is recorded.* The snapshot lists each CPE identity it read in full and when. An identity it did not read, read
+    only in part, or read longer ago than the age limit is reported **unknown** (`closure-advisory-feed-incomplete`), never
+    clean. So is a component with no CPE at all: this feed is keyed by CPE, and a source URL or purl alone is not something it
+    can look up. An unreachable or throttling service leaves the previous snapshot in place with its age stated.
+  - *Rate limits.* NVD allows 5 requests per rolling 30 seconds without an API key and 50 with one. A free key
+    (`AGENTIC_SECURITY_NVD_API_KEY`, sent as a header, never in a URL) is recommended for anything beyond a handful of
+    packages. Requests are spaced at 6.5 s (keyless) or 0.7 s (keyed), a throttling response ends the run without retrying,
+    and a scan makes at most 20 (keyless) or 120 (keyed) requests, so a large closure fills in over several scans. An
+    identity is re-read at most once per 24 hours.
+  - *What it does NOT cover.* Identities without a CPE (purl or source-URL only); products with more than 6000 CVEs (for
+    example the Linux kernel), which are reported not covered rather than truncated; operating-system or hardware conditions
+    on a combined NVD configuration (a match is made on the component alone, so such a finding may be broader than the
+    advisory); fix-patch evidence (NVD carries none, so a backported patch stays an unverified claim); severity (not taken from NVD).
+    NVD is also not the whole picture for a nixpkgs package: distribution-specific fixes are not in it.
 - **License data** is not present in these records, so no license policy is applied and the scan says so.
 
 ## Fixes
@@ -268,6 +329,46 @@ FULL (full-source-edit): services.openssh.settings.PermitRootLogin = "yes" -> "n
   note: Root can no longer log in over SSH. Make sure a non-root account with an authorized key and sudo access exists BEFORE deploying, or you can lock yourself out.
 ```
 <!-- generated:fix-nix-ssh:end -->
+
+### Fixes that span several files
+
+A NixOS option is judged on the effective configuration, so the definition that matters is often not in the file the finding
+points at. A fix therefore works from every definition that contributes to the effective value, not from one line:
+
+- **The winner is in an imported module.** That module is edited; the entry configuration is not touched.
+- **Several files define the option at the winning priority.** They all agree today (a plain `"yes"` in two modules is
+  legal), but the module system rejects a mix of values, so editing one file would turn a finding into a configuration that
+  no longer evaluates. All of them are edited together, or none is.
+- **A stronger definition (`mkForce`, `mkOverride`) lives elsewhere.** That definition is the one edited. Weaker definitions it
+  overrides are left alone and listed in the notes. Asking for a fix on a definition that something else overrides is refused,
+  naming the definition that wins.
+- **A conditional definition (`mkIf`, `if`).** The branch that holds the weak literal is edited, and the fix is accepted only if
+  the patched configuration can no longer produce the weak value under any branch.
+
+Verification is on the effective value, not just on the finding disappearing. After the edit the option is resolved again over
+the patched tree and must be a decided value equal to the intended one (or, for a conditional option, must not include the weak
+value among its possible values). A rescan that merely stops reporting the finding is not enough.
+
+Every touched file is backed up first and nothing is written until all of them have been checked (inside the project root,
+unchanged on disk since planning). If a write fails part way, the files already written are put back and the result says
+whether that rollback was complete. The history gets one entry per file, grouped, and both `agentic-security undo` and the
+backup-level undo restore the whole group as a unit: every backup is read before the first restore, and a failed restore puts
+the earlier ones back.
+
+**What it refuses**, with the reason stated and no file written:
+
+| Situation | Result |
+|---|---|
+| The winning definition is outside the project root (an import of `../shared/ssh.nix`, say) | refused; the override line to add to the entry module is offered as a suggestion, never applied |
+| The winning definition is not a single literal, or is built by a function or a merge | refused, same suggestion |
+| The definition you chose is overridden by a stronger one | refused, names the definition that wins |
+| A file changed on disk since the fix was planned | refused before any write |
+| The patched configuration would not have the intended effective value (a conflict, a branch that still produces the weak value) | blocked, nothing applied |
+| Any target that would leave the project root | blocked by the path gate |
+
+The suggested override line uses the weakest wrapper that actually wins: a plain assignment when every existing definition is
+weaker than plain, `lib.mkForce` when a plain definition is the strongest, and `lib.mkOverride <n>` just below anything
+stronger than that. It is a suggestion for a human to review, and `lib` must be among the module arguments.
 
 A finding that needs a human decision is reported as guidance and exits non-zero, rather than being patched:
 

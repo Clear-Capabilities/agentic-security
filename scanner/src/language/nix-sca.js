@@ -20,7 +20,9 @@
 
 import { AdvisoryDb, matchComponent as matchHackage, reachability as hackageReachability, licensePolicy, hackagePurl, normalizeAdvisory } from './haskell-sca.js';
 import { parseVersion as parsePvp } from './haskell-manifests.js';
+import { advisorySeverity, NO_RATING_BASIS } from './cvss.js';
 import { parseNix } from './nix-parser.js';
+import { cpeKey } from './nix-advisory-feed.js';
 
 export const NIX_SCA_VERSION = 'nix-sca/1';
 const HEX40 = /^[0-9a-f]{40}$/i;
@@ -59,16 +61,18 @@ export function compareUpstream(a, b) {
 // ── advisories ───────────────────────────────────────────────────────────────
 const sha = (s) => String(s || '').toLowerCase().replace(/^sha256[-:]/, '');
 function eventsToRanges(events) {
-  const out = []; let lo = null;
+  // `introduced_excluding` is not an OSV event: it carries an exclusive start bound (the NVD live feed has them), so 8.0 is not in "after 8.0".
+  const out = []; let lo = null; let loExc = false;
   for (const e of events || []) {
-    if ('introduced' in e) lo = e.introduced === '0' ? null : e.introduced;
-    else if ('fixed' in e) { out.push({ lo, hi: e.fixed, hiInc: false }); lo = null; }
-    else if ('last_affected' in e) { out.push({ lo, hi: e.last_affected, hiInc: true }); lo = null; }
+    if ('introduced' in e) { lo = e.introduced === '0' ? null : e.introduced; loExc = false; }
+    else if ('introduced_excluding' in e) { lo = e.introduced_excluding; loExc = true; }
+    else if ('fixed' in e) { out.push({ lo, loExc, hi: e.fixed, hiInc: false }); lo = null; loExc = false; }
+    else if ('last_affected' in e) { out.push({ lo, loExc, hi: e.last_affected, hiInc: true }); lo = null; loExc = false; }
   }
-  if (events && events.some((e) => 'introduced' in e) && (lo !== null || !out.length || !events.some((e) => 'fixed' in e || 'last_affected' in e))) out.push({ lo, hi: null, hiInc: false });
+  if (events && events.some((e) => 'introduced' in e || 'introduced_excluding' in e) && (lo !== null || !out.length || !events.some((e) => 'fixed' in e || 'last_affected' in e))) out.push({ lo, loExc, hi: null, hiInc: false });
   return out;
 }
-const inRange = (v, r) => (r.lo === null || compareUpstream(v, r.lo) >= 0) && (r.hi === null || (r.hiInc ? compareUpstream(v, r.hi) <= 0 : compareUpstream(v, r.hi) < 0));
+const inRange = (v, r) => (r.lo === null || (r.loExc ? compareUpstream(v, r.lo) > 0 : compareUpstream(v, r.lo) >= 0)) && (r.hi === null || (r.hiInc ? compareUpstream(v, r.hi) <= 0 : compareUpstream(v, r.hi) < 0));
 
 /** Normalize a non-Hackage OSV-style record into what Nix matching needs. */
 export function normalizeGenericAdvisory(rec) {
@@ -86,18 +90,28 @@ export function normalizeGenericAdvisory(rec) {
       fixPatches: ((a.database_specific && a.database_specific.fix_patches) || (rec.database_specific && rec.database_specific.fix_patches) || []).map((p) => ({ name: p.name || null, sha256: p.sha256 ? sha(p.sha256) : null })),
     });
   }
-  return { id: rec.id, ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
+  return { id: rec.id, severityInfo: advisorySeverity(rec), ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
 }
 
 export class NixAdvisoryData {
-  constructor({ records = [], hackage = null, source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30 } = {}) {
-    this.source = source; this.generatedAt = generatedAt; this.maxAgeDays = maxAgeDays;
+  constructor({ records = [], hackage = null, source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30, covered = null } = {}) {
+    this.source = source; this.generatedAt = generatedAt; this.maxAgeDays = maxAgeDays; this.now = now;
+    // `covered` is {'vendor:product': ISO time that CPE identity was last fully read from the live feed}. null means the snapshot makes no
+    // per-identity claim (a hand-built or operator-pinned snapshot) and is matched exactly as it always was.
+    this.covered = covered && typeof covered === 'object' ? covered : null;
     this.records = records.map(normalizeGenericAdvisory).filter(Boolean);
     this.hackage = hackage;                      // an AdvisoryDb (HS-009) for wrapped Haskell packages
     const gen = generatedAt ? Date.parse(generatedAt) : NaN;
     this.ageDays = Number.isFinite(gen) ? (now - gen) / 86400000 : null;
     this.stale = this.ageDays === null ? true : this.ageDays > maxAgeDays;
     this.feed = { source, generatedAt, status: this.stale ? 'stale-cache' : 'current', records: this.records.length };
+  }
+  /** 'covered' | 'uncovered' | 'stale' for a CPE identity ('vendor:product'); always 'covered' when the snapshot makes no per-identity claim. */
+  cpeCoverage(key) {
+    if (!this.covered) return 'covered';
+    const t = Date.parse(this.covered[key]);
+    if (!Number.isFinite(t)) return 'uncovered';
+    return (this.now - t) / 86400000 > this.maxAgeDays ? 'stale' : 'covered';
   }
 }
 
@@ -125,7 +139,7 @@ export function upstreamIdentity(node, drvEnv, meta, overlay) {
   const ids = meta && meta.identifiers ? meta.identifiers : null;
   if (ids && typeof ids.purl === 'string') cands.push({ purl: ids.purl, authority: 'explicit', basis: 'meta.identifiers.purl' });
   const cpes = ids ? [].concat(ids.cpe || [], ids.possibleCPEs || [], ids.v1 && ids.v1.cpeParts ? [ids.v1.cpeParts] : []).filter(Boolean) : [];
-  const cpeStrings = cpes.map((c) => (typeof c === 'string' ? c : (c.vendor && c.product ? `${c.vendor}:${c.product}` : null))).filter(Boolean);
+  const cpeStrings = cpes.map(cpeKey).filter(Boolean);   // 'vendor:product' from a full CPE string or a {vendor, product} part; malformed values are dropped
   const uniqueCpe = [...new Set(cpeStrings)];
   if (uniqueCpe.length === 1 && ids && ids.cpe && !ids.possibleCPEs) cands.push({ cpe: uniqueCpe[0], authority: 'explicit', basis: 'meta.identifiers.cpe' });
   else for (const c of uniqueCpe) cands.push({ cpe: c, authority: 'candidate', basis: uniqueCpe.length > 1 ? 'one of several possible CPEs' : 'possible CPE' });
@@ -137,6 +151,32 @@ export function upstreamIdentity(node, drvEnv, meta, overlay) {
   const strong = uniq.filter((c) => c.authority === 'explicit' || c.authority === 'src-derived');
   const distinctTargets = new Set(strong.map((c) => c.purl || c.cpe || `${c.ecosystem}:${c.name}`));
   return { ...base, candidates: uniq, ambiguous: distinctTargets.size > 1 || (strong.length === 0 && uniq.length > 1) || uniq.some((c) => c.authority === 'candidate'), authority: strong.length && distinctTargets.size === 1 && !uniq.some((c) => c.authority === 'candidate') ? strong[0].authority : (uniq[0] ? 'name-only' : 'none'), haskell: !!isHs };
+}
+
+/**
+ * The upstream identities of every dependency in a closure, in the form the matcher will use, so a pre-scan step can ask a live feed
+ * about exactly what the matcher will look up. `cpes` holds 'vendor:product' keys (explicit and candidate); a component with none is
+ * listed in `withoutCpe` so the caller can say what a CPE-keyed feed cannot cover.
+ */
+export function closureIdentities({ closure, drvEnv = {}, meta = {}, overlays = {} } = {}) {
+  const nodes = (closure && closure.nodes) || [];
+  const roots = new Set((closure && closure.roots) || []);
+  const subjects = new Map();
+  for (const n of nodes) {
+    if (n.kind !== 'output' || roots.has(n.id)) continue;
+    const key = n.deriver || n.id;
+    if (!subjects.has(key)) subjects.set(key, { drv: n.deriver || null, node: n });
+    const s = subjects.get(key);
+    if (n.outputName === 'out' || (s.node.outputName !== 'out' && n.scopes.includes('runtime'))) s.node = n;
+  }
+  const cpes = new Set(); const withoutCpe = [];
+  for (const s of subjects.values()) {
+    const node = s.node;
+    const ident = upstreamIdentity(node, (s.drv && drvEnv[s.drv]) || null, meta[node.pname] || meta[node.storeName] || null, overlays[node.pname] || null);
+    const mine = ident.candidates.filter((c) => c.cpe).map((c) => c.cpe);
+    if (mine.length) mine.forEach((k) => cpes.add(k)); else if (node.pname) withoutCpe.push(node.pname);
+  }
+  return { cpes: [...cpes].sort(), withoutCpe: [...new Set(withoutCpe)].sort() };
 }
 
 // ── overlays and patches ─────────────────────────────────────────────────────
@@ -297,11 +337,12 @@ export function matchNixVulnerabilities(opts = {}) {
         const st = decide(r, pe, ident);
         matched = true;
         if (haskellUsage) { const rr = hackageReachability(node.pname, haskellUsage.imports, haskellUsage.callees, symbols[adv.id] || null); tiers.reachability = { import: rr.import, function: rr.function, basis: rr.reason }; }
-        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
+        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases, severityInfo: adv.severityInfo }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
       }
     }
     // generic records by PURL / CPE; only authoritative identities are matched, candidates are leads
     for (const adv of data.records) {
+      if (adv.withdrawn) continue;
       for (const aff of adv.affected) {
         const target = ident.candidates.find((c) => (c.purl && aff.purl && c.purl === aff.purl) || (c.cpe && aff.cpe && c.cpe === aff.cpe) || (c.name && aff.name && !aff.purl && !aff.cpe && c.name === aff.name && c.authority === 'name-only') || (c.ecosystem === 'Hackage' && aff.ecosystem === 'Hackage' && c.name === aff.name));
         if (!target) continue;
@@ -320,7 +361,21 @@ export function matchNixVulnerabilities(opts = {}) {
         findings.push(finding({ ...base, tiers: { ...tiers } }, adv, st.status, st.reason, { source: data.source, ecosystem: aff.ecosystem, fixedIn: aff.fixedIn, patchEvidence: pe, identityBasis: target.basis, identityAuthority: target.authority }, { kev, epss }));
       }
     }
+    // A feed that records coverage per CPE identity can only vouch for the identities it actually read. Without a covered, explicit,
+    // unambiguous CPE identity, "no match" says nothing, so it is unknown (never not-affected).
+    let covGap = null;
+    if (!hackageGap && data.covered) {
+      const cpeCands = ident.candidates.filter((c) => c.cpe);
+      const firm = !ident.ambiguous ? cpeCands.find((c) => c.authority === 'explicit') : null;
+      if (firm) {
+        const cv = data.cpeCoverage(firm.cpe);
+        if (cv === 'covered') mapped = true;
+        else covGap = cv === 'stale' ? `the live advisory feed last read ${firm.cpe} longer ago than its age limit: the absence of a match is not a clean result` : `the live advisory feed never read ${firm.cpe} (it was not queried or the query did not complete): the absence of a match is not a clean result`;
+      } else if (!matched && !cpeCands.length) covGap = 'the live advisory feed is keyed by CPE and this component declares no CPE identity (a source URL or purl alone is not something it can look up): the absence of a match is not a clean result';
+    }
     if (matched) summary.matched++;
+    if (covGap) { if (!matched) summary.unmapped++; push({ status: 'unknown', reason: covGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
+    else if (matched) { /* findings above are the result */ }
     else if (hackageGap) { summary.unmapped++; push({ status: 'unknown', reason: hackageGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
     else if (mapped) { summary.mappedNoMatch++; push({ status: 'not-affected', reason: 'mapped to an upstream identity and no advisory in the supplied feed matches this version' }, { identityMapped: true }); }
     else { summary.unmapped++; push({ status: 'unknown', reason: ident.ambiguous ? 'the upstream identity is ambiguous: no verdict' : 'the upstream identity could not be mapped to anything an advisory is keyed by' }, { identityMapped: false }); }
@@ -340,10 +395,14 @@ function finding(base, adv, status, reason, extra, { kev, epss }) {
   const kevHit = cves.length ? (kev ? cves.some((c) => kev.has(c)) : 'unknown') : 'not-applicable';
   const ep = cves.map((c) => epss && epss[c]).filter((x) => typeof x === 'number');
   const level = { affected: 'high', 'possibly-affected': 'medium', candidate: 'low', 'backported-verified': 'info', fixed: 'info', unknown: 'low', 'not-affected': 'info' }[status] || 'low';
+  // The advisory's own rating applies only where the package is judged vulnerable; the other statuses keep their fixed,
+  // lower levels (a verified backport must never be raised by the upstream score).
+  const sev = adv.severityInfo || { level: null, score: null, basis: NO_RATING_BASIS };
+  const rated = !!sev.level && (status === 'affected' || status === 'possibly-affected');
   return {
     type: 'vulnerable_dep', ecosystem: 'nix', language: 'nix', capability: 'sca', analysisKind: 'application', evidenceKind: 'closure',
     name: base.name, version: base.version, osvId: adv.id, ids: adv.ids || [adv.id], cveAliases: cves, summary: adv.summary || '',
-    status, matchStatus: status, matchReason: reason, severity: level, severityBasis: 'the advisory carries no severity rating',
+    status, matchStatus: status, matchReason: reason, severity: rated ? sev.level : level, severityBasis: rated ? sev.basis : sev.level ? `the match status "${status}" fixes this level; the advisory rating (${sev.basis}) is not applied` : sev.basis, ...(rated ? { severityScore: sev.score } : {}),
     nixBuild: base.nixBuild, identity: base.identity, tiers: base.tiers, feed: base.feed,
     kev: kevHit, epss: ep.length ? Math.max(...ep) : 'unknown',
     fixedIn: extra.fixedIn || [], patchEvidence: extra.patchEvidence || { verified: null, claims: [] }, dataSource: { feed: extra.source || base.feed.source, ecosystem: extra.ecosystem || null, identityBasis: extra.identityBasis || null, identityAuthority: extra.identityAuthority || null, feedStatus: base.feed.status },

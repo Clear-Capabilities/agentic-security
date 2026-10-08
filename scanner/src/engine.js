@@ -8436,6 +8436,9 @@ function genHAR(routes,sources){const baseUrl="http://localhost:3000";const entr
 
 async function queryRegistries(components){
   const infoMap=new Map();
+  // Registry metadata (latest version, deprecation, age) is optional enrichment. Offline mode (--no-network, --deterministic, AGENTIC_SECURITY_OFFLINE=1)
+  // must not touch the network for it: found by the live Hackage feed bench, where an "offline" scan still fetched registry.npmjs.org/jquery.
+  if(process.env.AGENTIC_SECURITY_OFFLINE==='1')return infoMap;
   const npmNames=[...new Set(components.filter(c=>c.ecosystem==='npm').map(c=>c.name))];
   const pypiNames=[...new Set(components.filter(c=>c.ecosystem==='pypi').map(c=>c.name))];
   const CHUNK=8;
@@ -9229,6 +9232,7 @@ function _deterministicFileTimings(timings) {
   // X-010: Hackage and Nix components, dependency edges and target provenance. Kept beside (not inside) the ordinary
   // component list so the existing consumers are untouched; the BOM emitters and the SBOM diff read it explicitly.
   try{if(process.env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE==='1'){const{prefetchHackageFeed}=await import('./language/haskell-supply.js');const{resolvedHackageComponents,nixHaskellPackageNames}=await import('./language/resolved-pass.js');let _rc=[],_nx=[];try{_rc=resolvedHackageComponents(allFileContents).components||[];}catch(_){}try{_nx=nixHaskellPackageNames(allFileContents);}catch(_){}await prefetchHackageFeed(allFileContents,{resolvedComponents:_rc,extraNames:_nx});}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
+  try{if(process.env.AGENTIC_SECURITY_NIX_ADVISORIES_LIVE==='1'){const{prefetchNixAdvisoryFeed}=await import('./language/resolved-pass.js');await prefetchNixAdvisoryFeed(allFileContents);}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
   let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc&&!_nc.refused.length?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));
@@ -11031,6 +11035,7 @@ function _deterministicFileTimings(timings) {
     if (Object.keys(allFileContents).some(f => /\.(?:l?hs|hs-boot|hsc|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project|package\.yaml|stack\.yaml)/i.test(f))) {
       const { assessLanguageAssurance } = await import('./language/assurance.js');
       const { configuredAdvisoryDb } = await import('./language/haskell-supply.js');
+      const { liveFeedOptionalState } = await import('./language/haskell-advisory-feed.js');
       const env = process.env;
       const { resolvedHackageComponents, analyzeNixClosure, runSelectedNixEval } = await import('./language/resolved-pass.js');
       let _languageSupplyGaps = [];
@@ -11044,7 +11049,7 @@ function _deterministicFileTimings(timings) {
         sizeSkipped,
         supplyGaps: _languageSupplyGaps,
         licenseUnavailable: ((_languageBom && _languageBom.components) || []).filter((c) => c && !c.license && !(Array.isArray(c.licenses) && c.licenses.length)).length,
-        optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': { selected: false } },
+        optional: { 'nix-eval': { selected: env.AGENTIC_SECURITY_NIX_EVAL === '1', result: _nixEvalResult }, 'cabal-plan': { selected: false }, 'hackage-live': liveFeedOptionalState(env)},
       })).languageCoverage;
     }
   } catch (e) { _languageCoverage = { totals: null, byKind: null, conditions: [`language assurance could not be computed: ${String((e && e.message) || e)}`] }; }

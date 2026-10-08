@@ -15,6 +15,13 @@ on:
 # workflow in this repo, which already sets this.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # Bounded network behaviour for every `npm ci` below. npm's defaults retry twice but allow five minutes per request, so a stalled
+  # registry connection looked like a hang. A 60 s request deadline with five retries turns a stall into a quick, automatic retry, and
+  # the step-level `timeout-minutes` on each install is the backstop if the registry is down entirely.
+  NPM_CONFIG_FETCH_TIMEOUT: '60000'
+  NPM_CONFIG_FETCH_RETRIES: '5'
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '2000'
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '30000'
 
 jobs:
   test:
@@ -35,6 +42,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+        timeout-minutes: 10
       - name: Allow unprivileged user namespaces (the Nix script witnesses need a real confinement primitive)
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
@@ -111,11 +119,22 @@ jobs:
         with:
           ghc-version: '9.4.8'
           cabal-version: '3.10.2.1'
+        timeout-minutes: 15
       - run: ghc --version && cabal --version
+        timeout-minutes: 5
       - name: Provision the packages the route fixtures import (the compile criterion needs them installed)
         run: |
-          sudo apt-get update && sudo apt-get install -y libpq-dev
-          cabal update
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 update \
+              && timeout 180 sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 install -y libpq-dev; then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::apt failed after 3 attempts" >&2; exit 1; }
+            echo "apt attempt $attempt failed or timed out" >&2; sleep $((attempt * 10))
+          done
+          for attempt in 1 2 3; do
+            if timeout 300 cabal update; then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::cabal update failed after 3 attempts" >&2; exit 1; }
+            echo "cabal update attempt $attempt failed or timed out" >&2; sleep $((attempt * 10))
+          done
           cabal install --lib --package-env=default --allow-newer --index-state=2026-10-04T17:05:37Z --constraint='crypton==1.0.6' --constraint='memory==0.18.0' --constraint='jose==0.11' scotty-0.20.1 wai warp servant-server servant-auth-server postgresql-simple yesod http-types text
         timeout-minutes: 25
       - run: npm ci
@@ -139,7 +158,7 @@ jobs:
           - { os: ubuntu-latest, system: x86_64-linux }
           - { os: ubuntu-24.04-arm, system: aarch64-linux }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 240
+    timeout-minutes: 360
     continue-on-error: true
     defaults:
       run:
@@ -157,13 +176,30 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           ls -l /dev/kvm
-      - uses: cachix/install-nix-action@v31
+      # Two bounded attempts. The installer is a network download that has hung before; a hang becomes a 10 minute failure of
+      # attempt 1 and attempt 2 runs. BOTH attempts stay visible in the log; attempt 2 is skipped when attempt 1 succeeds, and a
+      # failure of attempt 2 fails the job.
+      - name: Install Nix (attempt 1)
+        id: nix_install_1
+        uses: cachix/install-nix-action@v31
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          install_url: https://releases.nixos.org/nix/nix-2.24.10/install
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            system-features = nixos-test benchmark big-parallel kvm
+      - name: Install Nix (attempt 2, only when attempt 1 failed or timed out)
+        if: steps.nix_install_1.outcome != 'success'
+        uses: cachix/install-nix-action@v31
+        timeout-minutes: 10
         with:
           install_url: https://releases.nixos.org/nix/nix-2.24.10/install
           extra_nix_config: |
             experimental-features = nix-command flakes
             system-features = nixos-test benchmark big-parallel kvm
       - run: nix --version
+        timeout-minutes: 5
       - run: npm ci
         timeout-minutes: 10
       - name: Isolated evaluation harness against a real evaluator
@@ -185,17 +221,63 @@ jobs:
       # NIX-012.AC03: "an aarch64-linux runner or actual tested emulation". The arm runner has no KVM, so the aarch64 guest is emulated (qemu
       # TCG) on the x86_64 KVM host. It is slow by nature; the driver's shell wait is stretched in flake.nix. The build step registers the
       # aarch64 user-mode emulator so the few aarch64 derivations (the package, the dev shell) can be built on this host.
-      - name: Emulated aarch64 NixOS guest (runs the NIX-012 suite inside it)
+      - name: Register the aarch64 user-mode emulator
         if: matrix.system == 'x86_64-linux'
         working-directory: .
         run: |
-          set -o pipefail
-          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          for attempt in 1 2 3; do
+            if timeout 300 docker run --privileged --rm tonistiigi/binfmt --install arm64; then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::binfmt registration failed after 3 attempts" >&2; exit 1; }
+            echo "binfmt attempt $attempt failed or timed out" >&2; sleep $((attempt * 10))
+          done
           sudo sh -c 'echo "extra-platforms = aarch64-linux" >> /etc/nix/nix.conf'
           sudo systemctl restart nix-daemon
-          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link result-aarch64
+        timeout-minutes: 15
+      # The emulated guest is run at most TWICE, and never silently. Attempt 1 is allowed to fail without failing the job only so that
+      # attempt 2 can run; its log is kept as an artifact, a warning annotation and the job summary say plainly that attempt 1 failed, and
+      # a failure of attempt 2 fails the job. A run that needed the retry is therefore visible as such, and counting those runs is how the
+      # flake rate is measured (see the note in flake.nix above mkHostTest).
+      - name: Emulated aarch64 NixOS guest, attempt 1 (runs the NIX-012 suite inside it)
+        id: aarch64_try1
+        if: matrix.system == 'x86_64-linux'
+        continue-on-error: true
+        working-directory: .
+        run: |
+          set -o pipefail
+          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link result-aarch64 2>&1 | tee /tmp/aarch64-attempt-1.log
           cat result-aarch64/nixos-host-aarch64-linux.tap
         timeout-minutes: 150
+      - name: Keep the log of a failed attempt 1
+        if: always() && steps.aarch64_try1.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nixos-aarch64-emulated-attempt-1-log
+          path: /tmp/aarch64-attempt-1.log
+          if-no-files-found: warn
+        timeout-minutes: 10
+      - name: Emulated aarch64 NixOS guest, attempt 2 (only because attempt 1 failed)
+        id: aarch64_try2
+        if: matrix.system == 'x86_64-linux' && steps.aarch64_try1.outcome == 'failure'
+        working-directory: .
+        run: |
+          set -o pipefail
+          echo "::warning title=emulated aarch64 attempt 1 FAILED::attempt 1 failed (its log is the nixos-aarch64-emulated-attempt-1-log artifact); retrying once. This job is only green if attempt 2 passes, and it is recorded as a retried run."
+          echo "### Emulated aarch64 guest: attempt 1 FAILED, attempt 2 running" >> "$GITHUB_STEP_SUMMARY"
+          echo '--- tail of the attempt 1 log ---'
+          tail -n 60 /tmp/aarch64-attempt-1.log || true
+          echo '--- attempt 2 ---'
+          nix build .#checks.x86_64-linux.nixos-host-aarch64-emulated -L --out-link result-aarch64 2>&1 | tee /tmp/aarch64-attempt-2.log
+          cat result-aarch64/nixos-host-aarch64-linux.tap
+          echo "### Emulated aarch64 guest: attempt 1 failed, attempt 2 PASSED (retried run, suspected flake)" >> "$GITHUB_STEP_SUMMARY"
+        timeout-minutes: 150
+      - name: Keep the log of a failed attempt 2
+        if: always() && steps.aarch64_try2.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nixos-aarch64-emulated-attempt-2-log
+          path: /tmp/aarch64-attempt-2.log
+          if-no-files-found: warn
+        timeout-minutes: 10
       - name: The NixOS example scans, and the opt-in evaluation states what it did
         run: |
           set -o pipefail
@@ -240,6 +322,7 @@ jobs:
   # does the real comparison.
   vscode-extension:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ide/vscode
@@ -249,6 +332,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+        timeout-minutes: 10
       - name: Build the extension bundle
         run: npm run build
       # `ide/vscode/dist/` is gitignored — the extension is packaged by `vsce`,
@@ -294,10 +378,24 @@ jobs:
   # belongs to the LSP smoke test, which already does it.
   nvim-plugin:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install Neovim
-        run: sudo apt-get update && sudo apt-get install -y neovim
+        # Each attempt is capped at 3 minutes and the package manager's own fetch timeout is 30 s, so a stalled mirror fails fast and
+        # is retried (this step once hung for 55 minutes).
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 update \
+              && timeout 180 sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 install -y neovim; then
+              exit 0
+            fi
+            echo "apt attempt $attempt failed or timed out" >&2
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not install neovim after 3 attempts" >&2
+          exit 1
+        timeout-minutes: 12
       - name: The plugin loads and setup() runs
         run: |
           nvim --headless -u NONE \
@@ -317,6 +415,7 @@ jobs:
   # milliseconds.
   jetbrains-plugin:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: ide/jetbrains
@@ -329,6 +428,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+        timeout-minutes: 10
       # No `gradle-version:` pin any more. The version lives in the committed
       # wrapper (ide/jetbrains/gradle/wrapper/gradle-wrapper.properties, with the
       # distribution checksum pinned), so CI and a developer's machine run the
@@ -338,6 +438,7 @@ jobs:
       # by Gradle 9 at all. That plugin is gone — this builds on the IntelliJ
       # Platform Gradle Plugin 2.x.
       - uses: gradle/actions/setup-gradle@v6
+        timeout-minutes: 10
       - name: Build and verify the plugin
         # `set -o pipefail` is load-bearing, not decoration. The default shell
         # for a `run:` step is `bash -e {0}` — NO pipefail — so the exit status
@@ -346,6 +447,7 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew --no-daemon buildPlugin verifyPluginProjectConfiguration verifyPluginStructure | tee /tmp/gradle.log
+        timeout-minutes: 40
       - name: No plugin configuration issues were reported
         # `verifyPluginProjectConfiguration` REPORTS problems and still exits 0.
         # It found two real ones on this plugin — compiling against Java 17 for a
@@ -358,6 +460,7 @@ jobs:
             sed -n '/plugin configuration issues were found/,/^> Task/p' /tmp/gradle.log
             exit 1
           fi
+        timeout-minutes: 10
       - name: A distribution zip was produced, and it contains the plugin
         run: |
           ZIP="$(find build/distributions -name '*.zip' -print -quit)"
@@ -386,6 +489,7 @@ jobs:
   # therefore never be mistaken for a pass here.
   sandbox-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -393,6 +497,7 @@ jobs:
           node-version: '24'
       - run: npm ci
         working-directory: scanner
+        timeout-minutes: 10
 
       - name: Host state before relaxing the restriction
         run: |
@@ -446,6 +551,7 @@ jobs:
 
   corpus:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -453,6 +559,7 @@ jobs:
           node-version: '24'
       - run: npm ci
         working-directory: scanner
+        timeout-minutes: 10
       - name: CVE-replay corpus baseline check (fails on any drift)
         run: npm run bench:cve-replay:check
         working-directory: scanner
@@ -490,6 +597,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -497,6 +605,7 @@ jobs:
           node-version: '24'
       - run: npm ci
         working-directory: scanner
+        timeout-minutes: 10
       - name: Compute run attestation
         # pipefail, same reason as the jetbrains-plugin build step: without it
         # the step's exit status is TEE's, so attest-fixture.mjs could fail —
@@ -510,10 +619,12 @@ jobs:
         with:
           name: attestation-${{ matrix.os }}
           path: attestation-${{ matrix.os }}.json
+        timeout-minutes: 10
 
   determinism-compare:
     needs: determinism-attest
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -521,5 +632,6 @@ jobs:
           pattern: attestation-*
           merge-multiple: true
           path: attestations
+        timeout-minutes: 10
       - name: All machines must agree on the digest
         run: node scripts/determinism-compare.mjs attestations

@@ -65,6 +65,7 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       security-events: write   # required for SARIF upload
@@ -87,8 +88,8 @@ jobs:
           # a release tag or commit SHA further hardens against repo compromise.
           set -euo pipefail
           BASE="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/${SCANNER_REF}/scanner/dist"
-          curl -sSL --fail -o /tmp/agentic-security.mjs        "${BASE}/agentic-security.mjs"
-          curl -sSL --fail -o /tmp/agentic-security.mjs.sha256 "${BASE}/agentic-security.mjs.sha256" || true
+          curl -sSL --fail --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors -o /tmp/agentic-security.mjs        "${BASE}/agentic-security.mjs"
+          curl -sSL --fail --max-time 60 --retry 3 --retry-delay 5 --retry-all-errors -o /tmp/agentic-security.mjs.sha256 "${BASE}/agentic-security.mjs.sha256" || true
           if [ -s /tmp/agentic-security.mjs.sha256 ]; then
             ACTUAL=$(sha256sum /tmp/agentic-security.mjs | awk '{print $1}')
             EXPECTED=$(awk '{print $1}' /tmp/agentic-security.mjs.sha256)
@@ -101,6 +102,7 @@ jobs:
             echo "agentic-security: no committed checksum at ${SCANNER_REF} — proceeding without integrity check." >&2
           fi
           chmod +x /tmp/agentic-security.mjs
+        timeout-minutes: 5
 
       - name: Apply paths-ignore to rules
         if: ${{ inputs.paths-ignore != '' }}
@@ -172,6 +174,7 @@ jobs:
             --pr "${{ github.event.pull_request.number }}" \
             --title "${{ github.event.pull_request.title }}" \
             > /tmp/pr-comment.md
+        timeout-minutes: 10
 
       - name: Post advisor comment
         if: github.event_name == 'pull_request' && inputs.pr-comment-mode == 'advisor'
@@ -231,3 +234,4 @@ jobs:
             none)     exit 0 ;;
             *)        echo "Unknown fail-on: $FAIL_ON"; exit 1 ;;
           esac
+        timeout-minutes: 10

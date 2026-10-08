@@ -36,7 +36,7 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const SCOTTY_METHODS = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE', patch: 'PATCH', options: 'OPTIONS', matchAny: 'ANY', addroute: 'ANY' };
 const SENSITIVE_PREFIX = ['Database.', 'System.Process.', 'System.Directory.', 'Prelude.readFile', 'Prelude.writeFile', 'Prelude.appendFile', 'System.IO.', 'Network.HTTP.Simple.', 'Network.HTTP.Client.'];
 const PERSIST_FNS = new Set(['get', 'getBy', 'selectFirst', 'selectList', 'insert', 'insert_', 'update', 'updateWhere', 'delete', 'deleteWhere', 'replace', 'runDB', 'getJust', 'upsert']);
-const GUARD_PRIMITIVES = new Set(['Yesod.Core.requireAuthId', 'Yesod.Core.requireAuth', 'Yesod.Auth.requireAuthId', 'Yesod.Auth.requireAuth', 'Network.Wai.Middleware.HttpAuth.basicAuth']);
+const GUARD_PRIMITIVES = new Set(['Yesod.Core.requireAuthId', 'Yesod.Core.requireAuth', 'Yesod.Auth.requireAuthId', 'Yesod.Auth.requireAuth', 'Yesod.requireAuthId', 'Yesod.requireAuth', 'Network.Wai.Middleware.HttpAuth.basicAuth']);
 const CREDENTIAL_HEADER = /^(?:authorization|cookie|x-api-key|x-auth-token|x-access-token)$/i;
 const ADMIN_PATH = /(?:^|\/)(?:admin|internal|manage|superuser)(?:\/|$|:)/i;
 const ROLE_CALL = /(?:^|\.)(?:isAdmin|hasRole|requireAdmin|checkRole|hasPermission|requireRole|requirePermission|isSuperuser)$/i;
@@ -128,18 +128,97 @@ function credentialKind(c) {
   if (c.callee === 'Web.Cookie.parseCookies') return 'cookie';
   if (c.callee === 'Network.Wai.requestHeaders') return 'token';
   if (c.callee.startsWith('Web.JWT.')) return 'token';
+  // Yesod: the session principal, or a credential header, read by the handler itself (the caller still has to reject on it)
+  if (/^Yesod(?:\.Core|\.Auth)?\.(?:maybeAuthId|maybeAuth)$/.test(c.callee)) return 'session';
+  if (/^Yesod(?:\.Core)?\.lookupHeader$/.test(c.callee)) { const h = headerArg(c); if (h && CREDENTIAL_HEADER.test(h)) return /cookie/i.test(h) ? 'cookie' : 'token'; }
+  if (/^Yesod(?:\.Core)?\.lookupBearerAuth$/.test(c.callee)) return 'token';
+  if (/^Yesod(?:\.Core)?\.lookupBasicAuth$/.test(c.callee)) return 'basic';
   if (GUARD_PRIMITIVES.has(c.callee)) return c.callee.includes('HttpAuth') ? 'basic' : 'session';
   return null;
+}
+
+/**
+ * Credential reads of one function, by call. A WAI `requestHeaders` read is classified by the key it is looked up with: a lookup of a
+ * header that is not a credential (`lookup "X-Request-Id" (requestHeaders req)`) is not a credential read. An unrecognised use of
+ * `requestHeaders` keeps its old meaning (a token read), so only the provable non-credential lookup is excluded.
+ * The IR lowers `lookup k t` to a call on `t` with the key kept as `hs.selector`.
+ */
+function credentialReadsOf(fn) {
+  const nodes = Object.values(fn.cfg.nodes);
+  const hdrTargets = new Map();   // temp name -> line of the node that read requestHeaders
+  for (const n of nodes) if (n.kind === 'assign' && n.source && n.source.kind === 'call' && n.source.callee === 'Network.Wai.requestHeaders') hdrTargets.set(n.target, n.line);
+  const lineKind = new Map();     // line of a requestHeaders read -> 'token' | 'cookie' | null (a header that is not a credential)
+  for (const n of nodes) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
+    if (e.kind !== 'call' || !/(?:^|\.)lookup$/.test(e.callee || '') || !e.hs || !e.hs.selector) continue;
+    const sel = e.hs.selector;
+    let name = null;
+    if (sel.kind === 'literal' && typeof sel.value === 'string') name = sel.value;
+    else if (sel.kind === 'ident' && /(?:^|\.)hAuthorization$/.test(sel.name || '')) name = 'Authorization';
+    else if (sel.kind === 'ident' && /(?:^|\.)hCookie$/.test(sel.name || '')) name = 'Cookie';
+    if (name === null) continue;
+    const a0 = (e.args || [])[0];
+    const line = a0 && a0.kind === 'ident' && hdrTargets.has(a0.name) ? hdrTargets.get(a0.name) : (a0 && a0.kind === 'call' && a0.callee === 'Network.Wai.requestHeaders' ? n.line : null);
+    if (line === null) continue;
+    lineKind.set(line, CREDENTIAL_HEADER.test(name) ? (/cookie/i.test(name) ? 'cookie' : 'token') : null);
+  }
+  const out = new Map();
+  for (const c of callsOf(fn)) {
+    let k;
+    if (c.callee === 'Network.Wai.requestHeaders' && lineKind.has(c.line)) k = lineKind.get(c.line);
+    else k = credentialKind(c);
+    if (k) out.set(c, k);
+  }
+  return out;
+}
+
+/**
+ * `notAuthenticated` takes no argument, so it is an identifier in the IR, not a call (like Scotty's `finish`). It ends the handler by itself,
+ * so each occurrence is a rejection, reported as a pseudo-call at its enclosing node's line.
+ */
+function nullaryRejectionsOf(fn) {
+  const out = [];
+  for (const n of Object.values(fn.cfg.nodes)) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
+    if (e.kind === 'ident' && /^Yesod(?:\.Core)?\.notAuthenticated$/.test(e.name || '')) out.push({ kind: 'call', callee: e.name, args: [], line: Number.isFinite(e.line) ? e.line : n.line, hs: { nullary: true } });
+  }
+  return out;
+}
+
+// A WAI rejection is a response VALUE: it ends the handler only when it is handed back (`respond (responseLBS 401 ..)`, `return (..)`).
+// Built and dropped, it rejects nothing. Servant's throwError, Yesod's permissionDenied/notAuthenticated and Scotty's raiseStatus end the
+// handler by themselves.
+function stopsHandler(c, allCalls) {
+  if (c.callee !== 'Network.Wai.responseLBS') return true;
+  return allCalls.some((p) => p !== c && (p.callee === 'return' || p.callee === 'pure' || (p.hs && p.hs.status === 'param') || p.callee === 'respond')
+    && (p.args || []).some((a) => [...walkIr(a)].some((x) => x.kind === 'call' && x.args === c.args)));
 }
 
 function isRejection(c) {
   const name = c.callee;
   const argNames = (c.args || []).flatMap((a) => (a && a.kind === 'ident' ? [a.name] : []));
   if ((name === 'Web.Scotty.status' || name === 'Web.Scotty.Trans.status') && argNames.some((n) => /(?:status40[13]|unauthorized401|forbidden403)$/.test(n))) return true;
+  if (/^Web\.Scotty(?:\.Trans)?\.raiseStatus$/.test(name) && argNames.some((n) => /(?:status40[13]|unauthorized401|forbidden403)$/.test(n))) return true;   // halts by itself
   if (name === 'Network.Wai.responseLBS' && argNames.some((n) => /(?:status40[13]|unauthorized401|forbidden403)$/.test(n))) return true;
-  if (/^(?:Servant|Servant\.Server|Control\.Monad\.Except)\.throwError$/.test(name) && (c.args || []).some((a) => a && ((a.kind === 'ident' && /err40[13]$/.test(a.name)) || (a.kind === 'call' && /err40[13]$/.test(a.callee))))) return true;
-  if (/^Yesod\.Core\.(?:permissionDenied|notAuthenticated)$/.test(name)) return true;
+  // `throwError err401 { errBody = .. }` is a record update: the status constructor is inside it
+  if (/^(?:Servant|Servant\.Server|Control\.Monad\.Except)\.throwError$/.test(name) && (c.args || []).some((a) => a && [...walkIr(a)].some((x) => (x.kind === 'ident' && /err40[13]$/.test(x.name || '')) || (x.kind === 'call' && /err40[13]$/.test(x.callee || ''))))) return true;
+  if (/^Yesod(?:\.Core)?\.(?:permissionDenied|notAuthenticated)$/.test(name)) return true;
   return false;
+}
+
+// Scotty's `status` only sets the response code: the handler keeps running unless something halts it.
+const SCOTTY_STATUS = /^Web\.Scotty(?:\.Trans)?\.status$/;
+const SCOTTY_HALT = /^Web\.Scotty(?:\.Trans)?\.(?:finish|raise|raiseStatus|redirect)$/;
+/**
+ * Source lines of every Scotty halting point in one function IR. `finish` is usually a bare operand (`status status401 >> finish`,
+ * `when bad finish`), which the IR records as an identifier rather than a call, and an identifier has no line of its own: it inherits the
+ * enclosing node's line. So both calls and identifiers are collected, by line.
+ */
+function haltLinesOf(fn) {
+  const lines = [];
+  for (const n of Object.values(fn.cfg.nodes)) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
+    const nm = e.kind === 'call' ? e.callee : e.kind === 'ident' ? e.name : null;
+    if (nm && SCOTTY_HALT.test(nm)) lines.push(Number.isFinite(e.line) ? e.line : n.line);
+  }
+  return lines;
 }
 
 function guardSummary(ctx, fn, depth = 0, seen = new Set()) {
@@ -148,11 +227,12 @@ function guardSummary(ctx, fn, depth = 0, seen = new Set()) {
   if (seen.has(fn.qid) || depth > 3) return { auth: false, kinds: [], role: false, owner: false, csrf: false };
   seen.add(fn.qid);
   const kinds = new Set();
-  let reads = false, rejects = false, role = false, owner = false, csrf = false, primitive = false;
+  let reads = false, rejects = false, statusRejects = [], role = false, owner = false, csrf = false, primitive = false;
+  const credReads = credentialReadsOf(fn);
   for (const c of callsOf(fn)) {
-    const k = credentialKind(c);
+    const k = credReads.get(c) || null;
     if (k) { kinds.add(k); reads = true; if (GUARD_PRIMITIVES.has(c.callee)) primitive = true; }
-    if (isRejection(c)) rejects = true;
+    if (isRejection(c)) { if (SCOTTY_STATUS.test(c.callee)) statusRejects.push(c.line); else rejects = true; }
     if (ROLE_CALL.test(c.callee || '')) role = true;
     if (OWNER_CALL.test(c.callee || '')) owner = true;
     if (CSRF_CALL.test(c.callee || '')) csrf = true;
@@ -162,6 +242,11 @@ function guardSummary(ctx, fn, depth = 0, seen = new Set()) {
       if (sub.role) role = true; if (sub.owner) owner = true; if (sub.csrf) csrf = true;
     }
   }
+  if (!rejects && nullaryRejectionsOf(fn).length) rejects = true;
+  // A Scotty `status 40x` is a rejection only if the function also halts the handler (finish, raise, raiseStatus, redirect). Position is not
+  // judged here: a bare `finish` operand carries its enclosing node's line (often the function head), so a line comparison would reject
+  // the ordinary `Nothing -> status status401 >> finish`. The inline-guard path, which can order against the first sensitive call, does.
+  if (!rejects && statusRejects.length && haltLinesOf(fn).length) rejects = true;
   // literal comparisons against an admin role count as a role check
   for (const n of Object.values(fn.cfg.nodes)) for (const e of exprsOfNode(n)) for (const x of walkIr(e)) {
     if (x.kind === 'binary' && (x.op === '==' || x.op === '===' || x.op === '!=')) {
@@ -188,7 +273,7 @@ const identsIr = (e) => { const out = new Set(); for (const x of walkIr(e)) { if
 
 // ── handler summary ─────────────────────────────────────────────────────────
 // Ordered call list (program order) + principal / id / ownership facts for one handler function IR.
-function handlerFacts(ctx, fn) {
+function handlerFacts(ctx, fn, opts = {}) {
   const ordered = [];
   const nodes = Object.entries(fn.cfg.nodes).map(([id, n]) => ({ id, ...n })).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const assigns = [];
@@ -226,26 +311,40 @@ function handlerFacts(ctx, fn) {
   // a WAI response, a Servant throwError or a Yesod permissionDenied ends the handler by itself.
   // `finish` is usually a bare operand (`status status401 >> finish`, `when bad finish`), which the IR records as an identifier
   // rather than a call, so halting points are collected from both, by source line.
-  const HALT = /^Web\.Scotty(?:\.Trans)?\.(?:finish|raise|raiseStatus|redirect)$/;
-  const haltLines = [];
-  for (const n of nodes) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) {
-    if ((e.kind === 'call' ? e.callee : e.kind === 'ident' ? e.name : null) && HALT.test(e.kind === 'call' ? e.callee : e.name)) haltLines.push(Number.isFinite(e.line) ? e.line : n.line);
-  }
+  const haltLines = haltLinesOf(fn);
   const sensLine = sensIdx >= 0 ? ordered[sensIdx].line : Infinity;
   const haltsAfter = (line) => haltLines.some((h) => Number.isFinite(h) && h >= line && h < sensLine);
   // The complete call list (not the node walk, which does not descend into case alternatives), ordered by source line.
-  const allCalls = callsOf(fn).filter((c) => typeof c.callee === 'string' && Number.isFinite(c.line)).sort((x, y) => x.line - y.line);
+  const allCalls = [...callsOf(fn), ...nullaryRejectionsOf(fn)].filter((c) => typeof c.callee === 'string' && Number.isFinite(c.line)).sort((x, y) => x.line - y.line);
+  const credReads = credentialReadsOf(fn);
+  // Credential reads in source order: calls that read one, and handler parameters bound to a credential header (Servant `Header "Authorization"`),
+  // whose "read" is their first use in the body.
+  const reads = [];
+  for (const c of allCalls) if (credReads.has(c)) reads.push({ line: c.line, kind: credReads.get(c), callee: c.callee, call: c });
+  for (const cp of opts.credentialParams || []) {
+    let first = null;
+    for (const n of nodes) for (const root of exprsOfNode(n)) for (const e of walkIr(root)) if (e.kind === 'ident' && e.name === cp.name && Number.isFinite(n.line) && (first === null || n.line < first)) first = n.line;
+    if (first !== null) reads.push({ line: first, kind: cp.kind, callee: `param:${cp.name}`, call: null });
+  }
+  reads.sort((x, y) => x.line - y.line);
   let inlineIdx = -1, inlineKind = null, inlineLine = null, inlineCallee = null;
-  for (let i = 0; i < allCalls.length && inlineIdx < 0; i++) {
-    const k = credentialKind(allCalls[i]);
-    if (!k) continue;
-    for (let j = i + 1; j < allCalls.length && allCalls[j].line < sensLine; j++) {
+  for (let i = 0; i < reads.length && inlineIdx < 0; i++) {
+    const rd = reads[i];
+    if (!(rd.line <= sensLine)) break;
+    // (a) a rejection at or after the read and before the first sensitive operation, by line. Scotty's `status` only sets the code, so there a
+    // halting call must follow too.
+    for (let j = 0; j < allCalls.length && allCalls[j].line < sensLine; j++) {
       const r = allCalls[j];
-      if (!isRejection(r)) continue;
-      const setsStatusOnly = /^Web\.Scotty(?:\.Trans)?\.status$/.test(r.callee);
-      if (setsStatusOnly && !haltsAfter(allCalls[i].line)) continue;   // an identifier carries its enclosing node's line, so position is judged from the credential read
-      inlineIdx = j; inlineKind = k; inlineLine = r.line; inlineCallee = allCalls[i].callee; break;
+      if (r === rd.call || r.line < rd.line || !isRejection(r) || !stopsHandler(r, allCalls)) continue;
+      if (SCOTTY_STATUS.test(r.callee) && !haltsAfter(rd.line)) continue;   // an identifier carries its enclosing node's line, so position is judged from the credential read
+      inlineIdx = j; inlineKind = rd.kind; inlineLine = r.line; inlineCallee = rd.callee; break;
     }
+    if (inlineIdx >= 0) break;
+    // (b) a rejection that ends the handler by itself (WAI response handed back, throwError, permissionDenied, raiseStatus). A call in tail position
+    // (the last statement, a case alternative) reports the enclosing line, not its own, so its line cannot be ordered against the sensitive
+    // operation; the ordering that CAN be trusted is the credential read against the first sensitive operation, tested above.
+    const hard = allCalls.findIndex((r) => r !== rd.call && isRejection(r) && !SCOTTY_STATUS.test(r.callee) && stopsHandler(r, allCalls));
+    if (hard >= 0) { inlineIdx = hard; inlineKind = rd.kind; inlineLine = allCalls[hard].line; inlineCallee = rd.callee; break; }
   }
   const principals = new Set();
   for (const a of assigns) if (a.source.kind === 'call' && isGuardCall(a.source)) principals.add(a.target);
@@ -285,7 +384,7 @@ function newRoute(r) { return { auth: { status: 'unknown', kind: null, evidence:
 function analyzeRoute(ctx, route, handlerFn, opts) {
   const R = route;
   if (!handlerFn) { R.handler = R.handler || { kind: 'unknown' }; R.auth = { status: 'unknown', kind: null, evidence: [], reason: 'handler not resolved' }; return; }
-  const facts = handlerFacts(ctx, handlerFn);
+  const facts = handlerFacts(ctx, handlerFn, opts);
   for (const v of opts.principalVars || []) facts.principals.add(v);
   for (const v of opts.idVars || []) facts.idVars.add(v);
   const gs = guardSummary(ctx, handlerFn);
@@ -460,6 +559,7 @@ function expandChain(chain, acc) {
   const name = first.t === 'con' ? first.v : null;
   if (name === 'Capture' || name === 'Capture\'') { const nm = head.find((t) => t.t === 'str'); a.path.push(`:${nm ? nm.v : 'param'}`); a.captures.push(nm ? nm.v : 'param'); a.order.push(`capture:${nm ? nm.v : 'param'}`); }
   else if (name === 'QueryParam' || name === 'QueryParam\'' || name === 'QueryParams') { const nm = head.find((t) => t.t === 'str'); a.params.push(nm ? nm.v : '?'); a.order.push(`query:${nm ? nm.v : '?'}`); }
+  else if (name === 'Header' || name === 'Header\'') { const nm = head.find((t) => t.t === 'str'); a.order.push(`header:${nm ? nm.v : '?'}`); }
   else if (name === 'ReqBody') a.order.push('body');
   else if (name === 'BasicAuth') { a.auth = { kind: 'basic', tag: 'BasicAuth' }; a.order.push('auth'); }
   else if (name === 'AuthProtect') { const nm = head.find((t) => t.t === 'str'); a.auth = { kind: 'token', tag: nm ? nm.v : 'AuthProtect' }; a.order.push('auth'); if (nm && /admin|role|perm/i.test(nm.v)) a.role = true; }
@@ -654,11 +754,16 @@ export function analyzeHaskellWeb(files, opts = {}) {
       (p.servant.order || []).forEach((kind, i) => {
         const nm = paramNames[i]; if (!nm) return;
         if (kind === 'auth') o.principalVars.push(nm);
+        else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
         else if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
       });
     } else if (p.framework === 'servant') {
       o.idVars = [];
-      (p.servant.order || []).forEach((kind, i) => { const nm = paramNames[i]; if (nm && /^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm); });
+      (p.servant.order || []).forEach((kind, i) => {
+        const nm = paramNames[i]; if (!nm) return;
+        if (/^(?:capture|query):.*id$/i.test(kind)) o.idVars.push(nm);
+        else if (/^header:/.test(kind) && CREDENTIAL_HEADER.test(kind.slice(7))) (o.credentialParams ||= []).push({ name: nm, kind: /cookie/i.test(kind) ? 'cookie' : 'token' });
+      });
     }
     if (p.framework === 'yesod') {
       o.idVars = paramNames.filter(Boolean);

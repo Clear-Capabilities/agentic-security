@@ -87,27 +87,45 @@
           };
           # `guest` is the guest's architecture; when it differs from the host the guest is emulated (qemu TCG), which the criterion
           # NIX-012.AC03 calls "actual tested emulation".
-          mkHostTest = guest: hostPkgs.testers.runNixOSTest {
+          #
+          # An EMULATED guest differs from a native or KVM one only in speed, and every fixed budget in this test is a race against that speed.
+          # So the emulated variant, and only it, gets: a bound on each guest command (`succeed` has no timeout by default, so a wedged
+          # guest would otherwise hold the runner until the job deadline, with no message saying which command it was), a wait for the Nix
+          # daemon socket the suite's `nix build --offline` depends on, two vCPUs and more memory (one emulated core is what makes a nixpkgs
+          # evaluation slow enough to brush the suite's own 15 minute build budget), a longer bound on the suite itself, and a scale factor
+          # the suite applies to ITS own timeouts (scanner/test/nix/nixos-host-runtime.test.js). Every one of these is bounded. The native
+          # variant runs the same commands with the same limits as before.
+          mkHostTest = guest:
+            let
+              emulated = guest != system;
+              scale = 6;
+              succeedTimeout = if emulated then ", timeout=3600" else "";
+              daemonWait = if emulated then ''machine.wait_for_unit("nix-daemon.socket", timeout=3600)'' else "";
+              scalePrefix = if emulated then "AGENTIC_SECURITY_TEST_TIMEOUT_SCALE=${toString scale} " else "";
+              suiteTimeout = if emulated then 10800 else 5400;
+            in hostPkgs.testers.runNixOSTest {
             name = "agentic-security-nixos-host-${guest}";
             node.pkgs = nixpkgs.lib.mkForce nixpkgs.legacyPackages.${guest};
             nodes.machine = { pkgs, ... }: {
               environment.systemPackages = [ self.packages.${guest}.default pkgs.nodejs_24 pkgs.git pkgs.which ];
               nix.settings.experimental-features = [ "nix-command" "flakes" ];
               nix.settings.flake-registry = "";
-              virtualisation.memorySize = 3072;
+              virtualisation.memorySize = if emulated then 4096 else 3072;
+              virtualisation.cores = nixpkgs.lib.mkIf emulated 2;
               virtualisation.diskSize = 4096;
               virtualisation.additionalPaths = [ nixpkgs.outPath self.packages.${guest}.default self.devShells.${guest}.default pkgs.nodejs_24 ];
             };
             testScript = ''
               machine.wait_for_unit("multi-user.target", timeout=3600)
-              machine.succeed("test -f /etc/NIXOS")
+              ${daemonWait}
+              machine.succeed("test -f /etc/NIXOS"${succeedTimeout})
               # the leg's name is a claim about the guest; check it (an "aarch64" leg that was really x86 would be a false label)
-              machine.succeed("test \"$(uname -m)\" = \"${if guest == "aarch64-linux" then "aarch64" else "x86_64"}\"")
-              machine.succeed("agentic-security version")
-              machine.succeed("cp -r ${repo} /tmp/repo && chmod -R u+w /tmp/repo")
-              machine.succeed("cd /tmp/repo && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t")
+              machine.succeed("test \"$(uname -m)\" = \"${if guest == "aarch64-linux" then "aarch64" else "x86_64"}\""${succeedTimeout})
+              machine.succeed("agentic-security version"${succeedTimeout})
+              machine.succeed("cp -r ${repo} /tmp/repo && chmod -R u+w /tmp/repo"${succeedTimeout})
+              machine.succeed("cd /tmp/repo && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t"${succeedTimeout})
               # The suite runs INSIDE the guest with a TAP reporter; its output is copied out so a verifier can read per-test results.
-              status, _ = machine.execute("cd /tmp/repo/scanner && node --test --test-reporter=tap test/nix/nixos-host-runtime.test.js > /tmp/nixos-host-${guest}.tap 2>&1", timeout=5400)
+              status, _ = machine.execute("cd /tmp/repo/scanner && ${scalePrefix}node --test --test-reporter=tap test/nix/nixos-host-runtime.test.js > /tmp/nixos-host-${guest}.tap 2>&1", timeout=${toString suiteTimeout})
               machine.copy_from_machine("/tmp/nixos-host-${guest}.tap")
               assert status == 0, "the NIX-012 suite failed inside the guest (see nixos-host-${guest}.tap)"
             '';

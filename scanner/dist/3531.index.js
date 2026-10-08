@@ -14,7 +14,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   purlFromGitHost: () => (/* binding */ purlFromGitHost),
 /* harmony export */   purlFromUpstreamUrl: () => (/* binding */ purlFromUpstreamUrl)
 /* harmony export */ });
-/* harmony import */ var _haskell_supply_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(43436);
+/* harmony import */ var _haskell_supply_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(86349);
 /* harmony import */ var _haskell_sca_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(2437);
 /* harmony import */ var _haskell_resolved_graph_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(86359);
 /* harmony import */ var _nix_inventory_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(81303);

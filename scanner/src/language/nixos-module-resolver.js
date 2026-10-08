@@ -10,7 +10,9 @@
 //   * conditions: `mkIf`, `optionalAttrs`, `if/else`, judged by a small evaluator
 //     (booleans, strings, ints, `!`, `&&`, `||`, `->`, `==`, `!=`, references to
 //     `config.<option>` and let-aliases of them, `pkgs.stdenv.isLinux`-style platform
-//     flags from `target.system`, and function arguments supplied in `target.args`).
+//     flags from `target.system`, and function arguments supplied in `target.args`),
+//     widened to let/with/if, lambdas and a closed allow-list of library functions
+//     (see nixos-eval-forms.js and docs/guides/nix-nixos.md "What the evaluator runs").
 //     Anything else is UNKNOWN, and an unknown condition keeps its definition
 //     "conditional", it is never assumed true or false;
 //   * list options merge; scalar options with equal-priority different values are a
@@ -33,10 +35,13 @@ import * as path from 'node:path';
 import { parseNix, spanText } from './nix-parser.js';
 import { analyzeNix, buildNixImportGraph } from './nix-ir.js';
 import { defaultCatalog, normalizeRelease } from './nixos-option-catalog.js';
+import { Closure, Builtin, Ns, NOT_STATIC, isAttrs, hasOwn, setAttr, isPlain, deepEq, nsLookup, isGlobalName, globalValue } from './nixos-eval-forms.js';
 
 export const DEFAULT_RESOLVE_BUDGETS = Object.freeze({
   maxEvaluations: 20_000,
   maxEvalDepth: 24,
+  maxExprDepth: 200,
+  maxValueSize: 4096,
   maxDefinitionsPerOption: 500,
   maxFiles: 200,
 });
@@ -45,6 +50,7 @@ const PRIORITY = { mkForce: 50, mkVMOverride: 10, mkDefault: 1000, mkOptionDefau
 const SKIP_TOP = new Set(['options', 'meta', 'imports', '_module', 'inputs', 'outputs', 'description', 'disabledModules']);
 const BLOCKER_KINDS = new Set(['dynamic-import', 'missing-import', 'import-cycle', 'syntax-error', 'budget-exceeded', 'import-budget', 'import-depth', 'ir-budget', 'missing-grammar', 'parse-failed', 'opaque-config', 'flake-modules-not-followed']);
 const UNK = Object.freeze({ known: false });
+const UNK_WITH = Object.freeze({ unknownWith: true });
 const known = (value) => ({ known: true, value });
 
 class Cap extends Error {
@@ -82,6 +88,10 @@ class Resolver {
     this.stack = new Set();
     this.parseCache = new Map();
     this.steps = 0;
+    this.exprDepth = 0;
+    this.aliasBusy = new Set();
+    this.fileInfoCache = new Map();
+    this.ctx = null;
   }
 
   gap(g) { this.unresolved.push(g); }
@@ -185,7 +195,7 @@ class Resolver {
         if (cat.renames[pathText]) { viaRename = { from: pathText, to: cat.renames[pathText] }; pathText = cat.renames[pathText]; p = pathText.split('.'); }
         const def = {
           id: id++, namespace: ns, scope, path: p, pathText, file, span: b.span, valueSpan: b.valueSpan, summary: b.value,
-          priorityName: b.priority || 'plain', priorityArg: b.priorityArg || null, conditions: b.conditions || [], merge: b.merge || null, viaRename,
+          withs: b.withs || [], evalSpan: b.evalSpan || null, evalWiths: b.evalWiths || null, inRec: !!b.inRec, priorityName: b.priority || 'plain', priorityArg: b.priorityArg || null, conditions: b.conditions || [], merge: b.merge || null, viaRename,
         };
         const key = this.key(ns, scope, pathText);
         if (!this.defs.has(key)) this.defs.set(key, []);
@@ -245,10 +255,99 @@ class Resolver {
     return { known: false, reason: 'default-differs-by-release-and-release-unknown' };
   }
 
+  // ── scopes ──
+  //
+  // Local scope chain (`env.sc`): `{ up, names: Map<name, Cell>|null, withv }`. A `let` or lambda scope has `names`; a `with`
+  // scope has `withv` (an attribute set value, a namespace, or UNK_WITH when its contents are not known). Lookup follows Nix's
+  // static rule: a lexical binding anywhere in scope wins over every `with`, and among `with`s the innermost wins.
+
+  scopeOf(env, names, withv) { return { up: env.sc || null, names: names || null, withv }; }
+
+  cellValue(cell) {
+    if (cell.res) return cell.res;
+    if (cell.busy) return UNK;
+    cell.busy = true;
+    try { cell.res = this.evalExpr(cell.expr, cell.env); } finally { cell.busy = false; }
+    return cell.res;
+  }
+
+  localCell(name, env) {
+    for (let s = env.sc; s; s = s.up) if (s.names && s.names.has(name)) return s.names.get(name);
+    return null;
+  }
+
+  /** What the file itself binds outside any expression this evaluator parses: `let` names and function parameters. */
+  fileInfo(file) {
+    if (this.fileInfoCache.has(file)) return this.fileInfoCache.get(file);
+    const ir = this.irs.get(file);
+    const info = { lets: new Map(), params: new Set(), complete: !!ir && !(ir.truncated || []).length };
+    if (ir) {
+      for (const b of ir.bindings) {
+        if (b.scope !== 'let') continue;
+        if (typeof b.path[0] !== 'string') { info.complete = false; continue; }
+        if (!info.lets.has(b.path[0])) info.lets.set(b.path[0], []);
+        info.lets.get(b.path[0]).push(b);
+      }
+      for (const f of ir.functions || []) { for (const p of f.params || []) info.params.add(p); if (f.atName) info.params.add(f.atName); }
+    }
+    this.fileInfoCache.set(file, info);
+    return info;
+  }
+
+  /** The environment an alias's expression is evaluated in: its own position, outside any local scope. */
+  aliasEnv(env, name) {
+    const h = this.fileInfo(env.file).lets.get(name)[0];
+    return { file: env.file, namespace: env.namespace, scope: env.scope, sc: null, withs: h.withs || [], pos: h.valueSpan, inRec: env.inRec };
+  }
+
+  lookupIdent(name, env) {
+    const cell = this.localCell(name, env);
+    if (cell) return this.cellValue(cell);
+    if (this.target.args && hasOwn(this.target.args, name)) return known(this.target.args[name]);
+    const info = this.fileInfo(env.file);
+    if (info.lets.has(name)) {
+      const hits = info.lets.get(name);
+      const h = hits[0];
+      // The single file-level binding is used only when it lexically ENCLOSES the text being evaluated (its let spans it) and nothing
+      // else could bind the name (no other let, no function parameter, not inside a rec set).
+      if (hits.length !== 1 || h.origin !== 'let' || h.path.length !== 1 || info.params.has(name) || !h.valueSpan) return UNK;
+      if (env.inRec || !h.letSpan || !env.pos || !within(h.letSpan, env.pos)) return UNK;
+      const key = `${env.file}:${name}`;
+      if (this.aliasBusy.has(key)) return UNK;
+      const ast = this.parseAt(env.file, h.valueSpan);
+      if (!ast) return UNK;
+      this.aliasBusy.add(key);
+      try { return this.evalExpr(ast, { file: env.file, namespace: env.namespace, scope: env.scope, sc: null, withs: h.withs || [], pos: h.valueSpan, inRec: env.inRec }); } finally { this.aliasBusy.delete(key); }
+    }
+    if (name === 'true') return known(true);
+    if (name === 'false') return known(false);
+    if (name === 'null') return known(null);
+    // a name the module function or an enclosing function declares: its value is not supplied, so it is unknown
+    if (info.params.has(name) || !info.complete) return name === 'lib' && info.params.has('lib') ? known(new Ns('lib')) : UNK;
+    if (name === 'builtins' || isGlobalName(name)) return known(globalValue(name));
+    for (let s = env.sc; s; s = s.up) {
+      if (s.withv === undefined) continue;
+      if (s.withv === UNK_WITH) return UNK;
+      if (s.withv instanceof Ns) { const v = nsLookup(s.withv.kind, name); return v ? known(v) : UNK; }
+      if (hasOwn(s.withv, name)) return known(s.withv[name]);
+    }
+    const outer = env.withs || [];
+    for (let i = outer.length - 1; i >= 0; i--) {
+      const w = String(outer[i]).trim();
+      if (w === 'lib' || w === 'builtins') { const v = nsLookup(w, name); return v ? known(v) : UNK; }
+      return UNK;
+    }
+    return UNK;
+  }
+
   // ── expression evaluation ──
 
   tick() {
     if (++this.steps > this.b.maxEvaluations) throw this.cap('maxEvaluations', this.b.maxEvaluations, 'static evaluation step budget exhausted');
+  }
+
+  size(n) {
+    if (n > this.b.maxValueSize) throw this.cap('maxValueSize', this.b.maxValueSize, `an evaluated list or string-list grew past ${this.b.maxValueSize} elements`);
   }
 
   parseAt(file, span) {
@@ -263,12 +362,15 @@ class Resolver {
     return ast;
   }
 
-  alias(file, name, guard) {
-    const ir = this.irs.get(file);
+  /** The single `let` binding of `name` in `file`, but only if it lexically encloses the text at `env.pos` and nothing else could bind the name. */
+  alias(env, name, guard) {
+    const ir = this.irs.get(env.file);
     const hits = ir ? ir.bindings.filter((b) => b.origin === 'let' && b.path.length === 1 && b.path[0] === name) : [];
-    if (hits.length !== 1 || guard.has(`${file}:${name}`)) return null;
-    guard.add(`${file}:${name}`);
-    return this.parseAt(file, hits[0].valueSpan);
+    const h = hits[0];
+    if (hits.length !== 1 || guard.has(`${env.file}:${name}`)) return null;
+    if (env.inRec || !h.letSpan || !env.pos || !within(h.letSpan, env.pos) || this.fileInfo(env.file).params.has(name)) return null;
+    guard.add(`${env.file}:${name}`);
+    return this.parseAt(env.file, h.valueSpan);
   }
 
   /** `config.a.b`, or `cfg.b` where `cfg = config.a`, as ['a','b']; otherwise null. */
@@ -281,29 +383,41 @@ class Resolver {
       base = unparen(n.base); segs = n.attrpath.map((s) => s.name);
     } else base = n;
     if (!base || base.type !== 'ident') return null;
-    if (base.name === 'config') return segs.length ? segs : null;
-    const al = this.alias(env.file, base.name, guard);
-    const head = al ? this.configPathOf(al, env, guard) : null;
+    // a name bound by an enclosing `let` or lambda inside the expression: follow it only if it is itself a config path
+    const cell = this.localCell(base.name, env);
+    if (cell) {
+      if (!cell.expr || guard.has(cell)) return null;
+      guard.add(cell);
+      const head = this.configPathOf(cell.expr, cell.env, guard);
+      return head ? head.concat(segs) : null;
+    }
+    // a module-level `let config = ...` (or `pkgs`) shadows the module argument: that is not an option read
+    if (base.name === 'config' && !this.fileInfo(env.file).lets.has('config')) return segs.length ? segs : null;
+    const al = this.alias(env, base.name, guard);
+    const head = al ? this.configPathOf(al, this.aliasEnv(env, base.name), guard) : null;
     return head ? head.concat(segs) : null;
   }
 
   evalExpr(node, env) {
     this.tick();
+    if (++this.exprDepth > this.b.maxExprDepth) { this.exprDepth--; throw this.cap('maxExprDepth', this.b.maxExprDepth, `expression nesting deeper than ${this.b.maxExprDepth}`); }
+    try { return this.evalNode(node, env); } finally { this.exprDepth--; }
+  }
+
+  evalNode(node, env) {
     const n = unparen(node);
     if (!n) return UNK;
     switch (n.type) {
-      case 'ident':
-        if (n.name === 'true') return known(true);
-        if (n.name === 'false') return known(false);
-        if (n.name === 'null') return known(null);
-        if (this.target.args && Object.prototype.hasOwnProperty.call(this.target.args, n.name)) return known(this.target.args[n.name]);
-        return UNK;
-      case 'int': case 'float': return known(n.value);
-      case 'string': return n.interpolated ? UNK : known(n.literal);
+      case 'ident': return this.lookupIdent(n.name, env);
+      case 'int': return Number.isSafeInteger(n.value) ? known(n.value) : UNK;
+      case 'float': return known(n.value);
+      case 'string': return this.evalString(n, env);
       case 'unop': {
-        if (n.op !== '!') return UNK;
         const v = this.evalExpr(n.operand, env);
-        return v.known && typeof v.value === 'boolean' ? known(!v.value) : UNK;
+        if (!v.known) return UNK;
+        if (n.op === '!') return typeof v.value === 'boolean' ? known(!v.value) : UNK;
+        if (n.op === '-') return Number.isSafeInteger(v.value) ? known(-v.value) : UNK;
+        return UNK;
       }
       case 'binop': return this.evalBinop(n, env);
       // A list or attribute set is known only when EVERY element is statically known (so `[ { from = 1; to = 65535; } ]` is, and a list
@@ -314,28 +428,167 @@ class Resolver {
         for (const it of n.items) { const v = this.evalExpr(it, env); if (!v.known) return UNK; out.push(v.value); }
         return known(out);
       }
-      case 'attrset': {
-        if (n.rec || n.errors || n.bindings.length > 256) return UNK;
-        const out = {};
-        for (const b of n.bindings) {
-          if (b.kind !== 'attr' || !b.path.length || !b.path.every((seg) => seg.kind === 'static' && typeof seg.name === 'string')) return UNK;
-          const v = this.evalExpr(b.value, env);
-          if (!v.known) return UNK;
-          let at = out;
-          for (const seg of b.path.slice(0, -1)) { if (typeof at[seg.name] !== 'object' || at[seg.name] === null) at[seg.name] = {}; at = at[seg.name]; }
-          at[b.path[b.path.length - 1].name] = v.value;
-        }
-        return known(out);
+      case 'attrset': return this.evalAttrset(n, env);
+      case 'select': return this.evalSelect(n, env);
+      case 'if': {
+        const c = this.evalExpr(n.cond, env);
+        if (!c.known || typeof c.value !== 'boolean') return UNK;
+        return this.evalExpr(c.value ? n.then : n.else, env);
       }
-      case 'select': {
-        const flags = platformFlags(this.target.system);
-        const b = unparen(n.base);
-        if (flags && b && b.type === 'ident' && b.name === 'pkgs' && n.attrpath.length === 2 && n.attrpath[0].name === 'stdenv' && n.attrpath[1].name in flags) return known(flags[n.attrpath[1].name]);
-        const p = this.configPathOf(n, env);
-        return p ? this.optionValue(env, p) : UNK;
+      case 'assert': {
+        const c = this.evalExpr(n.cond, env);
+        return c.known && c.value === true ? this.evalExpr(n.body, env) : UNK;
+      }
+      case 'let': return this.evalLet(n, env);
+      case 'with': {
+        const e = this.evalExpr(n.env, env);
+        const w = e.known && (e.value instanceof Ns ? e.value : isAttrs(e.value) ? e.value : UNK_WITH);
+        return this.evalExpr(n.body, { ...env, sc: this.scopeOf(env, null, w || UNK_WITH) });
+      }
+      case 'lambda': return known(new Closure(n.param, n.body, env));
+      case 'app': {
+        const f = this.evalExpr(n.fn, env);
+        if (!f.known) return UNK;
+        const a = this.evalExpr(n.arg, env);
+        return a.known ? this.applyValue(f.value, a.value) : UNK;
       }
       default: return UNK;
     }
+  }
+
+  evalString(n, env) {
+    if (!n.interpolated) return known(n.literal);
+    let out = '';
+    for (const p of n.parts) {
+      if (p.kind === 'text') { out += p.value; continue; }
+      const v = this.evalExpr(p.expr, env);
+      if (!v.known || typeof v.value !== 'string') return UNK;
+      out += v.value;
+      if (out.length > 65_536) return UNK;
+    }
+    return known(out);
+  }
+
+  evalAttrset(n, env) {
+    if (n.rec || n.errors || n.bindings.length > 256) return UNK;
+    const out = {};
+    const implicit = new WeakSet();
+    for (const b of n.bindings) {
+      let path; let valueRes;
+      if (b.kind === 'inherit') {
+        // `inherit a b;` reads the names from the enclosing scope. `inherit (e) a;` is not modelled.
+        if (b.from) return UNK;
+        for (const nm of b.names) {
+          if (nm.kind !== 'static' || typeof nm.name !== 'string') return UNK;
+          const v = this.lookupIdent(nm.name, env);
+          if (!v.known || hasOwn(out, nm.name)) return UNK;
+          setAttr(out, nm.name, v.value);
+        }
+        continue;
+      }
+      if (b.kind !== 'attr' || !b.path.length || !b.path.every((seg) => seg.kind === 'static' && typeof seg.name === 'string')) return UNK;
+      path = b.path;
+      valueRes = this.evalExpr(b.value, env);
+      if (!valueRes.known) return UNK;
+      let at = out;
+      for (const seg of path.slice(0, -1)) {
+        if (!hasOwn(at, seg.name)) { const sub = {}; implicit.add(sub); setAttr(at, seg.name, sub); }
+        else if (!implicit.has(at[seg.name])) return UNK;
+        at = at[seg.name];
+      }
+      const last = path[path.length - 1].name;
+      if (hasOwn(at, last)) return UNK;
+      setAttr(at, last, valueRes.value);
+    }
+    return known(out);
+  }
+
+  evalLet(n, env) {
+    const names = new Map();
+    const bound = new Set();
+    for (const b of n.bindings) {
+      if (b.kind === 'attr') {
+        if (b.path.length !== 1 || b.path[0].kind !== 'static' || typeof b.path[0].name !== 'string' || bound.has(b.path[0].name)) return UNK;
+        bound.add(b.path[0].name);
+      } else if (b.kind === 'inherit') {
+        for (const nm of b.names) { if (nm.kind !== 'static' || typeof nm.name !== 'string' || bound.has(nm.name)) return UNK; bound.add(nm.name); }
+      } else return UNK;
+    }
+    const inner = { ...env, sc: this.scopeOf(env, names) };
+    for (const b of n.bindings) {
+      if (b.kind === 'attr') { names.set(b.path[0].name, { expr: b.value, env: inner }); continue; }
+      // `inherit x;` / `inherit (lib) x;`: evaluated in the scope AROUND the let. Only `lib` / `builtins` are modelled as a source,
+      // and only when this let does not itself bind that name.
+      let from = null;
+      if (b.from) {
+        const f = unparen(b.from);
+        if (!f || f.type !== 'ident' || bound.has(f.name)) return UNK;
+        from = f;
+      }
+      for (const nm of b.names) {
+        // a plain `inherit x;` of a name this let also binds would be ambiguous, and `bound` forbids it above (duplicate)
+        const expr = from
+          ? { type: 'select', base: from, attrpath: [{ kind: 'static', name: nm.name }], default: null }
+          : { type: 'ident', name: nm.name };
+        names.set(nm.name, { expr, env });
+      }
+    }
+    return this.evalExpr(n.body, inner);
+  }
+
+  evalSelect(n, env) {
+    const flags = platformFlags(this.target.system);
+    const b = unparen(n.base);
+    if (flags && b && b.type === 'ident' && b.name === 'pkgs' && !this.localCell('pkgs', env) && !this.fileInfo(env.file).lets.has('pkgs') && n.attrpath.length === 2 && n.attrpath[0].name === 'stdenv' && n.attrpath[1].name in flags) return known(flags[n.attrpath[1].name]);
+    const p = this.configPathOf(n, env);
+    if (p) return this.optionValue(env, p);
+    if (n.attrpath.some((s) => s.kind !== 'static' || typeof s.name !== 'string')) return UNK;
+    let cur = this.evalExpr(n.base, env);
+    for (const s of n.attrpath) {
+      if (!cur.known) return UNK;
+      const v = cur.value;
+      if (v instanceof Ns) { const m = nsLookup(v.kind, s.name); cur = m ? known(m) : UNK; }
+      else if (isAttrs(v) && hasOwn(v, s.name)) cur = known(v[s.name]);
+      else if (isAttrs(v) && n.default) return this.evalExpr(n.default, env);
+      else return UNK;
+    }
+    return cur;
+  }
+
+  applyValue(f, a) {
+    if (f instanceof Builtin) {
+      const args = [...f.args, a];
+      if (args.length < f.def.arity) return known(new Builtin(f.name, f.def, args));
+      try { return known(f.def.call(args, this.callCtx())); } catch (e) { if (e === NOT_STATIC) return UNK; throw e; }
+    }
+    if (f instanceof Closure) {
+      const names = new Map();
+      const p = f.param;
+      const env = { ...f.env, sc: this.scopeOf(f.env, names) };
+      if (p.kind === 'ident') names.set(p.name, { res: known(a) });
+      else {
+        if (!isAttrs(a)) return UNK;
+        if (p.atName) names.set(p.atName, { res: known(a) });
+        for (const fm of p.formals) {
+          if (hasOwn(a, fm.name)) names.set(fm.name, { res: known(a[fm.name]) });
+          else if (fm.default) names.set(fm.name, { expr: fm.default, env });
+          else return UNK;
+        }
+        if (!p.ellipsis && Object.keys(a).some((k) => !p.formals.some((fm) => fm.name === k))) return UNK;
+      }
+      return this.evalExpr(f.body, env);
+    }
+    return UNK;
+  }
+
+  callCtx() {
+    if (!this.ctx) {
+      this.ctx = {
+        apply: (f, x) => { const r = this.applyValue(f, x); if (!r.known) throw NOT_STATIC; return r.value; },
+        size: (n) => this.size(n),
+      };
+    }
+    return this.ctx;
   }
 
   evalBinop(n, env) {
@@ -347,15 +600,47 @@ class Resolver {
       if (n.op === '||') return l === true || r === true ? known(true) : l === false && r === false ? known(false) : UNK;
       return l === false || r === true ? known(true) : l === true && r === false ? known(false) : UNK;
     }
-    if (n.op === '==' || n.op === '!=') {
-      const l = this.evalExpr(n.left, env);
-      const r = this.evalExpr(n.right, env);
-      if (!l.known || !r.known) return UNK;
-      const eq = sameValue(l.value, r.value);
-      return known(n.op === '==' ? eq : !eq);
+    const l = this.evalExpr(n.left, env);
+    const r = this.evalExpr(n.right, env);
+    if (!l.known || !r.known) return UNK;
+    const a = l.value; const b = r.value;
+    switch (n.op) {
+      case '==': case '!=': {
+        const eq = deepEq(a, b);
+        return eq === null ? UNK : known(n.op === '==' ? eq : !eq);
+      }
+      case '++': {
+        if (!Array.isArray(a) || !Array.isArray(b)) return UNK;
+        this.size(a.length + b.length);
+        return known(a.concat(b));
+      }
+      case '//': {
+        if (!isAttrs(a) || !isAttrs(b)) return UNK;
+        const out = {};
+        for (const k of Object.keys(a)) setAttr(out, k, a[k]);
+        for (const k of Object.keys(b)) setAttr(out, k, b[k]);
+        return known(out);
+      }
+      case '+': {
+        if (typeof a === 'string' && typeof b === 'string') return a.length + b.length <= 65_536 ? known(a + b) : UNK;
+        if (Number.isSafeInteger(a) && Number.isSafeInteger(b) && Number.isSafeInteger(a + b)) return known(a + b);
+        return UNK;
+      }
+      case '-': return Number.isSafeInteger(a) && Number.isSafeInteger(b) && Number.isSafeInteger(a - b) ? known(a - b) : UNK;
+      case '*': return Number.isSafeInteger(a) && Number.isSafeInteger(b) && Number.isSafeInteger(a * b) ? known(a * b) : UNK;
+      case '<': case '>': case '<=': case '>=': {
+        if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b)) return UNK;
+        return known(n.op === '<' ? a < b : n.op === '>' ? a > b : n.op === '<=' ? a <= b : a >= b);
+      }
+      default: return UNK;
     }
-    return UNK;
   }
+
+  /** The final value of a definition: anything that is not plain data (a function, a partial application, a namespace) is unknown. */
+  sealed(r) { return r.known && isPlain(r.value) ? r : UNK; }
+
+  /** Evaluation environment of a definition. `pos` is the absolute span of the text being evaluated (see lookupIdent's alias check). */
+  envOf(def, pos = def.valueSpan, withs = def.withs) { return { file: def.file, namespace: def.namespace, scope: def.scope, sc: null, withs: withs || [], pos, inRec: def.inRec }; }
 
   optionValue(env, segs) {
     const res = this.resolve(env.namespace, env.scope, segs.join('.'));
@@ -365,26 +650,36 @@ class Resolver {
   condOutcome(def, c) {
     const ast = this.parseAt(def.file, c.span);
     if (!ast) return 'unknown';
-    const r = this.evalExpr(ast, { file: def.file, namespace: def.namespace, scope: def.scope });
+    const r = this.evalExpr(ast, this.envOf(def, c.span));
     if (!r.known || typeof r.value !== 'boolean') return 'unknown';
     const truth = c.branch === 'else' ? !r.value : r.value;
     return truth ? 'true' : 'false';
   }
 
   defValue(def) {
+    // The value sits under a let / with / assert: evaluate the WHOLE wrapper so its bindings, shadowing and asserts apply.
+    if (def.evalSpan) {
+      const whole = this.parseAt(def.file, def.evalSpan);
+      return whole ? this.sealed(this.evalExpr(whole, this.envOf(def, def.evalSpan, def.evalWiths))) : UNK;
+    }
     const s = def.summary;
     switch (s.type) {
-      case 'bool': case 'number': case 'null': return known(s.value);
-      case 'string': return s.interpolated ? UNK : known(s.literal);
+      case 'bool': case 'null': return known(s.value);
+      case 'number': return Number.isInteger(s.value) && !Number.isSafeInteger(s.value) ? UNK : known(s.value);
+      case 'string': {
+        if (!s.interpolated) return known(s.literal);
+        const ast = this.parseAt(def.file, def.valueSpan);
+        return ast ? this.sealed(this.evalExpr(ast, this.envOf(def))) : UNK;
+      }
       case 'list': {
         if (s.items.length < s.length) return UNK;
         const out = [];
         for (const it of s.items) {
-          const v = it.type === 'string' && !it.interpolated ? known(it.literal) : it.type === 'number' || it.type === 'bool' ? known(it.value) : UNK;
+          const v = it.type === 'string' && !it.interpolated ? known(it.literal) : (it.type === 'number' && !(Number.isInteger(it.value) && !Number.isSafeInteger(it.value))) || it.type === 'bool' ? known(it.value) : UNK;
           if (!v.known) {
             // Not a list of scalars (for example a list of attribute sets): evaluate the whole expression from its source instead.
             const ast = this.parseAt(def.file, def.valueSpan);
-            return ast ? this.evalExpr(ast, { file: def.file, namespace: def.namespace, scope: def.scope }) : UNK;
+            return ast ? this.sealed(this.evalExpr(ast, this.envOf(def))) : UNK;
           }
           out.push(v.value);
         }
@@ -392,7 +687,7 @@ class Resolver {
       }
       case 'expression': case 'reference': {
         const ast = this.parseAt(def.file, def.valueSpan);
-        return ast ? this.evalExpr(ast, { file: def.file, namespace: def.namespace, scope: def.scope }) : UNK;
+        return ast ? this.sealed(this.evalExpr(ast, this.envOf(def))) : UNK;
       }
       default: return UNK;
     }

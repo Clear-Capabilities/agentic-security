@@ -1,8 +1,8 @@
-export const id = 8551;
-export const ids = [8551];
+export const id = 7033;
+export const ids = [7033];
 export const modules = {
 
-/***/ 38551:
+/***/ 37033:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 
@@ -11,12 +11,13 @@ __webpack_require__.d(__webpack_exports__, {
   analyzeNixClosure: () => (/* binding */ analyzeNixClosure),
   nixClosureOf: () => (/* binding */ nixClosureOf),
   nixHaskellPackageNames: () => (/* binding */ nixHaskellPackageNames),
+  prefetchNixAdvisoryFeed: () => (/* binding */ prefetchNixAdvisoryFeed),
   resolvedHackageComponents: () => (/* binding */ resolvedHackageComponents),
   resolvedHaskellGraph: () => (/* binding */ resolvedHaskellGraph),
   runSelectedNixEval: () => (/* binding */ runSelectedNixEval)
 });
 
-// UNUSED EXPORTS: RESOLVED_PASS_VERSION, configuredNixAdvisories, mergeEvaluationHealth
+// UNUSED EXPORTS: RESOLVED_PASS_VERSION, configuredNixAdvisories, configuredNixMeta, mergeEvaluationHealth
 
 // EXTERNAL MODULE: external "node:fs"
 var external_node_fs_ = __webpack_require__(73024);
@@ -363,8 +364,289 @@ function signedBody(ex) { return JSON.stringify({ schema: ex.schema, provenance:
 
 // EXTERNAL MODULE: ./src/language/haskell-sca.js
 var haskell_sca = __webpack_require__(2437);
+// EXTERNAL MODULE: ./src/language/cvss.js
+var cvss = __webpack_require__(32146);
 // EXTERNAL MODULE: ./src/language/nix-parser.js
 var nix_parser = __webpack_require__(54352);
+// EXTERNAL MODULE: external "node:path"
+var external_node_path_ = __webpack_require__(76760);
+;// CONCATENATED MODULE: ./src/language/nix-advisory-feed.js
+// Live advisory feed for the upstream software inside a Nix closure (NIX-009 follow-on).
+//
+// OSV has no nixpkgs ecosystem, so the Hackage approach (ask OSV by ecosystem and package name) does not carry over. The source used
+// here is the NVD CVE API 2.0 (https://services.nvd.nist.gov/rest/json/cves/2.0), queried by CPE vendor:product, because a nixpkgs
+// package declares its upstream identity as a CPE in meta.identifiers and NVD is the one public, machine-readable feed keyed by it.
+// What it can and cannot answer is stated in docs/guides/nix-nixos.md: an identity that has no CPE (a purl or a source URL alone) is
+// not something this feed is keyed by, so it is reported unknown, never clean.
+//
+// Contract (the same as haskell-advisory-feed.js, in the order it matters):
+//   * Opt in. Nothing here touches the network unless AGENTIC_SECURITY_NIX_ADVISORIES_LIVE=1, and never when AGENTIC_SECURITY_OFFLINE=1.
+//     An operator-pinned snapshot (AGENTIC_SECURITY_NIX_ADVISORIES) is used as given and is never refreshed over. A hand-written
+//     nix-advisories.json in the operator configuration directory is never overwritten either.
+//   * Coverage is recorded, not assumed. The snapshot lists every vendor:product it fully read and when. One it did not read, or read
+//     only in part, is NOT covered and the matcher reports it unknown.
+//   * Failure degrades. An unreachable or throttling feed leaves the previous snapshot in place; the scan runs on it with its age stated.
+//   * Everything from the wire is untrusted: the identity is validated before it reaches a URL, responses are size-capped, a record
+//     that does not name the requested product is dropped, and a cache whose records fail their own hashes is discarded.
+//   * Rate limits. NVD allows 5 requests per rolling 30 seconds without an API key and 50 with one (a key is free; set
+//     AGENTIC_SECURITY_NVD_API_KEY). Requests are spaced to stay under that, a throttling response stops the run instead of retrying,
+//     and the number of requests per scan is capped, so a large closure fills in over several scans rather than hammering the service.
+
+
+
+
+
+
+const FEED_ENV = 'AGENTIC_SECURITY_NIX_ADVISORIES_LIVE';
+const PINNED_ENV = 'AGENTIC_SECURITY_NIX_ADVISORIES';
+const KEY_ENV = 'AGENTIC_SECURITY_NVD_API_KEY';
+const SNAPSHOT_FILE = 'nix-advisories.json';
+const SNAPSHOT_SCHEMA = 'nix-advisories-live/1';
+const NVD_BASE = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+
+const DEFAULTS = Object.freeze({
+  ttlMs: 24 * 3600 * 1000,        // a covered identity is not queried again inside this window
+  timeoutMs: 20000,
+  maxProducts: 60,                // identities considered per scan
+  maxRequestsKeyless: 20,         // about 2 minutes at the keyless spacing
+  maxRequestsKeyed: 120,
+  intervalKeylessMs: 6500,        // 5 per 30 s, with margin
+  intervalKeyedMs: 700,           // 50 per 30 s, with margin
+  pageSize: 2000,                 // the NVD maximum
+  maxPages: 3,
+  maxResponseBytes: 32 << 20,
+  maxSnapshotRecords: 30000,
+});
+
+const PART = /^[a-z0-9][a-z0-9_.+~-]{0,63}$/;       // a CPE vendor or product, in the lowercase form NVD uses; no colon, slash, quote or escape
+const CVE_ID = /^CVE-\d{4}-\d{4,12}$/;
+const VERSION_OK = /^[A-Za-z0-9][A-Za-z0-9._+~-]{0,63}$/;
+const KEY_OK = /^[0-9a-fA-F-]{20,64}$/;
+
+/** 'vendor:product' from a full CPE 2.3 string, a {vendor, product} / {cpe} object, or a key already in that form; null if it cannot be made safely. */
+function cpeKey(x) {
+  let v = null; let p = null;
+  if (x && typeof x === 'object') {
+    if (typeof x.vendor === 'string' && typeof x.product === 'string') { v = x.vendor; p = x.product; }
+    else if (typeof x.cpe === 'string') return cpeKey(x.cpe);
+    else return null;
+  } else if (typeof x === 'string') {
+    if (x.startsWith('cpe:2.3:')) { const parts = x.split(':'); if (parts.length < 5) return null; v = parts[3]; p = parts[4]; }
+    else { const parts = x.split(':'); if (parts.length !== 2) return null; [v, p] = parts; }
+  } else return null;
+  v = v.toLowerCase(); p = p.toLowerCase();
+  return PART.test(v) && PART.test(p) ? `${v}:${p}` : null;
+}
+const validCpeKey = (k) => typeof k === 'string' && cpeKey(k) === k;
+
+let last = null;
+/** What the most recent refresh in this process did, so a "no feed" reason can say why. */
+const getLastRefresh = () => last;
+const _resetLastRefresh = () => { last = null; };
+
+function liveFeedEnabled(env = process.env) {
+  return env[FEED_ENV] === '1' && env.AGENTIC_SECURITY_OFFLINE !== '1';
+}
+function snapshotPath(env = process.env, dir = null) { return (0,external_node_path_.join)(dir || (0,trusted_inputs/* operatorConfigDir */.Us)(env), SNAPSHOT_FILE); }
+
+const nix_advisory_feed_sha256 = (s) => (0,external_node_crypto_.createHash)('sha256').update(s).digest('hex');
+
+/**
+ * Validate a snapshot written by this module. Returns {ok:true, records, covered, generatedAt} or {ok:false, reason}.
+ * `foreign` marks a parseable file that is not ours (a hand-written operator snapshot): not an error, and never overwritten.
+ */
+function loadLiveSnapshot(raw) {
+  if (!raw || typeof raw !== 'object' || raw.schema !== SNAPSHOT_SCHEMA) return { ok: false, foreign: true, reason: 'not a live-feed snapshot' };
+  if (!Array.isArray(raw.records) || !raw.recordHashes || typeof raw.recordHashes !== 'object') return { ok: false, reason: 'the snapshot has no record list or no record hashes' };
+  for (const rec of raw.records) {
+    if (!rec || typeof rec.id !== 'string' || !CVE_ID.test(rec.id)) return { ok: false, reason: 'a record has no valid identifier' };
+    if (raw.recordHashes[rec.id] !== nix_advisory_feed_sha256(JSON.stringify(rec))) return { ok: false, reason: `record ${rec.id} does not match its recorded hash` };
+  }
+  const covered = {};
+  if (!raw.covered || typeof raw.covered !== 'object' || Array.isArray(raw.covered)) return { ok: false, reason: 'the coverage table is missing or malformed' };
+  for (const [k, t] of Object.entries(raw.covered)) { if (!validCpeKey(k) || !Number.isFinite(Date.parse(t))) return { ok: false, reason: 'the coverage table has a malformed entry' }; covered[k] = t; }
+  return { ok: true, records: raw.records, covered, generatedAt: typeof raw.generatedAt === 'string' ? raw.generatedAt : null };
+}
+
+function readCurrent(path) {
+  let raw;
+  try { raw = JSON.parse((0,external_node_fs_.readFileSync)(path, 'utf8')); } catch (e) { return { records: new Map(), covered: {}, problem: e && e.code === 'ENOENT' ? null : 'the cached snapshot was unreadable and was discarded', foreign: false }; }
+  const r = loadLiveSnapshot(raw);
+  if (r.foreign) return { records: new Map(), covered: {}, problem: null, foreign: true };
+  if (!r.ok) return { records: new Map(), covered: {}, problem: `the cached snapshot was discarded: ${r.reason}`, foreign: false };
+  return { records: new Map(r.records.map((x) => [x.id, x])), covered: r.covered, problem: null, foreign: false };
+}
+
+const splitCpe = (s) => s.split(/(?<!\\):/);
+const isoOrNull = (t) => {
+  if (typeof t !== 'string') return null;
+  const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t}Z`);   // NVD timestamps carry no zone and are UTC
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+};
+
+/**
+ * One NVD CVE object -> an OSV-style record limited to the requested vendor:product, or null when the record does not name it
+ * (or is rejected, or carries nothing usable). Only `vulnerable` matches of the requested product are read; operating-system or
+ * hardware conditions on a combined configuration are NOT evaluated (see the guide).
+ * A start bound that is exclusive is carried as an `introduced_excluding` event, which the Nix matcher understands.
+ */
+function nvdToOsv(cve, key) {
+  if (!cve || typeof cve !== 'object' || typeof cve.id !== 'string' || !CVE_ID.test(cve.id)) return null;
+  if (typeof cve.vulnStatus === 'string' && /^rejected$/i.test(cve.vulnStatus)) return null;
+  const ranges = []; const versions = [];
+  for (const cfg of Array.isArray(cve.configurations) ? cve.configurations : []) {
+    for (const node of Array.isArray(cfg && cfg.nodes) ? cfg.nodes : []) {
+      if (node && node.negate === true) continue;
+      for (const m of Array.isArray(node && node.cpeMatch) ? node.cpeMatch : []) {
+        if (!m || m.vulnerable !== true || typeof m.criteria !== 'string' || !m.criteria.startsWith('cpe:2.3:')) continue;
+        const parts = splitCpe(m.criteria);
+        if (parts.length < 6 || !['a', 'o', '*'].includes(parts[2]) || `${parts[3]}:${parts[4]}` !== key) continue;
+        const ver = parts[5]; const upd = parts[6];
+        if (ver === '*') {
+          const s1 = m.versionStartIncluding; const s2 = m.versionStartExcluding; const e1 = m.versionEndIncluding; const e2 = m.versionEndExcluding;
+          if ([s1, s2, e1, e2].some((x) => x !== undefined && (typeof x !== 'string' || !VERSION_OK.test(x)))) continue;
+          const events = [];
+          if (s1) events.push({ introduced: s1 }); else if (s2) events.push({ introduced_excluding: s2 }); else events.push({ introduced: '0' });
+          if (e2) events.push({ fixed: e2 }); else if (e1) events.push({ last_affected: e1 });
+          ranges.push({ type: 'ECOSYSTEM', events });
+        } else if (ver !== '-' && ver !== '?') {
+          const v = upd && upd !== '*' && upd !== '-' ? `${ver}-${upd}` : ver;
+          if (VERSION_OK.test(v)) versions.push(v);
+        }
+      }
+    }
+  }
+  if (!ranges.length && !versions.length) return null;
+  const desc = (Array.isArray(cve.descriptions) ? cve.descriptions : []).find((d) => d && d.lang === 'en' && typeof d.value === 'string');
+  const refs = (Array.isArray(cve.references) ? cve.references : []).map((r) => r && r.url).filter((u) => typeof u === 'string' && /^https?:\/\//.test(u) && u.length <= 300).slice(0, 5);
+  return {
+    id: cve.id, aliases: [], summary: desc ? desc.value.slice(0, 400) : '', published: isoOrNull(cve.published), modified: isoOrNull(cve.lastModified),
+    affected: [{ package: { ecosystem: 'NVD-CPE', name: key.split(':')[1], cpe: key }, ranges, versions }],
+    references: refs.map((url) => ({ type: 'WEB', url })), database_specific: { source: 'nvd-cve-2.0' },
+  };
+}
+
+const sleepReal = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function getJson(fetchImpl, url, headers, timeoutMs, maxBytes) {
+  const resp = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  if (!resp) throw Object.assign(new Error('no response'), { http: 0 });
+  if (resp.status !== 200) throw Object.assign(new Error(`HTTP ${resp.status}`), { http: resp.status });
+  const text = await resp.text();
+  if (Buffer.byteLength(text) > maxBytes) throw new Error('response too large');
+  return JSON.parse(text);
+}
+
+/**
+ * Refresh the operator's Nix advisory snapshot for the given CPE identities ('vendor:product' keys or anything cpeKey accepts).
+ * Never throws. Returns a plain result; the snapshot file is rewritten only when something was read.
+ *
+ * @param {Array<string|object>} identities
+ * @param {{env?: object, fetchImpl?: Function, now?: number, dir?: string, sleep?: Function}} [opts]
+ */
+async function refreshNixAdvisories(identities, opts = {}) {
+  const env = opts.env || process.env;
+  const cfg = { ...DEFAULTS, ...Object.fromEntries(Object.entries(opts).filter(([k]) => k in DEFAULTS)) };
+  const now = opts.now ?? Date.now();
+  const done = (r) => { last = { ...r, at: new Date(now).toISOString() }; return last; };
+
+  if (env[PINNED_ENV]) return done({ status: 'pinned-snapshot-in-use', detail: `${PINNED_ENV} names an operator snapshot; it is used as given and is not refreshed` });
+  if (env[FEED_ENV] !== '1') return done({ status: 'disabled', detail: `set ${FEED_ENV}=1 to fetch advisories for the closure's upstream software from the NVD` });
+  if (env.AGENTIC_SECURITY_OFFLINE === '1') return done({ status: 'offline', detail: 'AGENTIC_SECURITY_OFFLINE=1: no advisory data was fetched' });
+
+  const all = (identities || []).map(cpeKey);
+  const invalid = all.filter((k) => !k).length;
+  const wanted = [...new Set(all.filter(Boolean))].sort().slice(0, cfg.maxProducts);
+  if (!wanted.length) return done({ status: 'nothing-to-do', detail: invalid ? `${invalid} identity value(s) were not valid CPE vendor:product names and were not queried` : 'the closure declares no CPE identity to look up', invalid });
+
+  const path = snapshotPath(env, opts.dir);
+  const cur = readCurrent(path);
+  if (cur.foreign) return done({ status: 'operator-snapshot-in-use', detail: `${path} is an operator-written snapshot; it is used as given and the live feed does not overwrite it` });
+  const need = wanted.filter((k) => { const t = Date.parse(cur.covered[k]); return !Number.isFinite(t) || now - t > cfg.ttlMs || t > now + 3600000; });
+  if (!need.length) return done({ status: 'current', detail: `${wanted.length} identity(ies) covered within the last ${Math.round(cfg.ttlMs / 3600000)}h; no request made`, identities: wanted.length, requested: 0 });
+
+  const fetchImpl = opts.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== 'function') return done({ status: 'failed', detail: 'no fetch implementation is available in this runtime' });
+  const sleep = opts.sleep || sleepReal;
+  const apiKey = typeof env[KEY_ENV] === 'string' && KEY_OK.test(env[KEY_ENV]) ? env[KEY_ENV] : null;
+  const keyNote = env[KEY_ENV] && !apiKey ? ` (${KEY_ENV} is set but is not a valid key; it was ignored)` : '';
+  const headers = { 'User-Agent': 'agentic-security-advisory-feed', Accept: 'application/json', ...(apiKey ? { apiKey } : {}) };
+  const interval = apiKey ? cfg.intervalKeyedMs : cfg.intervalKeylessMs;
+  const maxRequests = apiKey ? cfg.maxRequestsKeyed : cfg.maxRequestsKeyless;
+
+  let requests = 0; let throttled = false; let dropped = 0;
+  const failures = []; const fresh = new Map();      // key -> Map(cveId -> record)
+  const request = async (url) => { if (requests > 0) await sleep(interval); requests++; return getJson(fetchImpl, url, headers, cfg.timeoutMs, cfg.maxResponseBytes); };
+
+  for (const key of need) {
+    if (throttled) { failures.push(`${key}: not queried (the service signalled a rate limit)`); continue; }
+    if (requests >= maxRequests) { failures.push(`${key}: not queried (per-scan request cap of ${maxRequests} reached; a later scan will cover it)`); continue; }
+    const recs = new Map();
+    try {
+      let start = 0; let total = null; let seen = 0;
+      for (let page = 0; page < cfg.maxPages; page++) {
+        if (page > 0 && requests >= maxRequests) throw new Error('per-scan request cap reached part-way through this identity');
+        const url = `${NVD_BASE}?virtualMatchString=${encodeURIComponent(`cpe:2.3:*:${key}`)}&resultsPerPage=${cfg.pageSize}&startIndex=${start}`;
+        const data = await request(url);
+        if (!data || typeof data !== 'object' || !Array.isArray(data.vulnerabilities) || !Number.isInteger(data.totalResults) || data.totalResults < 0 || data.startIndex !== start) throw new Error('the response is not a CVE 2.0 page for this request');
+        if (total === null) { total = data.totalResults; if (total > cfg.pageSize * cfg.maxPages) throw new Error(`${total} CVEs name this product, more than the ${cfg.pageSize * cfg.maxPages} this feed reads; not treated as covered`); }
+        else if (data.totalResults !== total) throw new Error('the result set changed while it was being read');
+        for (const v of data.vulnerabilities) {
+          const rec = nvdToOsv(v && v.cve, key);
+          if (rec) recs.set(rec.id, rec); else dropped++;
+        }
+        seen += data.vulnerabilities.length; start += data.vulnerabilities.length;
+        if (seen >= total || !data.vulnerabilities.length) break;
+      }
+      if (seen < total) throw new Error('the result set was not read to the end');
+      fresh.set(key, recs);
+    } catch (e) {
+      const http = e && e.http;
+      if (http === 403 || http === 429 || http === 503) throttled = true;
+      failures.push(`${key}: ${String((e && e.message) || e).slice(0, 100)}`);
+    }
+  }
+
+  const uncovered = need.filter((k) => !fresh.has(k));
+  if (!fresh.size) return done({ status: 'failed', detail: `the NVD feed could not be read (${failures.slice(0, 2).join('; ') || 'no response'}); ${cur.records.size ? 'the previous snapshot is used and its age is disclosed' : 'no advisory data is available'}${keyNote}`, identities: wanted.length, requested: need.length, requests, uncovered, failures: failures.slice(0, 10), throttled, cacheProblem: cur.problem });
+
+  // merge: for each fully read identity, replace what the cache held for it and keep everything else
+  const records = new Map([...cur.records].map(([id, r]) => [id, { ...r, affected: [...(r.affected || [])] }]));
+  for (const [key, recs] of fresh) {
+    for (const [id, r] of [...records]) { r.affected = r.affected.filter((a) => !(a.package && a.package.cpe === key)); if (!r.affected.length) records.delete(id); }
+    for (const [id, rec] of recs) {
+      const have = records.get(id);
+      if (have) have.affected.push(...rec.affected); else records.set(id, rec);
+    }
+  }
+  if (records.size > cfg.maxSnapshotRecords) return done({ status: 'failed', detail: `the snapshot would exceed ${cfg.maxSnapshotRecords} records; refusing to write it`, identities: wanted.length, requested: need.length, uncovered });
+  const covered = { ...cur.covered };
+  const iso = new Date(now).toISOString();
+  for (const k of fresh.keys()) covered[k] = iso;
+
+  const sorted = [...records.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
+  const snap = {
+    schema: SNAPSHOT_SCHEMA, source: 'nvd-cve-2.0', generatedAt: iso, records: sorted,
+    recordHashes: Object.fromEntries(sorted.map((r) => [r.id, nix_advisory_feed_sha256(JSON.stringify(r))])),
+    covered: Object.fromEntries(Object.entries(covered).sort(([a], [b]) => (a < b ? -1 : 1))),
+  };
+  try {
+    const dir = opts.dir || (0,trusted_inputs/* operatorConfigDir */.Us)(env);
+    (0,external_node_fs_.mkdirSync)(dir, { recursive: true, mode: 0o700 });
+    const tmp = `${path}.${process.pid}.tmp`;
+    (0,external_node_fs_.writeFileSync)(tmp, JSON.stringify(snap), { mode: 0o600 });
+    try { (0,external_node_fs_.chmodSync)(tmp, 0o600); } catch { /* best effort on filesystems without modes */ }
+    (0,external_node_fs_.renameSync)(tmp, path);
+  } catch (e) {
+    return done({ status: 'failed', detail: `the snapshot could not be written: ${e.code || e.message}`, identities: wanted.length, requested: need.length, uncovered });
+  }
+  return done({
+    status: uncovered.length ? 'partial' : 'refreshed',
+    detail: `${fresh.size} identity(ies) covered in ${requests} request(s)${uncovered.length ? `; ${uncovered.length} NOT covered (${uncovered.slice(0, 3).join(', ')}${uncovered.length > 3 ? ', ...' : ''}) and will be reported as unknown` : ''}${throttled ? '; the service signalled a rate limit and the run stopped' : ''}${apiKey ? '' : `; no ${KEY_ENV} set (keyless limit: 5 requests per 30 s)`}${keyNote}`,
+    identities: wanted.length, requested: need.length, requests, records: records.size, dropped, uncovered, failures: failures.slice(0, 10), throttled, path, cacheProblem: cur.problem,
+  });
+}
+
 ;// CONCATENATED MODULE: ./src/language/nix-sca.js
 // Patch-aware Nix vulnerability matching and reachability (NIX-009).
 //
@@ -385,6 +667,8 @@ var nix_parser = __webpack_require__(54352);
 // put in a query. Wrapped Haskell packages reuse the Hackage matcher (PVP ordering). Inclusion in the
 // runtime closure and Haskell import/API reachability are separate evidence tiers: a store path or a build
 // input can establish the first and never the second.
+
+
 
 
 
@@ -427,16 +711,18 @@ function compareUpstream(a, b) {
 // ── advisories ───────────────────────────────────────────────────────────────
 const sha = (s) => String(s || '').toLowerCase().replace(/^sha256[-:]/, '');
 function eventsToRanges(events) {
-  const out = []; let lo = null;
+  // `introduced_excluding` is not an OSV event: it carries an exclusive start bound (the NVD live feed has them), so 8.0 is not in "after 8.0".
+  const out = []; let lo = null; let loExc = false;
   for (const e of events || []) {
-    if ('introduced' in e) lo = e.introduced === '0' ? null : e.introduced;
-    else if ('fixed' in e) { out.push({ lo, hi: e.fixed, hiInc: false }); lo = null; }
-    else if ('last_affected' in e) { out.push({ lo, hi: e.last_affected, hiInc: true }); lo = null; }
+    if ('introduced' in e) { lo = e.introduced === '0' ? null : e.introduced; loExc = false; }
+    else if ('introduced_excluding' in e) { lo = e.introduced_excluding; loExc = true; }
+    else if ('fixed' in e) { out.push({ lo, loExc, hi: e.fixed, hiInc: false }); lo = null; loExc = false; }
+    else if ('last_affected' in e) { out.push({ lo, loExc, hi: e.last_affected, hiInc: true }); lo = null; loExc = false; }
   }
-  if (events && events.some((e) => 'introduced' in e) && (lo !== null || !out.length || !events.some((e) => 'fixed' in e || 'last_affected' in e))) out.push({ lo, hi: null, hiInc: false });
+  if (events && events.some((e) => 'introduced' in e || 'introduced_excluding' in e) && (lo !== null || !out.length || !events.some((e) => 'fixed' in e || 'last_affected' in e))) out.push({ lo, loExc, hi: null, hiInc: false });
   return out;
 }
-const inRange = (v, r) => (r.lo === null || compareUpstream(v, r.lo) >= 0) && (r.hi === null || (r.hiInc ? compareUpstream(v, r.hi) <= 0 : compareUpstream(v, r.hi) < 0));
+const inRange = (v, r) => (r.lo === null || (r.loExc ? compareUpstream(v, r.lo) > 0 : compareUpstream(v, r.lo) >= 0)) && (r.hi === null || (r.hiInc ? compareUpstream(v, r.hi) <= 0 : compareUpstream(v, r.hi) < 0));
 
 /** Normalize a non-Hackage OSV-style record into what Nix matching needs. */
 function normalizeGenericAdvisory(rec) {
@@ -454,18 +740,28 @@ function normalizeGenericAdvisory(rec) {
       fixPatches: ((a.database_specific && a.database_specific.fix_patches) || (rec.database_specific && rec.database_specific.fix_patches) || []).map((p) => ({ name: p.name || null, sha256: p.sha256 ? sha(p.sha256) : null })),
     });
   }
-  return { id: rec.id, ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
+  return { id: rec.id, severityInfo: (0,cvss/* advisorySeverity */.Hp)(rec), ids: [rec.id, ...aliases], cves: [rec.id, ...aliases].filter((x) => /^CVE-/.test(x)), summary: rec.summary || '', withdrawn: rec.withdrawn || null, published: rec.published || null, modified: rec.modified || null, references: (rec.references || []).map((r) => r.url).filter(Boolean), affected };
 }
 
 class NixAdvisoryData {
-  constructor({ records = [], hackage = null, source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30 } = {}) {
-    this.source = source; this.generatedAt = generatedAt; this.maxAgeDays = maxAgeDays;
+  constructor({ records = [], hackage = null, source = 'records', generatedAt = null, now = Date.now(), maxAgeDays = 30, covered = null } = {}) {
+    this.source = source; this.generatedAt = generatedAt; this.maxAgeDays = maxAgeDays; this.now = now;
+    // `covered` is {'vendor:product': ISO time that CPE identity was last fully read from the live feed}. null means the snapshot makes no
+    // per-identity claim (a hand-built or operator-pinned snapshot) and is matched exactly as it always was.
+    this.covered = covered && typeof covered === 'object' ? covered : null;
     this.records = records.map(normalizeGenericAdvisory).filter(Boolean);
     this.hackage = hackage;                      // an AdvisoryDb (HS-009) for wrapped Haskell packages
     const gen = generatedAt ? Date.parse(generatedAt) : NaN;
     this.ageDays = Number.isFinite(gen) ? (now - gen) / 86400000 : null;
     this.stale = this.ageDays === null ? true : this.ageDays > maxAgeDays;
     this.feed = { source, generatedAt, status: this.stale ? 'stale-cache' : 'current', records: this.records.length };
+  }
+  /** 'covered' | 'uncovered' | 'stale' for a CPE identity ('vendor:product'); always 'covered' when the snapshot makes no per-identity claim. */
+  cpeCoverage(key) {
+    if (!this.covered) return 'covered';
+    const t = Date.parse(this.covered[key]);
+    if (!Number.isFinite(t)) return 'uncovered';
+    return (this.now - t) / 86400000 > this.maxAgeDays ? 'stale' : 'covered';
   }
 }
 
@@ -493,7 +789,7 @@ function upstreamIdentity(node, drvEnv, meta, overlay) {
   const ids = meta && meta.identifiers ? meta.identifiers : null;
   if (ids && typeof ids.purl === 'string') cands.push({ purl: ids.purl, authority: 'explicit', basis: 'meta.identifiers.purl' });
   const cpes = ids ? [].concat(ids.cpe || [], ids.possibleCPEs || [], ids.v1 && ids.v1.cpeParts ? [ids.v1.cpeParts] : []).filter(Boolean) : [];
-  const cpeStrings = cpes.map((c) => (typeof c === 'string' ? c : (c.vendor && c.product ? `${c.vendor}:${c.product}` : null))).filter(Boolean);
+  const cpeStrings = cpes.map(cpeKey).filter(Boolean);   // 'vendor:product' from a full CPE string or a {vendor, product} part; malformed values are dropped
   const uniqueCpe = [...new Set(cpeStrings)];
   if (uniqueCpe.length === 1 && ids && ids.cpe && !ids.possibleCPEs) cands.push({ cpe: uniqueCpe[0], authority: 'explicit', basis: 'meta.identifiers.cpe' });
   else for (const c of uniqueCpe) cands.push({ cpe: c, authority: 'candidate', basis: uniqueCpe.length > 1 ? 'one of several possible CPEs' : 'possible CPE' });
@@ -505,6 +801,32 @@ function upstreamIdentity(node, drvEnv, meta, overlay) {
   const strong = uniq.filter((c) => c.authority === 'explicit' || c.authority === 'src-derived');
   const distinctTargets = new Set(strong.map((c) => c.purl || c.cpe || `${c.ecosystem}:${c.name}`));
   return { ...base, candidates: uniq, ambiguous: distinctTargets.size > 1 || (strong.length === 0 && uniq.length > 1) || uniq.some((c) => c.authority === 'candidate'), authority: strong.length && distinctTargets.size === 1 && !uniq.some((c) => c.authority === 'candidate') ? strong[0].authority : (uniq[0] ? 'name-only' : 'none'), haskell: !!isHs };
+}
+
+/**
+ * The upstream identities of every dependency in a closure, in the form the matcher will use, so a pre-scan step can ask a live feed
+ * about exactly what the matcher will look up. `cpes` holds 'vendor:product' keys (explicit and candidate); a component with none is
+ * listed in `withoutCpe` so the caller can say what a CPE-keyed feed cannot cover.
+ */
+function closureIdentities({ closure, drvEnv = {}, meta = {}, overlays = {} } = {}) {
+  const nodes = (closure && closure.nodes) || [];
+  const roots = new Set((closure && closure.roots) || []);
+  const subjects = new Map();
+  for (const n of nodes) {
+    if (n.kind !== 'output' || roots.has(n.id)) continue;
+    const key = n.deriver || n.id;
+    if (!subjects.has(key)) subjects.set(key, { drv: n.deriver || null, node: n });
+    const s = subjects.get(key);
+    if (n.outputName === 'out' || (s.node.outputName !== 'out' && n.scopes.includes('runtime'))) s.node = n;
+  }
+  const cpes = new Set(); const withoutCpe = [];
+  for (const s of subjects.values()) {
+    const node = s.node;
+    const ident = upstreamIdentity(node, (s.drv && drvEnv[s.drv]) || null, meta[node.pname] || meta[node.storeName] || null, overlays[node.pname] || null);
+    const mine = ident.candidates.filter((c) => c.cpe).map((c) => c.cpe);
+    if (mine.length) mine.forEach((k) => cpes.add(k)); else if (node.pname) withoutCpe.push(node.pname);
+  }
+  return { cpes: [...cpes].sort(), withoutCpe: [...new Set(withoutCpe)].sort() };
 }
 
 // ── overlays and patches ─────────────────────────────────────────────────────
@@ -665,11 +987,12 @@ function matchNixVulnerabilities(opts = {}) {
         const st = decide(r, pe, ident);
         matched = true;
         if (haskellUsage) { const rr = (0,haskell_sca/* reachability */.oY)(node.pname, haskellUsage.imports, haskellUsage.callees, symbols[adv.id] || null); tiers.reachability = { import: rr.import, function: rr.function, basis: rr.reason }; }
-        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
+        findings.push(finding({ ...base, tiers: { ...tiers } }, { id: adv.canonicalId, ids: adv.ids, summary: adv.summary, cves: adv.cveAliases, severityInfo: adv.severityInfo }, st.status, st.reason, { source: data.hackage.source, ecosystem: 'Hackage', fixedIn: aff.fixedIn, patchEvidence: pe }, { kev, epss }));
       }
     }
     // generic records by PURL / CPE; only authoritative identities are matched, candidates are leads
     for (const adv of data.records) {
+      if (adv.withdrawn) continue;
       for (const aff of adv.affected) {
         const target = ident.candidates.find((c) => (c.purl && aff.purl && c.purl === aff.purl) || (c.cpe && aff.cpe && c.cpe === aff.cpe) || (c.name && aff.name && !aff.purl && !aff.cpe && c.name === aff.name && c.authority === 'name-only') || (c.ecosystem === 'Hackage' && aff.ecosystem === 'Hackage' && c.name === aff.name));
         if (!target) continue;
@@ -688,7 +1011,21 @@ function matchNixVulnerabilities(opts = {}) {
         findings.push(finding({ ...base, tiers: { ...tiers } }, adv, st.status, st.reason, { source: data.source, ecosystem: aff.ecosystem, fixedIn: aff.fixedIn, patchEvidence: pe, identityBasis: target.basis, identityAuthority: target.authority }, { kev, epss }));
       }
     }
+    // A feed that records coverage per CPE identity can only vouch for the identities it actually read. Without a covered, explicit,
+    // unambiguous CPE identity, "no match" says nothing, so it is unknown (never not-affected).
+    let covGap = null;
+    if (!hackageGap && data.covered) {
+      const cpeCands = ident.candidates.filter((c) => c.cpe);
+      const firm = !ident.ambiguous ? cpeCands.find((c) => c.authority === 'explicit') : null;
+      if (firm) {
+        const cv = data.cpeCoverage(firm.cpe);
+        if (cv === 'covered') mapped = true;
+        else covGap = cv === 'stale' ? `the live advisory feed last read ${firm.cpe} longer ago than its age limit: the absence of a match is not a clean result` : `the live advisory feed never read ${firm.cpe} (it was not queried or the query did not complete): the absence of a match is not a clean result`;
+      } else if (!matched && !cpeCands.length) covGap = 'the live advisory feed is keyed by CPE and this component declares no CPE identity (a source URL or purl alone is not something it can look up): the absence of a match is not a clean result';
+    }
     if (matched) summary.matched++;
+    if (covGap) { if (!matched) summary.unmapped++; push({ status: 'unknown', reason: covGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
+    else if (matched) { /* findings above are the result */ }
     else if (hackageGap) { summary.unmapped++; push({ status: 'unknown', reason: hackageGap }, { identityMapped: false, feedCoverage: 'incomplete' }); }
     else if (mapped) { summary.mappedNoMatch++; push({ status: 'not-affected', reason: 'mapped to an upstream identity and no advisory in the supplied feed matches this version' }, { identityMapped: true }); }
     else { summary.unmapped++; push({ status: 'unknown', reason: ident.ambiguous ? 'the upstream identity is ambiguous: no verdict' : 'the upstream identity could not be mapped to anything an advisory is keyed by' }, { identityMapped: false }); }
@@ -708,10 +1045,14 @@ function finding(base, adv, status, reason, extra, { kev, epss }) {
   const kevHit = cves.length ? (kev ? cves.some((c) => kev.has(c)) : 'unknown') : 'not-applicable';
   const ep = cves.map((c) => epss && epss[c]).filter((x) => typeof x === 'number');
   const level = { affected: 'high', 'possibly-affected': 'medium', candidate: 'low', 'backported-verified': 'info', fixed: 'info', unknown: 'low', 'not-affected': 'info' }[status] || 'low';
+  // The advisory's own rating applies only where the package is judged vulnerable; the other statuses keep their fixed,
+  // lower levels (a verified backport must never be raised by the upstream score).
+  const sev = adv.severityInfo || { level: null, score: null, basis: cvss/* NO_RATING_BASIS */.Ts };
+  const rated = !!sev.level && (status === 'affected' || status === 'possibly-affected');
   return {
     type: 'vulnerable_dep', ecosystem: 'nix', language: 'nix', capability: 'sca', analysisKind: 'application', evidenceKind: 'closure',
     name: base.name, version: base.version, osvId: adv.id, ids: adv.ids || [adv.id], cveAliases: cves, summary: adv.summary || '',
-    status, matchStatus: status, matchReason: reason, severity: level, severityBasis: 'the advisory carries no severity rating',
+    status, matchStatus: status, matchReason: reason, severity: rated ? sev.level : level, severityBasis: rated ? sev.basis : sev.level ? `the match status "${status}" fixes this level; the advisory rating (${sev.basis}) is not applied` : sev.basis, ...(rated ? { severityScore: sev.score } : {}),
     nixBuild: base.nixBuild, identity: base.identity, tiers: base.tiers, feed: base.feed,
     kev: kevHit, epss: ep.length ? Math.max(...ep) : 'unknown',
     fixedIn: extra.fixedIn || [], patchEvidence: extra.patchEvidence || { verified: null, claims: [] }, dataSource: { feed: extra.source || base.feed.source, ecosystem: extra.ecosystem || null, identityBasis: extra.identityBasis || null, identityAuthority: extra.identityAuthority || null, feedStatus: base.feed.status },
@@ -731,16 +1072,14 @@ function licenseReport(nodes, meta, policy) {
 
 
 
-// EXTERNAL MODULE: ./src/language/haskell-supply.js + 1 modules
-var haskell_supply = __webpack_require__(43436);
+// EXTERNAL MODULE: ./src/language/haskell-supply.js
+var haskell_supply = __webpack_require__(86349);
 // EXTERNAL MODULE: external "node:child_process"
 var external_node_child_process_ = __webpack_require__(31421);
 // EXTERNAL MODULE: external "node:net"
 var external_node_net_ = __webpack_require__(77030);
 // EXTERNAL MODULE: external "node:os"
 var external_node_os_ = __webpack_require__(48161);
-// EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(76760);
 ;// CONCATENATED MODULE: ./src/language/nix-eval-isolation.js
 // Isolated, opt-in Nix evaluation (NIX-011).
 //
@@ -1040,6 +1379,7 @@ function mergeEvaluationHealth(scanHealth, result) {
 
 
 
+
 const RESOLVED_PASS_VERSION = 'resolved-pass/1';
 
 const PLAN = /(?:^|\/)dist-newstyle\/cache\/plan\.json$/;
@@ -1160,8 +1500,56 @@ function configuredNixAdvisories(root, env = process.env, hackageDb = null) {
   const sel = (0,trusted_inputs/* resolveOperatorSnapshot */.Rn)({ envVar: 'AGENTIC_SECURITY_NIX_ADVISORIES', fileName: 'nix-advisories.json', root, env });
   if (!sel.path) return { data: null, reason: `no Nix advisory snapshot is configured (set AGENTIC_SECURITY_NIX_ADVISORIES, or place nix-advisories.json in the operator configuration directory, agentic-security under XDG_CONFIG_HOME)${sel.projectLocalIgnored ? (0,trusted_inputs/* IGNORED_NOTE */.cY)('nix-advisories.json') : ''}` };
   let snap; try { snap = JSON.parse((0,external_node_fs_.readFileSync)(sel.path, 'utf8')); } catch (e) { return { data: null, reason: `the Nix advisory snapshot is unreadable: ${e.code || e.message}` }; }
+  if (snap && snap.schema === SNAPSHOT_SCHEMA) {
+    // A snapshot the live feed wrote: its records must match their hashes, and it carries which CPE identities it actually read.
+    const live = loadLiveSnapshot(snap);
+    if (!live.ok) return { data: null, reason: `the live Nix advisory snapshot was refused: ${live.reason}` };
+    return { data: new NixAdvisoryData({ records: live.records, hackage: hackageDb, source: sel.source === 'env' ? 'pinned-snapshot' : 'nvd-live-feed', generatedAt: live.generatedAt, covered: live.covered }), reason: null };
+  }
   const records = Array.isArray(snap) ? snap : (Array.isArray(snap.records) ? snap.records : []);
   return { data: new NixAdvisoryData({ records, hackage: hackageDb, source: 'pinned-snapshot', generatedAt: (snap && snap.generatedAt) || null }), reason: null };
+}
+
+/**
+ * Package metadata for the closure (meta.identifiers, knownVulnerabilities, license), from a file the OPERATOR names in
+ * AGENTIC_SECURITY_NIX_META: either `{pname: meta}` or the `nix-env -qa --meta --json` shape (`{attr: {pname, meta}}`). It is never
+ * read from the scanned project, because metadata decides which upstream identity a component is matched under.
+ */
+function configuredNixMeta(env = process.env) {
+  const p = env.AGENTIC_SECURITY_NIX_META;
+  if (!p) return { meta: {}, reason: null };
+  let raw;
+  try { const text = (0,external_node_fs_.readFileSync)(p, 'utf8'); if (text.length > (32 << 20)) return { meta: {}, reason: 'the Nix metadata file is larger than 32 MB and was not read' }; raw = JSON.parse(text); } catch (e) { return { meta: {}, reason: `the Nix metadata file is unreadable: ${e.code || e.message}` }; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { meta: {}, reason: 'the Nix metadata file is not a JSON object' };
+  const meta = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!v || typeof v !== 'object') continue;
+    const m = v.meta && typeof v.meta === 'object' ? v.meta : v;
+    const name = typeof v.pname === 'string' && v.pname ? v.pname : k.split('.').pop();
+    if (/^[\w.+-]{1,100}$/.test(name) && !Object.prototype.hasOwnProperty.call(meta, name)) meta[name] = m;
+  }
+  return { meta, reason: null };
+}
+
+/**
+ * The async step before a scan's synchronous passes: when the live Nix feed is enabled, make sure the operator snapshot covers every
+ * CPE identity the imported closure declares. Does nothing, and costs nothing, unless the feed is enabled. Never throws.
+ */
+async function prefetchNixAdvisoryFeed(files, { env = process.env, ...opts } = {}) {
+  if (!liveFeedEnabled(env)) return null;
+  try {
+    const c = nixClosureOf(files, opts.now ? { now: opts.now } : {});
+    if (!c || (c.refused && c.refused.length)) return null;
+    const { cpes } = closureIdentities({ closure: c.closure, drvEnv: c.drvEnv, meta: configuredNixMeta(env).meta, overlays: overlayEvidence(files) });
+    if (!cpes.length) return null;
+    return await refreshNixAdvisories(cpes, { env, ...opts });
+  } catch (e) { return { status: 'failed', detail: `the feed step failed: ${String((e && e.message) || e).slice(0, 120)}` }; }
+}
+
+function nixLiveFeedNote(env) {
+  const r = getLastRefresh();
+  if (r && r.status !== 'disabled') return ` Live feed: ${r.status}, ${r.detail}.`;
+  return env[FEED_ENV] === '1' ? '' : ` To fetch advisories for the closure's upstream software from the NVD instead, set ${FEED_ENV}=1 (network, opt-in).`;
 }
 
 /** Closure statuses and findings, with every disclosure the import and the feed produced. */
@@ -1173,16 +1561,21 @@ function _analyzeNixClosure(files, { scanRoot = null, env = process.env, now = D
   if (!c) return null;
   const hackage = (0,haskell_supply.configuredAdvisoryDb)(scanRoot, env).db;
   const adv = configuredNixAdvisories(scanRoot, env, hackage);
+  if (!adv.data) adv.reason = `${adv.reason}${nixLiveFeedNote(env)}`;
+  const nm = configuredNixMeta(env);
   let usage = null; try { usage = (0,haskell_supply/* collectUsage */.c$)(files); } catch { usage = null; }
   let matched = null;
-  if (!c.refused.length) try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
+  if (!c.refused.length) try { matched = matchNixVulnerabilities({ closure: c.closure, drvEnv: c.drvEnv, data: adv.data, meta: nm.meta, overlays: overlayEvidence(files), haskellUsage: usage }); } catch (e) { matched = null; c.problems.push({ kind: 'match-failed', detail: String((e && e.message) || e).slice(0, 160) }); }
   const gaps = [];
   if (c.trust.includes('project-supplied') && !c.trust.includes('operator')) gaps.push({ kind: 'closure-project-supplied', detail: 'the closure export is a file in the scanned project, bound to its flake.lock but not signed: whoever controls the project controls its contents, so the ABSENCE of a finding for a component it lists is not evidence the real build is free of it (provide the export through AGENTIC_SECURITY_NIX_EXPORT, signed with AGENTIC_SECURITY_NIX_EXPORT_PUBKEY, to have it treated as operator evidence)' });
   for (const d of c.closure.disclosures || []) gaps.push({ kind: `closure-${d.kind}`, detail: d.detail });
   for (const d of c.refused) gaps.push({ kind: `closure-refused-${d.kind}`, detail: `${d.detail}; the export was REFUSED and contributes nothing` });
   for (const p of c.problems) gaps.push({ kind: `closure-${p.kind}`, detail: p.detail, file: p.file });
   if (!adv.data) gaps.push({ kind: 'closure-advisory-feed-unavailable', detail: `${adv.reason}. The closure's components were NOT checked against any advisory: the absence of findings is not a clean result.` });
-  else if (adv.data.stale) gaps.push({ kind: 'closure-advisory-feed-stale', detail: `the Nix advisory snapshot is stale or undated (${adv.data.ageDays == null ? 'age unknown' : `${Math.floor(adv.data.ageDays)} day(s) old`})` });
+  if (nm.reason) gaps.push({ kind: 'closure-meta-unreadable', detail: nm.reason });
+  const notCovered = ((matched && matched.statuses) || []).filter((x) => x.feedCoverage === 'incomplete');
+  if (adv.data && notCovered.length) gaps.push({ kind: 'closure-advisory-feed-incomplete', detail: `${notCovered.length} component(s) were not covered by the live advisory feed (${[...new Set(notCovered.map((x) => x.name))].slice(0, 5).join(', ')}${notCovered.length > 5 ? ', ...' : ''}): their status is unknown, and the absence of findings for them is not a clean result.` });
+  if (!adv.data) { /* reported above */ } else if (adv.data.stale) gaps.push({ kind: 'closure-advisory-feed-stale', detail: `the Nix advisory snapshot is stale or undated (${adv.data.ageDays == null ? 'age unknown' : `${Math.floor(adv.data.ageDays)} day(s) old`})` });
   const findings = ((matched && matched.findings) || []).filter((f) => ACTIONABLE.has(f.status)).map((f) => ({ ...f, file: c.sources[0], line: 1 }));
   return { status: c.closure.status, claims: c.closure.claims, sources: c.sources, summary: matched ? matched.summary : null, feed: matched ? matched.feed : null, statuses: matched ? matched.statuses : [], findings, gaps, licenses: matched ? matched.licenses : null, closure: c.closure };
 }
