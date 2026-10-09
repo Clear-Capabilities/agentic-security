@@ -161,8 +161,18 @@ describe('[X-205.AC03] taint absence never refutes a non-taint hypothesis, and u
     const cls = SCENARIO_CLASSES.find((c) => c.id === 'tenant-authorization');
     const { files } = classFixture(cls, 'positive');
     // the file really is taint-clean: the deep engine finds no taint flow in it
-    const scan = await runFullScan({ fileContents: files, scanRoot: mkTestTmp('nt-scan-'), provenance: false, deep: true }, () => {});
+    // Hosted CI skips deep analysis unless told otherwise, and it reports that skip as an informational taint-parser notice; opt in so the
+    // claim "the deep engine finds no flow" is actually exercised there, and put the environment back afterwards.
+    const prevDeepInCi = process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+    process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+    let scan;
+    try {
+      scan = await runFullScan({ fileContents: files, scanRoot: mkTestTmp('nt-scan-'), provenance: false, deep: true }, () => {});
+    } finally {
+      if (prevDeepInCi === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI; else process.env.AGENTIC_SECURITY_DEEP_IN_CI = prevDeepInCi;
+    }
     assert.ok(Array.isArray(scan.findings), 'the scan ran');
+    assert.ok(!(scan.findings || []).some((f) => f.id === 'ir-taint-ci-skipped'), 'deep analysis really ran');
     const taintFindings = (scan.findings || []).filter((f) => /taint/i.test(String(f.parser)) || /injection|traversal|ssrf/i.test(String(f.family)));
     assert.deepEqual(taintFindings, [], 'no source-to-sink flow exists in this file');
 
