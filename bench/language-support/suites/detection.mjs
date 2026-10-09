@@ -3,12 +3,12 @@
 // another. Family-scoped scoring (a finding of a different family in a case is counted separately, never as this family's false
 // positive) is reported next to the strict number.
 import { scoreLayer } from '../../../scanner/src/language/accuracy.js';
-import { readJson, source, unseenSource, shapeDevSource, scanFiles, TAINT_FAMILIES, NIX_FAMILY_ALIAS, layerPredicate } from '../lib.mjs';
+import { readJson, source, unseenSource, shapeDevSource, shapeDev2Source, scanFiles, TAINT_FAMILIES, NIX_FAMILY_ALIAS, layerPredicate } from '../lib.mjs';
 
 const score = (cases, findings, inLayer, familyScoped) => scoreLayer(cases, findings, { layer: 'custom', inLayer, lineTolerance: 1e9, familyScoped });
 
 export async function runDetection({ split, eco, limit = 0 }) {
-  const shapeSet = { unseen: ['labels/unseen.json', unseenSource], 'shape-dev': ['labels/shape-dev.json', shapeDevSource] }[split];
+  const shapeSet = { unseen: ['labels/unseen.json', unseenSource], 'shape-dev': ['labels/shape-dev.json', shapeDevSource], 'shape-dev-2': ['labels/shape-dev-2.json', shapeDev2Source] }[split];
   let cs = readJson(shapeSet ? shapeSet[0] : 'labels/cases.json').filter((c) => c.ecosystem === eco && c.split === split);
   if (limit) cs = cs.slice(0, limit);
   const findings = []; const scored = []; const unknown = []; let advisory = 0;

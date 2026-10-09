@@ -1,24 +1,24 @@
 {
   "schema": "agentic-security/language-support-measurement@2",
   "split": "unseen",
-  "measuredAt": "2026-10-05",
+  "measuredAt": "2026-10-09",
   "corpusVersion": "qa001-v2",
   "ecosystems": {
     "haskell": {
       "detection": {
         "cases": 156,
         "scored": 156,
-        "advisoryFindingsNotScored": 2,
+        "advisoryFindingsNotScored": 0,
         "layers": {
           "sast": {
             "cases": 96,
-            "tp": 44,
-            "fp": 4,
-            "fn": 4,
-            "tn": 44,
-            "precision": 0.9166666666666666,
-            "recall": 0.9166666666666666,
-            "f1": 0.9166666666666666,
+            "tp": 24,
+            "fp": 8,
+            "fn": 24,
+            "tn": 40,
+            "precision": 0.75,
+            "recall": 0.5,
+            "f1": 0.6,
             "measured": true,
             "families": {
               "weak-password-hash": {
@@ -31,24 +31,33 @@
                 "measured": true
               },
               "weak-randomness": {
-                "tp": 6,
-                "fp": 0,
-                "fn": 0,
-                "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "tp": 4,
+                "fp": 2,
+                "fn": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
                 "measured": true
               },
               "resource-limits": {
-                "tp": 4,
-                "fp": 0,
-                "fn": 2,
-                "precision": 1,
-                "recall": 0.6666666666666666,
-                "f1": 0.8,
+                "tp": 2,
+                "fp": 2,
+                "fn": 4,
+                "precision": 0.5,
+                "recall": 0.3333333333333333,
+                "f1": 0.4,
                 "measured": true
               },
               "parser-safety": {
+                "tp": 2,
+                "fp": 2,
+                "fn": 4,
+                "precision": 0.5,
+                "recall": 0.3333333333333333,
+                "f1": 0.4,
+                "measured": true
+              },
+              "sensitive-logging": {
                 "tp": 4,
                 "fp": 0,
                 "fn": 2,
@@ -57,116 +66,247 @@
                 "f1": 0.8,
                 "measured": true
               },
-              "sensitive-logging": {
-                "tp": 6,
-                "fp": 0,
-                "fn": 0,
-                "precision": 1,
-                "recall": 1,
-                "f1": 1,
-                "measured": true
-              },
               "route-authentication": {
-                "tp": 6,
-                "fp": 4,
-                "fn": 0,
-                "precision": 0.6,
-                "recall": 1,
-                "f1": 0.7499999999999999,
+                "tp": 4,
+                "fp": 2,
+                "fn": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
                 "measured": true
               },
               "object-authorization": {
-                "tp": 6,
+                "tp": 2,
                 "fp": 0,
-                "fn": 0,
+                "fn": 4,
                 "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "recall": 0.3333333333333333,
+                "f1": 0.5,
                 "measured": true
               },
               "session-cookie": {
-                "tp": 6,
+                "tp": 0,
                 "fp": 0,
-                "fn": 0,
-                "precision": 1,
-                "recall": 1,
-                "f1": 1,
-                "measured": true
+                "fn": 6,
+                "precision": null,
+                "recall": 0,
+                "f1": null,
+                "measured": false
               }
             },
             "misses": [
               {
-                "case": "hsv-d3100692f0",
+                "case": "hsy-00ae66e67a",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hsy-b8dd875745",
+                "label": {
+                  "cwe": "CWE-338"
+                }
+              },
+              {
+                "case": "hsy-d3100692f0",
                 "label": {
                   "cwe": "CWE-770"
                 }
               },
               {
-                "case": "hsv-a96d85263e",
+                "case": "hsy-a96d85263e",
                 "label": {
                   "cwe": "CWE-770"
                 }
               },
               {
-                "case": "hsv-634ab904ab",
+                "case": "hsy-973c5d77ce",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hsy-0f5bd0295e",
+                "label": {
+                  "cwe": "CWE-770"
+                }
+              },
+              {
+                "case": "hsy-d9e50754bd",
                 "label": {
                   "cwe": "CWE-248"
                 }
               },
               {
-                "case": "hsv-68e1da4214",
+                "case": "hsy-9fec491fd4",
                 "label": {
                   "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hsy-634ab904ab",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hsy-68e1da4214",
+                "label": {
+                  "cwe": "CWE-248"
+                }
+              },
+              {
+                "case": "hsy-3f80ace6a6",
+                "label": {
+                  "cwe": "CWE-532"
+                }
+              },
+              {
+                "case": "hsy-09adcf9c83",
+                "label": {
+                  "cwe": "CWE-532"
+                }
+              },
+              {
+                "case": "hsy-bda5c8a726",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              },
+              {
+                "case": "hsy-b42c0f6af9",
+                "label": {
+                  "cwe": "CWE-306"
+                }
+              },
+              {
+                "case": "hsy-0c43a7d5e7",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hsy-f64e503fc6",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hsy-486258d84b",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hsy-4eb44c2d05",
+                "label": {
+                  "cwe": "CWE-639"
+                }
+              },
+              {
+                "case": "hsy-cedfbead1a",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsy-972fcdb3ec",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsy-a8496fb1e3",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsy-948509b8dc",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsy-5b622385f8",
+                "label": {
+                  "cwe": "CWE-1004"
+                }
+              },
+              {
+                "case": "hsy-4b2f14f91e",
+                "label": {
+                  "cwe": "CWE-1004"
                 }
               }
             ],
             "strays": [
               {
-                "file": "hsv-5835357679/src/Svc.hs",
-                "line": 12,
+                "file": "hsy-080edd5d6c/src/Svc.hs",
+                "line": 9,
+                "cwe": "CWE-338"
+              },
+              {
+                "file": "hsy-d68580cb8c/src/Svc.hs",
+                "line": 9,
+                "cwe": "CWE-338"
+              },
+              {
+                "file": "hsy-e5698cab9f/src/Svc.hs",
+                "line": 8,
+                "cwe": "CWE-770"
+              },
+              {
+                "file": "hsy-7de82d4ff1/src/Svc.hs",
+                "line": 8,
+                "cwe": "CWE-770"
+              },
+              {
+                "file": "hsy-1494c1ca4b/src/Svc.hs",
+                "line": 8,
+                "cwe": "CWE-248"
+              },
+              {
+                "file": "hsy-b4c4db646a/src/Svc.hs",
+                "line": 8,
+                "cwe": "CWE-248"
+              },
+              {
+                "file": "hsy-5835357679/src/Svc.hs",
+                "line": 14,
                 "cwe": "CWE-306"
               },
               {
-                "file": "hsv-26f763e1d3/src/Svc.hs",
-                "line": 12,
-                "cwe": "CWE-306"
-              },
-              {
-                "file": "hsv-e0c01d0ad3/src/Svc.hs",
-                "line": 12,
-                "cwe": "CWE-306"
-              },
-              {
-                "file": "hsv-b06ed7e5d7/src/Svc.hs",
-                "line": 12,
+                "file": "hsy-26f763e1d3/src/Svc.hs",
+                "line": 14,
                 "cwe": "CWE-306"
               }
             ],
             "crossFamilyFindingsNotScored": 2,
             "strict": {
-              "fp": 6,
-              "precision": 0.88,
-              "f1": 0.8979591836734694
+              "fp": 10,
+              "precision": 0.7058823529411765,
+              "f1": 0.5853658536585366
             }
           },
           "taint": {
             "cases": 60,
-            "tp": 28,
-            "fp": 2,
-            "fn": 2,
-            "tn": 28,
-            "precision": 0.9333333333333333,
-            "recall": 0.9333333333333333,
-            "f1": 0.9333333333333333,
+            "tp": 22,
+            "fp": 4,
+            "fn": 8,
+            "tn": 24,
+            "precision": 0.8461538461538461,
+            "recall": 0.7333333333333333,
+            "f1": 0.7857142857142856,
             "measured": true,
             "families": {
               "sql-injection": {
-                "tp": 6,
+                "tp": 4,
                 "fp": 0,
-                "fn": 0,
+                "fn": 2,
                 "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
                 "measured": true
               },
               "command-injection": {
@@ -179,12 +319,12 @@
                 "measured": true
               },
               "path-traversal": {
-                "tp": 6,
+                "tp": 4,
                 "fp": 0,
-                "fn": 0,
+                "fn": 2,
                 "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
                 "measured": true
               },
               "ssrf": {
@@ -197,46 +337,92 @@
                 "measured": true
               },
               "html-injection": {
-                "tp": 6,
-                "fp": 0,
-                "fn": 0,
-                "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "tp": 4,
+                "fp": 2,
+                "fn": 2,
+                "precision": 0.6666666666666666,
+                "recall": 0.6666666666666666,
+                "f1": 0.6666666666666666,
                 "measured": true
               }
             },
             "misses": [
               {
-                "case": "hsv-38f12acff9",
+                "case": "hsy-8c23dfb1a5",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hsy-e6ba2e2122",
+                "label": {
+                  "cwe": "CWE-89"
+                }
+              },
+              {
+                "case": "hsy-74b6f96af3",
+                "label": {
+                  "cwe": "CWE-22"
+                }
+              },
+              {
+                "case": "hsy-6ec3217b59",
+                "label": {
+                  "cwe": "CWE-22"
+                }
+              },
+              {
+                "case": "hsy-b2835a757a",
                 "label": {
                   "cwe": "CWE-918"
                 }
               },
               {
-                "case": "hsv-45730c3d26",
+                "case": "hsy-610697846e",
                 "label": {
                   "cwe": "CWE-918"
+                }
+              },
+              {
+                "case": "hsy-cf84a1ceb6",
+                "label": {
+                  "cwe": "CWE-79"
+                }
+              },
+              {
+                "case": "hsy-bc9a75d067",
+                "label": {
+                  "cwe": "CWE-79"
                 }
               }
             ],
             "strays": [
               {
-                "file": "hsv-68c2063473/src/Svc.hs",
+                "file": "hsy-af4721fdb6/src/Svc.hs",
                 "line": 6,
                 "cwe": "CWE-78"
               },
               {
-                "file": "hsv-83266f39b7/src/Svc.hs",
+                "file": "hsy-b3dff46a17/src/Svc.hs",
                 "line": 6,
                 "cwe": "CWE-78"
+              },
+              {
+                "file": "hsy-ee44f15e2b/src/Svc.hs",
+                "line": 18,
+                "cwe": "CWE-79"
+              },
+              {
+                "file": "hsy-d96c684ed3/src/Svc.hs",
+                "line": 18,
+                "cwe": "CWE-79"
               }
             ],
             "crossFamilyFindingsNotScored": 2,
             "strict": {
-              "fp": 4,
-              "precision": 0.875,
-              "f1": 0.9032258064516129
+              "fp": 6,
+              "precision": 0.7857142857142857,
+              "f1": 0.7586206896551724
             }
           }
         },
@@ -312,22 +498,22 @@
         "layers": {
           "sast": {
             "cases": 132,
-            "tp": 64,
+            "tp": 58,
             "fp": 0,
-            "fn": 2,
+            "fn": 8,
             "tn": 66,
             "precision": 1,
-            "recall": 0.9696969696969697,
-            "f1": 0.9846153846153847,
+            "recall": 0.8787878787878788,
+            "f1": 0.9354838709677419,
             "measured": true,
             "families": {
               "secret-in-store": {
-                "tp": 6,
+                "tp": 4,
                 "fp": 0,
-                "fn": 0,
+                "fn": 2,
                 "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
                 "measured": true
               },
               "unpinned-source": {
@@ -385,15 +571,6 @@
                 "measured": true
               },
               "service-privilege": {
-                "tp": 6,
-                "fp": 0,
-                "fn": 0,
-                "precision": 1,
-                "recall": 1,
-                "f1": 1,
-                "measured": true
-              },
-              "firewall-exposure": {
                 "tp": 4,
                 "fp": 0,
                 "fn": 2,
@@ -402,7 +579,7 @@
                 "f1": 0.8,
                 "measured": true
               },
-              "privilege-escalation-policy": {
+              "firewall-exposure": {
                 "tp": 6,
                 "fp": 0,
                 "fn": 0,
@@ -411,30 +588,89 @@
                 "f1": 1,
                 "measured": true
               },
-              "tls-secret-runtime": {
-                "tp": 6,
+              "privilege-escalation-policy": {
+                "tp": 4,
                 "fp": 0,
-                "fn": 0,
+                "fn": 2,
                 "precision": 1,
-                "recall": 1,
-                "f1": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
+                "measured": true
+              },
+              "tls-secret-runtime": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1,
+                "recall": 0.6666666666666666,
+                "f1": 0.8,
                 "measured": true
               }
             },
             "misses": [
               {
-                "case": "nxv-76c20585e7",
+                "case": "nxy-d88a3140e3",
                 "label": {
                   "families": [
-                    "firewall-exposure"
+                    "hardcoded-secret"
                   ]
                 }
               },
               {
-                "case": "nxv-beef777f78",
+                "case": "nxy-0847d3aaae",
                 "label": {
                   "families": [
-                    "firewall-exposure"
+                    "hardcoded-secret"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-13954bc675",
+                "label": {
+                  "families": [
+                    "service-identity",
+                    "systemd-privilege"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-e89565afa4",
+                "label": {
+                  "families": [
+                    "service-identity",
+                    "systemd-privilege"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-326e003a8e",
+                "label": {
+                  "families": [
+                    "privilege-escalation"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-c4915b441d",
+                "label": {
+                  "families": [
+                    "privilege-escalation"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-62e7b898bd",
+                "label": {
+                  "families": [
+                    "tls-runtime"
+                  ]
+                }
+              },
+              {
+                "case": "nxy-bab107e075",
+                "label": {
+                  "families": [
+                    "tls-runtime"
                   ]
                 }
               }
@@ -444,37 +680,58 @@
             "strict": {
               "fp": 0,
               "precision": 1,
-              "f1": 0.9846153846153847
+              "f1": 0.9354838709677419
             }
           },
           "taint": {
             "cases": 12,
             "tp": 6,
-            "fp": 0,
+            "fp": 4,
             "fn": 0,
             "tn": 6,
-            "precision": 1,
+            "precision": 0.6,
             "recall": 1,
-            "f1": 1,
+            "f1": 0.7499999999999999,
             "measured": true,
             "families": {
               "script-interpolation": {
                 "tp": 6,
-                "fp": 0,
+                "fp": 4,
                 "fn": 0,
-                "precision": 1,
+                "precision": 0.6,
                 "recall": 1,
-                "f1": 1,
+                "f1": 0.7499999999999999,
                 "measured": true
               }
             },
             "misses": [],
-            "strays": [],
+            "strays": [
+              {
+                "file": "nxy-3c8d22b439/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-78"
+              },
+              {
+                "file": "nxy-90dac1aa23/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-78"
+              },
+              {
+                "file": "nxy-547a41b7b0/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-78"
+              },
+              {
+                "file": "nxy-63a4b737b1/configuration.nix",
+                "line": 8,
+                "cwe": "CWE-78"
+              }
+            ],
             "crossFamilyFindingsNotScored": 0,
             "strict": {
-              "fp": 0,
-              "precision": 1,
-              "f1": 1
+              "fp": 4,
+              "precision": 0.6,
+              "f1": 0.7499999999999999
             }
           }
         },
@@ -566,12 +823,13 @@
     }
   },
   "hashes": {
-    "unseenRollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
+    "unseenRollup": "5dc9bdded19309ee41231b26e9d199224363d13e88d0cfdc7005b751b47c46bd",
     "shapeDevRollup": "7dd61a16abcf5d1800a6a3dce55910657a45d6577f35d376e0e1e308f0812531",
+    "shapeDev2Rollup": "57ca0bd3416f63acb5025463fac881121669ad57975480f936d293066c7c21b8",
     "holdoutRollup": "5ed6ec7c7d87d0f0d769584da3238bea80999b66ee12a9f63b1de2dc4fb8410c",
     "contentRollup": "963d95bcddb3f2355d5a37bc61a1811536f67cfb1e0d0b9c09fffa8f22f93932",
     "labelsSha256": "130255408c1a8c10571483331aa12a6a0a5e2106b7b909f90a0f20848b4852f0",
     "privacyLabelsSha256": "1583afdaf624c14371b7186b0868c8dd34196a880de2485ac8fa63ddb2b2777a",
-    "manifestSha256": "a6cf6f04ed94868c8fec9318a3a8f4f0059fbf58c74760641ec0ba5821909ba1"
+    "manifestSha256": "e826f48ae72dd230096f8eda3d7d308743aaf61c50c8eb614eb3c9bf983ab0c6"
   }
 }
