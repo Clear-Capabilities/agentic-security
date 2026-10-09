@@ -26,6 +26,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { emitVerification } from './verification/emit.js';
 
 const SCHEMA = 'agentic-security/autopilot@1';
 
@@ -73,8 +74,15 @@ function _save(stateFile, state) {
  */
 export async function runAutopilot({
   stages = {}, stateFile = null, resume = true, apply = false,
-  onStage = () => {}, severities = ['critical', 'high'], maxFindings = Infinity,
+  onStage = () => {}, severities = ['critical', 'high'], maxFindings = Infinity, commit = null,
 } = {}) {
+  // X-201: every settled finding carries the one version-1 verification record, ADDITIVELY (`outcome`, `reason` and
+  // every other field are unchanged). The chain's own proof and re-verify stages run under the older sandbox path, so
+  // the record never says `confirmed` or `refuted` here: it records what was observed and what remains unproven.
+  const seal = (rec, finding, patch) => {
+    const e = emitVerification('autopilot', rec, { finding, patch: patch?.patch, commit });
+    if (e.ok) rec.verificationRecord = e.record;
+  };
   const required = ['scan'];
   for (const r of required) {
     if (typeof stages[r] !== 'function') return { ok: false, reason: `no ${r} stage supplied` };
@@ -138,6 +146,7 @@ export async function runAutopilot({
       if (rec.validation === 'refuted') {
         rec.outcome = 'NEEDS_REVIEW';
         rec.reason = 'an independent verifier refuted this finding; not fixed automatically';
+        seal(rec, f, null);
         results.push(rec); state.findings[key] = rec; _save(stateFile, state);
         onStage({ stage: 'validate', key, verdict: 'refuted' });
         continue;
@@ -149,6 +158,7 @@ export async function runAutopilot({
     if (!isProven) {
       rec.outcome = 'UNPROVEN';
       rec.reason = proved?.proofEvidence?.reason || 'no proof-of-concept demonstrated this finding';
+      seal(rec, f, null);
       results.push(rec); state.findings[key] = rec; _save(stateFile, state);
       continue;
     }
@@ -161,6 +171,7 @@ export async function runAutopilot({
     if (!patch || !patch.patch) {
       rec.outcome = 'NO_FIX';
       rec.reason = 'no patch was synthesised';
+      seal(rec, f, null);
       results.push(rec); state.findings[key] = rec; _save(stateFile, state);
       continue;
     }
@@ -171,6 +182,7 @@ export async function runAutopilot({
     if (typeof stages.verifyFix !== 'function') {
       rec.outcome = 'NEEDS_REVIEW';
       rec.reason = 'no verifyFix stage supplied — a patch that cannot be re-verified is never applied';
+      seal(rec, f, patch);
       results.push(rec); state.findings[key] = rec; _save(stateFile, state);
       continue;
     }
@@ -194,6 +206,7 @@ export async function runAutopilot({
         : (!rec.testsPass ? 'the project test suite fails with this patch'
           : (v?.reason || 'the patch did not re-verify'));
     }
+    seal(rec, f, patch);
     results.push(rec);
     state.findings[key] = rec;
     _save(stateFile, state);

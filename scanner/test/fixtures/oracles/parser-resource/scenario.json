@@ -1,0 +1,9 @@
+{
+  "export": "parse",
+  "benign": "aaaa",
+  "hostile": {
+    "unit": "a",
+    "count": 48,
+    "suffix": "!"
+  }
+}

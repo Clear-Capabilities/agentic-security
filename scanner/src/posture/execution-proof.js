@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runConfined, sandboxAvailable, detectBackend } from '../sandbox/index.js';
 import { attachProofTier, proofTierOf } from './proof-tier.js';
+import { emitVerification } from './verification/emit.js';
 
 const PROOF_MARKER = 'PROVEN';
 
@@ -75,7 +76,16 @@ export const DEFAULT_PROOF_TIMEOUT_MS =
     ? Number(process.env.AGENTIC_SECURITY_PROOF_TIMEOUT_MS)
     : 45000;
 
-export async function proveFinding(finding, { timeoutMs = DEFAULT_PROOF_TIMEOUT_MS, force, files } = {}) {
+// X-201: the proof result also carries the one verification record, ADDITIVELY (`proofTier` and `proofEvidence` are
+// unchanged). A PoC run under this older sandbox path is not a trusted runner, so the record says `inconclusive` for a
+// run that demonstrated the effect and for one that did not; `confirmed` takes a trusted oracle adapter.
+export async function proveFinding(finding, opts = {}) {
+  const proved = await _proveFinding(finding, opts);
+  const emitted = emitVerification('execution-proof', proved, { finding: proved, commit: opts.commit ?? null });
+  return emitted.ok ? { ...proved, verificationRecord: emitted.record } : proved;
+}
+
+async function _proveFinding(finding, { timeoutMs = DEFAULT_PROOF_TIMEOUT_MS, force, files } = {}) {
   const poc = finding?.poc;
   if (!poc?.code) {
     return attachProofTier(finding, _evidence({ tier: proofTierOf(finding), reason: 'no proof-of-concept attached' }));

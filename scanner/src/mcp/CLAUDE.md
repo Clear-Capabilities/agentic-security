@@ -12,7 +12,7 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `find_rule_module` | ✓ | reads `scanner/src/{sast,posture}/` to answer "which file detects CWE-X / family Y" |
 | `lookup_cve` | ✓ | reads local OSV / KEV / EPSS cache; staleness-tiered |
 | `synthesize_fix` | ✓ | reads last-scan; returns the patch text |
-| `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt |
+| `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt. Also returns `verificationRecord`, the shared version-1 verification record (X-201; additive, `apply_fix` returns it too): a static re-scan alone is `not-run`, never confirmed |
 | `apply_fix` | ✗ | writes via `posture/fix-history.js` (with backup). With `plan_digest` it applies a MULTI-FILE NixOS option fix (see "Multi-file apply_fix" below): all files or none, one backup per file, one history group |
 | `append_scratchpad` | ✗ | writes under `.agentic-security/agent-scratchpad/<agent>/<session>/` only |
 | `read_scratchpad` | ✓ | paginated read of scratchpad files |

@@ -23,6 +23,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { verifyFix } from './fix-verify.js';
+import { emitVerification } from './verification/emit.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -138,13 +139,19 @@ export async function verifyFixWithTests({
     lint: { ok: scanLint.lint?.ok ?? true, detail: scanLint.lint ?? null },
     tests: { ok: true, detail: null, skipped: true, reason: 'not-run' },
   };
+  // X-201: the closed loop's own record (additive). It runs the detector, linter and project tests, never an exploit
+  // oracle, so it can say `not-run` or `error` and nothing stronger.
+  const withRecord = (res) => {
+    const e = emitVerification('fix-verify-loop', res, { originalFindingStableId, files, scanRoot });
+    return { ...res, verificationRecord: e.ok ? e.record : null };
+  };
   if (!legs.scan.ok || !legs.lint.ok) {
-    return {
+    return withRecord({
       ok: false,
       verdict: 'verification-failed',
       legs,
       summary: _summarize(legs, 'verification-failed'),
-    };
+    });
   }
   if (runTests) {
     const tests = runProjectTests(scanRoot, { runnerOverride: testRunnerOverride, timeoutMs: testTimeoutMs });
@@ -154,7 +161,7 @@ export async function verifyFixWithTests({
   const verdict = !allOk
     ? 'verification-failed'
     : (legs.tests.skipped ? 'untested-but-passes' : 'verified-clean');
-  return { ok: allOk, verdict, legs, summary: _summarize(legs, verdict) };
+  return withRecord({ ok: allOk, verdict, legs, summary: _summarize(legs, verdict) });
 }
 
 function _summarize(legs, verdict) {

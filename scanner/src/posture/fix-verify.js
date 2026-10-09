@@ -22,6 +22,7 @@ import { runFullScan } from '../engine.js';
 import { gateFixOutput } from './fix-honesty-gate.js';
 import { runProjectTests } from './test-runner.js';
 import { recordFixAttempt } from './fix-metrics.js';
+import { emitVerification } from './verification/emit.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -337,5 +338,13 @@ export async function verifyFix({
     });
   }
 
-  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
+  // X-201: the one verification record, ADDITIVE. `ok` and every field above stay exactly as they were; the record
+  // says what was actually established (a static re-scan is not an exploit oracle, so without a PoC leg it is
+  // `not-run`, and nothing here can reach `confirmed`/`refuted`: that takes a trusted oracle adapter).
+  const emitted = emitVerification('fix-verify', { rescan, lint, tests, poc: pocLeg }, {
+    originalFindingStableId, files, scanRoot, finding: poc?.finding,
+  });
+  const verificationRecord = emitted.ok ? emitted.record : null;
+
+  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary, verificationRecord };
 }
