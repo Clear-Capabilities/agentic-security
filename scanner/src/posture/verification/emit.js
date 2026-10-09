@@ -99,7 +99,8 @@ function mapFixVerify(r, ctx) {
   const mapped = legacyVerificationOutcome({ proofEvidence: { tier: p === 'still-exploitable' ? 'execution-proven' : 'proof-failed', ran: true } });
   return {
     ...base, outcome: mapped.outcome, attempt: 1, oracle: POC_ORACLE, preconditions: { valid: true },
-    reason: `proof-of-concept leg '${p}': ${mapped.reason} (${legText})`,
+    // The leg's native status word ('fixed') is not echoed: it would read as a generic fixed label on a result that decided nothing.
+    reason: `proof-of-concept leg ${p === 'still-exploitable' ? 'reproduced the effect' : 'did not reproduce the effect'}: ${mapped.reason} (${legText})`,
   };
 }
 

@@ -43,7 +43,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const mod = (rel) => import(path.join(REPO, 'scanner', 'src', rel));
 
-const { runAutopilot, renderAutopilotSummary } = await mod('posture/autopilot.js');
+const { runAutopilot, renderAutopilotSummary, serializeAutopilotResult } = await mod('posture/autopilot.js');
 const { headCommit } = await mod('posture/verification/emit.js');
 const { runScan } = await mod('runScan.js');
 const { normalizeFindings } = await mod('report/index.js');
@@ -299,7 +299,7 @@ if (testsSkipped) {
 const jsonOut = arg('json');
 if (jsonOut) {
   fs.mkdirSync(path.dirname(path.resolve(jsonOut)), { recursive: true });
-  fs.writeFileSync(jsonOut, JSON.stringify({ summary: res.summary, results: res.results, testsSkipped }, null, 2));
+  fs.writeFileSync(jsonOut, JSON.stringify({ summary: res.summary, results: serializeAutopilotResult(res).results, testsSkipped }, null, 2));
   process.stderr.write(`wrote ${jsonOut}\n`);
 }
 

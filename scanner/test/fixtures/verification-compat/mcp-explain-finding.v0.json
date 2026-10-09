@@ -1,0 +1,34 @@
+{
+  "capturedFrom": "commit 0a03121b scanner/src",
+  "payload": {
+    "_meta": {
+      "source": "agentic-security-mcp",
+      "untrusted_excerpts": true
+    },
+    "id": "F-compat-1",
+    "severity": "high",
+    "file": "src/orders.js",
+    "line": 7,
+    "title": "Command injection",
+    "cwe": "CWE-78",
+    "description": "user input reaches a shell",
+    "remediation": "pass arguments as an array",
+    "snippet": null,
+    "trace": null,
+    "traceOffload": null,
+    "confidence": null,
+    "hasReplacementFix": false,
+    "integrity": "verified",
+    "compositeRisk": null,
+    "compositeRiskTier": null,
+    "compositeRiskFactors": [],
+    "exploitability": null,
+    "exploitabilityTier": null,
+    "mitigationVerdict": null,
+    "kev": false,
+    "epssScore": null,
+    "epssPercentile": null,
+    "exploitedNow": false,
+    "findingProvenance": null
+  }
+}

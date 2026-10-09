@@ -268,11 +268,50 @@ code), its limitations and the report lines a reader sees; every `runOracle` res
 throttling) are named with a reason. `judgeNonTaintHypothesis` is the rule that taint absence is never an input to a refutation:
 without an executed oracle of the class's own adapter with proven preconditions the outcome is `not-run` (or `unsupported`); the hunt
 mapper in `verification/emit.js` uses it. `trustedNegativeDenominator` counts only decided results of an executed oracle of an
-advertised class with proven preconditions and trusted runtime proof, and lists every exclusion with its reason (its in-tree consumers are the
-X-206/X-208 reporting that follows; today it is exercised by `non-taint-classes.test.js` only, so it is a public API with no runtime caller yet).
+advertised class with proven preconditions and trusted runtime proof, and lists every exclusion with its reason (its runtime consumer is `verificationCoverage` in
+`verification/projection.js`, which the JSON report, the CLI report and the MCP/autopilot surfaces use for the trusted-negative line).
 
 Not verified: Linux (the oracle platform statements stay `unverified`); only the declared exploit scenario and functional cases are
 exercised, never the patch's correctness elsewhere.
+
+## One projection for every interface, advisory/gating separation, conformance (X-206, X-207, X-208)
+
+Same posture as the sections above: consumed, not wired into the default scan, every output addition additive and present only
+when a verification record is. Suites: `test/verification/{interface-equivalence,advisory-gating,oracle-conformance}.test.js`
+(`npm run test:verification`). Docs: `docs/guides/verification-schema-migration.md`, `docs/guides/verification-oracle-conformance.md`.
+
+**`verification/projection.js` (X-206).** `projectVerification(record, { replay })` is the ONE place a record becomes something a
+person or another tool reads: state, scope, oracle, evidence ids, replay prerequisites (derived from the record, plus the typed
+ones a replay attempt reported), a what-was-verified / what-was-not summary, the legacy boolean view, and `text` lines. The JSON
+report (`report/index.js` `normalizeFindings`), the CLI and Markdown reports (`verificationBlock`), MCP `explain_finding`,
+`verify_fix` and `apply_fix`, and the autopilot response (`serializeAutopilotResult`, used by `scripts/autopilot.mjs --json`) all
+call it; none formats its own verification text. The key is **`verificationView`**, never `verification`: a finding's existing
+`verification` field is the producer/verifier separation record (`verification-separation.js`) and a first draft of this work
+collided with it. An invalid record yields `verificationView: null` plus `verificationViewErrors`, never a guessed state. The text
+never says "safe" or "fixed" for a partial result (a lint-style test covers every state, every repair status and the wording the real
+surfaces emit; the fix-verify leg's native status word `fixed` is deliberately not echoed into a record reason). `verificationCoverage`
+wraps `trustedNegativeDenominator`. Previous output schemas are pinned in `test/fixtures/verification-compat/`.
+
+**`verification/advisory-state.js`, `verification/hypothesis-promotion.js` (X-207).** Hunt (`discovery/`) is advisory.
+`writeAdvisoryState` is the only way advisory code writes: a closed file-name allowlist (the one hunt memory file), authoritative names
+refused, write to a temp file and rename (a symlink or hard link planted at the target is replaced, never written through), the state
+directory must resolve inside the project root. `discovery/memory.js` `saveMemory` uses it. `normalizeFindings` excludes any hunt
+hypothesis (`parser: DISCOVERY` or a `discovery` object) from every finding list and exit code and records `advisoryExcluded`.
+`promoteHypothesis({ hypothesis, result, policy })` is the only crossing: it verifies (not just checks presence of) a receipt issued by
+`runOracle` (`isIssuedReceipt`), bound to the hypothesis and an exact commit and to a valid record settled `confirmed` at the
+`runtime-confirmed` level, applies an EXPLICIT policy (fail-closed on an unknown key; the receipt rules are mandatory and cannot be
+waived; `minConfidence`/`minAgreement` can only add a requirement), reuses `verification-separation.js` for hunter != verifier, and
+returns a frozen audit record for every decision (`promoted`, `rejected`, `unsupported`, `inconclusive`) with no clock in it.
+`runDiscovery` calls it only when `opts.promote = { policy, verify }` is given. The audit record is returned, not persisted:
+persisting needs an artifact-registry classification and a signing domain, which are not decided here.
+
+**`oracles/conformance.js` and `scripts/verification-conformance-check.mjs` (X-208).** One contract over every registered adapter:
+static (class scope, budgets under `BUDGET_CEILINGS`, negative controls with an on-disk fixture, verifier-side evidence logic bound by
+a digest, fixtures and logic pinned in `test/fixtures/oracles/conformance-pins.json`) and execution (state mappings, issued and frozen
+receipts, three tamper attempts, an unavailable prerequisite, cancellation, replay). Wired into `scripts/release-check.mjs`
+(`verification-conformance-gate`, in `RELEASE_GROUPS['benches-b']`) and, static half only, the pre-push gate
+(`verification-conformance-static`). Where the boundary cannot run, execution is reported `not-run`, never passed; `--require-execution`
+makes that a failure. A new adapter must be pinned deliberately (`--update-pins`).
 
 ## Execution-proof tiers (R2)
 

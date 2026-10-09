@@ -103,3 +103,11 @@ the relock path is not a finding fix), no fix-attempt-budget enforcement (the la
 CLI, does not enforce a cap), and no `fixMeta` honesty gate (that gate judges a caller's residual/verdict claims, which this
 path does not take). The `preWrite` digest re-check is defence in depth over a deterministic planner and has no independent
 test that fails when it is removed (the earlier digest comparison is the pinned control).
+
+## Verification view (X-206)
+
+`explain_finding` (when the finding in `last-scan.json` carries a `verificationRecord`), `verify_fix` and `apply_fix` add
+`verificationView`, the shared projection from `posture/verification/projection.js`, beside the existing `verificationRecord`.
+It is the same object the JSON report, the text reports and the autopilot response carry for the same finding. Additive: a finding
+without a record returns exactly what it did. The key is `verificationView`, not `verification` (that name belongs to the
+producer/verifier separation record). See `docs/guides/verification-schema-migration.md`.

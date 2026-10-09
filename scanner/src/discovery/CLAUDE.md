@@ -52,3 +52,12 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
 `partition.js` `partitionNixFiles` groups `.nix` files by their import structure (a configuration and the modules it imports are
 one area), merged areas are capped, and hunter prompts for Haskell and Nix are redacted (split literals joined first) before they
 leave the process. `hunt` includes `.hs`, `.lhs` and `.nix`. With no endpoint every run is degraded and says so.
+
+## Advisory/gating separation (X-207)
+
+Hunt output stays advisory in code, not just by convention. `memory.js` writes only through
+`posture/verification/advisory-state.js` (`writeAdvisoryState`: one allowlisted file, atomic rename, never through a link), and
+`report/index.js` excludes every hunt hypothesis from findings and exit codes. A hypothesis crosses into a finding only through
+`promoteHypothesis` (`posture/verification/hypothesis-promotion.js`), reached from `runDiscovery` only with
+`opts.promote = { policy, verify }`: a verifier receipt the promotion code verifies, an explicit policy, and an audit record. The
+panel's votes, a confidence score and the confirmation tier are never inputs to that decision.
