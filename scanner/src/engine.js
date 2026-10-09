@@ -6684,17 +6684,32 @@ function _semverSatisfies(ver,range){
 function markUsedVulnFunctions(supplyChain,fc){
   const used={};
   const perFile={};
+  // The per-(package, function) expressions are compiled once, not once per file, and a file is split into lines only when
+  // it contains the text a match needs: `\b(?:pkg|_)\.fn\b` can only match a line holding the substring `.fn`, and the Rust
+  // bare-call expression one holding `fn`. Both prefilters are exact for a plain identifier; any other name skips the
+  // prefilter and is judged line by line, as before. Match order (file, package, function, line) is unchanged.
+  const _plainIdent=/^[A-Za-z_]\w*$/;
+  const _hintRes=new Map();
+  const _hintRe=(pkg,fn)=>{const k=pkg+'\0'+fn;let r=_hintRes.get(k);if(!r){r=new RegExp(`\\b(?:${pkg.replace(/\W/g,'\\$&')}|_)\\.${fn}\\b`,'g');_hintRes.set(k,r);}return r;};
+  const _bareRes=new Map();
+  const _bareRe=(fn)=>{let r=_bareRes.get(fn);if(!r){r=new RegExp(`\\b${fn.replace(/\W/g,'\\$&')}\\s*[(<]`,'g');_bareRes.set(fn,r);}return r;};
+  const _hintEntries=Object.entries(VULN_FUNCTION_HINTS);
+  for(const pkg of Object.keys(VULN_FUNCTION_HINTS))if(!perFile[pkg])perFile[pkg]=[];
   for(const[fp,content] of Object.entries(fc)){
-    const lines=content.split('\n');
+    let lines=null;
     // Rust import-aware matching: build import map for .rs files
     let _rustImports=null;
     if(/\.rs$/i.test(fp)){try{_rustImports=extractRustImportMap(content);}catch(_){}}
-    for(const[pkg,fns] of Object.entries(VULN_FUNCTION_HINTS)){
-      if(!perFile[pkg])perFile[pkg]=[];
+    for(const[pkg,fns] of _hintEntries){
       for(const fn of fns){
-        const re=new RegExp(`\\b(?:${pkg.replace(/\W/g,'\\$&')}|_)\\.${fn}\\b`,'g');
+        const plain=_plainIdent.test(fn);
+        const dotPossible=!plain||content.includes('.'+fn);
+        const barePossible=_rustImports&&(!plain||content.includes(fn));
+        if(!dotPossible&&!barePossible)continue;
+        const re=_hintRe(pkg,fn);
         // Rust: also match bare function calls if import map traces them to this package
-        const rustBareRe=_rustImports?new RegExp(`\\b${fn.replace(/\W/g,'\\$&')}\\s*[(<]`,'g'):null;
+        const rustBareRe=_rustImports?_bareRe(fn):null;
+        if(lines===null)lines=content.split('\n');
         for(let li=0;li<lines.length;li++){
           let matched=re.test(lines[li]);
           re.lastIndex=0;
@@ -6733,9 +6748,12 @@ function markUsedVulnFunctions(supplyChain,fc){
     // Search codebase for these functions (if not already searched via VULN_FUNCTION_HINTS)
     if(osvFns.length&&!hardcoded.length){
       for(const[fp,content] of Object.entries(fc)){
-        const lines=content.split('\n');
+        let lines=null;
         for(const fn of osvFns){
           const shortFn=fn.lastIndexOf('.')>0?fn.slice(fn.lastIndexOf('.')+1):fn;
+          // the expression escapes every non-word character, so a match needs the literal text on its line
+          if(!content.includes(shortFn))continue;
+          if(lines===null)lines=content.split('\n');
           const re=new RegExp(`\\b${shortFn.replace(/\W/g,'\\$&')}\\b`,'g');
           for(let li=0;li<lines.length;li++){
             if(re.test(lines[li])){

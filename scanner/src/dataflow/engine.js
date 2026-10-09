@@ -329,14 +329,14 @@ function _resolveCalleeForSummary(calleeExpr, callContext) {
 // call's OWN arguments, silently losing the callee's return-taint. Mirrors
 // the same resolve -> get-or-compute -> merge sequence step()'s two existing
 // call sites use, via the Task 3/4 shared _resolveCalleeForSummary.
-function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext) {
+function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argTaint) {
   if (!callContext || !callContext._summaryCache) return false;
   const target = _resolveCalleeForSummary(calleeExpr, callContext);
   if (!target) return false;
   const { qid, fn } = target;
   const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
   const entry = paramNames.length
-    ? entryStateFromCall(paramNames, argExprs || [], state, (a) => exprTaint(a, state, callContext))
+    ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)))
     : new Set();
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
@@ -470,7 +470,11 @@ function _calleeGetterFieldTainted(calleeExpr, state, callContext) {
   return !!(receiverPath && isCoveredBy(state, `${receiverPath}.${field}`));
 }
 
+// Work counter for the scaling guard in test/dataflow-expr-taint-scaling.test.js (a count, not a clock).
+export const _perf = { exprTaintCalls: 0 };
+
 function exprTaint(expr, state, callContext) {
+  _perf.exprTaintCalls += 1;
   if (expr && (expr.kind === 'member' || expr.kind === 'call' || expr.kind === 'ident') && exprIsSource(expr, callContext)) return true;
   if (!expr) return false;
   // P1.1 — field-sensitive access path: if the expression is a pure
@@ -518,8 +522,20 @@ function exprTaint(expr, state, callContext) {
       // direction) so the merge always runs when a call expression is
       // visited; _resolveCalleeForSummary + SummaryCache make repeat
       // resolution/computation for the same (qid, entry-state) cheap.
-      const argsTainted = (expr.args || []).some((a, i) => !_isSprintfSafeArg(expr, i) && exprTaint(a, state, callContext));
-      const nestedTainted = _nestedCallReturnTainted(expr.callee, expr.args, state, callContext);
+      // Each argument's taint is computed at most once per visit of this call. The argument loop below and the
+      // callee's entry state (built inside _nestedCallReturnTainted) both ask for it, and with the second ask
+      // re-walking the whole argument subtree the work doubled at every level of call nesting: a chain of N nested
+      // calls cost 2^N exprTaint visits (a deep-mode scan of a large Haskell project did not finish). The value asked
+      // for is the same pure function of (argument, state) both times, so reusing it changes no verdict.
+      const _argMemo = new Map();
+      const _argTaint = (a) => {
+        if (_argMemo.has(a)) return _argMemo.get(a);
+        const r = exprTaint(a, state, callContext);
+        _argMemo.set(a, r);
+        return r;
+      };
+      const argsTainted = (expr.args || []).some((a, i) => !_isSprintfSafeArg(expr, i) && _argTaint(a));
+      const nestedTainted = _nestedCallReturnTainted(expr.callee, expr.args, state, callContext, _argTaint);
       // Taint-recall PRD (80%): a call's RECEIVER can itself be tainted
       // independent of its arguments — `tainted.toString()`, `tainted.trim()`,
       // `it.getBytes()` — and neither argsTainted (there are no/unrelated
