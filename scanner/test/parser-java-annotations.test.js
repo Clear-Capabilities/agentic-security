@@ -5,6 +5,7 @@ import { runScan } from '../src/runScan.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('parseJavaFile: real parameter names are now extracted (was [] before this task)', async () => {
   const code = `
@@ -153,7 +154,7 @@ public class Helper {
 });
 
 test('R14(a) end-to-end: Spring @RequestParam flowing to a JDBC sink is detected', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-spring-'));
+  const dir = mkTestTmp('as-r14a-spring-');
   fs.writeFileSync(path.join(dir, 'UserController.java'), `
 public class UserController {
     public String show(@RequestParam String q) throws Exception {

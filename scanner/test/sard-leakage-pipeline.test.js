@@ -21,6 +21,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { _blindTransform } from './benchmark/realworld/bench-realworld.js';
 import { TERMS, auditFile } from '../../bench/sard/scripts/leakage-audit.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function termRegexes() {
   return TERMS.map(term => ({
@@ -30,7 +31,7 @@ function termRegexes() {
 }
 
 function mkTmpFile(name, content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sard-leakage-test-'));
+  const dir = mkTestTmp('sard-leakage-test-');
   const file = path.join(dir, name);
   fs.writeFileSync(file, content);
   return file;

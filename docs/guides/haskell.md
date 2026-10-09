@@ -160,11 +160,26 @@ The inline shape is recognised for every framework where it is idiomatic, not on
 | Yesod | `maybeAuthId`, `maybeAuth`, `lookupHeader "Authorization"`, `lookupBearerAuth`, `lookupBasicAuth` | `notAuthenticated`, `permissionDenied` |
 
 Each keeps the same negatives: a header that is not a credential, a rejection with no credential read, a check that runs after the
-first sensitive operation, and a response that is built but never handed back. One limit is stated plainly: for these three
-frameworks the IR reports a call in tail position (the last statement, a case alternative) at the enclosing line, so what is ordered
-against the first sensitive operation is the credential *read*, not the rejection. A handler that reads the credential first, writes,
-and only then rejects is therefore still credited as a guard (pinned in `test/haskell/haskell-web-guards.test.js` so closing the gap is
-deliberate).
+first sensitive operation, and a response that is built but never handed back.
+
+For these three frameworks the IR reports a call in tail position (the last statement, a case alternative) at the enclosing line,
+so the order of the rejection and the first sensitive operation is not taken from line numbers. It is read from the handler's own
+structure: statements of a `do` block in sequence, a scrutinee or condition before its branches, and `when`/`unless`/`if`/`case` as
+forks (a branch that always rejects after a credential read guards its sibling branches and everything after the fork). The result
+is one of three:
+
+- the rejection comes before every sensitive operation: the route is authenticated;
+- the handler reads the credential, performs the operation, and only then rejects: the route is reported as `late` (CWE-306,
+  "guard ... runs after the first sensitive operation");
+- the order cannot be established: the route is also reported as `late`, with the reason in the evidence, and is never credited as
+  authenticated. The cases are a rejection and a sensitive operation inside one opaque expression (`maybe notAuthenticated
+  (\_ -> write) m`), and a sensitive call the structural walk cannot find.
+
+Two points of precision. `throwError`, `permissionDenied` and `notAuthenticated` stop the handler wherever they appear, but a WAI
+`respond (responseLBS status401 ...)` stops it only in tail position (the value the handler hands back): a `respond` in the middle of
+a block is followed by the next statement, so it is not a rejection. And, as before, the condition that guards the rejection is not
+required to mention the credential. Both directions, for all three frameworks, are pinned in
+`test/haskell/haskell-web-guards.test.js`.
 
 ## Dependencies, advisories and the software bill of materials
 

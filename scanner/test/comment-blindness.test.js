@@ -32,9 +32,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function fixture(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-commentblind-'));
+  const dir = mkTestTmp('as-commentblind-');
   const src = path.join(dir, 'src');
   fs.mkdirSync(src, { recursive: true });
   for (const [name, body] of Object.entries(files)) {

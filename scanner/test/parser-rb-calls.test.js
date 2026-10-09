@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import { parseRubyFile } from '../src/ir/parser-rb.js';
 import { buildCallGraph } from '../src/ir/callgraph.js';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('parseRubyFile emits fn.calls for both statement-position and RHS-embedded calls', () => {
   const ir = parseRubyFile('app.rb', `
@@ -73,7 +74,7 @@ end
 });
 
 test('a Ruby helper that returns a tainted value is detected interprocedurally at its caller\'s sink', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-rbcalls-'));
+  const dir = mkTestTmp('as-rbcalls-');
   fs.writeFileSync(path.join(dir, 'app.rb'), `
 def build_cmd(id)
   return 'echo ' + id
@@ -93,7 +94,7 @@ end
 });
 
 test('the same helper called with a literal argument does not fire (control)', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-rbcalls-control-'));
+  const dir = mkTestTmp('as-rbcalls-control-');
   fs.writeFileSync(path.join(dir, 'app.rb'), `
 def build_cmd(id)
   return 'echo ' + id

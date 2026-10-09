@@ -28,6 +28,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIXTURE = path.join(REPO_ROOT, 'scanner', 'test', 'fixtures', 'vulnerable-js');
@@ -45,13 +46,13 @@ function extractImplementationBlock() {
 }
 
 async function mkProject(srcDir) {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'labs-cmd-'));
+  const dir = await mkTestTmp('labs-cmd-');
   fs.cpSync(srcDir, dir, { recursive: true });
   return { dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
 }
 
 function runMode(script, args, cwd) {
-  const scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'labs-run-')), 'run.sh');
+  const scriptPath = path.join(mkTestTmp('labs-run-'), 'run.sh');
   fs.writeFileSync(scriptPath, script);
   try {
     const out = execFileSync('bash', [scriptPath, ...args], {

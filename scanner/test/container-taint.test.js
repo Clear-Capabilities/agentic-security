@@ -33,9 +33,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 async function scanSource(name, body) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-container-taint-'));
+  const dir = mkTestTmp('as-container-taint-');
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'src', name), body);
   process.env.AGENTIC_SECURITY_DEEP = '1';
@@ -350,7 +351,7 @@ test('F2.2: a comprehension over a multi-value source reaches a sink via TAINT',
   process.env.AGENTIC_SECURITY_DEEP = '1';
   process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
 
-  const d = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'f22-'));
+  const d = mkTestTmp('f22-');
   try {
     fsx.writeFileSync(pathx.join(d, 'app.py'), [
       'import subprocess',

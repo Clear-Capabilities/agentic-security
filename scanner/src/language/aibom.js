@@ -80,7 +80,10 @@ export function extractHaskellAI(files) {
   const declared = new Map(comps.filter((c) => HS_AI_PACKAGES[c.name]).map((c) => [c.name, c]));
   let ir = null;
   try { ir = buildHaskellIR(Object.fromEntries(sources)); } catch (e) { gaps.push({ kind: 'haskell-ir-failed', detail: e.message }); }
-  const importsOf = (f) => (ir && ir.perFile ? (Object.values(ir.perFile).find((x) => x.file === f) || {}).imports || [] : []);
+  // file -> its imports, first entry wins; built once (a per-call scan of every file made this quadratic in project size)
+  const importsByFile = new Map();
+  if (ir && ir.perFile) for (const x of Object.values(ir.perFile)) if (!importsByFile.has(x.file)) importsByFile.set(x.file, x.imports || []);
+  const importsOf = (f) => importsByFile.get(f) || [];
 
   for (const [file, text] of sources) {
     const toks = tokenizeHaskell(text);

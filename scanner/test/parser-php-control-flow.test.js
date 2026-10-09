@@ -4,9 +4,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { parsePhpFile } from '../src/ir/parser-php.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-php-fix1-'));
+  const dir = mkTestTmp('as-r8-php-fix1-');
   for (const [rel, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, rel), content);
   }
@@ -127,7 +128,7 @@ test('parsePhpFile: end-to-end runScan detects a source flowing through a try-bl
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-php-'));
+  const dir = mkTestTmp('as-r8-php-');
   fs.writeFileSync(path.join(dir, 'index.php'), `<?php
 function run($conn) {
     try {

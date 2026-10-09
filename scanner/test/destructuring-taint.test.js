@@ -19,9 +19,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(name, files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-destr-${name}-`));
+  const dir = mkTestTmp(`as-destr-${name}-`);
   for (const [rel, content] of Object.entries(files)) {
     const fp = path.join(dir, rel);
     fs.mkdirSync(path.dirname(fp), { recursive: true });

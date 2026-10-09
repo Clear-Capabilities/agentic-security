@@ -16,6 +16,7 @@ import { liveFeedOptionalState } from '../../src/language/haskell-advisory-feed.
 import { AdvisoryDb, evaluateComponents } from '../../src/language/haskell-sca.js';
 import { hackageComponents } from '../../src/language/haskell-supply.js';
 import { queryRegistries } from '../../src/engine.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'hackage-advisories', 'records');
 const REAL = readdirSync(DIR).filter((f) => f.endsWith('.json')).sort().map((f) => JSON.parse(readFileSync(join(DIR, f), 'utf8')));
@@ -36,10 +37,10 @@ function fakeFetch() {
 }
 
 async function liveScan(cabal, { live = true } = {}) {
-  const proj = mkdtempSync(join(tmpdir(), 'agsec-livescan-proj-'));
+  const proj = mkTestTmp('agsec-livescan-proj-');
   writeFileSync(join(proj, 'app.cabal'), cabal);
   writeFileSync(join(proj, 'Main.hs'), 'module Main where\nmain :: IO ()\nmain = putStrLn "hi"\n');
-  const xdg = mkdtempSync(join(tmpdir(), 'agsec-livescan-xdg-'));
+  const xdg = mkTestTmp('agsec-livescan-xdg-');
   const saved = { fetch: globalThis.fetch, xdg: process.env.XDG_CONFIG_HOME, live: process.env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE, off: process.env.AGENTIC_SECURITY_OFFLINE };
   process.env.XDG_CONFIG_HOME = xdg;
   delete process.env.AGENTIC_SECURITY_OFFLINE;

@@ -33,6 +33,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import { statePath, stateDir } from '../../src/posture/state-dir.js';
 import { loadObservationImports, loadObservations } from '../../src/lineage/observation-store.js';
 import { validateRuntimeObservation } from '../../src/lineage/runtime-observation.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
@@ -52,7 +53,7 @@ function handleCheckout(req, logger, db) {
 `;
 
 function _mkTmpProject() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-dataflow-observations-cli-'));
+  const root = mkTestTmp('agsec-dataflow-observations-cli-');
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }
@@ -625,7 +626,7 @@ test('CLI/isSafe-1: observations import --yes pointed at a directory with no pro
   // lineage-graph.json (so loadSignedGraph succeeds — there is a real
   // graph to correlate against) but with NO other project marker in its
   // parent — isSafeStateDir must still refuse the write.
-  const bareDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-dataflow-observations-unsafe-'));
+  const bareDir = mkTestTmp('agsec-dataflow-observations-unsafe-');
   const bareStateDir = path.join(bareDir, '.agentic-security');
   fs.mkdirSync(bareStateDir, { recursive: true });
   fs.copyFileSync(statePath(root, 'lineage-graph.json'), path.join(bareStateDir, 'lineage-graph.json'));

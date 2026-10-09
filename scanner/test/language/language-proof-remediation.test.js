@@ -57,8 +57,11 @@ test('[X-009.AC01] syntax, executable, resource and sandbox failures are never p
   const noExe = runNixScriptWitness({ ...w, shell: 'definitely-not-a-shell-xyz' });
   assert.equal(noExe.status, 'invalid'); assert.match(noExe.reason, /executable not found/);
   // 3. resource limit: a witness that outlives its budget is invalid, not a refutation
-  const slow = runNixScriptWitness({ ...w, code: 'sleep 5\n' }, { timeoutMs: 300 });
-  assert.equal(slow.status, 'invalid'); assert.equal(slow.timedOut, true);
+  // The budget is shared by the syntax check and the run, so it must be generous (a loaded machine can take
+  // seconds just to start the sandbox) and the sleep must outlive it by a wide margin. Whichever phase hits the
+  // budget, the result must be invalid + timedOut, and never a refutation.
+  const slow = runNixScriptWitness({ ...w, code: 'exec sleep 120\n' }, { timeoutMs: 4000 });
+  assert.equal(slow.status, 'invalid'); assert.equal(slow.timedOut, true); assert.equal(slow.ran, false);
   // 4. sandbox disabled: refuses to execute, never runs unconfined
   const off = runNixScriptWitness(w, { force: 'disabled' });
   assert.equal(off.status, 'invalid'); assert.equal(off.ran, false);

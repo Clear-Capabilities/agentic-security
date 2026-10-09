@@ -15,6 +15,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkJavaFixture() {
   // MessageDigest.getInstance("MD5") fires a weak-crypto-family finding
@@ -23,7 +24,7 @@ function mkJavaFixture() {
   // declared family per _JULIET_CWE_TO_FAMILY is 'sql-injection' — an
   // unrelated family, so this finding is exactly the "off-family" shape the
   // filter targets.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-julietgate-'));
+  const dir = mkTestTmp('as-julietgate-');
   const sub = path.join(dir, 'juliet-cwe89', 'src');
   fs.mkdirSync(sub, { recursive: true });
   fs.writeFileSync(path.join(sub, 'Bad.java'), `

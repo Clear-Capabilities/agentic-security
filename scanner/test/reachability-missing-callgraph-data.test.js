@@ -15,9 +15,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('a non-JS finding in a routed project is not severity-demoted purely for lacking call-graph data', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-reach-nocg-'));
+  const dir = mkTestTmp('as-reach-nocg-');
   fs.writeFileSync(path.join(dir, 'app.js'), `
 const express = require('express');
 const app = express();
@@ -45,7 +46,7 @@ test('a genuinely-unreachable JS finding (real call-graph data says so) is still
   // and nothing in it is ever called near a route. This is the case the
   // demotion is SUPPOSED to catch — distinct from the Python case above,
   // where no call-graph data exists for the language at all.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-reach-jsdead-'));
+  const dir = mkTestTmp('as-reach-jsdead-');
   fs.writeFileSync(path.join(dir, 'app.js'), `
 const express = require('express');
 const app = express();

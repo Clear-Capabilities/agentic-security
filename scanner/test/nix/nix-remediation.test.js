@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, existsSync, lstatSync, realpathSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -15,6 +15,7 @@ import { analyzeNixScripts } from '../../src/language/nix-script-taint.js';
 import { analyzeNixosHardening } from '../../src/language/nixos-hardening.js';
 import { analyzeNixBuildTrust } from '../../src/language/nix-build-trust.js';
 import { validateHaskellFix } from '../../src/language/haskell-fix.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const SCANNER = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const nix = (s) => s.replace(/@\{/g, '${');
@@ -198,13 +199,30 @@ const files = { 'a.nix': '{ lib, ... }:\\n{\\n  services.openssh.settings.Permit
 const r = planNixFix({ rule: 'ssh-root-login', file: 'a.nix', line: 3, subject: 'x', evidence: [{ option: 'services.openssh.settings.PermitRootLogin', sources: [{ role: 'winner', file: 'a.nix', line: 3 }] }] }, files);
 console.log(JSON.stringify({ ok: r.ok }));`;
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
-  const p = spawnSync(process.execPath, ['--permission', `--allow-fs-read=${SCANNER}`, '--input-type=module', '-e', probe], { encoding: 'utf8', env, cwd: SCANNER, timeout: 60000 });
+  // In a git worktree `node_modules` (and `vendor`) are symlinks to a directory OUTSIDE scanner/. The permission
+  // model checks the resolved path, so exactly those two directories are granted by their real path. Nothing
+  // else is widened: every other path outside scanner/ stays unreadable (asserted below).
+  const reads = [SCANNER];
+  for (const d of ['node_modules', 'vendor']) {
+    try { if (lstatSync(join(SCANNER, d)).isSymbolicLink()) reads.push(realpathSync(join(SCANNER, d))); } catch { /* absent: nothing to grant */ }
+  }
+  const readFlags = reads.map((r) => `--allow-fs-read=${r}`);
+  const p = spawnSync(process.execPath, ['--permission', ...readFlags, '--input-type=module', '-e', probe], { encoding: 'utf8', env, cwd: SCANNER, timeout: 60000 });
   assert.equal(p.status, 0, `${p.stdout}\n${p.stderr}`);
   assert.equal(JSON.parse(p.stdout.trim()).ok, true, 'planning works with no process, network or write permission');
+  // The module is still confined under the same grants: a read outside them and any write are refused.
+  const deny = `import fs from 'node:fs'; const out = {};
+for (const [k, f] of [['read', () => fs.readFileSync('/etc/hosts', 'utf8')], ['write', () => fs.writeFileSync(${JSON.stringify(join(tmpdir(), 'nix010-must-not-exist'))}, 'x')]]) {
+  try { f(); out[k] = 'allowed'; } catch (e) { out[k] = e.code; }
+}
+console.log(JSON.stringify(out));`;
+  const d = spawnSync(process.execPath, ['--permission', ...readFlags, '--input-type=module', '-e', deny], { encoding: 'utf8', env, cwd: SCANNER, timeout: 60000 });
+  assert.equal(d.status, 0, `${d.stdout}\n${d.stderr}`);
+  assert.deepEqual(JSON.parse(d.stdout.trim()), { read: 'ERR_ACCESS_DENIED', write: 'ERR_ACCESS_DENIED' });
 });
 
 test('[NIX-010.AC04] preview, backup, apply and undo use the same lifecycle as the Haskell fixers', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'nix-fixapply-'));
+  const root = mkTestTmp('nix-fixapply-');
   for (const [p, t] of Object.entries(SSH_FILES)) { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), t); }
   const f = hardening(SSH_FILES).find((x) => x.rule === 'ssh-password-auth');
   const dry = await validateNixFix(f, { files: SSH_FILES });

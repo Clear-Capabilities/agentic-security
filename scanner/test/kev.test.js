@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { mkTestTmp } from './helpers/tmp.js';
 
 // ISOLATE $HOME FIRST — before anything computes a cache path and before the
 // engine import below resolves.
@@ -25,7 +26,7 @@ import * as crypto from 'node:crypto';
 // it is deterministic regardless of what else runs alongside it and regardless
 // of whether the machine has network. `os.homedir()` honours $HOME on POSIX
 // and USERPROFILE on Windows.
-const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'kev-home-'));
+const HOME = mkTestTmp('kev-home-');
 process.env.HOME = HOME;
 process.env.USERPROFILE = HOME;
 

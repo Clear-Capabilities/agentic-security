@@ -18,12 +18,13 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
 import { buildProjectIR, buildProjectIRAsync } from '../src/ir/index.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => path.join(__dirname, 'fixtures', n);
 
 function mkTmp(name, files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-java-intraclass-${name}-`));
+  const dir = mkTestTmp(`as-java-intraclass-${name}-`);
   for (const [rel, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, rel), content);
   }

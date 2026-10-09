@@ -8,8 +8,9 @@ import * as path from 'node:path';
 import {
   appendAgentsMemory, readAgentsMemory, summarizeForSession, _internals,
 } from '../src/posture/agents-memory.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
-function mkRoot() { return fs.mkdtempSync(path.join(os.tmpdir(), 'agents-md-')); }
+function mkRoot() { return mkTestTmp('agents-md-'); }
 
 test('appendAgentsMemory creates the file with a header on first write', () => {
   const root = mkRoot();

@@ -19,11 +19,12 @@ import {
   appendLedgerEvent,
   ledgerIntegrity,
 } from '../../src/posture/remediation-ledger.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 // Same temp-project helper shape test/cli/governance-propose-edit.test.js
 // uses: a real temp dir plus a package.json marker, so isSafeStateDir passes.
 function _mkTmpProject() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-rem-ledger-'));
+  const root = mkTestTmp('agsec-rem-ledger-');
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }
@@ -205,9 +206,24 @@ test('stale-lock reaping: a lockfile holding a certainly-dead PID does not wedge
   assert.equal(readLedgerEvents(root).length, 1);
 });
 
+// L/11b
+test('a freshly created EMPTY lockfile (its holder is between create and writing its PID) is not reaped as stale: the writer waits out the grace period, then proceeds', async () => {
+  const root = _mkTmpProject();
+  const { lockPath } = ledgerPaths(root);
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  fs.writeFileSync(lockPath, '');
+
+  const t0 = Date.now();
+  const res = await appendLedgerEvent(root, _openedEvent('item-1'));
+  const waited = Date.now() - t0;
+  assert.equal(res.valid, true, JSON.stringify(res.errors));
+  assert.ok(waited >= 1500, `an empty lockfile younger than the grace period must not be stolen (proceeded after ${waited} ms)`);
+  assert.equal(readLedgerEvents(root).length, 1);
+});
+
 // L/12
 test('appendLedgerEvent refuses when isSafeStateDir is false, and creates no .agentic-security dir', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-rem-ledger-unsafe-'));
+  const root = mkTestTmp('agsec-rem-ledger-unsafe-');
   const res = await appendLedgerEvent(root, _openedEvent('item-1'));
   assert.equal(res.valid, false);
   assert.ok(res.errors.length > 0);

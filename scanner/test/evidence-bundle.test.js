@@ -20,8 +20,9 @@ import {
   ensureKeyPair, buildEvidenceBundle, signEvidenceBundle, verifyEvidenceBundle,
   canonicalJson, BUNDLE_SCHEMA,
 } from '../src/posture/evidence-bundle.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
-const tmpKeyDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'attest-'));
+const tmpKeyDir = () => mkTestTmp('attest-');
 
 const FINDING = {
   id: 'f1', stableId: 's1', severity: 'high', file: 'app.js', line: 42,
@@ -196,7 +197,7 @@ test('a bundle with only the legitimate keys still verifies (guard against over-
 test('ensureKeyPair: concurrent first-use does not crash on the public-key half of the race', async () => {
   const { spawn } = await import('node:child_process');
   const dir = tmpKeyDir();
-  const barrierDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ekp-barrier-'));
+  const barrierDir = mkTestTmp('ekp-barrier-');
   const childScript = path.join(barrierDir, 'child.mjs');
   const N = 8;
   fs.writeFileSync(childScript, `

@@ -13,8 +13,9 @@ import {
   ensureKeyPair, buildProvenanceEvidenceBundle, signProvenanceEvidenceBundle,
   verifyProvenanceEvidenceBundle, PROVENANCE_BUNDLE_SCHEMA,
 } from '../../src/posture/provenance-evidence-bundle.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
-const tmpKeyDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'prov-attest-'));
+const tmpKeyDir = () => mkTestTmp('prov-attest-');
 
 const SAMPLE_FINDING = {
   id: 'f1', stableId: 'sid-1',

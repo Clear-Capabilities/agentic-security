@@ -17,6 +17,7 @@ import {
 import { parsePythonFile as parsePythonFileRegex } from '../src/ir/parser-py.js';
 import { buildProjectIR } from '../src/ir/index.js';
 import { runDeepAnalysis } from '../src/dataflow/index.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const cap = probePythonAvailable();
 const cstAvailable = cap.ok;
@@ -399,7 +400,7 @@ _maybe('end-to-end: taint flows through response["X-Trace"] = request.GET["trace
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-py-setitem-'));
+  const dir = mkTestTmp('as-py-setitem-');
   fs.writeFileSync(path.join(dir, 'views.py'), `
 def trace(request):
     response = HttpResponse("ok")

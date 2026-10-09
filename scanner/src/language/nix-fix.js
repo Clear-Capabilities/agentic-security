@@ -340,7 +340,7 @@ function makeEffectiveCheck(entry) {
 export async function validateNixFix(finding, o) {
   const plan = planNixFix(finding, o.files, o);
   if (!plan.ok) return { status: plan.status || 'unsupported', applied: false, tier: plan.tier, reason: plan.reason, proposal: plan.proposal || null, ...plan };
-  const res = await runFixLifecycle({ plan, files: o.files, finding, matchKey, rescan: o.rescan || rescanNix, syntax: syntaxGate, behaviorCheck: o.behaviorCheck, effectiveCheck: makeEffectiveCheck(entryOf(o.files, o)), writeFile: o.writeFile, witness: o.witness, requireWitness: o.requireWitness, apply: o.apply, root: o.root });
+  const res = await runFixLifecycle({ plan, files: o.files, finding, matchKey, rescan: o.rescan || rescanNix, syntax: syntaxGate, behaviorCheck: o.behaviorCheck, effectiveCheck: makeEffectiveCheck(entryOf(o.files, o)), writeFile: o.writeFile, preWrite: o.preWrite, witness: o.witness, requireWitness: o.requireWitness, apply: o.apply, root: o.root });
   return { ...res, consequences: plan.consequences || [], tier: res.status === 'blocked' ? TIERS.blocked : plan.tier, explanation: plan.explanation };
 }
 

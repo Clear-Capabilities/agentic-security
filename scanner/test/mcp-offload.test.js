@@ -7,9 +7,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { signLastScan } from '../src/posture/integrity.js';
 import { explain_finding, read_scratchpad } from '../src/mcp/tools.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkRootWithFinding(stagedFinding) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'offload-'));
+  const root = mkTestTmp('offload-');
   const stateDir = path.join(root, '.agentic-security');
   fs.mkdirSync(stateDir, { recursive: true });
   const scan = { findings: [stagedFinding] };

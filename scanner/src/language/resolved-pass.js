@@ -69,13 +69,16 @@ export function resolvedHackageComponents(files) {
   const SCOPE = { runtime: 'required', test: 'optional', benchmark: 'optional', setup: 'optional', 'build-tool': 'optional' };
   const direct = new Set((g.declared || []).map((d) => d.name));
   const components = [];
+  // Boot libraries are not dependencies to match, but the plan states the exact version the compiler provides: the compiler-advisory
+  // grouping decides a boot-library advisory from it (and from the compiler-id) instead of from a declared range.
+  const bootLibraries = (g.units || []).filter((u) => u.origin === 'compiler' && u.name && u.version).map((u) => ({ name: u.name, version: u.version, versionSource: { file: r.file, line: null } }));
   for (const u of g.units) {
     if (u.origin === 'local' || u.origin === 'compiler' || !u.name || !u.version) continue;   // the project itself and boot libraries are not dependencies to match
     const scopes = Array.isArray(u.scopes) && u.scopes.length ? u.scopes : ['runtime'];
     const scope = scopes.includes('runtime') ? 'runtime' : scopes[0];
     components.push({ ecosystem: 'hackage', name: u.name, version: u.version, declaredRange: null, resolution: 'plan', scope, engineScope: SCOPE[scope] || 'required', target: null, componentKind: u.componentKind || null, manifest: r.file, line: null, ghcComponent: false, direct: direct.has(u.name), unitId: u.id, origin: u.origin, versionSource: { file: r.file, line: null } });
   }
-  return { components, gaps, summary };
+  return { components, bootLibraries, compiler: g.compiler || null, gaps, summary };
 }
 
 // ── Nix closure ──────────────────────────────────────────────────────────────────

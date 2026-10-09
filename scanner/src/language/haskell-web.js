@@ -90,6 +90,7 @@ class Ctx {
     this.fnByQid = new Map();
     for (const f of Object.values(this.ir.perFile)) for (const fn of f.functions) this.fnByQid.set(fn.qid, fn);
     this.guardMemo = new Map();
+    this.handlerAst = new Map();   // handler IR fn -> { mod, rhss } for handlers lowered from an expression (named top-level ones are found by name)
     this.gaps = [];
     this.limits = [];
   }
@@ -271,6 +272,17 @@ function kidsIr(e) {
 function* walkIr(e, depth = 0) { if (!e || typeof e !== 'object' || depth > 80) return; yield e; for (const c of kidsIr(e)) yield* walkIr(c, depth + 1); }
 const identsIr = (e) => { const out = new Set(); for (const x of walkIr(e)) { if (x.kind === 'ident' && x.name) out.add(x.name); if (x.kind === 'member' && x.object) { for (const y of walkIr(x.object)) if (y.kind === 'ident') out.add(y.name); } } return out; };
 
+function isSensitiveCall(ctx, c) {
+  if (SENSITIVE_PREFIX.some((p) => c.callee.startsWith(p))) return true;
+  const bare = c.callee.split('.').pop();
+  if (PERSIST_FNS.has(bare) && !/^(?:Prelude|Data|Web)\./.test(c.callee)) return true;
+  if (c.hs && c.hs.status === 'resolved' && c.hs.target) {
+    const sub = ctx.fnByQid.get(c.hs.target);
+    if (sub && callsOf(sub).some((x) => SENSITIVE_PREFIX.some((p) => (x.callee || '').startsWith(p)))) return true;
+  }
+  return false;
+}
+
 // ── handler summary ─────────────────────────────────────────────────────────
 // Ordered call list (program order) + principal / id / ownership facts for one handler function IR.
 function handlerFacts(ctx, fn, opts = {}) {
@@ -294,16 +306,7 @@ function handlerFacts(ctx, fn, opts = {}) {
     if (c.hs && c.hs.status === 'resolved' && c.hs.target) return guardSummary(ctx, ctx.fnByQid.get(c.hs.target)).auth;
     return false;
   };
-  const isSensitive = (c) => {
-    if (SENSITIVE_PREFIX.some((p) => c.callee.startsWith(p))) return true;
-    const bare = c.callee.split('.').pop();
-    if (PERSIST_FNS.has(bare) && !/^(?:Prelude|Data|Web)\./.test(c.callee)) return true;
-    if (c.hs && c.hs.status === 'resolved' && c.hs.target) {
-      const sub = ctx.fnByQid.get(c.hs.target);
-      if (sub && callsOf(sub).some((x) => SENSITIVE_PREFIX.some((p) => (x.callee || '').startsWith(p)))) return true;
-    }
-    return false;
-  };
+  const isSensitive = (c) => isSensitiveCall(ctx, c);
   const guardIdx = ordered.findIndex((o) => isGuardCall(o.call));
   const sensIdx = ordered.findIndex((o) => isSensitive(o.call));
   // An INLINE guard: the handler itself reads a credential and, before any sensitive operation, rejects. Scotty's `status` only sets the
@@ -327,7 +330,7 @@ function handlerFacts(ctx, fn, opts = {}) {
     if (first !== null) reads.push({ line: first, kind: cp.kind, callee: `param:${cp.name}`, call: null });
   }
   reads.sort((x, y) => x.line - y.line);
-  let inlineIdx = -1, inlineKind = null, inlineLine = null, inlineCallee = null;
+  let inlineIdx = -1, inlineKind = null, inlineLine = null, inlineCallee = null, inlineRejectCallee = null;
   for (let i = 0; i < reads.length && inlineIdx < 0; i++) {
     const rd = reads[i];
     if (!(rd.line <= sensLine)) break;
@@ -337,14 +340,14 @@ function handlerFacts(ctx, fn, opts = {}) {
       const r = allCalls[j];
       if (r === rd.call || r.line < rd.line || !isRejection(r) || !stopsHandler(r, allCalls)) continue;
       if (SCOTTY_STATUS.test(r.callee) && !haltsAfter(rd.line)) continue;   // an identifier carries its enclosing node's line, so position is judged from the credential read
-      inlineIdx = j; inlineKind = rd.kind; inlineLine = r.line; inlineCallee = rd.callee; break;
+      inlineIdx = j; inlineKind = rd.kind; inlineLine = r.line; inlineCallee = rd.callee; inlineRejectCallee = r.callee; break;
     }
     if (inlineIdx >= 0) break;
     // (b) a rejection that ends the handler by itself (WAI response handed back, throwError, permissionDenied, raiseStatus). A call in tail position
     // (the last statement, a case alternative) reports the enclosing line, not its own, so its line cannot be ordered against the sensitive
     // operation; the ordering that CAN be trusted is the credential read against the first sensitive operation, tested above.
     const hard = allCalls.findIndex((r) => r !== rd.call && isRejection(r) && !SCOTTY_STATUS.test(r.callee) && stopsHandler(r, allCalls));
-    if (hard >= 0) { inlineIdx = hard; inlineKind = rd.kind; inlineLine = allCalls[hard].line; inlineCallee = rd.callee; break; }
+    if (hard >= 0) { inlineIdx = hard; inlineKind = rd.kind; inlineLine = allCalls[hard].line; inlineCallee = rd.callee; inlineRejectCallee = allCalls[hard].callee; break; }
   }
   const principals = new Set();
   for (const a of assigns) if (a.source.kind === 'call' && isGuardCall(a.source)) principals.add(a.target);
@@ -357,7 +360,7 @@ function handlerFacts(ctx, fn, opts = {}) {
       if (nm && /id$/i.test(nm)) idVars.add(a.target);
     }
   }
-  return { ordered, guardIdx, inlineIdx, inlineKind, inlineLine, inlineCallee, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
+  return { ordered, guardIdx, inlineIdx, inlineKind, inlineLine, inlineCallee, inlineRejectCallee, sensIdx, principals, idVars, conds, assigns, isGuardCall, isSensitive, fn };
 }
 
 function hasOwnership(ctx, facts) {
@@ -376,6 +379,181 @@ function hasOwnership(ctx, facts) {
   // 3. a project function receiving both
   for (const o of facts.ordered) if (o.call.hs && o.call.hs.status === 'resolved' && (o.call.args || []).some(mentionsPrincipal) && (o.call.args || []).some((a) => [...identsIr(a)].some((n) => idVars.has(n)))) return { kind: 'principal-scoped-helper', callee: o.call.callee };
   return null;
+}
+
+// ── structural order of an inline guard (WAI, Servant, Yesod) ──────────────────
+// For these frameworks the IR reports a call in tail position (the last statement, a case alternative) at the ENCLOSING line, so a line
+// number cannot say whether the rejection runs before the first sensitive operation. The handler's own syntax tree can: this walks it in
+// evaluation order (statements of a do block in sequence, a scrutinee or condition before its branches, `when`/`unless`/`if`/`case` as forks)
+// and proves, per sensitive operation, whether a rejection that follows a credential read has already been passed on every path to it.
+//
+//   * A branch is REJECTING when every path through it ends in a rejection reached after a credential read. The sibling branches of a rejecting
+//     branch, and everything after the conditional, are GUARDED. This is a statement about control flow only: it does not judge that the
+//     condition really examines the credential (the same laxity the line-based check had).
+//   * `throwError`, `permissionDenied` and `notAuthenticated` stop the handler wherever they appear. A WAI `respond`/`return` of a 401 stops it only in
+//     TAIL position (the value the handler hands back); a mid-block `respond` is followed by the next statement, so it is not a rejection.
+//   * Anything not understood (a rejection mixed with a sensitive operation inside one opaque expression, a body that is not available as
+//     source, a sensitive call the walk did not find) makes the order UNKNOWN, and unknown is reported as late, never as authenticated.
+// Leaf expressions are classified by lowering them alone and reusing the classifiers above (credentialReadsOf, isRejection, stopsHandler,
+// isSensitiveCall), so this adds ordering and no second definition of what a credential, a rejection or a sensitive call is.
+const HARD_REJECT_HEAD = /^(?:throwError|permissionDenied|notAuthenticated)$/;
+const SOFT_REJECT_HEAD = /^(?:respond|return|pure)$/;
+
+function rhsBranches(rhs) {
+  if (!rhs) return [];
+  if (Array.isArray(rhs.guards) && rhs.guards.length) return rhs.guards.map((g) => ({ quals: g.quals || [], body: g.body }));
+  return [{ quals: [], body: rhs.body }];
+}
+
+function handlerSource(ctx, fn) {
+  const reg = ctx.handlerAst.get(fn);
+  if (reg) return reg;
+  const mod = ctx.modOf(fn.file);
+  const fun = mod && mod.groups.funs.find((f) => `${mod.name}.${f.name}` === fn.name);
+  return fun ? { mod, rhss: fun.clauses.map((c) => c.rhs) } : null;
+}
+
+function inlineOrder(ctx, fn, facts, opts) {
+  const src = handlerSource(ctx, fn);
+  if (!src) return { verdict: 'unknown', reason: 'the handler body is not available as source structure' };
+  const credNames = new Set((opts.credentialParams || []).map((c) => c.name));
+  const irSens = callsOf(fn).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c)).length;
+  const T = { astSens: 0, failed: false, unordered: false };
+  const memo = new Map();
+  const localSens = new Map();    // a name bound by let/where to an expression that performs a sensitive operation -> how many
+  let seq = 0;
+  const mentions = (e, names) => { for (const x of walkAst(e)) if (x.t === 'var' && !x.qual && names.has(x.name)) return x.name; return null; };
+  const classify = (e) => {
+    if (memo.has(e)) return memo.get(e);
+    let out = { reads: false, rej: false, sensN: 0 };
+    try {
+      const f2 = lowerHandlerExpr(ctx.project, src.mod, e, `order${seq++}`, Number.isFinite(e.line) ? e.line : 1);
+      const calls = [...callsOf(f2), ...nullaryRejectionsOf(f2)].filter((c) => typeof c.callee === 'string');
+      out = {
+        // an argument-less credential read (`maybeAuthId`, `lookupBearerAuth`) is an identifier, not a call, when it is lowered on its own
+        reads: credentialReadsOf(f2).size > 0 || Object.values(f2.cfg.nodes).some((n) => exprsOfNode(n).some((r) => [...walkIr(r)].some((x) => x.kind === 'ident' && typeof x.name === 'string' && !!credentialKind({ callee: x.name, args: [] })))),
+        rej: calls.some((c) => isRejection(c) && !SCOTTY_STATUS.test(c.callee) && stopsHandler(c, calls)),
+        sensN: callsOf(f2).filter((c) => typeof c.callee === 'string' && isSensitiveCall(ctx, c)).length,
+      };
+    } catch { T.failed = true; }
+    // A lambda inside the expression is lifted out by the lowering, so the calls in its body are not among the expression's own: classify
+    // each lambda body on its own and fold it in (over-counting is the safe direction here).
+    memo.set(e, out);
+    for (const x of walkAst(e)) {
+      const bodies = x.t === 'lam' ? [x.body] : x.t === 'lamcase' ? (x.alts || []).flatMap((a) => rhsBranches(a.rhs).map((b) => b.body)) : [];
+      for (const b of bodies) { const sub = classify(b); out = { reads: out.reads || sub.reads, rej: out.rej || sub.rej, sensN: out.sensN + sub.sensN }; }
+    }
+    T.astSens += out.sensN;
+    memo.set(e, out);
+    return out;
+  };
+  const newAcc = () => ({ sens: [], guards: 0 });
+  const localMentions = (e) => { const out = []; for (const x of walkAst(e)) if (x.t === 'var' && !x.qual && localSens.has(x.name)) out.push(x.name); return out; };
+
+  const atom = (e, st, tail, acc) => {
+    const c = classify(e);
+    let s = st;
+    if (c.reads || (credNames.size && mentions(e, credNames))) s = { ...s, read: true, readMay: true };
+    let n = c.sensN;
+    for (const nm of localMentions(e)) n += localSens.get(nm);
+    for (let i = 0; i < n; i++) acc.sens.push({ guarded: s.guarded, readMay: s.readMay });
+    const sp = spine(e);
+    const hn = sp && sp.head ? sp.head.name : null;
+    if (c.rej && n === 0 && hn && (HARD_REJECT_HEAD.test(hn) || (tail && SOFT_REJECT_HEAD.test(hn))) && s.read) { acc.guards++; return { st: s, term: true }; }
+    if (c.rej && n > 0) T.unordered = true;
+    return { st: s, term: false };
+  };
+  // Run alternative branches. A branch that always rejects (after a read) guards its siblings and everything after the fork.
+  const fork = (st, kids, acc) => {
+    const rejecting = kids.map((k) => k(st, newAcc()).term);
+    const base = rejecting.some(Boolean) ? { ...st, guarded: true } : st;
+    const outs = kids.map((k, i) => k(rejecting[i] ? st : base, acc));
+    const live = outs.filter((o) => !o.term);
+    if (!live.length) return { st, term: true };
+    return { st: { read: live.every((o) => o.st.read), readMay: st.readMay || live.some((o) => o.st.readMay), guarded: live.every((o) => o.st.guarded) }, term: false };
+  };
+  const letDecls = (decls, st) => {
+    let s = st;
+    for (const d of decls || []) {
+      const rhs = d && d.t === 'clause' ? d.clause && d.clause.rhs : d && d.t === 'patbind' ? d.rhs : null;
+      if (!rhs) continue;
+      for (const b of rhsBranches(rhs)) {
+        const c = classify(b.body);
+        if (c.reads || (credNames.size && mentions(b.body, credNames))) s = { ...s, read: true, readMay: true };
+        if (c.sensN && d.t === 'clause' && d.name) localSens.set(d.name, (localSens.get(d.name) || 0) + c.sensN);
+      }
+    }
+    return s;
+  };
+  const walkBranch = (b, st, tail, acc) => {
+    let s = st;
+    for (const q of b.quals || []) {
+      if (q.t === 'qlet') { s = letDecls(q.decls, s); continue; }
+      const r = walk(q.e, s, false, acc);
+      if (r.term) return r;
+      s = r.st;
+    }
+    return walk(b.body, s, tail, acc);
+  };
+  const altKids = (alts, tail) => (alts || []).flatMap((alt) => rhsBranches(alt.rhs).map((b) => (s, a) => walkBranch(b, s, tail, a)));
+  const walkStmts = (stmts, st, tail, acc) => {
+    let s = st;
+    for (let i = 0; i < stmts.length; i++) {
+      const stmt = stmts[i];
+      const t = tail && i === stmts.length - 1;
+      let r;
+      if (stmt.t === 'sexpr') r = walk(stmt.e, s, t, acc);
+      else if (stmt.t === 'sbind') r = walk(stmt.e, s, false, acc);
+      else if (stmt.t === 'slet') r = { st: letDecls(stmt.decls, s), term: false };
+      else { T.unordered = true; r = { st: s, term: false }; }
+      if (r.term) return r;
+      s = r.st;
+    }
+    return { st: s, term: false };
+  };
+  const walk = (e0, st, tail, acc) => {
+    const e = unparen(e0);
+    if (!e) return { st, term: false };
+    switch (e.t) {
+      case 'do': return walkStmts(e.stmts || [], st, tail, acc);
+      case 'case': { const r = walk(e.scrut, st, false, acc); return r.term ? r : fork(r.st, altKids(e.alts, tail), acc); }
+      case 'lamcase': return fork(st, altKids(e.alts, tail), acc);
+      case 'if': { const r = walk(e.c, st, false, acc); return r.term ? r : fork(r.st, [(s, a) => walk(e.a, s, tail, a), (s, a) => walk(e.b, s, tail, a)], acc); }
+      case 'multiif': return fork(st, (e.guards || []).map((g) => (s, a) => walkBranch({ quals: g.quals || [], body: g.body }, s, tail, a)), acc);
+      case 'lam': return walk(e.body, st, tail, acc);
+      case 'let': return walk(e.body, letDecls(e.decls, st), tail, acc);
+      default: break;
+    }
+    if (e.t === 'app' || (e.t === 'op' && e.op === '$')) {
+      const sp = spine(e);
+      if (sp && sp.head && /^(?:when|unless)$/.test(sp.head.name) && sp.args.length >= 2) {
+        const r = walk(sp.args[0], st, false, acc);
+        return r.term ? r : fork(r.st, [(s, a) => walk(sp.args[1], s, false, a), (s) => ({ st: s, term: false })], acc);
+      }
+    }
+    if (e.t === 'op' && (e.op === '>>' || e.op === '*>' || e.op === '>>=')) {
+      const l = walk(e.l, st, false, acc);
+      return l.term ? l : walk(e.r, l.st, tail, acc);
+    }
+    if (e.t === 'op' && e.op === '=<<') {
+      const r = walk(e.r, st, false, acc);
+      return r.term ? r : walk(e.l, r.st, tail, acc);
+    }
+    return atom(e, st, tail, acc);
+  };
+
+  const acc = newAcc();
+  let s0 = { read: false, readMay: false, guarded: false };
+  for (const rhs of src.rhss) s0 = letDecls(rhs.where || [], s0);
+  fork(s0, src.rhss.flatMap(rhsBranches).map((b) => (s, a) => walkBranch(b, s, true, a)), acc);
+  if (T.failed) return { verdict: 'unknown', reason: 'part of the handler could not be analysed' };
+  if (T.unordered) return { verdict: 'unknown', reason: 'a rejection and a sensitive operation sit in one expression whose order is not modelled' };
+  if (T.astSens < irSens) return { verdict: 'unknown', reason: 'a sensitive operation was not found in the handler source structure' };
+  if (acc.sens.length === 0 && irSens === 0) return { verdict: 'before', reason: 'no sensitive operation to order' };
+  const unguarded = acc.sens.filter((x) => !x.guarded);
+  if (!unguarded.length && acc.guards > 0) return { verdict: 'before' };
+  if (unguarded.length && unguarded.every((x) => x.readMay)) return { verdict: 'after', reason: 'a sensitive operation runs after the credential read and before any rejection' };
+  return { verdict: 'unknown', reason: 'the order of the rejection and the sensitive operations could not be established' };
 }
 
 // ── route record ─────────────────────────────────────────────────────────────
@@ -403,7 +581,11 @@ function analyzeRoute(ctx, route, handlerFn, opts) {
       (sub.kinds || []).forEach((k) => R.credentialKinds.add(k));
     }
   } else if (facts.inlineIdx >= 0) {
-    R.auth = { status: 'authenticated', kind: facts.inlineKind, evidence: [{ kind: 'inline-guard', callee: facts.inlineCallee, line: facts.inlineLine }] };
+    // Scotty reports its halting points reliably. For WAI, Servant and Yesod the candidate (a credential read and a rejection that ends the
+    // handler) is only credited once the STRUCTURE of the handler proves the rejection precedes every sensitive operation.
+    const ord = R.framework === 'scotty' ? { verdict: 'before' } : inlineOrder(ctx, handlerFn, facts, opts);
+    if (ord.verdict === 'before') R.auth = { status: 'authenticated', kind: facts.inlineKind, evidence: [{ kind: 'inline-guard', callee: facts.inlineCallee, line: facts.inlineLine }] };
+    else R.auth = { status: 'late', kind: null, evidence: [{ kind: 'late-guard', callee: facts.inlineRejectCallee || facts.inlineCallee, line: facts.inlineLine, order: ord.verdict, reason: ord.reason }] };
   } else R.auth = { status: 'none', kind: null, evidence: [] };
   // role
   const roleCall = facts.ordered.find((o) => ROLE_CALL.test(o.call.callee || ''));
@@ -730,14 +912,14 @@ export function analyzeHaskellWeb(files, opts = {}) {
         // a handler bound in the enclosing `where` (Servant servers usually are)
         const local = (p.whereDecls || []).find((d) => d.name === head.name && !head.qual);
         if (local && local.clause && local.clause.rhs && local.clause.rhs.body && !(local.clause.rhs.guards && local.clause.rhs.guards.length)) {
-          try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, local.clause.rhs.body, `${p.framework}-${head.name}`, local.line || p.line); handlerName = head.name; paramNames = paramsOf(local.clause); } catch { handlerFn = null; }
+          try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, local.clause.rhs.body, `${p.framework}-${head.name}`, local.line || p.line); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [local.clause.rhs] }); handlerName = head.name; paramNames = paramsOf(local.clause); } catch { handlerFn = null; }
         } else {
           const q = ctx.qualify(p.mod, head);
           if (q && q.qid) { handlerFn = ctx.fnFor(q); handlerName = q.name; const f = topFun(p.mod, head.name); if (f && f.clauses[0]) paramNames = paramsOf(f.clauses[0]); }
           else if (q) handlerName = q.name;
         }
       } else {
-        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line); handlerName = '<inline>'; } catch { handlerFn = null; }
+        try { handlerFn = lowerHandlerExpr(ctx.project, p.mod, p.handlerAst, `${p.framework}-${p.line}`, p.line); ctx.handlerAst.set(handlerFn, { mod: p.mod, rhss: [{ guards: null, body: p.handlerAst, where: [] }] }); handlerName = '<inline>'; } catch { handlerFn = null; }
       }
     }
     R.handler = handlerFn ? { kind: handlerName === '<inline>' ? 'inline' : 'named', name: handlerName } : { kind: 'unknown', name: handlerName };
@@ -851,7 +1033,7 @@ function emitFindings(ctx, result, yesodAuthz) {
     if (!R.handler || R.handler.kind === 'unknown') continue;
     const writes = WRITE_METHODS.has(R.method) || R.method === 'ANY';
     const privileged = ADMIN_PATH.test(R.path) || /admin/i.test(R.handler.name || '');
-    if (R.auth.status === 'late') emit('hs-route-late-auth', R, { detail: `guard ${R.auth.evidence[0].callee} runs after the first sensitive operation`, evidence: R.auth.evidence });
+    if (R.auth.status === 'late') emit('hs-route-late-auth', R, { detail: R.auth.evidence[0].order === 'unknown' ? `the rejection ${R.auth.evidence[0].callee} cannot be shown to run before the first sensitive operation (${R.auth.evidence[0].reason})` : `guard ${R.auth.evidence[0].callee} runs after the first sensitive operation`, evidence: R.auth.evidence });
     else if (R.auth.status === 'none' && (writes || privileged) && R.sensitive !== false) {
       if (!(R.framework === 'yesod' && R.yesodExplicitPublic && !writes)) emit('hs-route-missing-auth', R, { severity: writes ? 'high' : 'medium', detail: R.method === 'ANY' ? 'any method' : 'state-changing method' });
     }

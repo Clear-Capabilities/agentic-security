@@ -19,7 +19,7 @@ function limitsFor(tools, unseen) {
     ? `Not available where the measurement ran: ${missing.join(', ')}. Capabilities that need them are blocked, never reported as passing.${tools.ghc ? ' GHC was present, so the Haskell route fixtures were compiled.' : ''}`
     : 'Every tool the capabilities need was available where the measurement ran.');
   out.push(unseen
-    ? 'The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v2 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written after the fixes the earlier set motivated, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 set was used to change the engine and is a development set (shape-dev), not a generalisation measure.'
+    ? 'The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.'
     : 'No unseen-shape measurement is recorded: the holdout score says nothing about code shapes the templates did not contain.');
   return out;
 }

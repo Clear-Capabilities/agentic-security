@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../../src/runScan.js';
 import { measureAll, profile } from '../../../bench/language-support/perf.mjs';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.join(HERE, '..', '..');
@@ -15,7 +16,7 @@ const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 const BLOCK_NET = path.join(HERE, 'helpers', 'block-network.cjs');
 
 const mk = (files) => {
-  const d = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qa003-')));
+  const d = fs.realpathSync(mkTestTmp('qa003-'));
   fs.writeFileSync(path.join(d, 'package.json'), '{}');
   for (const [f, t] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), t); }
   return d;
@@ -27,7 +28,7 @@ const lines = (n, open, close, mid) => `${Array.from({ length: n }, () => open).
 
 // ── AC01: performance and resource budgets ───────────────────────────────────────────────────────────────────
 test('[QA-003.AC01] a mixed 2,000-file / 20 MiB fixture: cold <= 180 s, peak memory < 2 GiB, three cold and three warm runs, a 10-file incremental under 15 s', { timeout: 1_800_000 }, () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa003-perf-'));
+  const root = mkTestTmp('qa003-perf-');
   try {
     const r = measureAll(root);
     const prof = profile();
@@ -109,7 +110,7 @@ test('[QA-003.AC02] an offline scan reports its known findings, states the feed 
 
 // ── AC03: attacker-controlled paths ─────────────────────────────────────────────────────────────────────────
 test('[QA-003.AC03] symlinks and path tricks cannot make the scan read outside the root, and nothing from a hostile tree is executed', () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'qa003-out-'));
+  const outside = mkTestTmp('qa003-out-');
   const marker = path.join(os.tmpdir(), `qa003-pwned-${process.pid}`);
   fs.writeFileSync(path.join(outside, 'Secret.hs'), 'module Secret where\nimport System.Process\nz :: String -> IO ()\nz s = callCommand s\n');
   fs.writeFileSync(path.join(outside, 'secret.nix'), '{ services.openssh.enable = true; services.openssh.settings.PermitRootLogin = "yes"; }');
@@ -135,7 +136,7 @@ test('[QA-003.AC03] symlinks and path tricks cannot make the scan read outside t
 });
 
 test('[QA-003.AC03] a symlinked state directory or file cannot redirect or overwrite evidence', () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'qa003-state-'));
+  const outside = mkTestTmp('qa003-state-');
   const victim = path.join(outside, 'victim.txt');
   fs.writeFileSync(victim, 'original');
   const d = mk({ 'A.hs': 'module A where\nimport System.Process\nz :: String -> IO ()\nz s = callCommand s\n' });
@@ -161,7 +162,7 @@ test('[QA-003.AC03] a fix target outside the root is refused before any gate run
 
 // ── AC04: cancellation, crashes and responsiveness ────────────────────────────────────────────────────────────
 test('[QA-003.AC04] cancelling a scan mid-run exits within the deadline and leaves no corrupt or unsigned state', { timeout: 300_000 }, async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qa003-cancel-'));
+  const root = mkTestTmp('qa003-cancel-');
   const { generateFixture } = await import('../../../bench/language-support/perf.mjs');
   try {
     generateFixture(root, 600, 6 * 1024 * 1024);

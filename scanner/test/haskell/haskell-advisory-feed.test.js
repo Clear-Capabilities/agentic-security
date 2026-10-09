@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { refreshHackageAdvisories, snapshotPath, getLastRefresh, _resetLastRefresh, FEED_ENV, PINNED_ENV } from '../../src/language/haskell-advisory-feed.js';
 import { loadAdvisorySnapshot, evaluateComponents } from '../../src/language/haskell-sca.js';
 import { configuredAdvisoryDb, analyzeHaskellSupply, prefetchHackageFeed } from '../../src/language/haskell-supply.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'hackage-advisories', 'records');
 const REAL = readdirSync(DIR).filter((f) => f.endsWith('.json')).sort().map((f) => JSON.parse(readFileSync(join(DIR, f), 'utf8')));
@@ -42,7 +43,7 @@ function fakeOsv({ failVulns = new Set(), failBatch = false, pageToken = new Set
 }
 
 const liveEnv = (dir, extra = {}) => ({ XDG_CONFIG_HOME: dir, [FEED_ENV]: '1', ...extra });
-const tmp = () => mkdtempSync(join(tmpdir(), 'agsec-hsfeed-'));
+const tmp = () => mkTestTmp('agsec-hsfeed-');
 const loadDb = (dir) => { const r = loadAdvisorySnapshot(JSON.parse(readFileSync(snapshotPath({ XDG_CONFIG_HOME: dir }), 'utf8')), { now: NOW }); assert.ok(r.ok, r.reason); return r.db; };
 
 test('[HS-009] disabled by default: no flag, no request, no file', async () => {

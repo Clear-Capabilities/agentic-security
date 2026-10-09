@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { parseArgs, rawDirFor, RAW_DIR, sarifDigest } from '../../bench/proof-corpus/runner.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('RAW_DIR is the fixed, gitignored path', () => {
   assert.ok(RAW_DIR.endsWith(path.join('bench', 'proof-corpus', 'results', 'raw')));
@@ -39,7 +40,7 @@ test('parseArgs: default outDir is the standard results directory', () => {
 // any capture that isn't a whole SARIF document.
 
 function _tmpFile(name, content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-sarif-'));
+  const dir = mkTestTmp('proof-sarif-');
   const f = path.join(dir, name);
   fs.writeFileSync(f, content);
   return f;

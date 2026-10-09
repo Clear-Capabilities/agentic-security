@@ -26,6 +26,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { load as loadYaml } from '../src/util/yaml.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TEMPLATES_DIR = path.join(REPO_ROOT, 'scripts', 'ci-templates');
@@ -92,7 +93,7 @@ test('S4: setup.md\'s inline GitHub Actions generator produces valid, correctly-
   // the raw text straight to `node -e` (argv, no shell) skips that
   // unescaping and fails for a completely different, uninteresting reason.
   const script = lines.slice(startIdx, endIdx + 1).join('\n');
-  const scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'setup-ci-')), 'run.sh');
+  const scriptPath = path.join(mkTestTmp('setup-ci-'), 'run.sh');
   fs.writeFileSync(scriptPath, script);
 
   const result = spawnSync('bash', [scriptPath, '--provider', 'github', '--fail-on', 'high'], {

@@ -16,9 +16,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 async function scanSource(name, body) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-regex-guard-'));
+  const dir = mkTestTmp('as-regex-guard-');
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'src', name), body);
   process.env.AGENTIC_SECURITY_DEEP = '1';

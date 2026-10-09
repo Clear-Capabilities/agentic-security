@@ -175,7 +175,23 @@ function exportedLookup(proj, target, name, depth, seen) {
   return null;
 }
 
-function resolveGlobal(proj, mod, name, qual, depth = 0, seen = new Set()) {
+// A top-level resolution (depth 0, nothing seen yet) is a pure function of the module table, which is complete before any function
+// is lowered, so its answer is kept per module: the same name is resolved again at every use site, and each resolution walks the
+// module's imports and the re-export chains of every module it imports (hub modules re-export hundreds of names). Resolutions
+// made inside a re-export chain (depth > 0) depend on the path taken, so they are never kept. Callers treat the result as
+// read-only.
+const RESOLVE_MEMO = new WeakMap();   // module info -> (qualifier, name) -> resolution; a module's memo dies with the module
+function resolveGlobal(proj, mod, name, qual, depth = 0, seen = null) {
+  if (depth !== 0 || seen) return resolveGlobalUncached(proj, mod, name, qual, depth, seen || new Set());
+  let memo = RESOLVE_MEMO.get(mod);
+  if (!memo) { memo = new Map(); RESOLVE_MEMO.set(mod, memo); }
+  const key = qual ? `${qual}\0${name}` : name;
+  let r = memo.get(key);
+  if (r === undefined) { r = resolveGlobalUncached(proj, mod, name, qual, 0, new Set()); memo.set(key, r); }
+  return r;
+}
+
+function resolveGlobalUncached(proj, mod, name, qual, depth, seen) {
   if ((!qual || qual === mod.name) && mod.defs.has(name)) return defResult(mod, name);
   if (depth > HS_IR_LIMITS.maxResolveDepth) return { kind: 'unknown', reason: 'resolution-depth-cap' };
   const hits = [];
@@ -649,8 +665,7 @@ class FnLowerer {
   // call to it, not a mere reference: it runs when sequenced.
   executeRef(v, ln) {
     if (!v || v.kind !== 'ident' || !v.hs || !v.hs.functionRef || v.hs.closure) return v;
-    let def = null;
-    for (const m of this.proj.modules.values()) for (const d of m.defs.values()) if (d.qid === v.hs.functionRef) def = d;
+    const def = this.proj.defByQid(v.hs.functionRef);
     if (!def || def.kind !== 'fun' || def.arity !== 0) return v;
     return { kind: 'call', callee: v.name, args: [], line: ln, hs: { status: 'resolved', target: v.hs.functionRef, effect: 'io', action: true } };
   }
@@ -1103,9 +1118,35 @@ class Project {
     this.byFile.get(fn.file).push(fn);
   }
 
+  // The three lookups below used to walk every module on every call (a constructor, a record type, a def by qid), which is
+  // quadratic in project size. They are built once, lazily, on first use: the module table is complete before any function
+  // is lowered, and nothing adds a module, a constructor or a definition afterwards. First-wins / last-wins orders match the
+  // original scans exactly.
   findCon(name) {
-    for (const m of this.modules.values()) if (m.cons.has(name)) return m.cons.get(name);
-    return null;
+    if (!this._conIndex) {
+      this._conIndex = new Map();
+      for (const m of this.modules.values()) for (const [n, c] of m.cons) if (!this._conIndex.has(n)) this._conIndex.set(n, c);
+    }
+    return this._conIndex.get(name) || null;
+  }
+
+  // Record types declared in the project: type name -> field names (a later declaration of the same type name wins).
+  recordTypes() {
+    if (!this._recTypes) {
+      const recTypes = new Map();
+      for (const m of this.modules.values()) for (const d of (m.parse && m.parse.data) || []) if (d.constructors && d.constructors.some((c) => c.fields && c.fields.length)) recTypes.set(d.name, d.constructors.flatMap((c) => c.fields || []));
+      this._recTypes = recTypes;
+    }
+    return this._recTypes;
+  }
+
+  // A definition by its qid (the last one in module order wins, as the linear scan it replaces did).
+  defByQid(qid) {
+    if (!this._defIndex) {
+      this._defIndex = new Map();
+      for (const m of this.modules.values()) for (const d of m.defs.values()) this._defIndex.set(d.qid, d);
+    }
+    return this._defIndex.get(qid) || null;
   }
 
   instancesOf(cls, method) { return [...(this.instanceIndex.get(`${cls}.${method}`) || [])]; }
@@ -1123,8 +1164,7 @@ function lowerTopFunction(proj, mod, fun, def) {
   fn.hs.textParams = ann.map((a) => a.name);
   // Parameters of an exported function whose type is a record DECLARED IN THE PROJECT: the lineage view treats each such
   // parameter as a source of that record's fields (a customer record handed to an entry point), field by field.
-  const recTypes = new Map();
-  for (const m of proj.modules.values()) for (const d of (m.parse && m.parse.data) || []) if (d.constructors && d.constructors.some((c) => c.fields && c.fields.length)) recTypes.set(d.name, d.constructors.flatMap((c) => c.fields || []));
+  const recTypes = proj.recordTypes();
   fn.hs.recordParams = [];
   if (exported && sig && Array.isArray(sig.argTypes) && Array.isArray(fn.params)) {
     sig.argTypes.forEach((t, i) => { const m = /^\(?\s*([A-Z][A-Za-z0-9_']*)\s*\)?$/.exec(t); if (m && recTypes.has(m[1]) && fn.params[i]) fn.hs.recordParams.push({ name: fn.params[i], type: m[1], fields: [...new Set(recTypes.get(m[1]))] }); });

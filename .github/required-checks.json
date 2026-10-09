@@ -1,5 +1,6 @@
 {
   "$comment": [
+    "test (the required check) is an AGGREGATOR over test-shard (1/4..4/4) and test-bundle, see .github/workflows/ci.yml. The shard and bundle checks are real check runs and are BLOCKING too: a failed one already fails test, so listing them adds no new way to be red, and an unlisted run would be treated as blocking anyway with a warning. scanner/test/ci-test-shards.test.js keeps the shard names here equal to the workflow's matrix.",
     "Which hosted CI checks BLOCK a release, and which are informational. PRD R2.",
     "",
     "Defined once, here, so the release gate and GitHub branch protection cannot",
@@ -50,6 +51,11 @@
   ],
   "blocking": [
     "test",
+    "test-shard (1/4)",
+    "test-shard (2/4)",
+    "test-shard (3/4)",
+    "test-shard (4/4)",
+    "test-bundle",
     "corpus",
     "sandbox-linux",
     "determinism-compare",

@@ -7,11 +7,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered,
-  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS,
+  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, makeRunTemp, writeThenExit,
 } from '../../scripts/run-unit-tests.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -120,6 +121,23 @@ test('every shard of 4 is non-empty and within one file of balanced', () => {
   assert.ok(Math.max(...sizes) - Math.min(...sizes) <= 1, `sizes ${sizes}`);
 });
 
+test('writeThenExit exits only after the write has completed, never straight after write()', () => {
+  const events = [];
+  let flush;
+  const stream = { write: (text, cb) => { events.push(`write ${text.length}`); flush = cb; } };
+  writeThenExit('abc', 0, { stream, exit: (c) => events.push(`exit ${c}`) });
+  assert.deepEqual(events, ['write 3'], 'no exit while the write is still pending');
+  flush();
+  assert.deepEqual(events, ['write 3', 'exit 0'], 'exit follows the completed write');
+});
+
+test('--list-shard never ends the process with a synchronous exit right after writing (the cause of lost output on a pipe)', () => {
+  const src = fs.readFileSync(path.resolve(HERE, '..', '..', 'scripts', 'run-unit-tests.mjs'), 'utf8');
+  const branch = src.slice(src.indexOf("const li = argv.indexOf('--list-shard')"), src.indexOf('const shard = resolveShard(argv)'));
+  assert.match(branch, /writeThenExit\(/);
+  assert.doesNotMatch(branch, /process\.exit\(/, 'a synchronous exit after a pipe write can drop buffered output');
+});
+
 test('--list-shard prints the assignment through the real CLI and runs nothing', () => {
   const files = unionFiles(readPkg());
   const script = path.resolve(HERE, '..', '..', 'scripts', 'run-unit-tests.mjs');
@@ -136,4 +154,18 @@ test('--list-shard prints the assignment through the real CLI and runs nothing',
   assert.equal(stepLines, 1, 'the extra step is listed under exactly one shard');
   const bad = spawnSync(process.execPath, [script, '--list-shard', '9/4'], { encoding: 'utf8' });
   assert.notEqual(bad.status, 0);
+});
+
+test('the run gets a private temp root: test processes see it as their temp dir, and cleanup removes whatever they left in it', () => {
+  const { root, env, cleanup } = makeRunTemp();
+  try {
+    assert.ok(path.basename(root).startsWith('as-run-'));
+    assert.equal(env.TMPDIR, root); assert.equal(env.TEMP, root); assert.equal(env.TMP, root);
+    // a child that forgets to clean up after itself, like the tests used to
+    const r = spawnSync(process.execPath, ['-e', "const fs=require('fs'),os=require('os'),p=require('path');fs.writeFileSync(p.join(fs.mkdtempSync(p.join(os.tmpdir(),'leak-')),'f'),'x');console.log(os.tmpdir())"], { env, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(fs.realpathSync(r.stdout.trim()), fs.realpathSync(root), 'the child resolved os.tmpdir() to the private root');
+    assert.equal(fs.readdirSync(root).length, 1, 'the leak landed inside the private root, not the machine temp folder');
+  } finally { cleanup(); }
+  assert.equal(fs.existsSync(root), false, 'cleanup removed the root and everything in it');
 });

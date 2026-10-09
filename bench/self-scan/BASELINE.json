@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-08T23:47:52.219Z",
-  "commit": "599f5332b727f6b49615548b625c6a85a19742d4",
+  "generatedAt": "2026-10-09T04:31:23.956Z",
+  "commit": "3f3c30672833a8253765d4a9e7d6e9917d8c034f",
   "targets": {
     "hooks": {
       "total": 19,
@@ -17,7 +17,7 @@
       }
     },
     "scripts": {
-      "total": 50,
+      "total": 51,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -38,6 +38,7 @@
         "run-unit-tests.mjs": 1,
         "self-test-runner.mjs": 2,
         "ship.mjs": 3,
+        "ship/run.mjs": 1,
         "synthesize-detector.mjs": 7
       }
     },
@@ -89,6 +90,7 @@
         "language/haskell-parser.js": 3,
         "language/haskell-resolved-graph.js": 3,
         "language/haskell-sca.js": 1,
+        "language/haskell-supply.js": 1,
         "language/nix-build-trust.js": 3,
         "language/nix-closure.js": 6,
         "language/nix-eval-isolation.js": 3,
@@ -250,7 +252,7 @@
         "sast/model-load.js": 1,
         "sast/mutation-xss.js": 1,
         "sast/php.js": 1,
-        "sast/pipeline.js": 2,
+        "sast/pipeline.js": 1,
         "sast/rate-limit.js": 2,
         "sast/sensitive-data-logging.js": 2,
         "sast/solidity.js": 1,

@@ -6684,17 +6684,32 @@ function _semverSatisfies(ver,range){
 function markUsedVulnFunctions(supplyChain,fc){
   const used={};
   const perFile={};
+  // The per-(package, function) expressions are compiled once, not once per file, and a file is split into lines only when
+  // it contains the text a match needs: `\b(?:pkg|_)\.fn\b` can only match a line holding the substring `.fn`, and the Rust
+  // bare-call expression one holding `fn`. Both prefilters are exact for a plain identifier; any other name skips the
+  // prefilter and is judged line by line, as before. Match order (file, package, function, line) is unchanged.
+  const _plainIdent=/^[A-Za-z_]\w*$/;
+  const _hintRes=new Map();
+  const _hintRe=(pkg,fn)=>{const k=pkg+'\0'+fn;let r=_hintRes.get(k);if(!r){r=new RegExp(`\\b(?:${pkg.replace(/\W/g,'\\$&')}|_)\\.${fn}\\b`,'g');_hintRes.set(k,r);}return r;};
+  const _bareRes=new Map();
+  const _bareRe=(fn)=>{let r=_bareRes.get(fn);if(!r){r=new RegExp(`\\b${fn.replace(/\W/g,'\\$&')}\\s*[(<]`,'g');_bareRes.set(fn,r);}return r;};
+  const _hintEntries=Object.entries(VULN_FUNCTION_HINTS);
+  for(const pkg of Object.keys(VULN_FUNCTION_HINTS))if(!perFile[pkg])perFile[pkg]=[];
   for(const[fp,content] of Object.entries(fc)){
-    const lines=content.split('\n');
+    let lines=null;
     // Rust import-aware matching: build import map for .rs files
     let _rustImports=null;
     if(/\.rs$/i.test(fp)){try{_rustImports=extractRustImportMap(content);}catch(_){}}
-    for(const[pkg,fns] of Object.entries(VULN_FUNCTION_HINTS)){
-      if(!perFile[pkg])perFile[pkg]=[];
+    for(const[pkg,fns] of _hintEntries){
       for(const fn of fns){
-        const re=new RegExp(`\\b(?:${pkg.replace(/\W/g,'\\$&')}|_)\\.${fn}\\b`,'g');
+        const plain=_plainIdent.test(fn);
+        const dotPossible=!plain||content.includes('.'+fn);
+        const barePossible=_rustImports&&(!plain||content.includes(fn));
+        if(!dotPossible&&!barePossible)continue;
+        const re=_hintRe(pkg,fn);
         // Rust: also match bare function calls if import map traces them to this package
-        const rustBareRe=_rustImports?new RegExp(`\\b${fn.replace(/\W/g,'\\$&')}\\s*[(<]`,'g'):null;
+        const rustBareRe=_rustImports?_bareRe(fn):null;
+        if(lines===null)lines=content.split('\n');
         for(let li=0;li<lines.length;li++){
           let matched=re.test(lines[li]);
           re.lastIndex=0;
@@ -6733,9 +6748,12 @@ function markUsedVulnFunctions(supplyChain,fc){
     // Search codebase for these functions (if not already searched via VULN_FUNCTION_HINTS)
     if(osvFns.length&&!hardcoded.length){
       for(const[fp,content] of Object.entries(fc)){
-        const lines=content.split('\n');
+        let lines=null;
         for(const fn of osvFns){
           const shortFn=fn.lastIndexOf('.')>0?fn.slice(fn.lastIndexOf('.')+1):fn;
+          // the expression escapes every non-word character, so a match needs the literal text on its line
+          if(!content.includes(shortFn))continue;
+          if(lines===null)lines=content.split('\n');
           const re=new RegExp(`\\b${shortFn.replace(/\W/g,'\\$&')}\\b`,'g');
           for(let li=0;li<lines.length;li++){
             if(re.test(lines[li])){
@@ -9086,6 +9104,11 @@ function _deterministicFileTimings(timings) {
   setProgress({current:i,total:files.length,file:"Config file cross-ref...",phase:"Linking"});aLogic.push(...(runDetector(_detectorErrors,'<project>','scanConfigFiles',()=>scanConfigFiles(fc))||[]));
   setProgress({current:i,total:files.length,file:"OSV vulnerability database...",phase:"SCA"});
   const allFileContents={...fc, ...depFileContents};
+  // The opt-in live advisory feeds are fetched HERE, as soon as the manifests are in hand, not after the expensive passes: a scan that is
+  // killed or times out later still has its feed data on disk (the lookup used to run ~1447 s into a 1460 s scan, so an early kill looked like
+  // "feed unavailable"). The inputs are the file contents only, so the result is the same as when this ran at the end.
+  try{if(process.env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE==='1'){const{prefetchHackageFeed}=await import('./language/haskell-supply.js');const{resolvedHackageComponents,nixHaskellPackageNames}=await import('./language/resolved-pass.js');let _rc=[],_nx=[];try{_rc=resolvedHackageComponents(allFileContents).components||[];}catch(_){}try{_nx=nixHaskellPackageNames(allFileContents);}catch(_){}await prefetchHackageFeed(allFileContents,{resolvedComponents:_rc,extraNames:_nx});}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
+  try{if(process.env.AGENTIC_SECURITY_NIX_ADVISORIES_LIVE==='1'){const{prefetchNixAdvisoryFeed}=await import('./language/resolved-pass.js');await prefetchNixAdvisoryFeed(allFileContents);}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
   // PRD F11.4 — malicious install hooks, scanned where package.json actually
   // lives. `scanInstallScripts` was wired into the per-file SAST dispatch, but
   // that loop iterates `files`, which comes from `fileContents` — and
@@ -9231,8 +9254,6 @@ function _deterministicFileTimings(timings) {
   const annotatedComponents=components.map(c=>{const key=`${c.ecosystem}:${c.name}:${c.version}`;const vulns=vulnsByKey[key]||[];const riKey=c.ecosystem==='maven'&&c.group?`maven:${c.group}/${c.name}`:`${c.ecosystem}:${c.name}`;const ri=registryInfo.get(riKey)||{};const latestVersion=ri.latestVersion||'';const vd=(ri.versions||{})[c.version]||{};const isDeprecated=typeof vd.deprecated==='string'&&vd.deprecated.length>0;const deprecationMessage=isDeprecated?vd.deprecated:'';const isOutdated=!isDeprecated&&typeof vd.outdated==='string'&&vd.outdated.length>0;const outdatedMessage=isOutdated?vd.outdated:'';const license=ri.license||vd.license||'';return{...c,vulns,hasVulns:vulns.length>0,hasAttackPath:attackResult.flagged.has(key),attackPaths:attackResult.pathsByKey.get(key)||[],latestVersion,isDeprecated,deprecationMessage,isOutdated,outdatedMessage,license};});
   // X-010: Hackage and Nix components, dependency edges and target provenance. Kept beside (not inside) the ordinary
   // component list so the existing consumers are untouched; the BOM emitters and the SBOM diff read it explicitly.
-  try{if(process.env.AGENTIC_SECURITY_HACKAGE_ADVISORIES_LIVE==='1'){const{prefetchHackageFeed}=await import('./language/haskell-supply.js');const{resolvedHackageComponents,nixHaskellPackageNames}=await import('./language/resolved-pass.js');let _rc=[],_nx=[];try{_rc=resolvedHackageComponents(allFileContents).components||[];}catch(_){}try{_nx=nixHaskellPackageNames(allFileContents);}catch(_){}await prefetchHackageFeed(allFileContents,{resolvedComponents:_rc,extraNames:_nx});}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
-  try{if(process.env.AGENTIC_SECURITY_NIX_ADVISORIES_LIVE==='1'){const{prefetchNixAdvisoryFeed}=await import('./language/resolved-pass.js');await prefetchNixAdvisoryFeed(allFileContents);}}catch(_){/* the live feed is optional: a failure leaves the scan on whatever snapshot exists */}
   let _languageBom=null;try{if(Object.keys(allFileContents).some(f=>/\.(?:l?hs|nix)$|\.cabal$|(?:^|\/)(?:cabal\.project(?:\.freeze)?|package\.yaml|stack\.yaml(?:\.lock)?|flake\.lock)$/i.test(f))){const{languageBom}=await import('./language/bom.js');const{resolvedHaskellGraph,nixClosureOf}=await import('./language/resolved-pass.js');const _rg=resolvedHaskellGraph(allFileContents);const _nc=nixClosureOf(allFileContents);_languageBom=languageBom(allFileContents,{...(_rg?{resolved:_rg.graph}:{}),...(_nc&&!_nc.refused.length?{closure:_nc.closure}:{})});}}catch(_){_languageBom=null;}
   aF.push(...(runDetector(_detectorErrors,'<project>','scanDbTaintCrossFile',()=>scanDbTaintCrossFile(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanCsharpCrossFile',()=>scanCsharpCrossFile(fc))||[]));

@@ -16,13 +16,14 @@ import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { statePath } from '../../src/posture/state-dir.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
 const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 
 function _mkTmpProject() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-governance-cli-'));
+  const root = mkTestTmp('agsec-governance-cli-');
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }

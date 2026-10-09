@@ -70,6 +70,7 @@
 
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -183,6 +184,27 @@ export function resolveShard(argv = [], env = process.env) {
   return fromEnv ? parseShard(fromEnv) : null;
 }
 
+/**
+ * Write `text` and exit only once the write has completed. `process.exit()` straight after `write()` can drop whatever is still buffered when
+ * stdout is a pipe and the reader is slow (a CI runner running the whole suite in parallel): the `--list-shard` test, which reads this through a
+ * pipe, lost the last 8 lines of shard 1's output on `main` while the identical tree had passed on the pull request.
+ */
+export function writeThenExit(text, code, { stream = process.stdout, exit = (c) => process.exit(c) } = {}) {
+  stream.write(text, () => exit(code));
+}
+
+/** One private temp root for a whole run: the env to give the test processes, and a cleanup that never throws. */
+export function makeRunTemp(base = os.tmpdir(), baseEnv = process.env) {
+  // Short name on purpose: tests bind unix sockets under os.tmpdir(), and a socket path is limited to ~104
+  // bytes on macOS, so a long private root would break them for the wrong reason.
+  const root = fs.mkdtempSync(path.join(base, 'as-run-'));
+  return {
+    root,
+    env: { ...baseEnv, TMPDIR: root, TEMP: root, TMP: root },
+    cleanup() { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* best effort */ } },
+  };
+}
+
 function main(argv = process.argv.slice(2)) {
   const pkg = readPkg();
 
@@ -207,9 +229,9 @@ function main(argv = process.argv.slice(2)) {
   if (li !== -1) {
     // Print the assignment and run nothing.
     const shard = parseShard(argv[li + 1]);
-    for (const f of assignShard(files, shard)) process.stdout.write(`${f}\n`);
-    for (const e of extraStepsForShard(shard)) process.stdout.write(`step: ${e.script}\n`);
-    process.exit(0);
+    const out = [...assignShard(files, shard).map((f) => `${f}\n`), ...extraStepsForShard(shard).map((e) => `step: ${e.script}\n`)].join('');
+    writeThenExit(out, 0);
+    return;
   }
 
   const shard = resolveShard(argv);
@@ -220,14 +242,26 @@ function main(argv = process.argv.slice(2)) {
   }
   if (shard) process.stderr.write(`run-unit-tests.mjs: shard ${shard.index}/${shard.total}: ${mine.length} of ${files.length} test files\n`);
 
-  const r = spawnSync(process.execPath, ['--test', ...mine], { cwd: SCANNER, stdio: 'inherit' });
-  if (r.status !== 0) process.exit(r.status ?? 1);
+  // The whole run gets ONE private temp root (TMPDIR/TEMP/TMP) that is deleted when the run ends, so a test, or
+  // the code under test, that forgets to clean up after itself can no longer fill the machine's real temp
+  // folder: a full run used to leave thousands of directories behind (gigabytes at one point), which also made
+  // later runs slower. Set AGENTIC_SECURITY_TEST_KEEP_TMP=1 to keep it (the path is printed) when debugging.
+  const { root: tmpRoot, env, cleanup } = makeRunTemp();
+  const finish = (code) => {
+    if (process.env.AGENTIC_SECURITY_TEST_KEEP_TMP === '1') process.stderr.write(`run-unit-tests.mjs: kept temp root ${tmpRoot}\n`);
+    else cleanup();
+    process.exit(code);
+  };
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => finish(130));
+
+  const r = spawnSync(process.execPath, ['--test', ...mine], { cwd: SCANNER, stdio: 'inherit', env });
+  if (r.status !== 0) finish(r.status ?? 1);
 
   for (const step of extraStepsForShard(shard)) {
-    const e = spawnSync('npm', ['run', step.script], { cwd: SCANNER, stdio: 'inherit' });
-    if (e.status !== 0) process.exit(e.status ?? 1);
+    const e = spawnSync('npm', ['run', step.script], { cwd: SCANNER, stdio: 'inherit', env });
+    if (e.status !== 0) finish(e.status ?? 1);
   }
-  process.exit(0);
+  finish(0);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -768,7 +768,7 @@ async function verifyPatch({
   // patched files are scanned deep, together with their import closure and manifests read from disk.
   let deep;
   if (Object.keys(fileContents).some((f) => /\.(?:l?hs|hs-boot|hsc|nix)$/i.test(f))) {
-    const { withLanguageContext } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 15911));
+    const { withLanguageContext } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 52603));
     const lc = withLanguageContext(scanRoot, fileContents, depFileContents);
     fileContents = lc.fileContents; depFileContents = lc.depFileContents; deep = true;
   }

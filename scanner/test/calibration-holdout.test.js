@@ -18,9 +18,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runCalibrationHoldoutCheck } from '../../scripts/calibration-holdout-check.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function repoWith(files) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'calib-'));
+  const d = mkTestTmp('calib-');
   for (const [rel, body] of Object.entries(files)) {
     const p = path.join(d, rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });

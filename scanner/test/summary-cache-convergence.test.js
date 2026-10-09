@@ -20,6 +20,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { SummaryCache } from '../src/dataflow/summaries.js';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('SummaryCache.compute(): a fixed-point iteration whose mutatedParams changes MEMBERSHIP (not size) is not mistaken for convergence', () => {
   // Simulates a recursive/depth-dependent helper whose mutated-target
@@ -82,7 +83,7 @@ test('runTaintEngine empty-entry pre-pass: a 3-hop mutated-param propagation cha
   // The old size-only break fired after pass 1 (no NEW cache KEYS were
   // added, only an existing value changed), so pass 2 never ran and aTop's
   // cached summary stayed permanently empty.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-fp3-'));
+  const dir = mkTestTmp('as-fp3-');
   fs.writeFileSync(path.join(dir, 'app.js'), `
 const cp = require('child_process');
 const express = require('express');

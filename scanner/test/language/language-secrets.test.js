@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { blankHaskell, blankNix, scanLanguageSecretConcat, scanDependencyUrlCredentials, providerInfo, redactSecret } from '../../src/language/secrets.js';
 import { sweepGitHistory, splitDiffByFile } from '../../src/posture/secret-history.js';
 import { scanCredentials } from '../../src/secrets/index.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const SCANNER = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BIN = join(SCANNER, 'bin', 'agentic-security.js');
@@ -91,7 +92,7 @@ test('[X-001.AC01] split secrets are found in Haskell and Nix; comments, nested 
 });
 
 test('[X-001.AC01] a real scan finds known, entropy and split secrets and keeps the public values out', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'x001-scan-'));
+  const dir = mkTestTmp('x001-scan-');
   mkdirSync(join(dir, 'src')); mkdirSync(join(dir, 'modules'));
   writeFileSync(join(dir, 'src', 'S.hs'), HS);
   writeFileSync(join(dir, 'modules', 'c.nix'), NIX);
@@ -114,7 +115,7 @@ test('[X-001.AC01] a real scan finds known, entropy and split secrets and keeps 
 });
 
 test('[X-001.AC02] git history findings name the committed file, line, commit and provider, and never the value', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'x001-hist-'));
+  const repo = mkTestTmp('x001-hist-');
   const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...a], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
   git('init', '-q');
   mkdirSync(join(repo, 'src'));
@@ -149,7 +150,7 @@ test('[X-001.AC02] git history findings name the committed file, line, commit an
 });
 
 test('[X-001.AC02] the --secret-history entry point and the response guidance work on a Haskell/Nix repository', () => {
-  const repo = mkdtempSync(join(tmpdir(), 'x001-cli-'));
+  const repo = mkTestTmp('x001-cli-');
   const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', ...a], { encoding: 'utf8' });
   git('init', '-q');
   writeFileSync(join(repo, 'flake.nix'), nix(`{\n  inputs.priv.url = "git+https://ci:${URLPW}@git.example-corp.invalid/priv.git";\n  outputs = { self, priv }: { };\n}\n`));
@@ -167,7 +168,7 @@ test('[X-001.AC02] the --secret-history entry point and the response guidance wo
 });
 
 test('[X-001.AC03] planted credentials never appear in any output format, in persisted state, or in test logs', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'x001-redact-'));
+  const dir = mkTestTmp('x001-redact-');
   mkdirSync(join(dir, 'src'));
   writeFileSync(join(dir, 'src', 'App.hs'), `module App where\nimport System.Process (callCommand)\ntoken :: String\ntoken = "${GH}"\nsplit = "AKIA" ++ "${AWS.slice(4)}"\npw :: String\npw = "${PW}"\n`);
   writeFileSync(join(dir, 'app.cabal'), `name: app\nversion: 0.1\nlibrary\n  build-depends: base\n`);
@@ -211,7 +212,7 @@ test('[X-001.AC03] dependency-URL credentials: placeholders, hosts for documenta
 
 test('[X-001.AC03] the bodyguard recognises Haskell and Nix credential assignments before they are written', () => {
   const hook = join(SCANNER, '..', 'hooks', 'pre-edit-bodyguard.js');
-  const dir = mkdtempSync(join(tmpdir(), 'x001-bg-'));
+  const dir = mkTestTmp('x001-bg-');
   mkdirSync(join(dir, '.agentic-security'));
   writeFileSync(join(dir, 'package.json'), '{"name":"x"}');
   writeFileSync(join(dir, '.agentic-security', 'bodyguard.json'), JSON.stringify({ mode: 'block' }));

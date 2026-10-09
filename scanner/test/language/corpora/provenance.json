@@ -153,6 +153,28 @@
       "measurement": "measured exactly once with the engine as it stood after the fixes, before any registry change; never tuned against. Any engine change motivated by a miss on this set moves it to shape-dev and requires unseen-v3.",
       "holdoutUse": "promote.mjs re-measures the frozen holdout after the engine change (repeated holdout use, as the project documents); no engine change was made against the holdout.",
       "labelledBy": "the author of the shapes"
+    },
+    {
+      "version": "shapedev-v2",
+      "date": "2026-10-08",
+      "changed": [
+        "the former unseen-v2 split is renamed shape-dev-2 (labels/shape-dev-2.json, sources-shape-dev-2/, templates-shapedev2.mjs): ids, sources and labels are byte-identical"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "The engine was changed to fix gaps the second unseen measurement exposed (0.158.0: wreq URL position per function, inline route auth guards, nested-sink de-duplication, CWE-770 for an unbounded request body, NixOS firewall port ranges and a list/attrset evaluator). A set that was used to change the engine no longer measures generalisation, so it is a development set.",
+      "labelledBy": "the author of the shapes"
+    },
+    {
+      "version": "unseen-v3",
+      "date": "2026-10-08",
+      "changed": [
+        "new unseen split replaces unseen-v2 (labels/unseen.json, sources-unseen/, templates-unseen.mjs): 300 author-labelled cases, 3 vulnerable and 3 safe NEW single-flaw shapes per family, 2 nouns each, same family coverage and size as v2"
+      ],
+      "unchangedHoldoutCases": "all (cases.json, privacy.json, holdoutRollup and contentRollup are byte-identical to qa001-v2)",
+      "reason": "Replaces unseen-v2 as the generalisation measure. Written from the vulnerability classes and from what a developer plausibly writes, from library and NixOS option knowledge, without reading the engine's rule or model files. Extra variety in the areas recent fixes touched (HTTP-client SSRF across libraries and call shapes, request-body reading with and without a limit, inline route authentication including a check that comes too late, nested process calls, firewall port ranges and let/with/optionals/mkMerge option forms, secrets in Nix). Includes near-miss safe variants.",
+      "measurement": "measured exactly once, with the engine as it stood on the base commit, before any registry change; never tuned against. Any engine change motivated by a miss on this set moves it to shape-dev-3 and requires unseen-v4.",
+      "holdoutUse": "the frozen holdout was not measured or touched for this revision.",
+      "labelledBy": "the author of the shapes"
     }
   ]
 }

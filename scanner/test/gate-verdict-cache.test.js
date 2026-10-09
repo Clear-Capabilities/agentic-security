@@ -23,6 +23,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const PARTS = {
   commitSha: 'a'.repeat(40),
@@ -156,7 +157,7 @@ test('caching can be switched off by flag or environment', () => {
 // mutates the repo it inspects.
 
 function mkGitRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-cache-treesha-'));
+  const dir = mkTestTmp('gate-cache-treesha-');
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
   git('init', '--quiet');
   git('config', 'user.email', 'test@example.com');

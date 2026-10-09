@@ -18,6 +18,7 @@ import {
   verifyRunAttestation,
   ATTESTATION_CANONICALISATION,
 } from '../src/posture/attestation.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const META = { engineVersion: '9.9.9', rulesetVersion: '9.9.9', bundleSha: 'abc123' };
 
@@ -213,8 +214,8 @@ test('concurrent first-use does not produce signatures that fail to verify later
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), 'integrity-race-'));
-  const barrierDir = fs.mkdtempSync(path.join(os.tmpdir(), 'integrity-race-barrier-'));
+  const tmpConfig = mkTestTmp('integrity-race-');
+  const barrierDir = mkTestTmp('integrity-race-barrier-');
   const childScript = path.join(barrierDir, 'child.mjs');
   const N = 8;
   const findings = corpus();

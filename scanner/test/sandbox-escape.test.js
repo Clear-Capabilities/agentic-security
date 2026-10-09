@@ -9,6 +9,7 @@ import { detectBackend } from '../src/sandbox/capabilities.js';
 import { runUserspace } from '../src/sandbox/backend-userspace.js';
 import { runNamespace } from '../src/sandbox/backend-namespace.js';
 import { runDisabled } from '../src/sandbox/backend-disabled.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 // A skip here is NOT a pass. Detection is functional (capabilities.js): the
 // backend is reported only when it just ran a trivial command under real
@@ -26,8 +27,8 @@ const skip = ACTIVE !== 'userspace'
 describe('userspace confinement — escape attempts', { skip }, () => {
   let root, outside;
   test('setup', () => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-root-'));
-    outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-out-'));
+    root = mkTestTmp('sbx-root-');
+    outside = mkTestTmp('sbx-out-');
   });
 
   test('GOOD: a write inside the sandbox root succeeds', () => {
@@ -185,7 +186,7 @@ const NET_PROBE = 'exec 3<>/dev/tcp/1.1.1.1/443';
 
 describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, () => {
   test('GOOD: a write inside the sandbox root succeeds', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const root = mkTestTmp('sbx-ns-');
     const r = runNamespace(['/bin/sh', '-c', 'echo ok > "$ROOT/a.txt" && cat "$ROOT/a.txt"'], { root });
     assert.equal(r.status, 'ok', r.stderr);
     assert.match(r.stdout, /ok/);
@@ -199,8 +200,8 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     // does not exist afterwards. The second half is the load-bearing one —
     // per the module guide, the side effect is the reliable evidence, the
     // status is derived from the child's own stderr.
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const root = mkTestTmp('sbx-ns-');
+    const outside = mkTestTmp('sbx-ns-out-');
     const target = path.join(outside, 'escape.txt');
     const r = runNamespace(['/bin/sh', '-c', `echo bad > ${target}`], { root });
     assert.equal(fs.existsSync(target), false, 'ESCAPED: file was created outside the sandbox root');
@@ -209,8 +210,8 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
   });
 
   test('BAD: a DENIED write is not reported as a clean run even when the command exits 0', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const root = mkTestTmp('sbx-ns-');
+    const outside = mkTestTmp('sbx-ns-out-');
     const target = path.join(outside, 'escape-exit0.txt');
     const r = runNamespace(['/bin/sh', '-c', `echo bad > ${target}; exit 0`], { root });
     assert.equal(r.exitCode, 0, 'precondition: the command must exit 0 for this test to mean anything');
@@ -224,8 +225,8 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     // acquired through a user namespace, so without the capability drop the
     // payload would hold CAP_SYS_ADMIN over its own mount namespace and could
     // simply undo the confinement. This asserts it cannot.
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-out-'));
+    const root = mkTestTmp('sbx-ns-');
+    const outside = mkTestTmp('sbx-ns-out-');
     const target = path.join(outside, 'reescape.txt');
     const r = runNamespace(
       ['/bin/sh', '-c', `mount -o remount,bind,rw / 2>&1; echo bad > ${target}`],
@@ -238,7 +239,7 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
   });
 
   test('GOOD: an ordinary non-zero exit is "nonzero", never "blocked"', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const root = mkTestTmp('sbx-ns-');
     const r = runNamespace(['/bin/sh', '-c', 'exit 3'], { root });
     assert.equal(r.exitCode, 3);
     assert.equal(r.denied, false);
@@ -246,7 +247,7 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
   });
 
   test('BAD: the parent environment is not handed to the confined command', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const root = mkTestTmp('sbx-ns-');
     process.env.SBX_PARENT_SECRET = 'leaked-value-should-not-appear';
     try {
       const r = runNamespace(['/bin/sh', '-c', 'echo "[${SBX_PARENT_SECRET}]"'], { root });
@@ -268,13 +269,13 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     const control = execFileSync(NET_SHELL, ['-c', `${NET_PROBE} && echo REACHABLE`], { encoding: 'utf8' });
     assert.match(control, /REACHABLE/, 'precondition: outbound egress must work unconfined for this test to mean anything');
 
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const root = mkTestTmp('sbx-ns-');
     const r = runNamespace([NET_SHELL, '-c', NET_PROBE], { root, timeoutMs: 15000 });
     assert.notEqual(r.exitCode, 0, 'outbound connection unexpectedly succeeded inside the sandbox');
   });
 
   test('BAD: a wall-clock overrun stops the direct child', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-'));
+    const root = mkTestTmp('sbx-ns-');
     const r = runNamespace(['/bin/sh', '-c', 'sleep 30'], { root, timeoutMs: 3000 });
     assert.equal(r.timedOut, true);
     assert.equal(r.status, 'timeout');
@@ -300,7 +301,7 @@ describe('kernel-namespace confinement — escape attempts', { skip: nsSkip }, (
     // not better than it as this module claimed for a long time. Survivors stay
     // inside the mount and network namespaces, so confinement holds — what is
     // missing is a bound on how long descendants run.
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sbx-ns-tree-'));
+    const root = mkTestTmp('sbx-ns-tree-');
     const marker = path.join(root, 'survivor.marker');
     const budgetMs = 1200;
     const started = Date.now();

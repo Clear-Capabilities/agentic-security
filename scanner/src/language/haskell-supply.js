@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import { analyzeHaskellManifests } from './haskell-manifests.js';
 import { buildHaskellIR } from './haskell-ir.js';
 import { getLastRefresh, refreshHackageAdvisories, liveFeedEnabled, FEED_ENV } from './haskell-advisory-feed.js';
-import { AdvisoryDb, loadAdvisorySnapshot, evaluateComponents, reachability, nearNameCandidates, sourceIntegrity, lifecycle, licensePolicy, hackagePurl, GHC_BOOT_PACKAGES } from './haskell-sca.js';
+import { AdvisoryDb, loadAdvisorySnapshot, evaluateComponents, reachability, nearNameCandidates, sourceIntegrity, lifecycle, licensePolicy, hackagePurl, GHC_BOOT_PACKAGES, rangeToIntervals, intervalsContain, baseRangeForGhc } from './haskell-sca.js';
+import { deriveCppContext } from './haskell-cpp.js';
 
 const MANIFEST = /(?:^|\/)(?:[^/]+\.cabal|cabal\.project(?:\.[a-z]+)?|package\.yaml|stack\.yaml|stack\.yaml\.lock)$/;
 const SCOPE = { runtime: 'required', test: 'optional', benchmark: 'optional', setup: 'optional', 'build-tool': 'optional' };
@@ -38,12 +39,16 @@ export function hackageComponents(files) {
   // workspace package, not to Hackage; reporting it would raise advisories about the project's own (usually fixed) version as if it were a
   // dependency. Found by the live Hackage feed bench (aeson's own test suite depends on aeson).
   const defined = new Set([...(manifests.packages || []), ...(manifests.hpack || [])].map((p) => p.name).filter(Boolean));
+  // Every distinct DECLARED USE is kept (not just the first per package and scope): a second manifest or component with a different range was
+  // never evaluated, so a worse status could hide behind a milder kept one. The evaluator reports the worst per package, scope and advisory
+  // and lists the components that carry it; `components` below keeps the old one-per-package-and-scope shape for inventories.
   const seen = new Map();
   for (const d of manifests.dependencies || []) {
     if (defined.has(d.name)) continue;
     const lock = lockedFor(d.name, d.manifest);
     const resolved = (lock && lock.version) || d.exactPin || null;
-    const key = `${d.name}@${d.scope || 'runtime'}@${resolved || ''}`;   // a covered (resolved) use is not merged into an uncovered one
+    // a covered (resolved) use is not merged into an uncovered one; an uncovered use is distinguished by where and how it is declared
+    const key = `${d.name}@${d.scope || 'runtime'}@${resolved || ''}@${resolved ? '' : `${d.manifest}|${d.component || ''}|${d.declaredRange || ''}|${d.rangeKind || ''}`}`;
     if (seen.has(key)) continue;
     seen.set(key, {
       ecosystem: 'hackage', name: d.name, version: resolved, declaredRange: d.declaredRange || null, unbounded: !resolved && !d.declaredRange && d.rangeKind === 'unbounded',
@@ -71,7 +76,96 @@ export function hackageComponents(files) {
     c.unbounded = false;
     c.rangeInheritedFromSibling = true;
   }
-  return { components: [...seen.values()], manifests };
+  // Project-level bounds from cabal.project: `constraints:` narrow a declared range (the solver must satisfy both) and `allow-newer` /
+  // `allow-older` widen it. Both apply only to a use with no resolved version, from a project file that actually governs the manifest.
+  const bounds = projectBounds(manifests);
+  for (const c of seen.values()) {
+    if (c.version) continue;
+    const gov = bounds.governing(c.manifest);
+    if (!gov.length) continue;
+    const cons = bounds.constraintsFor(c.name, gov);
+    const relax = bounds.relaxationsFor(c.name, gov);
+    if (relax.length) c.relaxation = relax;
+    if (!cons.length) continue;
+    // an exact pin inside the declared range IS the resolved version; anything else is an interval to intersect
+    const pins = cons.filter((x) => x.pin);
+    const distinctPins = [...new Set(pins.map((x) => x.pin))];
+    const declaredIv = c.declaredRange ? rangeToIntervals(c.declaredRange) : [{ lo: null, loInc: false, hi: null, hiInc: false }];
+    if (distinctPins.length === 1 && declaredIv && (!c.declaredRange || intervalsContain(declaredIv, distinctPins[0])) && cons.every((x) => x.pin || (rangeToIntervals(x.text) && intervalsContain(rangeToIntervals(x.text), distinctPins[0])))) {
+      const p = pins[0];
+      c.version = distinctPins[0]; c.resolution = 'constraint-pin'; c.versionSource = { file: p.file, line: p.line || null }; c.unbounded = false;
+      c.projectConstraints = cons.map(({ text, file, line }) => ({ text, file, line }));
+    } else {
+      c.projectConstraints = cons.map(({ text, file, line }) => ({ text, file, line }));
+    }
+  }
+  // Collapse uses that ended up identical (same package, scope, version, bounds): one entry, every declaring component kept in `carriers`.
+  const merged = new Map();
+  for (const c of seen.values()) {
+    const key = `${c.name}@${c.scope}@${c.version || ''}@${c.version ? '' : `${c.declaredRange || ''}|${c.unbounded}|${(c.projectConstraints || []).map((x) => x.text).join(',')}|${(c.relaxation || []).map((x) => x.direction).join(',')}`}`;
+    const carrier = { file: c.manifest, line: c.line, target: c.target, componentKind: c.componentKind, declaredRange: c.declaredRange };
+    if (merged.has(key)) { merged.get(key).carriers.push(carrier); continue; }
+    merged.set(key, { ...c, carriers: [carrier] });
+  }
+  const uses = [...merged.values()];
+  const first = new Map();
+  for (const c of uses) { const k = `${c.name}@${c.scope}@${c.version || ''}`; if (!first.has(k)) first.set(k, c); }
+  return { components: [...first.values()], uses, manifests, bounds: { conditionalConstraintsSkipped: bounds.conditionalSkipped } };
+}
+
+const isRemotePattern = (p) => /^[a-z][a-z0-9+.-]*:\/\//i.test(p);
+/** Does a cabal.project `packages:` pattern name this manifest (a .cabal, or a package.yaml whose cabal file is generated beside it)? */
+function patternNames(pattern, relManifest) {
+  let pat = String(pattern).trim().replace(/^\.\//, '');
+  if (pat === '' || pat === '.') pat = '*.cabal';
+  else if (pat.endsWith('/')) pat = `${pat}*.cabal`;
+  else if (!pat.endsWith('.cabal')) pat = `${pat}/*.cabal`;
+  const rel = /(?:^|\/)package\.yaml$/.test(relManifest) ? relManifest.replace(/package\.yaml$/, 'package.cabal') : relManifest;
+  const re = new RegExp(`^${pat.split('**').map((seg) => seg.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('[^/]*')).join('.*')}$`);
+  return re.test(rel);
+}
+
+/**
+ * cabal.project constraints and relaxations, scoped to the manifests a project file governs. A project governs a manifest only when the
+ * manifest sits at or below the project's directory AND matches one of its `packages:` patterns (a project with no `packages:` governs
+ * the .cabal file in its own directory, which is cabal's default). A constraint under an `if` is not in force everywhere and is not applied
+ * (counted in `conditionalSkipped` and disclosed). A freeze file is handled as a resolution, not here.
+ */
+function projectBounds(manifests) {
+  const dirOf = (p) => (typeof p === 'string' && p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+  const isFreeze = (f) => /\.freeze$|(?:^|\/)cabal\.config$/.test(f || '');
+  const projects = (manifests.projects || []).filter((p) => p.kind === 'cabal-project' && !isFreeze(p.file));
+  const constraints = [];
+  let conditionalSkipped = 0;
+  for (const c of manifests.constraints || []) {
+    if (c.kind !== 'range' || !c.range || isFreeze(c.manifest)) continue;
+    if (c.qualifier && c.qualifier !== 'any') continue;
+    if (c.conditions && c.conditions.length) { conditionalSkipped += 1; continue; }
+    constraints.push({ name: c.name, text: c.rangeText, file: c.file, line: c.line, project: c.manifest, pin: c.range.t === 'cmp' && c.range.op === '==' && !c.range.wildcard ? c.range.text : null });
+  }
+  const governs = (project, manifest) => {
+    const base = dirOf(project.file);
+    let rel;
+    if (base === '') rel = manifest;
+    else if (manifest.startsWith(`${base}/`)) rel = manifest.slice(base.length + 1);
+    else return false;
+    const pats = (project.packages || []).map((x) => x.pattern).filter((x) => typeof x === 'string' && !isRemotePattern(x));
+    return (pats.length ? pats : ['.']).some((pat) => patternNames(pat, rel));
+  };
+  const relaxMatches = (target, dep) => {
+    const t = String(target || '').trim().replace(/^\^/, '');
+    if (t === '' || t === 'all' || t === '*' || t === '*:*') return true;
+    const parts = t.split(':');
+    const last = parts[parts.length - 1];
+    return last === dep || last === '*';
+  };
+  return {
+    conditionalSkipped,
+    governing: (manifest) => projects.filter((p) => typeof manifest === 'string' && governs(p, manifest)),
+    constraintsFor: (name, gov) => constraints.filter((c) => c.name === name && gov.some((p) => p.file === c.project)),
+    // A relaxation naming package `a:dep` is applied to `dep` wherever it is used: widening more than the cabal semantics is the safe direction.
+    relaxationsFor: (name, gov) => gov.flatMap((p) => (p.allowRelaxations || []).filter((r) => relaxMatches(r.target, name)).map((r) => ({ direction: r.direction, target: r.target, file: r.file, line: r.line }))),
+  };
 }
 
 /**
@@ -130,6 +224,70 @@ export async function prefetchHackageFeed(files, { env = process.env, resolvedCo
   } catch (e) { return { status: 'failed', detail: `the feed step failed: ${String((e && e.message) || e).slice(0, 120)}` }; }
 }
 
+/**
+ * The compiler this project is built with, only when it is stated: `with-compiler`, a Stack `compiler:`, a plan's compiler-id, or a
+ * `tested-with` whose every item is the same exact version (a claim by the project, weaker than a pin). Sources that disagree, or a
+ * `tested-with` listing several versions, leave it UNKNOWN, never a guess.
+ * @returns {{version: string|null, label: string, basis: string|null, reason: string|null}}
+ */
+export function projectCompiler(files, manifests, resolved) {
+  const pins = [];
+  const take = (v, basis) => { if (typeof v === 'string') { const m = /(?:^|[\\/])ghc-(\d+(?:\.\d+)+)$/.exec(v.trim()); if (m) pins.push({ version: m[1], basis }); } };
+  for (const p of (manifests && manifests.projects) || []) take(p.withCompiler, 'with-compiler');
+  for (const s of (manifests && manifests.stack) || []) take(s.compiler, 'stack compiler');
+  const pc = resolved && resolved.compiler;
+  if (pc && /^ghc$/i.test(pc.name || 'ghc') && pc.version) pins.push({ version: pc.version, basis: 'plan compiler-id' });
+  const distinct = [...new Set(pins.map((p) => p.version))];
+  if (distinct.length > 1) return { version: null, label: 'unknown compiler', basis: null, reason: `the project states conflicting compilers: ${pins.map((p) => `${p.basis} ${p.version}`).join(', ')}` };
+  if (distinct.length === 1) return { version: distinct[0], label: `GHC ${distinct[0]}`, basis: [...new Set(pins.map((p) => p.basis))].join(' + '), reason: null };
+  let tested = null;
+  try { tested = deriveCppContext(files).ghc; } catch { /* unreadable manifests state nothing */ }
+  if (tested && tested.basis === 'tested-with') {
+    const vs = [...new Set(tested.versions.map((v) => v.join('.')))];
+    if (vs.length === 1) return { version: vs[0], label: `GHC ${vs[0]}`, basis: 'tested-with (the project\'s own claim, not a pin)', reason: null };
+    return { version: null, label: 'unknown compiler', basis: null, reason: `tested-with lists several GHC versions: ${vs.join(', ')}; none is pinned` };
+  }
+  return { version: null, label: 'unknown compiler', basis: null, reason: 'no compiler is pinned by with-compiler, a Stack compiler or a plan, and no tested-with names exactly one version' };
+}
+
+/** A compiler-provided package takes its version from the plan's boot unit, else (for base) the compiler's base series; otherwise it stays as declared. */
+function resolveBootComponent(c, compiler, resolved) {
+  if (!c.ghcComponent || c.version) return c;
+  const boot = resolved && resolved.bootLibraries && resolved.bootLibraries.find((b) => b.name === c.name && b.version);
+  if (boot) return { ...c, version: boot.version, resolution: 'plan-compiler', versionSource: boot.versionSource || null, compilerDerived: { compiler: compiler.label, basis: 'plan boot library' } };
+  if (compiler.version && c.name === 'base') {
+    const range = baseRangeForGhc(compiler.version);
+    if (range) return { ...c, declaredRange: range, unbounded: false, declaredRangeAsWritten: c.declaredRange || null, compilerDerived: { compiler: compiler.label, basis: compiler.basis, rule: `base ${range} is the base series of ${compiler.label}` } };
+  }
+  return c;
+}
+
+const GHC_RANK = { affected: 3, 'possibly-affected': 2, unknown: 1 };
+/** One finding per advisory for the project's compiler: members, the worst status, and a remediation that names the compiler. */
+function groupCompilerFindings(findings, compiler) {
+  const byAdvisory = new Map();
+  for (const f of findings) { const k = `${f.osvId}\u0000${(f.ids && f.ids[0]) || ''}`; if (!byAdvisory.has(k)) byAdvisory.set(k, []); byAdvisory.get(k).push(f); }
+  const out = [];
+  for (const members of byAdvisory.values()) {
+    const rank = (f) => GHC_RANK[f.matchStatus] || 0;
+    const lead = members.slice().sort((a, b) => rank(b) - rank(a))[0];
+    const packages = [...new Set(members.map((m) => m.name))].sort();
+    const fixed = [...new Set(members.flatMap((m) => m.fixedIn || []))];
+    const list = packages.join(', ');
+    const fixText = fixed.length ? `a release that ships ${list} ${fixed.join(' or ')} or later` : `a release with a fixed ${list} (none is published yet)`;
+    const remediation = compiler.version
+      ? `${list} ${packages.length > 1 ? 'are' : 'is'} provided by the compiler, and this project builds with ${compiler.label} (${compiler.basis}). Upgrade GHC to ${fixText}; a Cabal bound does not change the compiler's own library.`
+      : `${list} ${packages.length > 1 ? 'are' : 'is'} provided by the compiler, and this project's compiler is unknown (${compiler.reason}), so which ${list} version applies cannot be decided. Pin one with with-compiler in cabal.project, or supply a Cabal plan, to decide it. The fix is a compiler upgrade: upgrade GHC to ${fixText}.`;
+    out.push({
+      ...lead, name: list, packages, grouped: 'compiler', ghcComponent: true, compiler: { version: compiler.version, label: compiler.label, basis: compiler.basis, reason: compiler.reason },
+      matchStatus: lead.matchStatus, remediation,
+      members: members.map((m) => ({ name: m.name, scope: m.scope, version: m.version, declaredRange: m.declaredRange, matchStatus: m.matchStatus, matchReason: m.matchReason, resolution: m.resolution, carriedBy: m.carriedBy, ...(m.compilerDerived ? { compilerDerived: m.compilerDerived } : {}) })),
+      memberCount: members.length,
+    });
+  }
+  return out;
+}
+
 /** Imports and import-qualified callees across the project's Haskell sources. */
 export function collectUsage(files) {
   const hs = {};
@@ -156,9 +314,15 @@ export function analyzeHaskellSupply(files, { db = undefined, root = null, env =
   if (!components.length) return out;
   let feedReason = null;
   if (db === undefined) { const c = configuredAdvisoryDb(root, env); db = c.db; feedReason = c.reason; }
-  const ev = evaluateComponents(components, db, { kev, epss });
-  out.statuses = ev.statuses;
+  const compiler = projectCompiler(files, manifests, resolved);
+  out.compiler = compiler;
+  // Evaluate every distinct declared use (the evaluator reports the worst per package, scope and advisory), with compiler-provided packages
+  // resolved against the project's compiler where that can be decided.
+  const evalComponents = mergeResolved(hc.uses, resolved).map((c) => resolveBootComponent(c, compiler, resolved));
+  const ev = evaluateComponents(evalComponents, db, { kev, epss });
+  out.statuses = ev.statuses.map((s) => (s.ghcComponent ? { ...s, compiler: compiler.label } : s));
   out.feed = ev.feed;
+  if (hc.bounds && hc.bounds.conditionalConstraintsSkipped) out.gaps.push({ kind: 'conditional-constraints-not-applied', detail: `${hc.bounds.conditionalConstraintsSkipped} cabal.project constraint(s) sit under a condition (if os(...), flag, compiler) and were NOT applied to declared ranges; they are not in force everywhere, so a declared range they would narrow is judged as written` });
   if (!db) out.gaps.push({ kind: 'advisory-feed-unavailable', detail: `${feedReason || ev.feed.detail}. ${components.length} Hackage dependencies were NOT checked against any advisory: the absence of findings is not a clean result.` });
   else if (ev.feed.status === 'stale-cache') out.gaps.push({ kind: 'advisory-feed-stale', detail: ev.feed.detail });
   const notCovered = ev.statuses.filter((x) => x.status === 'feed-incomplete' || x.status === 'feed-stale');
@@ -173,8 +337,13 @@ export function analyzeHaskellSupply(files, { db = undefined, root = null, env =
     f.reachability = r;
     f.functionReachable = r.function === 'reachable' ? 'reachable' : (r.function === 'not-imported' ? 'unreachable' : 'unknown');
     f.reachabilityTier = r.import === 'imported' ? (r.function === 'reachable' ? 'function-reachable' : 'import-reachable') : (r.import === 'not-imported' ? 'not-imported' : 'unknown');
-    out.supplyChain.push({ ...f, file: f.file, line: f.line });
   }
+  // Compiler-provided packages (GHC boot libraries) are one finding per advisory for the project's compiler, not one per package and scope:
+  // the fix is a compiler upgrade whatever the Cabal bounds say. Every member stays listed in the group and every use keeps its status row.
+  const ordinary = ev.findings.filter((f) => !f.ghcComponent);
+  const groups = groupCompilerFindings(ev.findings.filter((f) => f.ghcComponent), compiler);
+  for (const f of [...ordinary, ...groups]) out.supplyChain.push({ ...f, file: f.file, line: f.line });
+  out.counts = { dependencyFindings: ordinary.length, compilerAdvisories: groups.length, compilerMemberRows: groups.reduce((n, g) => n + g.memberCount, 0), statusRows: out.statuses.length };
   // policy
   const si = sourceIntegrity(manifests || {});
   for (const s of si.filter((x) => x.finding)) {
