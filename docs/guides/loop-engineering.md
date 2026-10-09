@@ -112,6 +112,23 @@ Everything the controller learns lives in `.loop-engineering/` (git-ignored, mod
 evidence key. It is deliberately outside `.agentic-security/`, so loop state can never be mistaken for scan evidence.
 Delete a finished run's directory to reclaim space; the manifest and evidence of an active run must be left alone.
 
+## The assurance-differentiation profile
+
+`profiles/assurance-differentiation.json` registers `AGENTIC_SECURITY_DIFFERENTIATION_PRD.md` (an untracked root PRD) with the
+same controller and the same section-8 importer. It carries the PRD section 7 limits as finite caps. The two budgets
+(`claudeBudgetUsd` 50, `perAttemptBudgetUsd` 6) are ceilings, not spending authorization.
+
+Three optional profile fields were added; a profile without them (such as `haskell-nix`) behaves exactly as before.
+
+| Field | Meaning |
+|---|---|
+| `workstreams` | Ordered prefix and number-range rules that put every requirement in exactly one of eleven workstreams (seven product workstreams plus foundation, loop, documentation and release), each with its own evidence watch set. A requirement matching no rule or two rules refuses `init`. The manifest records the grouping and `computeProgress` reports a per-workstream view. |
+| `suites.<key>.protectedWrapper` / `notYetRunnable` | A supervisor-authored suite wrapper that must exist before launch, and an honest declaration that it does not exist yet. `preflight` and `start` refuse to launch while either is unmet, naming the suite and the reason. |
+| `unenforced` | PRD-named controls this controller cannot enforce (for example `networkRequestSeconds`, the separate provider envelope, a fixed 15 s stale threshold). They are listed with a status and a reason, never claimed. |
+
+Until the protected wrappers under `scripts/assurance-differentiation/test/` are authored, only the `loop` suite is runnable and
+`preflight` reports the other ten as blockers. `profileVersion` must be 1; any other value is refused with the migration hint.
+
 ## Haskell and Nix tools in the loop
 
 | Tool | Used for | When absent | Troubleshooting |

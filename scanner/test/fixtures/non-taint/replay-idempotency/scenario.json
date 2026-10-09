@@ -1,0 +1,7 @@
+{
+  "export": "createWebhookHandler",
+  "sink": "creditAccount",
+  "request": { "eventId": "evt_1001", "accountId": "acct_7", "amountCents": 2500 },
+  "distinctRequest": { "eventId": "evt_1002", "accountId": "acct_7", "amountCents": 2500 },
+  "deliveries": 3
+}

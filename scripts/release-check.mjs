@@ -291,6 +291,17 @@ export const CHECKS = [
       'and say why in the commit.',
   },
   {
+    // X-208: the oracle conformance contract. Rejects an adapter that lacks class scope, resource budgets, negative controls or
+    // verifier-side evidence logic, fixtures or adapter logic that moved since they were pinned, and (where the trust boundary
+    // can run) any wrong state mapping, accepted tamper, uncancellable run or non-reproducing replay. On a host that cannot run
+    // the boundary the execution half is reported not-run, never passed; the static half is always enforced.
+    id: 'verification-conformance-gate',
+    title: 'Every registered verification oracle conforms (class scope, budgets, negative controls, evidence receipts)',
+    slow: true,
+    remedy: 'Run `npm run verification:conformance:check` in scanner/ and fix the adapter named. To change a pinned fixture or ' +
+      'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins` and say why in the commit.',
+  },
+  {
     id: 'calibration-holdout',
     title: 'Confidence surface verified on held-out data',
     slow: false,
@@ -356,7 +367,7 @@ export function plannedCheckIds({ fast = false } = {}) {
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],
   'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
-  'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate'],
+  'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate'],
 };
 
 /** Every group name a run may select, `rest` included. */
@@ -1032,6 +1043,7 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
+  evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
 
   evaluate('calibration-holdout', () => {
     const r = runCalibrationHoldoutCheck(REPO);

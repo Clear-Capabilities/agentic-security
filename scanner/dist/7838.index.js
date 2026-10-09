@@ -536,6 +536,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _fix_honesty_gate_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(27785);
 /* harmony import */ var _test_runner_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(35136);
 /* harmony import */ var _fix_metrics_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(32238);
+/* harmony import */ var _verification_emit_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(85578);
 var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_engine_js__WEBPACK_IMPORTED_MODULE_3__]);
 _engine_js__WEBPACK_IMPORTED_MODULE_3__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // Closed-loop /fix verification (Sentinel-parity FR-L4-4, FR-L4-5).
@@ -554,6 +555,7 @@ _engine_js__WEBPACK_IMPORTED_MODULE_3__ = (__webpack_async_dependencies__.then ?
 // If any of those fail, the caller is expected to NOT apply the patch and
 // instead surface a "fix plan" — a numbered list of steps the engineer can
 // follow — rather than dump a broken patch on the user.
+
 
 
 
@@ -727,6 +729,8 @@ async function verifyFix({
   testTimeoutMs,
   recordMetrics = true,
   poc,
+  patchNegative,
+  assuranceConfig,
 } = {}) {
   // R5 (reporting half) — time each stage as it runs. Measured here rather
   // than inside each stage because only this function knows the boundaries of
@@ -809,7 +813,26 @@ async function verifyFix({
   }
   _lap('honesty');
 
-  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true);
+  // X-204: patch-negative verification, only when the caller asked for it AND the `patch-negative-verification` feature is
+  // on. `patchNegative` is the requester's exploit scenario and functional cases ({ original, functional, commit?, ... }); the
+  // candidate `files` are the proposed diff. With the flag off, or no request, nothing here runs and every field below is
+  // exactly what it was before.
+  let pn = null;
+  if (patchNegative && typeof patchNegative === 'object') {
+    try {
+      const { verifyPatchNegative } = await Promise.all(/* import() */[__webpack_require__.e(6239), __webpack_require__.e(5613)]).then(__webpack_require__.bind(__webpack_require__, 95613));
+      pn = await verifyPatchNegative({
+        hypothesisId: originalFindingStableId, ...patchNegative, patch: { files },
+        commit: patchNegative.commit ?? (0,_verification_emit_js__WEBPACK_IMPORTED_MODULE_7__.headCommit)(scanRoot),
+      }, { config: assuranceConfig });
+    } catch (e) {
+      pn = { status: 'error', verifiedFix: false, incompleteStep: 'patch-negative', failureCode: 'harness-error', reason: `patch-negative verification failed to run: ${String(e?.message || e).slice(0, 200)}`, summary: '' };
+    }
+  }
+  const pnActive = pn !== null && pn.status !== 'disabled';
+  _lap('patchNegative');
+
+  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true) && (pnActive ? pn.verifiedFix === true : true);
 
   // FR-305 (assurance-hardening PRD): `ok` alone conflates "every leg
   // genuinely ran and passed" with "passed, but a required leg was skipped
@@ -851,6 +874,7 @@ async function verifyFix({
       : pocLeg.status === 'no-longer-proven' ? 'poc:     PASS (ran against the patch and no longer demonstrates the vulnerability)'
       : `poc:     inconclusive — not counted either way (${pocLeg.reason || 'no detail reported'})`,
     // FR-305: never let a degraded pass read the same as a full one.
+    pnActive ? `patch-negative: ${pn.verifiedFix ? 'PASS (verified-fix)' : `FAIL - not verified-fix, incomplete step '${pn.incompleteStep}' (${pn.failureCode}): ${pn.reason}`}` : null,
     ok && !verifiedFull ? `NOTE:    PASSED, but NOT fully verified — ${degradedLegs.join('; ')}` : null,
   ].filter(Boolean).join('\n');
   // Persist the attempt so the distribution can be reported from real runs.
@@ -877,7 +901,19 @@ async function verifyFix({
     });
   }
 
-  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary };
+  // X-201: the one verification record, ADDITIVE. `ok` and every field above stay exactly as they were; the record
+  // says what was actually established (a static re-scan is not an exploit oracle, so without a PoC leg it is
+  // `not-run`, and nothing here can reach `confirmed`/`refuted`: that takes a trusted oracle adapter).
+  const emitted = (0,_verification_emit_js__WEBPACK_IMPORTED_MODULE_7__/* .emitVerification */ .T)('fix-verify', { rescan, lint, tests, poc: pocLeg }, {
+    originalFindingStableId, files, scanRoot, finding: poc?.finding,
+  });
+  const verificationRecord = emitted.ok ? emitted.record : null;
+
+  return {
+    ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary, verificationRecord,
+    // additive, present only when patch-negative verification was requested (X-204)
+    ...(pn ? { patchNegative: pn, ...(pnActive ? { fixStatus: pn.verifiedFix ? 'verified-fix' : 'not-verified-fix' } : {}) } : {}),
+  };
 }
 
 __webpack_async_result__();

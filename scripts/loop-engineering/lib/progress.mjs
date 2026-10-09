@@ -57,14 +57,29 @@ export function computeProgress(manifest, assessMap, runReqState = {}) {
       rejectedEvidence: (a.rejected || []).length,
     });
   }
-  void byId;
+  // Optional workstream view, present only when the profile groups requirements.
+  let workstreams;
+  if (manifest.workstreams) {
+    workstreams = {};
+    for (const k of manifest.workstreams.order) workstreams[k] = { label: manifest.workstreams.labels[k], kind: manifest.workstreams.kinds[k], verifiedWeight: 0, totalWeight: 0, verifiedRequirements: 0, totalRequirements: 0, stale: 0, blocked: 0, failed: 0 };
+    for (const row of rows) {
+      const w = workstreams[byId.get(row.id).workstream];
+      if (!w) continue;
+      w.totalWeight += row.weight; w.totalRequirements += 1;
+      if (row.state === 'verified') { w.verifiedWeight += row.weight; w.verifiedRequirements += 1; }
+      else if (row.state === 'stale') w.stale += 1;
+      else if (row.state === 'blocked') w.blocked += 1;
+      else if (row.state === 'failed' || row.state === 'timed-out') w.failed += 1;
+    }
+    for (const w of Object.values(workstreams)) w.verifiedPercent = formatPercent(w.verifiedWeight, w.totalWeight);
+  }
   const categories = Object.fromEntries(Object.entries(cat).map(([k, c]) => [k, { label: CATEGORY_LABEL[k] || k, verifiedPercent: formatPercent(c.num, c.den), verifiedWeight: c.num, totalWeight: c.den, verifiedRequirements: c.verified, totalRequirements: c.requirements }]));
   return {
     verifiedPercent: formatPercent(num, den),
     verifiedWeight: num, totalWeight: den,
     verifiedRequirements: counts.verified, totalRequirements: manifest.requirements.length,
     passedCriteria: critPass, totalCriteria: critTotal,
-    counts, categories, requirements: rows,
+    counts, categories, ...(workstreams ? { workstreams } : {}), requirements: rows,
   };
 }
 

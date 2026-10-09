@@ -1,0 +1,6 @@
+{
+  "export": "fetchPreview",
+  "sink": "fetch",
+  "benignValue": "https://api.example/items/1",
+  "attackerValue": "http://attacker.invalid/steal"
+}

@@ -1,7 +1,7 @@
 // Execution profile: finite limits, scoped permissions, suite -> argv mapping.
 // Validation is strict because the profile is the only thing standing between
 // an unattended worker and an unbounded or over-permissive run.
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { sha256, canonicalJson } from './util.mjs';
 
@@ -20,6 +20,67 @@ export function loadProfile(path) {
   return { profile: p, sha256: sha256(canonicalJson(p)) };
 }
 
+export const SUPPORTED_PROFILE_VERSION = 1;
+const WORKSTREAM_KINDS = ['product', 'foundation', 'loop', 'documentation', 'release'];
+
+// Optional workstream grouping (backwards compatible: a profile without a
+// `workstreams` block behaves exactly as before). A requirement belongs to
+// exactly one workstream, chosen by ordered prefix/number-range rules.
+export function workstreamMatches(ws, id) {
+  const m = /^([A-Z]+)-(\d+)$/.exec(id);
+  if (!m || !ws || !Array.isArray(ws.assign)) return [];
+  const n = Number(m[2]);
+  return ws.assign.filter((r) => r.prefix === m[1] && (r.from === undefined || (n >= r.from && n <= r.to))).map((r) => r.workstream);
+}
+
+function validateWorkstreams(ws, problems) {
+  if (typeof ws !== 'object' || ws === null || Array.isArray(ws)) { problems.push('workstreams must be an object'); return; }
+  const order = ws.order;
+  if (!Array.isArray(order) || !order.length || order.some((x) => typeof x !== 'string' || !x) || new Set(order).size !== order.length) { problems.push('workstreams.order must be a non-empty list of unique names'); return; }
+  const defs = ws.definitions || {};
+  for (const name of order) {
+    const d = defs[name];
+    if (!d) { problems.push(`workstreams.definitions.${name} is missing`); continue; }
+    if (typeof d.label !== 'string' || !d.label) problems.push(`workstreams.definitions.${name}.label is required`);
+    if (!WORKSTREAM_KINDS.includes(d.kind)) problems.push(`workstreams.definitions.${name}.kind must be one of ${WORKSTREAM_KINDS.join(', ')}`);
+    if (!Array.isArray(d.watch) || !d.watch.length || d.watch.some((g) => typeof g !== 'string' || !g)) problems.push(`workstreams.definitions.${name}.watch must be a non-empty list of globs (every requirement needs an evidence watch set)`);
+  }
+  for (const name of Object.keys(defs)) if (!order.includes(name)) problems.push(`workstreams.definitions.${name} is not listed in workstreams.order`);
+  if (ws.globalWatch !== undefined && (!Array.isArray(ws.globalWatch) || ws.globalWatch.some((g) => typeof g !== 'string' || !g))) problems.push('workstreams.globalWatch must be a list of globs');
+  if (!Array.isArray(ws.assign) || !ws.assign.length) { problems.push('workstreams.assign must be a non-empty list of rules'); return; }
+  ws.assign.forEach((r, i) => {
+    if (typeof r.prefix !== 'string' || !/^[A-Z]+$/.test(r.prefix)) problems.push(`workstreams.assign[${i}].prefix must be an upper-case ID prefix`);
+    if (!order.includes(r.workstream)) problems.push(`workstreams.assign[${i}].workstream "${r.workstream}" is not a defined workstream`);
+    const hasRange = r.from !== undefined || r.to !== undefined;
+    if (hasRange && (!Number.isInteger(r.from) || !Number.isInteger(r.to) || r.from > r.to)) problems.push(`workstreams.assign[${i}] needs integer from <= to`);
+  });
+}
+
+// Disclosure list of PRD-named controls this controller cannot enforce.
+function validateUnenforced(list, problems) {
+  if (!Array.isArray(list)) { problems.push('unenforced must be a list'); return; }
+  list.forEach((u, i) => {
+    if (!u || typeof u.field !== 'string' || !u.field) problems.push(`unenforced[${i}].field is required`);
+    if (!u || typeof u.note !== 'string' || !u.note.trim()) problems.push(`unenforced[${i}].note must say why the control is not enforced`);
+  });
+}
+
+// Why a profile cannot launch even though it is structurally valid: suites that
+// are declared not runnable yet, or whose supervisor-authored wrapper is
+// missing. Returns [{ suite, reason }]. Suites workers write themselves
+// (no protectedWrapper flag) are never blocked here, so existing profiles are unaffected.
+export function suiteLaunchBlockers(profile, repoRoot) {
+  const out = [];
+  for (const [name, s] of Object.entries(profile.suites || {})) {
+    if (s.notYetRunnable) { out.push({ suite: name, reason: `declared not yet runnable: ${s.notYetRunnable.reason}` }); continue; }
+    if (s.protectedWrapper && s.kind === 'node-test') {
+      const missing = (s.files || []).filter((f) => !existsSync(resolve(repoRoot, s.cwd || '.', f)));
+      if (missing.length) out.push({ suite: name, reason: `protected wrapper file(s) not found: ${missing.join(', ')}; author them in the supervising session before launch` });
+    }
+  }
+  return out;
+}
+
 export function insideRepo(repoRoot, p) {
   if (isAbsolute(p)) return false;
   const abs = resolve(repoRoot, p);
@@ -30,6 +91,7 @@ export function insideRepo(repoRoot, p) {
 export function validateProfile(p, repoRoot) {
   const problems = [];
   if (!p || typeof p !== 'object') throw new ProfileError(['profile must be an object']);
+  if (p.profileVersion !== SUPPORTED_PROFILE_VERSION) problems.push(`profileVersion ${JSON.stringify(p.profileVersion)} is not supported: this controller reads profileVersion ${SUPPORTED_PROFILE_VERSION}; migrate the profile or use a controller that supports it`);
   const L = p.limits || {};
   for (const k of REQUIRED_LIMITS) {
     if (typeof L[k] !== 'number' || !Number.isFinite(L[k]) || L[k] <= 0) problems.push(`limits.${k} must be a finite positive number (budgets are never unbounded)`);
@@ -63,6 +125,7 @@ export function validateProfile(p, repoRoot) {
     if (s.kind === 'node-test') {
       checkCmd(`suite ${name}`, { ...s, args: ['--test', ...(s.files || [])] });
       if (!s.files || !s.files.length) problems.push(`suite ${name}: node-test suite must name at least one test file`);
+      if (s.notYetRunnable !== undefined && (typeof s.notYetRunnable?.reason !== 'string' || !s.notYetRunnable.reason.trim())) problems.push(`suite ${name}: notYetRunnable needs a reason`);
       for (const f of s.files || []) if (!f.endsWith('.test.js') || f.startsWith('/') || f.includes('..')) problems.push(`suite ${name}: bad test file path "${f}"`);
     }
   }
@@ -76,6 +139,8 @@ export function validateProfile(p, repoRoot) {
     if (!(s.requiresTools || []).length) problems.push(`suite ${name}: remote is only reached when a required tool is missing, so requiresTools must name one`);
   }
   for (const g of [...(p.baselineGates || []), ...(p.finalGates || [])]) checkCmd(`gate ${g.id}`, g);
+  if (p.workstreams !== undefined) validateWorkstreams(p.workstreams, problems);
+  if (p.unenforced !== undefined) validateUnenforced(p.unenforced, problems);
   if (!p.watch || !p.watch.LOOP) problems.push('watch globs missing');
   if (problems.length) throw new ProfileError(problems);
   return true;

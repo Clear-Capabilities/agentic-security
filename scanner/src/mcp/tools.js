@@ -26,6 +26,8 @@ import { withStateWritesDisabled } from '../posture/state-dir.js';
 import { analyzeTranscript, formatCacheReport, renderCacheStatusLine } from '../posture/cache-economics.js';
 import { redactString, redactFinding } from './redact.js';
 import { _remediationOf, normalizeFindings } from '../report/index.js';
+// X-206: the one projection of the verification record, shared with the JSON report, the text report and the autopilot response.
+import { verificationFields } from '../posture/verification/projection.js';
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
@@ -599,6 +601,10 @@ export const explain_finding = {
       findingProvenance: f.findingProvenance ? redactFindingProvenance(f.findingProvenance, {
         pseudonymize: process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1',
       }) : null,
+      // X-206: the same verification projection the JSON and text reports carry; absent when the finding has no record.
+      ...(f.verificationRecord && typeof f.verificationRecord === 'object'
+        ? { verificationRecord: f.verificationRecord, ...verificationFields(f.verificationRecord, { replay: f.verificationReplay }) }
+        : {}),
     };
   },
 };
@@ -875,7 +881,7 @@ export const apply_fix = {
           // default. Normalized to the scan+lint verdict shape used below.
           const { verifyFixWithTests } = await import('../posture/fix-verify-loop.js');
           const t = await verifyFixWithTests({ scanRoot: ctx.sessionRoot, originalFindingStableId: f.stableId, files: _files });
-          verdict = { ok: t.ok, summary: t.summary, rescan: t.legs?.scan?.detail, lint: t.legs?.lint?.detail, tests: t.legs?.tests, testVerdict: t.verdict };
+          verdict = { ok: t.ok, summary: t.summary, rescan: t.legs?.scan?.detail, lint: t.legs?.lint?.detail, tests: t.legs?.tests, testVerdict: t.verdict, verificationRecord: t.verificationRecord ?? null };
         } else {
           const verifyFixCore = await getVerifyFixCore();
           verdict = await verifyFixCore({
@@ -893,6 +899,9 @@ export const apply_fix = {
           _meta: META, applied: false,
           reason: `patch rejected by verifier: ${verdict.summary || verdict.rescan?.reason || 'did not verify'}`,
           verify: { rescan: verdict.rescan, lint: { runner: verdict.lint?.runner, ok: verdict.lint?.ok }, honesty: verdict.honesty || null },
+          // X-201: the same version-1 verification record every surface emits (additive; null when none could be formed).
+          verificationRecord: verdict.verificationRecord ?? null,
+          ...verificationFields(verdict.verificationRecord),
         };
       }
       // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
@@ -913,7 +922,7 @@ export const apply_fix = {
       }
       const materialClassification = classifyFixMaterialRisk(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, materialClassification };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord), materialClassification };
       }
       const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
       if (approvalRefusal) return approvalRefusal;
@@ -944,7 +953,7 @@ export const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary }, acceptance, materialClassification };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord) }, acceptance, materialClassification };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -1033,7 +1042,7 @@ export const apply_fix = {
 // proceed with apply_fix.
 export const verify_fix = {
   name: 'verify_fix',
-  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory, runs the project linter, runs the project test suite, checks fix honesty (FULL/MITIGATION/WORKAROUND) when fixMeta is supplied, and re-runs the PoC when one exists. Returns { ok, rescan, lint, tests, honesty, poc, summary }. Does not write to the target project’s own files, but DOES append one record per attempt to .agentic-security/fix-metrics.jsonl for the measured fix-loop.',
+  description: 'Verify a proposed patch before applying. Re-scans the patched files in memory, runs the project linter, runs the project test suite, checks fix honesty (FULL/MITIGATION/WORKAROUND) when fixMeta is supplied, and re-runs the PoC when one exists. Returns { ok, rescan, lint, tests, honesty, poc, summary, verificationRecord } (verificationRecord is the shared version-1 record: outcome is one of not-run, unsupported, inconclusive, error, refuted, confirmed, and a static re-scan alone is never reported as confirmed; verificationView is the shared projection every interface shows for it, with state, scope, evidence ids, replay prerequisites and what was and was not verified). Does not write to the target project’s own files, but DOES append one record per attempt to .agentic-security/fix-metrics.jsonl for the measured fix-loop.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -1134,6 +1143,10 @@ export const verify_fix = {
         honesty: r.honesty,
         poc: r.poc ? { ...r.poc, reason: r.poc.reason ? redactString(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
+        // X-201: the one version-1 verification record (additive). It states what was actually established, e.g.
+        // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
+        verificationRecord: r.verificationRecord ?? null,
+        ...verificationFields(r.verificationRecord),
       };
     } catch (e) {
       return { _meta: META, ok: false, reason: `verify_fix failed: ${e.message}` };

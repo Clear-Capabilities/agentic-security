@@ -96,6 +96,8 @@ Wired in `bin/agentic-security.js` after every filter and after `makeDeterminist
 
 **`verifyRunAttestation` now has two real callers.** `agentic-security verify-attestation <file>` auto-detects whether the given JSON is an evidence bundle (`.finding`+`.signature`, verified via `evidence-bundle.js`'s Ed25519 path, unchanged) or a run attestation (`.digest`+`.canonicalisation`, either bare or embedded under a full `last-scan.json`'s `.attestation` field) and dispatches accordingly. A run attestation isn't self-contained the way a bundle is — verifying it means re-scanning the project (`--against <path>`, default `.`) and confirming the fresh scan reproduces the attested digest, which is the actual, meaningful claim this artifact makes ("does this codebase, scanned now, match what was attested earlier"). Separately, `scripts/release-check.mjs`'s `attestation-self-check` gate round-trips a synthetic finding set through compute→verify (and a mutated copy through verify, which must fail) on every release, catching a broken canonicalisation or signing path before it ships — independent of whether any project ever calls `verify-attestation` on a real artifact.
 
+**Issuer and trust basis (CORE-003.AC03).** `evidence-bundle.js` signs an `issuance` block inside the canonical bytes (only when present, so pre-existing bundles keep their signatures): issuer id and key fingerprint, `trustBasis: 'self-issued-local-key'`, `independentlyCertified: false`, and a plain statement. `verifyEvidenceBundle` returns `trustBasis`/`issuer`/`trustNote`; a bundle with no `issuance` verifies and is reported `none-declared` (never as trusted); an unknown basis, an `independentlyCertified: true` claim, or an issuer fingerprint that is not the verifying key is rejected even when validly signed. The only basis this build can verify is the local one: a third-party basis needs a trust-root policy that does not exist here. A signed run attestation carries the same self-issued label. `verify-attestation` exit codes are unchanged. Signing keys are protected from workers by `sandbox/trust-boundary.js` (see `sandbox/CLAUDE.md`). Suite: `test/evidence-issuer.test.js`.
+
 **Integrity + signing** — `integrity.js` (per-install HMAC for `last-scan.json`), `rule-pack-signing.js`. The HMAC key lives at `$XDG_CONFIG_HOME/agentic-security/scan-key`; override via `$AGENTIC_SECURITY_HMAC_KEY`. Premortem-derived; do not regress to hostname-derived.
 
 **Rule lifecycle** — `custom-rules.js` (YAML pattern DSL), `rule-overrides.js` (`disable:` gated on signature), `rule-packs.js`, `rule-synthesis.js` (proposes suppressions from triage feedback), `ruleset-version.js`.
@@ -138,6 +140,178 @@ one was caught by the module's own test, not in review.
 - **Annotation order matters.** If your annotator reads `f.confidence`, run it after `annotateConfidence`. If it reads `f.exploitability`, run it after `annotateExploitability`. Wire in `engine.js`, not in `index.js`.
 - **No throwing.** Every annotation in `engine.js` is wrapped `try { … } catch (_) {}`. Your annotator must degrade gracefully — set `null` on the field and continue.
 - **Dead-module test.** `npm run test:lifecycle` fails the build if you export a public symbol from a posture module that no other source file imports. Wire it in `engine.js` (or allowlist it with a written reason in `test/no-dead-modules.test.js`).
+
+## Assurance contracts, baseline and rollout config — `assurance/` (9 modules)
+
+Foundation for the differentiation work (CORE-001, CORE-002, CORE-004). All of it is pure or read-only, and **nothing in it is wired into `engine.js` or the scan/report path**: a default scan is byte-for-byte unaffected, which `test/posture/assurance-config.test.js` pins. Consumers (X-201 and later) import it directly.
+
+- **`identity.js`**: ids for evidence records. Reuses `canonicalJson` (`evidence-bundle.js`) and `computeStableId` (`stable-id.js`, a hypothesis id is a finding's stable id). An id is a hash over an **allowlist** of semantic fields, so clocks (`createdAt`) and migration bookkeeping can never reach it. Prefixes `vrec/obind/capd/rlab/rev` are distinct from lineage's, and nothing here imports `lineage/` (a test checks that).
+- **`schema-kit.js`**: validator primitives. Closed-world (unknown fields rejected), typed error codes, supported major version 1 only, `sha256:<64 hex>` digests.
+- **`verification-record.js`**: the one verification record. Six distinct outcomes, a SEPARATE repair status, four evidence kinds. Structural rules: a model can only produce `inference`; `confirmed` needs referenced trusted-runtime-proof or independent-adjudication evidence; `confirmationLevel` must equal the level derived from the evidence (a forged level fails); `refuted` needs an applicable non-model oracle, valid preconditions and proving evidence.
+- **`contracts.js`**: observation binding (references a lineage observation by id only; absence in a sampled observation cannot establish `blocked`), capability decision (only runner/proxy mediation with a backend and an active-probe digest may claim `enforced`; a hook or in-process check never can), routing label (a decided label must name an adjudication or trusted-execution source), release evidence (`complete` is derived, never trusted), and `validateRecordSet` for duplicate ids, dangling references and conflicting claims.
+- **`migrations.js`**: explicit v1 adapters from legacy shapes (proof tier, boolean verified, egress decision, attestation, lineage observation) and a legacy view back out. Evidence can be lost, never invented: a legacy `true` is `inconclusive`, `proof-failed` is `inconclusive` not `refuted`, and the only route to `confirmed` is an explicit `trustedRunner` assertion bound to a commit. The legacy view's `verified` is `true` only for confirmed and `false` only for refuted, otherwise `null`.
+- **`config.js`**: the unified feature configuration. Reuses the env/`.agentic-security/*.yml` mechanism. Precedence: kill switch (`AGENTIC_SECURITY_NO_ASSURANCE` or `AGENTIC_SECURITY_NO_<FEATURE>`) > explicit override > `AGENTIC_SECURITY_ASSURANCE_<FEATURE>` > `.agentic-security/assurance.yml` > default (everything off). **A project file can never enable a `high-risk-execution` feature** (the file lives in the scanned repo); invalid configuration fails closed; unsupported platforms return a typed `unsupported` with the disclosure. `runFeature` returns typed `blocked`/`unsupported`/`degraded`/`disabled` results and never prompts.
+- **`bounded-io.js`**: `guardedModelCall` is the only route for new model/network calls. It owns no HTTP client (the transport is injected): feature gate, then `evaluateEgress` BEFORE the payload exists, then `redactPayload`, then the request-size limit, then deadline plus bounded retries, then output cap, with every decision appended to the existing egress audit chain. `readFileBounded`, `capOutput`, `withDeadline`, `retryBounded` enforce the limits `config.js` claims; `maxMemoryMiB` is carried for a runner and disclosed as not enforced here.
+- **`baseline.js`, `baseline-inventory.js`**: baseline capture (`scripts/baseline-capture.mjs`, `npm run baseline:capture`). Read-only; records HEAD, dirty paths, exact source and bundle digests, tool versions, entry points, the seven mappings and an 18-entry capability inventory (implemented / partial / unsupported / unmeasured, every path and exported symbol verified at capture time, a missing one is a reported problem). Unknown facts are `{status:'unknown', reason}` with no value. `evaluateBaseline` invalidates exactly the capabilities whose cited files changed and lists unrelated user changes as retained/introduced. The manifest is machine-specific, so it is generated on demand and not committed. When you change a capability's source or tests, update its inventory entry in the same change.
+
+Tests: `test/posture/assurance-{baseline,contracts,config}.test.js`, all in `test:posture`.
+
+## One verification record, trusted oracles and replay (X-201, X-202, X-203)
+
+Built on `assurance/` (the record schema, migrations, config) and `sandbox/trust-boundary.js` (the boundary). Three
+directories, all consumed rather than wired into the default scan: a default scan is unchanged, and every addition to an
+existing output is an additive field.
+
+**`verification/emit.js`: the one emit function (X-201).** `emitVerification(surface, source, ctx)` is what every
+verification surface calls to get the version-1 record (`{ ok, record, legacy, errors }`, never throws, validated before it
+returns). Surfaces and where they call it: `fix-verify.js` (`verificationRecord` on the result, which the MCP `verify_fix` and
+`apply_fix` tools forward), `fix-verify-loop.js`, `execution-proof.js` (`proveFinding` result), `verifier.js`
+(`verifierVerificationRecords`, called by the CLI `verify` command into its `verifier-runs/` run record, never onto the findings that
+are written back to `last-scan.json`), `autopilot.js` (`rec.verificationRecord`, `commit` option), `discovery/index.js` (hunt:
+`verificationRecords`, advisory) and `oracles/oracle.js` (the `oracle` surface). The rule for every mapping: evidence is lost,
+never invented, so no legacy surface can reach `confirmed` or `refuted`. A PoC run under the older sandbox path is `inconclusive`
+(not a trusted runner; `proof-failed` is a triage signal, not a refutation), a static re-scan with no exploit oracle is `not-run`,
+a family with no oracle is `unsupported`, a harness failure is `error`, a model verdict is `inference` evidence only. Only
+`oracle` emissions carry trusted-runner evidence, because only `oracles/oracle.js` builds them.
+
+Legacy consumers: nothing existing was renamed or removed. For a consumer that wants a status or a boolean, `toLegacyVerificationView`
+(`assurance/migrations.js`, also returned as `legacy`) maps `verified` to `true` only for `confirmed` and `false` only for `refuted`,
+`null` for the other four, and carries `status` with the real outcome name, so a skipped check can never read as a pass and an unrun
+check never as a failure. Native vocabularies keep their own fields (`proofTier`, `verifier_verdict`, autopilot `outcome`, fix-verify
+`ok`); the record sits beside them as `verificationRecord`. A boolean `true` migrated from a legacy record is `inconclusive`.
+
+**`oracles/` (X-202).** `oracle.js` is the adapter contract (`validateOracleSpec`, `defineOracle`) and the runner (`runOracle`).
+`adapters.js` holds the five class adapters (injection-execution, authorization-decision, state-transition,
+side-effect-reachability, parser-resource), `registry.js` the frozen registry and `oracleManifest()`, the machine-readable
+description X-208 gates on (class, prerequisites, platforms with an honest per-platform status, budgets, negative controls,
+fixture locations, limitations, logic digest). Fixtures: `test/fixtures/oracles/<class>/{positive,negative,inconclusive}`.
+- A run is: feature gate (`verification-oracles`, off by default, operator-only), request validation (closed-world: labels,
+  verdicts and receipts are never accepted; reserved `__oracle_*` names and path escapes are refused), prerequisite check
+  (an unmet one is `unsupported` with a typed reason and the target is never executed), a fresh workspace plus a verifier-owned
+  evidence directory outside it, the target through `runInBoundary` ONLY (a test pins that `oracle.js` imports no other way to
+  run code), a digest check of the adapter's own harness (a target that rewrote it makes the run `error`), then verifier-side
+  interpretation of what the run left behind, read after the whole process tree is dead. The settled status comes from
+  `settleVerification` with `observedBy: 'verifier'` evidence; a decided result (`confirmed`/`refuted`) additionally needs an
+  exact commit, else it is held at `inconclusive`.
+- `refuted` needs the adapter's own precondition (a benign control passed); a target that failed to load, exited early or never
+  reported is `inconclusive`. A run cut by its deadline decides nothing except for the parser/resource class, where the supervisor's
+  own deadline observation IS the measurement.
+- Receipts are issued only by `runOracle` (a WeakSet records them; they are deep-frozen; a copy or hand-built one is not
+  `isIssuedReceipt`). They carry the observed output (capped), the logic digest, sanitized environment metadata (an allowlist: no
+  hostname, paths or environment values) and the record id. Unsigned: signing belongs to the signer domain.
+- Platforms: macOS (userspace backend) is the only host these have been executed on. Linux is declared `unverified` in the
+  manifest and cannot be `supported`; today the boundary refuses to run on the namespace backend, which the runner reports as
+  `unsupported`. Changing what an adapter asserts means bumping its `version` (the harness text and version feed `logicDigest`).
+- KNOWN LIMIT: the target is imported into the harness process. A target written to recognise the oracle's payload and forge the
+  effect artifact is not distinguishable from a real injection; the oracle bounds the effect it tests, it is not a defence
+  against a target built to fool it. Tamper controls cover what a worker or target can do to adapter logic, labels, receipts and
+  status text.
+
+**`replay/replay.js` (X-203).** A replay manifest pins the repository commit, the patch hash, the fixture hash, the toolchain
+(runtime version, platform, architecture, and a container digest when there is one), the oracle id, version and logic digest, the
+inputs and the budgets. It is a description of an oracle run, not a second runner: `replayManifest` ends in `runOracle`, so the
+supervised process tree, output cap and cleanup are the existing ones. It rejects, and nothing executes, on a content hash that does
+not match, an oracle that changed since the manifest was made, a scope wider than "exactly the named oracle, no network,
+workspace-only writes", a budget over the oracle's ceiling, an unsafe file path or an unknown field. Missing toolchain, container
+runtime or image, a denied network (acquisition is never attempted: this build fetches nothing), a disabled feature or a boundary
+that cannot run are typed prerequisites with `resumable` set honestly; the attempt is parked (`awaiting-prerequisites`) and
+`resume` re-evaluates the prerequisites against the real host (a claim that they are met does nothing). Outcome while parked is
+`not-run` (or `unsupported` when this build can never meet it, such as container execution, which is not implemented), with no
+evidence; nothing is substituted for the execution that did not happen. Toolchain identity is exact. Persistence of attempts is
+the caller's (the attempt object is plain data). Suites: `test/verification/{verification-record,oracle-adapters,replay-manifest}.test.js`
+(`npm run test:verification`).
+
+## Patch-negative verification and non-taint classes (X-204, X-205)
+
+Same posture as the three directories above: consumed, not wired into the default scan, every output addition additive, and
+nothing changes with the feature flags off. Suites: `test/verification/{patch-negative,non-taint-classes}.test.js`
+(`npm run test:verification`).
+
+**`verification/patch-negative.js` (X-204).** `verifyPatchNegative(req, { config, runOptions })` is `verified-fix` only when four
+`replayManifest` runs (so each is pinned, boundary-confined and receipted) show: the exploit oracle CONFIRMS on the original
+revision, REFUTES on original-plus-diff, and the `functional-regression` oracle (the requester's declared cases) is clean on the
+original (a baseline: wrong expectations are reported, not blamed on the patch) and on the patched revision. It stops at the first
+non-passing step and names it: the result carries `incompleteStep` and a typed `failureCode` (`original-not-reproduced`,
+`patched-still-exploitable`, `patched-build-broken`, `functional-omitted`, `functional-baseline-invalid`,
+`functional-regression-detected`, `oracle-changed`, `revision-unbound`, `prerequisite-unmet` (resumable where stated),
+`environment-mismatch`, `promotion-refused`) and a `summary` that says what was and was not exercised. Gate: the
+`patch-negative-verification` feature (high-risk execution, operator-only, off by default) plus `verification-oracles`.
+Wiring: `fix-verify.js` (`verifyFix({ patchNegative, assuranceConfig })` adds `patchNegative` and `fixStatus`, and `ok` requires
+`verified-fix`), `fix-verify-loop.js` (a `patchNegative` leg and the `verified-fix` verdict) and `fix/apply-fix-service.js`
+(`applyVerifiedFix({ patchNegative })` writes only a promoted patch and returns `repairRecords`). With the flag off or no request,
+those return exactly what they did before.
+
+**`verification/patch-promotion.js`.** `promotePatch({ proposal, receipts })` re-derives the diff digest and revision from the
+PROPOSAL and refuses any receipt that was not issued by `runOracle` (`isIssuedReceipt`: copies and hand-built receipts fail), that
+covers different content than the exact diff on the original revision, that was issued for another commit or hypothesis, whose
+oracle or inputs differ between the original and patched runs, whose environment identity differs, or that is reused in two roles.
+Receipts are valid inside the verifier's process only; carrying a promotion across processes needs a signing domain (not here).
+
+**`verification/repair-records.js`.** The CORE-002 record has one repair status and no value for a rejection, so the history is an
+append-only ledger of separate, frozen, chained records: `proposed`, `rejected`, `promoted` (only through `recordPromotion`, which
+accepts nothing but a result `promotePatch` returned `ok`), `applied` (only after a promotion for that exact diff) and
+`rolled-back`. `verificationRepairFor`/`withRepairStatus` map the ledger onto the CORE-002 `repair` field (`replay-verified` carries the
+patched-negative record id); a rejection leaves it at `proposed` because the foundation enum is not widened here. The ledger is
+returned to the caller and not persisted: persisting it would need an artifact-registry classification.
+
+**New adapters.** `replay-idempotency` (a factory receiving a recording stand-in for the effect: a request and a distinct request
+are delivered as a control, then the same request is redelivered, and the verifier counts effects) and `functional-regression`
+(declared cases against expected JSON values; the hypothesis is that behaviour REGRESSED, so a clean patch is `refuted`). Both have
+the usual positive, negative and inconclusive fixtures under `test/fixtures/oracles/`.
+
+**`oracles/scenario-classes.js` (X-205).** The supported-class manifest for non-taint defects, surfaced as
+`oracleManifest().nonTaint`: tenant authorization and privileged action (REUSE `authorization-decision`), workflow order (REUSES
+`state-transition`), bounded resource exhaustion (REUSES `parser-resource`) and replay/idempotency (the new adapter). Each class
+lists what the requester must supply, its fixtures (`test/fixtures/non-taint/<class>/{positive,negative,scenario.json}`, application-style
+code), its limitations and the report lines a reader sees; every `runOracle` result additionally carries a `disclosure`
+(prerequisites, platform statement, limitations, class report). Unsupported non-taint classes (concurrent races, CSRF, authentication
+throttling) are named with a reason. `judgeNonTaintHypothesis` is the rule that taint absence is never an input to a refutation:
+without an executed oracle of the class's own adapter with proven preconditions the outcome is `not-run` (or `unsupported`); the hunt
+mapper in `verification/emit.js` uses it. `trustedNegativeDenominator` counts only decided results of an executed oracle of an
+advertised class with proven preconditions and trusted runtime proof, and lists every exclusion with its reason (its runtime consumer is `verificationCoverage` in
+`verification/projection.js`, which the JSON report, the CLI report and the MCP/autopilot surfaces use for the trusted-negative line).
+
+Not verified: Linux (the oracle platform statements stay `unverified`); only the declared exploit scenario and functional cases are
+exercised, never the patch's correctness elsewhere.
+
+## One projection for every interface, advisory/gating separation, conformance (X-206, X-207, X-208)
+
+Same posture as the sections above: consumed, not wired into the default scan, every output addition additive and present only
+when a verification record is. Suites: `test/verification/{interface-equivalence,advisory-gating,oracle-conformance}.test.js`
+(`npm run test:verification`). Docs: `docs/guides/verification-schema-migration.md`, `docs/guides/verification-oracle-conformance.md`.
+
+**`verification/projection.js` (X-206).** `projectVerification(record, { replay })` is the ONE place a record becomes something a
+person or another tool reads: state, scope, oracle, evidence ids, replay prerequisites (derived from the record, plus the typed
+ones a replay attempt reported), a what-was-verified / what-was-not summary, the legacy boolean view, and `text` lines. The JSON
+report (`report/index.js` `normalizeFindings`), the CLI and Markdown reports (`verificationBlock`), MCP `explain_finding`,
+`verify_fix` and `apply_fix`, and the autopilot response (`serializeAutopilotResult`, used by `scripts/autopilot.mjs --json`) all
+call it; none formats its own verification text. The key is **`verificationView`**, never `verification`: a finding's existing
+`verification` field is the producer/verifier separation record (`verification-separation.js`) and a first draft of this work
+collided with it. An invalid record yields `verificationView: null` plus `verificationViewErrors`, never a guessed state. The text
+never says "safe" or "fixed" for a partial result (a lint-style test covers every state, every repair status and the wording the real
+surfaces emit; the fix-verify leg's native status word `fixed` is deliberately not echoed into a record reason). `verificationCoverage`
+wraps `trustedNegativeDenominator`. Previous output schemas are pinned in `test/fixtures/verification-compat/`.
+
+**`verification/advisory-state.js`, `verification/hypothesis-promotion.js` (X-207).** Hunt (`discovery/`) is advisory.
+`writeAdvisoryState` is the only way advisory code writes: a closed file-name allowlist (the one hunt memory file), authoritative names
+refused, write to a temp file and rename (a symlink or hard link planted at the target is replaced, never written through), the state
+directory must resolve inside the project root. `discovery/memory.js` `saveMemory` uses it. `normalizeFindings` excludes any hunt
+hypothesis (`parser: DISCOVERY` or a `discovery` object) from every finding list and exit code and records `advisoryExcluded`.
+`promoteHypothesis({ hypothesis, result, policy })` is the only crossing: it verifies (not just checks presence of) a receipt issued by
+`runOracle` (`isIssuedReceipt`), bound to the hypothesis and an exact commit and to a valid record settled `confirmed` at the
+`runtime-confirmed` level, applies an EXPLICIT policy (fail-closed on an unknown key; the receipt rules are mandatory and cannot be
+waived; `minConfidence`/`minAgreement` can only add a requirement), reuses `verification-separation.js` for hunter != verifier, and
+returns a frozen audit record for every decision (`promoted`, `rejected`, `unsupported`, `inconclusive`) with no clock in it.
+`runDiscovery` calls it only when `opts.promote = { policy, verify }` is given. The audit record is returned, not persisted:
+persisting needs an artifact-registry classification and a signing domain, which are not decided here.
+
+**`oracles/conformance.js` and `scripts/verification-conformance-check.mjs` (X-208).** One contract over every registered adapter:
+static (class scope, budgets under `BUDGET_CEILINGS`, negative controls with an on-disk fixture, verifier-side evidence logic bound by
+a digest, fixtures and logic pinned in `test/fixtures/oracles/conformance-pins.json`) and execution (state mappings, issued and frozen
+receipts, three tamper attempts, an unavailable prerequisite, cancellation, replay). Wired into `scripts/release-check.mjs`
+(`verification-conformance-gate`, in `RELEASE_GROUPS['benches-b']`) and, static half only, the pre-push gate
+(`verification-conformance-static`). Where the boundary cannot run, execution is reported `not-run`, never passed; `--require-execution`
+makes that a failure. A new adapter must be pinned deliberately (`--update-pins`).
 
 ## Execution-proof tiers (R2)
 

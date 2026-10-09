@@ -14,6 +14,8 @@ import { confirmAll } from './confirm.js';
 import { disprovePanel } from './disprove.js';
 import { judgeCandidates } from './judge.js';
 import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan } from './memory.js';
+import { emitVerification, headCommit } from '../posture/verification/emit.js';
+import { promoteHypothesis } from '../posture/verification/hypothesis-promotion.js';
 
 // Bridge a candidate to the deterministic layer. A taint finding at or within
 // two lines of the candidate corroborates it; a modelled sink on the line
@@ -283,11 +285,37 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     }));
   }
 
+  // X-201: one version-1 verification record per fresh hypothesis, ADDITIVE and advisory (hunt output never enters
+  // last-scan.json). A taint-corroborated candidate is `inconclusive` (a static probe is corroboration, not
+  // execution) and an uncorroborated one is `not-run`; a model refutation panel is recorded as inference only.
+  const hypothesisCommit = headCommit(opts.scanRoot);
+  const verificationRecords = [];
+  for (const f of fresh) {
+    const e = emitVerification('hunt', f, { finding: f, commit: hypothesisCommit });
+    if (e.ok) verificationRecords.push(e.record);
+  }
+
+  // X-207: opt-in promotion. A hypothesis crosses into a finding ONLY through `promoteHypothesis` (trusted verifier receipt,
+  // explicit policy, audit record). `fresh` is unchanged; promoted findings and every decision's audit record are reported
+  // separately, and nothing here writes `last-scan.json`. `opts.promote = { policy, verify(hypothesis) -> runOracle result }`.
+  let promotions = null;
+  if (opts.promote && typeof opts.promote.verify === 'function') {
+    promotions = [];
+    for (const f of fresh) {
+      let result = null;
+      try { result = await opts.promote.verify(f); } catch { result = null; }
+      const p = promoteHypothesis({ hypothesis: f, result, policy: opts.promote.policy });
+      promotions.push({ hypothesisId: p.audit.sourceHypothesis.id, decision: p.decision, audit: p.audit, finding: p.finding });
+    }
+  }
+
   return {
     schema: 'agentic-security/discovery@1',
     focusAreas: areas.map(a => ({ id: a.id, label: a.label, files: a.files.length, size: a.size })),
     runs,
     fresh,
+    verificationRecords,
+    ...(promotions ? { promotions } : {}),
     duplicates,
     suppressed,
     // `refutedCandidates` holds RAW candidates straight from `disprovePanel`,

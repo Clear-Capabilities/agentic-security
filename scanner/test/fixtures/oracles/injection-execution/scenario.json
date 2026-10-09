@@ -1,0 +1,6 @@
+{
+  "export": "handler",
+  "benign": "hello",
+  "attackTemplate": "x; printf %s {TOKEN} > effect-{TOKEN}",
+  "settleMs": 0
+}

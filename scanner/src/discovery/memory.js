@@ -40,6 +40,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { stateWritesEnabled } from '../posture/state-dir.js';
+import { writeAdvisoryState } from '../posture/verification/advisory-state.js';
 const MEMORY_SCHEMA = 'agentic-security/discovery-memory@1';
 export const MEMORY_FILE = path.join('.agentic-security', 'discovery-memory.json');
 
@@ -73,14 +74,15 @@ export function loadMemory(scanRoot) {
   }
 }
 
-/** Persist. Failure is non-fatal — the run still produced its report. */
+/**
+ * Persist. Failure is non-fatal -- the run still produced its report. X-207: the write goes through the advisory-state writer
+ * (closed file-name allowlist, atomic rename, never through a link), so hunt output cannot reach `last-scan.json` or its
+ * signature even when a hostile tree planted a link at the memory file.
+ */
 export function saveMemory(scanRoot, memory) {
   try {
-    const p = path.join(scanRoot, MEMORY_FILE);
     if (!stateWritesEnabled()) return;
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, JSON.stringify(memory, null, 2) + '\n');
-    return true;
+    return writeAdvisoryState(scanRoot, path.basename(MEMORY_FILE), JSON.stringify(memory, null, 2) + '\n').ok;
   } catch {
     return false;
   }

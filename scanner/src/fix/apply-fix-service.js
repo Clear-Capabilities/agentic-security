@@ -42,6 +42,7 @@ import { verifyLastScan } from '../posture/integrity.js';
 import { stateDir } from '../posture/state-dir.js';
 import { applyFix as applyFixHistory, revertEntryById as revertFixEntry } from '../posture/fix-history.js';
 import { classifyFixMaterialRisk } from '../posture/material-change.js';
+import { appendRepairRecord } from '../posture/verification/repair-records.js';
 import { loadApproverRegistry, verifyApprover, requiredRolesFor, checkSeparationOfDuties } from './approver-registry.js';
 
 const RESERVED_WRITE_PREFIXES = [
@@ -191,6 +192,12 @@ async function getVerifyFixCore() {
  *   .agentic-security/authorized-approvers.json is configured, `approvedBy` is ALSO checked
  *   against it (fix/approver-registry.js) — an approvedBy the registry doesn't recognize, or one
  *   missing a role a touched category requires, is refused. A no-op with no registry configured.
+ * @param {object} [opts.patchNegative] - X-204: `{ original: {files, entry, oracleId, inputs}, functional: {inputs}, commit?, ... }`,
+ *   the exploit scenario and functional cases the patch must satisfy. Honoured only when the `patch-negative-verification`
+ *   feature (and `verification-oracles`) is enabled; otherwise ignored and this function behaves exactly as before. When it
+ *   runs, a patch is written only if it is `verified-fix`, and the result carries `patchNegative` plus `repairRecords`: SEPARATE
+ *   records for the proposal, its promotion or rejection, its application and any rollback.
+ * @param {object} [opts.assuranceConfig] - resolved assurance config (defaults to the process environment)
  * @param {boolean} [opts.dryRun]
  * @param {boolean} [opts.skipVerification] - escape hatch for callers that have ALREADY verified
  *   (none currently use this — present so a future caller cannot be forced into double verification
@@ -202,7 +209,7 @@ async function getVerifyFixCore() {
  *   configured, tests when a runner is detected — genuinely ran and passed, not silently skipped.
  *   `verified:true, verifiedFull:false` is a real, honest state: applied, but on a degraded pass.
  */
-export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = null, dryRun = false, skipVerification = false } = {}) {
+export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = null, dryRun = false, skipVerification = false, patchNegative = null, assuranceConfig } = {}) {
   if (!scanRoot) return { ok: false, applied: false, reason: 'scanRoot required' };
   if (!finding) return { ok: false, applied: false, reason: 'finding required' };
   if (!files || typeof files !== 'object' || !Object.keys(files).length) {
@@ -316,6 +323,9 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
   }
 
   let verify = null;
+  let pn = null;
+  let repairRecords = [];
+  const pnView = (r) => ({ status: r.status, verifiedFix: r.verifiedFix, incompleteStep: r.incompleteStep, failureCode: r.failureCode, reason: r.reason, steps: r.steps, patchDigest: r.patchDigest, summary: r.summary, verificationRecord: r.verificationRecord });
   if (!skipVerification) {
     if (!finding.stableId) {
       return { ok: false, applied: false, reason: 'finding has no stableId — cannot verify a candidate fix against it' };
@@ -328,22 +338,31 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
         originalFindingStableId: finding.stableId,
         files: Object.fromEntries(Object.entries(confined).map(([rel, v]) => [rel, v.content])),
         fixMeta,
+        ...(patchNegative ? { patchNegative, assuranceConfig } : {}),
       });
     } catch (e) {
       return { ok: false, applied: false, reason: `verification failed: ${e.message}` };
     }
     verify = verdict;
+    // X-204: present only when the caller asked and the feature is on. `pn` stays null on every legacy path.
+    const pnRun = verdict.patchNegative && verdict.patchNegative.status !== 'disabled' ? verdict.patchNegative : null;
+    if (pnRun) { pn = pnRun; repairRecords = pnRun.repairRecords || []; }
     if (!verdict.ok) {
+      // the patch-negative leg may have passed while another leg did not: the rejection is still its own record
+      if (pn && pn.verifiedFix) {
+        repairRecords = appendRepairRecord(repairRecords, { kind: 'rejected', hypothesisId: finding.stableId, revision: pn.promotion?.revision ?? null, diffDigest: pn.patchDigest, step: 'other-verification-legs', reason: `rejected by verifier: ${String(verdict.summary || 'did not verify').slice(0, 200)}` }).records;
+      }
       return {
         ok: false, applied: false,
         reason: `rejected by verifier: ${verdict.summary || verdict.rescan?.reason || 'did not verify'}`,
         verify: { rescan: verdict.rescan, lint: verdict.lint ? { runner: verdict.lint.runner, ok: verdict.lint.ok } : null, honesty: verdict.honesty || null },
+        ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
       };
     }
   }
 
   if (dryRun) {
-    return { ok: true, applied: false, dryRun: true, verified: !skipVerification, files: Object.keys(confined), verify, materialClassification };
+    return { ok: true, applied: false, dryRun: true, verified: !skipVerification, files: Object.keys(confined), verify, materialClassification, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}) };
   }
 
   // FR-304: re-check every file against its pre-verification baseline hash,
@@ -381,10 +400,20 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     for (const w of written) {
       try { await revertFixEntry(scanRoot, w.historyId); } catch { /* best-effort; original error still propagates below */ }
     }
-    if (e && e.name === 'FixAttemptBudgetExceededError') {
-      return { ok: false, applied: false, reason: `budget-exceeded: ${e.message}`, budgetExceeded: true, attempts: e.attempts, maxAttempts: e.max, key: e.key };
+    // X-204: the rollback is its own record, after the promotion it undoes (a write that failed part-way)
+    if (pn) {
+      const rolled = appendRepairRecord(repairRecords, { kind: 'rolled-back', hypothesisId: finding.stableId, revision: pn.promotion?.revision ?? null, diffDigest: pn.patchDigest, reason: `the write failed and every file written in this batch was restored: ${String(e?.message || e).slice(0, 160)}` });
+      repairRecords = rolled.records;
     }
+    if (e && e.name === 'FixAttemptBudgetExceededError') {
+      return { ok: false, applied: false, reason: `budget-exceeded: ${e.message}`, budgetExceeded: true, attempts: e.attempts, maxAttempts: e.max, key: e.key, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}) };
+    }
+    if (pn && e && typeof e === 'object') e.repairRecords = repairRecords;
     throw e;
+  }
+  // X-204: application is a separate record from the promotion that allowed it
+  if (pn) {
+    repairRecords = appendRepairRecord(repairRecords, { kind: 'applied', hypothesisId: finding.stableId, revision: pn.promotion?.revision ?? null, diffDigest: pn.patchDigest, reason: `written to ${written.length} file(s) after verified-fix promotion` }).records;
   }
 
   // FR-305: `verified: true` only ever meant "verification was attempted",
@@ -400,5 +429,6 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     written,
     verify: verify ? { summary: verify.summary, verifiedFull: verify.verifiedFull, degradedLegs: verify.degradedLegs || [] } : null,
     materialClassification,
+    ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
   };
 }

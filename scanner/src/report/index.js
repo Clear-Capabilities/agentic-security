@@ -12,6 +12,10 @@ import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/leg
 // (sca/sigstore-verify.js's SLSA/Sigstore build attestation). Three unrelated
 // things, three distinct keys — do not collapse them.
 import { redactFindingProvenance, sanitizeForTerminal } from '../posture/provenance/schema.js';
+// X-206: the one projection of the verification record. This report, the MCP tools and the autopilot response all call it.
+import { verificationFields, verificationCoverage } from '../posture/verification/projection.js';
+// X-207: a hunt hypothesis is advisory and is never a finding in any gating output; promotion is the only way across.
+import { isAdvisoryHypothesis } from '../posture/verification/advisory-state.js';
 // Re-exported: FR-PROV-026. Lives in provenance/schema.js (shared with
 // posture/auditor-walkthrough.js, a second CLI renderer of the same
 // untrusted fields — see that module's header for why it lives there
@@ -222,7 +226,11 @@ export function normalizeFindings(scan){
     });
     return true;
   };
+  const advisoryExcluded = [];
   for (const f of (scan.findings||[])) {
+    // X-207.AC01: an unpromoted hunt hypothesis cannot gate. It is excluded here, the one place every output format and every
+    // exit code derives from, and the exclusion is recorded (never silent) as `advisoryExcluded`.
+    if (isAdvisoryHypothesis(f)) { advisoryExcluded.push({ id: f.id ?? null, stableId: f.stableId ?? null, reason: 'advisory hunt hypothesis: not a finding until promoted by a verifier receipt and policy' }); continue; }
     if (suppress(f.vuln || f.type, f.file, f.line || f.source?.line || 0, f.snippet)) continue;
     out.push({
       id: f.id || fingerprint(f),
@@ -328,6 +336,11 @@ export function normalizeFindings(scan){
       // a finding with no proof backing simply omits these fields.
       ...(f.proofTier !== undefined ? { proofTier: f.proofTier } : {}),
       ...(f.proofEvidence !== undefined ? { proofEvidence: f.proofEvidence } : {}),
+      // X-206: the version-1 verification record and its shared projection, ADDITIVE and present only when the finding carries
+      // a record (a plain scan output is byte-identical). `verificationReplay` is the typed prerequisite list of a replay attempt.
+      ...(f.verificationRecord && typeof f.verificationRecord === 'object'
+        ? { verificationRecord: f.verificationRecord, ...(f.verificationReplay ? { verificationReplay: f.verificationReplay } : {}), ...verificationFields(f.verificationRecord, { replay: f.verificationReplay }) }
+        : {}),
       // Phase-1 next-gen P1.3 (FR-UX-1, FR-UX-2): calibrated probability +
       // 95% Wilson CI + sample size. Null when N < MIN_SAMPLES_FOR_CALIBRATION
       // for this family; `calibration_reason` explains why.
@@ -587,6 +600,7 @@ export function normalizeFindings(scan){
   // all derive from this one function) — one place, covers every output
   // format, matches this function's own role as "the canonical shape".
   for (const f of out) applyLegacyCompat(f);
+  if (advisoryExcluded.length) scan.advisoryExcluded = advisoryExcluded; else delete scan.advisoryExcluded;
 
   // Sort by severity tier, then within a tier by EPSS percentile (desc) so that
   // CVEs with active in-the-wild abuse float above theoretical CVEs.
@@ -734,6 +748,11 @@ export function toJSON(scan, meta={}, opts={}){
     // hand-built `scan` object in a test), same convention as the S7 fields
     // above; a real scan always computes it.
     scanHealth: scan.scanHealth || null,
+    // X-207: advisory hypotheses a caller put in the finding list; excluded from `findings`, listed here so it is never silent.
+    ...(Array.isArray(scan.advisoryExcluded) && scan.advisoryExcluded.length ? { advisoryExcluded: scan.advisoryExcluded } : {}),
+    // X-206: trusted-negative accounting over the findings that carry a verification record. Absent when none does, so a plain
+    // scan's output is unchanged.
+    ...(findings.some(f => f.verificationRecord) ? { verificationCoverage: verificationCoverage(findings.map(f => f.verificationRecord).filter(Boolean)) } : {}),
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;
@@ -903,6 +922,16 @@ function _mdFenceLen(text) {
   return Math.max(3, ...runs.map(r => r.length + 1));
 }
 
+/**
+ * X-206: the human-readable verification block for a normalized finding, from the SAME projection the JSON and MCP surfaces
+ * carry (`finding.verification.text`). Null when the finding has no verification record. Terminal control characters are stripped.
+ */
+export function verificationBlock(f) {
+  const text = f?.verificationView?.text;
+  // sanitizeForTerminal trims, so the line's own indentation is restored after it strips control characters.
+  return Array.isArray(text) && text.length ? text.map((l) => String(l).match(/^ */)[0] + sanitizeForTerminal(String(l))) : null;
+}
+
 export function toMarkdown(scan, meta={}){
   const findings = normalizeFindings(scan);
   const lines = ['# Agentic Security — Scan Report', ''];
@@ -934,6 +963,23 @@ export function toMarkdown(scan, meta={}){
       } else {
         lines.push(`| \`${f.file}:${f.line}\` | ${f.vuln} | ${f.cwe||'—'} | ${epss} | ${fix.replace(/\|/g,'\\|').slice(0,140)} |`);
       }
+    }
+    // X-206: verification blocks come from the shared projection, never a second renderer.
+    const withVerification = bySev[sev].filter(f => verificationBlock(f));
+    if (withVerification.length) {
+      lines.push('');
+      lines.push('<details><summary>Verification</summary>');
+      lines.push('');
+      for (const f of withVerification) {
+        const block = verificationBlock(f).join('\n');
+        lines.push(`**\`${f.file}:${f.line}\`**: ${f.vuln}`);
+        const fence = '`'.repeat(_mdFenceLen(block));
+        lines.push(fence);
+        lines.push(block);
+        lines.push(fence);
+        lines.push('');
+      }
+      lines.push('</details>');
     }
     // FR-PROV-018: one provenance block per finding that has one, reusing
     // explainProvenance's content — never a second, divergent renderer.
@@ -1432,6 +1478,8 @@ export function toCLI(scan, { verbose=false, color=true, provenance=false }={}){
     if (ex.how) lines.push(`        ${c('how:', DIM)} ${ex.how}`);
     if (ex.fix) lines.push(`        ${c('fix:', DIM)} ${ex.fix}`);
     if (ex.fixCode) for (const ln of ex.fixCode.split('\n').slice(0, 6)) lines.push(`           ${c(ln, DIM)}`);
+    const vblock = verificationBlock(f);
+    if (vblock) for (const ln of vblock) lines.push(`        ${c(ln, DIM)}`);
     if (provenance) {
       // `f` here is already normalized, so its findingProvenance has been
       // through redactFindingProvenance — the email is gone before it can
@@ -1443,6 +1491,7 @@ export function toCLI(scan, { verbose=false, color=true, provenance=false }={}){
   lines.push('');
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity]||0) + 1;
+  if (findings.some(f => f.verificationRecord)) lines.push(verificationCoverage(findings.map(f => f.verificationRecord).filter(Boolean)).lines[0]);
   lines.push(`${c('Critical:', SEV_COLOR.critical)} ${counts.critical}    ${c('High:', SEV_COLOR.high)} ${counts.high}    ${c('Medium:', SEV_COLOR.medium)} ${counts.medium}    ${c('Low:', SEV_COLOR.low)} ${counts.low}    ${c('Info:', SEV_COLOR.info)} ${counts.info}`);
   return lines.join('\n');
 }

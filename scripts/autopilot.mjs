@@ -43,7 +43,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const mod = (rel) => import(path.join(REPO, 'scanner', 'src', rel));
 
-const { runAutopilot, renderAutopilotSummary } = await mod('posture/autopilot.js');
+const { runAutopilot, renderAutopilotSummary, serializeAutopilotResult } = await mod('posture/autopilot.js');
+const { headCommit } = await mod('posture/verification/emit.js');
 const { runScan } = await mod('runScan.js');
 const { normalizeFindings } = await mod('report/index.js');
 const { synthesizeInProcessPoc } = await mod('posture/poc-inprocess.js');
@@ -275,7 +276,7 @@ process.stderr.write(`autopilot: ${root}\n`
   + `  severities: ${severities.join(', ')}; test leg: ${runTests ? 'on' : 'OFF'}\n`);
 
 const res = await runAutopilot({
-  stages, stateFile, apply, severities, maxFindings: max,
+  stages, stateFile, apply, severities, maxFindings: max, commit: headCommit(root),
   resume: !has('no-resume'),
   onStage: (e) => {
     if (e.stage === 'scan') process.stderr.write(`  scanned: ${e.count} finding(s)\n`);
@@ -298,7 +299,7 @@ if (testsSkipped) {
 const jsonOut = arg('json');
 if (jsonOut) {
   fs.mkdirSync(path.dirname(path.resolve(jsonOut)), { recursive: true });
-  fs.writeFileSync(jsonOut, JSON.stringify({ summary: res.summary, results: res.results, testsSkipped }, null, 2));
+  fs.writeFileSync(jsonOut, JSON.stringify({ summary: res.summary, results: serializeAutopilotResult(res).results, testsSkipped }, null, 2));
   process.stderr.write(`wrote ${jsonOut}\n`);
 }
 

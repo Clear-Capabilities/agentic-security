@@ -12,7 +12,7 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `find_rule_module` | ✓ | reads `scanner/src/{sast,posture}/` to answer "which file detects CWE-X / family Y" |
 | `lookup_cve` | ✓ | reads local OSV / KEV / EPSS cache; staleness-tiered |
 | `synthesize_fix` | ✓ | reads last-scan; returns the patch text |
-| `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt |
+| `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt. Also returns `verificationRecord`, the shared version-1 verification record (X-201; additive, `apply_fix` returns it too): a static re-scan alone is `not-run`, never confirmed |
 | `apply_fix` | ✗ | writes via `posture/fix-history.js` (with backup). With `plan_digest` it applies a MULTI-FILE NixOS option fix (see "Multi-file apply_fix" below): all files or none, one backup per file, one history group |
 | `append_scratchpad` | ✗ | writes under `.agentic-security/agent-scratchpad/<agent>/<session>/` only |
 | `read_scratchpad` | ✓ | paginated read of scratchpad files |
@@ -103,3 +103,11 @@ the relock path is not a finding fix), no fix-attempt-budget enforcement (the la
 CLI, does not enforce a cap), and no `fixMeta` honesty gate (that gate judges a caller's residual/verdict claims, which this
 path does not take). The `preWrite` digest re-check is defence in depth over a deterministic planner and has no independent
 test that fails when it is removed (the earlier digest comparison is the pinned control).
+
+## Verification view (X-206)
+
+`explain_finding` (when the finding in `last-scan.json` carries a `verificationRecord`), `verify_fix` and `apply_fix` add
+`verificationView`, the shared projection from `posture/verification/projection.js`, beside the existing `verificationRecord`.
+It is the same object the JSON report, the text reports and the autopilot response carry for the same finding. Additive: a finding
+without a record returns exactly what it did. The key is `verificationView`, not `verification` (that name belongs to the
+producer/verifier separation record). See `docs/guides/verification-schema-migration.md`.

@@ -47,6 +47,61 @@ import * as crypto from 'node:crypto';
 
 export const BUNDLE_SCHEMA = 'agentic-security/finding-evidence@1';
 
+// ---- issuer and trust basis (CORE-003.AC03) --------------------------------
+//
+// A signature says WHO signed and nothing about whether anyone independent
+// vouches for them. This install generates its own key, so every bundle it
+// signs is SELF-ISSUED. The `issuance` block says so inside the signed bytes,
+// so a summariser cannot drop it, and the verifier reports it back. The only
+// trust basis this build can verify is the local one; a third-party basis needs
+// a trust-root policy that does not exist here, so an unknown basis is
+// REJECTED rather than being displayed as if it were certification.
+//
+// Backward compatible: `issuance` is absent from bundles signed before this
+// field existed. Those still verify exactly as before and are reported as
+// having NO DECLARED trust basis (not as trusted, not as invalid).
+export const TRUST_BASES = Object.freeze({
+  'self-issued-local-key': Object.freeze({
+    independentlyCertified: false,
+    statement:
+      'Signed by a key this install generated for itself. It proves the bundle is unmodified since ' +
+      'this key signed it. It is NOT independent third-party certification: whoever controls this ' +
+      'install controls the key.',
+  }),
+});
+
+/** SHA-256 of the SPKI DER of a public key: the stable identity of an issuer. */
+export function keyFingerprint(publicKeyPem) {
+  const der = crypto.createPublicKey(publicKeyPem).export({ type: 'spki', format: 'der' });
+  return crypto.createHash('sha256').update(der).digest('hex');
+}
+
+/** Issuance block for a locally generated key. */
+function buildLocalIssuance(publicKeyPem) {
+  const fp = keyFingerprint(publicKeyPem);
+  return {
+    issuer: { id: `local-install:${fp.slice(0, 16)}`, kind: 'local-install', keyFingerprint: fp },
+    trustBasis: 'self-issued-local-key',
+    independentlyCertified: false,
+    statement: TRUST_BASES['self-issued-local-key'].statement,
+  };
+}
+
+/** Group/world access to key material is a defect, reported by path. */
+export function keyPermissionIssues(dir = keyDir()) {
+  const p = keyPaths(dir);
+  const issues = [];
+  try {
+    const d = fs.statSync(dir).mode & 0o077;
+    if (d) issues.push(`${dir} is accessible to group/other (mode ${(fs.statSync(dir).mode & 0o777).toString(8)})`);
+  } catch { /* absent: nothing to report */ }
+  try {
+    const m = fs.statSync(p.privateKey).mode & 0o777;
+    if (m & 0o077) issues.push(`${p.privateKey} is accessible to group/other (mode ${m.toString(8)})`);
+  } catch { /* absent */ }
+  return issues;
+}
+
 /** Where the Ed25519 signing key lives. Mirrors integrity.js's key handling. */
 function keyDir() {
   const xdg = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
@@ -142,6 +197,9 @@ export function canonicalBytes(bundle) {
     engine: bundle.engine,
     proves: bundle.proves,
     doesNotProve: bundle.doesNotProve,
+    // Only when present, so the canonical bytes (and signatures) of every
+    // bundle signed before this field existed are unchanged.
+    ...(bundle.issuance !== undefined ? { issuance: bundle.issuance } : {}),
   };
   return Buffer.from(canonicalJson(signed), 'utf8');
 }
@@ -226,11 +284,17 @@ export function buildEvidenceBundle(finding, { engineVersion, rulesetVersion, bu
   };
 }
 
-/** Sign a bundle. Returns a new object; the input is not mutated. */
+/**
+ * Sign a bundle. Returns a new object; the input is not mutated. The issuer and
+ * trust basis are derived from the signing key and signed with the bundle; a
+ * caller cannot supply a stronger basis than the one this build can verify.
+ */
 export function signEvidenceBundle(bundle, privateKeyPem) {
-  const sig = crypto.sign(null, canonicalBytes(bundle), privateKeyPem);
+  const publicKeyPem = crypto.createPublicKey(privateKeyPem).export({ type: 'spki', format: 'pem' });
+  const withIssuance = { ...bundle, issuance: buildLocalIssuance(publicKeyPem) };
+  const sig = crypto.sign(null, canonicalBytes(withIssuance), privateKeyPem);
   return {
-    ...bundle,
+    ...withIssuance,
     signature: {
       algorithm: 'ed25519',
       canonicalisation: BUNDLE_SCHEMA,
@@ -256,7 +320,7 @@ export function signEvidenceBundle(bundle, privateKeyPem) {
 // what buildEvidenceBundle+signEvidenceBundle actually produce, or a
 // legitimate bundle would start failing verification.
 const BUNDLE_TOP_LEVEL_KEYS = new Set([
-  'schema', 'finding', 'evidence', 'engine', 'proves', 'doesNotProve', 'signature',
+  'schema', 'finding', 'evidence', 'engine', 'proves', 'doesNotProve', 'issuance', 'signature',
 ]);
 
 export function verifyEvidenceBundle(bundle, publicKeyPem) {
@@ -276,7 +340,29 @@ export function verifyEvidenceBundle(bundle, publicKeyPem) {
   } catch (e) {
     return { ok: false, reason: `verification error: ${e.message}` };
   }
-  return ok
-    ? { ok: true, reason: null }
-    : { ok: false, reason: 'signature does not match the bundle contents — it was modified after signing' };
+  if (!ok) return { ok: false, reason: 'signature does not match the bundle contents — it was modified after signing' };
+
+  // Trust basis. Checked AFTER the signature so the issuance block is already
+  // known to be unmodified.
+  if (bundle.issuance === undefined) {
+    return {
+      ok: true, reason: null, trustBasis: 'none-declared', independentlyCertified: false, issuer: null,
+      trustNote: 'This bundle predates issuer declarations: no trust basis is declared. Treat it as unattested provenance, not as certification.',
+    };
+  }
+  const iss = bundle.issuance;
+  const basis = iss && typeof iss === 'object' ? TRUST_BASES[iss.trustBasis] : undefined;
+  if (!basis) return { ok: false, reason: `unsupported trust basis: ${JSON.stringify(iss?.trustBasis ?? null)}` };
+  if (iss.independentlyCertified !== false) {
+    return { ok: false, reason: 'a self-issued bundle may not claim independent certification' };
+  }
+  let fp;
+  try { fp = keyFingerprint(publicKeyPem); } catch (e) { return { ok: false, reason: `verification error: ${e.message}` }; }
+  if (iss.issuer?.keyFingerprint !== fp) {
+    return { ok: false, reason: 'the declared issuer key does not match the key that verified the signature' };
+  }
+  return {
+    ok: true, reason: null, trustBasis: iss.trustBasis, independentlyCertified: false,
+    issuer: iss.issuer, trustNote: basis.statement,
+  };
 }

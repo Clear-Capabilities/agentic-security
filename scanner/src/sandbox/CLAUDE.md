@@ -347,6 +347,47 @@ its payload ran — not an escape (the prelude runs inside the confinement) but
 a way for a config-derived value to silently *disable* the limits it was
 supposed to set.
 
+## Trust boundary (CORE-003)
+
+Four trust domains (target, worker, verifier/custodian, signer) are defined in
+`trust-domains.js` as a default-deny policy plus pure helpers (protected host
+paths, secret-env detection, verification-status formation). The ENFORCEMENT is
+`trust-boundary.js` `runInBoundary()`, the one function verifier-side code uses
+to run untrusted code. It: refuses secret-looking env for the target; refuses a
+workspace overlapping a protected path; probes the backend's controls
+(`control-probes.js`) and returns `status:'blocked'` (target never executed,
+`verificationStatus:'not-run'`) when any required control is not `proved`;
+then runs supervised with protected paths read-denied.
+
+- **Read denial** is the new control `denyReadPaths` (userspace backend: SBPL
+  deny rules after the blanket read allow, paths passed as parameters). The
+  default protected set is the key directory, common credential directories
+  under the home directory, plus caller-supplied sealed-label and evidence
+  directories. A denylist is a floor, not a claim of host-wide read isolation.
+  The namespace backend does NOT implement it and returns `status:'error'`
+  without executing when asked, so on Linux the boundary is `blocked`.
+- **Process trees** (`supervise.js`): own process group, periodic descendant
+  sweep, SIGTERM, grace, SIGKILL, then a poll that confirms no survivors; the
+  same cleanup runs on a clean exit. Cancel is an `AbortSignal` (status
+  `cancelled`). Output is capped. Known gap: a double-fork plus setsid between
+  two sweeps escapes; only a PID namespace or cgroup closes it. Supervised
+  execution exists ONLY for the userspace backend; `namespace` is refused
+  because tree termination has not been implemented and executed there.
+- **Active probes**: write confinement, read denial, env scrub, network, tree
+  termination and the file-size limit each run an attack plus a positive
+  control through the real backend. `process-cap` is reported `unverified` on
+  every backend and must not be claimed enforced (per-uid and system-wide on
+  macOS, and it did not refuse on the hosted Linux runner in the last release).
+  `capabilityReport()` carries the standing note that Linux enforcement is
+  evidenced only where the `sandbox-linux` CI job ran the same probes.
+- **Status**: target output is returned labelled `untrusted` and is never parsed
+  for a status. `classifyRun` can yield at most `inconclusive`; `confirmed`
+  and `refuted` come only from `settleVerification` given evidence with
+  `observedBy: 'verifier'`. Oracle adapters (X-202) must consume this.
+- **Consumer**: the oracle adapters (`posture/oracles/oracle.js`, X-202) run every target through `runInBoundary` and nowhere else, and replay (`posture/replay/replay.js`, X-203) goes through them. A `blocked` boundary is reported by the oracle runner as `unsupported` (an unmet isolation prerequisite), never as a pass or a failure of the hypothesis.
+- Tests: `test/trust-boundary.test.js` (attack fixture, tree kill with `ps`
+  orphan checks, blocked-never-pass), in `test:lifecycle`.
+
 ## Extending this module
 
 - Both real backends (`backend-userspace.js`, `backend-namespace.js`) must

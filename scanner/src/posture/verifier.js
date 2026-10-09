@@ -33,6 +33,7 @@ import * as os from 'node:os';
 import { runConfined, sandboxAvailable } from '../sandbox/index.js';
 import { isExplicitlyNoPoc } from './poc-cwe-map.js';
 import { isSafeStateDir, stateDir, statePath, stateWritesEnabled } from './state-dir.js';
+import { emitVerification } from './verification/emit.js';
 
 // ─── PoC static validation ──────────────────────────────────────────────────
 //
@@ -216,6 +217,21 @@ export function annotateVerifierVerdicts(findings, opts = {}) {
       f.verifier_reason = `verifier-exception:${e.message?.slice(0, 80)}`;
     }
   }
+}
+
+// ─── Verification records (X-201) ───────────────────────────────────────────
+//
+// The version-1 record for each annotated finding. Returned, never written onto the finding: `verifier_verdict` and
+// its siblings stay exactly as they were, and a finding that later lands in last-scan.json is not changed by this.
+// None of the verdicts above ran under the trusted boundary, so none maps to `confirmed` or `refuted`.
+export function verifierVerificationRecords(findings, { commit = null } = {}) {
+  const out = [];
+  for (const f of findings || []) {
+    if (!f || typeof f !== 'object' || !f.verifier_verdict) continue;
+    const e = emitVerification('verifier', f, { finding: f, commit });
+    if (e.ok) out.push(e.record);
+  }
+  return out;
 }
 
 // ─── Summary helpers ────────────────────────────────────────────────────────
