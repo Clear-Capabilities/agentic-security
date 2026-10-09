@@ -13,6 +13,44 @@
 const _GH_WORKFLOW_RE = /(?:^|\/)\.github\/workflows\/.*\.ya?ml$/i;
 const _NONPROD_RE = /(?:^|\/)(?:tests?|examples?|fixtures?)\//i;
 
+
+// Matches of the workflow-wide `env:` secret pattern, as { index, end }. See the entry in PIPELINE_PATTERNS.
+// The header is `^env\s*:\s*\n`; its greedy `\s*` ends at the last newline of the whitespace run, and every earlier choice
+// of newline only replays the same lines, so the lazy line loop starts at the line after that newline. Each following line
+// is either the assignment (the tail, tried first, as the lazy loop does) or must itself start with a space or tab.
+const _ENV_HEAD_RE = /^env\s*:\s*/gm;
+const _ENV_TAIL_RE = /[ \t]+[A-Za-z0-9_]+\s*:\s*\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}/y;
+export function* scanEnvSecrets(raw, stats) {
+  const head = new RegExp(_ENV_HEAD_RE.source, _ENV_HEAD_RE.flags);
+  const tail = new RegExp(_ENV_TAIL_RE.source, _ENV_TAIL_RE.flags);
+  let pos = 0;
+  while (pos <= raw.length) {
+    head.lastIndex = pos;
+    const h = head.exec(raw);
+    if (!h) return;
+    const afterHead = h.index + h[0].length;
+    const colon = raw.indexOf(':', h.index + 3);
+    const lastNl = raw.lastIndexOf('\n', afterHead - 1);
+    if (lastNl <= colon) { pos = h.index + 1; continue; }   // no newline after the colon: not a header
+    let s = lastNl + 1;
+    let end = -1;
+    for (;;) {
+      tail.lastIndex = s;
+      if (stats) stats.tailAttempts += 1;
+      const t = tail.exec(raw);
+      if (t) { end = s + t[0].length; break; }
+      const c = raw.charCodeAt(s);
+      if (c !== 32 && c !== 9) break;                      // the line loop needs an indented line
+      const nl = raw.indexOf('\n', s);
+      if (nl < 0) break;
+      s = nl + 1;
+    }
+    if (end < 0) { pos = h.index + 1; continue; }
+    yield { index: h.index, end };
+    pos = end > h.index ? end : h.index + 1;
+  }
+}
+
 const PIPELINE_PATTERNS = [
   // ── build hooks common to Haskell (ghcup, Cabal, Stack, Hackage) and Nix pipelines ──
   {
@@ -34,7 +72,12 @@ const PIPELINE_PATTERNS = [
     fix: 'Do not accept a flake\'s own configuration, disable the sandbox, add unauthenticated substituters or evaluate impurely in CI. Put the trust decision in the repository\'s reviewed configuration instead.',
   },
   {
-    re: /^env\s*:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+[A-Za-z0-9_]+\s*:\s*\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}/gm,
+    // Equivalent to /^env\s*:\s*\n(?:[ \t]+[^\n]*\n)*?[ \t]+[A-Za-z0-9_]+\s*:\s*\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}/gm,
+    // which backtracked catastrophically on a comment-blanked workflow (blanking leaves runs of blank lines, and `\s*`, `\n` and
+    // the lazy line loop can all claim them): a real repository's CI directory made a scan run for many minutes. The matcher
+    // below returns the same match starts and ends, in one pass over each `env:` block. Pinned against the original expression
+    // by test/pipeline-env-secret.test.js.
+    scan: scanEnvSecrets,
     vuln: 'Pipeline: secret exposed at workflow-wide environment scope',
     sev: 'medium', cwe: 'CWE-522',
     fix: 'Set secrets such as a Hackage or Cachix token on the single step that needs them (`env:` under that step), not at the top of the workflow where every step and every third-party action can read them.',
@@ -105,9 +148,13 @@ export function scanPipeline(fp, raw) {
       if (p.contextNeg && present) continue; // suppress: required context exists
       if (!p.contextNeg && !present) continue;
     }
-    const re = new RegExp(p.re.source, p.re.flags.includes('g') ? p.re.flags : p.re.flags + 'g');
-    let m;
-    while ((m = re.exec(raw))) {
+    let matches;
+    if (p.scan) matches = p.scan(raw);
+    else {
+      const re = new RegExp(p.re.source, p.re.flags.includes('g') ? p.re.flags : p.re.flags + 'g');
+      matches = (function* () { let mm; while ((mm = re.exec(raw))) yield mm; })();
+    }
+    for (const m of matches) {
       const line = raw.substring(0, m.index).split('\n').length;
       if (p.lineSafeRe && p.lineSafeRe.test((lines[line - 1] || '').trim())) continue;
       const id = `pipeline:${fp}:${line}:${p.vuln.replace(/\s/g, '_').slice(0, 48)}`;
