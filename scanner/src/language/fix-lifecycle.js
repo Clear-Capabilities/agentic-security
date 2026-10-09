@@ -191,6 +191,15 @@ export async function runFixLifecycle(o) {
   const res = { status: 'verified', applied: false, plan, gates, label: plan.label, verified, preview: edits.map((e) => unifiedDiff(e.file, e.before, e.after)).join('\n'), files: edits.map((e) => e.file) };
   if (o.apply) {
     if (!o.root) return blocked('apply requires a root directory');
+    // Optional last check, after every gate has passed and before the first byte is written, so a caller that bound this plan
+    // to something outside the lifecycle (a digest, a confinement policy) refuses atomically with the write it guards. A hook
+    // that throws or answers ok:false blocks the apply; nothing has been written at this point.
+    if (o.preWrite) {
+      let pre;
+      try { pre = o.preWrite(plan, edits); } catch (err) { pre = { ok: false, detail: `pre-write check failed: ${err.message}` }; }
+      gates.preWrite = pre || { ok: false, detail: 'no pre-write result' };
+      if (gates.preWrite.ok !== true) return blocked(`pre-write: ${gates.preWrite.detail || 'refused'} (no file was written)`);
+    }
     const base = { scanRoot: o.root, findingId: finding.id || `${finding.file}:${finding.line}`, ruleId: finding.rule || null, vuln: finding.vuln || null, stableId: finding.stableId || null, fixLabel: plan.label || null, verification: verified, findingProvenance: finding.findingProvenance || null };
     if (edits.length === 1) {
       res.backup = writeWithBackup(o.root, plan.file, plan.before, plan.after);

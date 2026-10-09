@@ -13,7 +13,7 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | `lookup_cve` | ✓ | reads local OSV / KEV / EPSS cache; staleness-tiered |
 | `synthesize_fix` | ✓ | reads last-scan; returns the patch text |
 | `verify_fix` | ✗ | re-scans patched files in memory, runs lint + the project test suite + the fix-honesty gate + PoC re-check; does not touch the target project's own files, but appends a record to `.agentic-security/fix-metrics.jsonl` per attempt |
-| `apply_fix` | ✗ | writes via `posture/fix-history.js` (with backup) |
+| `apply_fix` | ✗ | writes via `posture/fix-history.js` (with backup). With `plan_digest` it applies a MULTI-FILE NixOS option fix (see "Multi-file apply_fix" below): all files or none, one backup per file, one history group |
 | `append_scratchpad` | ✗ | writes under `.agentic-security/agent-scratchpad/<agent>/<session>/` only |
 | `read_scratchpad` | ✓ | paginated read of scratchpad files |
 | `append_agents_memory` | ✗ | appends to `.agentic-security/AGENTS.md` continual-learning file |
@@ -42,6 +42,8 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 | Path-escape refusal | `tools.js::_confine` lexical check before any fs call |
 | Reserved-write paths | `tools.js::RESERVED_WRITE_*` — `.git/`, `.github/`, `.gitlab/`, `.circleci/`, `.buildkite/`, `.agentic-security/`, `node_modules/`, `.terraform/`, `.aws/`, `k8s/`, manifest basenames, `*.tf`, `docker-compose.yml` |
 | HMAC integrity on findings | `posture/integrity.js` — per-install random key at `$XDG_CONFIG_HOME/agentic-security/scan-key`. **Not** hostname-derived. |
+| Multi-file plan binding | `tools.js::_multiFilePlanDigest` / `_applyMultiFilePlan`: `apply_fix` never accepts file content for a multi-file plan; it recomputes the plan from the signed finding + live tree and compares a digest (finding id, stableId, every path, SHA-256 of every pre/post image) with the caller's `plan_digest`. The lifecycle's `preWrite` hook re-checks the digest of the VERIFIED edits and the targets immediately before the first byte is written |
+| Multi-file confinement | `tools.js::_checkMultiFileTargets`: EVERY file of the plan gets clean root-relative form (no absolute, `..`, `.`, backslash, NUL, empty segment), `_confine` (no symlink leaf, no escape), a no-symlinked-parent check (realpath must equal the lexical path), the reserved-write list, existence, no duplicates, at most 8 files. One bad file refuses the whole plan |
 | Patches pass through unredacted | `tools.js` synthesize_fix / apply_fix — premortem-derived. Patches are not findings; redacting them silently corrupts valid fixes. |
 | Secret redaction on findings | `redact.js` — applied to snippet/description/title/vuln/remediation/trace |
 | Audit log | `audit.js` — NDJSON, hash-chained, at `.agentic-security/mcp-audit.log`. Set `$AGENTIC_SECURITY_AUDIT_WEBHOOK=<url>` to also fire-and-forget POST every entry to a remote witness — closes the full-file-rewrite blind spot. Failures land in `mcp-audit.remote-errors.log` and never block a tool call. |
@@ -70,5 +72,34 @@ MCP server. JSON-RPC 2.0 over NDJSON on stdin/stdout. Bin entry `../../bin/agent
 
 `scan_diff`, `verify_fix` and `synthesize_fix` add the import closure of a Haskell or Nix file and the manifests as context
 (`language/context.js` `withLanguageContext`, bounded in files and bytes, read-only) and still report only the files asked
-about. The tool that previews a fix for these files uses the language fixers; `apply_fix` is unchanged (its generic confined-write
-path), and the language-aware apply with backup and `undo` is the CLI's `fix --apply`.
+about. The tool that previews a fix for these files uses the language fixers. A single-file `apply_fix` is unchanged (its generic
+confined-write path); the language-aware apply with backup and `undo` for everything else is the CLI's `fix --apply`.
+
+## Multi-file `apply_fix` (NixOS option fixes, `plan_digest`)
+
+A NixOS option is judged on the effective configuration, so one fix can edit several files (every definition at the winning
+priority). Flow: `synthesize_fix` returns `languageFix.multiFile` (the files), `languageFix.edits` (per file: path + SHA-256 of
+the before and after image, **no content**) and `languageFix.planDigest` after running the verification gates read-only. The
+caller then sends `apply_fix {finding_id, confirm:true, plan_digest}` (optionally `dry_run:true`, `fixMeta.approval` for a
+high-impact change).
+
+Design decision: the caller **cannot supply file content** on this path (`plan_digest` plus `patch` is refused). The server
+re-derives the plan with `planNixFix` over `loadLanguageProject` and refuses unless the digest matches, so "the plan applied is
+exactly the plan previewed" holds by construction, and a changed project file, a changed finding or an altered digest all give
+`stale:true` with no hint of the expected value. Order of checks: `confirm:true` -> last-scan HMAC -> finding exists -> not shadow
+-> digest format -> Nix finding with stableId -> plan exists and has 2+ files -> digest equal -> every file confined and not
+reserved -> high-impact approval (shared `_highImpactApprovalRefusal`, same code as the `patch` branch) -> lifecycle
+(`validateNixFix`, apply): syntax, rescan (original gone, nothing new at medium+), effective-value gate, then `preWrite`, then
+`writeManyWithBackup` (checks every file unchanged since planning and backs every file up before the first write). History is
+one `languageGroupId` group: `undo` / `undoLast` revert all files or none.
+
+Results are non-leaky: absolute paths are scrubbed to `<root>` and passed through `redactString`. A failed write is reported as
+`applied:false` with `rolledBack` and `rollbackIncomplete` (+ `restoreManually` file names) honestly; an incomplete rollback is
+never reported as success.
+
+What this deliberately does NOT do: no caller-supplied multi-file `patch` (would reopen the plan-binding problem), no Haskell
+multi-file plans (the Haskell planner produces none), no `flake.lock` relock plans (`.lock` is on the reserved-write list and
+the relock path is not a finding fix), no fix-attempt-budget enforcement (the language lifecycle records attempts but, as in the
+CLI, does not enforce a cap), and no `fixMeta` honesty gate (that gate judges a caller's residual/verdict claims, which this
+path does not take). The `preWrite` digest re-check is defence in depth over a deterministic planner and has no independent
+test that fails when it is removed (the earlier digest comparison is the pinned control).
