@@ -12,7 +12,7 @@ import {
   acquireRunLock, releaseRunLock, evidenceKey, HEARTBEAT_MS,
 } from './lib/state.mjs';
 import { atomicWriteJson, readJson, nowIso, sleep, redact } from './lib/util.mjs';
-import { loadProfile, validateProfile, ProfileError, insideRepo } from './lib/profile.mjs';
+import { loadProfile, validateProfile, ProfileError, insideRepo, suiteLaunchBlockers } from './lib/profile.mjs';
 import { createManifest, writeManifest, loadManifest, checkPrdFresh } from './lib/manifest.mjs';
 import { ImportError } from './lib/prd-import.mjs';
 import { TreeIndex } from './lib/tree.mjs';
@@ -209,7 +209,9 @@ async function cmdPreflight(argv) {
     for (const s of Object.values(profile.suites)) { exes.add(s.executable); (s.requiresTools || []).forEach((t) => needs.add(t)); }
     for (const g of [...profile.finalGates, ...profile.baselineGates]) exes.add(g.executable);
     const missing = [...exes].filter((e) => !toolAvailable(e));
-    add('verification-executables', missing.length ? 'fail' : 'pass', missing.length ? `not found: ${missing.join(', ')}` : `${[...exes].join(', ')} resolvable`);
+    add('verification-executables', missing.length ? 'fail' : 'pass', missing.length ? `not found on PATH: ${missing.join(', ')}; install it, or remove it from approvedExecutables and the suites or gates that use it` : `${[...exes].join(', ')} resolvable`);
+    const blocked = suiteLaunchBlockers(profile, root);
+    add('suites-runnable', blocked.length ? 'fail' : 'pass', blocked.length ? `${blocked.length} suite(s) cannot run yet: ${blocked.map((b) => `${b.suite} (${b.reason})`).join('; ')}` : 'every registered suite has its executable wrapper in place');
     const optMissing = [...needs].filter((t) => !toolAvailable(t));
     add('optional-tools', optMissing.length ? 'warn' : 'pass', optMissing.length ? `${optMissing.join(', ')} unavailable: requirements needing them will be recorded as typed blockers, not skipped` : 'all suite tool requirements present');
     const hostTools = ['ghc', 'cabal', 'stack', 'nix'].filter((t) => !toolAvailable(t));
@@ -295,6 +297,12 @@ async function cmdStart(argv) {
   if (!prd.ok) throw new UsageError(prd.error);
   const { runId, state } = loadRunContext(root);
   if (state.status === 'completed') throw new UsageError(`run ${runId} is already completed; run init to create a new run`);
+  try {
+    const { profile } = loadProfile(resolve(root, state.profilePath || DEFAULT_PROFILE));
+    validateProfile(profile, root);
+    const blocked = suiteLaunchBlockers(profile, root);
+    if (blocked.length) throw new UsageError(`refusing to launch: ${blocked.length} suite(s) cannot run yet: ${blocked.map((x) => `${x.suite} (${x.reason})`).join('; ')}`);
+  } catch (e) { if (e instanceof ProfileError) throw new UsageError(`refusing to launch: ${e.message}`); throw e; }
   const lock = readJson(layout(root).lockFile, null);
   if (lock && identityMatches(lock.pid, lock.start)) throw new UsageError(`run ${lock.runId} already has an active controller (pid ${lock.pid}); a second launch cannot mutate this checkout`);
   const r = await launchController(root, runId, a.serve || null, { foreground: !!a.foreground });
