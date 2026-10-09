@@ -13,6 +13,7 @@
 // host details, and its order is fixed, so it is byte-stable across runs.
 import { ADAPTERS } from './adapters.js';
 import { PREREQUISITES, ORACLE_CLASSES, validateOracleSpec } from './oracle.js';
+import { SCENARIO_CLASSES, UNSUPPORTED_NON_TAINT, NON_TAINT_SCHEMA, scenarioClassReportLines } from './scenario-classes.js';
 
 const BY_ID = new Map(ADAPTERS.map((a) => [a.id, a]));
 if (BY_ID.size !== ADAPTERS.length) throw new Error('duplicate oracle adapter id');
@@ -38,6 +39,21 @@ export function manifestEntry(a) {
   };
 }
 
+// X-205: the supported-class manifest for non-taint vulnerabilities. Each class names the adapter that executes it, whether
+// that adapter was reused, its fixtures and the user-visible report text (prerequisites, platforms, limitations).
+function scenarioClassEntries(adapters) {
+  return SCENARIO_CLASSES.map((c) => {
+    const a = adapters.find((x) => x.id === c.adapterId) || null;
+    return {
+      id: c.id, title: c.title, claim: c.claim, oracle: c.adapterId, adapterReuse: c.adapterReuse,
+      requires: c.requires, limitations: c.limitations, fixtures: c.fixtures,
+      prerequisites: a ? a.prerequisites.map((id) => ({ id, description: PREREQUISITES[id].description })) : [],
+      platforms: a ? a.platforms : null,
+      report: scenarioClassReportLines(c, a),
+    };
+  });
+}
+
 export function oracleManifest(adapters = listOracles()) {
   const entries = adapters.map(manifestEntry);
   return {
@@ -46,6 +62,15 @@ export function oracleManifest(adapters = listOracles()) {
     oracles: entries,
     // Every class the PRD names must have an adapter; a missing one is stated, never implied.
     uncoveredClasses: ORACLE_CLASSES.filter((c) => !adapters.some((a) => a.class === c)),
-    problems: adapters.flatMap((a) => validateOracleSpec(a).map((p) => `${a.id}: ${p}`)),
+    problems: [
+      ...adapters.flatMap((a) => validateOracleSpec(a).map((p) => `${a.id}: ${p}`)),
+      ...SCENARIO_CLASSES.filter((c) => !adapters.some((a) => a.id === c.adapterId)).map((c) => `scenario class ${c.id}: its oracle '${c.adapterId}' is not registered`),
+    ],
+    nonTaint: {
+      schema: NON_TAINT_SCHEMA, schemaVersion: '1.0.0',
+      classes: scenarioClassEntries(adapters),
+      unsupported: UNSUPPORTED_NON_TAINT.map((u) => ({ id: u.id, cwes: u.cwes, reason: u.reason })),
+      rules: ['taint absence never refutes a non-taint hypothesis', 'an unsupported or unrun case is never counted in the trusted-negative denominator'],
+    },
   };
 }

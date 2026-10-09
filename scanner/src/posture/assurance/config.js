@@ -44,6 +44,10 @@ export const FEATURES = Object.freeze({
     risk: 'high-risk-execution', platforms: ['linux', 'darwin'],
     platformNote: 'runtime oracles run through the confinement sandbox; isolation-required checks are only advertised on Linux',
   },
+  'patch-negative-verification': {
+    risk: 'high-risk-execution', platforms: ['linux', 'darwin'],
+    platformNote: 'replays the exploit against the original and the patched revision through the confinement sandbox, so it needs verification-oracles as well; an unproved isolation control blocks it',
+  },
   'deployment-boundaries': { risk: 'passive', platforms: ['linux', 'darwin', 'win32'], platformNote: null },
   'invariant-scenarios': {
     risk: 'high-risk-execution', platforms: ['linux', 'darwin'],

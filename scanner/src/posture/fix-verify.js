@@ -22,7 +22,7 @@ import { runFullScan } from '../engine.js';
 import { gateFixOutput } from './fix-honesty-gate.js';
 import { runProjectTests } from './test-runner.js';
 import { recordFixAttempt } from './fix-metrics.js';
-import { emitVerification } from './verification/emit.js';
+import { emitVerification, headCommit } from './verification/emit.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -188,6 +188,8 @@ export async function verifyFix({
   testTimeoutMs,
   recordMetrics = true,
   poc,
+  patchNegative,
+  assuranceConfig,
 } = {}) {
   // R5 (reporting half) — time each stage as it runs. Measured here rather
   // than inside each stage because only this function knows the boundaries of
@@ -270,7 +272,26 @@ export async function verifyFix({
   }
   _lap('honesty');
 
-  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true);
+  // X-204: patch-negative verification, only when the caller asked for it AND the `patch-negative-verification` feature is
+  // on. `patchNegative` is the requester's exploit scenario and functional cases ({ original, functional, commit?, ... }); the
+  // candidate `files` are the proposed diff. With the flag off, or no request, nothing here runs and every field below is
+  // exactly what it was before.
+  let pn = null;
+  if (patchNegative && typeof patchNegative === 'object') {
+    try {
+      const { verifyPatchNegative } = await import('./verification/patch-negative.js');
+      pn = await verifyPatchNegative({
+        hypothesisId: originalFindingStableId, ...patchNegative, patch: { files },
+        commit: patchNegative.commit ?? headCommit(scanRoot),
+      }, { config: assuranceConfig });
+    } catch (e) {
+      pn = { status: 'error', verifiedFix: false, incompleteStep: 'patch-negative', failureCode: 'harness-error', reason: `patch-negative verification failed to run: ${String(e?.message || e).slice(0, 200)}`, summary: '' };
+    }
+  }
+  const pnActive = pn !== null && pn.status !== 'disabled';
+  _lap('patchNegative');
+
+  const ok = rescan.ok && (lint.ok || lint.skipped) && testsOk && pocOk && (honesty ? honesty.ok : true) && (pnActive ? pn.verifiedFix === true : true);
 
   // FR-305 (assurance-hardening PRD): `ok` alone conflates "every leg
   // genuinely ran and passed" with "passed, but a required leg was skipped
@@ -312,6 +333,7 @@ export async function verifyFix({
       : pocLeg.status === 'no-longer-proven' ? 'poc:     PASS (ran against the patch and no longer demonstrates the vulnerability)'
       : `poc:     inconclusive — not counted either way (${pocLeg.reason || 'no detail reported'})`,
     // FR-305: never let a degraded pass read the same as a full one.
+    pnActive ? `patch-negative: ${pn.verifiedFix ? 'PASS (verified-fix)' : `FAIL - not verified-fix, incomplete step '${pn.incompleteStep}' (${pn.failureCode}): ${pn.reason}`}` : null,
     ok && !verifiedFull ? `NOTE:    PASSED, but NOT fully verified — ${degradedLegs.join('; ')}` : null,
   ].filter(Boolean).join('\n');
   // Persist the attempt so the distribution can be reported from real runs.
@@ -346,5 +368,9 @@ export async function verifyFix({
   });
   const verificationRecord = emitted.ok ? emitted.record : null;
 
-  return { ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary, verificationRecord };
+  return {
+    ok, verifiedFull, degradedLegs, rescan, lint, tests, testedPrePatch: _testedPrePatch, honesty, poc: pocLeg, durations, summary, verificationRecord,
+    // additive, present only when patch-negative verification was requested (X-204)
+    ...(pn ? { patchNegative: pn, ...(pnActive ? { fixStatus: pn.verifiedFix ? 'verified-fix' : 'not-verified-fix' } : {}) } : {}),
+  };
 }

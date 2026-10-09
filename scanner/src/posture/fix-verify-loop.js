@@ -132,8 +132,10 @@ export async function verifyFixWithTests({
   runTests = true,
   testRunnerOverride,
   testTimeoutMs,
+  patchNegative,
+  assuranceConfig,
 } = {}) {
-  const scanLint = await verifyFix({ scanRoot, originalFindingStableId, files, depFileContents });
+  const scanLint = await verifyFix({ scanRoot, originalFindingStableId, files, depFileContents, patchNegative, assuranceConfig });
   const legs = {
     scan: { ok: scanLint.rescan?.ok ?? scanLint.ok, detail: scanLint.rescan ?? scanLint },
     lint: { ok: scanLint.lint?.ok ?? true, detail: scanLint.lint ?? null },
@@ -145,7 +147,11 @@ export async function verifyFixWithTests({
     const e = emitVerification('fix-verify-loop', res, { originalFindingStableId, files, scanRoot });
     return { ...res, verificationRecord: e.ok ? e.record : null };
   };
-  if (!legs.scan.ok || !legs.lint.ok) {
+  // X-204: the patch-negative leg is present only when it was requested and its feature is on. A patch the oracle did not verify
+  // is never `verified-clean`, whatever the other legs say.
+  const pn = scanLint.patchNegative && scanLint.patchNegative.status !== 'disabled' ? scanLint.patchNegative : null;
+  if (pn) legs.patchNegative = { ok: pn.verifiedFix === true, detail: { status: pn.status, incompleteStep: pn.incompleteStep, failureCode: pn.failureCode, reason: pn.reason } };
+  if (!legs.scan.ok || !legs.lint.ok || (pn && !legs.patchNegative.ok)) {
     return withRecord({
       ok: false,
       verdict: 'verification-failed',
@@ -160,7 +166,7 @@ export async function verifyFixWithTests({
   const allOk = legs.scan.ok && legs.lint.ok && legs.tests.ok;
   const verdict = !allOk
     ? 'verification-failed'
-    : (legs.tests.skipped ? 'untested-but-passes' : 'verified-clean');
+    : pn ? 'verified-fix' : (legs.tests.skipped ? 'untested-but-passes' : 'verified-clean');
   return withRecord({ ok: allOk, verdict, legs, summary: _summarize(legs, verdict) });
 }
 
@@ -169,5 +175,6 @@ function _summarize(legs, verdict) {
   bits.push(`scan: ${legs.scan.ok ? 'pass' : 'fail'}`);
   bits.push(`lint: ${legs.lint.skipped ? 'skip' : legs.lint.ok ? 'pass' : 'fail'}`);
   bits.push(`tests: ${legs.tests.skipped ? 'skip' : legs.tests.ok ? 'pass' : 'fail'}`);
+  if (legs.patchNegative) bits.push(`patch-negative: ${legs.patchNegative.ok ? 'pass' : `fail (${legs.patchNegative.detail.incompleteStep})`}`);
   return `${verdict} (${bits.join(' · ')})`;
 }

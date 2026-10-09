@@ -1,0 +1,7 @@
+{
+  "export": "canRunAdminAction",
+  "cases": [
+    { "id": "admin", "role": "control", "args": [{ "userId": "u-1", "roles": ["member", "admin"] }, "delete-workspace"] },
+    { "id": "member", "role": "attack", "args": [{ "userId": "u-7", "roles": ["member"] }, "delete-workspace"] }
+  ]
+}

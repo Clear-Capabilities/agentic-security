@@ -1,0 +1,7 @@
+{
+  "export": "applyDiscount",
+  "cases": [
+    { "id": "no-code", "args": [1000, ""], "expected": 1000 },
+    { "id": "ten-percent", "args": [1000, "SAVE10"], "expected": 900 }
+  ]
+}

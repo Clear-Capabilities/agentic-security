@@ -50,9 +50,12 @@ import { resolveAssuranceConfig, featureStatus } from '../assurance/config.js';
 import { digestOf, digestOfBytes } from '../assurance/identity.js';
 import { isCommit, isPlainObject } from '../assurance/schema-kit.js';
 import { emitVerification } from '../verification/emit.js';
+import { scenarioClassesForAdapter, scenarioClassReportLines } from './scenario-classes.js';
 
 export const ORACLE_CLASSES = Object.freeze([
   'injection-execution', 'authorization-decision', 'state-transition', 'side-effect-reachability', 'parser-resource',
+  // X-205 and X-204: a replayed request that repeats its effect, and a differential behaviour check for a patch.
+  'replay-idempotency', 'functional-regression',
 ]);
 const PLATFORM_STATUSES = Object.freeze(['supported', 'unverified', 'unsupported']);
 export const FEATURE_ID = 'verification-oracles';
@@ -270,12 +273,26 @@ function outcomeFields(oracle, req, { outcome, reason, attempt, evidence, precon
   };
 }
 
+/**
+ * What a reader of any result from this oracle must be shown next to it: the prerequisites it needed, the platform statement
+ * and its limitations, and, for a non-taint class it serves, that class's own report lines (X-205.AC02). Data only.
+ */
+function disclosureOf(oracle) {
+  return {
+    oracle: oracle.id,
+    prerequisites: oracle.prerequisites.map((id) => ({ id, description: PREREQUISITES[id].description })),
+    platform: { name: process.platform, status: oracle.platforms[process.platform]?.status ?? 'unsupported' },
+    limitations: [...oracle.limitations],
+    scenarioClasses: scenarioClassesForAdapter(oracle.id).map((c) => ({ id: c.id, report: scenarioClassReportLines(c, oracle) })),
+  };
+}
+
 function finishWithRecord(oracle, req, status, fields, extra = {}) {
   const emitted = emitVerification('oracle', null, {
     hypothesisId: req.hypothesisId, commit: req.commit ?? null, finding: req.finding || null,
     ...(req.detectorOrigin ? { detectorOrigin: req.detectorOrigin } : {}), fields,
   });
-  return { status, outcome: fields.outcome, reason: fields.reason, record: emitted.ok ? emitted.record : null, recordErrors: emitted.errors, ...extra };
+  return { status, outcome: fields.outcome, reason: fields.reason, record: emitted.ok ? emitted.record : null, recordErrors: emitted.errors, disclosure: disclosureOf(oracle), ...extra };
 }
 
 /**

@@ -1,0 +1,7 @@
+{
+  "export": "canReadDocument",
+  "cases": [
+    { "id": "owner", "role": "control", "args": [{ "userId": "u-1", "tenantId": "acme" }, "doc-1001"] },
+    { "id": "other-tenant", "role": "attack", "args": [{ "userId": "u-9", "tenantId": "globex" }, "doc-1001"] }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "export": "createHandler",
+  "sink": "chargeCard",
+  "request": { "idempotencyKey": "k-1", "amountCents": 500 },
+  "distinctRequest": { "idempotencyKey": "k-2", "amountCents": 500 },
+  "deliveries": 3
+}
