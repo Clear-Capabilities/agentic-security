@@ -3289,6 +3289,9 @@ async function cmdVerifyAttestation(args) {
   console.log('');
   console.log(`  proves:        ${bundle.proves}`);
   console.log(`  does NOT prove: ${bundle.doesNotProve}`);
+  // CORE-003.AC03: who vouches. Informational only; the exit code is unchanged.
+  console.log(`  trust basis:   ${r.trustBasis}${r.issuer ? ` (issuer ${r.issuer.id})` : ''}`);
+  console.log(`  ${r.trustNote}`);
   return 0;
 }
 
