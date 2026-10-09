@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.159.0  
+**Version:** 0.160.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -91,6 +91,10 @@ After any change to `scanner/src/` or `scanner/bin/`, run `npm run build` before
 - **Keeping scopes honest.** `npm run gate:trace -- <check-id> --verify` runs one check under a read/write tracer (`scripts/gate-trace-preload.mjs`) and exits 1 if it read a file outside its scope, read scan state the digest cannot see, ran git on this repository while `usesHistory` is false, or wrote inside the repository while the scope says `writesRepo: false`. Re-run it after a bench changes what it loads. It is evidence from one run, not a proof: ESM-loader reads and non-node children (python) are not seen, and the tracer slows the long benches by an order of magnitude.
 - **Parallel checks.** Checks sharing a `parallelGroup` (currently `mutation-gate`, `protection-verdict-gate`, `provenance-accuracy-gate`) run concurrently with captured output. Membership requires `writesRepo: false` from a traced run; the big suites are deliberately serial.
 
+### Shipping a release
+
+`node scripts/ship.mjs` (or `npm run ship` in `scanner/`) takes the current feature branch through push, pull request, the blocking checks, merge, the release gate, the tag, the hosted release workflow and the npm check, starting each step the moment the previous one is ready. It never bypasses a gate (no `--no-verify`, no `--allow-unverified-ci`, no force-push) and never tags a commit that was not verified. Three things make it faster than doing the steps by hand: it does not idle between steps; it re-runs a CI job that has been running far longer than any healthy run, or that failed in setup, instead of waiting on it (a real gate failure is never re-run, even when fail-fast cancelled its sibling jobs); and when the merge commit's tree is byte-identical to the verified PR head's it tags the PR head, so the second CI wait and a second full verification are skipped (a different tree falls back to waiting for CI on the merge commit). `--dry-run` stops before the merge, `--resume` continues an interrupted run without repeating a finished phase (it will not merge or tag twice), `--status` prints the last run. Progress goes to `.agentic-security/ship/state.json` and per-phase logs to `.agentic-security/ship/logs/`. The decisions are in `scripts/ship/lib.mjs`, the flow in `scripts/ship/run.mjs`, both covered by `test/ship.test.js`.
+
 ### Signed, portable evidence (PRD D2)
 
 Run attestation (posture/attestation.js) is a per-install SYMMETRIC HMAC — tamper-evidence for the operator, not third-party non-repudiation. posture/evidence-bundle.js is the other half: an Ed25519-signed bundle per FINDING, verifiable by someone who has only the public key.
@@ -103,7 +107,7 @@ A bundle PROVES its contents are unmodified since signing. It does NOT prove the
 
 ### Two publish paths, and only one carries provenance
 
-- **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` on a clean runner and publishes with `npm publish --provenance`, so the artifact carries a verifiable link back to this repository and commit. Needs the `NPM_TOKEN` repository secret.
+- **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` as parallel `gate` legs on clean runners (the test suite in four shards, two bench groups, and `rest`, defined by `RELEASE_GROUPS` in `scripts/release-check.mjs`, where `rest` is the computed complement so a new check can never be dropped), then a `publish` job that `needs` every leg re-verifies the bundle and package shape and runs `npm publish --provenance` via npm trusted publishing (OIDC, no token); only `publish` holds `id-token: write`, so the artifact carries a verifiable link back to this repository and commit.
 - **Local `npm publish`.** Still supported and still fully gated by `prepublishOnly`. It produces **no provenance attestation** — npm requires a trusted CI publisher with OIDC for that. Use it when you must; prefer the tag.
 
 `workflow_dispatch` on the release workflow runs the gate and `npm pack --dry-run` without publishing, which is the cheapest way to check a release would go out cleanly.

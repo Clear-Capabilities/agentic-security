@@ -42,7 +42,22 @@
 //   node scripts/release-check.mjs                      # full gate
 //   node scripts/release-check.mjs --fast               # skip the slow checks
 //   node scripts/release-check.mjs --allow-unverified-ci
-// Exit: 0 all planned checks passed / 1 one or more failed.
+//   node scripts/release-check.mjs --group <name>       # one named group (see RELEASE_GROUPS)
+//   node scripts/release-check.mjs --only id,id         # exactly these checks
+//   node scripts/release-check.mjs --group tests --shard 2/4   # one shard of the test suite
+// Exit: 0 all planned checks passed / 1 one or more failed / 2 bad arguments.
+//
+// PARTIAL RUNS (the hosted release workflow runs the gate as parallel jobs)
+// -------------------------------------------------------------------------
+// --group, --only and --shard each run a SUBSET of the checks. A subset run
+// fails closed exactly like a full run (any failing check exits 1), but it is
+// labelled as partial in its header and its final line, and it NEVER prints the
+// full-gate success line: only a run that executed every planned check may say
+// "Release gate passed". The workflow's publish job depends on every group, so
+// the union of the partial runs is the full gate. RELEASE_GROUPS names the
+// groups; the group called `rest` is computed as the COMPLEMENT of the named
+// ones, so a newly added check lands in `rest` and runs by default instead of
+// being silently dropped.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -325,6 +340,96 @@ export const CHECKS = [
 /** Ids of the checks a run with these options will actually execute. */
 export function plannedCheckIds({ fast = false } = {}) {
   return CHECKS.filter(c => !(fast && c.slow)).map(c => c.id);
+}
+
+// ---------------------------------------------------------------------------
+// Groups. The hosted release workflow runs one job per group (and one per test
+// shard), in parallel. Timings behind the split, from the v0.158.0 release run:
+// test-suite 14.9 min (sharded further, see --shard); provenance 2.4, self-scan
+// 2.3, cve-replay 2.0, layer-recall 1.9, memory 1.2, ttff 0.2; everything else
+// under a minute each. The slowest benches sit in different groups.
+//
+// Only the NAMED groups are listed. `rest` is every planned check not named
+// here (see `resolveGroups`), so adding a check to CHECKS without touching this
+// table runs it in `rest`; it can never fall out of the release.
+// ---------------------------------------------------------------------------
+export const RELEASE_GROUPS = {
+  tests: ['test-suite'],
+  'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
+  'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate'],
+};
+
+/** Every group name a run may select, `rest` included. */
+export function groupNames() {
+  return [...Object.keys(RELEASE_GROUPS), 'rest'];
+}
+
+/** { name: [ids] } for every group, with `rest` computed as the complement of the named groups. */
+export function resolveGroups() {
+  const named = new Set(Object.values(RELEASE_GROUPS).flat());
+  return { ...RELEASE_GROUPS, rest: plannedCheckIds().filter((id) => !named.has(id)) };
+}
+
+/**
+ * Parse the partial-run flags. Returns { error } for anything malformed; never
+ * guesses. `--shard` is only meaningful for the test suite, so it is refused
+ * when the selection does not include `test-suite` (a shard flag that silently
+ * does nothing would look like a sharded run and prove nothing).
+ */
+export function parseSelection(argv, { fast = false } = {}) {
+  const val = (flag) => {
+    const i = argv.indexOf(flag);
+    if (i === -1) return { present: false };
+    const v = argv[i + 1];
+    if (!v || v.startsWith('--')) return { present: true, missing: true };
+    return { present: true, value: v };
+  };
+  const group = val('--group');
+  const only = val('--only');
+  const shard = val('--shard');
+  for (const [flag, v] of [['--group', group], ['--only', only], ['--shard', shard]]) {
+    if (v.missing) return { error: `${flag} needs a value` };
+  }
+  if (group.present && only.present) return { error: '--group and --only are mutually exclusive' };
+
+  let shardSpec = null;
+  if (shard.present) {
+    const m = /^(\d+)\/(\d+)$/.exec(shard.value);
+    if (!m || Number(m[1]) < 1 || Number(m[2]) < 1 || Number(m[1]) > Number(m[2])) {
+      return { error: `--shard "${shard.value}" is invalid: expected i/N with 1 <= i <= N` };
+    }
+    shardSpec = shard.value;
+  }
+
+  const planned = plannedCheckIds({ fast });
+  let ids = planned;
+  let label = null;
+  if (group.present) {
+    const groups = resolveGroups();
+    if (!Object.hasOwn(groups, group.value)) {
+      return { error: `unknown group "${group.value}"; groups are: ${groupNames().join(', ')}` };
+    }
+    ids = groups[group.value].filter((id) => planned.includes(id));
+    label = `group ${group.value}`;
+  } else if (only.present) {
+    const wanted = only.value.split(',').map((x) => x.trim()).filter(Boolean);
+    const known = new Set(CHECKS.map((c) => c.id));
+    const unknown = wanted.filter((id) => !known.has(id));
+    if (!wanted.length || unknown.length) {
+      return { error: `unknown check id(s) for --only: ${unknown.join(', ') || '(none given)'}` };
+    }
+    ids = planned.filter((id) => wanted.includes(id));
+    label = `only ${wanted.join(',')}`;
+  }
+  if (shardSpec) {
+    if (!ids.includes('test-suite')) {
+      return { error: '--shard only applies to the test-suite check, which this selection does not run' };
+    }
+    label = `${label ? `${label}, ` : ''}shard ${shardSpec}`;
+  }
+  if (!ids.length) return { error: 'the selection matches no planned check; refusing to report a vacuous pass' };
+  const partial = ids.length !== planned.length || Boolean(shardSpec);
+  return { ids, label, shard: shardSpec, partial };
 }
 
 function result(errors = [], warnings = [], extra = {}) {
@@ -738,10 +843,10 @@ export function scorecardFacts(version) {
   };
 }
 
-function runNpmGate(script) {
+function runNpmGate(script, env = {}) {
   const label = `npm run ${script}`;
   process.stderr.write(`  running ${label} (this is one of the slow gates) …\n`);
-  const r = run('npm', ['run', script], { cwd: SCANNER, stdio: 'inherit' });
+  const r = run('npm', ['run', script], { cwd: SCANNER, stdio: 'inherit', env: { ...process.env, ...env } });
   return evaluateCommandGate({ label, exitCode: r.status });
 }
 
@@ -780,10 +885,21 @@ function remoteCiFacts(headSha) {
 // Runner
 // ---------------------------------------------------------------------------
 
-function main(argv) {
+// `overrides` maps a check id to a replacement evaluator and `out` is the report
+// stream; both exist so the tests can drive a real run (selection, labelling,
+// exit code) without spawning the slow gates. The CLI passes neither.
+export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   const fast = argv.includes('--fast');
   const allowUnverified = argv.includes('--allow-unverified-ci');
-  const planned = new Set(plannedCheckIds({ fast }));
+  const selection = parseSelection(argv, { fast });
+  if (selection.error) {
+    out.write(`release-check: ${selection.error}\n`);
+    return 2;
+  }
+  const planned = new Set(selection.ids);
+  const fullPlanned = plannedCheckIds({ fast });
+  const partial = selection.partial;
+  const shard = selection.shard;
 
   const headSha = (gitOut(['rev-parse', 'HEAD']) || '').trim() || 'unknown';
   const versionSources = gatherVersionSources();
@@ -814,9 +930,14 @@ function main(argv) {
   const cachedProvenance = new Map();
 
   const results = new Map();
-  const evaluate = (id, fn) => {
+  const evaluate = (id, realFn) => {
     if (!planned.has(id)) return;
-    if (cacheCtx.enabled && CACHEABLE.has(id)) {
+    const fn = overrides[id] || realFn;
+    // A sharded test-suite verdict covers a fraction of the suite, so it must
+    // neither be read from nor written to the cache (it would otherwise be
+    // recorded as the whole suite passing for this key).
+    const cacheable = CACHEABLE.has(id) && !(id === 'test-suite' && shard);
+    if (cacheCtx.enabled && cacheable) {
       const rec = cacheCtx.records[id];
       const verdict = evaluateCachedVerdict({ record: rec, key: cacheCtx.key, checkId: id });
       if (verdict.usable) {
@@ -827,7 +948,7 @@ function main(argv) {
     }
     const startedCheck = Date.now();
     const r = fn();
-    if (r?.ok && cacheCtx.enabled && CACHEABLE.has(id)) {
+    if (r?.ok && cacheCtx.enabled && cacheable) {
       recordVerdict(REPO, {
         checkId: id, key: cacheCtx.key, commitSha: cacheCtx.commitSha,
         by: 'release-check', durationMs: Date.now() - startedCheck,
@@ -901,7 +1022,7 @@ function main(argv) {
 
   evaluate('package-contents', () => runPackageContentsCheck(REPO));
 
-  evaluate('test-suite', () => runNpmGate('test'));
+  evaluate('test-suite', () => runNpmGate('test', shard ? { AGENTIC_SECURITY_TEST_SHARD: shard } : {}));
   evaluate('corpus-gate', () => runNpmGate('bench:cve-replay:check'));
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
@@ -935,10 +1056,13 @@ function main(argv) {
   });
 
   // ---- summary ----
-  const out = process.stderr;
   out.write(`\n${'='.repeat(64)}\n`);
   out.write(`Release gate — version ${version || '(undetermined)'} @ ${headSha.slice(0, 12)}` +
     `${fast ? '  [--fast: slow gates skipped]' : ''}\n`);
+  if (partial) {
+    out.write(`PARTIAL RUN, NOT THE FULL GATE: ${selection.label || 'selection'}: ` +
+      `${planned.size} of ${CHECKS.length} checks\n`);
+  }
   out.write(`${'='.repeat(64)}\n`);
 
   if (cacheCtx.rejected) {
@@ -949,6 +1073,9 @@ function main(argv) {
   for (const check of CHECKS) {
     const r = results.get(check.id);
     if (!r) {
+      // Outside the selection of a partial run: another job owns it, and the
+      // header already says how many checks this run covers.
+      if (partial && fullPlanned.includes(check.id)) continue;
       out.write(`SKIP  ${check.title}  (--fast)\n`);
       continue;
     }
@@ -970,13 +1097,21 @@ function main(argv) {
     out.write(`${'!'.repeat(64)}\n`);
   }
 
+  if (failed.length === 0 && partial) {
+    // Deliberately a different sentence from the full-gate line below: a partial
+    // pass proves only its own checks, and must never be mistaken for the whole.
+    out.write(`\n✓ Partial run passed (${selection.label || 'selection'}: ${results.size} of ${CHECKS.length} checks). ` +
+      'This is NOT the full release gate; every other group must pass too.\n');
+    return 0;
+  }
+
   if (failed.length === 0) {
     out.write(`\n✓ Release gate passed (${results.size}/${CHECKS.length} checks run).` +
       `${fast ? ' NOTE: --fast was used; this is not a publish-grade run.' : ''}\n`);
     return 0;
   }
 
-  out.write(`\n✗ Release gate FAILED — ${failed.length} check(s) did not pass:\n`);
+  out.write(`\n✗ Release gate FAILED${partial ? ` (partial run: ${selection.label || 'selection'})` : ''} — ${failed.length} check(s) did not pass:\n`);
   // Repeat WHY each check failed, not just what to do about it. The detail is
   // printed inline above, but npm surfaces only the tail of a failed
   // prepublishOnly, so a summary carrying "commit your changes" without naming

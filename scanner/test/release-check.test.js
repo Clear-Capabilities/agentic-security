@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import {
   CHECKS,
   plannedCheckIds,
@@ -25,6 +26,11 @@ import {
   evaluateAttestationSelfCheck,
   extractVersionsFromSource,
   scorecardFacts,
+  RELEASE_GROUPS,
+  resolveGroups,
+  groupNames,
+  parseSelection,
+  main as runReleaseGate,
 } from '../../scripts/release-check.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -610,4 +616,134 @@ test('release-gate — completion-declared: open requirements must be named in t
   const missing = '## 1.2.3 - x\n\nPartial release: NIX-011 is open.\n';
   assert.ok(evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: missing, readmeText: readme }).errors.some((e) => /REL-001/.test(e)), 'every open id is named');
   assert.equal(evaluateCompletionDeclared({ version: '1.2.3', status, changelogText: good, readmeText: 'nothing here' }).ok, false, 'the README must name them too');
+});
+
+// ------------------------------------------------------- groups and partial runs
+// The hosted release workflow runs the gate as parallel jobs, one per group (and
+// one per test shard). These tests are what make "the union of the groups is the
+// full gate" a checked fact rather than a hope.
+const passing = () => ({ ok: true, errors: [], warnings: [] });
+const failing = () => ({ ok: false, errors: ['forced failure'], warnings: [] });
+
+/** Run the real gate entry point with every selected check stubbed; returns { code, text, ran }. */
+function gateRun(argv, overrides = {}) {
+  let text = '';
+  const ran = [];
+  const stubs = {};
+  for (const id of plannedCheckIds()) {
+    stubs[id] = () => { ran.push(id); return (overrides[id] || passing)(); };
+  }
+  const code = runReleaseGate([...argv, '--no-cache'], { overrides: stubs, out: { write: (x) => { text += x; } } });
+  return { code, text, ran };
+}
+
+test('release groups: the named groups plus rest partition plannedCheckIds() exactly', () => {
+  const groups = resolveGroups();
+  assert.deepEqual(Object.keys(groups), groupNames());
+  const all = Object.values(groups).flat();
+  assert.equal(new Set(all).size, all.length, 'a check id appears in more than one group');
+  assert.deepEqual([...all].sort(), [...plannedCheckIds()].sort(), 'the groups must cover every planned check, nothing more');
+});
+
+test('release groups: every named id exists in CHECKS (typo guard) and rest is a pure complement', () => {
+  const known = new Set(CHECKS.map((c) => c.id));
+  for (const [name, ids] of Object.entries(RELEASE_GROUPS)) {
+    assert.ok(ids.length > 0, `group ${name} is empty`);
+    for (const id of ids) assert.ok(known.has(id), `group ${name} names unknown check "${id}"`);
+  }
+  assert.ok(!('rest' in RELEASE_GROUPS), '`rest` is computed, never listed');
+  const named = new Set(Object.values(RELEASE_GROUPS).flat());
+  assert.deepEqual(resolveGroups().rest, plannedCheckIds().filter((id) => !named.has(id)));
+  // A check added to CHECKS and to no group lands in rest, so it still runs.
+  const rest = resolveGroups().rest;
+  for (const id of plannedCheckIds()) if (!named.has(id)) assert.ok(rest.includes(id));
+});
+
+test('release groups: the slow benches are balanced across groups, not stacked in one', () => {
+  const slow = ['provenance-gate', 'self-scan-gate', 'corpus-gate', 'layer-recall-gate'];
+  const where = slow.map((id) => Object.entries(RELEASE_GROUPS).find(([, ids]) => ids.includes(id))?.[0]);
+  assert.ok(where.every(Boolean), 'every slow bench must be in a named group');
+  assert.ok(new Set(where).size >= 2, 'the slow benches must not all share one group');
+  assert.ok(RELEASE_GROUPS.tests.includes('test-suite'));
+});
+
+test('--group runs only its group', () => {
+  const { code, ran, text } = gateRun(['--group', 'benches-a']);
+  assert.equal(code, 0, text);
+  assert.deepEqual(ran.sort(), [...RELEASE_GROUPS['benches-a']].sort());
+});
+
+test('--group rest runs exactly the complement', () => {
+  const { code, ran } = gateRun(['--group', 'rest']);
+  assert.equal(code, 0);
+  assert.deepEqual(ran.sort(), [...resolveGroups().rest].sort());
+});
+
+test('running every group once runs every planned check exactly once', () => {
+  const ran = [];
+  for (const g of groupNames()) ran.push(...gateRun(['--group', g]).ran);
+  assert.deepEqual(ran.sort(), [...plannedCheckIds()].sort());
+});
+
+test('--only runs exactly the named checks', () => {
+  const { code, ran } = gateRun(['--only', 'bundle-integrity,package-contents']);
+  assert.equal(code, 0);
+  assert.deepEqual(ran.sort(), ['bundle-integrity', 'package-contents']);
+});
+
+test('a failing check inside a group fails the group (exit 1) and says which', () => {
+  const { code, text } = gateRun(['--group', 'benches-b'], { 'layer-recall-gate': failing });
+  assert.equal(code, 1);
+  assert.match(text, /FAIL {2}/);
+  assert.match(text, /forced failure/);
+  assert.doesNotMatch(text, /Release gate passed/);
+  assert.match(text, /partial run: group benches-b/);
+});
+
+test('a partial run never prints the full-gate success line, and says it is partial', () => {
+  const g = gateRun(['--group', 'tests', '--shard', '2/4']);
+  assert.equal(g.code, 0, g.text);
+  assert.match(g.text, /group tests, shard 2\/4: 1 of \d+ checks/);
+  assert.match(g.text, /PARTIAL RUN, NOT THE FULL GATE/);
+  assert.match(g.text, /Partial run passed/);
+  assert.doesNotMatch(g.text, /Release gate passed/);
+  for (const argv of [['--only', 'doc-links'], ['--group', 'rest'], ['--group', 'benches-a']]) {
+    const r = gateRun(argv);
+    assert.doesNotMatch(r.text, /Release gate passed/, argv.join(' '));
+  }
+});
+
+test('a full run (no selection) still prints the full-gate line with the full count', () => {
+  const { code, text } = gateRun([]);
+  assert.equal(code, 0);
+  assert.match(text, new RegExp(`Release gate passed \\(${CHECKS.length}/${CHECKS.length} checks run\\)`));
+  assert.doesNotMatch(text, /PARTIAL/);
+});
+
+test('--shard is parsed and validated, and is refused for a selection without the test suite', () => {
+  assert.equal(parseSelection(['--group', 'tests', '--shard', '3/4']).shard, '3/4');
+  for (const bad of [['--shard', '0/4'], ['--shard', '5/4'], ['--shard', 'x'], ['--shard']]) {
+    assert.ok(parseSelection(bad).error, `must reject ${bad.join(' ')}`);
+  }
+  assert.match(parseSelection(['--group', 'rest', '--shard', '1/4']).error, /only applies to the test-suite/);
+  assert.equal(gateRun(['--group', 'rest', '--shard', '1/4']).code, 2);
+});
+
+test('bad selections exit 2 and run nothing: unknown group, unknown id, both flags, missing value', () => {
+  for (const argv of [['--group', 'nope'], ['--only', 'nope'], ['--group', 'rest', '--only', 'doc-links'], ['--group'], ['--only', '']]) {
+    const r = gateRun(argv);
+    assert.equal(r.code, 2, argv.join(' '));
+    assert.deepEqual(r.ran, []);
+  }
+});
+
+test('the real CLI exits 2 on an unknown group and 0 on a cheap real group', () => {
+  const script = path.join(REPO_ROOT, 'scripts', 'release-check.mjs');
+  const bad = spawnSync(process.execPath, [script, '--group', 'nope'], { encoding: 'utf8' });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /unknown group/);
+  const ok = spawnSync(process.execPath, [script, '--only', 'attestation-self-check', '--no-cache'], { encoding: 'utf8' });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stderr, /Partial run passed/);
+  assert.doesNotMatch(ok.stderr, /Release gate passed/);
 });

@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.159.0",
+    "engineVersion": "0.160.0",
     "bundleSha256": "6a0bcec455607538bd4485ce3b9cd5a266f51daf636b0ef6260cdc3bacf01776",
-    "commit": "74cff402de56fd2c41519493b6087bee2fff5589",
+    "commit": "a3286ca21826d40e5621cb3225083adb08143a5f",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-08T22:07:15.072Z",
+    "generatedAt": "2026-10-08T23:32:59.917Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -828,7 +828,7 @@
         }
       },
       "scripts": {
-        "total": 46,
+        "total": 54,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -846,7 +846,10 @@
           "owasp-llm-top10/scan.py": 1,
           "release-check.mjs": 1,
           "rotate-key-auto.py": 1,
+          "run-unit-tests.mjs": 1,
           "self-test-runner.mjs": 2,
+          "ship.mjs": 6,
+          "ship/run.mjs -> ship/lib.mjs": 1,
           "synthesize-detector.mjs": 7
         }
       }
@@ -858,8 +861,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 340,
-    "d": 419
+    "n": 342,
+    "d": 422
   },
   "taintRecall": {
     "measuredThisRun": true,
