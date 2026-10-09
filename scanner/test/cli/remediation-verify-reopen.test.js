@@ -13,7 +13,7 @@
 // `statePath(root, 'lineage-snapshots', '<commit>.json')`, with explicit
 // mtimes so `loadSnapshots`' newest-first ordering is deterministic
 // regardless of filesystem timestamp resolution.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,16 +25,27 @@ import { statePath } from '../../src/posture/state-dir.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
 const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
-const TIMEOUT = 20_000;
+// Each CLI start costs ~1.3 s of CPU (it loads the whole engine) and several
+// times that under heavy machine load, so the per-spawn bound is a generous
+// stall detector, not a performance budget. SIGKILL (not the default SIGTERM)
+// guarantees a stuck child is really gone, and _run turns a timeout into a
+// named failure instead of a bare `null` exit status.
+const TIMEOUT = 120_000;
+
+const _ROOTS = [];
+after(() => { for (const r of _ROOTS) fs.rmSync(r, { recursive: true, force: true }); });
 
 function _mkTmpProject(prefix = 'agsec-remediation-verify-cli-') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  _ROOTS.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }
 
 function _run(argv) {
-  return spawnSync(process.execPath, [CLI, ...argv], { encoding: 'utf8', timeout: TIMEOUT });
+  const r = spawnSync(process.execPath, [CLI, ...argv], { encoding: 'utf8', timeout: TIMEOUT, killSignal: 'SIGKILL' });
+  assert.notEqual(r.error && r.error.code, 'ETIMEDOUT', `CLI stalled past ${TIMEOUT} ms: ${argv.slice(0, 2).join(' ')}`);
+  return r;
 }
 
 function _ledgerPath(root) { return statePath(root, 'remediation', 'items.jsonl'); }

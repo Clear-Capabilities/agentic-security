@@ -1,20 +1,31 @@
 // hooks/pre-bash-guard.js: deletion is allowed strictly inside an allowed root (default ~/code) and refused everywhere else.
 // The guard parses the command; it does not grep it. These cases pin both directions, because a guard that blocks everything is as
 // useless as one that blocks nothing (the old text match refused `docker run --rm -v /abs/path` and any absolute `rm` path).
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync, existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir, homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK = join(HERE, '..', '..', 'hooks', 'pre-bash-guard.js');
 const { analyzeDeletes } = createRequire(import.meta.url)(HOOK);
 
-const base = realpathSync(mkdtempSync(join(tmpdir(), 'guard-')));
+// The guard's default allowed root is ~/code, and the "outside" cases need a directory that is genuinely outside
+// it. The OS temp folder normally is, but a TMPDIR inside the repository (which lives under ~/code) is not, and
+// the "blocked" assertions would then fail for a reason unrelated to the guard. So the scratch area is the first
+// candidate that is really outside ~/code; the guard itself is not relaxed in any way.
+const codeRoot = join(homedir(), 'code');
+const insideCode = (d) => { const r = realpathSync(d); return r === codeRoot || r.startsWith(codeRoot + sep); };
+const scratchParent = [tmpdir(), '/tmp', '/var/tmp'].find((d) => existsSync(d) && !insideCode(d)) || tmpdir();
+const made = [];
+const mkScratch = (prefix) => { const d = realpathSync(mkdtempSync(join(scratchParent, prefix))); made.push(d); return d; };
+after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
+
+const base = mkScratch('guard-');
 const root = join(base, 'code'); const outside = join(base, 'elsewhere');
 mkdirSync(join(root, 'proj', 'sub'), { recursive: true }); mkdirSync(outside, { recursive: true });
 writeFileSync(join(root, 'proj', 'a.txt'), 'x'); writeFileSync(join(outside, 'keep.txt'), 'x');
@@ -98,7 +109,7 @@ test('text that merely mentions rm, and docker --rm, are not deletions', () => {
 
 test('the hook end to end: exit 2 when it blocks, 0 when it allows, and the config can widen the root', () => {
   const run = (command, config) => {
-    const proj = realpathSync(mkdtempSync(join(tmpdir(), 'guard-proj-')));
+    const proj = mkScratch('guard-proj-');
     if (config) { mkdirSync(join(proj, '.agentic-security')); writeFileSync(join(proj, '.agentic-security', 'destructive-guard.json'), JSON.stringify(config)); }
     return spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }), env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: 'utf8' });
   };

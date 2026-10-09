@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { planHaskellFix, validateHaskellFix, undoFix, unifiedDiff, planHaskellUpgrade, syntaxGate, compileGate, LABELS, SUPPORTED_FIX_IDS } from '../../src/language/haskell-fix.js';
 import { analyzeHaskellManifests } from '../../src/language/haskell-manifests.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const PG = 'import Database.PostgreSQL.Simple\nimport Data.String (fromString)';
 const SRC = {
@@ -148,7 +149,7 @@ test('[HS-010.AC02] a process fix whose argument could still be read as an optio
 });
 
 test('[HS-010.AC02] preview, backup, apply and undo work, and apply refuses a file that changed underneath it', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'hs-fixapply-'));
+  const root = mkTestTmp('hs-fixapply-');
   const f = join(root, SRC.html.file); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, SRC.html.text);
   const stub = async (fs) => (/preEscapedToHtml n\)/.test(fs[SRC.html.file]) ? [HIGH('html')] : []);
   const dry = await validateHaskellFix(fin('html'), { files: filesOf('html'), rescan: stub });
@@ -224,7 +225,7 @@ test('[HS-010.AC04] compilation is opt-in: it does not run by default, and a mis
 });
 
 test('[HS-010.AC04] a default static scan and the default fix path never spawn ghc, cabal, stack or Setup.hs', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'hs-nospawn-'));
+  const dir = mkTestTmp('hs-nospawn-');
   mkdirSync(join(dir, 'bin')); mkdirSync(join(dir, 'src'));
   const log = join(dir, 'spawned.log');
   for (const t of ['ghc', 'cabal', 'stack', 'runghc', 'runhaskell']) writeFileSync(join(dir, 'bin', t), `#!/bin/sh\necho ${t} >> ${log}\nexit 1\n`, { mode: 0o755 });

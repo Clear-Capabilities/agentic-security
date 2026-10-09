@@ -7,13 +7,14 @@ import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.resolve(here, '..', 'dist', 'agentic-security.mjs');
 const fixture = path.resolve(here, 'fixtures', 'vulnerable-js');
 
 async function copyFixture() {
-  const dst = await fsp.mkdtemp(path.join(os.tmpdir(), 'agsec-ci-'));
+  const dst = await mkTestTmp('agsec-ci-');
   // shallow copy of all files in the fixture (no nested dirs expected here)
   for (const entry of await fsp.readdir(fixture, { withFileTypes: true })) {
     if (entry.isFile()) await fsp.copyFile(path.join(fixture, entry.name), path.join(dst, entry.name));
@@ -47,7 +48,7 @@ async function copyFixture() {
 // `complete`/`uncommitted`, which is what "genuinely clean/complete" is
 // supposed to mean for this test.
 async function makeLogicFreeGitFixture() {
-  const dst = await fsp.mkdtemp(path.join(os.tmpdir(), 'agsec-ci-logicfree-'));
+  const dst = await mkTestTmp('agsec-ci-logicfree-');
   await fsp.writeFile(path.join(dst, 'app.js'), `// Plain, framework-free vulnerable snippets — no HTTP route handlers, so
 // the business-logic detector and the Express stack-playbook
 // recommendations (both of which land in the logicVulns channel, which is

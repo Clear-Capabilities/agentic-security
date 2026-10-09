@@ -18,12 +18,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => path.join(__dirname, 'fixtures', n);
 
 function mkTmp(name, code) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-kt-safecall-${name}-`));
+  const dir = mkTestTmp(`as-kt-safecall-${name}-`);
   fs.writeFileSync(path.join(dir, 'App.kt'), code);
   return dir;
 }

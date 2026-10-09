@@ -8,13 +8,14 @@ import { graphId } from '../../src/lineage/ids.js';
 import { emptyGraphEnvelope } from '../../src/lineage/schema.js';
 import { exportGraphJSON, computeGraphDigest } from '../../src/lineage/export-json.js';
 import { loadRemoteGraphExport } from '../../src/lineage/federation-loader.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FLAGSHIP_PATH = path.join(__dirname, '../../src/lineage/fixtures/flagship-graph.json');
 const flagship = JSON.parse(fs.readFileSync(FLAGSHIP_PATH, 'utf8'));
 
 function tmpFile(name) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-federation-loader-'));
+  const dir = mkTestTmp('agsec-federation-loader-');
   return path.join(dir, name);
 }
 

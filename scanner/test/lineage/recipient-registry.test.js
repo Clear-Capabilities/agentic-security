@@ -12,6 +12,7 @@ import {
   buildRecipientProfile,
 } from '../../src/lineage/recipient-registry.js';
 import { validateRecipientProfile } from '../../src/lineage/recipient-profile.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 // =====================================================================
 // resolveTechnicalProvider
@@ -115,7 +116,7 @@ test('resolveTechnicalProvider: real Google Cloud Pub/Sub framework match', () =
 // =====================================================================
 
 function _tmpFile(content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'recipient-registry-test-'));
+  const dir = mkTestTmp('recipient-registry-test-');
   const file = path.join(dir, RECIPIENT_CONFIG_FILENAME);
   if (content !== undefined) fs.writeFileSync(file, content, 'utf8');
   return file;

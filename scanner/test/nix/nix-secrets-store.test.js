@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeNixSecrets, plausibleSecret, SECRET_RULES } from '../../src/language/nix-secrets.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCANNER = join(HERE, '..', '..');
@@ -118,7 +119,7 @@ test('[NIX-006.AC03] secret values never appear in findings, and source/destinat
 });
 
 test('[NIX-006.AC03] CLI outputs and persisted state redact the planted credentials', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nix-secret-cli-'));
+  const dir = mkTestTmp('nix-secret-cli-');
   for (const d of ['plaintext', 'store']) { mkdirSync(join(dir, d)); cpSync(join(FIX, d, 'configuration.nix'), join(dir, d, 'configuration.nix')); }
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const out = {};

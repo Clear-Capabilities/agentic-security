@@ -9,8 +9,9 @@ import {
   nextWavePlan, forgetRefuted, MEMORY_FILE,
 } from '../src/discovery/memory.js';
 import { parseEndpoints, consensusOf } from '../src/discovery/llm-invoke.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dmem-'));
+const tmp = () => mkTestTmp('dmem-');
 const cand = (o = {}) => ({ file: 'a.js', line: 3, family: 'injection', ...o });
 
 // ------------------------------------------------------------------ C4 keys

@@ -30,6 +30,7 @@ import {
   newState, assume, step, isReachable, exploreFunction, getVar, setVar,
 } from '../src/dataflow/symbolic-exec.js';
 import { SummaryCache } from '../src/dataflow/summaries.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 // ── numeric-domain ─────────────────────────────────────────────────────────
 test('numeric: range constructor + constant', () => {
@@ -169,7 +170,7 @@ test('incremental: validateIncrementalState — version drift invalidates', () =
 });
 
 test('incremental: persist + read + drop round-trip', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-incr-'));
+  const dir = mkTestTmp('as-incr-');
   const ok = commitIncrementalState(dir, { files: { 'a.js': 'h1' }, summaries: { foo: { returnTainted: true } } }, { scanner: '0.59.0', rules: 'r1' });
   assert.equal(ok, true);
   const s = readIncrementalState(dir);

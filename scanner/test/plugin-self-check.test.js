@@ -11,13 +11,14 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import * as cp from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const HOOK = path.resolve(__dirname, '..', '..', 'hooks', 'session-start-self-check.js');
 
 function mkPlugin(layout) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-check-'));
+  const dir = mkTestTmp('self-check-');
   for (const [rel, content] of Object.entries(layout)) {
     const fp = path.join(dir, rel);
     fs.mkdirSync(path.dirname(fp), { recursive: true });

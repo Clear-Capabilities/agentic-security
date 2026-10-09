@@ -8,13 +8,14 @@ import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import { auditCall } from '../src/mcp/audit.js';
 import { fileURLToPath } from 'node:url';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BIN = path.resolve(__dirname, '..', 'bin', 'agentic-security-audit.js');
 
 function mkLog(entries) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-cli-'));
+  const root = mkTestTmp('audit-cli-');
   // audit.js refuses to write the log unless the session root has a project
   // marker (package.json / .git / etc). Drop a stub so the CLI tests see it.
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"audit-cli-test"}');
@@ -121,7 +122,7 @@ test('verify fails on tampered chain', () => {
 });
 
 test('review on empty log prints "No entries match"', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-empty-'));
+  const root = mkTestTmp('audit-empty-');
   const r = run(['review'], root);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /No entries match/);
@@ -156,7 +157,7 @@ test('metrics --by-session flags outliers above threshold', () => {
 });
 
 test('metrics --by-session handles legacy entries without sessionId', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-legacy-'));
+  const root = mkTestTmp('audit-legacy-');
   const stateDir = path.join(root, '.agentic-security');
   fs.mkdirSync(stateDir, { recursive: true });
   // Hand-craft a pre-instrumentation entry (no sessionId field). The bucket

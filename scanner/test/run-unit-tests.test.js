@@ -7,11 +7,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered,
-  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, writeThenExit } from '../../scripts/run-unit-tests.mjs';
+  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, makeRunTemp, writeThenExit,
+} from '../../scripts/run-unit-tests.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(HERE, '..');
@@ -152,4 +154,18 @@ test('--list-shard prints the assignment through the real CLI and runs nothing',
   assert.equal(stepLines, 1, 'the extra step is listed under exactly one shard');
   const bad = spawnSync(process.execPath, [script, '--list-shard', '9/4'], { encoding: 'utf8' });
   assert.notEqual(bad.status, 0);
+});
+
+test('the run gets a private temp root: test processes see it as their temp dir, and cleanup removes whatever they left in it', () => {
+  const { root, env, cleanup } = makeRunTemp();
+  try {
+    assert.ok(path.basename(root).startsWith('as-run-'));
+    assert.equal(env.TMPDIR, root); assert.equal(env.TEMP, root); assert.equal(env.TMP, root);
+    // a child that forgets to clean up after itself, like the tests used to
+    const r = spawnSync(process.execPath, ['-e', "const fs=require('fs'),os=require('os'),p=require('path');fs.writeFileSync(p.join(fs.mkdtempSync(p.join(os.tmpdir(),'leak-')),'f'),'x');console.log(os.tmpdir())"], { env, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(fs.realpathSync(r.stdout.trim()), fs.realpathSync(root), 'the child resolved os.tmpdir() to the private root');
+    assert.equal(fs.readdirSync(root).length, 1, 'the leak landed inside the private root, not the machine temp folder');
+  } finally { cleanup(); }
+  assert.equal(fs.existsSync(root), false, 'cleanup removed the root and everything in it');
 });

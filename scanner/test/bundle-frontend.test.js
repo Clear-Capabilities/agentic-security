@@ -4,9 +4,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { bundleFrontendModules } from '../scripts/bundle-frontend.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function _mkTmpTree(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-bundle-'));
+  const root = mkTestTmp('agsec-bundle-');
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });

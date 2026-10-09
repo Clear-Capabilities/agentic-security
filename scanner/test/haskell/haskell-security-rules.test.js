@@ -10,6 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeHaskellRules, RULES, BOUNDARIES, HS_RULES_VERSION } from '../../src/language/haskell-security-rules.js';
 import { modelStatus, HS_PACKAGES } from '../../src/language/haskell-models.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'agentic-security.js');
 const mod = (name, imports, body) => `module ${name} where\n${imports}\n${body}\n`;
@@ -18,7 +19,7 @@ const one = (src, name = 'T') => rulesOf({ [`${name}.hs`]: src }).findings.map((
 const CH = 'import Crypto.Hash (hash, hashWith, MD5(..), SHA1(..), SHA256(..))\nimport qualified Crypto.Hash.MD5 as MD5\nimport qualified Crypto.Hash.SHA256 as S256\nimport qualified Data.ByteString.Char8 as B';
 
 function scan(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'hs-rules-'));
+  const dir = mkTestTmp('hs-rules-');
   for (const [f, text] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), text); }
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const p = spawnSync(process.execPath, [BIN, 'scan', dir, '--format', 'json'], { encoding: 'utf8', timeout: 180000, env, maxBuffer: 64 * 1024 * 1024 });

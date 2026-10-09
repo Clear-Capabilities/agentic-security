@@ -11,9 +11,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { measureConsistency, summarize } from '../src/llm-validator/consistency.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('measureConsistency runs cleanly with validator off (all unvalidated)', async () => {
-  const scanRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'consist-'));
+  const scanRoot = mkTestTmp('consist-');
   const findings = [
     { id: 'f1', stableId: 'abc', file: 'app.js', line: 10, vuln: 'X', cwe: 'CWE-89', severity: 'high' },
     { id: 'f2', stableId: 'def', file: 'app.js', line: 20, vuln: 'Y', cwe: 'CWE-78', severity: 'critical' },

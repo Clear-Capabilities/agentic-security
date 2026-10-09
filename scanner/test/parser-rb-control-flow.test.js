@@ -18,6 +18,7 @@ import { runScan } from '../src/runScan.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function callNodes(ir, fnName) {
   const fn = ir.functions.find(f => f.name === fnName);
@@ -237,7 +238,7 @@ test('parseRubyFile: deeply nested trailing blocks do not overflow the stack (re
 });
 
 test('parseRubyFile: end-to-end runScan detects taint flowing through a case/when arm into a sink', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-rb-case-'));
+  const dir = mkTestTmp('as-rb-case-');
   fs.writeFileSync(path.join(dir, 'app.rb'), `
 def run(mode, params)
   code = params[:code]
@@ -254,7 +255,7 @@ end
 });
 
 test('parseRubyFile: end-to-end runScan detects taint flowing through a do...end block parameter into a sink', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-rb-block-'));
+  const dir = mkTestTmp('as-rb-block-');
   fs.writeFileSync(path.join(dir, 'app.rb'), `
 def run(params)
   codes = params[:code]

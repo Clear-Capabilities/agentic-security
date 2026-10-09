@@ -6,9 +6,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { append_scratchpad, read_scratchpad } from '../src/mcp/tools.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'scratch-'));
+  return mkTestTmp('scratch-');
 }
 
 test('append + read round-trips a small payload', async () => {

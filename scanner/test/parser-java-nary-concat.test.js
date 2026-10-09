@@ -30,9 +30,10 @@ import { runScan } from '../src/runScan.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(code) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-java-nary-concat-'));
+  const dir = mkTestTmp('as-java-nary-concat-');
   fs.writeFileSync(path.join(dir, 'X.java'), code);
   return dir;
 }

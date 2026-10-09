@@ -7,9 +7,10 @@ import { runScan } from '../src/runScan.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(name, code) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-rb-catalog-${name}-`));
+  const dir = mkTestTmp(`as-rb-catalog-${name}-`);
   fs.writeFileSync(path.join(dir, 'app.rb'), code);
   return dir;
 }

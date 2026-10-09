@@ -21,6 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.join(HERE, '..');
@@ -34,8 +35,8 @@ function run(args, cwd) {
 }
 
 before(() => {
-  stage = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-stage-'));
-  outside = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-cwd-'));
+  stage = mkTestTmp('third-party-stage-');
+  outside = mkTestTmp('third-party-cwd-');
 
   // Pack exactly what npm would publish, then unpack it elsewhere. Anything the
   // package forgot to ship is simply absent here, which is the point.
@@ -74,7 +75,7 @@ test('a third party with only the bundle and public key verifies it', async () =
   const { buildEvidenceBundle, signEvidenceBundle, ensureKeyPair } =
     await import('../src/posture/evidence-bundle.js');
 
-  const keyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-keys-'));
+  const keyHome = mkTestTmp('third-party-keys-');
   const { publicKeyPem, privateKeyPem } = ensureKeyPair(keyHome);
 
   const finding = {
@@ -109,7 +110,7 @@ test('a TAMPERED bundle is rejected by the same third party', async () => {
   const { buildEvidenceBundle, signEvidenceBundle, ensureKeyPair } =
     await import('../src/posture/evidence-bundle.js');
 
-  const keyHome = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-keys-'));
+  const keyHome = mkTestTmp('third-party-keys-');
   const { publicKeyPem, privateKeyPem } = ensureKeyPair(keyHome);
 
   const finding = {
@@ -140,8 +141,8 @@ test('a bundle does not verify under the WRONG public key', async () => {
   const { buildEvidenceBundle, signEvidenceBundle, ensureKeyPair } =
     await import('../src/posture/evidence-bundle.js');
 
-  const homeA = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-keyA-'));
-  const homeB = fs.mkdtempSync(path.join(os.tmpdir(), 'third-party-keyB-'));
+  const homeA = mkTestTmp('third-party-keyA-');
+  const homeB = mkTestTmp('third-party-keyB-');
   const a = ensureKeyPair(homeA);
   const b = ensureKeyPair(homeB);
 

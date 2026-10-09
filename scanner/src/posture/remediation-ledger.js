@@ -213,7 +213,11 @@ async function withLock(lockPath, fn) {
             fsp.readFile(lockPath, 'utf8').catch(() => ''),
           ]);
           const pid = parseInt(pidStr.trim(), 10);
-          const pidAlive = Number.isFinite(pid) && isProcessAlive(pid);
+          // A holder creates the file (`wx`) and only then writes its PID, so
+          // an EMPTY file younger than a few seconds is a lock being taken,
+          // not a dead one. Reaping it would hand the lock to two processes.
+          const mid = !pidStr.trim() && Date.now() - st.mtimeMs < 2000;
+          const pidAlive = mid || (Number.isFinite(pid) && isProcessAlive(pid));
           const old = Date.now() - st.mtimeMs > 30000;
           if (!pidAlive || old) {
             try {
@@ -225,6 +229,11 @@ async function withLock(lockPath, fn) {
                 await fsp.unlink(lockPath);
               }
             } catch {}
+            // Bounded: a reap that cannot make progress (unlink refused, the
+            // holder changing under us) must end in the named timeout error,
+            // never spin until an outer watchdog kills the process.
+            if (Date.now() - start > TIMEOUT_MS) throw new Error('remediation-ledger: lock timed out');
+            await new Promise((r) => setTimeout(r, 25));
             continue;
           }
         } catch {}

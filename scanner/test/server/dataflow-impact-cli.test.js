@@ -7,13 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { signLastScan } from '../../src/posture/integrity.js';
 import { statePath } from '../../src/posture/state-dir.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
 const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 
 function _mkTmpProject() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-dataflow-impact-cli-'));
+  const root = mkTestTmp('agsec-dataflow-impact-cli-');
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }

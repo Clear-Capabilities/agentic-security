@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { analyzeNixBuildTrust, createNixBuildTrustAdapter, BUILD_TRUST_RULES, BUILD_TRUST_TYPE } from '../../src/language/nix-build-trust.js';
 import { analyzeLanguageSupplyChain } from '../../src/language/engine-pass.js';
 import { runLanguageAnalysis, languageHealth, validateLanguageFinding } from '../../src/language/contracts.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'agentic-security.js');
 const HASH = 'sha256-n7cJ0pYQZKj7P1fD0zq3m6eV8kT2uWb9x1yH4rLsA3c=';
@@ -185,7 +186,7 @@ test('[NIX-005.AC04] the engine pass returns the same findings for the supplyCha
 });
 
 test('[NIX-005.AC04] a real CLI scan reports the Nix finding in the ordinary findings output, with no side channel', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'nix-trust-'));
+  const dir = mkTestTmp('nix-trust-');
   writeFileSync(join(dir, 'flake.nix'), '{ inputs.foo.url = "github:a/b/main"; outputs = { ... }: {}; }\n');
   writeFileSync(join(dir, 'default.nix'), '{ pkgs }: pkgs.fetchurl { url = "https://example.com/a.tar.gz"; }\n');
   const p = spawnSync(process.execPath, [BIN, 'scan', dir, '--format', 'json'], { encoding: 'utf8', timeout: 120000, env: { ...process.env, NODE_TEST_CONTEXT: undefined } });
@@ -195,7 +196,7 @@ test('[NIX-005.AC04] a real CLI scan reports the Nix finding in the ordinary fin
   assert.ok(mine.every((f) => f.severity && f.file));
   assert.equal(out.scanHealth.files.scanned, 2);
   // a clean, pinned project stays quiet
-  const clean = mkdtempSync(join(tmpdir(), 'nix-trust-clean-'));
+  const clean = mkTestTmp('nix-trust-clean-');
   writeFileSync(join(clean, 'default.nix'), `{ pkgs }: pkgs.fetchurl { url = "https://example.com/a.tar.gz"; hash = "${HASH}"; }\n`);
   const q = spawnSync(process.execPath, [BIN, 'scan', clean, '--format', 'json'], { encoding: 'utf8', timeout: 120000, env: { ...process.env, NODE_TEST_CONTEXT: undefined } });
   assert.equal(JSON.parse(q.stdout).findings.filter((f) => f.type === BUILD_TRUST_TYPE).length, 0);

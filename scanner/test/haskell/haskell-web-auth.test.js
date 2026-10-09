@@ -13,6 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeHaskellWeb, WEB_RULES, spine } from '../../src/language/haskell-web.js';
 import { HS_WEB_FRAMEWORKS, HS_WEB_MODEL_VERSION } from '../../src/language/haskell-models.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FX = join(HERE, '..', 'fixtures', 'haskell-web');
@@ -29,7 +30,7 @@ const route = (r, method, path) => r.routes.find((x) => x.method === method && x
 const rules = (r) => r.findings.map((f) => `${f.rule}:${f.route.method} ${f.route.path}`).sort();
 
 function cliScan(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'hs-web-'));
+  const dir = mkTestTmp('hs-web-');
   for (const [f, text] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), text); }
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const p = spawnSync(process.execPath, [BIN, 'scan', dir, '--format', 'json'], { encoding: 'utf8', timeout: 180000, env, maxBuffer: 64 * 1024 * 1024 });
@@ -135,7 +136,7 @@ test('[HS-006.AC01] the route fixtures compile (requires GHC; an unavailable com
   assert.ok(ghc, 'ghc is not installed on this host: AC01 requires real COMPILABLE route fixtures, so it cannot be verified here. Install GHC (and the fixtures\' packages) and re-run `verify --requirement HS-006`.');
   // A directory holds several PROGRAMS that share Auth.hs, each with its own Main: compile each program (its entry module, with the
   // directory on the import path) separately, never every file in one invocation.
-  const out = mkdtempSync(join(tmpdir(), 'hs-compile-'));
+  const out = mkTestTmp('hs-compile-');
   const mains = (dir) => readdirSync(join(FX, dir)).filter((f) => f.endsWith('.hs') && f !== 'Auth.hs');
   for (const dir of ['scotty', 'wai', 'servant', 'yesod']) {
     for (const f of mains(dir)) {

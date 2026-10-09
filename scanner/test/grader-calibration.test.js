@@ -6,6 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { cohensKappa, joinHumanLlm, calibrateGraders } from '../src/posture/grader-calibration.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('cohensKappa returns 1 on perfect agreement', () => {
   const r = cohensKappa([
@@ -76,7 +77,7 @@ test('most-recent triage entry per stableId wins', () => {
 });
 
 test('calibrateGraders surfaces insufficient-sample on a fresh dir', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cal-'));
+  const root = mkTestTmp('cal-');
   const r = calibrateGraders(root);
   assert.equal(r.kappa, null);
   assert.match(r.note, /Insufficient overlap/);
@@ -85,7 +86,7 @@ test('calibrateGraders surfaces insufficient-sample on a fresh dir', () => {
 
 test('calibrateGraders alarms when κ < 0.6 with sufficient sample', () => {
   // Construct a triage + last-scan pair with 10 entries; 7 agree, 3 disagree.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cal-'));
+  const root = mkTestTmp('cal-');
   fs.mkdirSync(path.join(root, '.agentic-security'), { recursive: true });
   const triage = { entries: [] };
   const findings = [];

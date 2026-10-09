@@ -14,6 +14,7 @@ import {
   buildDeletionReport, writeDeletionReport, DELETION_REPORT_FILE,
   buildExportReport, writeExportReport, EXPORT_REPORT_FILE,
 } from '../src/posture/state-lifecycle-report.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -24,7 +25,7 @@ function run(args) {
 }
 
 async function mkSession() {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'state-lifecycle-'));
+  const dir = await mkTestTmp('state-lifecycle-');
   await fsp.mkdir(path.join(dir, '.agentic-security'), { recursive: true });
   await fsp.writeFile(path.join(dir, 'package.json'), '{"name":"t"}');
   return { dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
@@ -106,7 +107,7 @@ test('writeExportReport: writes valid JSON to .agentic-security/export-report.js
 });
 
 test('writeDeletionReport: returns null on a session with no project marker, never throws', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'state-lifecycle-nomarker-'));
+  const dir = mkTestTmp('state-lifecycle-nomarker-');
   try {
     assert.doesNotThrow(() => writeDeletionReport(dir, buildDeletionReport({ mode: 'reset', dryRun: false, root: dir })));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -158,8 +159,8 @@ test('export (real CLI): --out is required', async () => {
 });
 
 test('export (real CLI): no state dir at all reports cleanly and exits 0', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'state-lifecycle-nostate-'));
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'state-lifecycle-out-'));
+  const dir = mkTestTmp('state-lifecycle-nostate-');
+  const outDir = mkTestTmp('state-lifecycle-out-');
   try {
     fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"t"}');
     const r = run(['export', '--out', outDir, '--root', dir]);
@@ -170,7 +171,7 @@ test('export (real CLI): no state dir at all reports cleanly and exits 0', async
 
 test('export (real CLI): copies BOTH generated and operator-config artifacts, writes a manifest with sha256, and records an export-report.json under .agentic-security/', async () => {
   const s = await mkSession();
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'state-lifecycle-out-'));
+  const outDir = mkTestTmp('state-lifecycle-out-');
   try {
     fs.writeFileSync(path.join(s.dir, '.agentic-security', 'last-scan.json'), '{"findings":[]}'); // generated
     fs.writeFileSync(path.join(s.dir, '.agentic-security', 'rules.yml'), 'custom: []\n'); // operator-config
@@ -205,7 +206,7 @@ test('export (real CLI): copies BOTH generated and operator-config artifacts, wr
 
 test('export (real CLI): an artifact not present in this project is simply absent from the manifest, not reported as failed', async () => {
   const s = await mkSession();
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'state-lifecycle-out-'));
+  const outDir = mkTestTmp('state-lifecycle-out-');
   try {
     // Empty .agentic-security/ — nothing registered is present.
     const r = run(['export', '--out', outDir, '--root', s.dir]);

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { statePath } from '../../src/posture/state-dir.js';
 import { buildGraphSnapshot } from '../../src/lineage/graph-snapshot.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(__dirname, '..', '..');
@@ -30,7 +31,7 @@ const CLI = path.join(SCANNER, 'bin', 'agentic-security.js');
 const TIMEOUT = 20_000;
 
 function _mkTmpProject(prefix = 'agsec-remediation-cli-') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = mkTestTmp(prefix);
   fs.writeFileSync(path.join(root, 'package.json'), '{"name":"tmp","version":"1.0.0"}');
   return root;
 }
@@ -388,7 +389,7 @@ test('remediation list: exits 0 on an empty ledger for both formats (C/14)', () 
 // --- C/15 ------------------------------------------------------------------
 
 test('remediation update/accept-risk: refuse exit 2 in a directory with no project marker, creating no state dir (C/15)', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-remediation-unsafe-'));
+  const root = mkTestTmp('agsec-remediation-unsafe-');
   const rUpdate = _run(['remediation', 'update', root, '--id', 'rem-x', '--state', 'in_progress', '--yes']);
   assert.equal(rUpdate.status, 2);
   assert.ok(!fs.existsSync(path.join(root, '.agentic-security')));
@@ -400,7 +401,7 @@ test('remediation update/accept-risk: refuse exit 2 in a directory with no proje
 });
 
 test('remediation open: refuses exit 2 via isSafeStateDir even with a snapshot/assessment present, creating no remediation ledger (C/15)', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-remediation-unsafe-open-'));
+  const root = mkTestTmp('agsec-remediation-unsafe-open-');
   // Seeded directly via fs, not through the app's own write guard — proves
   // the guard fires even when the earlier snapshot/assessment reads
   // otherwise succeed.

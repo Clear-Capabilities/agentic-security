@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseJsFile } from '../src/ir/parser-js.js';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('parseJsFile: a NestJS @Query() decorator on a parameter populates fn.paramAnnotations', () => {
   const code = `
@@ -120,7 +121,7 @@ class UserController {
 });
 
 test('R14(a) end-to-end: NestJS @Query() flowing to a code-injection sink is detected', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-nest-'));
+  const dir = mkTestTmp('as-r14a-nest-');
   fs.writeFileSync(path.join(dir, 'app.controller.ts'), `
 class AppController {
   ping(@Query() cmd) {
