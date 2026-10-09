@@ -183,6 +183,15 @@ export function resolveShard(argv = [], env = process.env) {
   return fromEnv ? parseShard(fromEnv) : null;
 }
 
+/**
+ * Write `text` and exit only once the write has completed. `process.exit()` straight after `write()` can drop whatever is still buffered when
+ * stdout is a pipe and the reader is slow (a CI runner running the whole suite in parallel): the `--list-shard` test, which reads this through a
+ * pipe, lost the last 8 lines of shard 1's output on `main` while the identical tree had passed on the pull request.
+ */
+export function writeThenExit(text, code, { stream = process.stdout, exit = (c) => process.exit(c) } = {}) {
+  stream.write(text, () => exit(code));
+}
+
 function main(argv = process.argv.slice(2)) {
   const pkg = readPkg();
 
@@ -207,9 +216,9 @@ function main(argv = process.argv.slice(2)) {
   if (li !== -1) {
     // Print the assignment and run nothing.
     const shard = parseShard(argv[li + 1]);
-    for (const f of assignShard(files, shard)) process.stdout.write(`${f}\n`);
-    for (const e of extraStepsForShard(shard)) process.stdout.write(`step: ${e.script}\n`);
-    process.exit(0);
+    const out = [...assignShard(files, shard).map((f) => `${f}\n`), ...extraStepsForShard(shard).map((e) => `step: ${e.script}\n`)].join('');
+    writeThenExit(out, 0);
+    return;
   }
 
   const shard = resolveShard(argv);

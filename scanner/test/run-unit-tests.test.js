@@ -11,8 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered,
-  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS,
-} from '../../scripts/run-unit-tests.mjs';
+  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, writeThenExit } from '../../scripts/run-unit-tests.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(HERE, '..');
@@ -118,6 +117,23 @@ test('every shard of 4 is non-empty and within one file of balanced', () => {
   const sizes = [1, 2, 3, 4].map((index) => assignShard(files, { index, total: 4 }).length);
   assert.ok(sizes.every((n) => n > 0));
   assert.ok(Math.max(...sizes) - Math.min(...sizes) <= 1, `sizes ${sizes}`);
+});
+
+test('writeThenExit exits only after the write has completed, never straight after write()', () => {
+  const events = [];
+  let flush;
+  const stream = { write: (text, cb) => { events.push(`write ${text.length}`); flush = cb; } };
+  writeThenExit('abc', 0, { stream, exit: (c) => events.push(`exit ${c}`) });
+  assert.deepEqual(events, ['write 3'], 'no exit while the write is still pending');
+  flush();
+  assert.deepEqual(events, ['write 3', 'exit 0'], 'exit follows the completed write');
+});
+
+test('--list-shard never ends the process with a synchronous exit right after writing (the cause of lost output on a pipe)', () => {
+  const src = fs.readFileSync(path.resolve(HERE, '..', '..', 'scripts', 'run-unit-tests.mjs'), 'utf8');
+  const branch = src.slice(src.indexOf("const li = argv.indexOf('--list-shard')"), src.indexOf('const shard = resolveShard(argv)'));
+  assert.match(branch, /writeThenExit\(/);
+  assert.doesNotMatch(branch, /process\.exit\(/, 'a synchronous exit after a pipe write can drop buffered output');
 });
 
 test('--list-shard prints the assignment through the real CLI and runs nothing', () => {
