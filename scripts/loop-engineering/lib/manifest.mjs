@@ -8,7 +8,7 @@ import { sha256, canonicalJson, atomicWriteJson, readJson, nowIso } from './util
 import { parsePrd, readPrd, categoryOf, ImportError, findCycles } from './prd-import.mjs';
 import { validate } from './schema.mjs';
 import { layout } from './state.mjs';
-import { validateProfile } from './profile.mjs';
+import { validateProfile, workstreamMatches } from './profile.mjs';
 
 const SCHEMA_DIR = new URL('../schemas/', import.meta.url);
 export const loadSchema = (name) => JSON.parse(readFileSync(new URL(name, SCHEMA_DIR), 'utf8'));
@@ -37,10 +37,17 @@ export function buildRequirements({ parsed, profile, repoRoot }) {
     const suite = profile.suites[r.suite];
     if (!suite) { problems.push(`${r.id}: suite "${r.suite}" has no command mapping in the execution profile (unknown mandatory command)`); continue; }
     const prefix = r.id.split('-')[0];
-    const watch = profile.watch[prefix];
+    let workstream = null;
+    let watch = profile.watch?.[prefix];
+    if (profile.workstreams) {
+      const hits = workstreamMatches(profile.workstreams, r.id);
+      if (hits.length !== 1) { problems.push(`${r.id}: ${hits.length ? `matches ${hits.length} workstream rules (${hits.join(', ')})` : 'matches no workstream rule'}; each requirement must belong to exactly one workstream`); continue; }
+      workstream = hits[0];
+      watch = [...new Set([...(profile.workstreams.globalWatch || []), ...profile.workstreams.definitions[workstream].watch])];
+    }
     if (!watch) { problems.push(`${r.id}: no watch globs for category ${prefix}`); continue; }
     out.push({
-      id: r.id, title: r.title, category: categoryOf(r.id) || 'shared', weight: r.weight, required: true,
+      id: r.id, title: r.title, category: categoryOf(r.id) || 'shared', ...(workstream ? { workstream } : {}), weight: r.weight, required: true,
       dependencies: r.dependencies || [], suite: r.suite,
       description: Array.isArray(r.description) ? r.description.join(' ') : (r.description || ''),
       watch,
@@ -146,6 +153,7 @@ export function createManifest({ repoRoot, prdPath, profile, profileSha, checkou
     acceptanceHash: computeAcceptanceHash(requirements),
     totals, checkout, tools, baselineGates,
     profile: { name: profile.name, sha256: profileSha, limits: profile.limits },
+    ...(profile.workstreams ? { workstreams: { order: profile.workstreams.order, labels: Object.fromEntries(profile.workstreams.order.map((k) => [k, profile.workstreams.definitions[k].label])), kinds: Object.fromEntries(profile.workstreams.order.map((k) => [k, profile.workstreams.definitions[k].kind])) } } : {}),
     requirements,
   };
   let diff = null;

@@ -1,0 +1,784 @@
+{
+  "profileVersion": 1,
+  "name": "assurance-differentiation",
+  "description": "Execution profile for AGENTIC_SECURITY_DIFFERENTIATION_PRD.md. Limits are the PRD section 7 defaults: finite operating caps, not delivery estimates and not spending authorization. Suites other than loop are declared not-yet-runnable until their protected wrappers exist.",
+  "platforms": {
+    "supported": [
+      "darwin",
+      "linux"
+    ],
+    "unsupported": [
+      "win32"
+    ],
+    "note": "Windows needs a Job Object/WSL implementation that is not tested; disclosed as unsupported."
+  },
+  "limits": {
+    "heartbeatSeconds": 5,
+    "workerIdleSeconds": 180,
+    "noProgressSeconds": 600,
+    "subprocessWallSeconds": 120,
+    "killGraceSeconds": 10,
+    "claudeAttemptSeconds": 1200,
+    "claudeMaxTurns": 80,
+    "attemptsPerRequirement": 3,
+    "sameFailureRepeats": 2,
+    "runWallSeconds": 43200,
+    "runMaxAttempts": 150,
+    "claudeBudgetUsd": 50,
+    "perAttemptBudgetUsd": 6,
+    "retryBackoffMaxSeconds": 60,
+    "resource": {
+      "maxRssMiB": 6144,
+      "maxOutputMiB": 256,
+      "maxLogMiB": 5,
+      "minFreeDiskGiB": 5,
+      "cpu": "No separate CPU cap: wall-clock deadlines bound CPU time. Disclosed, not silently omitted."
+    }
+  },
+  "worker": {
+    "concurrency": 1,
+    "command": "claude",
+    "bare": false,
+    "permissionMode": "dontAsk",
+    "permissionPrompts": "none",
+    "model": null,
+    "mcp": "disabled",
+    "allowedTools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(node:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(python3:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(diff:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(pwd:*)",
+      "Bash(cut:*)",
+      "Bash(uniq:*)",
+      "Bash(tr:*)",
+      "Bash(awk:*)",
+      "Bash(which:*)"
+    ],
+    "disallowedTools": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(git clean:*)",
+      "Bash(git stash:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)",
+      "Bash(git tag:*)",
+      "Bash(git remote:*)",
+      "Bash(git config:*)",
+      "Bash(npm publish:*)",
+      "Bash(npm login:*)",
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ci:*)",
+      "Bash(npx:*)",
+      "Bash(gh:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(doas:*)",
+      "Bash(nixos-rebuild:*)",
+      "Bash(nix-env:*)",
+      "Bash(systemctl:*)",
+      "Bash(launchctl:*)",
+      "Bash(kill:*)",
+      "Bash(pkill:*)",
+      "Bash(killall:*)",
+      "Bash(rm:*)",
+      "Edit(.loop-engineering/**)",
+      "Write(.loop-engineering/**)",
+      "Read(.loop-engineering/**)",
+      "Edit(scripts/loop-engineering/lib/**)",
+      "Write(scripts/loop-engineering/lib/**)",
+      "Edit(scripts/loop-engineering/run.mjs)",
+      "Write(scripts/loop-engineering/run.mjs)",
+      "Edit(AGENTIC_SECURITY_DIFFERENTIATION_PRD.md)",
+      "Write(AGENTIC_SECURITY_DIFFERENTIATION_PRD.md)",
+      "Edit(scripts/loop-engineering/profiles/**)",
+      "Write(scripts/loop-engineering/profiles/**)",
+      "Edit(scripts/loop-engineering/test/**)",
+      "Write(scripts/loop-engineering/test/**)",
+      "Edit(scripts/assurance-differentiation/test/**)",
+      "Write(scripts/assurance-differentiation/test/**)"
+    ],
+    "honestLimits": [
+      "Bash(node:*) can run arbitrary JavaScript, so the allow list scopes tool use but is not a filesystem sandbox. The controller re-verifies every attempt itself and the final phase re-runs all suites from scratch; worker claims and worker-written evidence are never trusted. Read confinement of verifier keys and sealed labels is the job of CORE-003, not of this profile.",
+      "The installed Claude CLI has no --max-turns flag; the 80-turn cap is enforced externally by counting assistant turns in the stream and terminating the attempt.",
+      "Edit/Write deny rules protect the controller, profile and protected suite wrappers from the worker tool surface only; a worker running node can still write any path the OS user can. Evidence signing and tree-digest staleness, not these rules, are what make tampering visible.",
+      "Bash(rm:*) is denied outright: workers delete files with node or by overwriting."
+    ],
+    "protectedPaths": [
+      ".loop-engineering/",
+      "scripts/loop-engineering/",
+      "scripts/assurance-differentiation/test/",
+      "AGENTIC_SECURITY_DIFFERENTIATION_PRD.md"
+    ]
+  },
+  "serve": {
+    "host": "127.0.0.1",
+    "port": 4317,
+    "lingerSeconds": 3600
+  },
+  "approvedExecutables": [
+    "node",
+    "npm",
+    "python3",
+    "git"
+  ],
+  "unenforced": [
+    {
+      "field": "heartbeatSeconds",
+      "requested": 5,
+      "status": "partial",
+      "note": "The controller heartbeats on a fixed internal interval and judges stale at a fixed 15 s (STALE_AFTER_MS); the profile value is validated as finite but not read by the controller. The PRD figures match the constants today; they are not profile-configurable."
+    },
+    {
+      "field": "subprocessWallSeconds",
+      "requested": 120,
+      "status": "unenforced",
+      "note": "Validated as finite only. Each suite and gate is bounded by its own timeoutSeconds, which is what is enforced."
+    },
+    {
+      "field": "networkRequestSeconds",
+      "requested": 15,
+      "status": "unsupported",
+      "note": "The controller has no network client or accounting; PRD CORE-004 owns bounded I/O for product code."
+    },
+    {
+      "field": "networkRetries",
+      "requested": 2,
+      "status": "unsupported",
+      "note": "As networkRequestSeconds."
+    },
+    {
+      "field": "suiteCeilings",
+      "requested": "120 / 900 / 7200 seconds with finite per-child leases",
+      "status": "partial",
+      "note": "Per-suite timeoutSeconds is enforced and ceilings are set per suite key; there is no separate per-child lease inside a suite wrapper."
+    },
+    {
+      "field": "providerEnvelopeUsd",
+      "requested": 25,
+      "status": "unsupported",
+      "note": "The controller meters only the model worker (claudeBudgetUsd). A separate provider or infrastructure envelope has no accounting; enabling one needs new resource accounting before it can be claimed."
+    },
+    {
+      "field": "unknownBillingReserve",
+      "requested": "stop paid tasks or use an upper-bound reserve",
+      "status": "partial",
+      "note": "perAttemptBudgetUsd is passed to the CLI as a ceiling and run spend is tracked from reported cost; a CLI that reports no cost is not given a defined upper-bound reserve."
+    },
+    {
+      "field": "budgetsAreCapsNotAuthorization",
+      "requested": "claudeBudgetUsd 50 and perAttemptBudgetUsd 6",
+      "status": "documentation-only",
+      "note": "These are explicit ceilings. Nothing in the profile authorizes spend; a real run needs a logged-in CLI and a supervising decision."
+    },
+    {
+      "field": "linuxEnforcementBackend",
+      "requested": "proven read/network/process confinement",
+      "status": "unsupported",
+      "note": "Not part of the controller. CORE-003 and X-502 own it; requiresTools is not set on any suite yet because the backend is not chosen."
+    }
+  ],
+  "workstreams": {
+    "globalWatch": [
+      "scripts/loop-engineering/profiles/assurance-differentiation.json",
+      "scripts/loop-engineering/lib/**",
+      "scripts/loop-engineering/run.mjs",
+      "scripts/assurance-differentiation/**"
+    ],
+    "order": [
+      "foundation",
+      "loop",
+      "evaluation",
+      "verification",
+      "deployment-graph",
+      "invariants",
+      "capabilities",
+      "routing",
+      "portfolio",
+      "documentation",
+      "release"
+    ],
+    "definitions": {
+      "foundation": {
+        "label": "Foundation",
+        "kind": "foundation",
+        "watch": [
+          "scanner/src/posture/**",
+          "scanner/src/sandbox/**",
+          "scanner/src/egress/**",
+          "scanner/src/shared/**",
+          "scanner/src/util/**",
+          "scanner/test/**",
+          "scanner/package.json"
+        ]
+      },
+      "loop": {
+        "label": "Loop",
+        "kind": "loop",
+        "watch": [
+          "scripts/loop-engineering/**"
+        ]
+      },
+      "evaluation": {
+        "label": "Real-code evaluation",
+        "kind": "product",
+        "watch": [
+          "bench/**",
+          "scanner/src/ir/**",
+          "scanner/src/dataflow/**",
+          "scanner/src/sast/**",
+          "scanner/src/posture/**",
+          "docs/SCORECARD.md",
+          "docs/scorecard.json",
+          "scanner/test/**"
+        ]
+      },
+      "verification": {
+        "label": "Verification and oracles",
+        "kind": "product",
+        "watch": [
+          "scanner/src/fix/**",
+          "scanner/src/sandbox/**",
+          "scanner/src/mcp/**",
+          "scanner/src/posture/verifier*",
+          "scanner/src/posture/execution-proof.js",
+          "scanner/src/posture/fix-verify*",
+          "scripts/autopilot.mjs",
+          "scanner/test/**"
+        ]
+      },
+      "deployment-graph": {
+        "label": "Deployment-aware boundaries",
+        "kind": "product",
+        "watch": [
+          "scanner/src/lineage/**",
+          "scanner/src/integrations/**",
+          "scanner/src/report/**",
+          "frontend/**",
+          "scanner/test/**"
+        ]
+      },
+      "invariants": {
+        "label": "Business invariants",
+        "kind": "product",
+        "watch": [
+          "scanner/src/discovery/**",
+          "scanner/src/sast/**",
+          "scanner/src/posture/**",
+          "scanner/test/**"
+        ]
+      },
+      "capabilities": {
+        "label": "Agent capability enforcement",
+        "kind": "product",
+        "watch": [
+          "scanner/src/sandbox/**",
+          "scanner/src/egress/**",
+          "scanner/src/mcp/**",
+          "hooks/**",
+          "scanner/src/posture/**",
+          "scanner/test/**"
+        ]
+      },
+      "routing": {
+        "label": "Calibrated model routing",
+        "kind": "product",
+        "watch": [
+          "scanner/src/posture/router.js",
+          "scanner/src/posture/model-routing.js",
+          "scanner/src/posture/model-trust.js",
+          "scanner/src/posture/cache-economics.js",
+          "scanner/src/llm-validator/**",
+          "docs/**",
+          "scanner/test/**"
+        ]
+      },
+      "portfolio": {
+        "label": "Portfolio and release assurance",
+        "kind": "product",
+        "watch": [
+          "scripts/fleet.mjs",
+          "scanner/src/posture/fleet.js",
+          "scanner/src/posture/scan-checkpoint.js",
+          "scanner/src/posture/attestation.js",
+          "scanner/src/posture/evidence-bundle.js",
+          "scanner/src/posture/integrity.js",
+          "scanner/src/posture/retention-policy.js",
+          "scanner/test/**"
+        ]
+      },
+      "documentation": {
+        "label": "Documentation",
+        "kind": "documentation",
+        "watch": [
+          "docs/**",
+          "README.md",
+          "commands/**",
+          "examples/**",
+          "CLAUDE.md"
+        ]
+      },
+      "release": {
+        "label": "Release",
+        "kind": "release",
+        "watch": [
+          "**"
+        ]
+      }
+    },
+    "assign": [
+      {
+        "prefix": "CORE",
+        "workstream": "foundation"
+      },
+      {
+        "prefix": "LOOP",
+        "workstream": "loop"
+      },
+      {
+        "prefix": "QA",
+        "workstream": "evaluation"
+      },
+      {
+        "prefix": "X",
+        "from": 201,
+        "to": 208,
+        "workstream": "verification"
+      },
+      {
+        "prefix": "X",
+        "from": 301,
+        "to": 308,
+        "workstream": "deployment-graph"
+      },
+      {
+        "prefix": "X",
+        "from": 401,
+        "to": 408,
+        "workstream": "invariants"
+      },
+      {
+        "prefix": "X",
+        "from": 501,
+        "to": 508,
+        "workstream": "capabilities"
+      },
+      {
+        "prefix": "X",
+        "from": 601,
+        "to": 608,
+        "workstream": "routing"
+      },
+      {
+        "prefix": "X",
+        "from": 701,
+        "to": 708,
+        "workstream": "portfolio"
+      },
+      {
+        "prefix": "DOC",
+        "workstream": "documentation"
+      },
+      {
+        "prefix": "REL",
+        "workstream": "release"
+      }
+    ]
+  },
+  "suites": {
+    "foundation": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/foundation.test.js"
+      ],
+      "timeoutSeconds": 120,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/foundation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "loop": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/loop-engineering/test/loop-assurance-profile.test.js"
+      ],
+      "timeoutSeconds": 120,
+      "protectedWrapper": true
+    },
+    "documentation": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/documentation.test.js"
+      ],
+      "timeoutSeconds": 120,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/documentation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "release": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/release.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/release.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "evaluation": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/evaluation.test.js"
+      ],
+      "timeoutSeconds": 7200,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/evaluation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "verification": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/verification.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/verification.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "deployment-graph": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/deployment-graph.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/deployment-graph.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "invariants": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/invariants.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/invariants.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "capabilities": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/capabilities.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/capabilities.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "routing": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/routing.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/routing.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    },
+    "portfolio": {
+      "kind": "node-test",
+      "cwd": ".",
+      "executable": "node",
+      "files": [
+        "scripts/assurance-differentiation/test/portfolio.test.js"
+      ],
+      "timeoutSeconds": 900,
+      "protectedWrapper": true,
+      "notYetRunnable": {
+        "reason": "protected wrapper scripts/assurance-differentiation/test/portfolio.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
+      }
+    }
+  },
+  "watch": {
+    "LOOP": [
+      "scripts/loop-engineering/**"
+    ],
+    "CORE": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "docs/**",
+      "bench/**"
+    ],
+    "X": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "docs/**",
+      "bench/**"
+    ],
+    "QA": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "docs/**",
+      "bench/**"
+    ],
+    "DOC": [
+      "scanner/src/**",
+      "scanner/bin/**",
+      "scanner/test/**",
+      "scanner/package.json",
+      "hooks/**",
+      "commands/**",
+      "docs/**",
+      "bench/**"
+    ],
+    "REL": [
+      "**"
+    ]
+  },
+  "baselineGates": [
+    {
+      "id": "npm-test",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "test"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "bench-cve-replay",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:cve-replay:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-mutation",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:mutation:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-layer-recall",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:layer-recall:check"
+      ],
+      "timeoutSeconds": 300
+    }
+  ],
+  "finalGates": [
+    {
+      "id": "build",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "npm-test",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "test"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "test-ci-parity",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "test:ci-parity"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "test-loop-controller",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "test:loop"
+      ],
+      "timeoutSeconds": 900
+    },
+    {
+      "id": "bench-cve-replay",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:cve-replay:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-self-scan",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:self-scan:check"
+      ],
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "bench-mutation",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:mutation:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-protection-verdict",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:protection-verdict:check"
+      ],
+      "timeoutSeconds": 120
+    },
+    {
+      "id": "bench-provenance-accuracy",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:provenance-accuracy:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "bench-layer-recall",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:layer-recall:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "check-doc-drift",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "check-doc-drift"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "docs-verify-examples",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "docs:verify-examples"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "scorecard-check",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "scorecard:check"
+      ],
+      "timeoutSeconds": 300
+    }
+  ]
+}
