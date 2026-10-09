@@ -44,7 +44,8 @@ or a capability.** Product-facing guides: `docs/guides/haskell.md`, `docs/guides
   first write, rolls back on a failed write) and records one history entry per file sharing `languageGroupId`; `undoFix` and
   `posture/fix-history.js` `undoLast`/`revertEntryById` restore a group as a unit. A winner outside the root or not a single
   literal is refused with an `override` suggestion (`overrideSuggestion`), never an automatic edit. Any new consumer of a fix
-  plan (LSP, MCP, CLI) must honour `plan.edits`: `apply_fix` writes one file, so a multi-file fix is not offered there.
+  plan (LSP, MCP, CLI) must honour `plan.edits`. MCP `apply_fix` does so through `plan_digest` (the server recomputes the plan and
+  compares a digest; see `mcp/CLAUDE.md`), using the lifecycle's optional `preWrite` hook, which runs after every gate and before the first write.
 - **Boundaries are narrowed only by sound, closed rules.** `haskell-cpp.js` decides a CPP conditional only from the file, a project-stated
   compiler (`with-compiler` pin; `tested-with` only when every item is an exact version and all agree, recorded as an assumption) or the hull
   of cabal `build-depends` bounds; an unknown macro is undecided, never 0, and an undecided conditional keeps every branch. `haskell-boundaries.js`

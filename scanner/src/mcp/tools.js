@@ -349,7 +349,7 @@ function _maybeOffload(sessionRoot, toolName, items) {
 //
 // Exported under the `_internals` convention this codebase already uses
 // (see posture/poc-inprocess.js). Not part of the MCP tool surface.
-export const _internals = { _confine, isReservedWrite: _isReservedWritePath };
+export const _internals = { _confine, isReservedWrite: _isReservedWritePath, checkMultiFileTargets: _checkMultiFileTargets, multiFilePlanDigest: _multiFilePlanDigest };
 
 export const scan_diff = {
   name: 'scan_diff',
@@ -603,10 +603,153 @@ export const explain_finding = {
   },
 };
 
+// FR-307/FR-1002/FR-1003: the high-impact-change approval gate (approval evidence, approver identity, separation of duties),
+// shared by the caller-patch branch and the multi-file plan branch so the two cannot drift. Returns a refusal result, or null
+// when the change is not high-impact or is properly approved.
+function _highImpactApprovalRefusal(ctx, materialClassification, fixMeta) {
+  if (!materialClassification.highImpactCategories.length) return null;
+  const cats = materialClassification.highImpactCategories.join(', ');
+  const approval = fixMeta && typeof fixMeta === 'object' ? fixMeta.approval : null;
+  const hasApprovalEvidence = !!(approval && typeof approval === 'object' &&
+    typeof approval.approvedBy === 'string' && approval.approvedBy.trim().length > 0 &&
+    typeof approval.reason === 'string' && approval.reason.trim().length > 0);
+  if (!hasApprovalEvidence) {
+    return {
+      _meta: META, applied: false,
+      reason: `high-impact change (${cats}) requires approval evidence — pass fixMeta.approval: {approvedBy, reason} — before it can be applied`,
+      materialClassification,
+    };
+  }
+  const approverRegistry = loadApproverRegistry(ctx.sessionRoot);
+  const requiredRoles = requiredRolesFor(approverRegistry, materialClassification.highImpactCategories);
+  const identityCheck = verifyApprover(approverRegistry, approval.approvedBy, requiredRoles);
+  if (!identityCheck.verified) {
+    return { _meta: META, applied: false, reason: `high-impact change (${cats}) approval rejected: ${identityCheck.reason}`, materialClassification };
+  }
+  // FR-1003: separation-of-duties, same no-op-unless-configured gate as apply-fix-service.js's own copy; see approver-registry.js.
+  const sodCheck = checkSeparationOfDuties(approverRegistry, fixMeta?.author, approval.approvedBy);
+  if (!sodCheck.ok) {
+    return { _meta: META, applied: false, reason: `high-impact change (${cats}) approval rejected: ${sodCheck.reason}`, materialClassification };
+  }
+  return null;
+}
+
+// ─── Multi-file plans (apply_fix with plan_digest) ───────────────────────────
+// A NixOS option fix can edit several files at once (every definition at the winning priority). apply_fix never accepts file
+// contents for this: it RECOMPUTES the plan from the signed finding and the live tree, and writes only if that plan's digest is
+// the one synthesize_fix returned. The digest binds the finding, every file path, the exact pre-image and the exact post-image
+// of each edit, so a changed tree, a changed finding, or an altered digest all refuse. The write itself is the language
+// lifecycle's all-or-nothing writeManyWithBackup (one backup per file, one history group, honest rollback).
+const MULTI_FILE_MAX = 8;
+const _sha256 = (t) => crypto.createHash('sha256').update(String(t), 'utf8').digest('hex');
+function _multiFilePlanDigest(finding, edits) {
+  const canon = edits.map((e) => ({ file: String(e.file), before: _sha256(e.before), after: _sha256(e.after) })).sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+  return _sha256(JSON.stringify({ v: 'mf-plan/1', id: finding.id || null, stableId: finding.stableId || null, edits: canon }));
+}
+// Every file of a multi-file plan gets the SAME checks a single-file apply_fix target gets: root-relative lexical form,
+// confinement (no symlink leaf, no symlinked parent, no escape), reserved-write list, and existence. Returns {ok, reason, abs}.
+function _checkMultiFileTargets(sessionRoot, edits) {
+  if (!Array.isArray(edits) || edits.length < 2) return { ok: false, reason: 'a multi-file plan needs at least two edits' };
+  if (edits.length > MULTI_FILE_MAX) return { ok: false, reason: `a multi-file plan may edit at most ${MULTI_FILE_MAX} files` };
+  const rootReal = fs.realpathSync(path.resolve(sessionRoot));
+  const seen = new Set();
+  const abs = {};
+  for (const e of edits) {
+    const rel = e && e.file;
+    if (typeof rel !== 'string' || !rel || rel.includes('\0') || rel.includes('\\') || path.isAbsolute(rel) || rel.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')) {
+      return { ok: false, reason: `path-escape refused: plan file "${path.isAbsolute(String(rel)) ? '(absolute path)' : String(rel).slice(0, 120)}" is not a clean root-relative path` };
+    }
+    if (seen.has(rel)) return { ok: false, reason: `the same file appears twice in the plan: ${rel}` };
+    seen.add(rel);
+    let real;
+    try { real = _confine(sessionRoot, rel, 'plan file'); }
+    catch (err) { return { ok: false, reason: `path-escape refused: ${String(err.message).split(rootReal).join('<root>')}` }; }
+    if (path.relative(rootReal, real).split(path.sep).join('/') !== rel) return { ok: false, reason: `path-escape refused: plan file "${rel}" resolves through a symbolic link` };
+    if (_isReservedWritePath(sessionRoot, real)) return { ok: false, reason: `reserved path refused: ${rel}` };
+    if (!fs.existsSync(real)) return { ok: false, reason: `plan file not found: ${rel}` };
+    abs[rel] = real;
+  }
+  return { ok: true, abs };
+}
+const _scrubRoot = (sessionRoot, text) => {
+  let out = String(text);
+  const roots = new Set([path.resolve(sessionRoot)]);
+  try { roots.add(fs.realpathSync(path.resolve(sessionRoot))); } catch { /* root vanished: the plain path is still scrubbed */ }
+  for (const r of roots) out = out.split(r).join('<root>');
+  return redactString(out);
+};
+const _gateSummary = (g) => (g ? {
+  path: g.path ? g.path.ok : undefined, syntax: g.syntax ? g.syntax.ok : undefined,
+  rescan: g.rescan ? { ok: g.rescan.ok, originalGone: g.rescan.originalGone, newMediumOrHigher: g.rescan.newMediumOrHigher } : undefined,
+  effective: g.effective ? { ok: g.effective.ok, ran: g.effective.ran === true, detail: g.effective.detail } : undefined,
+  compile: g.compile ? { ran: g.compile.ran === true, ok: g.compile.ok } : undefined,
+} : null);
+
+async function _applyMultiFilePlan({ f, planDigest, dryRun, fixMeta, ctx, status }) {
+  const refuse = (reason, extra = {}) => ({ _meta: META, applied: false, multiFile: true, reason, ...extra });
+  if (typeof planDigest !== 'string' || !/^[0-9a-f]{64}$/.test(planDigest)) return refuse('plan_digest must be the 64-character hex digest returned by synthesize_fix');
+  if (!f.stableId) return refuse('finding has no stableId, so a plan cannot be verified against it');
+  const lc = await import('../language/context.js');
+  if (lc.languageOfFinding(f) !== 'nix') return refuse('multi-file plans are produced for NixOS findings only');
+  const nf = await import('../language/nix-fix.js');
+  const proj = lc.loadLanguageProject(ctx.sessionRoot);
+  const files = proj.files;
+  // The plan is derived here, from the signed finding and the live tree. Nothing the caller sends can supply file content.
+  const plan = nf.planNixFix(f, files);
+  if (!plan || plan.ok === false) return refuse(`no applicable plan: ${_scrubRoot(ctx.sessionRoot, (plan && plan.reason) || 'no deterministic fix')}`);
+  if (!Array.isArray(plan.edits) || plan.edits.length < 2) return refuse('this finding has a single-file plan; use apply_fix without plan_digest');
+  if (_multiFilePlanDigest(f, plan.edits) !== planDigest) {
+    return refuse('plan_digest does not match the plan computed now for this finding: the project files or the finding changed since synthesize_fix, or the digest was altered. Run synthesize_fix again and review the new plan.', { stale: true });
+  }
+  const targets = _checkMultiFileTargets(ctx.sessionRoot, plan.edits);
+  if (!targets.ok) return refuse(targets.reason);
+  const classification = classifyFixMaterialRisk(Object.fromEntries(plan.edits.map((e) => [e.file, { before: e.before, after: e.after }])));
+  if (!dryRun) {
+    const approvalRefusal = _highImpactApprovalRefusal(ctx, classification, fixMeta);
+    if (approvalRefusal) return { ...approvalRefusal, multiFile: true };
+  }
+  // The verification gates (syntax, rescan with no new finding, effective value changed as intended) run inside the lifecycle,
+  // and the pre-write hook re-checks the digest of the VERIFIED edits and the targets immediately before the first byte is written.
+  const preWrite = (verifiedPlan) => {
+    const vedits = Array.isArray(verifiedPlan.edits) ? verifiedPlan.edits : [];
+    if (_multiFilePlanDigest(f, vedits) !== planDigest) return { ok: false, detail: 'the verified plan differs from the previewed plan' };
+    const again = _checkMultiFileTargets(ctx.sessionRoot, vedits);
+    return again.ok ? { ok: true } : { ok: false, detail: again.reason };
+  };
+  let res;
+  try { res = await nf.validateNixFix(f, { files, apply: !dryRun, root: ctx.sessionRoot, preWrite }); }
+  catch (e) { return refuse(`plan verification failed: ${_scrubRoot(ctx.sessionRoot, e.message)}`); }
+  const gates = _gateSummary(res.gates);
+  const touched = plan.edits.map((e) => e.file);
+  if (res.status === 'verified' && dryRun) {
+    return { _meta: META, applied: false, dryRun: true, verified: true, multiFile: true, files: touched, planDigest, gates, materialClassification: classification, diff: res.preview };
+  }
+  if (res.status === 'applied') {
+    let acceptance = null;
+    try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* best-effort */ }
+    const hist = Array.isArray(res.history) ? res.history : [];
+    const allRecorded = hist.length === touched.length && hist.every(Boolean);
+    return {
+      _meta: META, applied: true, verified: true, multiFile: true, files: touched, planDigest,
+      groupId: res.backup && res.backup.id, historyIds: hist.map((h) => (h ? h.id : null)),
+      ...(allRecorded ? {} : { warning: 'the files were written and backed up, but the fix history could not record every entry; restore with the group backup under .agentic-security/fix-backups' }),
+      gates, integrity: status, acceptance, materialClassification: classification,
+    };
+  }
+  // Blocked or failed: nothing is left changed unless rollbackIncomplete says otherwise.
+  const incomplete = res.rolledBack === false;
+  return {
+    _meta: META, applied: false, multiFile: true, files: touched,
+    reason: _scrubRoot(ctx.sessionRoot, res.reason || `plan not applied (${res.status})`),
+    gates,
+    ...(res.rolledBack !== undefined ? { rolledBack: res.rolledBack === true, rollbackIncomplete: incomplete, ...(incomplete ? { restoreManually: (res.rollbackFailed || []).map(String) } : {}) } : {}),
+  };
+}
+
 // ─── apply_fix ───────────────────────────────────────────────────────────────
 export const apply_fix = {
   name: 'apply_fix',
-  description: 'Apply a fix for a finding. Two modes: (1) the stored fix.replacement, or (2) a caller-supplied `patch` (a files map) which is RE-VERIFIED inline (rescan-clean + no new ≥medium + lint) before any write — this unblocks findings that ship only a template or description. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if a path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing. On success, `verified:true` means verification passed but `verifiedFull:true` is the honest signal that every required leg (lint when configured, tests when a runner exists) genuinely ran — a false `verifiedFull` with `verified:true` means the pass is real but degraded (see `verify.degradedLegs`), not a full verification.',
+  description: 'Apply a fix for a finding. Two modes: (1) the stored fix.replacement, or (2) a caller-supplied `patch` (a files map) which is RE-VERIFIED inline (rescan-clean + no new ≥medium + lint) before any write — this unblocks findings that ship only a template or description. Refuses if last-scan.json fails its HMAC check, if the finding is shadow-marked, or if a path escapes the session root via lexical traversal OR a symlink. Requires confirm:true. Supports dry_run:true to preview without writing. On success, `verified:true` means verification passed but `verifiedFull:true` is the honest signal that every required leg (lint when configured, tests when a runner exists) genuinely ran — a false `verifiedFull` with `verified:true` means the pass is real but degraded (see `verify.degradedLegs`), not a full verification. MULTI-FILE NixOS FIX: when synthesize_fix returns `languageFix.planDigest` (an option defined in several files, edited together), pass it back as `plan_digest`. apply_fix then RECOMPUTES the plan itself from the signed finding and the live files, refuses unless its digest matches (so a changed tree, a changed finding or an altered digest all refuse; you never send file content), applies the same confinement, reserved-path, shadow and high-impact-approval checks to EVERY file, runs the verification gates (syntax, rescan with no new finding, the option resolves to the intended value on the patched configuration) before writing, and writes all files or none with one backup per file and one history group that `undo` reverts together. A rollback that could not complete is reported as `rollbackIncomplete` with the files to restore. `plan_digest` cannot be combined with `patch`.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -614,6 +757,7 @@ export const apply_fix = {
       finding_id: { type: 'string', minLength: 1, maxLength: 256 },
       confirm: { type: 'boolean' },
       dry_run: { type: 'boolean' },
+      plan_digest: { type: 'string', minLength: 64, maxLength: 64 },
       patch: {
         type: 'object',
         additionalProperties: { type: 'string', maxLength: 500_000 },
@@ -673,7 +817,7 @@ export const apply_fix = {
     },
     required: ['finding_id', 'confirm'],
   },
-  async handler({ finding_id, confirm, dry_run = false, patch = null, fixMeta = null }, ctx) {
+  async handler({ finding_id, confirm, dry_run = false, patch = null, fixMeta = null, plan_digest = null }, ctx) {
     if (confirm !== true) {
       return { _meta: META, applied: false, reason: 'apply_fix requires confirm: true.' };
     }
@@ -685,6 +829,15 @@ export const apply_fix = {
     if (!f) return { _meta: META, applied: false, reason: `Finding not found: ${finding_id}` };
     if (f._shadow === true) {
       return { _meta: META, applied: false, reason: 'shadow findings cannot be auto-applied' };
+    }
+
+    // Multi-file plan (a NixOS option defined in several files). The plan is recomputed here and bound by plan_digest; the
+    // caller can never supply file content on this path, and it cannot be combined with `patch`.
+    if (plan_digest !== null && plan_digest !== undefined) {
+      if (patch && typeof patch === 'object' && Object.keys(patch).length) {
+        return { _meta: META, applied: false, reason: 'plan_digest and patch cannot be combined: a multi-file plan is computed by the scanner, not supplied by the caller' };
+      }
+      return _applyMultiFilePlan({ f, planDigest: plan_digest, dryRun: dry_run === true, fixMeta, ctx, status });
     }
 
     // #3 — verifier-approved patch path. When the caller supplies `patch` (a
@@ -762,39 +915,8 @@ export const apply_fix = {
       if (dry_run) {
         return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, materialClassification };
       }
-      if (materialClassification.highImpactCategories.length) {
-        const approval = fixMeta && typeof fixMeta === 'object' ? fixMeta.approval : null;
-        const hasApprovalEvidence = !!(approval && typeof approval === 'object' &&
-          typeof approval.approvedBy === 'string' && approval.approvedBy.trim().length > 0 &&
-          typeof approval.reason === 'string' && approval.reason.trim().length > 0);
-        if (!hasApprovalEvidence) {
-          return {
-            _meta: META, applied: false,
-            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) requires approval evidence — pass fixMeta.approval: {approvedBy, reason} — before it can be applied`,
-            materialClassification,
-          };
-        }
-        const approverRegistry = loadApproverRegistry(ctx.sessionRoot);
-        const requiredRoles = requiredRolesFor(approverRegistry, materialClassification.highImpactCategories);
-        const identityCheck = verifyApprover(approverRegistry, approval.approvedBy, requiredRoles);
-        if (!identityCheck.verified) {
-          return {
-            _meta: META, applied: false,
-            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) approval rejected: ${identityCheck.reason}`,
-            materialClassification,
-          };
-        }
-        // FR-1003: separation-of-duties, same no-op-unless-configured gate
-        // as apply-fix-service.js's own copy — see approver-registry.js.
-        const sodCheck = checkSeparationOfDuties(approverRegistry, fixMeta?.author, approval.approvedBy);
-        if (!sodCheck.ok) {
-          return {
-            _meta: META, applied: false,
-            reason: `high-impact change (${materialClassification.highImpactCategories.join(', ')}) approval rejected: ${sodCheck.reason}`,
-            materialClassification,
-          };
-        }
-      }
+      const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
+      if (approvalRefusal) return approvalRefusal;
       const written = [];
       try {
         for (const [rel, v] of Object.entries(confinedAbs)) {
@@ -1025,7 +1147,7 @@ export const verify_fix = {
 // sequence with the returned blob.
 export const synthesize_fix = {
   name: 'synthesize_fix',
-  description: 'Return the stored fix replacement for a finding (replacement text + remediation + plan if the patch is too large). Read-only; never writes to disk. Use verify_fix → apply_fix to deploy.',
+  description: 'Return the stored fix replacement for a finding (replacement text + remediation + plan if the patch is too large). Read-only; never writes to disk. Use verify_fix → apply_fix to deploy. For a NixOS option defined in several files, `languageFix.multiFile` lists every file, `languageFix.edits` gives each file\'s before/after SHA-256 (no file content) and `languageFix.planDigest` is the value to pass to apply_fix as `plan_digest`; the preview is verified but nothing is written.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -1079,8 +1201,15 @@ export const synthesize_fix = {
             const proj = lc.loadLanguageProject(ctx.sessionRoot);
             const prev = await lc.languageFixPreview(f, proj.files);
             languageFix = { status: prev.status, ok: prev.ok, label: prev.label || null, tier: prev.tier || null, reason: prev.reason || null, diff: prev.diff || null, explanation: prev.explanation || null, consequences: prev.consequences || [] };
-            // apply_fix writes ONE file; a fix that spans several files must go through the CLI lifecycle (atomic, grouped undo).
-            if (prev.ok && prev.edits) languageFix.multiFile = prev.edits.map((e) => e.file);
+            // A fix that spans several files is applied with apply_fix + plan_digest (atomic, one history group); see _applyMultiFilePlan.
+            if (prev.ok && prev.edits) {
+              languageFix.multiFile = prev.edits.map((e) => e.file);
+              // The digest binds finding + every file + exact pre/post image. Pass it to apply_fix as plan_digest; apply_fix
+              // recomputes the plan itself and refuses on any difference. No file content is ever sent back to apply_fix.
+              languageFix.planDigest = _multiFilePlanDigest(f, prev.edits);
+              languageFix.edits = prev.edits.map((e) => ({ file: e.file, beforeSha256: _sha256(e.before), afterSha256: _sha256(e.after) }));
+              languageFix.applyWith = { finding_id: f.id, confirm: true, plan_digest: languageFix.planDigest };
+            }
             else if (prev.ok) autofix = { deterministic: true, ruleId: f.rule || f.family || null, patch: prev.after, file: prev.file, label: prev.label || null, verified: true };
           }
         } catch { /* best-effort: the preview is advisory */ }
