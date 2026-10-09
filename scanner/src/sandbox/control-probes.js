@@ -16,6 +16,7 @@
 //
 // The probes are generic, so on a Linux host they run against the namespace
 // backend for real. Nothing in this file asserts a Linux outcome in advance.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -56,7 +57,7 @@ function probeReadDenial(backend) {
   const root = mk('agsec-probe-r-'); const secretDir = mk('agsec-probe-rs-');
   try {
     const secret = path.join(secretDir, 'sealed.txt');
-    const token = `SEALED-${Math.random().toString(36).slice(2)}`;
+    const token = `SEALED-${crypto.randomBytes(8).toString('hex')}`;
     fs.writeFileSync(secret, token);
     const cmd = ['/bin/sh', '-c', `cat '${secret}' 2>&1; true`];
     const open = runConfined(cmd, { root });

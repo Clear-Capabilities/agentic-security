@@ -157,6 +157,11 @@ function computeRunAttestation({
     try {
       att.signature = (0,_integrity_js__WEBPACK_IMPORTED_MODULE_1__/* .signLastScan */ .lU)(digest);
       att.signatureScope = 'per-install-hmac';
+      // CORE-003.AC03: say plainly who vouches. A symmetric install HMAC can be
+      // produced by anyone who can verify it, so it is self-issued by
+      // construction and can never be third-party certification.
+      att.trustBasis = 'self-issued-local-key';
+      att.independentlyCertified = false;
     } catch { /* signing is best-effort; an unsigned attestation is still valid */ }
   }
   return att;

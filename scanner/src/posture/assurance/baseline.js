@@ -45,8 +45,8 @@ function defaultExec(cmd, args, { cwd, timeoutMs = 15_000 } = {}) {
   return { status: r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 }
 
-function git(exec, root, args) {
-  return exec('git', hardenGitArgs(args), { cwd: root });
+function git(runCmd, root, args) {
+  return runCmd('git', hardenGitArgs(args), { cwd: root });
 }
 
 function fileDigest(root, rel) {
@@ -57,8 +57,8 @@ function fileDigest(root, rel) {
   } catch { return null; }
 }
 
-function tool(exec, root, cmd, args) {
-  const r = exec(cmd, args, { cwd: root });
+function tool(runCmd, root, cmd, args) {
+  const r = runCmd(cmd, args, { cwd: root });
   if (r.status !== 0 || !r.stdout.trim()) return unknown(`${cmd} ${args.join(' ')} did not report a version${r.stderr ? ` (${String(r.stderr).trim().split('\n')[0]})` : ''}`);
   return known(r.stdout.trim().split('\n')[0]);
 }
@@ -85,8 +85,8 @@ function classify(xy) {
   return 'modified';
 }
 
-function collectSourceFiles(exec, root) {
-  const r = git(exec, root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...SOURCE_DIGEST_PATHS]);
+function collectSourceFiles(runCmd, root) {
+  const r = git(runCmd, root, ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...SOURCE_DIGEST_PATHS]);
   if (r.status !== 0) return null;
   return [...new Set(r.stdout.split('\0').filter(Boolean))].sort();
 }
@@ -96,7 +96,7 @@ function collectSourceFiles(exec, root) {
  * unknown paths and stay clock-free; `inventory`/`mappings` default to the real ones.
  */
 export function captureBaseline({
-  root, exec = defaultExec, now = () => new Date().toISOString(),
+  root, exec: runCmd = defaultExec, now = () => new Date().toISOString(),
   inventory = CAPABILITY_INVENTORY, mappings = RECOMMENDATION_MAPPINGS,
 } = {}) {
   if (!root) throw new Error('captureBaseline needs a root');
@@ -104,11 +104,11 @@ export function captureBaseline({
   const abs = path.resolve(root);
 
   // ---- git state
-  const headR = git(exec, abs, ['rev-parse', 'HEAD']);
+  const headR = git(runCmd, abs, ['rev-parse', 'HEAD']);
   const head = headR.status === 0 && /^[0-9a-f]{40,64}$/.test(headR.stdout.trim()) ? known(headR.stdout.trim()) : unknown('no git HEAD could be resolved');
-  const branchR = git(exec, abs, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const branchR = git(runCmd, abs, ['rev-parse', '--abbrev-ref', 'HEAD']);
   const branch = branchR.status === 0 ? known(branchR.stdout.trim()) : unknown('branch could not be resolved');
-  const statusR = git(exec, abs, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  const statusR = git(runCmd, abs, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
   let dirty;
   if (statusR.status !== 0) dirty = unknown('git status failed; the worktree state is not known');
   else {
@@ -116,7 +116,7 @@ export function captureBaseline({
   }
 
   // ---- digests
-  const files = collectSourceFiles(exec, abs);
+  const files = collectSourceFiles(runCmd, abs);
   let sourceDigest;
   if (!files) sourceDigest = unknown('source file list unavailable (git ls-files failed)');
   else {
@@ -140,9 +140,9 @@ export function captureBaseline({
     node: known(process.version),
     platform: known(`${process.platform}-${process.arch}`),
     scanner: pkg?.version ? known(pkg.version) : unknown('scanner/package.json has no readable version'),
-    npm: tool(exec, abs, 'npm', ['--version']),
-    git: tool(exec, abs, 'git', ['--version']),
-    python3: tool(exec, abs, 'python3', ['--version']),
+    npm: tool(runCmd, abs, 'npm', ['--version']),
+    git: tool(runCmd, abs, 'git', ['--version']),
+    python3: tool(runCmd, abs, 'python3', ['--version']),
   };
 
   // ---- feature entry points that exist now
@@ -310,13 +310,13 @@ export function validateBaseline(m) {
  * Where a baseline may be written. Never inside an application source root, and
  * never over a file git tracks (which would change application source).
  */
-export function assertSafeOutput(root, outPath, exec = defaultExec) {
+export function assertSafeOutput(root, outPath, runCmd = defaultExec) {
   const abs = path.resolve(root); const out = path.resolve(outPath);
   const rel = path.relative(abs, out);
   if (rel.startsWith('..') || path.isAbsolute(rel)) return { ok: true, reason: 'outside the repository' };
   const inSource = SOURCE_ROOTS.some(r => rel === r || rel.startsWith(`${r}${path.sep}`));
   if (inSource) return { ok: false, reason: `'${rel}' is inside an application source root` };
-  const tracked = git(exec, abs, ['ls-files', '--error-unmatch', '--', rel]);
+  const tracked = git(runCmd, abs, ['ls-files', '--error-unmatch', '--', rel]);
   if (tracked.status === 0) return { ok: false, reason: `'${rel}' is tracked by git; refusing to overwrite application files` };
   return { ok: true, reason: 'untracked path outside the source roots' };
 }
