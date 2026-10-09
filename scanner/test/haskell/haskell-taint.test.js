@@ -12,11 +12,12 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scoreLayer, scoreAllLayers, prf, LAYERS } from '../../src/language/accuracy.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'agentic-security.js');
 
 function scan(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'hs-taint-'));
+  const dir = mkTestTmp('hs-taint-');
   for (const [f, text] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), text); }
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const p = spawnSync(process.execPath, [BIN, 'scan', dir, '--format', 'json'], { encoding: 'utf8', timeout: 180000, env, maxBuffer: 64 * 1024 * 1024 });

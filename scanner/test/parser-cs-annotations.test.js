@@ -11,6 +11,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { parseCSharpFile } from '../src/ir/parser-cs.js';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('parseCSharpFile: [FromQuery] attribute on a parameter populates fn.paramAnnotations', () => {
   const code = `
@@ -108,7 +109,7 @@ public class UserController {
 });
 
 test('R14(a) end-to-end: ASP.NET Core [FromQuery] flowing to a SQL sink is detected', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r14a-cs-'));
+  const dir = mkTestTmp('as-r14a-cs-');
   fs.writeFileSync(path.join(dir, 'UserController.cs'), `
 public class UserController {
     public string Get([FromQuery] string id) {

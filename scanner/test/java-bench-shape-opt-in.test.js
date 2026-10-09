@@ -22,9 +22,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(name, content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-benchshape-${name}-`));
+  const dir = mkTestTmp(`as-benchshape-${name}-`);
   fs.writeFileSync(path.join(dir, 'Bad.java'), content);
   return dir;
 }

@@ -22,6 +22,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { _internal } from '../src/llm-validator/index.js';
 import { TERMS, auditFile } from '../../bench/sard/scripts/leakage-audit.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function termRegexes() {
   return TERMS.map((term) => ({
@@ -49,7 +50,7 @@ function termRegexes() {
 // GoodSource(), ...) still applies unconditionally, since none of those are
 // ever legitimate scanner output.
 function auditPromptText(promptText, { excludeBareCwe = false } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sard-llm-isolation-'));
+  const dir = mkTestTmp('sard-llm-isolation-');
   const file = path.join(dir, 'prompt.txt');
   fs.writeFileSync(file, promptText);
   const terms = excludeBareCwe ? termRegexes().filter((t) => t.term !== 'CWE') : termRegexes();

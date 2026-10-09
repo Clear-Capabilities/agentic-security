@@ -16,9 +16,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runIndependentPopulationGate, updateGateBaseline } from '../../scripts/independent-population-gate.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function repoWith(files) {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'indep-gate-'));
+  const d = mkTestTmp('indep-gate-');
   for (const [rel, body] of Object.entries(files)) {
     const p = path.join(d, rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });

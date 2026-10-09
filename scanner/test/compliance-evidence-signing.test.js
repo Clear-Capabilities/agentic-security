@@ -16,13 +16,14 @@ import {
   loadSigningKeyIfConfigured, COMPLIANCE_EVIDENCE_SCHEMA,
 } from '../src/posture/compliance-evidence-signing.js';
 import { loadPolicy, verifyPolicy, emitEvidenceJsonLd } from '../src/posture/compliance-policy.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..');
 const CLI = path.join(REPO_ROOT, 'scanner', 'bin', 'agentic-security.js');
 
 function tmpKeyDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-key-'));
+  return mkTestTmp('compliance-sign-key-');
 }
 
 function sampleDoc(overrides = {}) {
@@ -105,7 +106,7 @@ test('canonicalComplianceEvidenceBytes: key order does not change the canonical 
 // ── loadSigningKeyIfConfigured: the opt-in check ─────────────────────────
 
 test('loadSigningKeyIfConfigured: no key present returns null, never throws', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-nohome-'));
+  const home = mkTestTmp('compliance-sign-nohome-');
   const prev = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = home;
   try {
@@ -118,7 +119,7 @@ test('loadSigningKeyIfConfigured: no key present returns null, never throws', ()
 });
 
 test('loadSigningKeyIfConfigured: a pre-existing key (e.g. from a prior `attest` run) is picked up', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-home-'));
+  const home = mkTestTmp('compliance-sign-home-');
   const prev = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = home;
   try {
@@ -136,14 +137,14 @@ test('loadSigningKeyIfConfigured: a pre-existing key (e.g. from a prior `attest`
 // ── real end-to-end through emitEvidenceJsonLd + the real CLI ───────────
 
 async function mkSession() {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'compliance-sign-session-'));
+  const dir = await mkTestTmp('compliance-sign-session-');
   await fsp.mkdir(path.join(dir, '.agentic-security'), { recursive: true });
   await fsp.writeFile(path.join(dir, 'package.json'), '{"name":"t"}');
   return { dir, cleanup: async () => fsp.rm(dir, { recursive: true, force: true }) };
 }
 
 test('emitEvidenceJsonLd: no signing key configured emits an UNSIGNED document — unchanged, backward-compatible default', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-emit-nohome-'));
+  const home = mkTestTmp('compliance-sign-emit-nohome-');
   const prev = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = home;
   const sess = await mkSession();
@@ -169,7 +170,7 @@ controls:
 });
 
 test('emitEvidenceJsonLd: a configured signing key produces a SIGNED, self-verifying document', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-emit-home-'));
+  const home = mkTestTmp('compliance-sign-emit-home-');
   const prev = process.env.XDG_CONFIG_HOME;
   process.env.XDG_CONFIG_HOME = home;
   const sess = await mkSession();
@@ -200,7 +201,7 @@ controls:
 });
 
 test('verify-attestation (real CLI): auto-detects and verifies a signed compliance evidence manifest', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'compliance-sign-cli-home-'));
+  const home = mkTestTmp('compliance-sign-cli-home-');
   const sess = await mkSession();
   try {
     const kp = ensureKeyPair(path.join(home, 'agentic-security'));

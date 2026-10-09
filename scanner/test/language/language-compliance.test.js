@@ -15,6 +15,7 @@ import { signComplianceEvidence, verifyComplianceEvidence } from '../../src/post
 import { buildObligationEvidencePack, signObligationEvidencePack, verifyObligationEvidencePack } from '../../src/posture/obligation-evidence-pack.js';
 import { buildProjectIR } from '../../src/ir/index.js';
 import { buildLineageGraph } from '../../src/lineage/index.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRAMEWORK_DIR = path.join(HERE, '..', '..', 'src', 'posture', 'compliance-frameworks');
@@ -39,7 +40,7 @@ const scanOf = (fc, dep = {}) => runFullScan({ fileContents: fc, depFileContents
 
 let _bad = null;
 const badScan = async () => (_bad ||= await scanOf({ 'App.hs': HS_BAD, 'configuration.nix': NIX_BAD }, { 'flake.nix': FLAKE }));
-const root = () => { const r = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'x011-'))); fs.writeFileSync(path.join(r, 'package.json'), '{}'); return r; };
+const root = () => { const r = fs.realpathSync(mkTestTmp('x011-')); fs.writeFileSync(path.join(r, 'package.json'), '{}'); return r; };
 
 test('[X-011.AC03] the framework count and the applicable subset are generated from the current catalogs', () => {
   const files = fs.readdirSync(FRAMEWORK_DIR).filter((f) => f.endsWith('.json'));
@@ -136,7 +137,7 @@ test('[X-011.AC03] positive, negative and unassessed controls produce the right 
   assert.ok(n(evBad, 'partial') + n(evBad, 'absent') > n(evGood, 'partial') + n(evGood, 'absent') - 1);
   assert.ok(n(evPart, 'partial') >= n(evGood, 'partial'), 'incomplete analysis never improves coverage');
   assert.ok(n(evGood, 'present') >= n(evPart, 'present'), 'complete analysis can only evidence more');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'x011-key-'));
+  const dir = mkTestTmp('x011-key-');
   try {
     const keys = ensureKeyPair(dir);
     const doc = walkthroughToEvidenceJsonLd(fw, evBad, { scan: bad, engineVersion: 'test', generatedAt: '2026-10-03T00:00:00Z' });
@@ -166,7 +167,7 @@ test('[X-011.AC03] a signed obligation pack carries a Haskell graph fact and ver
   const pack = buildObligationEvidencePack({ graph: lr.graph, framework: fw, evaluation: ev, engineVersion: 'test' });
   assert.ok(pack.facts.length >= 1, 'the graph: mapping produced an obligation fact');
   assert.ok(pack.graphDigest);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'x011-pack-'));
+  const dir = mkTestTmp('x011-pack-');
   try {
     const keys = ensureKeyPair(dir);
     const signed = signObligationEvidencePack(pack, keys.privateKeyPem);

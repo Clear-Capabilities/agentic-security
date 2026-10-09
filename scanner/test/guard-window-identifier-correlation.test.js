@@ -12,9 +12,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runScan } from '../src/runScan.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mkTmp(name, content) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-guardcorr-${name}-`));
+  const dir = mkTestTmp(`as-guardcorr-${name}-`);
   fs.writeFileSync(path.join(dir, 'app.js'), content);
   return dir;
 }

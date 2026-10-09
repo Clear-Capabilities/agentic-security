@@ -13,6 +13,7 @@ import { refreshNixAdvisories, snapshotPath, getLastRefresh, _resetLastRefresh, 
 import { matchNixVulnerabilities, NixAdvisoryData, closureIdentities, upstreamIdentity } from '../../src/language/nix-sca.js';
 import { importNixClosure } from '../../src/language/nix-closure.js';
 import { configuredNixAdvisories, configuredNixMeta, prefetchNixAdvisoryFeed, analyzeNixClosure } from '../../src/language/resolved-pass.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SAMPLE = JSON.parse(readFileSync(join(HERE, '..', 'fixtures', 'nvd-cpe', 'gnu-gzip.sample.json'), 'utf8'));
@@ -45,7 +46,7 @@ function fakeNvd(byProduct, { status = null, textOf = null, mutate = null } = {}
 }
 const sleeper = () => { const s = async (ms) => { s.waits.push(ms); }; s.waits = []; return s; };
 const liveEnv = (dir, extra = {}) => ({ XDG_CONFIG_HOME: dir, [FEED_ENV]: '1', ...extra });
-const tmp = () => mkdtempSync(join(tmpdir(), 'agsec-nixfeed-'));
+const tmp = () => mkTestTmp('agsec-nixfeed-');
 const snapFile = (dir) => snapshotPath({ XDG_CONFIG_HOME: dir });
 const readSnap = (dir) => JSON.parse(readFileSync(snapFile(dir), 'utf8'));
 const refresh = (ids, dir, f, extra = {}, envExtra = {}) => refreshNixAdvisories(ids, { env: liveEnv(dir, envExtra), fetchImpl: f, now: NOW, sleep: sleeper(), ...extra });

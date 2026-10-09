@@ -14,6 +14,7 @@ import { analyzeNixAgents } from '../../src/language/nix-agents.js';
 import { toHTML } from '../../src/report/index.js';
 import { _internal as V, validateOne } from '../../src/llm-validator/index.js';
 import { MODEL_STATUS } from '../../src/llm-validator/model-status.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, '..', 'fixtures', 'language-llm');
@@ -22,7 +23,7 @@ const walk = (d, base = d, acc = {}) => { for (const e of readdirSync(d, { withF
 const HS = walk(join(FIX, 'haskell')); const NX = walk(join(FIX, 'nix'));
 
 function scan(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'x003-'));
+  const dir = mkTestTmp('x003-');
   for (const [f, t] of Object.entries(files)) { mkdirSync(dirname(join(dir, f)), { recursive: true }); writeFileSync(join(dir, f), t); }
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const p = spawnSync(process.execPath, [BIN, 'scan', dir, '--format', 'json'], { encoding: 'utf8', env, timeout: 180000, maxBuffer: 64 << 20 });
@@ -156,13 +157,13 @@ test('[X-003.AC03] an unavailable or disabled model is a typed advisory outcome,
   for (const k of Object.keys(process.env)) if (/^AGENTIC_SECURITY_(?:LLM|OLLAMA|VALIDATOR|EGRESS|PROVIDER)/.test(k)) { saved[k] = process.env[k]; delete process.env[k]; }
   try {
     const f = { id: 'a', file: 'A.hs', line: 4, vuln: 'Prompt Injection', severity: 'high', cwe: 'CWE-1427', parser: 'IR-TAINT' };
-    const r = await validateOne(f, { 'A.hs': 'module A where\nx = 1\n' }, mkdtempSync(join(tmpdir(), 'x003-v-')));
+    const r = await validateOne(f, { 'A.hs': 'module A where\nx = 1\n' }, mkTestTmp('x003-v-'));
     assert.equal(r.verdict, 'unvalidated'); assert.equal(f.unvalidated, true); assert.equal(f.llmValidationStatus, MODEL_STATUS.DISABLED);
     assert.notEqual(f.validator_verdict, 'accept'); assert.notEqual(f.validator_verdict, 'reject');
     // a configured but unreachable local endpoint: attempted, failed, and still not a verdict
     process.env.AGENTIC_SECURITY_LLM_PRESET = 'local'; process.env.AGENTIC_SECURITY_LLM_ENDPOINT = 'http://127.0.0.1:9/v1/chat'; process.env.AGENTIC_SECURITY_LLM_MODEL = 'm';
     const g = { ...f, id: 'b' };
-    const r2 = await validateOne(g, { 'A.hs': 'module A where\nx = 1\n' }, mkdtempSync(join(tmpdir(), 'x003-v-')));
+    const r2 = await validateOne(g, { 'A.hs': 'module A where\nx = 1\n' }, mkTestTmp('x003-v-'));
     assert.ok(['unvalidated', 'escalate'].includes(r2.verdict) || r2.error, JSON.stringify(r2));
     assert.ok([MODEL_STATUS.UNAVAILABLE, MODEL_STATUS.POLICY_BLOCKED, MODEL_STATUS.DISABLED, MODEL_STATUS.MALFORMED].includes(g.llmValidationStatus), `typed status: ${g.llmValidationStatus}`);
     assert.notEqual(g.llmValidationStatus, MODEL_STATUS.COMPLETED);

@@ -21,6 +21,7 @@ import {
   REQUIRED_EVAL_FLAGS, SAFETY_OPTIONS, IMPORT_FALLBACK, DEFAULT_LIMITS,
 } from '../../src/language/nix-eval-isolation.js';
 import { analyzeNixScripts } from '../../src/language/nix-script-taint.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCANNER = join(HERE, '..', '..');
@@ -32,7 +33,7 @@ const FAST = { deadlineMs: 4000, killGraceMs: 500, maxRssMb: 400, maxOutputBytes
 
 /** A throwaway flake directory whose adversary.json drives the stand-in. */
 function project(actions, extra = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'nix-eval-proj-'));
+  const dir = mkTestTmp('nix-eval-proj-');
   writeFileSync(join(dir, 'adversary.json'), JSON.stringify({ actions }));
   writeFileSync(join(dir, 'flake.nix'), '{ outputs = { self }: { }; }\n');
   writeFileSync(join(dir, 'flake.lock'), '{"nodes":{"root":{}},"root":"root","version":7}\n');
@@ -44,7 +45,7 @@ const snapshot = (dir) => Object.fromEntries(readdirSync(dir).map((f) => [f, cre
 const sandboxed = SB.available;
 
 test('[NIX-011.AC01] hostile evaluator behavior cannot read outside roots, see credentials, fetch, spawn native code, write the lock or escape', async () => {
-  const secretDir = mkdtempSync(join(tmpdir(), 'nix-eval-secret-'));
+  const secretDir = mkTestTmp('nix-eval-secret-');
   const secret = join(secretDir, 'credentials'); writeFileSync(secret, 'AKIA-NOT-A-REAL-KEY');
   const outsideWrite = join(secretDir, 'planted.txt');
   let hits = 0;
@@ -113,7 +114,7 @@ test('[NIX-011.AC02] the sandbox is probed with real syscalls, independently of 
 });
 
 test('[NIX-011.AC02] an unavailable or insufficient sandbox returns unsupported/blocked BEFORE any project code runs', async () => {
-  const marker = join(mkdtempSync(join(tmpdir(), 'nix-eval-marker-')), 'ran');
+  const marker = join(mkTestTmp('nix-eval-marker-'), 'ran');
   const dir = project([{ kind: 'writeOutside', path: marker }]);
   const none = await evalIn(dir, { sandbox: { available: false, backend: 'none', reason: 'isolation disabled by the caller' } });
   assert.equal(none.status, 'unsupported'); assert.equal(none.projectCodeEvaluated, false); assert.match(none.reason, /NOT evaluated/);

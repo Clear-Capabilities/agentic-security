@@ -12,6 +12,7 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractHaskellAI, extractNixAI, extractLanguageAI, redactEndpoint } from '../../src/language/aibom.js';
 import { buildAIBOM, aibomToMarkdown, toCycloneDXMLBOM, validateMLBOM } from '../../src/posture/aibom.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = join(HERE, '..', 'fixtures', 'language-aibom');
@@ -125,7 +126,7 @@ test('[X-002.AC03] header tokens, URL query keys, environment keys and model-hos
 });
 
 test('[X-002.AC04] the proprietary JSON and Markdown AI-BOM and the CycloneDX ML-BOM view validate, and the labels stay honest', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'x002-cli-'));
+  const dir = mkTestTmp('x002-cli-');
   cpSync(join(FIX, 'haskell'), join(dir, 'haskell'), { recursive: true }); cpSync(join(FIX, 'nix'), join(dir, 'nix'), { recursive: true });
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const run = (fmt) => spawnSync(process.execPath, [BIN, 'scan', dir, '--format', fmt], { encoding: 'utf8', env, timeout: 180000, maxBuffer: 64 << 20 });

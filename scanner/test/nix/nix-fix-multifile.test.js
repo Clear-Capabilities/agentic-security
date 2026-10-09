@@ -14,6 +14,7 @@ import { runFixLifecycle } from '../../src/language/fix-lifecycle.js';
 import { analyzeNixosHardening } from '../../src/language/nixos-hardening.js';
 import { resolveNixosConfig } from '../../src/language/nixos-module-resolver.js';
 import { listHistory, undoLast } from '../../src/posture/fix-history.js';
+import { mkTestTmp } from '../helpers/tmp.js';
 
 const OPT = 'services.openssh.settings.PermitRootLogin';
 const ENTRY = (imports) => `{ config, lib, ... }:\n{\n  imports = [ ${imports.join(' ')} ];\n  services.openssh.enable = true;\n}\n`;
@@ -23,7 +24,7 @@ const rootFinding = (files) => hardening(files).find((f) => f.rule === 'ssh-root
 const effective = (files) => resolveNixosConfig({ entry: 'configuration.nix', files }).lookup(OPT);
 
 function project(files) {
-  const root = mkdtempSync(join(tmpdir(), 'nix-multifile-'));
+  const root = mkTestTmp('nix-multifile-');
   for (const [p, t] of Object.entries(files)) {
     const abs = join(root, p);
     mkdirSync(dirname(abs), { recursive: true });

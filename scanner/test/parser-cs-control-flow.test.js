@@ -12,6 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCSharpFile } from '../src/ir/parser-cs.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 // Matches by bare tail, not exact equality: `fn.name` is class-qualified
 // (`"ClassName.method"`, the same convention parser-java.js/parser-js.js
@@ -150,7 +151,7 @@ test('parseCSharpFile: end-to-end runScan detects a source flowing through an if
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-cs-'));
+  const dir = mkTestTmp('as-r8-cs-');
   // The brief's illustrative version of this test used a bare `string id`
   // parameter with no annotation as the "source". Verified empirically
   // (not assumed) that this does NOT work for C# regardless of any CFG
@@ -249,7 +250,7 @@ test('parseCSharpFile: end-to-end runScan detects a source flowing through a for
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-cs-foreach-'));
+  const dir = mkTestTmp('as-r8-cs-foreach-');
   // See the comment on the if-block end-to-end test above: `[FromQuery]`
   // is required for C#'s dataflow engine to treat a parameter as tainted
   // at all — a bare parameter is not a recognized source.
@@ -463,7 +464,7 @@ test('parseCSharpFile: end-to-end runScan detects taint through a no-modifier pr
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-nomodifier-'));
+  const dir = mkTestTmp('as-cs-nomodifier-');
   fs.writeFileSync(path.join(dir, 'C.cs'), `
 public class C {
     void RunQuery(string id) {
@@ -486,7 +487,7 @@ test('parseCSharpFile: end-to-end runScan detects a source flowing through a usi
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-cs-using-'));
+  const dir = mkTestTmp('as-r8-cs-using-');
   fs.writeFileSync(path.join(dir, 'C.cs'), `
 public class C {
     public void Run([FromQuery] string id) {
@@ -570,7 +571,7 @@ test('parseCSharpFile: end-to-end runScan detects taint through if(true)/else (J
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-const-if-'));
+  const dir = mkTestTmp('as-cs-const-if-');
   fs.writeFileSync(path.join(dir, 'Bad.cs'), `
 using System;
 using System.IO;
@@ -683,7 +684,7 @@ test('parseCSharpFile: end-to-end runScan — a private const bool condition res
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-const-field-'));
+  const dir = mkTestTmp('as-cs-const-field-');
   fs.writeFileSync(path.join(dir, 'Bad.cs'), `
 using System;
 using System.IO;
@@ -865,7 +866,7 @@ test('parseCSharpFile: W4.C38 end-to-end runScan — Juliet Flow Variant 05 (pla
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-plain-bool-if-'));
+  const dir = mkTestTmp('as-cs-plain-bool-if-');
   fs.writeFileSync(path.join(dir, 'Bad.cs'), `
 using System;
 using System.IO;
@@ -978,7 +979,7 @@ test('parseCSharpFile: W5.28 end-to-end runScan — Juliet Flow Variant 08/11 (i
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-private-returns-'));
+  const dir = mkTestTmp('as-cs-private-returns-');
   fs.writeFileSync(path.join(dir, 'Bad.cs'), `
 using System;
 using System.IO;
@@ -1191,7 +1192,7 @@ test('parseCSharpFile: W5.36 end-to-end runScan — Juliet Flow Variant 15 (swit
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-cs-switch-const-'));
+  const dir = mkTestTmp('as-cs-switch-const-');
   fs.writeFileSync(path.join(dir, 'Bad.cs'), `
 using System;
 using System.Diagnostics;

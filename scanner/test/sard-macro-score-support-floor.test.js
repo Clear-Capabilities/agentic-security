@@ -29,6 +29,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { f1, perCweTable, macroF1, macroF1MinSupport } from '../../bench/sard/scripts/macro-score.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('f1: harmonic mean, zero when both precision and recall are zero', () => {
   assert.equal(f1(0, 0), 0);
@@ -89,7 +90,7 @@ test('macroF1MinSupport: no excluded CWEs when every row already meets the floor
 // when the legacy scorer's perCwe reflects fewer TPs than the current one —
 // exactly the C# LDAP scenario this diagnostic exists to make visible.
 test('macro-score.mjs CLI: emits scorerDelta when the input carries legacyScoring, with rawOldScorer computed independently from the primary macroF1', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'macro-score-scorer-delta-'));
+  const dir = mkTestTmp('macro-score-scorer-delta-');
   const input = {
     results: [{
       name: 'sard-juliet-csharp-strict', language: 'csharp', scanned: 10,

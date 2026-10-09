@@ -5,9 +5,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { decide, computeScanTrend, explain } from '../src/posture/router.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function tmpRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'as-router-'));
+  const root = mkTestTmp('as-router-');
   fs.mkdirSync(path.join(root, '.agentic-security'), { recursive: true });
   return root;
 }

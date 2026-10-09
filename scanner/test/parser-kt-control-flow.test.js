@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKotlinFile } from '../src/ir/parser-kt.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function callNodes(ir, fnName) {
   const fn = ir.functions.find(f => f.name === fnName);
@@ -87,7 +88,7 @@ test('parseKotlinFile: existing straight-line Ktor source-to-sink shape is unaff
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-kt-ktor-'));
+  const dir = mkTestTmp('as-r8-kt-ktor-');
   fs.writeFileSync(path.join(dir, 'App.kt'), `
 fun handle(call: Any) {
   val host = call.parameters
@@ -103,7 +104,7 @@ test('parseKotlinFile: end-to-end runScan detects a source flowing through an if
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-kt-'));
+  const dir = mkTestTmp('as-r8-kt-');
   // The brief's illustrative version of this test used a bare `id: String?`
   // parameter with no recognized-source shape as the "source". Verified
   // empirically (not assumed) that this does NOT work for Kotlin regardless
@@ -296,7 +297,7 @@ test('parseKotlinFile: end-to-end runScan detects taint flowing through a .forEa
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-kt-lambda-'));
+  const dir = mkTestTmp('as-kt-lambda-');
   fs.writeFileSync(path.join(dir, 'App.kt'), `
 fun handler(request: HttpServletRequest, stmt: Statement) {
     val id = request.getParameter("id")

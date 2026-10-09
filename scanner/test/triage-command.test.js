@@ -26,6 +26,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -41,14 +42,14 @@ function extractStep(stepHeading) {
 }
 
 async function mkProject(findings) {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'triage-cmd-'));
+  const dir = await mkTestTmp('triage-cmd-');
   fs.mkdirSync(path.join(dir, '.agentic-security'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings }));
   return { dir, cleanup: () => fsp.rm(dir, { recursive: true, force: true }) };
 }
 
 function runStep(script, { cwd, env = {}, arg = '' }) {
-  const scriptPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'triage-step-')), 'run.sh');
+  const scriptPath = path.join(mkTestTmp('triage-step-'), 'run.sh');
   fs.writeFileSync(scriptPath, script);
   try {
     const out = execFileSync('bash', [scriptPath, arg], {

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseJavaFile } from '../src/ir/parser-java.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function callNodes(ir, fnName) {
   const fn = ir.functions.find(f => f.name.includes(fnName));
@@ -186,7 +187,7 @@ test('parseJavaFile: an end-to-end runScan detects a source flowing through a fo
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-java-'));
+  const dir = mkTestTmp('as-r8-java-');
   // This fixture is intra-procedural by design (source and sink live in the
   // same method), not the plan draft's cross-function `handle() -> run(ids)`
   // shape. Confirmed by direct probing during implementation: that
@@ -237,7 +238,7 @@ test('parseJavaFile: an end-to-end runScan detects a tainted collection flowing 
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-r8-java-foreach-'));
+  const dir = mkTestTmp('as-r8-java-foreach-');
   fs.writeFileSync(path.join(dir, 'C.java'), `
 public class C {
     public void run(@RequestParam String[] ids, java.sql.Statement stmt) throws Exception {

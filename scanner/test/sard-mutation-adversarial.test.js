@@ -25,6 +25,7 @@ import { runScan } from '../src/runScan.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkTestTmp } from './helpers/tmp.js';
 
 test('mutateAdversarialLiteralization: replaces a String initializer with a hardcoded literal, keeping the variable name', () => {
   const content = [
@@ -89,7 +90,7 @@ test('mutateAdversarialLiteralization: only the FIRST matching declaration in th
 // footgun found while building this test.)
 
 function mkTmp(name, javaSource, className) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `as-sard-adv-mut-${name}-`));
+  const dir = mkTestTmp(`as-sard-adv-mut-${name}-`);
   fs.writeFileSync(path.join(dir, `${className}.java`), javaSource);
   return dir;
 }

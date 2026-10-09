@@ -12,9 +12,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { listFiles, globFiles, matchesAnyGlob } from '../src/util/glob.js';
+import { mkTestTmp } from './helpers/tmp.js';
 
 function mktree(spec) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'glob-compat-'));
+  const root = mkTestTmp('glob-compat-');
   for (const [rel, body] of Object.entries(spec)) {
     const abs = path.join(root, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -92,7 +93,7 @@ test('ignore patterns apply inside hidden directories too', async () => {
 });
 
 test('symlinks are not followed: a link escaping the root yields nothing', async () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'glob-outside-'));
+  const outside = mkTestTmp('glob-outside-');
   fs.writeFileSync(path.join(outside, 'secret.txt'), 'do-not-scan');
   fs.mkdirSync(path.join(outside, 'sub'), { recursive: true });
   fs.writeFileSync(path.join(outside, 'sub', 'deep.txt'), 'do-not-scan');

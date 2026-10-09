@@ -24,6 +24,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { adaptiveTolerance } from '../../bench/sard/scripts/compare-baseline.mjs';
+import { mkTestTmp } from './helpers/tmp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(__dirname, '..', '..', 'bench', 'sard', 'scripts', 'compare-baseline.mjs');
@@ -70,7 +71,7 @@ test('adaptiveTolerance: degenerate/invalid support (0, negative, NaN) falls bac
 // SARD_BASELINE_REPORTS_DIR_FOR_TESTS expects: a path directly containing
 // latest.json/baseline.json, not a parent with a "reports" subfolder).
 function mkReportsDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'sard-baseline-cli-'));
+  return mkTestTmp('sard-baseline-cli-');
 }
 
 function writeReport(reportsDir, file, data) {
