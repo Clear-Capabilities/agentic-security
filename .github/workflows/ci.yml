@@ -24,9 +24,31 @@ env:
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '30000'
 
 jobs:
-  test:
+  # THE TEST GATE, SHARDED, UNDER THE SAME REQUIRED NAME
+  # ---------------------------------------------------
+  # `npm test` as one job took about 13 to 14 minutes and was the slowest stage of every pull request. It is now three pieces:
+  #
+  #   - `test-shard`: a matrix of four legs, each running `npm test` with AGENTIC_SECURITY_TEST_SHARD=i/4 on its own runner
+  #     (scripts/run-unit-tests.mjs partitions the derived file list; the extras run in shard 1 only). `fail-fast` is off so every
+  #     failing shard shows its own failure instead of being cancelled by the first.
+  #   - `test-bundle`: the committed-bundle check (build, then a diff of the bundle and its sidecar against the commit). It runs ONCE,
+  #     in parallel with the shards, not inside every shard.
+  #   - `test`: the aggregator. Branch protection and .github/required-checks.json require a check named exactly `test`, so that name is
+  #     kept and still means "the whole suite passed". It `needs` both jobs above and runs with `if: always()`: without it, a failed
+  #     dependency would SKIP this job, and a skipped required check is reported as passing by branch protection. It fails unless
+  #     both results are exactly `success`, so a failed, skipped or cancelled shard all fail it.
+  #
+  # scanner/test/ci-test-shards.test.js pins this shape from the workflow text. The shard check names are listed in
+  # .github/required-checks.json as blocking: a failed shard already fails `test`, so listing them adds no new way to be red, and it
+  # keeps the release gate's hosted-CI check from warning about unclassified runs.
+  test-shard:
+    name: test-shard (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
     defaults:
       run:
         working-directory: scanner
@@ -48,12 +70,48 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
           sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
           sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
-      - name: Unit + integration test gate
+      - name: Unit + integration test gate (shard ${{ matrix.shard }})
+        env:
+          AGENTIC_SECURITY_TEST_SHARD: ${{ matrix.shard }}
         run: npm test
+
+  test-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: scanner
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        timeout-minutes: 10
       - name: Build bundle
         run: npm run build
       - name: Verify committed bundle matches source
         run: git diff --exit-code dist/agentic-security.mjs dist/agentic-security.mjs.sha256
+
+  # The required check. No checkout and no install: it only reads the results of the jobs it needs, and does so even when they
+  # failed, were skipped or were cancelled (`if: always()`). Anything other than exactly `success` fails it.
+  test:
+    needs: [test-shard, test-bundle]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard and the bundle check must have succeeded
+        env:
+          SHARDS_RESULT: ${{ needs.test-shard.result }}
+          BUNDLE_RESULT: ${{ needs.test-bundle.result }}
+        run: |
+          echo "test-shard: $SHARDS_RESULT"
+          echo "test-bundle: $BUNDLE_RESULT"
+          if [ "$SHARDS_RESULT" != "success" ] || [ "$BUNDLE_RESULT" != "success" ]; then
+            echo "::error::the test gate did not fully succeed (test-shard=$SHARDS_RESULT, test-bundle=$BUNDLE_RESULT)"
+            exit 1
+          fi
 
   # Haskell and Nix/NixOS support (HASKELL_NIXOS_FULL_CAPABILITY_PRD.md, QA-004).
   #
