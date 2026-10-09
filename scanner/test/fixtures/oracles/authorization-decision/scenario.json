@@ -1,0 +1,33 @@
+{
+  "export": "authorize",
+  "cases": [
+    {
+      "id": "owner",
+      "role": "control",
+      "args": [
+        {
+          "id": "u1",
+          "tenant": "t1"
+        },
+        {
+          "id": "r1",
+          "tenant": "t1"
+        }
+      ]
+    },
+    {
+      "id": "cross-tenant",
+      "role": "attack",
+      "args": [
+        {
+          "id": "u2",
+          "tenant": "t2"
+        },
+        {
+          "id": "r1",
+          "tenant": "t1"
+        }
+      ]
+    }
+  ]
+}

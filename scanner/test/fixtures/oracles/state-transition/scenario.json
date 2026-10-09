@@ -1,0 +1,12 @@
+{
+  "factory": "createMachine",
+  "legal": [
+    "pay",
+    "ship"
+  ],
+  "expectedFinal": "shipped",
+  "attack": [
+    "ship"
+  ],
+  "forbiddenState": "shipped"
+}

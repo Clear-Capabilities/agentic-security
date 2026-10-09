@@ -384,6 +384,7 @@ then runs supervised with protected paths read-denied.
   for a status. `classifyRun` can yield at most `inconclusive`; `confirmed`
   and `refuted` come only from `settleVerification` given evidence with
   `observedBy: 'verifier'`. Oracle adapters (X-202) must consume this.
+- **Consumer**: the oracle adapters (`posture/oracles/oracle.js`, X-202) run every target through `runInBoundary` and nowhere else, and replay (`posture/replay/replay.js`, X-203) goes through them. A `blocked` boundary is reported by the oracle runner as `unsupported` (an unmet isolation prerequisite), never as a pass or a failure of the hypothesis.
 - Tests: `test/trust-boundary.test.js` (attack fixture, tree kill with `ps`
   orphan checks, blocked-never-pass), in `test:lifecycle`.
 

@@ -25,6 +25,7 @@ Node-only scan engine. ESM throughout, Node ≥ 24. The CLI bundle (`dist/agenti
 | `npm run test:report` | Report emit (SARIF/JUnit/CI/PoC/verifier) | When editing `src/report/` |
 | `npm run test:lineage` | `src/lineage/` — DataFlowGraph v1 contract, IDs, fixture | When editing `src/lineage/` |
 | `npm run test:server` | `src/server/` — the `explore` loopback HTTP server (graph-loader, security, routes, http-server) + `bin/agentic-security.js`'s `cmdExplore` and `cmdDataflowExport` | When editing `src/server/`, or the `explore`/`dataflow export` CLI commands |
+| `npm run test:verification` | `test/verification/` — the one verification record, the oracle adapters and replay manifests (runs targets through the trust boundary; the execution tests skip, loudly, where the boundary cannot run) | When editing `src/posture/{verification,oracles,replay}/` |
 | `npm run test:lifecycle` | Dead-code + dead-module guards | Before committing a remediation that adds new modules |
 | `npm run test:haskell` / `test:nix` / `test:language` | Haskell, Nix/NixOS and language-wide suites (part of `npm test`) | When editing `src/language/` |
 | `npm run test:language-stress` / `test:language-tools` | Scale/memory suite; criteria that need `ghc` (both excluded from `npm test`, see `scripts/run-unit-tests.mjs`) | Before a release; where the tools exist |

@@ -2290,7 +2290,7 @@ async function cmdVerify(args) {
     process.env.AGENTIC_SECURITY_VERIFY_LIVE = '1';
     process.env.AGENTIC_SECURITY_VERIFY_TARGET = targetFlag;
   }
-  const { annotateVerifierVerdicts, verifierCoverageSummary, recordVerifierRun } = await import('../src/posture/verifier.js');
+  const { annotateVerifierVerdicts, verifierCoverageSummary, recordVerifierRun, verifierVerificationRecords } = await import('../src/posture/verifier.js');
   const filter = args.flags.finding ? findings.filter(f => f.id === args.flags.finding || f.stableId === args.flags.finding) : findings;
   if (!filter.length) {
     console.error(`No matching findings (use --finding <id>).`);
@@ -2319,7 +2319,13 @@ async function cmdVerify(args) {
   // Adversarial premortem Q1: a durable record that a security assessment of
   // findings actually happened, so module:verifier has something real to
   // point at (see verifier.js's recordVerifierRun header comment).
-  recordVerifierRun(scanRoot, { findingCount: filter.length, live: liveFlag, target: targetFlag || null, summary: sum });
+  // X-201: one version-1 verification record per verified finding, in the durable run record (never on the findings,
+  // which are written back to last-scan.json below).
+  const { headCommit } = await import('../src/posture/verification/emit.js');
+  recordVerifierRun(scanRoot, {
+    findingCount: filter.length, live: liveFlag, target: targetFlag || null, summary: sum,
+    verificationRecords: verifierVerificationRecords(filter, { commit: headCommit(scanRoot) }),
+  });
   if (args.flags.verbose || args.flags.finding) {
     for (const f of filter) {
       console.log(`  ${f.file}:${f.line}  ${f.vuln}`);

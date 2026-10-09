@@ -156,6 +156,71 @@ Foundation for the differentiation work (CORE-001, CORE-002, CORE-004). All of i
 
 Tests: `test/posture/assurance-{baseline,contracts,config}.test.js`, all in `test:posture`.
 
+## One verification record, trusted oracles and replay (X-201, X-202, X-203)
+
+Built on `assurance/` (the record schema, migrations, config) and `sandbox/trust-boundary.js` (the boundary). Three
+directories, all consumed rather than wired into the default scan: a default scan is unchanged, and every addition to an
+existing output is an additive field.
+
+**`verification/emit.js`: the one emit function (X-201).** `emitVerification(surface, source, ctx)` is what every
+verification surface calls to get the version-1 record (`{ ok, record, legacy, errors }`, never throws, validated before it
+returns). Surfaces and where they call it: `fix-verify.js` (`verificationRecord` on the result, which the MCP `verify_fix` and
+`apply_fix` tools forward), `fix-verify-loop.js`, `execution-proof.js` (`proveFinding` result), `verifier.js`
+(`verifierVerificationRecords`, called by the CLI `verify` command into its `verifier-runs/` run record, never onto the findings that
+are written back to `last-scan.json`), `autopilot.js` (`rec.verificationRecord`, `commit` option), `discovery/index.js` (hunt:
+`verificationRecords`, advisory) and `oracles/oracle.js` (the `oracle` surface). The rule for every mapping: evidence is lost,
+never invented, so no legacy surface can reach `confirmed` or `refuted`. A PoC run under the older sandbox path is `inconclusive`
+(not a trusted runner; `proof-failed` is a triage signal, not a refutation), a static re-scan with no exploit oracle is `not-run`,
+a family with no oracle is `unsupported`, a harness failure is `error`, a model verdict is `inference` evidence only. Only
+`oracle` emissions carry trusted-runner evidence, because only `oracles/oracle.js` builds them.
+
+Legacy consumers: nothing existing was renamed or removed. For a consumer that wants a status or a boolean, `toLegacyVerificationView`
+(`assurance/migrations.js`, also returned as `legacy`) maps `verified` to `true` only for `confirmed` and `false` only for `refuted`,
+`null` for the other four, and carries `status` with the real outcome name, so a skipped check can never read as a pass and an unrun
+check never as a failure. Native vocabularies keep their own fields (`proofTier`, `verifier_verdict`, autopilot `outcome`, fix-verify
+`ok`); the record sits beside them as `verificationRecord`. A boolean `true` migrated from a legacy record is `inconclusive`.
+
+**`oracles/` (X-202).** `oracle.js` is the adapter contract (`validateOracleSpec`, `defineOracle`) and the runner (`runOracle`).
+`adapters.js` holds the five class adapters (injection-execution, authorization-decision, state-transition,
+side-effect-reachability, parser-resource), `registry.js` the frozen registry and `oracleManifest()`, the machine-readable
+description X-208 gates on (class, prerequisites, platforms with an honest per-platform status, budgets, negative controls,
+fixture locations, limitations, logic digest). Fixtures: `test/fixtures/oracles/<class>/{positive,negative,inconclusive}`.
+- A run is: feature gate (`verification-oracles`, off by default, operator-only), request validation (closed-world: labels,
+  verdicts and receipts are never accepted; reserved `__oracle_*` names and path escapes are refused), prerequisite check
+  (an unmet one is `unsupported` with a typed reason and the target is never executed), a fresh workspace plus a verifier-owned
+  evidence directory outside it, the target through `runInBoundary` ONLY (a test pins that `oracle.js` imports no other way to
+  run code), a digest check of the adapter's own harness (a target that rewrote it makes the run `error`), then verifier-side
+  interpretation of what the run left behind, read after the whole process tree is dead. The settled status comes from
+  `settleVerification` with `observedBy: 'verifier'` evidence; a decided result (`confirmed`/`refuted`) additionally needs an
+  exact commit, else it is held at `inconclusive`.
+- `refuted` needs the adapter's own precondition (a benign control passed); a target that failed to load, exited early or never
+  reported is `inconclusive`. A run cut by its deadline decides nothing except for the parser/resource class, where the supervisor's
+  own deadline observation IS the measurement.
+- Receipts are issued only by `runOracle` (a WeakSet records them; they are deep-frozen; a copy or hand-built one is not
+  `isIssuedReceipt`). They carry the observed output (capped), the logic digest, sanitized environment metadata (an allowlist: no
+  hostname, paths or environment values) and the record id. Unsigned: signing belongs to the signer domain.
+- Platforms: macOS (userspace backend) is the only host these have been executed on. Linux is declared `unverified` in the
+  manifest and cannot be `supported`; today the boundary refuses to run on the namespace backend, which the runner reports as
+  `unsupported`. Changing what an adapter asserts means bumping its `version` (the harness text and version feed `logicDigest`).
+- KNOWN LIMIT: the target is imported into the harness process. A target written to recognise the oracle's payload and forge the
+  effect artifact is not distinguishable from a real injection; the oracle bounds the effect it tests, it is not a defence
+  against a target built to fool it. Tamper controls cover what a worker or target can do to adapter logic, labels, receipts and
+  status text.
+
+**`replay/replay.js` (X-203).** A replay manifest pins the repository commit, the patch hash, the fixture hash, the toolchain
+(runtime version, platform, architecture, and a container digest when there is one), the oracle id, version and logic digest, the
+inputs and the budgets. It is a description of an oracle run, not a second runner: `replayManifest` ends in `runOracle`, so the
+supervised process tree, output cap and cleanup are the existing ones. It rejects, and nothing executes, on a content hash that does
+not match, an oracle that changed since the manifest was made, a scope wider than "exactly the named oracle, no network,
+workspace-only writes", a budget over the oracle's ceiling, an unsafe file path or an unknown field. Missing toolchain, container
+runtime or image, a denied network (acquisition is never attempted: this build fetches nothing), a disabled feature or a boundary
+that cannot run are typed prerequisites with `resumable` set honestly; the attempt is parked (`awaiting-prerequisites`) and
+`resume` re-evaluates the prerequisites against the real host (a claim that they are met does nothing). Outcome while parked is
+`not-run` (or `unsupported` when this build can never meet it, such as container execution, which is not implemented), with no
+evidence; nothing is substituted for the execution that did not happen. Toolchain identity is exact. Persistence of attempts is
+the caller's (the attempt object is plain data). Suites: `test/verification/{verification-record,oracle-adapters,replay-manifest}.test.js`
+(`npm run test:verification`).
+
 ## Execution-proof tiers (R2)
 
 `proof-tier.js` + `execution-proof.js` add a fourth axis to a finding's
