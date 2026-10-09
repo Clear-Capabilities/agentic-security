@@ -22,6 +22,8 @@ export const source = (eco, id, rel) => read(path.join(DATA, 'sources', eco, id,
 export const unseenSource = (eco, id, rel) => read(path.join(DATA, 'sources-unseen', eco, id, rel));
 /** The shape-dev set (the former unseen-v1, used to change the engine): same layout, its own directory. */
 export const shapeDevSource = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev', eco, id, rel));
+/** The shape-dev-2 set (the former unseen-v2, also used to change the engine). */
+export const shapeDev2Source = (eco, id, rel) => read(path.join(DATA, 'sources-shape-dev-2', eco, id, rel));
 
 // Which layer is RESPONSIBLE for a family: declared here, never derived from engine output (see measure.mjs README).
 export const TAINT_FAMILIES = {

@@ -9,8 +9,8 @@ A row is **supported** only from passing evidence of its own metric kind. Read t
 | Capability | Status | Evidence on the frozen holdout (95% intervals) | Unseen shapes | Why not supported |
 |---|---|---|---|---|
 | parser | supported | 175/175 parsed; 0 crashed |  |  |
-| sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) [P 92.6%-100.0%, R 92.6%-100.0%]; strict P 85.7% | meets targets: P 91.7% / R 91.7% / F1 91.7% (44 TP, 4 FP, 4 FN) |  |
-| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%]; strict P 100.0% | meets targets: P 93.3% / R 93.3% / F1 93.3% (28 TP, 2 FP, 2 FN) |  |
+| sast | supported | P 100.0% / R 100.0% / F1 100.0% (48 TP, 0 FP, 0 FN) [P 92.6%-100.0%, R 92.6%-100.0%]; strict P 85.7% | BELOW TARGET: P 75.0% / R 50.0% / F1 60.0% (24 TP, 8 FP, 24 FN) |  |
+| taint | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%]; strict P 100.0% | BELOW TARGET: P 84.6% / R 73.3% / F1 78.6% (22 TP, 4 FP, 8 FN) |  |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
 | auth | supported | P 100.0% / R 100.0% / F1 100.0% (12 TP, 0 FP, 0 FN) [P 73.5%-100.0%, R 73.5%-100.0%] |  |  |
 | sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
@@ -26,8 +26,8 @@ Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this 
 | Capability | Status | Evidence on the frozen holdout (95% intervals) | Unseen shapes | Why not supported |
 |---|---|---|---|---|
 | parser | supported | 161/161 parsed; 0 crashed |  |  |
-| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) [P 94.6%-100.0%, R 94.6%-100.0%]; strict P 100.0% | meets targets: P 100.0% / R 97.0% / F1 98.5% (64 TP, 0 FP, 2 FN) |  |
-| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) [P 54.1%-100.0%, R 54.1%-100.0%]; strict P 100.0% | meets targets: P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) |  |
+| config-sast | supported | P 100.0% / R 100.0% / F1 100.0% (66 TP, 0 FP, 0 FN) [P 94.6%-100.0%, R 94.6%-100.0%]; strict P 100.0% | meets targets: P 100.0% / R 87.9% / F1 93.5% (58 TP, 0 FP, 8 FN) |  |
+| config-taint | supported | P 100.0% / R 100.0% / F1 100.0% (6 TP, 0 FP, 0 FN) [P 54.1%-100.0%, R 54.1%-100.0%]; strict P 100.0% | BELOW TARGET: P 60.0% / R 100.0% / F1 75.0% (6 TP, 4 FP, 0 FN) |  |
 | privacy-lineage | supported | P 100.0% / R 100.0% / F1 100.0% (30 TP, 0 FP, 0 FN) [P 88.4%-100.0%, R 88.4%-100.0%] |  |  |
 | sca | supported | manifests 48/48; advisory ranges 28/28 |  |  |
 | bom | supported |  |  |  |
@@ -46,5 +46,5 @@ Metamorphic pairs: semantics-changing 100.0%, semantics-preserving 100.0% (this 
 - Not available where the measurement ran: stack, nix, nixos. Capabilities that need them are blocked, never reported as passing. GHC was present, so the Haskell route fixtures were compiled.
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
-- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v2 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written after the fixes the earlier set motivated, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 set was used to change the engine and is a development set (shape-dev), not a generalisation measure.
+- The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.
 

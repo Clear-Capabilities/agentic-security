@@ -9,10 +9,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-eec31db62d",
+  "id": "hsy-eec31db62d",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "31f6653ad23f8e397c1cf9be4220135e50125c2d9837a59f605153f4e072878b"
+  "fingerprint": "8d59a7ecd66e4a49fc54684d6f419e751b310f2cd40af84b5a0bebbe7fd48031"
  },
  {
   "ecosystem": "haskell",
@@ -24,10 +24,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-78547431a4",
+  "id": "hsy-78547431a4",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "44f1e3ee058d68d6135e211fac2bca4d9e61c09b00c111d6f3f148159cd9b79a"
+  "fingerprint": "fffc7ef1513b0300145749880b404fec9b4785481c1ac843cc56f5c52bab4585"
  },
  {
   "ecosystem": "haskell",
@@ -39,10 +39,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4b32c7fb0e",
+  "id": "hsy-4b32c7fb0e",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "95bad3b3abab9c4e15e069dd353c9c69218f268714feb61c314756f1d6bd3e98"
+  "fingerprint": "238b5d28ebcc6195c7f011f25560b708f0f11f92c9d33bb4b40fd2e621fc248c"
  },
  {
   "ecosystem": "haskell",
@@ -54,10 +54,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-962e57b301",
+  "id": "hsy-962e57b301",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "43c11771ec079ca4248a215c5615003147c5f90746b008e631ffdead90f7badd"
+  "fingerprint": "db5788ac8886224d6867f3a15a5da67244b395dbc9087fa5a349b13fad7a3ce2"
  },
  {
   "ecosystem": "haskell",
@@ -69,10 +69,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-8c23dfb1a5",
+  "id": "hsy-8c23dfb1a5",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "627b75ad91f9478f5f88245937df727775ef5d286a37648742954182915db19c"
+  "fingerprint": "5caa4056360c3071895a83245e657976979bca9c1c440ff903f37c4cf410c8c5"
  },
  {
   "ecosystem": "haskell",
@@ -84,10 +84,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e6ba2e2122",
+  "id": "hsy-e6ba2e2122",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "54e680629e50b59dccc3a7bc2fe5ddfe7660cad1079e85c7a9309c1f58e3f368"
+  "fingerprint": "5906087e8d3093ba4b4337fc874d7687ec0fe5d66811b9f6d07d2991d3c71088"
  },
  {
   "ecosystem": "haskell",
@@ -99,10 +99,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-90831f62cc",
+  "id": "hsy-90831f62cc",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "764ada825988604e2231285e523853454b4b038a16014c40b9a0e4793ef5455c"
+  "fingerprint": "925afa143e4de654222e00da7108a713ea8d63b1004426270c39b65230763f97"
  },
  {
   "ecosystem": "haskell",
@@ -114,10 +114,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-96b2382c24",
+  "id": "hsy-96b2382c24",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "c7f75dd69a637bcb4849a2cfccc052f882d40ec0696ef2edc0cdfa972be21c3e"
+  "fingerprint": "094b8b2a74cdf38e7f90daf3b7a43105db835bc1f1c87a4a870457f9ef405b5c"
  },
  {
   "ecosystem": "haskell",
@@ -125,14 +125,14 @@
   "label": "safe",
   "group": "haskell|sql-injection|safe|u1|users",
   "split": "unseen",
-  "nearMiss": "parameterized",
+  "nearMiss": "constant-concat",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5dfd30bc22",
+  "id": "hsy-5dfd30bc22",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "73c5a82ec38a33aca7aa9af26ef497a8db04df132193ea542ae697e2e4f43747"
+  "fingerprint": "1399f3091a22fdcdc5323cf5e0b8aa9f8594707df4bcc4a2fd5eda3c8f71578b"
  },
  {
   "ecosystem": "haskell",
@@ -140,14 +140,14 @@
   "label": "safe",
   "group": "haskell|sql-injection|safe|u1|orders",
   "split": "unseen",
-  "nearMiss": "parameterized",
+  "nearMiss": "constant-concat",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e18b141923",
+  "id": "hsy-e18b141923",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "51aa357bf4542abdd98088b66b7946f75a1561e1f00314e3617ea6bcf681fbf1"
+  "fingerprint": "5d9050df40dcd02b26f4b306fc3c5e32ff4521909fd35963084d3fcc4145e742"
  },
  {
   "ecosystem": "haskell",
@@ -159,10 +159,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-33180abed1",
+  "id": "hsy-33180abed1",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "cf4e14b2fa4e5bbc40641c9c303860130156c32cfdca68a53d2351e5c571200a"
+  "fingerprint": "da64d7995f9834934c3ad2432503d6a163edc39f65353af608349d07695eb854"
  },
  {
   "ecosystem": "haskell",
@@ -174,10 +174,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-87d226879b",
+  "id": "hsy-87d226879b",
   "path": "src/Svc.hs",
   "cwe": "CWE-89",
-  "fingerprint": "ab88197431dc39d2f602bc292caa8a6a47904ead2eb1411fe84ac261f5f5bd6b"
+  "fingerprint": "a2310a5eafb6a134b6c172f1b0b074f8c02c4808b77086c14414149bdf066693"
  },
  {
   "ecosystem": "haskell",
@@ -189,10 +189,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4c5ad1d7a7",
+  "id": "hsy-4c5ad1d7a7",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "599b8ed7f6e55a8d4cd51968f7f6328d836974d142c4600aaba75d6087dea9e3"
+  "fingerprint": "d82734b491dc32d010fc9315d349a96542f6c275fdf5717ed2423aeaa40d8310"
  },
  {
   "ecosystem": "haskell",
@@ -204,10 +204,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-1fe198cb6a",
+  "id": "hsy-1fe198cb6a",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "68e8e8aae0a61b6cea34fc0a230a2307b613d33ebcf6f2d9d4c3f136bcc10198"
+  "fingerprint": "dc53976d904415a17ca3d530c094de6970835714e1566b1228c7994bf2315948"
  },
  {
   "ecosystem": "haskell",
@@ -219,10 +219,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-68c2063473",
+  "id": "hsy-68c2063473",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "b08f6fe6a42d1e2d8d8f9101a267b7bb4a9f3fe55ef72539f663e9409c89dcf1"
+  "fingerprint": "ba39ae30d9b9d9f0ad72c02dcb4cf4007c84a4fdfaf9a80b1ccbcd8ab4a322d4"
  },
  {
   "ecosystem": "haskell",
@@ -234,10 +234,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-83266f39b7",
+  "id": "hsy-83266f39b7",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "576661db2cce00227e5f82c455c40a6c9cc875178a32cb2662f30a49ef03bb66"
+  "fingerprint": "3e13bf611aa7f98ef28e9603f0bc5eb1f305e8efa50c55d9adaa68ec60b9a1cd"
  },
  {
   "ecosystem": "haskell",
@@ -249,10 +249,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-ca44ba2547",
+  "id": "hsy-ca44ba2547",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "727c8499cbd6c383379f26121294d5bf049b098055ff8fe069ea94ec0beb1109"
+  "fingerprint": "960087560950f10dcbe3add68bdd098b753e7afdd5f46b399b774a2918cafeb5"
  },
  {
   "ecosystem": "haskell",
@@ -264,10 +264,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-af68e785df",
+  "id": "hsy-af68e785df",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "9e5535e21c7d4bbf981d607a2bb2a166a5ee126f6479d00d5331cab644d5bdd3"
+  "fingerprint": "4a403eb8627daff229fe3a84c0ad9f83f1876e3bd4c98e18e952d6eab6a53141"
  },
  {
   "ecosystem": "haskell",
@@ -279,10 +279,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-0b1738ec9f",
+  "id": "hsy-0b1738ec9f",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "90eb63e9ff7a8a7b0d3ffde2141dce7afef5719de333fe3c40c33915a42160a6"
+  "fingerprint": "7d4fe49936248580dddd6ba80c330d4266ad2c521d6741cccf5e766c122bcb45"
  },
  {
   "ecosystem": "haskell",
@@ -294,10 +294,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-257630038f",
+  "id": "hsy-257630038f",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "0613aa060a1a2988411449a9106c045b48211280102b2d823d51ef53346997fd"
+  "fingerprint": "e994ee8e66e9fb256013d25f65f5f2311d47df2d543c5150c527cb3073dd6d0a"
  },
  {
   "ecosystem": "haskell",
@@ -309,10 +309,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-764cebf217",
+  "id": "hsy-764cebf217",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "c1757d230997383dbf263ba8bd1a2013057bb7067ec04dfbba5c0663af056fa1"
+  "fingerprint": "2f17175ff4bdc11635fa74e09ee0a22e91d892ddb23979bc436d67ee8b0ee21c"
  },
  {
   "ecosystem": "haskell",
@@ -324,10 +324,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-ac906a9aff",
+  "id": "hsy-ac906a9aff",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "e8ec0111eaca457fad85b946c26e90e88dd49d90f6445bb191afaf88e3f82ab1"
+  "fingerprint": "414960eb8d58391f75b1cdb19aae10b6cbe493c60f8f92139d660a946533c689"
  },
  {
   "ecosystem": "haskell",
@@ -335,14 +335,14 @@
   "label": "safe",
   "group": "haskell|command-injection|safe|u2|users",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "positional-args",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-af4721fdb6",
+  "id": "hsy-af4721fdb6",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "6b1a2abe1319939edb0668a71accb291e13a2f03f39dd1dca9f82c46f40af79c"
+  "fingerprint": "e06b938ac3bf2d8cecd97830fe8b1aeec20c99b519abff352eb45da3a37a422b"
  },
  {
   "ecosystem": "haskell",
@@ -350,14 +350,14 @@
   "label": "safe",
   "group": "haskell|command-injection|safe|u2|orders",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "positional-args",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b3dff46a17",
+  "id": "hsy-b3dff46a17",
   "path": "src/Svc.hs",
   "cwe": "CWE-78",
-  "fingerprint": "035cb75481098baa9e5abda8e9d4c3f9c48decc69cabf814838f3d76a3cc515b"
+  "fingerprint": "b49763c2880f8fa07205f64d08cfc6fc22716d6e6f48ece7403205e7099ef503"
  },
  {
   "ecosystem": "haskell",
@@ -369,10 +369,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-c9cab4e7fc",
+  "id": "hsy-c9cab4e7fc",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "9dfbfc1211585e33a7aaa0df3d01576cd7ee61705c03a1bbc44a1ec0770e8cd9"
+  "fingerprint": "774e78b99b0cc32e5be7ef5b960bbad5cae1e4ef5553be5fc01649fbd905452b"
  },
  {
   "ecosystem": "haskell",
@@ -384,10 +384,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-575db0188d",
+  "id": "hsy-575db0188d",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "91a7891e7ab60b7721836480100c4ed958d675fb24431b3242c2e82935367f0e"
+  "fingerprint": "b46298663f910d0c2b4de4e52b779011961618af85d1da2f422ea9e24c64e8dd"
  },
  {
   "ecosystem": "haskell",
@@ -399,10 +399,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-161130c3fe",
+  "id": "hsy-161130c3fe",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "06dab873faf5eb23070334097da1789a392eae919f0721f7a961332de9f85f4c"
+  "fingerprint": "64e34a65a23a9f4afa72339c2103dc91a179ae0bfec4d6bad558bf9b28589121"
  },
  {
   "ecosystem": "haskell",
@@ -414,10 +414,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-78da97a753",
+  "id": "hsy-78da97a753",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "dd3334ed4c54568a6e6e5451fb4d61397e83999361c645f08e911fc94491b537"
+  "fingerprint": "c1f5eb157212ffe926381cd121b4f0bd24011b654ab2532d1499de0802ef48c2"
  },
  {
   "ecosystem": "haskell",
@@ -429,10 +429,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-74b6f96af3",
+  "id": "hsy-74b6f96af3",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "d541538f85fcf75b63d6917d1854f6cdb0f720860ee8342f344d8c4c1dad2dda"
+  "fingerprint": "8c94fdcacf58534748d7f3d283b7d994aa758f57100ca83d36925d07bc1baf20"
  },
  {
   "ecosystem": "haskell",
@@ -444,10 +444,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-6ec3217b59",
+  "id": "hsy-6ec3217b59",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "08b21dc32998f3b0d8a08622aa7ee1000cbb38bfe325f9fb127d50f39559f96e"
+  "fingerprint": "5e6ea8e41dfefadba3f29400a9a85e332604cdbabe270200b71ad1c3bbddcdeb"
  },
  {
   "ecosystem": "haskell",
@@ -455,14 +455,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u0|users",
   "split": "unseen",
-  "nearMiss": "sanitizer",
+  "nearMiss": "guard",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-117ccea1b0",
+  "id": "hsy-117ccea1b0",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "ff443841cec360c4fce8fb47d46d5cf6cf22a16a2c2948acd0f9d04269e1fabb"
+  "fingerprint": "bb5427912f8fb2a4b27b0c0327c2e196744ff23b66d3e1ad3d1c652bdab9347c"
  },
  {
   "ecosystem": "haskell",
@@ -470,14 +470,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u0|orders",
   "split": "unseen",
-  "nearMiss": "sanitizer",
+  "nearMiss": "guard",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3ab1b3013b",
+  "id": "hsy-3ab1b3013b",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "d906f68fc51ec821844a4b9f8d1d8fbfff695a72c26bd0d529f7d9913439bf07"
+  "fingerprint": "fd1a85d3862caf6dff637def04a85c2f00ef34014a4e4d9d143704364019314b"
  },
  {
   "ecosystem": "haskell",
@@ -485,14 +485,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u1|users",
   "split": "unseen",
-  "nearMiss": "guard",
+  "nearMiss": "constant-table",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-f5d893f99c",
+  "id": "hsy-f5d893f99c",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "d294c8ab2691ec74fa9a064338326310219dd9244753154d6fbca2bdd3fc65b5"
+  "fingerprint": "3ba3e7755a0e5c004e3530ff8a3d7ac77c64c11c71e8287657bd94a5177c3fbd"
  },
  {
   "ecosystem": "haskell",
@@ -500,14 +500,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u1|orders",
   "split": "unseen",
-  "nearMiss": "guard",
+  "nearMiss": "constant-table",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-0cce5fdea8",
+  "id": "hsy-0cce5fdea8",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "cf03553d399c4a8d62131c7e13b623ca96f8c8829763ad8f3c945345eae20baa"
+  "fingerprint": "61bd062118a5cc54f8fcc82b6a84cdc2a6a67baf264620cef0812e26c224c8c6"
  },
  {
   "ecosystem": "haskell",
@@ -515,14 +515,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u2|users",
   "split": "unseen",
-  "nearMiss": "sanitizer",
+  "nearMiss": "fixed-path",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-2cd2007e73",
+  "id": "hsy-2cd2007e73",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "92f0da4036fba8f3e9d5c5d1894da1db1e177dd53862cf92f08e31e0877ff13b"
+  "fingerprint": "c0fa2b2cb0316f7cb4041533c4de2275c681e14efc870b97264e46e9061e35f6"
  },
  {
   "ecosystem": "haskell",
@@ -530,14 +530,14 @@
   "label": "safe",
   "group": "haskell|path-traversal|safe|u2|orders",
   "split": "unseen",
-  "nearMiss": "sanitizer",
+  "nearMiss": "fixed-path",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-cad9addb3a",
+  "id": "hsy-cad9addb3a",
   "path": "src/Svc.hs",
   "cwe": "CWE-22",
-  "fingerprint": "9d8937d5f6f598525bd11068ed58cf3c3b9d285468604a337458b024831b4918"
+  "fingerprint": "1398749b3157779e3ad845adb1a2054c61b71ec00ba7c95ab6dffe9ba5ada340"
  },
  {
   "ecosystem": "haskell",
@@ -549,10 +549,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b2835a757a",
+  "id": "hsy-b2835a757a",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "ce59c3b386bbe164368934a63af1ed2bb2ce78789d513d3a9e7966e1e4ba24ee"
+  "fingerprint": "ebecf44718db4b6cafee1b2098e0af1bd277a9d94b769959d73717fe1f220eec"
  },
  {
   "ecosystem": "haskell",
@@ -564,10 +564,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-610697846e",
+  "id": "hsy-610697846e",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "97efd328aa6155f7ee75cb104e8e9a86df4e40e9f4f9cfaa313a975133fac8ca"
+  "fingerprint": "02902b2306b2aef5382dc331e2ea026845440f11b75e9ba6984b18e3f3ded6ad"
  },
  {
   "ecosystem": "haskell",
@@ -579,10 +579,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-38f12acff9",
+  "id": "hsy-38f12acff9",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "e0f5cb448d000f3e9829458dd9e5636a71ff268ee344dad36cf380e98157f301"
+  "fingerprint": "d9398e3d5cacf93f991246ac5cfc35797e88590b40f00124c13d56289fb8d5fe"
  },
  {
   "ecosystem": "haskell",
@@ -594,10 +594,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-45730c3d26",
+  "id": "hsy-45730c3d26",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "7f6122ce00d7631a6158cf9295b2a4b5f37e3f17c946215e361956906f64868f"
+  "fingerprint": "9570ba6358f2a0574b3b642e039db86108f3def950e906faac46f49592e28a67"
  },
  {
   "ecosystem": "haskell",
@@ -609,10 +609,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-de2d652dd9",
+  "id": "hsy-de2d652dd9",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "0b9db8a40cbe2ceaceaf1ba61d228132f212040c3f17506c2d17dadcac9a6576"
+  "fingerprint": "7388f916033cd6aca29ef9ad2236e14451eff3768cd3d8c3aafc44501496e8b0"
  },
  {
   "ecosystem": "haskell",
@@ -624,10 +624,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3dc8ce15c4",
+  "id": "hsy-3dc8ce15c4",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "2eeaad9b7a05ae20b3b7edd3cc93109d80ad342b4d06b7f9d496a159f03a3aad"
+  "fingerprint": "8ffc84f43967a50f47313e9de0d973cf382d41a5e25b93ac91d0967943467e27"
  },
  {
   "ecosystem": "haskell",
@@ -635,14 +635,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u0|users",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "fixed-host",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-87094b4900",
+  "id": "hsy-87094b4900",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "29cd86bf20ac585adeef288473e11752fe7349fcceb1f623784da86a13f150a4"
+  "fingerprint": "dcdd4320aaaefcb756af96b616edf9c0a47a33a1ebb11c4ac9c79e7c6d8b329c"
  },
  {
   "ecosystem": "haskell",
@@ -650,14 +650,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u0|orders",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "fixed-host",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-ba716b6118",
+  "id": "hsy-ba716b6118",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "b568bb73cc484e45877e69f17a85e5a39a93dee2e92a565b4aeca079b70170f8"
+  "fingerprint": "197926cbe38ea0153e3ef2aedaf49565f313d0a6330e3e6b4dd51386879a1cdf"
  },
  {
   "ecosystem": "haskell",
@@ -665,14 +665,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u1|users",
   "split": "unseen",
-  "nearMiss": "fixed-host",
+  "nearMiss": "allowlist",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4b196ae23d",
+  "id": "hsy-4b196ae23d",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "3bd4b1ecab608534b33a6d7fb73a7f021892f24cdcf40b5b4c68ce59eec384b8"
+  "fingerprint": "a45140374b597b95143823aaf589fd15e58fabcbef5274a94231b004d34a3d92"
  },
  {
   "ecosystem": "haskell",
@@ -680,14 +680,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u1|orders",
   "split": "unseen",
-  "nearMiss": "fixed-host",
+  "nearMiss": "allowlist",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-df10e9a6b2",
+  "id": "hsy-df10e9a6b2",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "d8638173c8d5bec234caa9138d311654eceaf9c1252a2e1c1f8abaf7176f2f80"
+  "fingerprint": "0a9fe386b49e0d1e430e71208232eada099c6efc34e5acc2156503f3976c0391"
  },
  {
   "ecosystem": "haskell",
@@ -695,14 +695,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u2|users",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "fixed-host",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-9984d33acf",
+  "id": "hsy-9984d33acf",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "416229933d4ada946dd5847ac0ffb645fef07467e1952a063ca297f7d23eab88"
+  "fingerprint": "6e548bfb034d96a9a8ad94d52787ab7510311b2dfcce8d3e788ce10a8d1f59a1"
  },
  {
   "ecosystem": "haskell",
@@ -710,14 +710,14 @@
   "label": "safe",
   "group": "haskell|ssrf|safe|u2|orders",
   "split": "unseen",
-  "nearMiss": "allowlist",
+  "nearMiss": "fixed-host",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-2b92750440",
+  "id": "hsy-2b92750440",
   "path": "src/Svc.hs",
   "cwe": "CWE-918",
-  "fingerprint": "ea7d56a0dcb6338d42a2c3bc58d7f63988091850a35e8d91a0565785af2dcde6"
+  "fingerprint": "e90a4facec839b895040d30b09636125031f2bfb3188ff28094078d00ba4a2b9"
  },
  {
   "ecosystem": "haskell",
@@ -729,10 +729,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-a472ed5674",
+  "id": "hsy-a472ed5674",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "642aed183a9bf5f16ab6cb8577d8edd502c8425d532b816388a5949d3ebb757a"
+  "fingerprint": "bc1a78f76cec1c7c2232259a5e6bd40ce36c667a78e87b3fae2f2c46f4b97441"
  },
  {
   "ecosystem": "haskell",
@@ -744,10 +744,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-df7c47d5ac",
+  "id": "hsy-df7c47d5ac",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "27f49b3ed9103c6bd8c42ecafd3be2dc6c302f3a1abdb3a6c43af1fe26f2aec0"
+  "fingerprint": "a3aabb804da68e194a76759213b93598a278ce52a84815ae2453dbd09540d5e9"
  },
  {
   "ecosystem": "haskell",
@@ -759,10 +759,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-f967e2c81c",
+  "id": "hsy-f967e2c81c",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "802d3eecf2ef25b82818d82c2b6772b9c28cd56e1a87a80aef2a46c5834bdb8d"
+  "fingerprint": "500111f4bb5acaac3c5eb892de2b1159f4b52da48cbd75046d578831bb88354e"
  },
  {
   "ecosystem": "haskell",
@@ -774,10 +774,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-2feb2c23a2",
+  "id": "hsy-2feb2c23a2",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "b7d47d217f719802e9d9ad6e1bd2acdb1762ab23d8c2ae4079e7cd51cbf7dded"
+  "fingerprint": "862c7b3c0ba2153ae77dddb0916b239b370d34157c82813b9ece250dcd0cdc3c"
  },
  {
   "ecosystem": "haskell",
@@ -789,10 +789,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-cf84a1ceb6",
+  "id": "hsy-cf84a1ceb6",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "687cb3aed0598eb96b97ec385f4ed437506869f1394866eaa3a76e26bf7d3118"
+  "fingerprint": "83f158f9b3fa8cb7f5a3211978b10b478fe615e07dd5a6083dba12e13aabba07"
  },
  {
   "ecosystem": "haskell",
@@ -804,10 +804,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-bc9a75d067",
+  "id": "hsy-bc9a75d067",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "d9eb6de8c46d60b262c145d355a7f9f51c489e2c87c8f414e66c86f9aced04df"
+  "fingerprint": "dfe058fb14ebf40352407ee371f7b00e99d5a70e5a36b18eb461f7e51297d5ae"
  },
  {
   "ecosystem": "haskell",
@@ -815,14 +815,14 @@
   "label": "safe",
   "group": "haskell|html-injection|safe|u0|users",
   "split": "unseen",
-  "nearMiss": "plain-text",
+  "nearMiss": "escaper",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-ee44f15e2b",
+  "id": "hsy-ee44f15e2b",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "e5974b5dc585b6547b8147656dc9e100f171a0274d2a2e8bd6428a9d2308ae65"
+  "fingerprint": "aaab9dbb7113ae6671b06e6d91748100b019fd5b2be145dcd1c1ed10c009d119"
  },
  {
   "ecosystem": "haskell",
@@ -830,14 +830,14 @@
   "label": "safe",
   "group": "haskell|html-injection|safe|u0|orders",
   "split": "unseen",
-  "nearMiss": "plain-text",
+  "nearMiss": "escaper",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-d96c684ed3",
+  "id": "hsy-d96c684ed3",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "8e3f5a935620dd5c4d5a2ba633a41e68705dd9118e6feab4ead2a088c528157f"
+  "fingerprint": "efd142fea304a39a6343657ab09b8e452460cf6814f155744ce42248ee727feb"
  },
  {
   "ecosystem": "haskell",
@@ -849,10 +849,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-85de5e5025",
+  "id": "hsy-85de5e5025",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "f7e2da41c22ee01ec05e1cba99d0538a4bc473035b547b4668dd7a1cf1563687"
+  "fingerprint": "416db02df9566970754fe0c44bc059382d37efe2cf625d4dc8a07def97e36ace"
  },
  {
   "ecosystem": "haskell",
@@ -864,10 +864,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5158be1531",
+  "id": "hsy-5158be1531",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "5d13f7b51836191bab34af56b67fb3a18c920f7f0c4c8762fb4598a4676beb5b"
+  "fingerprint": "b7d91649e5895bf8ad22ce371c7d3bc4f4b49774b581e3233d617c8e101e63cd"
  },
  {
   "ecosystem": "haskell",
@@ -879,10 +879,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-397a31c612",
+  "id": "hsy-397a31c612",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "35172452fd72f5e96c5c20b136dbcf936bb122fe3d7fcf857c2540f8d1f8c497"
+  "fingerprint": "f9bd4ddbaa4e3f88b99f9b6bc577ef137d148ba85f7ffd2aef7d31e2507c0f16"
  },
  {
   "ecosystem": "haskell",
@@ -894,10 +894,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5a279a2b87",
+  "id": "hsy-5a279a2b87",
   "path": "src/Svc.hs",
   "cwe": "CWE-79",
-  "fingerprint": "cb5114a9689710e776eb708e659a197d1853b0ea55e379caf0b6e8d55fe0e926"
+  "fingerprint": "0a67f4ba5e2998b9c12121ecf8d7dad22814e477511309c5cc62f68f23bdc7b1"
  },
  {
   "ecosystem": "haskell",
@@ -909,10 +909,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-9102e8272b",
+  "id": "hsy-9102e8272b",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "44e9ed0ea03666dabced416234ba84b4d3a0821c6ec7e006a6f2761b3044feb5"
+  "fingerprint": "4477bb9bfe38d25dc958c2ecde3a4b95777a567f01347f1e08f81f18ab6c9000"
  },
  {
   "ecosystem": "haskell",
@@ -924,10 +924,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3495d2cae6",
+  "id": "hsy-3495d2cae6",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "168b1bb3da749afbb47a6a65f0d397a2d7d9d868fd1f0baa99eba1205c5c6cc3"
+  "fingerprint": "8895ce90f00ae22795172ec455b2e8d78ab36a87f27ad027d5ba37b701909c33"
  },
  {
   "ecosystem": "haskell",
@@ -939,10 +939,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-eb0b7ffee1",
+  "id": "hsy-eb0b7ffee1",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "af8e3bc02691d37226d3a7d93a680d49a3e000dd5f1919890d03628b06e576da"
+  "fingerprint": "d25e834865175bfca93461e343cbeee0f0b68698f6dfea4c0c8ef6f26a4e4f67"
  },
  {
   "ecosystem": "haskell",
@@ -954,10 +954,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-92f93ca53f",
+  "id": "hsy-92f93ca53f",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "3d6f78b395f066865a0c563953f0ec8ae829d209b412d92130ac4add9699f1cf"
+  "fingerprint": "30f62c298a93f0547f6fb7fa49744b1ff3dbe5532cea8ba58d8f4adb959b2aeb"
  },
  {
   "ecosystem": "haskell",
@@ -969,10 +969,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-2677800027",
+  "id": "hsy-2677800027",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "d398bac37ab0fea1b4a4abea74930152f120a68dee3c25f85ddcf68254a21323"
+  "fingerprint": "ea67602ec95328f987b45fd68dfce647921dd8e4f51f42bb2d89ade5c4105285"
  },
  {
   "ecosystem": "haskell",
@@ -984,10 +984,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-86943e8fad",
+  "id": "hsy-86943e8fad",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "682fdaf850363561bd2a1b5e22e7fa6966fc537dcabf6dab4bd5725314ebf2ac"
+  "fingerprint": "5cc44ebac52f9715db4fcaa8af5ef1b21343376f2b8b7083c441f3d6d55b58c2"
  },
  {
   "ecosystem": "haskell",
@@ -999,10 +999,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-46c9f244f9",
+  "id": "hsy-46c9f244f9",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "fb26e922ec14513dc4bb31d354b32ef3c314237176109aa3f6bbaa78c40f7453"
+  "fingerprint": "e2346ed844c3a910d9ffde845597f66ea4b785e602aeeb7719f9ee83aa7d4e5f"
  },
  {
   "ecosystem": "haskell",
@@ -1014,10 +1014,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3cf392a18a",
+  "id": "hsy-3cf392a18a",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "55ebc56a341055b1c4cdb42b8787c39489f3825af5048cbbf7d6857aef10ed25"
+  "fingerprint": "16416c61e5f5ec0c4a5fea01c45620c51af2fd4d58d1e0f06ed946ea88f7ddf3"
  },
  {
   "ecosystem": "haskell",
@@ -1029,10 +1029,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5a72ce602a",
+  "id": "hsy-5a72ce602a",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "47e538df4d2b80d5ac72e3f7ebb8ad48150a3471b7aa9593e385111a8039255e"
+  "fingerprint": "77522f1f4a86165d9a5546b63f6d0e552829e15d5bf24b5d8a381cccdd21b200"
  },
  {
   "ecosystem": "haskell",
@@ -1044,10 +1044,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-633ea77886",
+  "id": "hsy-633ea77886",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "bb86b513b5b49bf2607065fbc471f03e41923659072c6f88528665ba06d3d531"
+  "fingerprint": "e5e86d598dd441563f231752d82fc622ec8ae34017fd048ba74a3c8a479dd198"
  },
  {
   "ecosystem": "haskell",
@@ -1059,10 +1059,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4436de6cb8",
+  "id": "hsy-4436de6cb8",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "c27b85214cae658d1a9bfa1d4df10228d7a68c76c8b61f93f0e1c7feaaac0e20"
+  "fingerprint": "6ddd1408f3d4a134b85105f02cd7964c4e4c49d80a18c209853e0940cdc6bb9b"
  },
  {
   "ecosystem": "haskell",
@@ -1074,10 +1074,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-782fd9d39f",
+  "id": "hsy-782fd9d39f",
   "path": "src/Svc.hs",
   "cwe": "CWE-916",
-  "fingerprint": "81d7002657b12267c972b88da01c7352c4893b948a960aed1292e6b1e97d12b6"
+  "fingerprint": "a8dcbfa1257046c0105b639691d2c7d4efb165955d3d6833c7a3ff01055ba502"
  },
  {
   "ecosystem": "haskell",
@@ -1089,10 +1089,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-080edd5d6c",
+  "id": "hsy-080edd5d6c",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "d43fdd73fa19178dbc6950530715de06f33b56ca290984beca28db2aa85bb2bd"
+  "fingerprint": "4162d503eed491e828ae29aa8f03429c93f3ef8cdd86316cea06843dbc7abc5b"
  },
  {
   "ecosystem": "haskell",
@@ -1104,10 +1104,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-d68580cb8c",
+  "id": "hsy-d68580cb8c",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "2004363e503eca10f1397bc84fee24d0a01ee0578cc9a621e38c969eb3a28cf0"
+  "fingerprint": "d7e8ba3cf724d059d50a55fc137b6795483a7cf751e49c6feacf51d8749b0b18"
  },
  {
   "ecosystem": "haskell",
@@ -1119,10 +1119,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-00ae66e67a",
+  "id": "hsy-00ae66e67a",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "45e5832da9a30b7968bb0b18bd6f5f5d6ed9bff73dfe90c04797f8aa1afe018b"
+  "fingerprint": "296c68209a73a1f87dd3b51a54bff4d51d5d45c71af2b00f0898304340cfd303"
  },
  {
   "ecosystem": "haskell",
@@ -1134,10 +1134,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b8dd875745",
+  "id": "hsy-b8dd875745",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "e6ffb7aa9c6a7fa650e2c276ac8acdb7b93e152eac5e17e45b01edb74794cb22"
+  "fingerprint": "3834f0ed3852d35891b357a747fb93e6d54fe775026db8be1df645ee5f788338"
  },
  {
   "ecosystem": "haskell",
@@ -1149,10 +1149,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b5e9e4c249",
+  "id": "hsy-b5e9e4c249",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "62935007200387bb2d28317c065dccad939c5567e5a1b67c588dc84d17298931"
+  "fingerprint": "a5db3354f90cc115553e214617dab3a31fd00f465720dbe29c4803bff917df37"
  },
  {
   "ecosystem": "haskell",
@@ -1164,10 +1164,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3bd0aae7fc",
+  "id": "hsy-3bd0aae7fc",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "75fe2907ce77ffe36b03d77f247ccf1be2b43c0f34b858290300f2b228eba703"
+  "fingerprint": "cc01c6b428e46c994afe2cd659737b7ea1056666ce439d4c851cd5527c09aba2"
  },
  {
   "ecosystem": "haskell",
@@ -1179,10 +1179,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-d377effe03",
+  "id": "hsy-d377effe03",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "21ea9b814bc445ad9146401c087dc413d80e8eae897b74d97a4a08a40a6be14d"
+  "fingerprint": "7ffa4f62c7f24e9fb85a7655f392d537fbb8b70e3802a5d3fd7bcc37239b9c0d"
  },
  {
   "ecosystem": "haskell",
@@ -1194,10 +1194,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-491b6ec855",
+  "id": "hsy-491b6ec855",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "932ecb3d72018c71980722fd078f92482bd4f31de2fcca3495471a61e7f76b0c"
+  "fingerprint": "ecbbdab84f6d19a45db324389b883b560f6a1e79ec0456dfb4753c6dc68bda54"
  },
  {
   "ecosystem": "haskell",
@@ -1209,10 +1209,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-327fef9eac",
+  "id": "hsy-327fef9eac",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "cb46fec6654a32000bd5854261156079f39c0e4c77c1a10fc0f73fb4e7ac379a"
+  "fingerprint": "8f5a18264090e7787746d2308444501118c1f0afbcd1d6595dcaba8eb2acb92b"
  },
  {
   "ecosystem": "haskell",
@@ -1224,10 +1224,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-18ca599138",
+  "id": "hsy-18ca599138",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "d6914e80087bb67c481ba11a09288704a3e8ba94df0557a13e888fcafedbaa46"
+  "fingerprint": "9ae4db427746a574bf4d7b0245cd147efa66d89fbabd8ffe11811904021c21c2"
  },
  {
   "ecosystem": "haskell",
@@ -1239,10 +1239,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4fe0e90580",
+  "id": "hsy-4fe0e90580",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "1f53993a5a93dff3ebb9eab16a3aea156d5328c8bf649b952913a96d860c1adb"
+  "fingerprint": "0a96646d43ff74c942a618c6e10f8fd1ab0b7a493c604efd326eea9bf90e5119"
  },
  {
   "ecosystem": "haskell",
@@ -1254,10 +1254,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b00e079ef6",
+  "id": "hsy-b00e079ef6",
   "path": "src/Svc.hs",
   "cwe": "CWE-338",
-  "fingerprint": "61b984fd38cd1bcb6e2d3737fc461db62ed9d354507231e74e0a7caa5580b0f1"
+  "fingerprint": "9abb9ef61f01ca142f25208f629243e41a9ca9b43511135a4be2bc27f97ca9b3"
  },
  {
   "ecosystem": "haskell",
@@ -1269,10 +1269,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-0f4da4ee41",
+  "id": "hsy-0f4da4ee41",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "32c6c931ea8bb0d76f1d16428824617fbe8d89bb6ddd2c5126e8e24761fae1e3"
+  "fingerprint": "26941ebe7872bae23c6a19409114873d76b5d01ddefee1b76a547fc894e15314"
  },
  {
   "ecosystem": "haskell",
@@ -1284,10 +1284,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-7de8dc0029",
+  "id": "hsy-7de8dc0029",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "fbd4c02af36163fc45c0c26ac7b621cc3e0ae361141df9aea4e3ae90f017402c"
+  "fingerprint": "3f81f73f4f0f95d3346a0977695f82b7d55dba2bd9d45832567659a51091a4e1"
  },
  {
   "ecosystem": "haskell",
@@ -1299,10 +1299,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-d3100692f0",
+  "id": "hsy-d3100692f0",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "cd61856cbcc4b5f672584895a7342a0c4056bebccbc6b7aac56f95683c03c6bb"
+  "fingerprint": "d3dbd048221a5981123f019e78b2d9a4a9e922d8e70ec005400445ffae6cf4d9"
  },
  {
   "ecosystem": "haskell",
@@ -1314,10 +1314,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-a96d85263e",
+  "id": "hsy-a96d85263e",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "97b80f97b6508dbf44784cc1be3d633166827c7584c8f4d762a4d4098b44f3c8"
+  "fingerprint": "9a66a3dfed2189c0b2f0102325094b3d53cb51377b855c348496a72a63b3f6de"
  },
  {
   "ecosystem": "haskell",
@@ -1329,10 +1329,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-973c5d77ce",
+  "id": "hsy-973c5d77ce",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "3c30d670288a09cfe215550967dc757cd1468e147e68aa0b0b0e571c339421e4"
+  "fingerprint": "a5139006829d8d39430cb29cc12fa014e19498a552163a1e4d8ac09f30b55e89"
  },
  {
   "ecosystem": "haskell",
@@ -1344,10 +1344,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-0f5bd0295e",
+  "id": "hsy-0f5bd0295e",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "6cf9514b2bb9a56506969b636c18031a1d453d6863a00d6099ea7386a9e76676"
+  "fingerprint": "4cf8189202282c05b9d65d1694c2b200051e48336b0266bfa61525e2cbcf7de0"
  },
  {
   "ecosystem": "haskell",
@@ -1359,10 +1359,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e5698cab9f",
+  "id": "hsy-e5698cab9f",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "610cf6e995e580104d8467a39678d72cae4098cb9b84f2625898dd0b9718045b"
+  "fingerprint": "94c61b7dcbfdc87a50ca3a3ed75d4e4300acc9c526811adf5905ef81c05a7ca9"
  },
  {
   "ecosystem": "haskell",
@@ -1374,10 +1374,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-7de82d4ff1",
+  "id": "hsy-7de82d4ff1",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "44937a884f3a11a3b1153a8d82a7394fe567909183be234fca0167f64b8ef8cc"
+  "fingerprint": "ed92ac311734a3c90b553a987c8c871b0d06ab6a30c2e7767b595e2a5b0e653b"
  },
  {
   "ecosystem": "haskell",
@@ -1389,10 +1389,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3b9eb198cc",
+  "id": "hsy-3b9eb198cc",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "dcda8924b3189a49ac6eb9ec5236b6b1e1e5d23a689c290f611561d392266893"
+  "fingerprint": "c257b3760ff6f7f25512bc809aa54a1ef0e6f57249900f1e5c9b77bb612c77b7"
  },
  {
   "ecosystem": "haskell",
@@ -1404,10 +1404,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-596a47a2f8",
+  "id": "hsy-596a47a2f8",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "e67756c61b171ce0e7227c622eb94cb5750b7c1b0525a9325315bf61c6a87e84"
+  "fingerprint": "22fa09c07e90713a8c8b9a37507b13777cdcb2756c8c522717adf1c6a1dfea61"
  },
  {
   "ecosystem": "haskell",
@@ -1419,10 +1419,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-500d361d13",
+  "id": "hsy-500d361d13",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "438051e1710ab290886d41b242b29c3007edb40d152b4764775300e7b2765564"
+  "fingerprint": "89cf713e2909514c655c2e090ec1b2a64cbf7b902693baa3f29e3e37041e417e"
  },
  {
   "ecosystem": "haskell",
@@ -1434,10 +1434,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-edc86210b3",
+  "id": "hsy-edc86210b3",
   "path": "src/Svc.hs",
   "cwe": "CWE-770",
-  "fingerprint": "9afd4f49bfba0349398dfef9313bb4db60869cfdd132ec839e0728cf5d634672"
+  "fingerprint": "c6e407620170c83e436e15153305b508551b4c7592fe5ef27fab65d9ead0339d"
  },
  {
   "ecosystem": "haskell",
@@ -1449,10 +1449,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-d9e50754bd",
+  "id": "hsy-d9e50754bd",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "23b965eaecbb21cf51e142426fcf6d0b82f5abff797181ebe625e9c3a7206a73"
+  "fingerprint": "c24b77ab55408950e86f2579e3dfb080bc75f7522e4289ab555a8d56fe1912f3"
  },
  {
   "ecosystem": "haskell",
@@ -1464,10 +1464,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-9fec491fd4",
+  "id": "hsy-9fec491fd4",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "e362dce6f62d718c268ef23b716402ae7642163ef89f9a754186e365b011eb23"
+  "fingerprint": "db3b966e4dc85fd0f0f300e4f166b9bf25737e656fbac350a365de3381d38d09"
  },
  {
   "ecosystem": "haskell",
@@ -1479,10 +1479,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-634ab904ab",
+  "id": "hsy-634ab904ab",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "cfec9b44ae451139c8725b30192f94c6538aca95a08c54af8522b85b621a630e"
+  "fingerprint": "af30995e55ce4706a7882a01606d11335d3a491d7bcbf3aa5e52b862186b0ea9"
  },
  {
   "ecosystem": "haskell",
@@ -1494,10 +1494,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-68e1da4214",
+  "id": "hsy-68e1da4214",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "edda346577a31a1905273ac2760d244f03e08b4395d603c60aa1a3d68602f6a0"
+  "fingerprint": "4bab43e601723816630e7a8f262ea74ccccf349e81d4af90a85536c7837cc85c"
  },
  {
   "ecosystem": "haskell",
@@ -1509,10 +1509,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-bc7af8b7a1",
+  "id": "hsy-bc7af8b7a1",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "cc74a04ed9fc75c86e654988afbe745044a583b50f6ff9d1c53bbb7b4cc0e835"
+  "fingerprint": "9471abda04d5ee8ed66f4cffbba1d564525303a9008ddc547920db6eff3cf211"
  },
  {
   "ecosystem": "haskell",
@@ -1524,10 +1524,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-92257ee90f",
+  "id": "hsy-92257ee90f",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "3ad99afc864b99927e45d9731fe01e72ea5746afef6c7898ed015e7d21750c0c"
+  "fingerprint": "df609139eac0b417725fcf25736e58048824d6cf3084dd575c4729df8ac8f83f"
  },
  {
   "ecosystem": "haskell",
@@ -1539,10 +1539,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3553c7d57b",
+  "id": "hsy-3553c7d57b",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "5afd8cfe556f5ecdd06b621a80738fb11ed75daa1396f9f73273bbc25408c0c8"
+  "fingerprint": "9e18af0527eb22607052585e28fe2327b008c677c2f775bbb2a39a8e1d7dd79c"
  },
  {
   "ecosystem": "haskell",
@@ -1554,10 +1554,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-6ee0e6c0a5",
+  "id": "hsy-6ee0e6c0a5",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "e6b7cba1e8953a142385aa991c261f2a875bb80c04537115319777c0ecd900bd"
+  "fingerprint": "7fb034bbfc639f8991913fefe211b136f8a702939430154ab9e6ba81dca474b9"
  },
  {
   "ecosystem": "haskell",
@@ -1569,10 +1569,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-469a2a2377",
+  "id": "hsy-469a2a2377",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "6fdc8a04a7a7bdd8b084528211e3bef0c3ac80bcbe69b951d99e15a7d600da39"
+  "fingerprint": "3ab59b337a2c4e0db71ba7ec5279a918b9a434721a3c811de44addbc4e8648a7"
  },
  {
   "ecosystem": "haskell",
@@ -1584,10 +1584,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-6c39b39422",
+  "id": "hsy-6c39b39422",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "5f836d3faf6b0fcd27477396f6fe5b251f7847d7ee8baa4f8e21de8cb3e0f486"
+  "fingerprint": "44681dd11f663f765729a491f3b40ca0faf83fbede9a408028600730e276d8f1"
  },
  {
   "ecosystem": "haskell",
@@ -1595,14 +1595,14 @@
   "label": "safe",
   "group": "haskell|parser-safety|safe|u2|users",
   "split": "unseen",
-  "nearMiss": "total-parser",
+  "nearMiss": "guarded-partial",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-1494c1ca4b",
+  "id": "hsy-1494c1ca4b",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "30f01621f13c7e44eff50a2552803a97397dea44de57b3af49168f054fb91d27"
+  "fingerprint": "6f857c6dd1c8fb7a5bc0a7815039a96d1097c4e57043833c8f30132b936d9bef"
  },
  {
   "ecosystem": "haskell",
@@ -1610,14 +1610,14 @@
   "label": "safe",
   "group": "haskell|parser-safety|safe|u2|orders",
   "split": "unseen",
-  "nearMiss": "total-parser",
+  "nearMiss": "guarded-partial",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b4c4db646a",
+  "id": "hsy-b4c4db646a",
   "path": "src/Svc.hs",
   "cwe": "CWE-248",
-  "fingerprint": "3795fd52fabc79b84a4f4174195bd11c1b0f97d53020f9d46602c3e810678fd1"
+  "fingerprint": "cfaad6822fed5db56ff002077e507078284a16aafb7feccdb39b44a8af975f2b"
  },
  {
   "ecosystem": "haskell",
@@ -1629,10 +1629,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-2687a945b6",
+  "id": "hsy-2687a945b6",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "806249a22184f8d0ea6f70e287874bd5ce62842ce4eb9beb4410e7af2fc5b958"
+  "fingerprint": "32b9fbe550706f25277723044315c2085af53c8260bd3b2203b5d19c94f97a36"
  },
  {
   "ecosystem": "haskell",
@@ -1644,10 +1644,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-8e1259b338",
+  "id": "hsy-8e1259b338",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "2435d35498296f8b1839460f24c2814fb82a6fa9f68fbed7971480544487ec97"
+  "fingerprint": "8903fc667610d97510de10c85c622424f7d320ce0100a5d59197ad31b9680941"
  },
  {
   "ecosystem": "haskell",
@@ -1659,10 +1659,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-fec0f3834f",
+  "id": "hsy-fec0f3834f",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "438aa92113804eae4a60bea885f2a9ae2b0499ad4fb4eb1ef076634173a06097"
+  "fingerprint": "071d03deab8267734904bfcdbe8f079c40590e876d3b93ab3f2c9d25bfc8929b"
  },
  {
   "ecosystem": "haskell",
@@ -1674,10 +1674,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e32b5420f9",
+  "id": "hsy-e32b5420f9",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "810d8ddb1a135f88b012309b2703d34522215237b3c56f9c22eb91d4117d442d"
+  "fingerprint": "2c58c492a81e4335eab72df5d35f5c65d2a975f20e6d112e4201d0ebe525055f"
  },
  {
   "ecosystem": "haskell",
@@ -1689,10 +1689,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3f80ace6a6",
+  "id": "hsy-3f80ace6a6",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "697f04f510588380eb05b886fca31c764b23ddf7e2b85af6cf3ec59b842cec83"
+  "fingerprint": "0d171656bc7b61e5e73cb6ac272704f91669fbedab73e1b097c555c982486f69"
  },
  {
   "ecosystem": "haskell",
@@ -1704,10 +1704,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-09adcf9c83",
+  "id": "hsy-09adcf9c83",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "ef6397b93ad74885fc77ec8cacb71acee180932f04dc88d8210e01b1ebca7dcc"
+  "fingerprint": "4e05996c52cb8f2a00dd5ea1e476c6ffca86ce9b431aabd35fdb8ffffb5f96f5"
  },
  {
   "ecosystem": "haskell",
@@ -1719,10 +1719,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-a81e8e2e29",
+  "id": "hsy-a81e8e2e29",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "01daca4193ace81c85cf6a97d90545e405a743c152ef12e52ee00e87232847d7"
+  "fingerprint": "2cd1a86a9dce371d888fce68f265bad8b6fc99b1cebf440c9f9d1aaf1924bea4"
  },
  {
   "ecosystem": "haskell",
@@ -1734,10 +1734,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-022f24653f",
+  "id": "hsy-022f24653f",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "89613262981322c4e31ede281d871fd55bb89367fd33d098a9ee52dd681f23e9"
+  "fingerprint": "0cde371d1b872294e89f59d2a044b289ef58f815c22572dd59c4f5a927bb1f73"
  },
  {
   "ecosystem": "haskell",
@@ -1745,14 +1745,14 @@
   "label": "safe",
   "group": "haskell|sensitive-logging|safe|u1|users",
   "split": "unseen",
-  "nearMiss": "redaction",
+  "nearMiss": "not-sensitive",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-870f01b33a",
+  "id": "hsy-870f01b33a",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "ee0e9f0016d914e26cffd1b914d4995721482a1628a7da5eef4df6821f89c55b"
+  "fingerprint": "d5814d269be7d9e3e96530a2f0120856d53cf63a932201a38a36e502a3207357"
  },
  {
   "ecosystem": "haskell",
@@ -1760,14 +1760,14 @@
   "label": "safe",
   "group": "haskell|sensitive-logging|safe|u1|orders",
   "split": "unseen",
-  "nearMiss": "redaction",
+  "nearMiss": "not-sensitive",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-46b5a806de",
+  "id": "hsy-46b5a806de",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "ce1173166e005489315e07acdf40fa0a0c2e1077a8278991bd78c2ac3b986236"
+  "fingerprint": "e5ccded7f982974549e508fe3258c3ce0468216fbe765bceaa3ab2c82f1109d0"
  },
  {
   "ecosystem": "haskell",
@@ -1775,14 +1775,14 @@
   "label": "safe",
   "group": "haskell|sensitive-logging|safe|u2|users",
   "split": "unseen",
-  "nearMiss": "not-sensitive",
+  "nearMiss": "redaction",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4c0dfadfff",
+  "id": "hsy-4c0dfadfff",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "1bed35ec4a461e88f3ad3e6e37403cad4c2ac7765acaf65e543a28e4dcd95ca2"
+  "fingerprint": "77d0905f4ffcd97e860abdfd46b3110312ed13e336c0bdd8fb1f318b063fc8a5"
  },
  {
   "ecosystem": "haskell",
@@ -1790,14 +1790,14 @@
   "label": "safe",
   "group": "haskell|sensitive-logging|safe|u2|orders",
   "split": "unseen",
-  "nearMiss": "not-sensitive",
+  "nearMiss": "redaction",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-fce5f32427",
+  "id": "hsy-fce5f32427",
   "path": "src/Svc.hs",
   "cwe": "CWE-532",
-  "fingerprint": "1bf23d7bf2f246e594229cd293ff432df076dde5dff48e1cbb86bd460b450b68"
+  "fingerprint": "ad964a698863453b070fc0115a64a461dee578ebc53644815f6b3adcde926262"
  },
  {
   "ecosystem": "haskell",
@@ -1809,10 +1809,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-da23d5ce3e",
+  "id": "hsy-da23d5ce3e",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "444a61227aab5227041476b0f2f77735057d1355fd928954f833c51e5e57b90e"
+  "fingerprint": "fb60a3d0f1db3a09829de4328e5d033d3a92ab940162fe49caf4add4b566cb55"
  },
  {
   "ecosystem": "haskell",
@@ -1824,10 +1824,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-34ce466c90",
+  "id": "hsy-34ce466c90",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "efb9fc53ccfefdbf0f956a448694f625cdb3bf1b85a15781a8106f26688fedac"
+  "fingerprint": "d3a7659bd32a67888359ac15d39fe07130d97e24af6c161356e4023a9fdf4c08"
  },
  {
   "ecosystem": "haskell",
@@ -1839,10 +1839,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-91fd781a11",
+  "id": "hsy-91fd781a11",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "e96b31ae62b325c7fd43755906fc5122cd36627f1d0cf2fed49c50eff5c2b987"
+  "fingerprint": "350c4165154896d0dec0f4c494eacee100d64acc2db82204a81751d2f1eb1362"
  },
  {
   "ecosystem": "haskell",
@@ -1854,10 +1854,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-a9bb109705",
+  "id": "hsy-a9bb109705",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "d5966b83c185cd3ff91f92902472d78bbb09e674db4cee30126d263ee156e314"
+  "fingerprint": "4d3d8b50c66f343d65bf87ff716fc48846ac55f5ada002ed67efb0f9126e2528"
  },
  {
   "ecosystem": "haskell",
@@ -1869,10 +1869,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-bda5c8a726",
+  "id": "hsy-bda5c8a726",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "b95340c42cf8a024064fb4346bbb4c1de658bbecfaa8c13fedda1dddc623889a"
+  "fingerprint": "2c70c5dc9c113b4ecd9ef823e5fe56113bcaf66c31130d2066f5f9ae65739ea7"
  },
  {
   "ecosystem": "haskell",
@@ -1884,10 +1884,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b42c0f6af9",
+  "id": "hsy-b42c0f6af9",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "3d82a73ca89b85a6fcf2176d5ad4707e3816b1e938ed3c5b3bc53105c64cdfef"
+  "fingerprint": "1397bba07d9a9768c1377bfbebf983229d0f13dc3f076ca08a3d5a944aac57e0"
  },
  {
   "ecosystem": "haskell",
@@ -1899,10 +1899,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5835357679",
+  "id": "hsy-5835357679",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "3ccc21a3fc554965fddea87b2d3db1f249370b664e4a49dfe4b92b59aeee3bc2"
+  "fingerprint": "62355eea2b1e7a0941c022b7e874a6991b8d74b6601a74968b1bb2eaccd8b0e7"
  },
  {
   "ecosystem": "haskell",
@@ -1914,10 +1914,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-26f763e1d3",
+  "id": "hsy-26f763e1d3",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "d191224fc7e39d6d75321012822f270a8027ce372bc281401560b78ef20b6bbe"
+  "fingerprint": "ecfa33b2ce2b9f8b0550a4fec0a413aa5c50a8cb30b6383baf4d20468ebbf4e2"
  },
  {
   "ecosystem": "haskell",
@@ -1929,10 +1929,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5394bf2ad6",
+  "id": "hsy-5394bf2ad6",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "f5bca14f98fca5c1ce9ba7b62795ed495f484377d72f107437402a33952a8164"
+  "fingerprint": "13be9326d169b7cf3f32ce0b630c4336b14b376102bf79efd3f9cfa897ac83e9"
  },
  {
   "ecosystem": "haskell",
@@ -1944,10 +1944,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-1696bfabf9",
+  "id": "hsy-1696bfabf9",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "493f76f59245280e509375d48b8f84a83ef787dd1e929009fcfbe6eb180408ef"
+  "fingerprint": "ba0aeffd87f01df781c7c9c434993d480c78ec66945d622f49021aec29f36735"
  },
  {
   "ecosystem": "haskell",
@@ -1959,10 +1959,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e0c01d0ad3",
+  "id": "hsy-e0c01d0ad3",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "7e2405173a1ba9398238b1b98d85ca57383fc9584ce55f93bbf50f950ab0695e"
+  "fingerprint": "698c300738799ee0bc0da64b816d8231e9c922aad51570f2b3b7f6195bba9906"
  },
  {
   "ecosystem": "haskell",
@@ -1974,10 +1974,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-b06ed7e5d7",
+  "id": "hsy-b06ed7e5d7",
   "path": "src/Svc.hs",
   "cwe": "CWE-306",
-  "fingerprint": "400438113b5353a3960f5bdf1bb8fbbddcda619134a006d479ddd6825f3a7115"
+  "fingerprint": "d66f5bbae0167a1185cf9f0b8a20465caf870fdf9aa1dbb745f5e4e8252e754a"
  },
  {
   "ecosystem": "haskell",
@@ -1989,10 +1989,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-0c43a7d5e7",
+  "id": "hsy-0c43a7d5e7",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "8184199072f483f57a188edda56b9a81cef01378949b1a4280675081d97f2353"
+  "fingerprint": "37dffe10475b52cdbd7324afce5c8a3a148c97defb1c225a8858f860689ab22a"
  },
  {
   "ecosystem": "haskell",
@@ -2004,10 +2004,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-f64e503fc6",
+  "id": "hsy-f64e503fc6",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "ff1b5cf82bd769e65d201ab378102e1b059861d6beb3a76037e572cf1edff1ae"
+  "fingerprint": "b5830ca8e19469886d816469588e6ea749e234d39a7ce8e334661eb7b03c4bf0"
  },
  {
   "ecosystem": "haskell",
@@ -2019,10 +2019,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-486258d84b",
+  "id": "hsy-486258d84b",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "e7278c9eaac5e14b70d58a3dc4937e3b8068b0177813861e5bcfe0fc845b2341"
+  "fingerprint": "ebb4033a6363b08e85d538ffbc1d0b93ae94d6a86f53794e2837385dd8bc4739"
  },
  {
   "ecosystem": "haskell",
@@ -2034,10 +2034,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4eb44c2d05",
+  "id": "hsy-4eb44c2d05",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "2b6da5e5ccce494a28e5a78450b22dd93908efd3bab3091ca2f6ecfbf310520a"
+  "fingerprint": "e1fee6f206eaad83f9c5495369f20c777b105a32db1464a4763d1f133320191e"
  },
  {
   "ecosystem": "haskell",
@@ -2049,10 +2049,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-143cd46ea9",
+  "id": "hsy-143cd46ea9",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "ff106eb15fc7ec97502bfbd0ea9c851b3051a08b5534a1075ec8e5fd5a20b88d"
+  "fingerprint": "c1673a3e83437f38d2a67373c83e9f97b266b7aeabd8f92e2cf4e9bb25ff72dd"
  },
  {
   "ecosystem": "haskell",
@@ -2064,10 +2064,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-fa5f3c43a9",
+  "id": "hsy-fa5f3c43a9",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "746b94d4476875e1cab9e3a9bf8770db3167072dd559545d852fc77787836c7f"
+  "fingerprint": "c9dc8b0f85cf122d165692a438817d43edb6bd9e9cedfc6343271a747863a852"
  },
  {
   "ecosystem": "haskell",
@@ -2079,10 +2079,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e26a2e73d6",
+  "id": "hsy-e26a2e73d6",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "28da021f8fcd6f8829fabe533ba02613d843af564607b4aa8c6d2a0ed9f8f837"
+  "fingerprint": "53cef0a325ec798c38cb2b91d1540cb866f906d631b27e83d8c620763c3d8521"
  },
  {
   "ecosystem": "haskell",
@@ -2094,10 +2094,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-15c5090a95",
+  "id": "hsy-15c5090a95",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "e1ceec05c8062f1553936d5653b39207b5d953eb4e3f78e0776905f676ed631c"
+  "fingerprint": "c60c0794b1bc7c8298ca5a2226bf5e5b910b5097ad8c7eafb9af11835bf9184a"
  },
  {
   "ecosystem": "haskell",
@@ -2109,10 +2109,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-f96f41a7d1",
+  "id": "hsy-f96f41a7d1",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "b7312e5dd4634869737eb003d636c4c88272d1eede58674a20d0adaef8e7e9a2"
+  "fingerprint": "7fee2179629f1beebfc7d1fcb96fd6e1eb40ef2af65050af577cfd000ec15c29"
  },
  {
   "ecosystem": "haskell",
@@ -2124,10 +2124,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-44a07dc083",
+  "id": "hsy-44a07dc083",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "52678d3b08934d45fc0fc20cedb42f3451358f8d4dda8750d04ff52b562c84d9"
+  "fingerprint": "77aca562a7d122ff04a1b46743216ca9e0e960725335ec0709c24245958b8e68"
  },
  {
   "ecosystem": "haskell",
@@ -2139,10 +2139,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-122dc0924d",
+  "id": "hsy-122dc0924d",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "9a75502b42aa49a2a8aabdfe7e708605d036dd60ac81fabb83fbceaa236a64a0"
+  "fingerprint": "8889bbddef9ab090ea247d92f3d6f73538fe3768a6fd9a3e3ea06749b65f32d5"
  },
  {
   "ecosystem": "haskell",
@@ -2154,10 +2154,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-3bb1107225",
+  "id": "hsy-3bb1107225",
   "path": "src/Svc.hs",
   "cwe": "CWE-639",
-  "fingerprint": "be4c21c6947449ad422629fa3cc7c8d69b721c11dc2fe8a47988ddb94f6fecd9"
+  "fingerprint": "8a558cc2599235c3d4ad5e631a261b068fdf1f8ab6bbd5aeb66d2083f91f2e9c"
  },
  {
   "ecosystem": "haskell",
@@ -2169,10 +2169,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-cedfbead1a",
+  "id": "hsy-cedfbead1a",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "2b176a999f36aecdc19f21d18b424badd45d7eaaf5a5ac8939aa7602c44a99f4"
+  "fingerprint": "554f5d20d6a35cf2fcc2e6279b618528d3e28cee466176d407a461f458f11c7a"
  },
  {
   "ecosystem": "haskell",
@@ -2184,10 +2184,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-972fcdb3ec",
+  "id": "hsy-972fcdb3ec",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "d3d45a5c46825fc4abe24d084e8ddaa1287bc8f89d862a2f98979bdb128a0cb1"
+  "fingerprint": "313ba593e3d4e1de516957c0e39985381a1a026f7ebf7e924a7efb7f6e8e630c"
  },
  {
   "ecosystem": "haskell",
@@ -2199,10 +2199,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-a8496fb1e3",
+  "id": "hsy-a8496fb1e3",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "6847587960ae795186069d868f74b5876c1ed3bee73ea5de030d150a587d1be2"
+  "fingerprint": "e93a37e745194c0de9c5c92b6bad2946c60e58f6ba4a588a6f08b214e44a4939"
  },
  {
   "ecosystem": "haskell",
@@ -2214,10 +2214,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-948509b8dc",
+  "id": "hsy-948509b8dc",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "9b7d58b306a1727354b55ac184b3254a9c9366c8be5642d21e0833613fbdcd62"
+  "fingerprint": "c97be5cc6372fdc9a3663c5dc5557abe26902b69a6e12d48596283ca74159d4d"
  },
  {
   "ecosystem": "haskell",
@@ -2229,10 +2229,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-5b622385f8",
+  "id": "hsy-5b622385f8",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "31b93df3d4bcd804eb27bc51fcb5031e8b92a79a5fe97a66b91db6bebc4af0b8"
+  "fingerprint": "a3c200dc4f2a6e6c7f1a8d15fe54ebd3593d0767b163c142f3e150deacdeaa47"
  },
  {
   "ecosystem": "haskell",
@@ -2244,10 +2244,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-4b2f14f91e",
+  "id": "hsy-4b2f14f91e",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "3b876952f172ecf1102247eab4f1cccb1cf1734cb3a66788976e2fd4514f2a86"
+  "fingerprint": "708ebd0a37caede56834408774cf44c734ddf9d19d7f0cc394de767b0efc51f6"
  },
  {
   "ecosystem": "haskell",
@@ -2259,10 +2259,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-486fad21bc",
+  "id": "hsy-486fad21bc",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "7faf47eeaf9b474b7d20ccf0fe99067c91b837f060ac01f85bd395d2d0763eff"
+  "fingerprint": "18ebff1ad9f94c3541b9a622f7263ed06faa2b1fbcb728f09a60231e6e2384a4"
  },
  {
   "ecosystem": "haskell",
@@ -2274,10 +2274,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-ff1e977cda",
+  "id": "hsy-ff1e977cda",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "548d41503662891323b57440493751788e48125ae7af01e61f13c69975ab060e"
+  "fingerprint": "b4a4ce59851f14ddef093b3a9bbe2cc75fa366bedd95db3463825ace7d29dce6"
  },
  {
   "ecosystem": "haskell",
@@ -2289,10 +2289,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-1815895450",
+  "id": "hsy-1815895450",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "9904523b4a70ca27f89e64cae2bd01356e15351761587c80e0a3ccc16cf4e76f"
+  "fingerprint": "0217b1b230cf7968526f67a821a935f58503701b72499c4bd81f2e3786647956"
  },
  {
   "ecosystem": "haskell",
@@ -2304,10 +2304,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-e9c94aaf6e",
+  "id": "hsy-e9c94aaf6e",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "074c760dbefda6c9830efb44fd962ce15652d425a4ae4f333475a113fed2409d"
+  "fingerprint": "79afad04424747490fef4b4029d7aebc9393e954d42572333a59402b0c5c0e6f"
  },
  {
   "ecosystem": "haskell",
@@ -2319,10 +2319,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-bd7a1a4352",
+  "id": "hsy-bd7a1a4352",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "1b487accabdca37cb4968afdca0634fa305fa44607cc8f02130262872fc7c2e0"
+  "fingerprint": "dfb117a6c2695fdfa47141baf85e24263d2ac7d8901606e65c822717e02e4bb3"
  },
  {
   "ecosystem": "haskell",
@@ -2334,10 +2334,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "hsv-7b617c64ee",
+  "id": "hsy-7b617c64ee",
   "path": "src/Svc.hs",
   "cwe": "CWE-1004",
-  "fingerprint": "6269fd3f34936b2dac380cfc1b8e331c0953b213cbd9a76c3e20ae6cd4d730ab"
+  "fingerprint": "3a544ffb540544d9194f194a34e52d08faa90d827ca68514f68bd177f2805ed8"
  },
  {
   "ecosystem": "nix",
@@ -2349,10 +2349,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3c8d22b439",
+  "id": "nxy-3c8d22b439",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "eb4887376267f00fcaea9cf1611c4a2ab719e83612c1820e79f8df673144f8cd"
+  "fingerprint": "934c717c46be202811839854caa788c7a0b51706b3e9e417830e1e39747216e1"
  },
  {
   "ecosystem": "nix",
@@ -2364,10 +2364,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-90dac1aa23",
+  "id": "nxy-90dac1aa23",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "77a9265e5dd6940f2dc913867b0100a70ae7b2986f266ad5da9cc2d027667813"
+  "fingerprint": "2377f4ba8746122b0a7d08020ead6e23a2da2d74b48c389c79972397611999db"
  },
  {
   "ecosystem": "nix",
@@ -2379,10 +2379,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f362b08f6f",
+  "id": "nxy-f362b08f6f",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "ea98b617ace82dd15e8bffd24d9db91597220822927289f317cbb951c99d5942"
+  "fingerprint": "e76d2f4b8416633d8f66ea0013477b0726fdd0ff25479f006b85e58da2047c6f"
  },
  {
   "ecosystem": "nix",
@@ -2394,10 +2394,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-81df6036b5",
+  "id": "nxy-81df6036b5",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "cedcdcb9211b7b67251742cb983c3cc51117a054b871cfc5c925fe747b227313"
+  "fingerprint": "a9a8146e914f4cb76c98abb9efc125611ad35ff04c32cf67194a75598716c3e5"
  },
  {
   "ecosystem": "nix",
@@ -2409,10 +2409,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-547a41b7b0",
+  "id": "nxy-547a41b7b0",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "8d60905304fb4b6b72e0fcf59c0c92d11a6d927cb3e0769fcbb7be8cf29cad02"
+  "fingerprint": "81eb06576ff00a43655af7d7b110f8eaec5e369ca072a1a180e4ba870d2dbecd"
  },
  {
   "ecosystem": "nix",
@@ -2424,10 +2424,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-63a4b737b1",
+  "id": "nxy-63a4b737b1",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "bc00f7f8d77f67c82b5365074d27d34631771c37d803b7e86b777459bc3ecec3"
+  "fingerprint": "b01e64dce7097045d27f66ba7d696c5dd6db8624cec65e39f124f4a40311184a"
  },
  {
   "ecosystem": "nix",
@@ -2439,10 +2439,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-eb6d5d8b7e",
+  "id": "nxy-eb6d5d8b7e",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "27df7829da47bb757f0bf9986b0ba9b9b9d64ce0f0977d60534072548547a02a"
+  "fingerprint": "a097a31aff2a82629e247b960b788d494ccbb704bdfb7c3098271fa74f2183de"
  },
  {
   "ecosystem": "nix",
@@ -2454,10 +2454,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-d9572edfd1",
+  "id": "nxy-d9572edfd1",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "ff12538ef5fcbf6e3b5e05dcbe5c083e5fd7410dca368db2599e64009367e8ee"
+  "fingerprint": "b2a6f14eb5fda0b5585474241845f4236545dd13ee8b9788fc3581d132c06567"
  },
  {
   "ecosystem": "nix",
@@ -2469,10 +2469,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-067ab91f75",
+  "id": "nxy-067ab91f75",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "eb1967f1cb3958243afb6d04c52cd715a681159d712d9317d0d0b0875d7f3ee8"
+  "fingerprint": "0593695e581690e287e705d83ea3bc05e4bb16517d70095c24651745b838cfe0"
  },
  {
   "ecosystem": "nix",
@@ -2484,10 +2484,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-0d98a4c5c7",
+  "id": "nxy-0d98a4c5c7",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "628263b45c721ca4a5686c69601498e1a5e6270c2e3c010860873fd46fe26797"
+  "fingerprint": "7bd2e82aee8f344f97b0d6e557ffb2173a5fb335ff5124d63471357d2c87742b"
  },
  {
   "ecosystem": "nix",
@@ -2495,14 +2495,14 @@
   "label": "safe",
   "group": "nix|script-interpolation|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "env-passing",
+  "nearMiss": "store-path-only",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-aea7a143e1",
+  "id": "nxy-aea7a143e1",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "4a8200ac83d8e8d45d0e2743d683ee5ee96e1cb3f52196be722f804336ed4d6f"
+  "fingerprint": "d3f74ca687b38cc8becc402a18516ea5f07ed6d05a2ef442b7aef229f1bf615d"
  },
  {
   "ecosystem": "nix",
@@ -2510,14 +2510,14 @@
   "label": "safe",
   "group": "nix|script-interpolation|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "env-passing",
+  "nearMiss": "store-path-only",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-465ee4082f",
+  "id": "nxy-465ee4082f",
   "path": "configuration.nix",
   "cwe": "CWE-78",
-  "fingerprint": "7743c9e1ed932689b61a5b23bdfe1afd10399faa89c62e7c2e9ba2c818978990"
+  "fingerprint": "73e8920978285b68680a62b5891227450b80b9d7c3c43bfe0dac809719c4169e"
  },
  {
   "ecosystem": "nix",
@@ -2529,10 +2529,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-be7d0e0834",
+  "id": "nxy-be7d0e0834",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "ef5976bd95d4438cec40b986c54ee10f72ee58881adc98b0a224294cd7c1c317"
+  "fingerprint": "63e195f7c72ff8eed9d39fd9575fa316b0728a65c0d863ad3c3117a00bbc755c"
  },
  {
   "ecosystem": "nix",
@@ -2544,10 +2544,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-11e2607702",
+  "id": "nxy-11e2607702",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "80ec060f28be728d902cecd2570c9ee0c5f3903d9b395a7c2995763a437c8bfc"
+  "fingerprint": "9a34bcf0d3315ab7c335b6fc194cb9ed458e321f261948a6af56d4b89a84191d"
  },
  {
   "ecosystem": "nix",
@@ -2559,10 +2559,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-2fee6f4932",
+  "id": "nxy-2fee6f4932",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "e84e69bae98ee25a3a6f1d957ad96e68831384b5ebc598cd7206b78f23bf61c9"
+  "fingerprint": "a9706fbd097ff7293e8657429f3a6b2d01d55a0ee5393565b986591b4eb033f8"
  },
  {
   "ecosystem": "nix",
@@ -2574,10 +2574,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-fb757a1ec0",
+  "id": "nxy-fb757a1ec0",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "032594372bf315e1d5e979edab48572357dffc7cc7a58fa49202d59790c3ff5e"
+  "fingerprint": "34d753222668798083afa33392ae649b45dcc8f487efae3dc11a731d070b0231"
  },
  {
   "ecosystem": "nix",
@@ -2589,10 +2589,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-d88a3140e3",
+  "id": "nxy-d88a3140e3",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "9d21f17f4d50817f45ccdfe278f770d05825809e2473f19ec457f86d85f7f6f8"
+  "fingerprint": "3f7dd6405ee70670979783ee2d16e3a80e5754c5f605ad170215f225b54ff679"
  },
  {
   "ecosystem": "nix",
@@ -2604,10 +2604,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-0847d3aaae",
+  "id": "nxy-0847d3aaae",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "b9419409e53e6d6380d938fefafd1b48f3dea1b8966e0d8c5a24ec9654b8b0cf"
+  "fingerprint": "d7c554961b0fdc27c8e10a2b624978c5ea164453733e57c1e22a66e07639b4a0"
  },
  {
   "ecosystem": "nix",
@@ -2619,10 +2619,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-44f356b12b",
+  "id": "nxy-44f356b12b",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "396ad166499c5c00c61e93d88a5d6f7b4d92ca95198bec4e4d311915a7341c4f"
+  "fingerprint": "af12280c3aa8bafecff7d58f3ffca02e0b8aa5dabc7d6bc6a3f3200d263a7396"
  },
  {
   "ecosystem": "nix",
@@ -2634,10 +2634,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c77be26505",
+  "id": "nxy-c77be26505",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "8cd2819fa64cd518a7ac7db9895b6ebc22b72c5c200003bdfcd096d9ab2ca9ed"
+  "fingerprint": "7693b924ba217bfc184c722aa5a0f9bd447cb658443e178e5d79d27f91b281c4"
  },
  {
   "ecosystem": "nix",
@@ -2649,10 +2649,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3cc5c44054",
+  "id": "nxy-3cc5c44054",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "a510d09f0ffc6ce6e81d301665fc508adbfe52365a2d55a04dd4a3319d75a67b"
+  "fingerprint": "77b7061d5e71d59e6ec7c9bd6e5e1b99af3019f230d9ae4bc183d7af87855d66"
  },
  {
   "ecosystem": "nix",
@@ -2664,10 +2664,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f5097c1b7f",
+  "id": "nxy-f5097c1b7f",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "a31385088a826a7cd7508c46cbace5009b786dad96c4007311f164bd86cee0b3"
+  "fingerprint": "e82bc178dcf75cf0a920bdf1b5c4a607fad3082eea76585f16e56bd9ce1c4e79"
  },
  {
   "ecosystem": "nix",
@@ -2675,14 +2675,14 @@
   "label": "safe",
   "group": "nix|secret-in-store|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "runtime-path",
+  "nearMiss": "not-a-secret",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-ed81dc1e3c",
+  "id": "nxy-ed81dc1e3c",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "ebb2ed23293d2b3802dcf6431c812980eb51c8395624f5e98ae10ea1223929a8"
+  "fingerprint": "51a20efc6f034aded802de29be03edc084571a139119c240a34a1f9d3e674199"
  },
  {
   "ecosystem": "nix",
@@ -2690,14 +2690,14 @@
   "label": "safe",
   "group": "nix|secret-in-store|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "runtime-path",
+  "nearMiss": "not-a-secret",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-760724fd3f",
+  "id": "nxy-760724fd3f",
   "path": "configuration.nix",
   "cwe": "CWE-312",
-  "fingerprint": "d2c783af32e239fed3b79ce86b0d915df81abab20607fdb747311f4bae02e86b"
+  "fingerprint": "15a3034dce73add0953b783c127a19d10a0d20f332e9da96df324f5799b0aedc"
  },
  {
   "ecosystem": "nix",
@@ -2709,10 +2709,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3066a9573d",
+  "id": "nxy-3066a9573d",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "7b388a7e044563aedeb6219efd899c8af5418bf9f9e31133cec04b4e6b57e8b0"
+  "fingerprint": "201e5720692679c67e64cbb8c7063e98bde0c2315b1e73bd749d2c6979ccb9e6"
  },
  {
   "ecosystem": "nix",
@@ -2724,10 +2724,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-79d4af6b30",
+  "id": "nxy-79d4af6b30",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "fd24abcfe3069e87bcf23ced0c7ac9701995919cbee550add44cfc174eeec967"
+  "fingerprint": "96479650e9fe3f42ddcafa26be97a6dac29b05ff9933e18425adaed90e89506e"
  },
  {
   "ecosystem": "nix",
@@ -2739,10 +2739,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-a234ecea6c",
+  "id": "nxy-a234ecea6c",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "16074af18aea2cf5c45c7b9e3e8093975b14f9bfa5a0286c9c320e7628c3ddf9"
+  "fingerprint": "c5fcf756f9619d29a2b9ad75af0360c43750d9a0b088800cd40cc35b9491031d"
  },
  {
   "ecosystem": "nix",
@@ -2754,10 +2754,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-ef6104b5a6",
+  "id": "nxy-ef6104b5a6",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "943445ef0b579b6359398900a5a88286c0ec3bf55bc30d74e038c8d3f4475cb2"
+  "fingerprint": "7816b7a8607cf636bfc1170b96bee7d89358f9c282c048b03276a8c1a3035d80"
  },
  {
   "ecosystem": "nix",
@@ -2769,10 +2769,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-99b1c1fbb9",
+  "id": "nxy-99b1c1fbb9",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "22c55a1bd98eb951dc8e94af9d04045c222dc75e4621c85223d20054b0827d6c"
+  "fingerprint": "5c5d3f4a90dcb68950df0e5dac7210f0e5609221e81d8a91bf3d1ca6fd7422bf"
  },
  {
   "ecosystem": "nix",
@@ -2784,10 +2784,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-5050072b1c",
+  "id": "nxy-5050072b1c",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "75b56f333071155c446b719e935bf174a9a543afddf67e29480106b21c5ba3a6"
+  "fingerprint": "7e2b8bf46c31cd84578c520c2c25f7426e7feda3cf9a7126720e1755dcd2abaa"
  },
  {
   "ecosystem": "nix",
@@ -2799,10 +2799,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-0eaeedabea",
+  "id": "nxy-0eaeedabea",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "a548dab68d022a1355e2317cf54e0e5d9a88b94ddab74a646791b5fb0830a629"
+  "fingerprint": "bdd74e2acec2b5e1dfb79c699596ed7a693f206f03ac6983bfa194176ae24f68"
  },
  {
   "ecosystem": "nix",
@@ -2814,10 +2814,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-d845416cee",
+  "id": "nxy-d845416cee",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "3b22fae1cf6c00c7e25841fa453e2023a6eb9c6fffecd711761e3f67c7e5bc50"
+  "fingerprint": "b732b02c0ea51151e1d5e1cc46c712a6e34411a20a81817c260fdd0e3681ce84"
  },
  {
   "ecosystem": "nix",
@@ -2829,10 +2829,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-28c8873323",
+  "id": "nxy-28c8873323",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "c93fef2057123ebe0ed6c6a64698bf124d0d24e661c10d8694b64d435d360504"
+  "fingerprint": "5715448bf92178552ca4e731de6526211809c08c3f0b72958dd38fedbe36f9bd"
  },
  {
   "ecosystem": "nix",
@@ -2844,10 +2844,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-328b5f55b1",
+  "id": "nxy-328b5f55b1",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "9dae62ce8e75596f0c3d020f260893b1de1c226c93de15a39f09cb0c57e53a3e"
+  "fingerprint": "f580a34e04059bc8641a50828e77815f4b2a34e03fa68585231a49093da7bd09"
  },
  {
   "ecosystem": "nix",
@@ -2859,10 +2859,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-89564d8ae0",
+  "id": "nxy-89564d8ae0",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "f8df1e1eeb4d1011739cd92b669cfc105bf761b97d8db68f70b05852aa624438"
+  "fingerprint": "cabeb2fa20ad45825a494e2d05239a4904e436ea35c1bd843bd7af618fa3c67a"
  },
  {
   "ecosystem": "nix",
@@ -2874,10 +2874,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-12a5b8fe8a",
+  "id": "nxy-12a5b8fe8a",
   "path": "configuration.nix",
   "cwe": "CWE-494",
-  "fingerprint": "d331b45160e3e81d7f8b9959a010d7170ee42ebd36a519b6c377a786b2585b10"
+  "fingerprint": "a95e655e73b275a4a0b534b880e40b6a7e1ed72170a785a1e08f45b2b781dd82"
  },
  {
   "ecosystem": "nix",
@@ -2889,10 +2889,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-b70f8864b8",
+  "id": "nxy-b70f8864b8",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "e83282135df30cbcbbfd0d1f75176bfdcb7edb65b1af8bcd86e9fd1f812a048a"
+  "fingerprint": "13add51f314ebd4abe972599985a572c92d360cc39632e76e41f79d5db28c79b"
  },
  {
   "ecosystem": "nix",
@@ -2904,10 +2904,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-a966d68e88",
+  "id": "nxy-a966d68e88",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "0442c922a5b619fd86ee215b301dc9df9b4e56d1f44a79b0930881f9fb3c11bc"
+  "fingerprint": "c23b40f9c8cd7865b72d082803c1a56137ca8ada23dd0b1f2cd39f1987753c51"
  },
  {
   "ecosystem": "nix",
@@ -2919,10 +2919,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-72d91ff61c",
+  "id": "nxy-72d91ff61c",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "6ddc6488d973f5e74466b0359a0f213da0262c7a6aadf5ffe37990a8c6cc2386"
+  "fingerprint": "744eb037cd4a6d32ccfba08ceb34690d1fd9c2994f18f5dee958d96d21ed77e0"
  },
  {
   "ecosystem": "nix",
@@ -2934,10 +2934,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-65d128eaf0",
+  "id": "nxy-65d128eaf0",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "23f1bba4fdf3ec79b516bd636fca27388969e1ad9ef32ce7d44d4f42b0c594b8"
+  "fingerprint": "c91e84c39309d06acc281394e813a1e57c42b1253077f61f0d009b1a543c8b5b"
  },
  {
   "ecosystem": "nix",
@@ -2949,10 +2949,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3b94633405",
+  "id": "nxy-3b94633405",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "12ae42b67c04ec4e59ad8a914e776d426f89114997c8a350e5b1c5ce837be076"
+  "fingerprint": "456ef6423c83ee42dd38e84ffd3a6cbff2960057936743c9e53e025ac606bb75"
  },
  {
   "ecosystem": "nix",
@@ -2964,10 +2964,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-dd039087ee",
+  "id": "nxy-dd039087ee",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "e6d644a98db7f80ffc11b8a8a34a500dda3e3650492c5be0d6a068d6c794333c"
+  "fingerprint": "09c70b33eab7843973d17cd050de676d232b1142c802207fcd470816e537a5fa"
  },
  {
   "ecosystem": "nix",
@@ -2979,10 +2979,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-37824e3ba8",
+  "id": "nxy-37824e3ba8",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "51476cc7919b83bbb2d48fc63a144eb85ebe47e7410f6193d8caf1518921b053"
+  "fingerprint": "697019a8ba11637cd55a0e4ceb327e7f40c411766f41b3e90862ff8dddf91b1e"
  },
  {
   "ecosystem": "nix",
@@ -2994,10 +2994,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1f76244c0e",
+  "id": "nxy-1f76244c0e",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "771836b62395b593f09a7bec963dc1e9b963e098a4e87bddddfc6d419a1fd79e"
+  "fingerprint": "5d1890c363f046b6f67a53ed3b7c951832b97aaf2748cf70c515c2e03e588728"
  },
  {
   "ecosystem": "nix",
@@ -3005,14 +3005,14 @@
   "label": "safe",
   "group": "nix|binary-cache-trust|safe|u1|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "tls-cache",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-ddec9a7ddc",
+  "id": "nxy-ddec9a7ddc",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "09e442dfb97297442d98d1d807f569bbcbcd7b67a64ff4520d9f6e66546cca31"
+  "fingerprint": "189bfc87d7731d7565b8c4e42f8ddc6f987077e2b98cb5cf91cf52ba90f4adef"
  },
  {
   "ecosystem": "nix",
@@ -3020,14 +3020,14 @@
   "label": "safe",
   "group": "nix|binary-cache-trust|safe|u1|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "tls-cache",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-aa7a715fd1",
+  "id": "nxy-aa7a715fd1",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "d015f2696cef9e4c61e233953842105c3d0e0c46cce0298cf1093fc2d14f842e"
+  "fingerprint": "29aee0129ad6c2700b474663d31b343dfd556fa47333152bcf5047b0fed3623d"
  },
  {
   "ecosystem": "nix",
@@ -3039,10 +3039,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e3158ac716",
+  "id": "nxy-e3158ac716",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "2997fba1264b4376a8adeeb0f05e8e85031ae1333f2f47597ec56921f3618139"
+  "fingerprint": "9383f636aa96d43e3823b518fe0dd95621a579ef9eb9808bdcad93d71a776932"
  },
  {
   "ecosystem": "nix",
@@ -3054,10 +3054,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-aa7f582457",
+  "id": "nxy-aa7f582457",
   "path": "configuration.nix",
   "cwe": "CWE-347",
-  "fingerprint": "81f081266d4be004801fc7fdba6871c5186fe356f31127dff0acc567ddb96edb"
+  "fingerprint": "0d4405fab7b77bce936101a80954cb44a501bacccadba956c5ea12dd969b8032"
  },
  {
   "ecosystem": "nix",
@@ -3069,10 +3069,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-209a63a0c3",
+  "id": "nxy-209a63a0c3",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "d74b87009cd7f5203b19c31e7392e38447c780e173ac2cd27312d714e471ccf6"
+  "fingerprint": "d8edb30fb99739d88a849553aed615caee958f8258275a39493915003e230181"
  },
  {
   "ecosystem": "nix",
@@ -3084,10 +3084,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-bbb0635e68",
+  "id": "nxy-bbb0635e68",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "dd7f7075cf45d440483385820151c0f800a92f43b71819a2d539f7175c781abf"
+  "fingerprint": "53af8368aaf96478e07aaf3429bb065d41d6958ee2220eb9bef9fc7f46f59d56"
  },
  {
   "ecosystem": "nix",
@@ -3099,10 +3099,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-5aade58adc",
+  "id": "nxy-5aade58adc",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "1f4208ee7d88ea15ea83058b546ceaced43657ccc9e3c3e2bd6834be72a65d17"
+  "fingerprint": "dbca11ede863a84c9a47b835f62415fa4d3fb19c0653b69a8e4eb87ac560510c"
  },
  {
   "ecosystem": "nix",
@@ -3114,10 +3114,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-7e1d80f213",
+  "id": "nxy-7e1d80f213",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "a3b094a600af8ee0b495ee058dad99a169d83b7eac2d5236f1e3e41b574a24e0"
+  "fingerprint": "437ff39cfcae96f66705fb91f41f7a008ea89de7a8a11d0d1530ee1daeae1673"
  },
  {
   "ecosystem": "nix",
@@ -3129,10 +3129,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4c230c9549",
+  "id": "nxy-4c230c9549",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "1f76b204aa4961469edb82ee02aa69803810623fb1822af862db1ea9f37cfa03"
+  "fingerprint": "b439c075c1246a2e1620cd9fe09db66ff14864614c61bd03e22615a27fe2d404"
  },
  {
   "ecosystem": "nix",
@@ -3144,10 +3144,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e8c1b838eb",
+  "id": "nxy-e8c1b838eb",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "8a216c73d7cd43306f8a4aa56496ddefee915e2ad8aaef94f1e64bdd7187641e"
+  "fingerprint": "3fafcbcd3a942db6bf51246c4de5b9d7f1cb225ec8e65653b1706c76f1a982a8"
  },
  {
   "ecosystem": "nix",
@@ -3159,10 +3159,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-ae4945736c",
+  "id": "nxy-ae4945736c",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "5e6ab3493cbd301df486d683048a3ffb9d704372dc557803c25ba51efb6ca666"
+  "fingerprint": "ad7f104bcf52a517a5369911d8da7498cf3e4fd859fdebca542d4541084a7910"
  },
  {
   "ecosystem": "nix",
@@ -3174,10 +3174,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-bb8960b347",
+  "id": "nxy-bb8960b347",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "a0fbd30acbaa053c8e86e3e380d97ad7670ecbb0e334c81003789da4b96f7b2e"
+  "fingerprint": "eef5090dae2d99951b6bc252700d1937188e111da1de4811be4b47cf8453914b"
  },
  {
   "ecosystem": "nix",
@@ -3185,14 +3185,14 @@
   "label": "safe",
   "group": "nix|trusted-users|safe|u1|crm",
   "split": "unseen",
-  "nearMiss": "scoped-users",
+  "nearMiss": "unrelated-setting",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e6dab74b5c",
+  "id": "nxy-e6dab74b5c",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "1cd37cc4ab22c7afc77e60d439141b0fa2b63c60fb29ed3cbcede871f3cef67c"
+  "fingerprint": "1c668a4bf55693422cd05c9d3321e4fa8e54d26ef9251480e6e539e8a4b4a363"
  },
  {
   "ecosystem": "nix",
@@ -3200,14 +3200,14 @@
   "label": "safe",
   "group": "nix|trusted-users|safe|u1|billing",
   "split": "unseen",
-  "nearMiss": "scoped-users",
+  "nearMiss": "unrelated-setting",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-47a97aef57",
+  "id": "nxy-47a97aef57",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "ae948fbafc872ff17044958c314bbf2f9b23b4ad8c244e8a75722396dbe45ba9"
+  "fingerprint": "7270856ba4272fde2b1d837e0bd068415ac6e74876ef8ae41499f743015b7434"
  },
  {
   "ecosystem": "nix",
@@ -3219,10 +3219,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-afc9def6a9",
+  "id": "nxy-afc9def6a9",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "dcf744402298738f8a448fc18a93789970c6f8df837b04e3f8ad051c485cfe84"
+  "fingerprint": "65f6d299ffe9a20467b18c1eaf52e701df97908d8e72f3f544fe3dccc3e74c25"
  },
  {
   "ecosystem": "nix",
@@ -3234,10 +3234,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-363b124275",
+  "id": "nxy-363b124275",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "c66ad85c5238c77cd054d9023134f5b8b946ba0d6268c0dac5c0175ce1a35f18"
+  "fingerprint": "fec5459d07867f4778aabaeb7d9dc39739f38c9e8297463dd1ff40adad064773"
  },
  {
   "ecosystem": "nix",
@@ -3249,10 +3249,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-a55a8bc66e",
+  "id": "nxy-a55a8bc66e",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "b126d262f018debd6ef977836aeebe15827c5909926e0b835e72e248e7daff29"
+  "fingerprint": "caee54d2a12066886de76440ef0371cd247ff7ce36954c61e79477ecf597f4df"
  },
  {
   "ecosystem": "nix",
@@ -3264,10 +3264,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-8381bd9de0",
+  "id": "nxy-8381bd9de0",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "ffff826911a704f29bb03bf163d5aa8c98b3dcee9604261c8e7b87079d7accc8"
+  "fingerprint": "428a95d8b92a36595c9b4ab6119bff820be826109961f64c2efd0b97f4a33ea3"
  },
  {
   "ecosystem": "nix",
@@ -3279,10 +3279,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-6357072c00",
+  "id": "nxy-6357072c00",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "b691d5b612dae20f625ee27284ccbcdb55ca7a31cfa1f2198dcdf59f6e46ae3b"
+  "fingerprint": "17c52fa1b214406e4d86d72ea7c3a979f7ea987ecbc6a4ced1a75220f28e8c15"
  },
  {
   "ecosystem": "nix",
@@ -3294,10 +3294,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-d604e139fa",
+  "id": "nxy-d604e139fa",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "bba74d7526c439d583c49c35820f36b2ab4ffa29a94c2f148daed2247f43df76"
+  "fingerprint": "5e44ba3a3186492b0ee4ab03bece284bcce379f903d841bd2011fd2a248b8bfe"
  },
  {
   "ecosystem": "nix",
@@ -3309,10 +3309,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e783950c2e",
+  "id": "nxy-e783950c2e",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "d29a6669907d5d5ef8ec17c4a9ca04be95c83e2bc12c3cc85f5e9d3d6a77891a"
+  "fingerprint": "ea1024ed7d6cd0be8156cb1f352c78d142aa1dcff193184f7a6df0eab3de0827"
  },
  {
   "ecosystem": "nix",
@@ -3324,10 +3324,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c23335fa8b",
+  "id": "nxy-c23335fa8b",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "89cb738852817ecd45d59cc71ea9f53915480fd07932a01af6366d7a21a3103c"
+  "fingerprint": "b5e61abc283a49e23465240ab5ffbd969a4c7f22ec42d41af679011468263066"
  },
  {
   "ecosystem": "nix",
@@ -3339,10 +3339,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4c5cd51eeb",
+  "id": "nxy-4c5cd51eeb",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "86d01837d2f6c5ef05ee1658e1ee4b43a489816ef36cdd23987e18ab77c359d4"
+  "fingerprint": "cafbb29d684315795b51de49deebaba279313be15dfd8bf876f6bca892425326"
  },
  {
   "ecosystem": "nix",
@@ -3354,10 +3354,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-9955ea5a99",
+  "id": "nxy-9955ea5a99",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "dd9553d322450429ecff6a5554c1212ce0b96c234195a8238704a6a6e724a02e"
+  "fingerprint": "edb0d2d8b7f792b1f1b87b99dd507275f0ef998f3de44b8bb63b1773906fa75d"
  },
  {
   "ecosystem": "nix",
@@ -3365,14 +3365,14 @@
   "label": "safe",
   "group": "nix|native-eval|safe|u1|crm",
   "split": "unseen",
-  "nearMiss": "unrelated-setting",
+  "nearMiss": "empty-list",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-a7ac1206a1",
+  "id": "nxy-a7ac1206a1",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "28d1c091d9f0797281d0a580936bc1ff1fe2ae0ff5f7cdd47df4046420525cc2"
+  "fingerprint": "d9a78faf6e7be74f3e38760d34fe95ea4a3c19f657f02eb7625712c453dacb4b"
  },
  {
   "ecosystem": "nix",
@@ -3380,14 +3380,14 @@
   "label": "safe",
   "group": "nix|native-eval|safe|u1|billing",
   "split": "unseen",
-  "nearMiss": "unrelated-setting",
+  "nearMiss": "empty-list",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-aab7c17def",
+  "id": "nxy-aab7c17def",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "95bdb47b692a2728899fb90323ee807b6612ee2869054fe57630ca0f7174ebfe"
+  "fingerprint": "63987fc4b99121630eeed042dbcc1a73463d1b8173fcd96a902d29c3d19943de"
  },
  {
   "ecosystem": "nix",
@@ -3395,14 +3395,14 @@
   "label": "safe",
   "group": "nix|native-eval|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "empty-list",
+  "nearMiss": "hardened-setting",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-cc37739024",
+  "id": "nxy-cc37739024",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "8449127bf362bd8322cbf8a2452f63a4e95bf322fc09fd53220d4bb047087bfc"
+  "fingerprint": "ab749e00e97660c0eaab9c52e317a6addfd240418295296a8ddb8bf4395b09df"
  },
  {
   "ecosystem": "nix",
@@ -3410,14 +3410,14 @@
   "label": "safe",
   "group": "nix|native-eval|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "empty-list",
+  "nearMiss": "hardened-setting",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-61a8a0bf10",
+  "id": "nxy-61a8a0bf10",
   "path": "configuration.nix",
   "cwe": "CWE-829",
-  "fingerprint": "6cbbcafffacf5f8166ec0ad66e072a456657845e0dcd2318524ae5f0035ff92a"
+  "fingerprint": "bca5b4e23a80bdc27e0fa0f17674503e386095e9efd57ca0f4183fabc219544b"
  },
  {
   "ecosystem": "nix",
@@ -3429,10 +3429,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-231e87f06d",
+  "id": "nxy-231e87f06d",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "1dc85322f8b26df924fc553d47a936aacc564d771eeee59c3835dd70340619f5"
+  "fingerprint": "93853f3e7d7acc3ae7fdac96af14af7d726abb530ae520cb5a03995e42a5920a"
  },
  {
   "ecosystem": "nix",
@@ -3444,10 +3444,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-d99c208948",
+  "id": "nxy-d99c208948",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "8a46f0653159e2b295697a673e02aae2ac722177592f1402b2a831c26578b941"
+  "fingerprint": "4bfb8cfb8279b769d24ccb16efa6500cc48f7ab3165fb25577fd2b5a40cbfed0"
  },
  {
   "ecosystem": "nix",
@@ -3459,10 +3459,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-79cad981c1",
+  "id": "nxy-79cad981c1",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "9597fca763bcc763c9456c7180ae1649a6708c7e1690a86d4b3ad638de301693"
+  "fingerprint": "fd3c3389451861eaba8155d2cf9fa30c6b95797e995ccc646eaf5ca5c952b269"
  },
  {
   "ecosystem": "nix",
@@ -3474,10 +3474,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-0b26dfb056",
+  "id": "nxy-0b26dfb056",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "4fc7f2bb452c1ff92f91aecb95bc789eac446505571e8a854369b3b5a3b5be8c"
+  "fingerprint": "ee71c24b0462213310dec5c898cafb048cd2ce608417ef2ab9c7f858771543fd"
  },
  {
   "ecosystem": "nix",
@@ -3489,10 +3489,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-34f17c75b4",
+  "id": "nxy-34f17c75b4",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "a145d13b5377da39d32eccf671f8fc05dd44145e13e2549b6b4f2e85a50bd82f"
+  "fingerprint": "e96e03c6f6c22c2224c2daf928bf55dc8a7254366e10e121f86853176a629327"
  },
  {
   "ecosystem": "nix",
@@ -3504,10 +3504,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c8ca08a758",
+  "id": "nxy-c8ca08a758",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "46f819f672bf929fdeceb3d6c9c6f10eaa6e25cc3f6ad13e6c1005de7fc376d2"
+  "fingerprint": "de620d91a4248313e9860ebb17f204b8aa6ac2071f1902b54a088ee889da8aaa"
  },
  {
   "ecosystem": "nix",
@@ -3519,10 +3519,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-8284b73843",
+  "id": "nxy-8284b73843",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "681eac70da3996d0814c8f13bd2f833bf314d2639610630705a0305a528225c3"
+  "fingerprint": "b8dfcf215eb96cbd4408ce693465ed62edb3652bf8deea620c4533551d36cb20"
  },
  {
   "ecosystem": "nix",
@@ -3534,10 +3534,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3f58b6ce3a",
+  "id": "nxy-3f58b6ce3a",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "11a0c9ff70a50604626b02552e0cb2b09802295cd9c0bda0cf0c656adbe3349e"
+  "fingerprint": "1ca5ca564ec7c9f6d2e100976b1864bad43ad034d0a676fcfd29ef521885927a"
  },
  {
   "ecosystem": "nix",
@@ -3549,10 +3549,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-46767d9982",
+  "id": "nxy-46767d9982",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "f0ec8611e1a11487a7ee9aba36fc5557c284fe0bafc0fa17be061f744a8f2bae"
+  "fingerprint": "fcac37cb6f1a4d1546ee3dd601ff968694cfd80e6edcb9b6f5a78f7429376153"
  },
  {
   "ecosystem": "nix",
@@ -3564,10 +3564,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-8d8ba0f67a",
+  "id": "nxy-8d8ba0f67a",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "12dc3660ef4a6fa28c5ab2f746fa8296d8fa9d9ed4a160f4caf3137197688aa5"
+  "fingerprint": "03a077632065fea80048b035d22a44d75358760a84c57d5c20e829042981984d"
  },
  {
   "ecosystem": "nix",
@@ -3575,14 +3575,14 @@
   "label": "safe",
   "group": "nix|sandbox-trust|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "unrelated-setting",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-dd3ebc93c5",
+  "id": "nxy-dd3ebc93c5",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "e5d2a8a78a947c241445eaac78e49eb3b6f4040594069b9f9dfcf9bf1f796bb7"
+  "fingerprint": "e8df57fa2ec808cf7341188dac9158beb94c2bcd745bb1fafbd2f72fa6f083ba"
  },
  {
   "ecosystem": "nix",
@@ -3590,14 +3590,14 @@
   "label": "safe",
   "group": "nix|sandbox-trust|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "unrelated-setting",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-18684e1e26",
+  "id": "nxy-18684e1e26",
   "path": "configuration.nix",
   "cwe": "CWE-693",
-  "fingerprint": "c2178a0761289cc28e139d522ecba8ca3d71ca27b29c241cae1b0d19353e4636"
+  "fingerprint": "412ce7453bbfc59cd6147ecfeaba8ed6cab7b3cddca66faef2d54dfd5626c1d6"
  },
  {
   "ecosystem": "nix",
@@ -3609,10 +3609,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4f3f07a783",
+  "id": "nxy-4f3f07a783",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "72801c26c25013c63f8269729f37883d4ffe741dfc62c289c221e2d14bc14722"
+  "fingerprint": "80b871687d947ecc1ecb6a553330185279489b9fa6011fe92076241eda4253d8"
  },
  {
   "ecosystem": "nix",
@@ -3624,10 +3624,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4296c23308",
+  "id": "nxy-4296c23308",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "eacb9e3e0fccb3f2f38a01870b997e01a3719e3d9acfe7e70c85410b47322bc7"
+  "fingerprint": "5f11b170d696e1e609965fd51c4bce793e40c3d97d156cec4d54eb028cc45a0e"
  },
  {
   "ecosystem": "nix",
@@ -3639,10 +3639,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-37cac8b151",
+  "id": "nxy-37cac8b151",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "107770ceef538990c6c763cd77e90cbaa822965c16b05bffac7005ecd4ac2e3f"
+  "fingerprint": "248af4dec10dcf703c919487d657d92ca129e90598f0fc3e1577ed406d78a058"
  },
  {
   "ecosystem": "nix",
@@ -3654,10 +3654,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-99165f5bcf",
+  "id": "nxy-99165f5bcf",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "33a544b8905336cba637b8432753ae772d6696b4e0c2b6580bf10e7ff3db311b"
+  "fingerprint": "5ee0474010825eca369e9072b317b11d80c119ddcc213a72bb63e13c3b803082"
  },
  {
   "ecosystem": "nix",
@@ -3669,10 +3669,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-fb08139e39",
+  "id": "nxy-fb08139e39",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "00c9de30230b299554b5ad5d89b3d617c56740a400ccbc907fc88a7ac67386eb"
+  "fingerprint": "b22a4f7483da23db53744d3ac063486ce18ce1f598e840cd26734925a174cf81"
  },
  {
   "ecosystem": "nix",
@@ -3684,10 +3684,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3a09b3e112",
+  "id": "nxy-3a09b3e112",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "076648764742e12ac6698aa5b19a92c8cc65d69f6cbb17d8d93b7fb14fb2ddb0"
+  "fingerprint": "b81b8bb34bee2fcdd8d2324052bf86e8dfa45c1c99cd2cbeec174c2507b001be"
  },
  {
   "ecosystem": "nix",
@@ -3699,10 +3699,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3f4f595567",
+  "id": "nxy-3f4f595567",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "70287357ee22078afed93153fb428a34e88f2bec1513dd29932f94fbc303adc8"
+  "fingerprint": "8b8dd9ca5b7b320d5b2265baa95b43716a341b10fee40c5508f1aabda1f1111f"
  },
  {
   "ecosystem": "nix",
@@ -3714,10 +3714,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-9adb8b66df",
+  "id": "nxy-9adb8b66df",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "10da115e249dd1c055aa75831a001dd6bea4a56f61b03ecedc0d9fd9aacfab00"
+  "fingerprint": "3ac46d6844543e91adf23ea63f988e0f7badf8be06dffe2f77b1975891b065b1"
  },
  {
   "ecosystem": "nix",
@@ -3729,10 +3729,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1c90bbcb9c",
+  "id": "nxy-1c90bbcb9c",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "8cb9f24049c85daf65a8eb3f24f161a42d53155dc20c44327f3522a55cd1f8ab"
+  "fingerprint": "10c71681555d4b76a455eda2d6ad7f3f114c529d7f08a7d21604f951526473d2"
  },
  {
   "ecosystem": "nix",
@@ -3744,10 +3744,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-36d0eca835",
+  "id": "nxy-36d0eca835",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "b34b7a776aabebe24a219827900792d1165b83d5c5a3825b96a0c44879cb005f"
+  "fingerprint": "10c71681555d4b76a455eda2d6ad7f3f114c529d7f08a7d21604f951526473d2"
  },
  {
   "ecosystem": "nix",
@@ -3755,14 +3755,14 @@
   "label": "safe",
   "group": "nix|ssh-access|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "service-disabled",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-5439b56e4f",
+  "id": "nxy-5439b56e4f",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "c0347198d1f99e19041d26724030b529fd4a8f33145beeb48a531c8c1a3381a8"
+  "fingerprint": "d73dc5c9dac8ee582bad63332338118d6b78bb9a221cb30dbe3bb6e3dc5ef6b9"
  },
  {
   "ecosystem": "nix",
@@ -3770,14 +3770,14 @@
   "label": "safe",
   "group": "nix|ssh-access|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "service-disabled",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-129084fe78",
+  "id": "nxy-129084fe78",
   "path": "configuration.nix",
   "cwe": "CWE-287",
-  "fingerprint": "88bd8a312922a25ebe1a7778999b3181e9b686babf85d3698716e37541b41efd"
+  "fingerprint": "7d05cb84296e31c11633aa1cb0fb69dde3ee681f8d57cb0a4f37eff7ac6bb81b"
  },
  {
   "ecosystem": "nix",
@@ -3789,10 +3789,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-6ee949fb7e",
+  "id": "nxy-6ee949fb7e",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "dd113a3ae1813ec17963b214d0f799b4cdaa7963b7d453f37cad23e6e2529240"
+  "fingerprint": "99124febe8f10092a677e8a3d12eb007304eb3832e0e3a9127f8c3b59ec0d796"
  },
  {
   "ecosystem": "nix",
@@ -3804,10 +3804,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-50432349d7",
+  "id": "nxy-50432349d7",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "23d88afdd5d13ce19bd8c9abac661b1535fb6b69e22f67081068814b7fc87676"
+  "fingerprint": "31866917505b22b0b035891d08cb29cd897421d06215ec72bb2b1527fd8be3a6"
  },
  {
   "ecosystem": "nix",
@@ -3819,10 +3819,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-81caca3288",
+  "id": "nxy-81caca3288",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "ad5f277b42fb57b4e6bb2738ad3aef9a099c58efe694f0d77fdcb133f65596d6"
+  "fingerprint": "8f20f5b6045c42ce330542b439ca996c7d60b5f82364f96caea9702b0e91045a"
  },
  {
   "ecosystem": "nix",
@@ -3834,10 +3834,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-8db896fd28",
+  "id": "nxy-8db896fd28",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "0e9be1a1e0dbcf2f7e3216bd52b30d508e0a9b67c5e1dfcc586196c961fb09d1"
+  "fingerprint": "3d0b46b490ca86e4fd43ab43123a70281f1c8fef1a6f6ca34e969bb3ace4cd91"
  },
  {
   "ecosystem": "nix",
@@ -3849,10 +3849,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-13954bc675",
+  "id": "nxy-13954bc675",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "e2cf948febe795047a87a90d00ef3ec2eab0cebfb7f02ef6c33030c29e1c05f9"
+  "fingerprint": "da3e9dad287d8ab309409cb64e10d347da3e780485e4a7402507d5926d9ad69b"
  },
  {
   "ecosystem": "nix",
@@ -3864,10 +3864,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e89565afa4",
+  "id": "nxy-e89565afa4",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "beb30e8d4103c6684e8f3fb61dd8bea767a42b55c2f07c75818c1e47b6e73b03"
+  "fingerprint": "5594097158ae606b6a2b2608c44019857647b29d43a8a8f058bca540093ee2b5"
  },
  {
   "ecosystem": "nix",
@@ -3879,10 +3879,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f6fdf07939",
+  "id": "nxy-f6fdf07939",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "b9f6005182f3701daf488567e06f63979ca07a9254cdcf1023088b33c1146d31"
+  "fingerprint": "3fac6ad2a2720d34c652bc99c112106f34b61cfa0bd907d96d1791eae08a5e57"
  },
  {
   "ecosystem": "nix",
@@ -3894,10 +3894,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-7d5ecd73b7",
+  "id": "nxy-7d5ecd73b7",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "e4d38c9e0475ea84179332ced5e7653a472b0c2ae01a90fc42baaba33bcc0908"
+  "fingerprint": "c8b9bb0690ce5e788af561571225867c9e9e37b8866e76b78162a8eed939c860"
  },
  {
   "ecosystem": "nix",
@@ -3909,10 +3909,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f9e514573d",
+  "id": "nxy-f9e514573d",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "4ee1b5e213269d2518b3d2f267d90cda9b6f0e87ed3deedd788d1ac066deb2b9"
+  "fingerprint": "3d8824f7a94f0cb8d95c94f9c9ec5a48bd5965522737cc652c220e4c60cb5016"
  },
  {
   "ecosystem": "nix",
@@ -3924,10 +3924,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-49a7b43d11",
+  "id": "nxy-49a7b43d11",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "cbac4788ad13c3dc17d5efe4d132f7377cd28b7687cde539c6a4e77fee7c8c0e"
+  "fingerprint": "47c9d3b8248e3b5f71952ae4d4bda898402e303dfe2e9e0c77aa9d90c028d434"
  },
  {
   "ecosystem": "nix",
@@ -3935,14 +3935,14 @@
   "label": "safe",
   "group": "nix|service-privilege|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "scoped-service",
+  "nearMiss": "low-risk-capability",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c27353a2a2",
+  "id": "nxy-c27353a2a2",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "0be7678f2e328ef9b97455afe6d9f0f260ece77f6047fabdd28405cc11713b99"
+  "fingerprint": "3a1b9bcd4af52af0904748413d798f13cf8d9ee2b0b94c1299fb39952fea0504"
  },
  {
   "ecosystem": "nix",
@@ -3950,14 +3950,14 @@
   "label": "safe",
   "group": "nix|service-privilege|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "scoped-service",
+  "nearMiss": "low-risk-capability",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-231f0223cb",
+  "id": "nxy-231f0223cb",
   "path": "configuration.nix",
   "cwe": "CWE-250",
-  "fingerprint": "c5b5da81486094df3a858bb0480d83878812a08c8dbf6ac86758e74148e3693c"
+  "fingerprint": "5710f0c11824a4e5cde8652f37dac0e475613567b4ddb6e927496e1e9c19b33f"
  },
  {
   "ecosystem": "nix",
@@ -3969,10 +3969,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-9f3b0b64d4",
+  "id": "nxy-9f3b0b64d4",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "127287ff38a697b6f94482d71c56e194757dafa497e1253f110ccd225f204cbb"
+  "fingerprint": "cba14111361d0c7184ee5e813b5457c9e2e18d0ee03f583ffb3afe722e73aa1d"
  },
  {
   "ecosystem": "nix",
@@ -3984,10 +3984,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-5369a85d1f",
+  "id": "nxy-5369a85d1f",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "c65a0b22d4e4eba83317cdc55a426244887a362c5569434a21b3f4c781435d18"
+  "fingerprint": "590dfc50b8e5ba4f6c73f0457e614c1fb61be628cbfa54ab09a0ff08a4dd9de7"
  },
  {
   "ecosystem": "nix",
@@ -3999,10 +3999,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-76c20585e7",
+  "id": "nxy-76c20585e7",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "f3f1dd9659cfcf018a41ddac6f427452d567af347357a1ddda43f57f592ce485"
+  "fingerprint": "e6e7f43c7d0c9ba588ac2378ecfcfdd11a02d2a2fa06c1ad7e304106a3a47ffe"
  },
  {
   "ecosystem": "nix",
@@ -4014,10 +4014,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-beef777f78",
+  "id": "nxy-beef777f78",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "f064b3809b5e218e67daf74246f868cb25e8291615355572d7fe5ce7944d4af7"
+  "fingerprint": "e6e7f43c7d0c9ba588ac2378ecfcfdd11a02d2a2fa06c1ad7e304106a3a47ffe"
  },
  {
   "ecosystem": "nix",
@@ -4029,10 +4029,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-baeef623d0",
+  "id": "nxy-baeef623d0",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "e51fbb6c6a5fd93771f357f01e2baa6cfb60fa14c62afa1c3d47f623c3da0d15"
+  "fingerprint": "4d5cc55fc48c1c745e8d24938893c0fe749e66a71c8b394c447d088c26bef859"
  },
  {
   "ecosystem": "nix",
@@ -4044,10 +4044,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f73984277e",
+  "id": "nxy-f73984277e",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "0fcb7429accc8ec1827c806e392f21ad3441569e6edc533a95e0175b990f894f"
+  "fingerprint": "3e28df6b94a756ccf7f76664f42bdd4a6b3066ca1e4857f693658080ceb9dcf5"
  },
  {
   "ecosystem": "nix",
@@ -4055,14 +4055,14 @@
   "label": "safe",
   "group": "nix|firewall-exposure|safe|u0|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "narrow-range",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1dae7c1e90",
+  "id": "nxy-1dae7c1e90",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "e518b64a42327f9a97cac770709606dfd77c42a1a4d7e1562013f001e55a7f3c"
+  "fingerprint": "5bfdcf2e2c469e1728a9046e9f91a73a3e6eeb49bd25dc145e57329f02ed3b7b"
  },
  {
   "ecosystem": "nix",
@@ -4070,14 +4070,14 @@
   "label": "safe",
   "group": "nix|firewall-exposure|safe|u0|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "narrow-range",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-9604ea0a4c",
+  "id": "nxy-9604ea0a4c",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "fc6ff469d1cb160f4febe3a4a18c78b6349109e453e17683c50ce12dcf30f954"
+  "fingerprint": "3967a2f322b523f65a9fba0f6aa29b2c6e6da88c96fd1cfa82db0607c3193448"
  },
  {
   "ecosystem": "nix",
@@ -4089,10 +4089,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1b07dd4658",
+  "id": "nxy-1b07dd4658",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "95fcd429d8e1a184953fb150928477e0778ef483ac04eb2d1ccdf4efcae8a694"
+  "fingerprint": "63723d0db3c59876535cf320bf0d2909cc02b27879925e761d1eb3695a709996"
  },
  {
   "ecosystem": "nix",
@@ -4104,10 +4104,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-a6f2052806",
+  "id": "nxy-a6f2052806",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "60b3a38a3bb6e9e967fae216aa1254958c51cb721556cfacaa8d26aa6de04c9d"
+  "fingerprint": "9293d89a191092493c81fd60ff166c502c27f70378489fa17342a8fb24f6bdaa"
  },
  {
   "ecosystem": "nix",
@@ -4115,14 +4115,14 @@
   "label": "safe",
   "group": "nix|firewall-exposure|safe|u2|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "interface-scoped",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-693d5feb08",
+  "id": "nxy-693d5feb08",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "e14126d653cdce63a2c24c4dd55dfe5fd3cb25970cb460b99af89dfe4ce5ab61"
+  "fingerprint": "4caf8b6d26d2e05559dfcdda1ca6e296eeb1f5126a09302d0dba9001e2fa7e8c"
  },
  {
   "ecosystem": "nix",
@@ -4130,14 +4130,14 @@
   "label": "safe",
   "group": "nix|firewall-exposure|safe|u2|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "interface-scoped",
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-b936eb4762",
+  "id": "nxy-b936eb4762",
   "path": "configuration.nix",
   "cwe": "CWE-284",
-  "fingerprint": "7cc77b63b59443595199b8298b4c27d2343d6f925d17818a11086306b6ca0cae"
+  "fingerprint": "4caf8b6d26d2e05559dfcdda1ca6e296eeb1f5126a09302d0dba9001e2fa7e8c"
  },
  {
   "ecosystem": "nix",
@@ -4149,10 +4149,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-0ab3e7b04c",
+  "id": "nxy-0ab3e7b04c",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "f63bec7227b6f11ee37d0594792725150ba17b5439384c0d9e86698cab0b5bc4"
+  "fingerprint": "467cb25cba805df5ae980c7ab3ee105706896d8e1703880bc3152e3eb29b7984"
  },
  {
   "ecosystem": "nix",
@@ -4164,10 +4164,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c672b991bb",
+  "id": "nxy-c672b991bb",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "02480ae261282a24a48f22161a33a8791ed8537e533a1ec695e1f385b9ec1467"
+  "fingerprint": "2644f425e540c3670e551077fa89f01c4285f34e9be4884285fc732cb8500a63"
  },
  {
   "ecosystem": "nix",
@@ -4179,10 +4179,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1b2658a5f9",
+  "id": "nxy-1b2658a5f9",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "f0a958c2d9e4972aecd3723a2bf0f9ac102ec216b49b2d57a4ec52f975e9e0ff"
+  "fingerprint": "2e400fe9dcef53c7abcc2ef9757729bff33a6597f4f02bac726e89e6c944a636"
  },
  {
   "ecosystem": "nix",
@@ -4194,10 +4194,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-dc5ddebfc5",
+  "id": "nxy-dc5ddebfc5",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "9ea52d228b20f35e9aaca55a0a87c6f8832256c304e3686e35d1b0a34d7f69bc"
+  "fingerprint": "d1430b1b95e28e55107a05c359b9fa8e137bf2ef34d79bc728457de65405a3e0"
  },
  {
   "ecosystem": "nix",
@@ -4209,10 +4209,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-326e003a8e",
+  "id": "nxy-326e003a8e",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "9cf2be6cc91cb0efda8a8a1c3e5d74d6a9928bd06bf9918f525a07c225959453"
+  "fingerprint": "ce67dd7f88857a2d88e1c6de967d80ae75af79cee7e348dbef7042b704b11808"
  },
  {
   "ecosystem": "nix",
@@ -4224,10 +4224,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-c4915b441d",
+  "id": "nxy-c4915b441d",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "6d780ddd108d5a7e0a356710d530f9fa40b4da28397a0c59b34a5b32dd5e837d"
+  "fingerprint": "78616b9ae122a477a9bcc34fbc77503f1ba0d718275b4b2813f9e282c5033f7c"
  },
  {
   "ecosystem": "nix",
@@ -4235,14 +4235,14 @@
   "label": "safe",
   "group": "nix|privilege-escalation-policy|safe|u0|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "scoped-command",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-6b9e657c4c",
+  "id": "nxy-6b9e657c4c",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "73eca10e43aae4d650002ddcdb124194b76d76e9e370d37bf268b3e74d3cd070"
+  "fingerprint": "f378d5915f4aed420d5255cb5d0112583989cca3b1054b8b50ce92bec90a996b"
  },
  {
   "ecosystem": "nix",
@@ -4250,14 +4250,14 @@
   "label": "safe",
   "group": "nix|privilege-escalation-policy|safe|u0|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "scoped-command",
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4f29268ef6",
+  "id": "nxy-4f29268ef6",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "2219410bbdd136ac0193c68a076bfa4ef3fbe912592334874804399b5a4033f7"
+  "fingerprint": "2f6fb419b517a661e7e5569a3d545152c570a5df4f3a2a880f6ca7e258b6b3f1"
  },
  {
   "ecosystem": "nix",
@@ -4269,10 +4269,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-6cb433d6c2",
+  "id": "nxy-6cb433d6c2",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "891cb0a9a9876d8ed5a1515c46e0dc71cc1ebe5cc72aa6c7b4bca378e9294284"
+  "fingerprint": "d7f848bce20f4bd7fac51a4e87a3317c4381cda38709a4c6e06c310a9bb8ba14"
  },
  {
   "ecosystem": "nix",
@@ -4284,10 +4284,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-7e76e0463a",
+  "id": "nxy-7e76e0463a",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "87aea30ea5087c2d59c454f5a4f8fb070bd0239571aae4f529068ef6b13dbf4b"
+  "fingerprint": "55db30549c5d23e5d717a1b8fa85779fc88424b5b57e746b2459a00c8c106344"
  },
  {
   "ecosystem": "nix",
@@ -4299,10 +4299,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-4a65c7cf5d",
+  "id": "nxy-4a65c7cf5d",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "16172139d123fe44c36923af1b874eca40cf5f4bfe8ccaf01179db76de97e403"
+  "fingerprint": "3a11b16d50b539a41d258e69014170f76f0541250592d543305ad0922f032cbf"
  },
  {
   "ecosystem": "nix",
@@ -4314,10 +4314,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-8b252dd7df",
+  "id": "nxy-8b252dd7df",
   "path": "configuration.nix",
   "cwe": "CWE-269",
-  "fingerprint": "d1798133087c99ac2083beef5892877efe52bc74a7f27d2ba2618f7b57769862"
+  "fingerprint": "9fd4399431001cad26996392ae91d4bd1d4cab7e141873c9b7c0f5dafbc361a5"
  },
  {
   "ecosystem": "nix",
@@ -4329,10 +4329,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-e631441af1",
+  "id": "nxy-e631441af1",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "f30f09954808df46a120ca686a93cbe53b6b8487a02d102e2622e21e5df50943"
+  "fingerprint": "f0f160c848eaddd1a13254a7fafc3de9bd5034515f367cda94d6ec3e94cde20d"
  },
  {
   "ecosystem": "nix",
@@ -4344,10 +4344,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-123d462b7e",
+  "id": "nxy-123d462b7e",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "f64c905cc99c2db733541efb41df9b278c9209117204d9097715382eaa49891e"
+  "fingerprint": "a2932f9b5150547229aea2f7d1fca186e890d34e6a58b7a7c5baee4dd15bdc2f"
  },
  {
   "ecosystem": "nix",
@@ -4359,10 +4359,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-bf13b22c40",
+  "id": "nxy-bf13b22c40",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "b4d4ef055706aaefa963644ebd64023c6fcd92ad767349ac966bd66d5bf8ceea"
+  "fingerprint": "f05bca85210b8e26de796cd09d86657342a9ef661f040628768d343dbef68859"
  },
  {
   "ecosystem": "nix",
@@ -4374,10 +4374,10 @@
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-1c0bbbd695",
+  "id": "nxy-1c0bbbd695",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "78be880000f70d11bc639d5be04ae9b76c0c453d8ff84024a43ea0e5dd140e23"
+  "fingerprint": "463c1c06587c9d4e45f29bcb20c35567fedff8f1e08a8ba0adfbea338305b06f"
  },
  {
   "ecosystem": "nix",
@@ -4389,10 +4389,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-62e7b898bd",
+  "id": "nxy-62e7b898bd",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "7952395451229de014c909959e465feb2d937d01287226a034fbcbd82316358d"
+  "fingerprint": "34af9cee8294cb9f3dfc8356042a18b37ef2ff3ee9f8d5fa06e895fcc0852e76"
  },
  {
   "ecosystem": "nix",
@@ -4404,10 +4404,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-bab107e075",
+  "id": "nxy-bab107e075",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "e3529b895d6b44d55ee497cff26629996e06f80baa388eb673b4f69bb47c8c38"
+  "fingerprint": "c79f2da18bffb562b2c6231ac39798faa75d05cbee7f1b95a7ff4bc191d68a84"
  },
  {
   "ecosystem": "nix",
@@ -4419,10 +4419,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-78469aeb07",
+  "id": "nxy-78469aeb07",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "c7a5a093cefed3a7d74dcbfab6b17a48537835e8316e1e02c6947ce6071cdc19"
+  "fingerprint": "4be1873bb4f62ab053d379f14a7dad985569da0389c646e22d94cae21757b2fc"
  },
  {
   "ecosystem": "nix",
@@ -4434,10 +4434,10 @@
   "shape": "u0",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-3dc1dfcd15",
+  "id": "nxy-3dc1dfcd15",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "14f633edaba5fe8ced3749e5ba121ef4168f2f96d39f92d26ab057d12f07d7aa"
+  "fingerprint": "7af2707c18f9f93f39a9b15b49814f6a4c1efb45d275bb44d8d3bc3f6aa4bb68"
  },
  {
   "ecosystem": "nix",
@@ -4445,14 +4445,14 @@
   "label": "safe",
   "group": "nix|tls-secret-runtime|safe|u1|crm",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "runtime-path",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-5a02754cf5",
+  "id": "nxy-5a02754cf5",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "df989f95851f22c5accd7e650f5ba5585d8d52a1dac11626d3b550c2a5f1a51d"
+  "fingerprint": "3c3c78b35273b1415b8c69a80045d51bfcd321c332751a7cf15289bbb694ee7e"
  },
  {
   "ecosystem": "nix",
@@ -4460,14 +4460,14 @@
   "label": "safe",
   "group": "nix|tls-secret-runtime|safe|u1|billing",
   "split": "unseen",
-  "nearMiss": "hardened-setting",
+  "nearMiss": "runtime-path",
   "shape": "u1",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-dd97324d52",
+  "id": "nxy-dd97324d52",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "8e8a8f1b91cda4b7600eba4e967e7f5894b8c7ed196226d2d5f26ed17cccf3fb"
+  "fingerprint": "cdc5877b5cef8b8b6c2c62a17760517762b6c8e46d399a05f0cec24d2ac9b8a6"
  },
  {
   "ecosystem": "nix",
@@ -4479,10 +4479,10 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-7a94ddd011",
+  "id": "nxy-7a94ddd011",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "3308dfda5cdce5c459d7ddaa2bf6590c1abd828c6092e17131687a254cc233cb"
+  "fingerprint": "c3d36d7237ad750bb1ad462e989dd6ba5ef597d61762b3cd1dd226f04551e72a"
  },
  {
   "ecosystem": "nix",
@@ -4494,9 +4494,9 @@
   "shape": "u2",
   "labelledBy": "author",
   "j": 0,
-  "id": "nxv-f15ce5af5e",
+  "id": "nxy-f15ce5af5e",
   "path": "configuration.nix",
   "cwe": "CWE-319",
-  "fingerprint": "20d28367c8c97dcc014193c4d04c4f53497126c1ab365b16e107852ca8ab6d65"
+  "fingerprint": "bb422da2231ede159789a260a34f1f49ed6f8c97e21e2a1d65134ee69643a18d"
  }
 ]

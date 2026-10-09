@@ -1,7 +1,7 @@
 // QA-001 SHAPE-DEV set (formerly 'unseen-v1').
 //
 // STATUS: DEVELOPMENT. These shapes WERE used to change the engine (see provenance.json, revision shapedev-v1), so they no longer measure
-// generalisation: they are kept as a regression set for the fixes they motivated. The unseen split is now templates-unseen.mjs (v2),
+// generalisation: they are kept as a regression set for the fixes they motivated. The unseen split has since been replaced twice (see templates-shapedev2.mjs and templates-unseen.mjs),
 // written after those fixes, measured once, and never to be tuned against. The text below is the original header.
 //
 // QA-001 UNSEEN shapes (premortem remediation: generalisation beyond the template family).
