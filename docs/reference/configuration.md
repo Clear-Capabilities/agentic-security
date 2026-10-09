@@ -71,6 +71,22 @@ CI environment that doesn't invoke the CLI flags:
 Files read by exact path (never discovered by walking): `dist-newstyle/cache/plan.json`, `.stack-work/dependencies.json`,
 `nix-export.json` and `.direnv/nix-export.json`. See [Haskell](../guides/haskell.md) and [Nix and NixOS](../guides/nix-nixos.md).
 
+### Assurance features (opt-in, all off by default)
+
+The new verification, boundary, invariant, capability-enforcement, routing and portfolio features share one switch layer. A disabled feature changes nothing about an existing scan or report.
+Precedence, highest first: kill switch, explicit option, environment, `.agentic-security/assurance.yml`, default (off).
+
+| Variable | Effect |
+|---|---|
+| `AGENTIC_SECURITY_NO_ASSURANCE=1` | Kill switch for every assurance feature. Wins over everything else. |
+| `AGENTIC_SECURITY_NO_<FEATURE>=1` | Kill switch for one feature, e.g. `AGENTIC_SECURITY_NO_MODEL_ROUTING`. |
+| `AGENTIC_SECURITY_ASSURANCE_<FEATURE>=1\|0` | Enable or disable one feature. Features: `VERIFICATION_ORACLES`, `DEPLOYMENT_BOUNDARIES`, `INVARIANT_SCENARIOS`, `CAPABILITY_ENFORCEMENT`, `MODEL_ROUTING`, `PORTFOLIO_ASSURANCE`. |
+
+`.agentic-security/assurance.yml` takes `version: 1`, `features: {<id>: {enabled: bool}}` and `limits:`. A project file cannot enable a high-risk-execution feature (`verification-oracles`, `invariant-scenarios`, `capability-enforcement`): the file lives in the scanned repository, so only the environment or an explicit option can. Invalid configuration disables the affected feature and is reported.
+Limits (`timeoutMs`, `retries`, `maxOutputBytes`, `maxRequestBytes`, `maxFileBytes`, `maxMemoryMiB`) are finite integers with hard ceilings. `maxMemoryMiB` is carried for a runner and is not enforced by the configuration layer itself.
+New model and network calls go through the existing egress policy and redaction (`egress-policy.yml`), with no endpoint default and no cloud fallback. A missing provider, credential, collector, backend or dependency yields a typed `blocked`, `unsupported` or `degraded` result, never a prompt.
+Capability enforcement is only supported on Linux; other platforms report `unsupported` with the reason.
+
 ### Turning a detector off
 
 Most detectors have a `AGENTIC_SECURITY_NO_<NAME>` kill switch (e.g.
