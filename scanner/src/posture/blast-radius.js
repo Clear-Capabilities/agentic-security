@@ -734,8 +734,12 @@ function buildNarrative(finding, signals) {
     ` (controls reducing cost: ${[...signals.controls].join(', ')})` : '';
   const line = finding.line || finding.source?.line || finding.sink?.line || 0;
 
+  // A dependency advisory (Hackage, Nix) carries no `vuln` text, and `vuln` also feeds finding identity, so it is not invented there: the
+  // narrative builds its own label from what the finding does state, and leaves out a location clause it has no location for.
+  const label = finding.vuln || finding.title || advisoryLabel(finding);
+  const where = finding.file ? ` on \`${finding.file}:${line}\`` : '';
   const narrative =
-    `${finding.vuln || finding.title} on \`${finding.file}:${line}\` ` +
+    `${label}${where} ` +
     `could ${dataAtRisk.includes('rce') ? 'lead to' : 'expose'} ${dataPhrase}. ` +
     `Context: ${indProfile.label} / ${jurStr}${controlsStr}. ` +
     `Estimated cost: best ${fmtMoney(total.low)} · likely ${fmtMoney(total.likely)} · worst ${fmtMoney(total.high)}. ` +
@@ -776,6 +780,16 @@ function buildNarrative(finding, signals) {
     confidence,
     narrative,
   };
+}
+
+/** A truthful label for a finding with no `vuln` or `title`: the advisory and package it names, else a plain "Finding". */
+function advisoryLabel(f) {
+  const id = f.osvId || f.advisory || (Array.isArray(f.ids) && f.ids[0]) || null;
+  const pkg = f.name ? `${f.name}${f.version ? ` ${f.version}` : ''}` : null;
+  if (id && pkg) return `Advisory ${id} in ${pkg}`;
+  if (id) return `Advisory ${id}`;
+  if (pkg) return `Vulnerable dependency ${pkg}`;
+  return 'Finding';
 }
 
 function describeDataAtRisk(dataAtRisk, userCount) {

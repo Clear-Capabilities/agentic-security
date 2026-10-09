@@ -32,7 +32,24 @@ export const GHC_BOOT_PACKAGES = Object.freeze(new Set([
   'process', 'stm', 'text', 'time', 'transformers', 'unix', 'xhtml', 'terminfo', 'Cabal', 'Cabal-syntax',
 ]));
 
-export const hackagePurl = (name, version) => `pkg:hackage/${encodeURIComponent(name).replace(/%2D/g, '-')}${version ? `@${encodeURIComponent(version)}` : ''}`;
+/**
+ * The `base` series each GHC release series ships (the series only: patch releases of one GHC can ship different `base` patch levels, so
+ * the answer is a range, never a single version). A release series absent from this table is not guessed.
+ */
+export const GHC_BASE_SERIES = Object.freeze({
+  '8.8': '4.13', '8.10': '4.14', '9.0': '4.15', '9.2': '4.16', '9.4': '4.17', '9.6': '4.18', '9.8': '4.19', '9.10': '4.20', '9.12': '4.21', '9.14': '4.22',
+});
+
+/** `>=4.18 && <4.19` for a GHC version such as "9.6.4", or null when the series is not in the table. */
+export function baseRangeForGhc(ghcVersion) {
+  const m = /^(\d+)\.(\d+)(?:\.|$)/.exec(String(ghcVersion || ''));
+  const series = m && GHC_BASE_SERIES[`${m[1]}.${m[2]}`];
+  if (!series) return null;
+  const [a, b] = series.split('.').map(Number);
+  return `>=${a}.${b} && <${a}.${b + 1}`;
+}
+
+export const hackagePurl =(name, version) => `pkg:hackage/${encodeURIComponent(name).replace(/%2D/g, '-')}${version ? `@${encodeURIComponent(version)}` : ''}`;
 
 /** The exact JSON body an OSV `/v1/query` takes for one component. */
 export function osvWireQuery(name, version) {
@@ -234,16 +251,45 @@ export function matchComponent(aff, comp) {
   }
   // `unbounded` = the manifest declared the dependency with NO version bound (`build-depends: aeson`), which in Cabal means "any version".
   // That is a declared range like any other (it overlaps an advisory, so possibly-affected), not an absent one.
-  if (comp.declaredRange || comp.unbounded) {
-    const declared = comp.declaredRange ? rangeToIntervals(comp.declaredRange) : [iv(null, false, null, false)];
+  const projectConstraints = Array.isArray(comp.projectConstraints) ? comp.projectConstraints : [];
+  if (comp.declaredRange || comp.unbounded || projectConstraints.length) {
+    const eff = effectiveDeclared(comp);
+    const declared = eff.intervals;
     if (declared === null) return { status: 'unknown', reason: 'the declared range could not be parsed' };
-    if (!declared.length) return { status: 'unknown', reason: 'the declared range admits no version' };
+    if (!declared.length) return { status: 'unknown', reason: projectConstraints.length ? `the declared range and the project constraints (${projectConstraints.map((c) => c.text).join(', ')}) admit no common version` : 'the declared range admits no version' };
     const overlap = intervalsOverlap(declared, aff.intervals);
-    if (!overlap) return { status: 'not-affected', reason: 'no version allowed by the declared range is affected' };
+    if (!overlap) return { status: 'not-affected', reason: `no version allowed by the declared range is affected${eff.note}` };
     const subset = declared.every((d) => aff.intervals.some((a) => !isEmpty(intersectIntervals(d, a)) && containsInterval(a, d)));
-    return subset ? { status: 'affected', reason: 'every version allowed by the declared range is affected' } : { status: 'possibly-affected', reason: comp.declaredRange ? 'the declared range allows both affected and unaffected versions; no resolved version is known' : 'the dependency is declared with no version bound, so any version may be selected; no resolved version is known' };
+    return subset ? { status: 'affected', reason: `every version allowed by the declared range is affected${eff.note}` } : { status: 'possibly-affected', reason: `${comp.declaredRange ? 'the declared range allows both affected and unaffected versions; no resolved version is known' : 'the dependency is declared with no version bound, so any version may be selected; no resolved version is known'}${eff.note}` };
   }
   return { status: 'unknown', reason: 'neither a resolved version nor a declared range is known' };
+}
+
+/**
+ * The versions a component may be built with: its declared range, widened by `allow-newer` / `allow-older` (which only ever ADD
+ * versions: an upper or lower bound dropped), then narrowed by project `constraints:` (hard solver constraints, so they intersect).
+ * Widening comes first because a relaxation applies to the package's own bounds and a constraint to whatever remains.
+ * @returns {{intervals: object[]|null, note: string}} null intervals = the declared range could not be parsed
+ */
+export function effectiveDeclared(comp) {
+  let intervals = comp.declaredRange ? rangeToIntervals(comp.declaredRange) : [iv(null, false, null, false)];
+  if (intervals === null) return { intervals: null, note: '' };
+  const notes = [];
+  const rel = Array.isArray(comp.relaxation) && comp.relaxation.length ? new Set(comp.relaxation.map((r) => r.direction)) : null;
+  if (rel && comp.declaredRange) {
+    intervals = intervals.map((x) => iv(rel.has('older') ? ZERO : x.lo, rel.has('older') ? true : x.loInc, rel.has('newer') ? null : x.hi, rel.has('newer') ? false : x.hiInc));
+    notes.push(`widened by ${[...rel].map((d) => `allow-${d}`).join(' and ')}, so the declared bounds are not authoritative`);
+  }
+  const cons = Array.isArray(comp.projectConstraints) ? comp.projectConstraints : [];
+  for (const c of cons) {
+    const ci = rangeToIntervals(c.text);
+    if (ci === null) continue;
+    const out = [];
+    for (const a of intervals) for (const b of ci) out.push(intersectIntervals(a, b));
+    intervals = normalizeIntervals(out);
+  }
+  if (cons.length) notes.push(`narrowed by project constraints: ${cons.map((c) => c.text).join(', ')}`);
+  return { intervals, note: notes.length ? ` (${notes.join('; ')})` : '' };
 }
 function containsInterval(outer, inner) {
   const loOk = outer.lo === null || (inner.lo !== null && (cmp(inner.lo, outer.lo) > 0 || (cmp(inner.lo, outer.lo) === 0 && (outer.loInc || !inner.loInc))));
@@ -291,6 +337,10 @@ export function evaluateComponents(components, db, opts = {}) {
         ...(ghc ? { remediation: `${comp.name} is provided by the compiler: upgrade GHC (the fix is in ${comp.name} ${aff.fixedIn.join(', ') || '(no fixed version published)'}), not a Cabal dependency bound.` } : { remediation: aff.fixedIn.length ? `Upgrade ${comp.name} to ${aff.fixedIn.join(' or ')}.` : `No fixed version of ${comp.name} is published; remove or replace the dependency.` }),
         kev: kevHit, epss: epssVals.length ? Math.max(...epssVals) : 'unknown',
         file: comp.manifest || null, line: comp.line || null, versionSource: comp.versionSource || null,
+        carriedBy: (comp.carriers && comp.carriers.length ? comp.carriers : [{ file: comp.manifest || null, line: comp.line || null, target: comp.target || null, componentKind: comp.componentKind || null, declaredRange: comp.declaredRange || null }]),
+        ...(comp.projectConstraints && comp.projectConstraints.length ? { projectConstraints: comp.projectConstraints } : {}),
+        ...(comp.relaxation && comp.relaxation.length ? { relaxation: comp.relaxation } : {}),
+        ...(comp.compilerDerived ? { compilerDerived: comp.compilerDerived } : {}),
         dataSource: { feed: db.source, generatedAt: db.generatedAt, integrity: db.integrity, feedStatus: feed.status },
         language: 'haskell', capability: 'sca', analysisKind: 'application', evidenceKind: 'manifest',
         confidence: m.status === 'affected' ? 0.9 : 0.5,
@@ -299,7 +349,37 @@ export function evaluateComponents(components, db, opts = {}) {
     }
     if (!any && !statuses.some((s) => s.name === comp.name && s.status !== 'not-affected')) statuses.push({ ...base, status: 'not-affected' });
   }
-  return { findings, statuses, feed };
+  return { findings: collapseToWorst(findings), statuses, feed };
+}
+
+const STATUS_RANK = { affected: 3, 'possibly-affected': 2, unknown: 1 };
+/**
+ * One finding per (package, scope, advisory) carrying the WORST status among the declared uses of that package, with every component that
+ * carries that worst status listed in `carriedBy`. Distinct declared ranges used to be collapsed by name and scope with the first one
+ * winning, which hid a worse use behind a milder one (found by the live Hackage feed bench). The milder uses are not dropped from the
+ * record: `otherUses` lists them, and every use keeps its own row in `statuses`.
+ */
+export function collapseToWorst(findings) {
+  const groups = new Map();
+  for (const f of findings) {
+    const k = `${f.name}\u0000${f.scope || ''}\u0000${f.osvId}\u0000${(f.ids && f.ids[0]) || ''}`;   // two records for one advisory stay two findings
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
+  }
+  const out = [];
+  for (const members of groups.values()) {
+    if (members.length === 1) { out.push(members[0]); continue; }
+    const rank = (f) => STATUS_RANK[f.matchStatus] || 0;
+    const worst = Math.max(...members.map(rank));
+    const top = members.filter((f) => rank(f) === worst);
+    const rest = members.filter((f) => rank(f) !== worst);
+    const carried = [];
+    for (const f of top) for (const c of f.carriedBy || []) if (!carried.some((x) => x.file === c.file && x.line === c.line && x.target === c.target && x.declaredRange === c.declaredRange)) carried.push(c);
+    const lead = { ...top[0], carriedBy: carried };
+    if (rest.length) lead.otherUses = rest.map((f) => ({ matchStatus: f.matchStatus, declaredRange: f.declaredRange, version: f.version, carriedBy: f.carriedBy }));
+    out.push(lead);
+  }
+  return out;
 }
 
 // ── reachability (imports) ───────────────────────────────────────────────────
