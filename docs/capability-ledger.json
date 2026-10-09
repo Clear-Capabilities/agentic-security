@@ -205,6 +205,14 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/guides/verification-oracle-conformance.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/verification-schema-migration.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/implementation/assurance-hardening-decisions.md",
       "taskId": "CORE-001-T03"
     },

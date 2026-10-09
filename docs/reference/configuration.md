@@ -79,7 +79,7 @@ Precedence, highest first: kill switch, explicit option, environment, `.agentic-
 | Variable | Effect |
 |---|---|
 | `AGENTIC_SECURITY_NO_ASSURANCE=1` | Kill switch for every assurance feature. Wins over everything else. |
-| `AGENTIC_SECURITY_NO_<FEATURE>=1` | Kill switch for one feature, e.g. `AGENTIC_SECURITY_NO_MODEL_ROUTING`. |
+| `AGENTIC_SECURITY_NO_<FEATURE>=1` | Kill switch for one feature; `<FEATURE>` is the feature id in upper case with `-` as `_`. |
 | `AGENTIC_SECURITY_ASSURANCE_<FEATURE>=1\|0` | Enable or disable one feature. Features: `VERIFICATION_ORACLES`, `DEPLOYMENT_BOUNDARIES`, `INVARIANT_SCENARIOS`, `CAPABILITY_ENFORCEMENT`, `MODEL_ROUTING`, `PORTFOLIO_ASSURANCE`. |
 
 `.agentic-security/assurance.yml` takes `version: 1`, `features: {<id>: {enabled: bool}}` and `limits:`. A project file cannot enable a high-risk-execution feature (`verification-oracles`, `invariant-scenarios`, `capability-enforcement`): the file lives in the scanned repository, so only the environment or an explicit option can. Invalid configuration disables the affected feature and is reported.

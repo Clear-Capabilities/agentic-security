@@ -175,7 +175,10 @@ test('[X-009.AC03] signed bundles for Haskell and Nix findings verify, keep thei
     const hs = { id: 'hs-1', severity: 'high', file: 'src/App.hs', line: 10, vuln: 'cmd', cwe: 'CWE-78', family: 'cmd', parser: 'IR-TAINT', language: 'haskell', evidenceKind: 'source', originalLocation: { file: 'src/App.hs', line: 10, column: 0 }, chain: [{ file: 'src/App.hs', line: 9, label: 'source' }, { file: 'src/Store.hs', line: 3, label: 'sink' }] };
     for (const f of [proven, hs]) {
       const signed = signEvidenceBundle(buildEvidenceBundle(f, { engineVersion: 'test' }), keys.privateKeyPem);
-      assert.deepEqual(verifyEvidenceBundle(signed, keys.publicKeyPem), { ok: true, reason: null });
+      const verdict = verifyEvidenceBundle(signed, keys.publicKeyPem);
+      assert.deepEqual({ ok: verdict.ok, reason: verdict.reason }, { ok: true, reason: null });
+      // The verdict also names who signed and on what basis; a signature here is never independent certification.
+      assert.equal(verdict.trustBasis, 'self-issued-local-key'); assert.equal(verdict.independentlyCertified, false);
       assert.equal(signed.finding.language, f.language || 'nix'); assert.ok(signed.finding.file);
       assert.equal(signed.evidence.proofTier, f.proofTier ?? null, 'the bundle carries the tier, a signature does not raise it');
       assert.match(signed.doesNotProve, /never a correctness claim/);
