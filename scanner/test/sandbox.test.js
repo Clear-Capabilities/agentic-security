@@ -288,9 +288,12 @@ describe('resource limit prelude', () => {
     // Refusing direction: a cap below the processes the uid already owns must
     // refuse to start even one more.
     const tight = buildLimitPrelude({ maxProcs: 1 }).prelude;
+    // The command must FORK to be refused: a shell may `exec` its last command (Linux dash does) and an exec creates no new
+    // process, so the cap would never be consulted. A non-final command always forks. Root is exempt from RLIMIT_NPROC.
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
     let refused = false;
     try {
-      execFileSync('/bin/sh', ['-c', `${tight} /bin/echo should-not-run`], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+      execFileSync('/bin/sh', ['-c', `${tight} /bin/echo should-not-run; /bin/echo nor-this`], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
     } catch (e) { refused = true; }
     assert.equal(refused, true, 'a cap below the ambient process count must refuse to run the command');
   });
