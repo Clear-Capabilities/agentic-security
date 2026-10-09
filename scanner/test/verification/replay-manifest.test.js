@@ -54,6 +54,12 @@ function bundle(oracleId = 'injection-execution', kind = 'positive', over = {}) 
 }
 const withId = (m) => ({ ...m, id: manifestId(m) });
 const spy = () => { const s = { calls: 0 }; s.deps = { runInBoundary: async () => { s.calls++; throw new Error('must not run'); } }; return s; };
+// other test files run oracles at the same time, so a global count is read after it settles, not once
+// A workspace left behind is attributed to THIS test by its content: other test files run oracles at the same time, so a
+// global count of oracle workspaces is not a measurement of this test.
+const wsSnapshot = () => new Set(tmpDirs('oracle-ws-'));
+const leakedWorkspaces = (before, matches) => tmpDirs('oracle-ws-').filter((n) => !before.has(n)).filter((n) => { try { return matches(fs.readFileSync(path.join(os.tmpdir(), n, 'target.mjs'), 'utf8')); } catch { return false; } });
+const settled = async (ok) => { for (let i = 0; i < 150 && !ok(); i++) await new Promise((r) => setTimeout(r, 100)); return ok(); };
 const tmpDirs = (prefix) => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(prefix));
 const psLines = (needle) => String(spawnSync('ps', ['-A', '-o', 'command='], { encoding: 'utf8' }).stdout).split('\n').filter((l) => l.includes(needle) && !l.includes('ps -A')).length;
 
@@ -222,7 +228,7 @@ export function handler() { execSync('sleep 31337'); }
 `;
     const { inputs } = fixture('injection-execution', 'positive');
     const b = bundle('injection-execution', 'positive', { manifest: { budgets: { timeoutMs: 1500 }, fixtureFiles: { 'target.mjs': hang }, inputs }, bundle: { fixtureFiles: { 'target.mjs': hang } } });
-    const before = tmpDirs('oracle-ws-').length;
+    const before = wsSnapshot();
     const t0 = Date.now();
     const r = await replayManifest(b, { config });
     assert.equal(r.status, 'completed');
@@ -232,7 +238,7 @@ export function handler() { execSync('sleep 31337'); }
     assert.equal(r.outcome, 'inconclusive', 'a run cut by its deadline decides nothing');
     await new Promise((res) => setTimeout(res, 300));
     assert.equal(psLines('sleep 31337'), 0, 'the backgrounded descendant survived the replay');
-    assert.equal(tmpDirs('oracle-ws-').length, before, 'the workspace was not cleaned up');
+    assert.equal(await settled(() => leakedWorkspaces(before, (t) => t === hang).length === 0), true, 'the workspace was not cleaned up');
   }));
 
   test('[X-203.AC03] an output flood is capped, the tree is terminated, and the result is `error`', needsBoundary(async () => {

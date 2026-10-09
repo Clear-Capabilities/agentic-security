@@ -221,6 +221,59 @@ evidence; nothing is substituted for the execution that did not happen. Toolchai
 the caller's (the attempt object is plain data). Suites: `test/verification/{verification-record,oracle-adapters,replay-manifest}.test.js`
 (`npm run test:verification`).
 
+## Patch-negative verification and non-taint classes (X-204, X-205)
+
+Same posture as the three directories above: consumed, not wired into the default scan, every output addition additive, and
+nothing changes with the feature flags off. Suites: `test/verification/{patch-negative,non-taint-classes}.test.js`
+(`npm run test:verification`).
+
+**`verification/patch-negative.js` (X-204).** `verifyPatchNegative(req, { config, runOptions })` is `verified-fix` only when four
+`replayManifest` runs (so each is pinned, boundary-confined and receipted) show: the exploit oracle CONFIRMS on the original
+revision, REFUTES on original-plus-diff, and the `functional-regression` oracle (the requester's declared cases) is clean on the
+original (a baseline: wrong expectations are reported, not blamed on the patch) and on the patched revision. It stops at the first
+non-passing step and names it: the result carries `incompleteStep` and a typed `failureCode` (`original-not-reproduced`,
+`patched-still-exploitable`, `patched-build-broken`, `functional-omitted`, `functional-baseline-invalid`,
+`functional-regression-detected`, `oracle-changed`, `revision-unbound`, `prerequisite-unmet` (resumable where stated),
+`environment-mismatch`, `promotion-refused`) and a `summary` that says what was and was not exercised. Gate: the
+`patch-negative-verification` feature (high-risk execution, operator-only, off by default) plus `verification-oracles`.
+Wiring: `fix-verify.js` (`verifyFix({ patchNegative, assuranceConfig })` adds `patchNegative` and `fixStatus`, and `ok` requires
+`verified-fix`), `fix-verify-loop.js` (a `patchNegative` leg and the `verified-fix` verdict) and `fix/apply-fix-service.js`
+(`applyVerifiedFix({ patchNegative })` writes only a promoted patch and returns `repairRecords`). With the flag off or no request,
+those return exactly what they did before.
+
+**`verification/patch-promotion.js`.** `promotePatch({ proposal, receipts })` re-derives the diff digest and revision from the
+PROPOSAL and refuses any receipt that was not issued by `runOracle` (`isIssuedReceipt`: copies and hand-built receipts fail), that
+covers different content than the exact diff on the original revision, that was issued for another commit or hypothesis, whose
+oracle or inputs differ between the original and patched runs, whose environment identity differs, or that is reused in two roles.
+Receipts are valid inside the verifier's process only; carrying a promotion across processes needs a signing domain (not here).
+
+**`verification/repair-records.js`.** The CORE-002 record has one repair status and no value for a rejection, so the history is an
+append-only ledger of separate, frozen, chained records: `proposed`, `rejected`, `promoted` (only through `recordPromotion`, which
+accepts nothing but a result `promotePatch` returned `ok`), `applied` (only after a promotion for that exact diff) and
+`rolled-back`. `verificationRepairFor`/`withRepairStatus` map the ledger onto the CORE-002 `repair` field (`replay-verified` carries the
+patched-negative record id); a rejection leaves it at `proposed` because the foundation enum is not widened here. The ledger is
+returned to the caller and not persisted: persisting it would need an artifact-registry classification.
+
+**New adapters.** `replay-idempotency` (a factory receiving a recording stand-in for the effect: a request and a distinct request
+are delivered as a control, then the same request is redelivered, and the verifier counts effects) and `functional-regression`
+(declared cases against expected JSON values; the hypothesis is that behaviour REGRESSED, so a clean patch is `refuted`). Both have
+the usual positive, negative and inconclusive fixtures under `test/fixtures/oracles/`.
+
+**`oracles/scenario-classes.js` (X-205).** The supported-class manifest for non-taint defects, surfaced as
+`oracleManifest().nonTaint`: tenant authorization and privileged action (REUSE `authorization-decision`), workflow order (REUSES
+`state-transition`), bounded resource exhaustion (REUSES `parser-resource`) and replay/idempotency (the new adapter). Each class
+lists what the requester must supply, its fixtures (`test/fixtures/non-taint/<class>/{positive,negative,scenario.json}`, application-style
+code), its limitations and the report lines a reader sees; every `runOracle` result additionally carries a `disclosure`
+(prerequisites, platform statement, limitations, class report). Unsupported non-taint classes (concurrent races, CSRF, authentication
+throttling) are named with a reason. `judgeNonTaintHypothesis` is the rule that taint absence is never an input to a refutation:
+without an executed oracle of the class's own adapter with proven preconditions the outcome is `not-run` (or `unsupported`); the hunt
+mapper in `verification/emit.js` uses it. `trustedNegativeDenominator` counts only decided results of an executed oracle of an
+advertised class with proven preconditions and trusted runtime proof, and lists every exclusion with its reason (its in-tree consumers are the
+X-206/X-208 reporting that follows; today it is exercised by `non-taint-classes.test.js` only, so it is a public API with no runtime caller yet).
+
+Not verified: Linux (the oracle platform statements stay `unverified`); only the declared exploit scenario and functional cases are
+exercised, never the patch's correctness elsewhere.
+
 ## Execution-proof tiers (R2)
 
 `proof-tier.js` + `execution-proof.js` add a fourth axis to a finding's

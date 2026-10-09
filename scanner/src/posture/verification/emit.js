@@ -26,6 +26,7 @@ import { buildVerificationRecord, validateVerificationRecord } from '../assuranc
 import { legacyVerificationOutcome, toLegacyVerificationView } from '../assurance/migrations.js';
 import { digestOf, hypothesisIdFromFinding } from '../assurance/identity.js';
 import { isCommit, isPlainObject } from '../assurance/schema-kit.js';
+import { judgeNonTaintHypothesis } from '../oracles/scenario-classes.js';
 
 export const SURFACES = Object.freeze([
   'fix-verify', 'fix-verify-loop', 'execution-proof', 'verifier', 'autopilot', 'hunt', 'oracle',
@@ -193,6 +194,12 @@ function mapHunt(finding) {
   const scope = scopeOf(`hunt candidate from the ${d.lens || 'unknown'} lens (advisory)`, null);
   const evidence = [];
   if (d.refutation) evidence.push(inference('refutation-panel', 'refutation panel votes', d.refutation));
+  // X-205: a non-taint hypothesis (a tenant check, a privileged action, workflow order, replay, resource use) is not judged by
+  // a taint probe in EITHER direction. Without an executed oracle of its own class it is `not-run` (or `unsupported`).
+  const nonTaint = judgeNonTaintHypothesis({ finding, taint: { clean: !(tier === 'taint-confirmed' || tier === 'sink-adjacent') } });
+  if (nonTaint.nonTaint) {
+    return { outcome: nonTaint.outcome, attempt: 0, oracle: null, evidence, preconditions: { valid: false }, scope, reason: nonTaint.reason };
+  }
   if (tier === 'taint-confirmed' || tier === 'sink-adjacent') {
     evidence.unshift(observation('taint-probe', 'deterministic taint probe', d.confirmation));
     return { outcome: 'inconclusive', attempt: 1, oracle: TAINT_ORACLE, evidence, preconditions: { valid: true }, scope,

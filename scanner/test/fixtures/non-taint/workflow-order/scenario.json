@@ -1,0 +1,7 @@
+{
+  "factory": "createRefundFlow",
+  "legal": ["submit", "approve", "refund"],
+  "expectedFinal": "refunded",
+  "attack": ["submit", "refund"],
+  "forbiddenState": "refunded"
+}

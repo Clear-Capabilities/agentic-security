@@ -23,6 +23,7 @@
 // tree termination are not implemented on the namespace backend), which the
 // runner reports as `unsupported`, and no Linux outcome is claimed.
 import { defineOracle } from './oracle.js';
+import { digestOf } from '../assurance/identity.js';
 
 const PLATFORMS = Object.freeze({
   darwin: { status: 'supported', note: 'executed by this repository\'s tests on the macOS development host (userspace confinement backend)' },
@@ -256,4 +257,104 @@ finish({});
   },
 });
 
-export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource]);
+// ------------------------------------------------------------------ replay / idempotency (X-205)
+
+const replayIdempotency = defineOracle({
+  id: 'replay-idempotency', class: 'replay-idempotency', version: '1',
+  description: 'Does delivering the same request again repeat its side effect? The harness builds a fresh handler around a recording stand-in for the effect, delivers a request and then a DISTINCT request (control: one effect each), then on a second fresh handler delivers the same request repeatedly; the verifier counts the effects.',
+  prerequisites: ['node-runtime', 'confinement-backend'],
+  platforms: PLATFORMS, budgets: COMMON_BUDGETS,
+  negativeControls: [{ id: 'idempotency-key-honoured', description: 'the same handler remembering the idempotency key must produce exactly one effect for the repeated request', expectedOutcome: 'refuted' }],
+  fixtures: { dir: 'test/fixtures/oracles/replay-idempotency', positive: 'positive', negative: 'negative', inconclusive: 'inconclusive' },
+  limitations: ['the target is a factory that receives a recording stand-in for its effect and returns a handler; code that imports its effect directly is not covered', 'deliveries are sequential: a race between concurrent deliveries is not exercised', 'durable deduplication in an external store is not observed, only the handler instance the factory returns', 'reaching the effect twice shows the handler would repeat it, not that the real operation would succeed'],
+  harnessSource: `${PROLOGUE}
+const mk = () => { const calls = []; return { calls, deps: { [INPUT.sink]: (...a) => { calls.push(1); return Promise.resolve({ ok: true }); } } }; };
+async function build() { const m = mk(); const h = await Promise.resolve(fn(m.deps)); if (typeof h !== 'function') throw new Error('not a handler'); return { m, h }; }
+try {
+  const c = await build();
+  try { await Promise.resolve(c.h(INPUT.request)); } catch (e) {}
+  out.firstEffects = c.m.calls.length;
+  try { await Promise.resolve(c.h(INPUT.distinctRequest)); } catch (e) {}
+  out.distinctEffects = c.m.calls.length;
+} catch (e) { out.controlFailed = true; }
+try {
+  const a = await build();
+  for (let i = 0; i < INPUT.deliveries; i++) { try { await Promise.resolve(a.h(INPUT.request)); } catch (e) {} }
+  out.replayEffects = a.m.calls.length;
+} catch (e) { out.replayFailed = true; }
+finish({});
+`,
+  validateInputs(i) {
+    if (!isId(i.export) || !isId(i.sink)) return 'export and sink must be identifiers';
+    const small = (v) => { try { const s = JSON.stringify(v); return typeof s === 'string' && s.length <= 2000 && v !== null && typeof v === 'object' && !Array.isArray(v); } catch { return false; } };
+    if (!small(i.request) || !small(i.distinctRequest)) return 'request and distinctRequest must be small JSON objects';
+    if (digestOf(i.request) === digestOf(i.distinctRequest)) return 'distinctRequest must differ from request';
+    if (!(Number.isInteger(i.deliveries) && i.deliveries >= 2 && i.deliveries <= 6)) return 'deliveries must be 2 to 6';
+    return null;
+  },
+  prepare: (i) => ({ export: i.export, sink: i.sink, request: i.request, distinctRequest: i.distinctRequest, deliveries: i.deliveries }),
+  interpret({ result }) {
+    if (!result || result.loadFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false }, reason: 'the target failed to load' };
+    const first = Number.isInteger(result.firstEffects) ? result.firstEffects : null;
+    const distinct = Number.isInteger(result.distinctEffects) ? result.distinctEffects : null;
+    const replay = Number.isInteger(result.replayEffects) ? result.replayEffects : null;
+    const controlHeld = first === 1 && distinct === 2;
+    const observed = { targetLoaded: true, firstDeliveryEffects: first, distinctDeliveryTotalEffects: distinct, repeatedDeliveryTotalEffects: replay, controlHeld };
+    if (replay !== null && replay > 1) return { satisfied: true, preconditionsHeld: controlHeld, observed, reason: `the same request delivered repeatedly produced ${replay} effects` };
+    if (controlHeld && replay === 1) return { satisfied: false, preconditionsHeld: true, observed, reason: 'a distinct request produced its own effect and the repeated request produced exactly one' };
+    return { satisfied: null, preconditionsHeld: false, observed, reason: controlHeld ? 'the repeated deliveries did not report' : 'the handler did not produce exactly one effect per first delivery, so it was not shown to be working' };
+  },
+});
+
+// ------------------------------------------------------------------ functional regression (X-204)
+
+const functionalRegression = defineOracle({
+  id: 'functional-regression', class: 'functional-regression', version: '1',
+  description: 'Does a revision still behave as intended? The harness calls the exported function with declared cases and records each result; the verifier compares them with the declared expectations. The hypothesis is that the behaviour REGRESSED, so a patch is clean when this is refuted.',
+  prerequisites: ['node-runtime', 'confinement-backend'],
+  platforms: PLATFORMS, budgets: COMMON_BUDGETS,
+  negativeControls: [{ id: 'behaviour-preserved', description: 'a revision that returns the expected value for every declared case must show no regression', expectedOutcome: 'refuted' }],
+  fixtures: { dir: 'test/fixtures/oracles/functional-regression', positive: 'positive', negative: 'negative', inconclusive: 'inconclusive' },
+  limitations: ['only the declared cases are checked: behaviour outside them is not observed, and a patch that breaks an undeclared path is not detected', 'results are compared as JSON values, so identity, ordering of unordered data and timing are not compared', 'the expectations are supplied by the requester and are not inferred; expectations that are wrong for the ORIGINAL revision are reported by the baseline check, not hidden'],
+  harnessSource: `${PROLOGUE}
+const results = {};
+for (const c of INPUT.cases) {
+  try { const v = await Promise.resolve(fn(...c.args)); results[c.id] = { ok: true, value: v === undefined ? null : JSON.parse(JSON.stringify(v)) }; }
+  catch (e) { results[c.id] = { ok: false }; }
+}
+finish({ results });
+`,
+  validateInputs(i) {
+    if (!isId(i.export)) return 'export must be an identifier';
+    if (!Array.isArray(i.cases) || i.cases.length < 1 || i.cases.length > 16) return 'cases must hold 1 to 16 entries';
+    const ids = new Set();
+    for (const c of i.cases) {
+      if (!c || typeof c.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(c.id) || ids.has(c.id)) return 'every case needs a unique slug id';
+      ids.add(c.id);
+      if (!Array.isArray(c.args) || c.args.length > 6) return 'case args must be an array of at most 6';
+      if (!('expected' in c)) return 'every case needs an expected value';
+      try { if (JSON.stringify(c.expected) === undefined) return 'expected must be JSON'; } catch { return 'expected must be JSON'; }
+    }
+    return null;
+  },
+  prepare: (i) => ({ export: i.export, cases: i.cases.map((c) => ({ id: c.id, args: c.args })) }),
+  interpret({ inputs, result }) {
+    const got = result && result.results && typeof result.results === 'object' ? result.results : null;
+    if (!got || result.loadFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false }, reason: 'the target did not report results' };
+    const regressions = [];
+    let reported = 0;
+    for (const c of inputs.cases) {
+      const r = got[c.id];
+      if (!r || typeof r !== 'object') continue;
+      reported++;
+      if (r.ok !== true || digestOf(r.value) !== digestOf(c.expected)) regressions.push(c.id);
+    }
+    const complete = reported === inputs.cases.length;
+    const observed = { targetLoaded: true, casesDeclared: inputs.cases.length, casesReported: reported, regressedCases: regressions };
+    if (regressions.length) return { satisfied: true, preconditionsHeld: complete, observed, reason: `behaviour differs from the declared expectation in case(s): ${regressions.join(', ')}` };
+    if (complete) return { satisfied: false, preconditionsHeld: true, observed, reason: 'every declared case returned its expected value' };
+    return { satisfied: null, preconditionsHeld: false, observed, reason: 'not every declared case reported a result' };
+  },
+});
+
+export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource, replayIdempotency, functionalRegression]);

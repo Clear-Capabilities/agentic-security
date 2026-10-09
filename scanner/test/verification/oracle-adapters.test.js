@@ -54,11 +54,18 @@ const request = (oracleId, kind, over = {}) => ({
 });
 const run = (req, o = {}) => runOracle(req, { config, ...o });
 const tmpDirs = (prefix) => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(prefix));
-const harnessProcs = () => String(spawnSync('ps', ['-A', '-o', 'command='], { encoding: 'utf8' }).stdout).split('\n').filter((l) => l.includes(HARNESS_FILE)).length;
+// other test files run oracles at the same time, so a global count is read after it settles, not once
+// A workspace left behind is attributed to THIS test by its content: other test files run oracles at the same time, so a
+// global count of oracle workspaces is not a measurement of this test.
+const wsSnapshot = () => new Set(tmpDirs('oracle-ws-'));
+const leakedWorkspaces = (before, matches) => tmpDirs('oracle-ws-').filter((n) => !before.has(n)).filter((n) => { try { return matches(fs.readFileSync(path.join(os.tmpdir(), n, 'target.mjs'), 'utf8')); } catch { return false; } });
+const settled = async (ok) => { for (let i = 0; i < 150 && !ok(); i++) await new Promise((r) => setTimeout(r, 100)); return ok(); };
+// Only harnesses this test process spawned, or orphans (parent 1), count: a harness belonging to another test file running at the same time has a live parent of its own.
+const harnessProcs = () => String(spawnSync('ps', ['-A', '-o', 'ppid=,command='], { encoding: 'utf8' }).stdout).split('\n').filter((l) => l.includes(HARNESS_FILE) && [1, process.pid].includes(Number(l.trim().split(/\s+/)[0]))).length;
 
 // ---------------------------------------------------------------- AC01
 
-describe('[X-202.AC01] the five oracle classes, with declared prerequisites and platforms', () => {
+describe('[X-202.AC01] the oracle classes (five original, plus replay-idempotency and functional-regression), with declared prerequisites and platforms', () => {
   test('[X-202.AC01] the manifest covers every class with prerequisites, platforms, budgets and negative controls', () => {
     const m = registry.oracleManifest();
     assert.deepEqual(m.classes, [...ORACLE_CLASSES]);
@@ -96,7 +103,7 @@ describe('[X-202.AC01] the five oracle classes, with declared prerequisites and 
     assert.match(without('platforms', { ...good.platforms, linux: { status: 'supported', note: 'works' } }).join(), /linux/);
     assert.match(without('harnessSource', 'no placeholder').join(), /harnessSource/);
     assert.throws(() => defineOracle({ ...good, negativeControls: [] }), /invalid oracle adapter/);
-    assert.equal(registry.listOracles().length, 5);
+    assert.equal(registry.listOracles().length, 7);
   });
 
   test('[X-202.AC01] a request over an adapter budget or with unsafe content is rejected before anything runs', async () => {
@@ -324,7 +331,7 @@ export function handler(input) { return execFileSync('echo', [input], { encoding
     assert.throws(() => { o.budgets.timeoutMs = 1; }, TypeError);
     const list = registry.listOracles();
     list.push({}); list.length = 0;
-    assert.equal(registry.listOracles().length, 5, 'mutating a returned list does not change the registry');
+    assert.equal(registry.listOracles().length, 7, 'mutating a returned list does not change the registry');
     assert.deepEqual(Object.keys(registry).sort(), ['MANIFEST_SCHEMA', 'getOracle', 'listOracles', 'manifestEntry', 'oracleManifest']);
     const spec = { ...o }; delete spec.logicDigest;
     assert.equal(oracleLogicDigest(spec), o.logicDigest);
@@ -341,7 +348,8 @@ export function handler(input) { return execFileSync('echo', [input], { encoding
   });
 
   test('[X-202.AC03] cancellation and deadlines leave no process behind and no workspace', needsBoundary(async () => {
-    const before = tmpDirs('oracle-ws-').length + tmpDirs('oracle-ev-').length;
+    const before = wsSnapshot();
+    const parserPositive = fixture('parser-resource', 'positive').files['target.mjs'];
     const ac = new AbortController();
     setTimeout(() => ac.abort(), 700);
     const cancelled = await run(request('parser-resource', 'positive', { budgets: { timeoutMs: 5000 } }), { signal: ac.signal });
@@ -352,7 +360,7 @@ export function handler(input) { return execFileSync('echo', [input], { encoding
     assert.equal(timedOut.run.timedOut, true);
     assert.equal(timedOut.run.survivors, 0);
     await new Promise((r) => setTimeout(r, 300));
-    assert.equal(harnessProcs(), 0, 'a harness process survived');
-    assert.equal(tmpDirs('oracle-ws-').length + tmpDirs('oracle-ev-').length, before, 'a workspace or evidence directory was left behind');
+    assert.equal(await settled(() => harnessProcs() === 0), true, 'a harness process survived');
+    assert.equal(await settled(() => leakedWorkspaces(before, (t) => t === parserPositive).length === 0), true, 'a workspace was left behind');
   }));
 });
