@@ -244,8 +244,15 @@ export function runNamespace(argv, {
   limits = {},
   env = {},
   maxBuffer = 8 * 1024 * 1024,
+  denyReadPaths = [],
 } = {}) {
   // Documented shape, never a throw — see the same note in backend-userspace.
+  // Read denial is NOT implemented on this backend (its mount tree is rebound
+  // read-only, not detached). A caller that asks for it must get a refusal,
+  // never a run that silently leaves the path readable.
+  if (Array.isArray(denyReadPaths) && denyReadPaths.length) {
+    return errorResult('namespace', 'read denial of host paths is not implemented on this backend; refusing to execute');
+  }
   if (!root) return errorResult('namespace', 'runNamespace requires a sandbox root');
 
   const bin = resolveNamespaceBin();
