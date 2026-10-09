@@ -120,7 +120,7 @@ function runNixScriptWitness(w, { timeoutMs = DEFAULT_TIMEOUT_MS, force } = {}) 
     // 1. a witness that does not parse proves nothing in either direction
     const syn = (0,_sandbox_index_js__WEBPACK_IMPORTED_MODULE_4__/* .runConfined */ .id)([shellBin, '-n', 'witness.sh'], { root, timeoutMs, force });
     if (syn.status === 'disabled' || syn.status === 'error') return { ...base, backend: syn.backend, status: 'invalid', reason: `the sandbox could not run the syntax check (${syn.backend}): ${String(syn.stderr || '').trim() || 'no detail'}` };
-    if (syn.timedOut) return { ...base, backend: syn.backend, status: 'invalid', reason: 'the syntax check exceeded its time budget' };
+    if (syn.timedOut) return { ...base, backend: syn.backend, status: 'invalid', reason: 'the syntax check exceeded its time budget', timedOut: true };
     if (syn.exitCode !== 0) return { ...base, backend: syn.backend, status: 'invalid', reason: `syntax error in the generated witness: ${String(syn.stderr || '').trim().split('\n')[0] || 'shell rejected it'}` };
     // 2. the real run
     const r = (0,_sandbox_index_js__WEBPACK_IMPORTED_MODULE_4__/* .runConfined */ .id)([shellBin, 'witness.sh'], { root, timeoutMs, force });

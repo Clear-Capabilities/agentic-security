@@ -12,7 +12,7 @@ export const modules = {
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(31174);
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(71130);
-/* harmony import */ var _context_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(15911);
+/* harmony import */ var _context_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(52603);
 // Haskell and Nix analysis metadata as registered state artifacts (X-016).
 //
 // An ordinary scan already leaves last-scan.json. Two things a reviewer, auditor or retention policy needs about the
