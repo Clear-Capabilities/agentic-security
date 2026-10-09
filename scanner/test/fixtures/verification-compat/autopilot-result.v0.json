@@ -1,0 +1,73 @@
+{
+  "capturedFrom": "commit 0a03121b scanner/src",
+  "result": {
+    "key": "stable-compat-1",
+    "file": "src/orders.js",
+    "line": 7,
+    "vuln": "Command injection",
+    "severity": "high",
+    "proofTier": "execution-proven",
+    "validation": "upheld",
+    "pocStillFires": false,
+    "testsPass": true,
+    "outcome": "VERIFIED_FIXED",
+    "applied": false,
+    "reason": "gates on: patch is ready but was not written",
+    "verificationRecord": {
+      "schema": "agentic-security/verification-record",
+      "schemaVersion": "1.0.0",
+      "hypothesisId": "stable-compat-1",
+      "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "detectorOrigin": {
+        "detector": "Command injection",
+        "family": "injection",
+        "parser": "SAST"
+      },
+      "oracle": {
+        "id": "poc-marker-replay",
+        "kind": "runtime-replay",
+        "version": "1"
+      },
+      "attempt": 1,
+      "outcome": "inconclusive",
+      "reason": "the proof-of-concept no longer fires against the patch under the older runner; that is not a trusted exploit-negative result",
+      "evidence": [
+        {
+          "id": "autopilot-stage",
+          "kind": "observation",
+          "producer": "tool",
+          "digest": "sha256:54543c70a0116db0d98d0969ca67915a74a1c92edb8e34d107eb9a5a9ad9bf06",
+          "source": "autopilot stage outcome"
+        }
+      ],
+      "evidenceRefs": [
+        "autopilot-stage"
+      ],
+      "scope": {
+        "description": "autopilot scan, prove, validate, fix, re-verify chain",
+        "platform": "darwin"
+      },
+      "preconditions": {
+        "valid": true
+      },
+      "repair": {
+        "status": "proposed",
+        "patchDigest": "sha256:1ea39eb2bf9899d8f403dc657b52668f5291007ee3c9053d0d59345c05e494d9"
+      },
+      "confirmationLevel": "none",
+      "id": "vrec:39bc7b95ce153832"
+    }
+  },
+  "summary": {
+    "considered": 1,
+    "outOfScope": 0,
+    "capped": 0,
+    "byOutcome": {
+      "VERIFIED_FIXED": 1,
+      "NEEDS_REVIEW": 0,
+      "NO_FIX": 0,
+      "UNPROVEN": 0
+    },
+    "applied": 0
+  }
+}

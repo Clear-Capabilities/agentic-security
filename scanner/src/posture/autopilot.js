@@ -27,6 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { emitVerification } from './verification/emit.js';
+import { verificationFields } from './verification/projection.js';
 
 const SCHEMA = 'agentic-security/autopilot@1';
 
@@ -214,6 +215,19 @@ export async function runAutopilot({
   }
 
   return { ok: true, results, skipped, outOfScope, capped, summary: summarizeAutopilot(results, outOfScope, capped) };
+}
+
+/**
+ * X-206: the autopilot response as it is serialized for a caller. Every field of every result is kept (the native `outcome`
+ * vocabulary and its meaning are unchanged); a result that carries a verification record additionally gets `verificationView`, the
+ * shared projection every other interface shows for the same finding. Results without a record are returned as they were.
+ */
+export function serializeAutopilotResult(res) {
+  if (!res || !Array.isArray(res.results)) return res;
+  return {
+    ...res,
+    results: res.results.map((r) => (r && r.verificationRecord ? { ...r, ...verificationFields(r.verificationRecord, { replay: r.verificationReplay }) } : r)),
+  };
 }
 
 export function summarizeAutopilot(results, outOfScope = 0, capped = 0) {

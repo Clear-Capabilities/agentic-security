@@ -219,6 +219,16 @@ export const CHECKS = [
     remedy: 'Run `npm run bench:language-support:check` in scanner/. To change a number, re-measure and promote it deliberately ' +
       '(bench/language-support/promote.mjs); never edit docs/language-support.json by hand.',
   },
+  {
+    // X-208: the STATIC half of the oracle conformance contract (class scope, budgets, negative controls, evidence logic,
+    // pinned fixtures). Measured well under a second and it executes nothing, so it fits the pre-push budget; the execution
+    // half (~19s, needs the trust boundary) runs in the release gate.
+    id: 'verification-conformance-static',
+    title: 'Every registered verification oracle satisfies the static conformance contract',
+    npmScript: 'verification:conformance:static',
+    remedy: 'Run `npm run verification:conformance:static` in scanner/ and fix the adapter named. To change a pinned fixture or ' +
+      'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins`.',
+  },
 ];
 
 /** Ids in execution order — cheapest first. */
