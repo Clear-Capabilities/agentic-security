@@ -10,8 +10,9 @@
 // head's tree, the PR head's verdicts (the pre-push gate, the PR's CI) are verdicts about the same content, so the PR head is what gets tagged
 // and the second CI wait is not needed. Any difference in tree falls back to waiting for CI on the merge commit.
 
-import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, mkdtempSync, realpathSync, rmSync, lstatSync } from 'node:fs';
+import { tmpdir as osTmpdir } from 'node:os';
+import { dirname, basename, join } from 'node:path';
 
 export const PHASES = Object.freeze(['preflight', 'push', 'pr', 'checks', 'merge', 'verify', 'tag', 'release', 'npm', 'done']);
 
@@ -125,7 +126,7 @@ export class ShipState {
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
   // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
-  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed'];
+  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun'];
   set(patch) {
     for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
     this.data.updated = this.now(); this.save();
@@ -134,10 +135,27 @@ export class ShipState {
   note(phase, detail) { this.data.phases[phase] = { ...(this.data.phases[phase] || {}), detail }; this.data.updated = this.now(); this.save(); }
   finish(phase, ok, detail = null) {
     const p = this.data.phases[phase] || {};
-    this.data.phases[phase] = { ...p, state: ok ? 'done' : 'failed', endedAt: this.now(), seconds: p.startedAt ? Math.round((this.now() - p.startedAt) / 1000) : null, detail: detail ?? p.detail ?? null };
+    this.data.phases[phase] = { ...p, state: ok ? 'done' : 'failed', endedAt: this.now(), seconds: Number.isFinite(p.startedAt) ? Math.round((this.now() - p.startedAt) / 1000) : null, detail: detail ?? p.detail ?? null };
     this.data.updated = this.now(); this.save();
   }
   event(text) { this.data.events.push({ at: this.now(), text }); this.data.events = this.data.events.slice(-60); this.data.updated = this.now(); this.save(); }
+  /**
+   * The failure to report, or null. `failed` is the record of the last stop; it describes the run only while that run is still stopped, so it
+   * is ignored once the run has finished or the phase it names has since completed (a resumed run that got past it).
+   */
+  failure() {
+    const f = this.data.failed;
+    if (!f || this.data.finished) return null;
+    const p = this.data.phases[f.phase];
+    if (p && p.state === 'done') return null;
+    return f;
+  }
+  /** One line of per-phase seconds (the last attempt of each phase), for the changelog's measured numbers. */
+  timingsLine() {
+    const parts = []; let total = 0;
+    for (const p of PHASES) { const x = this.data.phases[p]; if (x && Number.isFinite(x.seconds)) { parts.push(`${p}=${x.seconds}s`); total += x.seconds; } }
+    return `TIMINGS ${parts.length ? parts.join(' ') : '(no phase finished)'} total=${total}s`;
+  }
   summary() {
     return PHASES.map((p) => { const x = this.data.phases[p]; return `${p.padEnd(10)} ${x ? `${x.state}${x.seconds != null ? ` ${x.seconds}s` : ''}` : '-'}`; }).join('\n');
   }
@@ -155,4 +173,52 @@ export async function waitFor(probe, { timeoutMs, intervalMs = 10000, maxInterva
     await sleep(Math.min(wait, Math.max(0, end - now())));
     wait = Math.min(Math.round(wait * 1.25), maxIntervalMs);
   }
+}
+
+
+// ── what ship.mjs prints ──────────────────────────────────────────────────────────────────────────────────────
+
+const shellWord = (w) => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(w) ? w : `'${String(w).replace(/'/g, "'\\''")}'`);
+
+/**
+ * The exact command that continues a stopped run. A temp directory is carried only when the operator chose it; otherwise the resumed run
+ * makes its own fresh one, which is what a re-run of the gate wants.
+ */
+export function resumeCommand(data = {}) {
+  return ['node', 'scripts/ship.mjs', '--resume', ...(data.dryRun ? ['--dry-run'] : []), ...(data.tmpdirGiven && data.tmpdir ? ['--tmpdir', data.tmpdir] : [])].map(shellWord).join(' ');
+}
+
+/** `--status`: the phases, and a FAILED line only for a run that really ended failed (with how to continue it). Reads; never writes. */
+export function statusText(state) {
+  const f = state.failure();
+  return `${state.summary()}\n${f ? `FAILED in ${f.phase}: ${f.message}\nresume with: ${resumeCommand(state.data)}\n` : ''}${state.timingsLine()}\n`;
+}
+
+/** The last output of a run: phases, the timings line, and either the elapsed time or where it stopped and how to resume. */
+export function outcomeText(state, result, { logDir = '.agentic-security/ship/logs', now = Date.now() } = {}) {
+  const total = Math.round((now - state.data.started) / 1000);
+  const verdict = result.ok
+    ? `shipped in ${Math.floor(total / 60)} min ${total % 60} s`
+    : `STOPPED in ${result.phase}: ${result.message}\nfull logs: ${logDir}/\nresume with: ${resumeCommand(state.data)}`;
+  return `\n${state.summary()}\n${state.timingsLine()}\n\n${verdict}\n`;
+}
+
+// ── a fresh temp directory for the release gate ─────────────────────────────────────────────────────────────
+
+const TMP_PREFIX = 'ship-tmp-';
+
+/**
+ * The directory the release gate gets as TMPDIR. A leftover pile of temp files from earlier runs slows the suite, so unless the operator names
+ * one, every run makes a new EMPTY directory inside the OS temp folder. A named directory is created if missing and never emptied.
+ */
+export function prepareTmpdir(given, { base = osTmpdir() } = {}) {
+  if (given) { mkdirSync(given, { recursive: true }); return { dir: given, created: false }; }
+  return { dir: mkdtempSync(join(realpathSync(base), TMP_PREFIX)), created: true };
+}
+
+/** Remove a directory `prepareTmpdir` made. Refuses anything else: not its prefix, not directly inside the OS temp folder, or not a real directory. */
+export function removeFreshTmpdir(dir, { base = osTmpdir() } = {}) {
+  const real = realpathSync(base);
+  if (!dir || !basename(dir).startsWith(TMP_PREFIX) || dirname(dir) !== real) return false;
+  try { if (!lstatSync(dir).isDirectory()) return false; rmSync(dir, { recursive: true, force: true }); return true; } catch { return false; }
 }

@@ -25,6 +25,9 @@ export async function runShip(ctx, opts = {}) {
 
   let branch, version, prNumber, prHead, releaseSha, tag, treeEquivalent = false;
   const originalBranch = git(['branch', '--show-current']).trim();
+  // A resumed run starts clean: the stop it is continuing from is recorded in the phases, and a stale `failed` would be reported after it succeeds.
+  state.set({ dryRun: o.dryRun, tmpdirGiven: Boolean(o.tmpdir), ...(o.tmpdir ? { tmpdir: o.tmpdir } : {}), ...(o.resume ? { failed: null } : {}) });
+  let autoTmp = null;
   if (o.resume) { const d = state.data; branch = d.branch; version = d.version; tag = d.tag; prNumber = d.pr; prHead = d.prHead; releaseSha = d.releaseSha; treeEquivalent = Boolean(d.treeEquivalent); }
 
   try {
@@ -138,7 +141,10 @@ export async function runShip(ctx, opts = {}) {
         if (bad.length) throw new Stop('verify', `CI failed on the merge commit ${releaseSha.slice(0, 8)}`);
       }
       git(['checkout', '--detach', releaseSha]);
-      const r = sh('node', ['scripts/release-check.mjs'], { stream: true, timeoutMs: 90 * 60 * 1000, env: o.tmpdir ? { TMPDIR: o.tmpdir } : {} });
+      // The gate gets an EMPTY temp directory unless the operator named one: leftover temp files from earlier runs slow the suite.
+      let tmp = o.tmpdir;
+      if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }
+      const r = sh('node', ['scripts/release-check.mjs'], { stream: true, timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {} });
       sh('git', ['checkout', '--', 'bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);
       if (r.code !== 0) throw new Stop('verify', `the release gate failed: ${(r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
       return `release gate passed on ${releaseSha.slice(0, 8)}${treeEquivalent ? ' (verdicts for this tree reused where identical inputs allow)' : ''}`;
@@ -184,6 +190,8 @@ export async function runShip(ctx, opts = {}) {
     });
 
     state.finish('done', true); state.set({ current: 'done', finished: ctx.now() });
+    // the directory made for the gate is removed once the release is out; after a stop it is kept, so the gate's leftovers can be inspected
+    if (autoTmp && ctx.removeTmpdir) ctx.removeTmpdir(autoTmp);
     return { ok: true, state: state.data };
   } catch (e) {
     const phaseName = e instanceof Stop ? e.phase : (state.data.current || 'unknown');

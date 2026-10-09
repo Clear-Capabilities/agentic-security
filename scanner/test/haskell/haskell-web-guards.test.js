@@ -232,11 +232,99 @@ test('Yesod named guard: a shared function that reads the principal and calls no
   open(status(gate('pure ()'), 'POST', '/wipe'));
 });
 
-// ── the documented gap ───────────────────────────────────────────────────────
-test('documented gap: for WAI, Servant and Yesod the rejection call itself is not ordered against the write (the read is)', () => {
-  // The credential is read before any write, and a rejection exists in the handler, but it only runs AFTER the write. The IR reports a
-  // tail-position call at the enclosing line, so the rejection cannot be ordered. This is credited (a false negative for the late-auth rule);
-  // the test pins the current behaviour so that closing the gap is a deliberate change.
-  const s = status(yesod(`postWipeR :: Handler Html\npostWipeR = do\n  mu <- maybeAuthId\n  _ <- ${YWRITE}\n  case mu of\n    Nothing -> notAuthenticated\n    Just _ -> redirect WipeR`), 'POST', '/wipe');
-  assert.equal(s.auth, 'authenticated');
+// ── 3. the order of rejection and write (WAI, Servant, Yesod) ──────────────────
+const late = (s, order) => {
+  assert.equal(s.auth, 'late', JSON.stringify(s));
+  assert.equal(s.evidence.kind, 'late-guard', JSON.stringify(s));
+  assert.equal(s.evidence.order, order, JSON.stringify(s));
+  assert.ok(s.findings.includes('hs-route-late-auth'), JSON.stringify(s));
+  assert.ok(!s.findings.includes('hs-route-missing-auth'), JSON.stringify(s));
+};
+const lateFinding = (files, path) => analyzeHaskellWeb(files).findings.find((f) => f.rule === 'hs-route-late-auth' && f.route.path === path);
+const yHandler = (...lines) => `postWipeR :: Handler Html\npostWipeR = do\n${lines.map((l) => `  ${l}`).join('\n')}`;
+
+test('Yesod order: reject-before-write is a guard; read, write, then reject is late', () => {
+  // guards, in several shapes
+  protectedRoute(status(yesod(yHandler('mu <- maybeAuthId', 'when (isNothing mu) notAuthenticated', `_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+  protectedRoute(status(yesod(yHandler('mu <- maybeAuthId', 'unless (isJust mu) $ permissionDenied "no"', `_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+  protectedRoute(status(yesod(yHandler('mu <- maybeAuthId', 'case mu of', '  Nothing -> notAuthenticated', '  Just _ -> pure ()', `_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+  // the write sits in the branch that is NOT the rejecting one: still guarded
+  protectedRoute(status(yesod(yHandler('mh <- lookupHeader "Authorization"', 'if isNothing mh then permissionDenied "no" else do', `  _ <- ${YWRITE}`, '  redirect WipeR')), 'POST', '/wipe'));
+  // read, write, THEN reject: late, in each shape a late check takes
+  const afterTail = yesod(yHandler('mu <- maybeAuthId', `_ <- ${YWRITE}`, 'case mu of', '  Nothing -> notAuthenticated', '  Just _ -> redirect WipeR'));
+  late(status(afterTail, 'POST', '/wipe'), 'after');
+  late(status(yesod(yHandler('mu <- maybeAuthId', `_ <- ${YWRITE}`, 'when (isNothing mu) notAuthenticated', 'redirect WipeR')), 'POST', '/wipe'), 'after');
+  late(status(yesod(yHandler('mh <- lookupHeader "Authorization"', `_ <- ${YWRITE}`, 'unless (isJust mh) $ permissionDenied "no"', 'redirect WipeR')), 'POST', '/wipe'), 'after');
+  const f = lateFinding(afterTail, '/wipe');
+  assert.equal(f.cwe, 'CWE-306'); assert.match(f.description, /runs after the first sensitive operation/);
+  // the write sits INSIDE the rejecting branch, before the rejection
+  late(status(yesod(yHandler('mu <- maybeAuthId', 'case mu of', '  Nothing -> do', `    _ <- ${YWRITE}`, '    notAuthenticated', '  Just _ -> redirect WipeR')), 'POST', '/wipe'), 'after');
+});
+
+test('Yesod order negatives: a rejection that is only built, another header, no credential read', () => {
+  // `permissionDenied` bound by a let is a value that is never run: it ends nothing, so nothing guards the write
+  open(status(yesod(yHandler('mu <- maybeAuthId', 'let denied = permissionDenied "no"', `_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+  // a header that is not a credential, and no credential read: no guard at all (reported as missing authentication)
+  open(status(yesod(yHandler('mh <- lookupHeader "X-Request-Id"', 'when (isNothing mh) $ permissionDenied "no"', `_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+  open(status(yesod(yHandler(`_ <- ${YWRITE}`, 'redirect WipeR')), 'POST', '/wipe'));
+});
+
+test('order that cannot be established is late with the reason, never authenticated', () => {
+  // the rejection and the write share one opaque expression: their order is not modelled
+  const files = yesod(yHandler('mu <- maybeAuthId', `maybe notAuthenticated (\\_ -> ${YWRITE} >> redirect WipeR) mu`));
+  late(status(files, 'POST', '/wipe'), 'unknown');
+  const f = lateFinding(files, '/wipe');
+  assert.match(f.description, /cannot be shown to run before/);
+  assert.equal(f.evidence[0].order, 'unknown'); assert.ok(f.evidence[0].reason.length > 10);
+  // the same shape in Servant
+  const sv = servant(API, 'h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  maybe (throwError err401) (\\_ -> liftIO (connectPostgreSQL "dbname=app" >>= \\c -> execute_ c "DELETE FROM sessions") >> return n) mAuth');
+  late(status(sv, 'POST', '/wipe'), 'unknown');
+});
+
+const WAI_WRITE = '    conn <- liftIO (connectPostgreSQL "dbname=app")\n    _ <- liftIO (execute_ conn "DELETE FROM sessions")';
+const WAI_LOOKUP = '    let mAuth = lookup "Authorization" (requestHeaders req)';
+
+test('WAI order: reject-before-write is a guard; read, write, then reject is late', () => {
+  protectedRoute(status(wai(waiGuard('"Authorization"')), 'POST', '/wipe'));
+  protectedRoute(status(wai(`${WAI_LOOKUP}\n    case mAuth of\n      Nothing -> respond (responseLBS status401 [] "no")\n      Just _ -> do\n${WIPE}`), 'POST', '/wipe'));
+  // read (the lookup), write, then hand back the 401
+  const readFirst = wai(`${WAI_LOOKUP}\n${WAI_WRITE}\n    case mAuth of\n      Nothing -> respond (responseLBS status401 [] "no")\n      Just _ -> respond (responseLBS status200 [] "done")`);
+  late(status(readFirst, 'POST', '/wipe'), 'after');
+  const f = lateFinding(readFirst, '/wipe');
+  assert.equal(f.cwe, 'CWE-306'); assert.match(f.description, /runs after the first sensitive operation/);
+});
+
+test('WAI order negatives: a respond mid-block does not end the handler; another header; no credential read', () => {
+  // `respond` hands the response to the server and returns; the next statement still runs, so the write goes ahead
+  late(status(wai(`${WAI_LOOKUP}\n    when (isNothing mAuth) $ respond (responseLBS status401 [] "no")\n${WAI_WRITE}\n    respond (responseLBS status200 [] "done")`), 'POST', '/wipe'), 'after');
+  // the credential is first looked at AFTER the write: not a read-before-write, so no guard (reported as missing, unchanged)
+  open(status(wai(`${WAI_WRITE}\n    case lookup "Authorization" (requestHeaders req) of\n      Nothing -> respond (responseLBS status401 [] "no")\n      Just _ -> respond (responseLBS status200 [] "done")`), 'POST', '/wipe'));
+  open(status(wai(waiGuard('"X-Request-Id"')), 'POST', '/wipe'));
+  open(status(wai(`    let mReq = lookup "X-Request-Id" (requestHeaders req)\n    case mReq of\n      Nothing -> respond (responseLBS status401 [] "no")\n      Just _ -> do\n${WIPE}`), 'POST', '/wipe'));
+});
+
+test('Servant order: reject-before-write is a guard; read, write, then reject is late', () => {
+  protectedRoute(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  when (isNothing mAuth) (throwError err401)\n${WRITE}`), 'POST', '/wipe'));
+  protectedRoute(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  case mAuth of\n    Nothing -> throwError err403\n    Just _ -> pure ()\n${WRITE}`), 'POST', '/wipe'));
+  const afterWrite = servant(API, 'h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  let ok = isJust mAuth\n  conn <- liftIO (connectPostgreSQL "dbname=app")\n  _ <- liftIO (execute_ conn "DELETE FROM sessions")\n  when (not ok) (throwError err401)\n  return n');
+  late(status(afterWrite, 'POST', '/wipe'), 'after');
+  const f = lateFinding(afterWrite, '/wipe');
+  assert.equal(f.cwe, 'CWE-306'); assert.match(f.description, /runs after the first sensitive operation/);
+  late(status(servant(API, 'h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  _ <- return mAuth\n  conn <- liftIO (connectPostgreSQL "dbname=app")\n  _ <- liftIO (execute_ conn "DELETE FROM sessions")\n  case mAuth of\n    Nothing -> throwError err401\n    Just _ -> return n'), 'POST', '/wipe'), 'after');
+});
+
+test('Servant order negatives: a throwError that is only built, another header, a credential never examined, a non-auth error', () => {
+  open(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  let denied = throwError err401 :: Handler ()\n  _ <- return (isNothing mAuth)\n${WRITE}`), 'POST', '/wipe'));
+  const other = '"wipe" :> Header "X-Request-Id" Text :> ReqBody \'[JSON] Int :> Post \'[JSON] Int';
+  open(status(servant(other, `h :: Maybe Text -> Int -> Handler Int\nh mReq n = do\n  when (isNothing mReq) (throwError err401)\n${WRITE}`), 'POST', '/wipe'));
+  open(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh _ n = do\n  when (n < 0) (throwError err401)\n${WRITE}`), 'POST', '/wipe'));
+  open(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  when (isNothing mAuth) (throwError err404)\n${WRITE}`), 'POST', '/wipe'));
+  // the only rejection runs BEFORE the credential is examined and does not depend on it: it cannot be the guard of the write
+  late(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = do\n  when (n < 0) (throwError err401)\n  _ <- return mAuth\n${WRITE}`), 'POST', '/wipe'), 'after');
+});
+
+test('structure, not position: a check and a write on ONE source line are ordered by the handler, not by the line', () => {
+  const w = 'liftIO (connectPostgreSQL "dbname=app" >>= \\c -> execute_ c "DELETE FROM sessions")';
+  protectedRoute(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = when (isNothing mAuth) (throwError err401) >> ${w} >> return n`), 'POST', '/wipe'));
+  late(status(servant(API, `h :: Maybe Text -> Int -> Handler Int\nh mAuth n = let ok = isJust mAuth in ${w} >> when (not ok) (throwError err401) >> return n`), 'POST', '/wipe'), 'after');
 });
