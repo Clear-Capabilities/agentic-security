@@ -79,7 +79,7 @@ export const CATALOG = [
     vuln: { name: 'SQL Injection (db.execute)', severity: 'critical', cwe: 'CWE-89',
             remediation: 'Use parameterized queries: db.execute("SELECT * FROM t WHERE id = ?", [id]).' } },
   // OS command.
-  { kind: 'sink', id: 'js-exec',     language: 'js', framework: 'node', match: { type: 'call', callee: 'exec'     }, argIndex: 0,
+  { kind: 'sink', id: 'js-exec',     language: 'js', framework: 'node', match: { type: 'call', callee: 'exec', receiverTypeExclude: ['^RegExp$'] }, argIndex: 0,
     vuln: { name: 'Command Injection (child_process.exec)', severity: 'critical', cwe: 'CWE-78',
             remediation: 'Use execFile or spawn with an argv array instead of exec — exec invokes the shell. If shell features are required, escape with shell-escape, never string-concat user input.' } },
   { kind: 'sink', id: 'js-execSync', language: 'js', framework: 'node', match: { type: 'call', callee: 'execSync' }, argIndex: 0,
@@ -2381,6 +2381,13 @@ function _receiverAllowed(entry, calleeExpr) {
 // vocabulary. Over-matching here is the safe direction: it only ever
 // *permits* a match the pattern layer already made.
 function _receiverTypeAllowed(entry, receiverType) {
+  // `receiverTypeExclude` is the NEGATIVE counterpart of `receiverTypeIn`: a
+  // confidently resolved receiver type that matches it removes the entry. An
+  // unresolved type (null) never excludes, so the conservative behaviour is
+  // unchanged whenever the engine cannot tell. `js-exec` uses it to drop a
+  // RegExp's `.exec()`, which shares its method name with child_process.exec.
+  const ex = entry.match && entry.match.receiverTypeExclude;
+  if (ex && ex.length && receiverType && ex.some((p) => new RegExp(p).test(String(receiverType)))) return false;
   const pats = entry.match && entry.match.receiverTypeIn;
   if (!pats || !pats.length) return true;
   if (!receiverType) return true;
@@ -2638,8 +2645,21 @@ export function matchSource(expr, file, receiverType) {
   return null;
 }
 
+// A receiver whose type is evident from the expression itself, with no
+// binding to resolve: a regex literal (`/x/.exec(s)`) or a direct construction
+// (`new RegExp(p).exec(s)`). Returns 'RegExp' or null. Callers that can also
+// resolve a bound variable pass their own `receiverType`, which wins.
+function _inlineReceiverType(calleeExpr) {
+  const o = calleeExpr && typeof calleeExpr === 'object' && calleeExpr.kind === 'member' ? calleeExpr.object : null;
+  if (!o) return null;
+  if (o.kind === 'literal' && o.isRegex) return 'RegExp';
+  if (o.kind === 'call' && o.callee && o.callee.kind === 'ident' && o.callee.name === 'RegExp') return 'RegExp';
+  return null;
+}
+
 export function matchSinkOrSanitizer(calleeExpr, file, receiverType) {
   if (!calleeExpr) return null;
+  receiverType = receiverType || _inlineReceiverType(calleeExpr);
   const raw = _calleeIndexHits(calleeExpr);
   if (!raw.length) return null;
   const hits = filterByProvenance(raw)

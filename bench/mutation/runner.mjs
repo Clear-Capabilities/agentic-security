@@ -802,6 +802,105 @@ async fn f(Query(params): Query<HashMap<String, String>>, pool: &sqlx::PgPool) {
     sqlx::query("SELECT * FROM t WHERE q = $1").bind(q).fetch_all(pool).await.unwrap();
 }`,
   },
+
+  // ── RegExp.exec is not child_process.exec ─────────────────────────────────
+  // The callee `exec` is a command sink in the catalog, matched by bare method
+  // name. A regex's own `.exec()` shares that name and is by far the more
+  // common call on request data, so the sink must be gated on the receiver's
+  // type: a receiver that is provably a RegExp is not a sink; a real
+  // child_process exec, however it is spelled, still is; and a receiver the
+  // engine cannot resolve keeps the conservative (fires) behaviour.
+  {
+    id: 'rx-exec-baseline-child-process',
+    class: 'baseline',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: true,
+    why: 'exec imported from child_process with a request value in the command is command injection',
+    code: `const { exec } = require('child_process');
+app.get('/v', (req, res) => {
+  exec('ls ' + req.query.d);
+  res.send('ok');
+});`,
+  },
+  {
+    id: 'rx-exec-metamorphic-member-form',
+    class: 'metamorphic',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: true,
+    why: 'cp.exec(...) through the module object is the same call as the destructured exec',
+    code: `const cp = require('child_process');
+app.get('/v', (req, res) => {
+  cp.exec('ls ' + req.query.d);
+  res.send('ok');
+});`,
+  },
+  {
+    id: 'rx-exec-metamorphic-unresolved-receiver',
+    class: 'metamorphic',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: true,
+    why: 'a receiver the engine cannot resolve to a RegExp must keep firing: only a PROVEN regex is exempt',
+    code: `const runner = makeRunner();
+app.get('/v', (req, res) => {
+  runner.exec('ls ' + req.query.d);
+  res.send('ok');
+});`,
+  },
+  {
+    id: 'rx-exec-metamorphic-rebound-name',
+    class: 'metamorphic',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: true,
+    why: 'a name that is ever bound to anything but a regex is not a proven RegExp, even if it was a regex once',
+    code: `let runner = /^a/;
+runner = require('child_process');
+app.get('/v', (req, res) => {
+  runner.exec('ls ' + req.query.d);
+  res.send('ok');
+});`,
+  },
+  {
+    id: 'rx-exec-adversarial-module-const',
+    class: 'adversarial',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: false,
+    why: 'a module-scope const initialised from a regex literal: its .exec() runs a match, not a shell',
+    code: `const SEMVER = /^(\\d+)\\.(\\d+)$/;
+app.get('/v', (req, res) => {
+  const m = SEMVER.exec(req.query.v);
+  res.send(String(m && m[1]));
+});`,
+  },
+  {
+    id: 'rx-exec-adversarial-inline-literal',
+    class: 'adversarial',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: false,
+    why: 'a regex literal as the receiver: /re/.exec(value) runs a match, not a shell',
+    code: `app.get('/v', (req, res) => {
+  const n = /^(\\d+)/.exec(req.query.w);
+  res.send(String(n && n[1]));
+});`,
+  },
+  {
+    id: 'rx-exec-adversarial-new-regexp',
+    class: 'adversarial',
+    dimension: 'detection',
+    cwe: /CWE-78/,
+    expectDetected: false,
+    why: 'a local initialised from new RegExp(...): its .exec() runs a match, not a shell',
+    code: `app.get('/v', (req, res) => {
+  const re = new RegExp('^v(\\d+)');
+  const m = re.exec(req.query.v);
+  res.send(String(m && m[1]));
+});`,
+  },
 ];
 
 async function verdictFor(c, tmpRoot) {
