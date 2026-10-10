@@ -1,0 +1,19 @@
+{
+  "id": "k8s-admin-ingress-vs-internal",
+  "title": "An unauthenticated admin service with secret access, public versus internal",
+  "kind": "deployment-only",
+  "defect": {
+    "family": "deployment-exposure",
+    "file": null
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "A public ingress reaches an admin workload whose service account can read secrets."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "The admin workload has the same secret access but no ingress reaches it."
+    }
+  }
+}

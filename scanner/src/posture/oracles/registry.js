@@ -33,7 +33,7 @@ export function manifestEntry(a) {
   return {
     id: a.id, class: a.class, version: a.version, logicDigest: a.logicDigest, description: a.description,
     prerequisites: a.prerequisites.map((id) => ({ id, description: PREREQUISITES[id].description })),
-    platforms: a.platforms, budgets: a.budgets,
+    platforms: a.platforms, budgets: a.budgets, requiresFeature: a.requiresFeature ?? null,
     negativeControls: a.negativeControls, fixtures: a.fixtures, limitations: a.limitations,
     receipts: 'issued by the verifier domain only (runOracle); a caller-supplied receipt is not valid',
   };

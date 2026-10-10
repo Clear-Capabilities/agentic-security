@@ -52,6 +52,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "Task|Agent|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/capability-dispatch.js",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "PostToolUse": [

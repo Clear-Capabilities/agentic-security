@@ -112,6 +112,55 @@ export function aggregateCorpus(detail) {
 }
 
 /**
+ * Real-code evaluation gates (programme QA-001/QA-003). Takes the committed gate
+ * report written by `scripts/evaluation.mjs gates` (or nothing) and returns the
+ * section the scorecard publishes. It can only RELAY a status: a synthetic
+ * protocol is forced to `unmeasured`, and an absent report is `unmeasured` with
+ * the reason, never an empty pass. Pure.
+ */
+export function summarizeMeasurement(provenance, independent) {
+  const p = provenance || {};
+  const clean = p.worktreeClean === true;
+  const hist = independent && independent.engineVersion && independent.engineVersion !== p.engineVersion;
+  return {
+    engineVersion: p.engineVersion || null, commit: p.commit || null, bundleSha256: p.bundleSha256 || null,
+    cleanMeasurement: clean,
+    identity: clean
+      ? 'the commit and bundle below identify exactly the tree that was measured'
+      : p.worktreeClean === false ? 'the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement' : 'cleanliness of the measured tree was not recorded',
+    currentEngineIndependentAccuracy: 'unmeasured',
+    currentEngineIndependentReason: 'no adjudicated real-code population has been run against this engine; the independent record in this document, if any, describes an older engine',
+    historicalIndependentRecord: hist
+      ? { engineVersion: independent.engineVersion, measuredAt: independent.measuredAt || null, usage: 'historical record only; not a measurement of the engine above and not combined with the corpus figures' }
+      : null,
+  };
+}
+
+export function summarizeEvaluationGates(report) {
+  if (!report || typeof report !== 'object') {
+    return {
+      measuredThisRun: false, status: 'unmeasured', synthetic: null, gates: [],
+      reason: 'no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated',
+    };
+  }
+  const gates = Array.isArray(report.gates) ? report.gates.map((g) => ({ id: g.id, status: g.status, threshold: g.threshold ?? null, measured: g.measured ?? null, reason: g.reason || null })) : [];
+  const synthetic = report.synthetic !== false;
+  const counts = {};
+  for (const g of gates) counts[g.status] = (counts[g.status] || 0) + 1;
+  return {
+    measuredThisRun: false,
+    source: 'bench/independent/evaluation-gates.json',
+    protocolHash: report.protocolHash || null,
+    synthetic,
+    // A synthetic protocol can exercise the machinery; it can never publish a gate result.
+    status: synthetic ? 'unmeasured' : (report.overall || 'unmeasured'),
+    reason: synthetic ? 'the recorded protocol is synthetic; its results are not real-code evidence' : (report.population?.reason || null),
+    gates: synthetic ? [] : gates,
+    gateCounts: synthetic ? {} : counts,
+  };
+}
+
+/**
  * Build the machine-readable scorecard model. `inputs`:
  *   provenance   { engineVersion, bundleSha256, commit, nodeVersion, generatedAt,
  *                  corpusVersion?, scope? } — the last two are FR-901's
@@ -227,6 +276,10 @@ export function buildScorecard(inputs) {
           source: 'bench/independent/RESULT.json',
           measuredAt: committed.independent.measuredAt || null,
           engineVersion: committed.independent.engineVersion || null,
+          // QA-008.AC01: this record belongs to the engine it names. When that is not the engine this scorecard measured, it is a
+          // HISTORICAL record: kept, dated, labelled, and never combined with the curated-corpus figures into one accuracy claim.
+          historical: !!committed.independent.engineVersion && committed.independent.engineVersion !== (inputs.provenance || {}).engineVersion,
+          comparableToCurrentEngine: !!committed.independent.engineVersion && committed.independent.engineVersion === (inputs.provenance || {}).engineVersion,
           population: committed.independent.population || null,
           overall: committed.independent.overall || null,
           wide: committed.independent.wide || null,
@@ -293,6 +346,10 @@ export function buildScorecard(inputs) {
     // frameworks" from "this scorecard predates the metric" the same way
     // every other section here distinguishes absence from zero.
     complianceMappingCoverage: inputs.complianceMappingCoverage || [],
+    // QA-001/QA-003: the real-code gates registered in the evaluation protocol. Relayed, never computed here.
+    evaluationGates: summarizeEvaluationGates(inputs.evaluation),
+    // QA-008.AC01: what this scorecard measured, stated once. `clean` is what lets the commit and bundle identify the measured tree.
+    measurement: summarizeMeasurement(inputs.provenance, committed.independent),
   };
 }
 
@@ -343,6 +400,10 @@ export function renderScorecardMarkdown(m) {
   L.push(`| Commit | \`${p.commit || 'unknown'}\` |`);
   if (p.worktreeClean !== undefined) {
     L.push(`| Worktree at measurement time | ${p.worktreeClean ? 'clean' : 'DIRTY — the commit above does not fully describe what was measured'} |`);
+  }
+  if (m.measurement) {
+    L.push(`| Measurement identity | ${m.measurement.cleanMeasurement ? 'clean measurement: the commit and bundle above identify the measured tree' : 'NOT a clean measurement: the commit and bundle above do not identify the measured tree'} |`);
+    L.push('| Independent accuracy of THIS engine | unmeasured (no adjudicated real-code population has been run; see the historical record below, if present) |');
   }
   L.push(`| Node | ${p.nodeVersion || 'unknown'} |`);
   L.push(`| Corpus entries | ${c.totalEntries} (${c.scoredEntries} scored) |`);
@@ -674,8 +735,17 @@ export function renderScorecardMarkdown(m) {
 
   const ind = m.committedInputs.independent;
   if (ind && ind.overall) {
-    L.push('## Independent evaluation population — the number that matters');
+    const hist = ind.historical === true;
+    L.push(hist
+      ? `## Independent evaluation population: historical record (engine ${ind.engineVersion}, ${ind.measuredAt || 'undated'})`
+      : '## Independent evaluation population — the number that matters');
     L.push('');
+    if (hist) {
+      L.push(`**This is a historical record of engine ${ind.engineVersion}, measured ${ind.measuredAt || 'on an unrecorded date'}.** It is not a measurement of the`);
+      L.push(`engine this scorecard describes (${p.engineVersion || 'unknown'}), it is a different population from the curated corpus above, and the two are`);
+      L.push('never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.');
+      L.push('');
+    }
     L.push('Everything above is a **regression net**: its fixtures and its labels are both');
     L.push('written here, which is why its detection rate sits at the ceiling by');
     L.push('construction. `bench/independent/` is the other instrument — real upstream code');
@@ -715,9 +785,14 @@ export function renderScorecardMarkdown(m) {
     L.push('class at all, a question with a much easier yes. It is kept because it is the');
     L.push('only way to tell whether a change moved the engine or moved the benchmark.');
     L.push('');
-    L.push('Against ~100% on the curated corpus above. **That gap is the most useful number');
-    L.push('in this document**, and publishing it is the point of the exercise. The figure');
-    L.push('went DOWN when the benchmark was corrected, and is published that way.');
+    if (hist) {
+      L.push(`This record is kept, dated and labelled because it is the last independent measurement the project made. It describes engine ${ind.engineVersion} only.`);
+      L.push('It does not describe the engine above, and the curated-corpus rates earlier in this document are a different population that must not be read beside it as one claim.');
+    } else {
+      L.push('Against ~100% on the curated corpus above. **That gap is the most useful number');
+      L.push('in this document**, and publishing it is the point of the exercise. The figure');
+      L.push('went DOWN when the benchmark was corrected, and is published that way.');
+    }
     L.push('');
     // FR-904 (assurance-hardening PRD): "rule authors cannot optimize
     // against the full scored population." T0.7's held-out slice is a
@@ -771,6 +846,22 @@ export function renderScorecardMarkdown(m) {
       }
     }
   }
+  const eg = m.evaluationGates || summarizeEvaluationGates(null);
+  L.push('## Real-code evaluation gates');
+  L.push('');
+  L.push(`Status: **${eg.status}**${eg.reason ? ` (${eg.reason})` : ''}.`);
+  L.push('');
+  L.push('The gates (per-language F1, micro and macro F1, pooled precision and recall, completion) are registered');
+  L.push('in a frozen protocol before any result is observed, and can read `pass` only on an independently');
+  L.push('adjudicated sealed population that meets the registered minimums. `insufficient-population` and');
+  L.push('`unmeasured` are honest blockers, not failures and not passes.');
+  if (eg.gates.length) {
+    L.push('');
+    L.push('| Gate | Status | Threshold | Measured |');
+    L.push('| --- | --- | --- | --- |');
+    for (const g of eg.gates) L.push(`| ${g.id} | ${g.status} | ${g.threshold ?? 'n/a'} | ${g.measured ?? 'n/a'} |`);
+  }
+  L.push('');
   L.push('## Committed artifacts referenced (not re-run by this command)');
   L.push('');
   const cb = m.committedInputs.corpusBaseline;

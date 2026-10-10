@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { ALL_TOOLS } from './tools.js';
 import { validate } from './validate.js';
 import { auditCall } from './audit.js';
+// X-505: tool calls are checked against the capability policy before a handler runs.
+import { createToolGate } from '../capabilities/tool-gate.js';
 
 const PROTOCOL_VERSION = '2025-03-26';
 const SERVER_NAME = 'agentic-security';
@@ -43,7 +45,7 @@ const TOOLS_BY_NAME = Object.fromEntries(ALL_TOOLS.map(t => [t.name, t]));
 function _codeFingerprint() {
   try {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
+    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'invariant-tools.js', 'portfolio-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
     const h = crypto.createHash('sha256');
     for (const f of files) {
       try { h.update(f); h.update(fs.readFileSync(path.join(here, f))); } catch {}
@@ -63,8 +65,12 @@ function _ok(id, result) {
   return { jsonrpc: '2.0', id, result };
 }
 
-export function createServer({ sessionRoot = process.cwd() } = {}) {
+// `capabilityPolicy` is `{ bound, binding }`, supplied by the operator from the
+// capability manifest facility. Absent, and with the `capability-enforcement`
+// feature off, the gate is inactive and behaviour is unchanged.
+export function createServer({ sessionRoot = process.cwd(), capabilityPolicy = null } = {}) {
   const ctx = { sessionRoot };
+  const gate = createToolGate({ sessionRoot, policy: capabilityPolicy });
 
   async function handleRequest(msg) {
     if (!msg || typeof msg !== 'object') return _err(null, -32600, 'Invalid Request');
@@ -117,6 +123,21 @@ export function createServer({ sessionRoot = process.cwd() } = {}) {
           auditCall({ sessionRoot, tool: name, args, outcome: 'rejected', reason: 'unknown-tool' });
           return _err(id, -32602, `Unknown tool: ${name}`);
         }
+        // X-505: the capability check, for the task identity bound to this server.
+        // An identity named in the request metadata can only be compared with it.
+        const gated = gate.check(name, { claimedTaskId: msg.params?._meta?.taskId });
+        if (!gated.allowed) {
+          auditCall({ sessionRoot, tool: name, args, outcome: 'rejected', reason: `capability-denied: ${gated.code}` });
+          const p = gated.proposal;
+          return _ok(id, {
+            content: [{ type: 'text', text: JSON.stringify({
+              blocked: true, code: gated.code, reason: gated.reason, missing: gated.missing,
+              proposedChange: p && p.proposable ? { review: p.review, change: p.change, nextPolicyVersion: p.nextPolicyVersion, requiresOperatorGrant: true } : null,
+              attemptsRemaining: gated.attemptsRemaining, exhausted: gated.exhausted,
+            }, null, 2) }],
+            isError: true,
+          });
+        }
         try { validate(tool.inputSchema, args); }
         catch (e) {
           auditCall({ sessionRoot, tool: name, args, outcome: 'rejected', reason: `invalid-args: ${e.message}` });
@@ -147,7 +168,7 @@ export function createServer({ sessionRoot = process.cwd() } = {}) {
     }
   }
 
-  return { handleRequest, sessionRoot };
+  return { handleRequest, sessionRoot, capabilityGate: gate };
 }
 
 // NOTE: no default-singleton export. Callers must use createServer({...})

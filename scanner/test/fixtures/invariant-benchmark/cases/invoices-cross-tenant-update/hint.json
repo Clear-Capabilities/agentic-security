@@ -1,0 +1,10 @@
+{
+  "class": "tenant-isolation",
+  "action": "reviseInvoice",
+  "source": "specification-mining",
+  "evidence": {
+    "file": "app.mjs",
+    "line": 1
+  },
+  "uncertainty": 0.7
+}

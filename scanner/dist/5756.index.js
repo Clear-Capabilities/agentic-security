@@ -25,8 +25,8 @@ var external_node_fs_ = __webpack_require__(73024);
 var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/mcp/validate.js
 var validate = __webpack_require__(61211);
-// EXTERNAL MODULE: ./src/egress/redact.js + 1 modules
-var redact = __webpack_require__(74831);
+// EXTERNAL MODULE: ./src/egress/redact.js
+var redact = __webpack_require__(11723);
 ;// CONCATENATED MODULE: ./src/llm-validator/agent-tools.js
 // PRD §18.2/§18.3 — the bounded local agent loop's tool registry.
 //

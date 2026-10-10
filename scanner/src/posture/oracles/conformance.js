@@ -140,7 +140,8 @@ export function checkFixturePins(adapter, scannerRoot, pins = loadPins(scannerRo
 
 // ---------------------------------------------------------------- execution
 
-const enabledConfig = () => resolveAssuranceConfig({ env: {}, overrides: { features: { [FEATURE_ID]: true } } });
+// An adapter that declares `requiresFeature` (X-404) needs that feature enabled too; conformance enables exactly the ones the adapter names.
+const enabledConfig = (adapter) => resolveAssuranceConfig({ env: {}, overrides: { features: { [FEATURE_ID]: true, ...(adapter?.requiresFeature ? { [adapter.requiresFeature]: true } : {}) } } });
 
 function requestFor(adapter, scannerRoot, kind, over = {}) {
   const f = readFixture(scannerRoot, adapter, kind);
@@ -164,7 +165,7 @@ function requestFor(adapter, scannerRoot, kind, over = {}) {
 export async function runAdapterConformance(adapter, { scannerRoot, run = runOracle, runOptions = {}, harnessProcesses = null } = {}) {
   const checks = [];
   const registry = { getOracle: (id) => (id === adapter.id ? adapter : null) };
-  const go = (req, extra = {}) => run(req, { config: enabledConfig(), registry, ...runOptions, ...extra });
+  const go = (req, extra = {}) => run(req, { config: enabledConfig(adapter), registry, ...runOptions, ...extra });
   try {
     const pos = await go(requestFor(adapter, scannerRoot, 'positive'));
     if (pos.status === 'unsupported' || pos.status === 'blocked' || pos.status === 'disabled') {

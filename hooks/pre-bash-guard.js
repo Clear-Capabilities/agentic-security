@@ -327,6 +327,10 @@ else (async () => {
   const tool = evt.tool_name || evt.toolName;
   if (tool !== 'Bash') process.exit(0);
 
+  // X-505: capability policy advice (inert unless the operator enabled the feature
+  // and named a manifest). A shell string cannot be mediated, so this only says so.
+  try { const adv = await require('./lib/capability-advice.js').capabilityAdvice(evt); if (adv) process.stderr.write(adv.join('\n') + '\n'); } catch { /* best-effort */ }
+
   const cmd = (evt.tool_input || {}).command || '';
   if (!cmd) process.exit(0);
 

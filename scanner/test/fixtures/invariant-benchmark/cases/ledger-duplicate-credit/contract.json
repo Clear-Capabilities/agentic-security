@@ -1,0 +1,72 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "ledger-conservation",
+  "revision": 1,
+  "name": "A settlement moves value, it never creates it",
+  "class": "value-conservation",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    }
+  ],
+  "actors": [
+    {
+      "id": "ana",
+      "tenant": "acme",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "payer",
+      "kind": "account",
+      "tenant": "acme",
+      "key": "ledger/payer"
+    },
+    {
+      "id": "payee",
+      "kind": "account",
+      "tenant": "acme",
+      "key": "ledger/payee"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "settle",
+      "action": "settle",
+      "actors": [
+        "ana"
+      ],
+      "resource": "payer"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "value-conserved",
+      "op": "sum-not-conserved",
+      "prefix": "ledger/",
+      "field": "amount",
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:d78b163f8c32d7db"
+}

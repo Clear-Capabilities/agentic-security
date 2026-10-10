@@ -1,0 +1,75 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "plans-admin-only-quota-fixed",
+  "revision": 1,
+  "name": "Only an admin changes the quota through setQuota",
+  "class": "privilege-constraint",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    }
+  ],
+  "actors": [
+    {
+      "id": "olga",
+      "tenant": "acme",
+      "role": "admin"
+    },
+    {
+      "id": "mike",
+      "tenant": "acme",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "quota",
+      "kind": "setting",
+      "tenant": "acme",
+      "key": "plans/quota"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "set-quota",
+      "action": "setQuota",
+      "actors": [
+        "olga"
+      ],
+      "resource": "quota"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "no-unprivileged-change",
+      "op": "unauthorized-role-change",
+      "actions": [
+        "setQuota"
+      ],
+      "allowedRoles": [
+        "admin"
+      ],
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:43a709bad073abaf"
+}

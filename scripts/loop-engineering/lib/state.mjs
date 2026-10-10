@@ -4,7 +4,7 @@
 import { mkdirSync, openSync, closeSync, writeSync, unlinkSync, readFileSync, existsSync, readdirSync, chmodSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { atomicWriteJson, atomicWriteFile, readJson, appendJsonl, nowIso, redactDeep } from './util.mjs';
+import { atomicWriteJson, atomicWriteFile, readJson, appendJsonl, withFileLock, nowIso, redactDeep } from './util.mjs';
 import { identityMatches, startTimeOf } from './procscan.mjs';
 
 export const STATE_DIRNAME = '.loop-engineering';
@@ -38,6 +38,10 @@ export function layout(repoRoot, runId = null) {
       logsDir: join(dir, 'logs'),
       statusHtml: join(dir, 'status.html'),
       finalReport: join(dir, 'final-report.json'),
+      finalEvidence: join(dir, 'final-evidence.json'),
+      completionReport: join(dir, 'completion-report.json'),
+      stateBackup: join(dir, 'state.json.bak'),
+      eventSeqFile: join(dir, 'events.seq'),
     });
   }
   return l;
@@ -78,8 +82,35 @@ export function listRunIds(repoRoot) {
   try { return readdirSync(join(layout(repoRoot).base, 'runs')).sort(); } catch { return []; }
 }
 
+// Every event carries a monotonic sequence id, unique across the controller, the
+// guardian and the CLI (they share the log), and across rotation and restarts.
 export function appendEvent(L, type, data = {}) {
-  appendJsonl(L.eventsFile, { at: nowIso(), type, ...redactDeep(data) });
+  withFileLock(`${L.eventsFile}.lock`, () => {
+    const last = readJson(L.eventSeqFile, null);
+    const seq = (Number.isInteger(last?.seq) ? last.seq : lastSeqInFile(L.eventsFile)) + 1;
+    appendJsonl(L.eventsFile, { seq, at: nowIso(), type, ...redactDeep(data) });
+    atomicWriteJson(L.eventSeqFile, { seq });
+  });
+}
+
+function lastSeqInFile(file) {
+  try {
+    const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) { try { const s = JSON.parse(lines[i]).seq; if (Number.isInteger(s)) return s; } catch { /* partial line */ } }
+  } catch { /* none yet */ }
+  return 0;
+}
+
+// The checkpoint with a fallback: state.json is replaced atomically, and each
+// controller checkpoint also refreshes state.json.bak. A torn or corrupted
+// primary is recovered from the backup rather than silently reinitialised (which
+// would reset attempt counters). -> { state, source: 'primary'|'backup'|'absent'|'corrupt' }
+export function readStateFile(L) {
+  const prim = readJson(L.stateFile, undefined);
+  if (prim !== undefined && prim !== null) return { state: prim, source: 'primary' };
+  const bak = readJson(L.stateBackup, null);
+  if (bak) return { state: bak, source: 'backup' };
+  return { state: null, source: existsSync(L.stateFile) ? 'corrupt' : 'absent' };
 }
 
 export function readEvents(L, limit = 200) {

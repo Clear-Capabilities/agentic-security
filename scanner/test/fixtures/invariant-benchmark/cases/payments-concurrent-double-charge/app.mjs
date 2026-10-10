@@ -1,0 +1,1 @@
+export function createApp() { return { async charge(ctx, key, p) { const seen = ctx.store.read('seen/' + p.requestId); await Promise.resolve(); if (!seen) { ctx.store.write('seen/' + p.requestId, { done: true }); ctx.emit('capture', { key: p.requestId }); } return { status: 200 }; } }; }

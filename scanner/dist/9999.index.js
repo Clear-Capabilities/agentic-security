@@ -503,7 +503,7 @@ async function runHunter(focusArea, lens, ctx = {}, opts = {}) {
 
   let prompt;
   try {
-    prompt = (0,discovery_lenses/* buildHunterPrompt */.j)(focusArea, lens, ctx);
+    prompt = (0,discovery_lenses/* buildHunterPrompt */.jM)(focusArea, lens, ctx);
   } catch (err) {
     const reason = `failed to build hunter prompt: ${err?.message || String(err)}`;
     appendEntry(transcript, { phase: 'prompt_error', reason });
@@ -959,8 +959,8 @@ function forgetRefuted(memory) {
 
 // EXTERNAL MODULE: ./src/posture/verification/emit.js
 var emit = __webpack_require__(85578);
-// EXTERNAL MODULE: ./src/posture/oracles/oracle.js + 4 modules
-var oracle = __webpack_require__(80219);
+// EXTERNAL MODULE: ./src/posture/oracles/oracle.js + 1 modules
+var oracle = __webpack_require__(14642);
 // EXTERNAL MODULE: ./src/posture/assurance/verification-record.js
 var verification_record = __webpack_require__(29668);
 // EXTERNAL MODULE: ./src/posture/assurance/identity.js
@@ -1182,6 +1182,8 @@ function deepFreeze(o) {
   return Object.freeze(o);
 }
 
+// EXTERNAL MODULE: ./src/posture/assurance/config.js
+var config = __webpack_require__(90385);
 ;// CONCATENATED MODULE: ./src/discovery/index.js
 //
 // Compose the discovery pipeline:
@@ -1192,6 +1194,7 @@ function deepFreeze(o) {
 // planned versus hunted and how many runs degraded, with reasons. A discovery
 // pass that half failed and reports "no findings" is indistinguishable from a
 // clean codebase unless it says so.
+
 
 
 
@@ -1344,7 +1347,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
 
   const lenses = [];
   for (const key of lensKeys) {
-    const lens = (0,discovery_lenses/* lensByKey */.H)(key);
+    const lens = (0,discovery_lenses/* lensByKey */.Hy)(key);
     // An unknown key must degrade visibly, not vanish via a silent filter.
     if (lens) lenses.push(lens);
     else reasons.push(`unresolved lens key: "${key}"`);
@@ -1480,6 +1483,18 @@ async function runDiscovery(ctx = {}, opts = {}) {
     if (e.ok) verificationRecords.push(e.record);
   }
 
+  // X-402: opt-in invariant proposals. A candidate from a state-oriented lens can suggest a contract; the suggestion is advisory,
+  // `proposed`, authored by the model and never approved here. Off unless `opts.invariantProposals = { config }` and the
+  // `invariant-scenarios` feature is enabled in that config.
+  let invariantProposals = null;
+  if (opts.invariantProposals && (0,config/* featureStatus */.FX)(opts.invariantProposals.config, 'invariant-scenarios').status === 'ok') {
+    invariantProposals = [];
+    for (const f of fresh) {
+      const inv = (0,discovery_lenses/* invariantProposalFor */.gj)({ lens: f.discovery?.lens, title: f.vuln, description: f.description, file: f.file, line: f.line });
+      if (inv) invariantProposals.push({ hypothesisId: f.stableId, invariant: inv });
+    }
+  }
+
   // X-207: opt-in promotion. A hypothesis crosses into a finding ONLY through `promoteHypothesis` (trusted verifier receipt,
   // explicit policy, audit record). `fresh` is unchanged; promoted findings and every decision's audit record are reported
   // separately, and nothing here writes `last-scan.json`. `opts.promote = { policy, verify(hypothesis) -> runOracle result }`.
@@ -1501,6 +1516,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
     fresh,
     verificationRecords,
     ...(promotions ? { promotions } : {}),
+    ...(invariantProposals ? { invariantProposals } : {}),
     duplicates,
     suppressed,
     // `refutedCandidates` holds RAW candidates straight from `disprovePanel`,
@@ -1559,11 +1575,13 @@ async function runDiscovery(ctx = {}, opts = {}) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   H: () => (/* binding */ lensByKey),
+/* harmony export */   Hy: () => (/* binding */ lensByKey),
 /* harmony export */   LENSES: () => (/* binding */ LENSES),
-/* harmony export */   j: () => (/* binding */ buildHunterPrompt)
+/* harmony export */   gj: () => (/* binding */ invariantProposalFor),
+/* harmony export */   jM: () => (/* binding */ buildHunterPrompt)
 /* harmony export */ });
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(11723);
+/* harmony import */ var _posture_invariants_lifecycle_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(80891);
 //
 // The seven hunting lenses. Each hunter run is one (focus area × lens) pair.
 //
@@ -1573,6 +1591,7 @@ async function runDiscovery(ctx = {}, opts = {}) {
 // same code than one told to look at crypto, so the union covers failure modes
 // no single prompt reaches. `wildcard` exists because a fixed taxonomy is a
 // ceiling, and the classes worth finding are the ones not on the list.
+
 
 const LENSES = Object.freeze([
   { key: 'injection', title: 'Injection', family: 'injection', cwe: 'CWE-74',
@@ -1590,6 +1609,23 @@ const LENSES = Object.freeze([
   { key: 'wildcard', title: 'Wildcard', family: 'other', cwe: 'CWE-710',
     brief: 'Anything the other lenses do not cover. Prefer the surprising and specific over the generic; report nothing rather than something already obvious.' },
 ]);
+
+// X-402: the lenses that reason about who may do what to whose data can propose an INVARIANT for a candidate they raise. The
+// proposal is a skeleton contract authored by the model (`proposed`, with the candidate as source evidence and a high uncertainty),
+// advisory until a reviewer approves it in the signed ledger. A lens whose candidates are not about state (injection, crypto) has
+// no mapping and proposes nothing.
+const TENANT_HINT = /tenant|idor|ownership|object reference|cross[- ]?(?:account|user|org)|leak|another user|other user/i;
+const WORKFLOW_HINT = /refund|order|status|workflow|state machine|out[- ]of[- ]order|step|approval|checkout|paid|ship/i;
+
+function invariantProposalFor(candidate) {
+  const text = `${candidate?.title || ''} ${candidate?.description || ''} ${candidate?.rationale || ''}`;
+  let cls = null;
+  if (candidate?.lens === 'authz') cls = TENANT_HINT.test(text) ? 'tenant-isolation' : 'privilege-constraint';
+  else if (candidate?.lens === 'feature-abuse' && TENANT_HINT.test(text)) cls = 'tenant-isolation';
+  else if (candidate?.lens === 'business-logic' && WORKFLOW_HINT.test(text)) cls = 'workflow-order';
+  if (!cls || typeof candidate.file !== 'string') return null;
+  return (0,_posture_invariants_lifecycle_js__WEBPACK_IMPORTED_MODULE_1__/* .inferredInvariant */ .mB)({ class: cls, source: 'discovery-lens', evidence: { file: candidate.file, line: Number.isInteger(candidate.line) ? candidate.line : null, lens: candidate.lens }, uncertainty: 0.85 });
+}
 
 function lensByKey(key) {
   if (typeof key !== 'string') return null;

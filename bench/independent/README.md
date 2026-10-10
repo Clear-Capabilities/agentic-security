@@ -210,3 +210,26 @@ is why the scope is capped rather than whole-repo.
 Fetched source is cached under `bench/independent/cache/` and is **gitignored**:
 this repository does not vendor other people's code. The manifest pins exact
 commit SHAs, so a run is reproducible as long as upstream keeps its history.
+
+## The frozen protocol (QA-001 to QA-003), and what it does not do
+
+`npm run evaluation -- <command>` (`scripts/evaluation.mjs`, modules in
+`scanner/src/posture/evaluation/`) is the tooling for a *current-engine*,
+*adjudicated*, *sealed* measurement. It is a separate instrument from the
+population above: it never reads this directory's manifest or result file, and
+the two populations are never merged into one figure.
+
+What exists: a protocol that is frozen before any result is observed (pinned
+versions, digests, licences, commits, scope, matching rules, budgets, thresholds,
+grouped dev/sealed splits, a hash that makes any later edit detectable and a
+refusal to amend it once a result is bound to it); label and negative schemas
+with adjudication rules; a custodian store and leakage controls; and a runner
+that records every outcome, scores timeouts and errors on known positives as
+misses, and ablates the deterministic, deep-taint and model-assisted layers.
+
+What does not exist: an independently adjudicated population or a sealed holdout.
+No real human adjudication was performed to build this, so every real-code gate
+(per-language F1 >= 0.80, >= 100 positives and negatives per core language, and
+the rest) reports `insufficient-population` or `unmeasured`, never a pass.
+`npm run evaluation:synthetic` exercises the whole path on three authored files,
+labelled synthetic throughout; its numbers say nothing about engine accuracy.

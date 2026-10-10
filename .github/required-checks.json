@@ -86,6 +86,7 @@
     "gate (tests 4/4)",
     "gate (benches-a)",
     "gate (benches-b)",
+    "gate (closure)",
     "gate (rest)"
   ]
 }

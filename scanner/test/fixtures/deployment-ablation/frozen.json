@@ -1,0 +1,362 @@
+{
+  "schema": "agentic-security/deployment-ablation-set",
+  "schemaVersion": 1,
+  "synthetic": true,
+  "note": "Authored by the tooling developers; labels are not independently adjudicated. Never counted toward a real-population gate.",
+  "protocolHash": "sha256:fda1db151efbd7885dbec4f76c472d2d2b784e6a80298a22af1086a0e1f38146",
+  "decisionRule": {
+    "id": "graph-arm-decision-rule",
+    "version": 1,
+    "demoteSourceFindingWhen": [
+      "exposure:blocked",
+      "exposure:none-found and graph-gap-count:0"
+    ],
+    "keepSourceFindingWhen": [
+      "exposure:possible",
+      "exposure:runtime-supported",
+      "exposure:unresolved",
+      "exposure:not-assessed"
+    ],
+    "addDeploymentFindingWhen": [
+      "path-state:possible or runtime-supported from an exposed entry to a privileged resource"
+    ]
+  },
+  "labelsHash": "sha256:bc990564971b14e960a9229cb12ac5d903531fca53cfaaea52ba5c96c1686acf",
+  "cases": [
+    {
+      "id": "compose-published-vs-internal",
+      "title": "The same handler with a published port and on an internal-only network",
+      "kind": "source-finding",
+      "defect": {
+        "family": "command-injection",
+        "file": "services/api/handler.js"
+      },
+      "sourceDigest": "sha256:8e2855406a38d490b295f528c7fe3f0617c817cfc9d86b196a6c28a083f763fd",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:8b88d4b9e3f3728aa37427f217495a9d514001341242cdfac741f5c206f3f626",
+          "exploitable": true,
+          "rationale": "The compose file publishes port 8080 on all interfaces for the service."
+        },
+        "non-exploitable": {
+          "digest": "sha256:888c8927df8cf9ed54a2df375951b43a96b0255ef966a60a32f1a90a336548ec",
+          "exploitable": false,
+          "rationale": "The service publishes no port and sits on an internal-only network."
+        }
+      }
+    },
+    {
+      "id": "k8s-admin-grant-vs-no-grant",
+      "title": "A public admin service with and without a privilege grant",
+      "kind": "deployment-only",
+      "defect": {
+        "family": "deployment-exposure",
+        "file": null
+      },
+      "sourceDigest": "sha256:c9f0a75cfefb2d0a6a6d8a7786de0e49a998cc97e8c44c3cdf9d1485b2577a00",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:54ff5f59fce63240554d60c4337f974a7fcbc9fc7f24503879c57e19253f70ef",
+          "exploitable": true,
+          "rationale": "A public ingress reaches an admin workload whose service account is bound to a secret-reading role."
+        },
+        "non-exploitable": {
+          "digest": "sha256:e8eba8b99c69e8dd573eb0d26de9ceea75de9bf2318d67d2db98177dd071c528",
+          "exploitable": false,
+          "rationale": "The same public ingress reaches the workload, but its service account has no role binding."
+        }
+      }
+    },
+    {
+      "id": "k8s-admin-ingress-vs-internal",
+      "title": "An unauthenticated admin service with secret access, public versus internal",
+      "kind": "deployment-only",
+      "defect": {
+        "family": "deployment-exposure",
+        "file": null
+      },
+      "sourceDigest": "sha256:c9f0a75cfefb2d0a6a6d8a7786de0e49a998cc97e8c44c3cdf9d1485b2577a00",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:54ff5f59fce63240554d60c4337f974a7fcbc9fc7f24503879c57e19253f70ef",
+          "exploitable": true,
+          "rationale": "A public ingress reaches an admin workload whose service account can read secrets."
+        },
+        "non-exploitable": {
+          "digest": "sha256:403b23adc090bad394eeff11a24d56d6295adbd8fd28fe90cd3825948b9aac08",
+          "exploitable": false,
+          "rationale": "The admin workload has the same secret access but no ingress reaches it."
+        }
+      }
+    },
+    {
+      "id": "k8s-finding-unbound",
+      "title": "The same handler where no service binding is supplied",
+      "kind": "source-finding",
+      "defect": {
+        "family": "command-injection",
+        "file": "services/api/handler.js"
+      },
+      "sourceDigest": "sha256:8e2855406a38d490b295f528c7fe3f0617c817cfc9d86b196a6c28a083f763fd",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:c3164cb04695537730ca7868476e825b775ea7d67759d218c16323e945cc3ec9",
+          "exploitable": true,
+          "rationale": "A public ingress routes /api to the service; no binding ties the finding to it."
+        },
+        "non-exploitable": {
+          "digest": "sha256:7d20fc57f8ffb71da91eeb11568a3b13affbc6bff17e94f1225dc353f32cf527",
+          "exploitable": false,
+          "rationale": "No ingress exists; no binding ties the finding to the service."
+        }
+      }
+    },
+    {
+      "id": "k8s-gateway-auth",
+      "title": "A public admin service with and without gateway authentication the adapters do not read",
+      "kind": "deployment-only",
+      "defect": {
+        "family": "deployment-exposure",
+        "file": null
+      },
+      "sourceDigest": "sha256:c9f0a75cfefb2d0a6a6d8a7786de0e49a998cc97e8c44c3cdf9d1485b2577a00",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:54ff5f59fce63240554d60c4337f974a7fcbc9fc7f24503879c57e19253f70ef",
+          "exploitable": true,
+          "rationale": "A public ingress reaches an admin workload with secret access and no authentication in front of it."
+        },
+        "non-exploitable": {
+          "digest": "sha256:b66bd448d940116331a4b1465bd3151d17a05faf15d3476d651b7d215270fab0",
+          "exploitable": false,
+          "rationale": "The ingress carries an external authentication annotation, so unauthenticated callers are refused. The adapters do not read ingress annotations, so the boundary graph cannot see this."
+        }
+      }
+    },
+    {
+      "id": "k8s-ingress-vs-internal",
+      "title": "The same handler behind a public ingress and behind an internal-only service",
+      "kind": "source-finding",
+      "defect": {
+        "family": "command-injection",
+        "file": "services/api/handler.js"
+      },
+      "sourceDigest": "sha256:8e2855406a38d490b295f528c7fe3f0617c817cfc9d86b196a6c28a083f763fd",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:6fad87d412a5b950a21f5065a8d6fde95b8dc6fdb4f313659ba6978da3ebc33f",
+          "exploitable": true,
+          "rationale": "A public ingress routes /api to the service running the handler."
+        },
+        "non-exploitable": {
+          "digest": "sha256:a71e4696a1072e93ffe8a0ab21cad1674b047921c3f1ddd5d41cb19653aa1c66",
+          "exploitable": false,
+          "rationale": "No ingress exists; the only network policy admits a single internal batch workload."
+        }
+      }
+    },
+    {
+      "id": "k8s-unresolved-ingress",
+      "title": "Exposure the supplied configuration cannot fully resolve versus no ingress at all",
+      "kind": "source-finding",
+      "defect": {
+        "family": "command-injection",
+        "file": "services/api/handler.js"
+      },
+      "sourceDigest": "sha256:8e2855406a38d490b295f528c7fe3f0617c817cfc9d86b196a6c28a083f763fd",
+      "deployments": {
+        "exploitable": {
+          "digest": "sha256:ee021557c8e6985f6e97f80d2b24c3b8e0c6fcb265987cc7a2a230de68ad347d",
+          "exploitable": true,
+          "rationale": "An ingress routes /api to a Service whose manifest was not supplied (a typed gap). Declared by the fixture author: that Service exists and selects the workload, so the handler is exposed."
+        },
+        "non-exploitable": {
+          "digest": "sha256:7bc3beeddb12c5b00953ad8fc3a680cc63e9137644416d94b759fcbcb878d771",
+          "exploitable": false,
+          "rationale": "No ingress exists; the Service is cluster-internal."
+        }
+      }
+    }
+  ],
+  "protocol": {
+    "synthetic": true,
+    "engine": {
+      "version": "0.0.0-synthetic",
+      "bundleDigest": "sha256:451654548642b073f84179297680ab20bd9753b3a38c37299b6195dda78523eb"
+    },
+    "measurement": {
+      "commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "cleanTree": true
+    },
+    "tools": {
+      "node": "synthetic"
+    },
+    "models": [],
+    "datasetLicenses": {
+      "synthetic-test-fixture": "authored for tooling tests; not real-world code"
+    },
+    "scope": {
+      "languages": [
+        "javascript",
+        "python",
+        "java",
+        "kotlin",
+        "go",
+        "ruby",
+        "php",
+        "csharp",
+        "rust"
+      ],
+      "families": [
+        "command-injection",
+        "deployment-exposure"
+      ]
+    },
+    "matching": {
+      "policy": "root-cause-location",
+      "lineWindow": 3,
+      "requireFamilyOrCwe": true,
+      "cweAloneSufficient": false,
+      "lineLessFindingsMatch": false
+    },
+    "limits": {
+      "perTargetTimeoutMs": 120000,
+      "spendCeilingUsd": 0,
+      "replicates": 1
+    },
+    "thresholds": {
+      "perLanguageF1": 0.8,
+      "overallMicroF1": 0.8,
+      "overallMacroF1": 0.8,
+      "pooledPrecision": 0.9,
+      "pooledRecall": 0.75,
+      "perLanguageF1LowerBound": 0.7,
+      "completion": 0.95,
+      "minPositivesPerCoreLanguage": 100,
+      "minNegativesPerCoreLanguage": 100,
+      "minPositivesPerFamily": 30,
+      "intervalMethod": "grouped-bootstrap-95"
+    },
+    "targets": [
+      {
+        "id": "compose-published-vs-internal",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/compose-published-vs-internal",
+        "pairId": "pair-compose-published-vs-internal",
+        "advisoryIds": [],
+        "preCommit": "1111111111111111111111111111111111111111",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:2cf059246a515b5c289ac6a6a93bd8c0666b54dff0877572c154931ddda14d88"
+      },
+      {
+        "id": "k8s-admin-grant-vs-no-grant",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-admin-grant-vs-no-grant",
+        "pairId": "pair-k8s-admin-grant-vs-no-grant",
+        "advisoryIds": [],
+        "preCommit": "2222222222222222222222222222222222222222",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:5f771895fc494c98308575bfc9c816461395050c0e6d63aaddef953603a9cafc"
+      },
+      {
+        "id": "k8s-admin-ingress-vs-internal",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-admin-ingress-vs-internal",
+        "pairId": "pair-k8s-admin-ingress-vs-internal",
+        "advisoryIds": [],
+        "preCommit": "3333333333333333333333333333333333333333",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:5f771895fc494c98308575bfc9c816461395050c0e6d63aaddef953603a9cafc"
+      },
+      {
+        "id": "k8s-finding-unbound",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-finding-unbound",
+        "pairId": "pair-k8s-finding-unbound",
+        "advisoryIds": [],
+        "preCommit": "4444444444444444444444444444444444444444",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:2cf059246a515b5c289ac6a6a93bd8c0666b54dff0877572c154931ddda14d88"
+      },
+      {
+        "id": "k8s-gateway-auth",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-gateway-auth",
+        "pairId": "pair-k8s-gateway-auth",
+        "advisoryIds": [],
+        "preCommit": "5555555555555555555555555555555555555555",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:5f771895fc494c98308575bfc9c816461395050c0e6d63aaddef953603a9cafc"
+      },
+      {
+        "id": "k8s-ingress-vs-internal",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-ingress-vs-internal",
+        "pairId": "pair-k8s-ingress-vs-internal",
+        "advisoryIds": [],
+        "preCommit": "6666666666666666666666666666666666666666",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:2cf059246a515b5c289ac6a6a93bd8c0666b54dff0877572c154931ddda14d88"
+      },
+      {
+        "id": "k8s-unresolved-ingress",
+        "language": "javascript",
+        "upstream": "example.invalid/synthetic/deployment-ablation/k8s-unresolved-ingress",
+        "pairId": "pair-k8s-unresolved-ingress",
+        "advisoryIds": [],
+        "preCommit": "7777777777777777777777777777777777777777",
+        "postCommit": null,
+        "license": "synthetic-test-fixture",
+        "digest": "sha256:2cf059246a515b5c289ac6a6a93bd8c0666b54dff0877572c154931ddda14d88"
+      }
+    ],
+    "splits": {
+      "dev": [],
+      "sealed": [
+        "compose-published-vs-internal",
+        "k8s-admin-grant-vs-no-grant",
+        "k8s-admin-ingress-vs-internal",
+        "k8s-finding-unbound",
+        "k8s-gateway-auth",
+        "k8s-ingress-vs-internal",
+        "k8s-unresolved-ingress"
+      ]
+    },
+    "grouping": {
+      "method": "union-find",
+      "keys": [
+        "pair",
+        "upstream",
+        "advisory",
+        "commit",
+        "template"
+      ],
+      "salt": "synthetic-deployment-ablation"
+    },
+    "schema": "agentic-security/evaluation-protocol",
+    "schemaVersion": "1.0.0",
+    "protocolVersion": 1,
+    "supersedes": null,
+    "originalTargetIds": [
+      "compose-published-vs-internal",
+      "k8s-admin-grant-vs-no-grant",
+      "k8s-admin-ingress-vs-internal",
+      "k8s-finding-unbound",
+      "k8s-gateway-auth",
+      "k8s-ingress-vs-internal",
+      "k8s-unresolved-ingress"
+    ],
+    "retired": [],
+    "comparability": {
+      "comparableWith": []
+    },
+    "protocolHash": "sha256:fda1db151efbd7885dbec4f76c472d2d2b784e6a80298a22af1086a0e1f38146"
+  },
+  "frozenHash": "sha256:e3e380919fc49df173101a354fe7b23a76562eb667cf167d66566a0101b80909"
+}

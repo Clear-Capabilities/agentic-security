@@ -41,6 +41,7 @@
 // reviewer asked to double-check itself is the same party voting twice.
 
 import { recordProducer, recordVerdict, consensusOf } from './verification-separation.js';
+import { inferredInvariant } from './invariants/lifecycle.js';
 
 export const PRODUCER = 'agent:logic-reviewer';
 
@@ -263,4 +264,15 @@ export function renderLogicClaimSummary(s) {
 // batch summariser have no consumer outside this module. Kept internal rather
 // than exported-and-unused — an export with no call site is how dead code gets
 // shipped and then trusted.
+// X-402: a reviewing agent's claim read as a proposed contract. The claim kinds that describe a state rule map to an invariant
+// class; the rest (a bare race, "other") map to nothing, because no business-state skeleton exists for them. The result is
+// `proposed`, authored by a model, and never approved by this function: a claim cannot establish its own ground truth.
+const INVARIANT_CLASS_BY_CLAIM = Object.freeze({ 'missing-ownership-check': 'tenant-isolation', 'missing-authorization': 'privilege-constraint', 'state-transition-bypass': 'workflow-order' });
+
+export function invariantFromLogicClaim(claim) {
+  const cls = INVARIANT_CLASS_BY_CLAIM[claim?.kind];
+  if (!cls || typeof claim.file !== 'string') return null;
+  return inferredInvariant({ class: cls, source: 'logic-claim', evidence: { file: claim.file, line: Number.isInteger(claim.line) ? claim.line : null, claimKind: claim.kind }, uncertainty: 0.8 });
+}
+
 export const _internals = { AUTH_HINTS, OWNERSHIP_HINTS, _enclosingBlock, QUOTE_WINDOW, CLAIM_KINDS, VERIFIER_QUOTATION, summarizeLogicClaims };

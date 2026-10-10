@@ -388,6 +388,16 @@ then runs supervised with protected paths read-denied.
 - Tests: `test/trust-boundary.test.js` (attack fixture, tree kill with `ps`
   orphan checks, blocked-never-pass), in `test:lifecycle`.
 
+## Capability mode (X-502, X-504)
+
+`backend-userspace.js` has an opt-in mode used by `capabilities/runner.js`; every pre-existing caller passes none of these options and gets the profile it always had.
+
+- `readRoots` (array): reads are confined to a fixed baseline of system paths (loader, libraries, locale, timezone, device nodes), the sandbox root, the write roots and these roots. File metadata is granted only for the ancestors of those roots, so a path outside them cannot be probed for existence. `denyReadPaths` still apply last.
+- `writeRoots`: further writable subtrees (readable too). `cwd`: working directory, which must exist.
+- `networkProxyPort`: opens exactly one loopback port (`(remote ip "localhost:PORT")`); DNS, every other port and every other address stay denied.
+
+Verified by execution on macOS only (`test/capabilities/`, probes in `capabilities/probes.js`). The namespace backend implements none of these options; asked for them it ignores them, which is why the capability runner never asks it: its probes report these controls `unsupported` there and the run is blocked.
+
 ## Extending this module
 
 - Both real backends (`backend-userspace.js`, `backend-namespace.js`) must

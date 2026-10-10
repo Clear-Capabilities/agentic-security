@@ -265,6 +265,10 @@ export const CATALOG = [
   { kind: 'source', id: 'cs-aspnet-fromform',    language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromForm' },    label: '[FromForm] (ASP.NET Core)' },
   { kind: 'source', id: 'cs-aspnet-fromroute',   language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromRoute' },   label: '[FromRoute] (ASP.NET Core)' },
   { kind: 'source', id: 'cs-aspnet-fromheader',  language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'FromHeader' },  label: '[FromHeader] (ASP.NET Core)' },
+  // QA-006: the IMPLICIT forms. A controller action's plain string parameter and a Spring-mapped method's plain String parameter are
+  // request-bound with no annotation at all; the IR frontends (ir/implicit-handler-params.js) tag them with these decorator names.
+  { kind: 'source', id: 'cs-aspnet-implicit-action-param', language: 'cs', framework: 'aspnet', match: { type: 'annotation', name: 'ImplicitMvcActionParam' }, label: 'controller action parameter (ASP.NET model binding)' },
+  { kind: 'source', id: 'java-spring-implicit-mapped-param', language: 'java', framework: 'spring', match: { type: 'annotation', name: 'ImplicitSpringMappedParam' }, label: 'mapped handler parameter (Spring request binding)' },
   { kind: 'source', id: 'js-nestjs-query',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Query' },   label: '@Query() (NestJS)',   provenance: 'url-param' },
   { kind: 'source', id: 'js-nestjs-body',    language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Body' },    label: '@Body() (NestJS)',    provenance: 'http-body' },
   { kind: 'source', id: 'js-nestjs-param',   language: 'js', framework: 'nestjs', match: { type: 'annotation', name: 'Param' },   label: '@Param() (NestJS)',   provenance: 'path-param' },
@@ -410,6 +414,11 @@ export const CATALOG = [
   { kind: 'source', id: 'php-symfony-files',   language: 'php', framework: 'symfony', match: { type: 'member', object: '$request', prop: 'files' },   label: '$request->files (Symfony)' },
   { kind: 'source', id: 'php-symfony-content', language: 'php', framework: 'symfony', match: { type: 'call', callee: 'getContent' },                  label: '$request->getContent() (Symfony)' },
   { kind: 'source', id: 'php-symfony-get',     language: 'php', framework: 'symfony', match: { type: 'call', callee: 'get' },                         label: '$request->get() (Symfony)' },
+  // QA-006: Laravel / Illuminate request accessors. `$request->input('x')` is the framework's primary way to read user input and had no
+  // source at all (only Symfony's property-shaped and `get` accessors did), so a controller reading its input the Laravel way was invisible.
+  // The receiver must be a request-named variable: `input`/`all`/`file` are common method names on unrelated objects.
+  ...['input', 'query', 'post', 'all', 'cookie', 'header', 'file', 'json', 'string', 'str', 'only', 'except', 'collect', 'getContent'].map((m) => (
+    { kind: 'source', id: `php-laravel-request-${m.toLowerCase()}`, language: 'php', framework: 'laravel', match: { type: 'call', callee: m, receiver: '^\\$?(?:request|req)$' }, label: `$request->${m}() (Laravel)` })),
 
   // SARD PHP corpus: file/stream/process-output sources. This corpus's
   // dominant "source" shape is NOT a superglobal at all — it's a value read
@@ -1383,6 +1392,10 @@ export const CATALOG = [
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header. Prefer an allow-listed set of header values.' } },
   { kind: 'source', id: 'py-flask-request-get-data', language: 'py', framework: 'flask', match: { type: 'call', callee: 'get_data' }, label: 'request.get_data() (Flask raw body)', provenance: 'http-body' },
   { kind: 'source', id: 'py-django-request-body',    language: 'py', framework: 'django', match: { type: 'member', object: 'request', prop: 'body' }, label: 'request.body (Django raw body)', provenance: 'http-body' },
+  // QA-006: header("Location: " . $x) is an open redirect, not only header injection. The CRLF entry below still applies to the same call.
+  { kind: 'sink', id: 'php-header-location', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'header', requireStaticPrefix: { index: 0, pattern: '^\\s*Location\\s*:' } }, argIndex: 0,
+    vuln: { name: 'Open Redirect (header Location)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'Validate the redirect target against an allow-list of relative paths or known hosts before putting it in a Location header.' } },
   { kind: 'sink', id: 'php-header', language: 'php', framework: 'stdlib', match: { type: 'call', callee: 'header' }, argIndex: 0,
     vuln: { name: 'HTTP Response Splitting / CRLF Injection (header())', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before passing it to header().' } },
@@ -1424,6 +1437,14 @@ export const CATALOG = [
   { kind: 'sink', id: 'kt-servlet-setheader', language: 'kt', framework: 'servlet', match: { type: 'call', callee: 'setHeader' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (HttpServletResponse.setHeader)', severity: 'high', cwe: 'CWE-113',
             remediation: 'Strip/validate CR/LF from any user-controlled value before using it as a header value.' } },
+  // QA-006: Go redirect helpers. net/http `http.Redirect(w, r, url, code)` takes the target as its THIRD argument; gin/echo
+  // `c.Redirect(code, url)` take it second; fiber `c.Redirect(url)` first. None was a sink, so a request-derived target went unseen.
+  { kind: 'sink', id: 'go-http-redirect', language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Redirect', receiver: '^http$' }, argIndex: 2,
+    vuln: { name: 'Open Redirect (http.Redirect)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'Only redirect to a relative path you validate (starts with "/" and not "//") or to a host on an allow-list.' } },
+  { kind: 'sink', id: 'go-ctx-redirect-second', language: 'go', framework: 'gin/echo', match: { type: 'call', callee: 'Redirect', receiver: '^(?:c|ctx|context)$' }, argIndex: 1,
+    vuln: { name: 'Open Redirect (context.Redirect)', severity: 'medium', cwe: 'CWE-601',
+            remediation: 'Only redirect to a relative path you validate or to a host on an allow-list.' } },
   { kind: 'sink', id: 'go-header-set', language: 'go', framework: 'net/http', match: { type: 'call', callee: 'Set', receiver: 'Header' }, argIndex: 1,
     vuln: { name: 'HTTP Response Splitting / Header Injection (Header().Set)', severity: 'high', cwe: 'CWE-113',
             remediation: 'net/http rejects raw CR/LF in header values since Go 1.x, but still validate/allow-list user-controlled header values.' } },

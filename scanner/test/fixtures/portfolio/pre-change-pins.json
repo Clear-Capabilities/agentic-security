@@ -1,0 +1,36 @@
+{
+  "synthetic": true,
+  "rollup": {
+    "repos": 3,
+    "scanned": 2,
+    "failed": 1,
+    "failures": [
+      {
+        "repo": "svc-c",
+        "error": "synthetic failure"
+      }
+    ],
+    "total": 3,
+    "proven": 1,
+    "bySeverity": {
+      "critical": 1,
+      "high": 1,
+      "medium": 1,
+      "low": 0,
+      "info": 0
+    },
+    "reposWithPartialScanHealth": 0,
+    "reposWithPolicyDrift": 0,
+    "provenance": {
+      "oldestProvenDebt": null,
+      "reposWithNoProvenDebt": [
+        "svc-a",
+        "svc-b"
+      ],
+      "perRepoOldestProvenDebt": [],
+      "mttr": null
+    }
+  },
+  "summary": "1 of 3 repo(s) FAILED to scan — their findings are unknown, not zero; 2 repo(s) scanned, 3 finding(s) (1 critical, 1 high, 1 medium), 1 execution-proven. PROVENANCE: no proven-origin findings across the fleet; 2 repo(s) with no complete-status provenance.",
+  "html": "<!-- generated offline; no external resources -->\n<h1>Fleet scan</h1>\n<p>1 of 3 repo(s) FAILED to scan — their findings are unknown, not zero; 2 repo(s) scanned, 3 finding(s) (1 critical, 1 high, 1 medium), 1 execution-proven. PROVENANCE: no proven-origin findings across the fleet; 2 repo(s) with no complete-status provenance.</p>\n<h2>Risk findings</h2>\n<table border=\"1\" cellpadding=\"4\">\n<tr><th>repo</th><th>total</th><th>critical</th><th>high</th><th>medium</th><th>low</th><th>info</th><th>proven</th><th>scanned at</th></tr>\n<tr><td>svc-a</td><td>3</td><td>1</td><td>1</td><td>1</td><td>0</td><td>0</td><td>1</td><td>unknown</td></tr>\n<tr><td>svc-b</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>unknown</td></tr>\n<tr class=\"fail\"><td>svc-c</td><td colspan=\"7\">SCAN FAILED — synthetic failure</td><td>unknown</td></tr>\n</table>\n<h2>Governance / coverage gaps</h2>\n<p>Nothing to report — every scanned repo has a complete scan and no policy drift.</p>\n<h2>Provenance-Proven Debt</h2>\n<p>No complete-status (proven-origin) findings across the fleet.</p>\n<p>2 repo(s) with no complete-status provenance: svc-a, svc-b</p>\n<p>Fleet MTTR: not available — fleet mode does not yet track finding remediation history across runs.</p>"
+}

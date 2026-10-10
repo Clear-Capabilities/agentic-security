@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.162.0  
+**Version:** 0.163.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -23,6 +23,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `frontend/` | Data Flow Explorer clickable prototype. Zero build step (plain ES modules); consumes the `DataFlowGraph v1` fixture via a build-time-generated, parity-tested copy. Milestone 0 (second half) of the Data Flow Explorer PRD. | `frontend/CLAUDE.md` |
 | `scanner/src/language/` | Haskell and Nix/NixOS: parsers, IRs, analyzers, fixers, support registry, resolved-pass wiring. Static by default; every limit disclosed; support status is measured per capability and generated into `docs/language-support.*`. | `scanner/src/language/CLAUDE.md` |
 | `scanner/src/discovery/` | LLM candidate discovery, gated by the deterministic engine. Propose → confirm → refute → judge. | `scanner/src/discovery/CLAUDE.md` |
+| `scanner/src/capabilities/` | Task capability manifests and runner-level enforcement of filesystem, structured commands and outbound network (loopback mediation proxy). Feature `capability-enforcement` is off by default and operator-only; enforced mode is advertised for Linux only and Linux is `unverified`, macOS runs are `host-proved`, never `enforced`. | `scanner/src/capabilities/CLAUDE.md` |
 | `scanner/src/mcp/` | MCP server. 17 tools (2 write: `apply_fix`, `apply_sca_upgrade`); OWASP MCP Top 10 hardened. | `scanner/src/mcp/CLAUDE.md` |
 | `scanner/src/ir/` | Layer-1 IR: Babel-based JS/TS; Python via stdlib `ast` subprocess (default, when python3 available) with regex fallback; `java-parser`-based Java. | `scanner/src/ir/CLAUDE.md` |
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
@@ -39,6 +40,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `.githooks/` | Committed **git** hooks (distinct from `hooks/` above, which is editor integration). Currently `pre-push`, a shim over `scripts/pre-push-gate.mjs`. Activated per clone via `core.hooksPath` — see "Pre-push gate". |  |
 | `scripts/` | Compliance + helper scripts + CI templates (`scripts/ci-templates/`). |  |
+| `scripts/assurance-differentiation/` + `scripts/release-closure.mjs` | Protected suite wrappers for the differentiation programme (`test/<suite>.test.js` run the real scoped test files and re-emit each result under its own name; `relay.mjs` is the shared body, pinned by digest in every wrapper) and the release closure (new suites plus controller, smoke, bundle-source, docs, scorecard and compatibility checks against one exact commit). Guide: `docs/guides/assurance-rollout-and-rollback.md`. | |
 | `scripts/loop-engineering/` | Supervised, bounded background implementation loop (a development tool, not shipped): manifest, evidence, watchdog, dashboard. Runbook: `docs/guides/loop-engineering.md`. State in `.loop-engineering/` (git-ignored). `npm run test:loop`. | |
 | `scripts/render-language-docs.mjs`, `scripts/capture-language-examples.mjs` | Generate the Haskell/Nix doc tables and captured example outputs from the registries and the BUILT bundle; `--check` modes fail on staleness (`npm run docs:check-language`). | |
 | `examples/` | Controlled projects (`haskell-app/{vulnerable,fixed,partial}`, `nixos-host/{vulnerable,fixed}`, `haskell-on-nix/vulnerable`, `polyglot-privacy`) whose captured outputs the docs quote. Do not "improve" a vulnerable example: its findings are the documented output. | |

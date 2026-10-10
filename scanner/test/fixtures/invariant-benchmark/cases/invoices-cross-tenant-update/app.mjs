@@ -1,0 +1,1 @@
+export function createApp() { return { reviseInvoice(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; ctx.store.write(key, { ...rec, memo: p.note }); return { status: 200 }; } }; }

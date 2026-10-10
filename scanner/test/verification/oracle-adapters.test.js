@@ -27,7 +27,8 @@ import { DEFAULT_REQUIRED_CONTROLS } from '../../src/sandbox/trust-boundary.js';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(HERE, '..', '..');
 const COMMIT = 'c'.repeat(40);
-const config = resolveAssuranceConfig({ env: {}, overrides: { features: { [FEATURE_ID]: true } } });
+// the business-state adapter also needs its own feature (X-404), so the shared config switches both on
+const config = resolveAssuranceConfig({ env: {}, overrides: { features: { [FEATURE_ID]: true, 'invariant-scenarios': true } } });
 
 let boundaryReady = false;
 let whyNot = '';
@@ -103,7 +104,7 @@ describe('[X-202.AC01] the oracle classes (five original, plus replay-idempotenc
     assert.match(without('platforms', { ...good.platforms, linux: { status: 'supported', note: 'works' } }).join(), /linux/);
     assert.match(without('harnessSource', 'no placeholder').join(), /harnessSource/);
     assert.throws(() => defineOracle({ ...good, negativeControls: [] }), /invalid oracle adapter/);
-    assert.equal(registry.listOracles().length, 7);
+    assert.equal(registry.listOracles().length, 8);
   });
 
   test('[X-202.AC01] a request over an adapter budget or with unsafe content is rejected before anything runs', async () => {
@@ -331,7 +332,7 @@ export function handler(input) { return execFileSync('echo', [input], { encoding
     assert.throws(() => { o.budgets.timeoutMs = 1; }, TypeError);
     const list = registry.listOracles();
     list.push({}); list.length = 0;
-    assert.equal(registry.listOracles().length, 7, 'mutating a returned list does not change the registry');
+    assert.equal(registry.listOracles().length, 8, 'mutating a returned list does not change the registry');
     assert.deepEqual(Object.keys(registry).sort(), ['MANIFEST_SCHEMA', 'getOracle', 'listOracles', 'manifestEntry', 'oracleManifest']);
     const spec = { ...o }; delete spec.logicDigest;
     assert.equal(oracleLogicDigest(spec), o.logicDigest);

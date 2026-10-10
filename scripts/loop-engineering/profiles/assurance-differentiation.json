@@ -1,7 +1,7 @@
 {
   "profileVersion": 1,
   "name": "assurance-differentiation",
-  "description": "Execution profile for AGENTIC_SECURITY_DIFFERENTIATION_PRD.md. Limits are the PRD section 7 defaults: finite operating caps, not delivery estimates and not spending authorization. Suites other than loop are declared not-yet-runnable until their protected wrappers exist.",
+  "description": "Execution profile for AGENTIC_SECURITY_DIFFERENTIATION_PRD.md. Limits are the PRD section 7 defaults: finite operating caps, not delivery estimates and not spending authorization. Every suite has a protected wrapper (scripts/assurance-differentiation/test/ or the loop suite's own files); a wrapper runs the real scoped test files and re-emits each result under its own name.",
   "platforms": {
     "supported": [
       "darwin",
@@ -158,12 +158,6 @@
   ],
   "unenforced": [
     {
-      "field": "heartbeatSeconds",
-      "requested": 5,
-      "status": "partial",
-      "note": "The controller heartbeats on a fixed internal interval and judges stale at a fixed 15 s (STALE_AFTER_MS); the profile value is validated as finite but not read by the controller. The PRD figures match the constants today; they are not profile-configurable."
-    },
-    {
       "field": "subprocessWallSeconds",
       "requested": 120,
       "status": "unenforced",
@@ -212,6 +206,122 @@
       "note": "Not part of the controller. CORE-003 and X-502 own it; requiresTools is not set on any suite yet because the backend is not chosen."
     }
   ],
+  "finalVerification": {
+    "required": true,
+    "closure": {
+      "releaseRequirement": "REL-003",
+      "expect": {
+        "requirements": 70,
+        "criteria": 210,
+        "weight": 269
+      },
+      "requireCleanTree": true,
+      "requiredGates": {
+        "quality": [
+          "bench-cve-replay",
+          "bench-self-scan",
+          "bench-mutation",
+          "bench-protection-verdict",
+          "bench-provenance-accuracy",
+          "bench-layer-recall"
+        ],
+        "routing": [
+          "bench-router-replay"
+        ],
+        "release": [
+          "build",
+          "npm-test",
+          "test-ci-parity",
+          "test-loop-controller",
+          "check-doc-drift",
+          "docs-verify-examples",
+          "scorecard-check",
+          "release-closure-check"
+        ]
+      },
+      "measuredGates": [
+        {
+          "id": "real-code-evaluation",
+          "group": "quality",
+          "cwd": ".",
+          "executable": "node",
+          "args": [
+            "scripts/evaluation.mjs",
+            "synthetic",
+            "--json"
+          ],
+          "timeoutSeconds": 600,
+          "parse": "evaluation-gates"
+        },
+        {
+          "id": "routing-promotion",
+          "group": "routing",
+          "cwd": ".",
+          "executable": "node",
+          "args": [
+            "scripts/routing-replay.mjs",
+            "--json"
+          ],
+          "timeoutSeconds": 300,
+          "parse": "status-json"
+        }
+      ],
+      "limits": {
+        "max": {
+          "heartbeatSeconds": 5,
+          "workerIdleSeconds": 180,
+          "noProgressSeconds": 600,
+          "subprocessWallSeconds": 120,
+          "killGraceSeconds": 10,
+          "claudeAttemptSeconds": 1200,
+          "claudeMaxTurns": 80,
+          "attemptsPerRequirement": 3,
+          "sameFailureRepeats": 2,
+          "runWallSeconds": 43200,
+          "runMaxAttempts": 150,
+          "claudeBudgetUsd": 50,
+          "perAttemptBudgetUsd": 6,
+          "retryBackoffMaxSeconds": 60,
+          "resource": {
+            "maxRssMiB": 6144,
+            "maxOutputMiB": 256,
+            "maxLogMiB": 5
+          }
+        },
+        "min": {
+          "resource": {
+            "minFreeDiskGiB": 5
+          }
+        }
+      },
+      "deliverables": {
+        "scorecards": [
+          "docs/scorecard.json",
+          "docs/SCORECARD.md",
+          "docs/METRICS.md"
+        ],
+        "policyCards": [
+          "docs/guides/evaluation-policy-card.md",
+          "docs/guides/routing-policy-card.md"
+        ],
+        "replayableFixtures": [
+          "bench/router-replay/corpus.jsonl",
+          "bench/router-replay/baseline.json",
+          "scripts/routing-replay.mjs",
+          "docs/guides/routing-replay.md",
+          "docs/guides/offline-reproduction.md"
+        ],
+        "artifacts": [
+          "scanner/dist/agentic-security.mjs"
+        ],
+        "scopeFiles": [
+          "docs/guides/assurance-scope-and-contracts.md",
+          "docs/reference/assurance-capability-matrix.md",
+          "docs/guides/measurement-status.md"
+        ]
+      }
+    }
+  },
   "workstreams": {
     "globalWatch": [
       "scripts/loop-engineering/profiles/assurance-differentiation.json",
@@ -428,19 +538,17 @@
         "scripts/assurance-differentiation/test/foundation.test.js"
       ],
       "timeoutSeconds": 120,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/foundation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "loop": {
       "kind": "node-test",
       "cwd": ".",
       "executable": "node",
       "files": [
-        "scripts/loop-engineering/test/loop-assurance-profile.test.js"
+        "scripts/loop-engineering/test/loop-assurance-profile.test.js",
+        "scripts/loop-engineering/test/loop-assurance-runtime.test.js"
       ],
-      "timeoutSeconds": 120,
+      "timeoutSeconds": 900,
       "protectedWrapper": true
     },
     "documentation": {
@@ -451,10 +559,7 @@
         "scripts/assurance-differentiation/test/documentation.test.js"
       ],
       "timeoutSeconds": 120,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/documentation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "release": {
       "kind": "node-test",
@@ -464,10 +569,7 @@
         "scripts/assurance-differentiation/test/release.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/release.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "evaluation": {
       "kind": "node-test",
@@ -477,10 +579,7 @@
         "scripts/assurance-differentiation/test/evaluation.test.js"
       ],
       "timeoutSeconds": 7200,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/evaluation.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "verification": {
       "kind": "node-test",
@@ -490,10 +589,7 @@
         "scripts/assurance-differentiation/test/verification.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/verification.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "deployment-graph": {
       "kind": "node-test",
@@ -503,10 +599,7 @@
         "scripts/assurance-differentiation/test/deployment-graph.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/deployment-graph.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "invariants": {
       "kind": "node-test",
@@ -516,10 +609,7 @@
         "scripts/assurance-differentiation/test/invariants.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/invariants.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "capabilities": {
       "kind": "node-test",
@@ -529,10 +619,7 @@
         "scripts/assurance-differentiation/test/capabilities.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/capabilities.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "routing": {
       "kind": "node-test",
@@ -542,10 +629,7 @@
         "scripts/assurance-differentiation/test/routing.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/routing.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     },
     "portfolio": {
       "kind": "node-test",
@@ -555,10 +639,7 @@
         "scripts/assurance-differentiation/test/portfolio.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true,
-      "notYetRunnable": {
-        "reason": "protected wrapper scripts/assurance-differentiation/test/portfolio.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init, so preflight reports this suite as a blocker"
-      }
+      "protectedWrapper": true
     }
   },
   "watch": {
@@ -779,6 +860,26 @@
         "scorecard:check"
       ],
       "timeoutSeconds": 300
+    },
+    {
+      "id": "bench-router-replay",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "bench:router-replay:check"
+      ],
+      "timeoutSeconds": 300
+    },
+    {
+      "id": "release-closure-check",
+      "cwd": "scanner",
+      "executable": "npm",
+      "args": [
+        "run",
+        "release:closure:check"
+      ],
+      "timeoutSeconds": 7200
     }
   ]
 }

@@ -54,7 +54,7 @@ const withoutDigest = (a) => { const s = { ...a }; delete s.logicDigest; return 
 describe('[X-208.AC01] one suite tests all registered adapters, state mappings, tamper attempts, cancellation and replay against pinned fixtures', () => {
   test('[X-208.AC01] every registered adapter satisfies the static contract and its pinned fixtures', () => {
     const adapters = real();
-    assert.equal(adapters.length, 7);
+    assert.equal(adapters.length, 8);
     assert.deepEqual(adapters.map((a) => a.class).sort(), [...ORACLE_CLASSES].sort(), 'every advertised class is served');
     for (const a of adapters) {
       const r = checkAdapterContract(a, { scannerRoot: SCANNER });
@@ -119,7 +119,7 @@ describe('[X-208.AC01] one suite tests all registered adapters, state mappings, 
   test('[X-208.AC01] the state mappings for a run that never executes are fixed: disabled is not-run, an unmet prerequisite and a refusing boundary are unsupported, none issues a receipt', async () => {
     const base = (id) => ({ oracleId: id, hypothesisId: 'h', commit: 'a'.repeat(40), entry: 'target.mjs', ...(() => { const d = path.join(SCANNER, 'test', 'fixtures', 'oracles', id); return { files: { 'target.mjs': fs.readFileSync(path.join(d, 'positive', 'target.mjs'), 'utf8') }, inputs: JSON.parse(fs.readFileSync(path.join(d, 'scenario.json'), 'utf8')) }; })() });
     const { resolveAssuranceConfig } = await import('../../src/posture/assurance/config.js');
-    const enabled = resolveAssuranceConfig({ env: {}, overrides: { features: { 'verification-oracles': true } } });
+    const enabled = resolveAssuranceConfig({ env: {}, overrides: { features: { 'verification-oracles': true, 'invariant-scenarios': true } } });
     const spy = { runInBoundary: async () => { throw new Error('must not run'); } };
     let ran = 0;
     const refusing = { runInBoundary: async () => { ran++; return { blocked: true, executed: false, reasons: ['control unproved'], backend: 'namespace' }; } };
@@ -252,7 +252,7 @@ describe('[X-208.AC02] release gating rejects an adapter that lacks class scope,
     const run = (args) => spawnSync(process.execPath, [GATE, ...args], { encoding: 'utf8' });
     const ok = run(['--static']);
     assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-    assert.match(ok.stdout, /7 adapter\(s\) conform/);
+    assert.match(ok.stdout, /8 adapter\(s\) conform/);
 
     const dir = mkTestTmp('x208-gate-');
     const variants = {
@@ -347,10 +347,22 @@ describe('[X-208.AC03] documentation: a bounded local replay example and how to 
     assert.match(bad.stderr, /no pinned fixture/);
   }));
 
-  test('[X-208.AC03] on a host that cannot run the boundary the example says so and exits 3 rather than reporting a pass', (t) => {
-    if (boundaryReady) return t.skip('this host can run the boundary, so the cannot-run path is exercised elsewhere');
-    const r = spawnSync(process.execPath, [EXAMPLE], { encoding: 'utf8', timeout: 60_000 });
-    assert.equal(r.status, 3);
-    assert.match(r.stdout, /not a pass/);
+  // This test must never skip: the controller counts a skipped test anywhere in the suite as a failure, and a pair of tests where each host
+  // skips one of them can never be verified on any host. The kill switch makes the boundary not run on EVERY host, so the not-executed path is
+  // exercised here whether or not the host could have run it; on a host that cannot, it is exercised without the switch as well.
+  test('[X-208.AC03] when the boundary does not run, because a kill switch is set or the host cannot run it, the example says so and exits 3 rather than reporting a pass', () => {
+    const run = (env) => spawnSync(process.execPath, [EXAMPLE], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, ...env } });
+    const killed = run({ AGENTIC_SECURITY_NO_VERIFICATION_ORACLES: '1' });
+    assert.equal(killed.status, 3, killed.stdout + killed.stderr);
+    assert.match(killed.stdout, /not executed/);
+    assert.match(killed.stdout, /not a pass/);
+    assert.doesNotMatch(killed.stdout, /replay reproduced the verdict/);
+    const globalKill = run({ AGENTIC_SECURITY_NO_ASSURANCE: '1' });
+    assert.equal(globalKill.status, 3, 'the global kill switch stops it too');
+    if (!boundaryReady) {
+      const r = run({});
+      assert.equal(r.status, 3);
+      assert.match(r.stdout, /not a pass/);
+    }
   });
 });

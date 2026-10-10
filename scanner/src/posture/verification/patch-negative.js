@@ -27,6 +27,10 @@
 //   environment-mismatch         the runs were not in equivalent environments
 //   promotion-refused            the receipts do not match the exact proposed diff and revision
 //
+// The behaviour check is the functional-regression oracle by default. A requester may name `business-state` as `functional.oracleId`
+// (X-406, `invariants/repair.js`): the same two runs and the same expectation, with an authorized-workflow scenario as the declared
+// case, and `promotePatch` then requires the functional receipts to come from that oracle class instead.
+//
 // Scope, stated so no caller overclaims: the exploit scenario and the functional cases are the REQUESTER's; this verifies the
 // declared scenario and cases, not that the patch is correct elsewhere. Linux is not claimed (the oracle platform statements
 // stay `unverified`). Receipts are valid inside this process only (see patch-promotion.js).
@@ -40,6 +44,9 @@ import { appendRepairRecord, recordPromotion, verificationRepairFor, withRepairS
 
 const PATCH_NEGATIVE_FEATURE = 'patch-negative-verification';
 const FUNCTIONAL_ORACLE = 'functional-regression';
+// The check that behaviour is preserved is normally the functional-regression oracle. A requester may name `business-state`
+// instead (X-406): the same two runs, the same expectation (refuted), with an authorized-workflow scenario as the declared case.
+const FUNCTIONAL_ORACLES = Object.freeze([FUNCTIONAL_ORACLE, 'business-state']);
 
 const STEPS = Object.freeze(['original-positive', 'patched-negative', 'functional-baseline', 'functional-regression']);
 
@@ -64,7 +71,8 @@ function classify(step, run) {
   }
   const outcome = run.outcome;
   const observed = run.receipt?.observed || {};
-  const loadBroken = observed.targetLoaded === false || observed.benignCompleted === false;
+  // a business-state run reports its control flow under `preconditions`: a control flow that no longer works is a broken revision
+  const loadBroken = observed.targetLoaded === false || observed.benignCompleted === false || observed.preconditions?.controlRan === false || observed.preconditions?.controlDurableEffect === false;
   if (outcome === 'error') return { status: 'incomplete', code: 'harness-error', reason: String(run.record?.reason || 'the oracle run failed').slice(0, 300), outcome };
   if (outcome === EXPECTED[step]) return { status: 'passed', code: null, reason: run.record?.reason ?? null, outcome };
   const reason = String(run.record?.reason || '').slice(0, 300);
@@ -150,6 +158,10 @@ export async function verifyPatchNegative(req, o = {}) {
   if (!isPlainObject(fn) || !isPlainObject(fn.inputs)) {
     return refuse('functional-regression', 'functional-omitted', 'no functional regression check was supplied: a patch that was never checked for behaviour cannot be a verified fix');
   }
+  const functionalOracle = fn.oracleId === undefined ? FUNCTIONAL_ORACLE : fn.oracleId;
+  if (!FUNCTIONAL_ORACLES.includes(functionalOracle)) {
+    return refuse('input-validation', 'bad-request', `the functional check oracle must be one of ${FUNCTIONAL_ORACLES.join(', ')}`);
+  }
 
   const patchDigest = digestOf(patchFiles);
   base.patchDigest = patchDigest;
@@ -158,8 +170,8 @@ export async function verifyPatchNegative(req, o = {}) {
   const plan = [
     ['original-positive', { oracleId: original.oracleId, entry: original.entry, inputs: original.inputs, patchFiles: null, budgets: original.budgets }],
     ['patched-negative', { oracleId: original.oracleId, entry: original.entry, inputs: original.inputs, patchFiles, budgets: original.budgets }],
-    ['functional-baseline', { oracleId: FUNCTIONAL_ORACLE, entry: original.entry, inputs: fn.inputs, patchFiles: null, budgets: fn.budgets }],
-    ['functional-regression', { oracleId: FUNCTIONAL_ORACLE, entry: original.entry, inputs: fn.inputs, patchFiles, budgets: fn.budgets }],
+    ['functional-baseline', { oracleId: functionalOracle, entry: original.entry, inputs: fn.inputs, patchFiles: null, budgets: fn.budgets }],
+    ['functional-regression', { oracleId: functionalOracle, entry: original.entry, inputs: fn.inputs, patchFiles, budgets: fn.budgets }],
   ];
   const runs = {};
   let failed = null;
@@ -186,7 +198,7 @@ export async function verifyPatchNegative(req, o = {}) {
 
   // ---- the receipts must match the exact proposed diff and revision before anything is promoted
   const receipts = Object.fromEntries(Object.entries(runs).map(([k, r]) => [k, r.receipt]));
-  const promotion = promotePatch({ proposal: { hypothesisId: req.hypothesisId, revision: req.commit, originalFiles: original.files, patchFiles }, receipts });
+  const promotion = promotePatch({ proposal: { hypothesisId: req.hypothesisId, revision: req.commit, originalFiles: original.files, patchFiles, functionalOracle }, receipts });
   if (!promotion.ok) {
     const envBroken = promotion.reasons.some((r) => r.code === 'environment-mismatch');
     const code = envBroken ? 'environment-mismatch' : promotion.reasons.some((r) => r.code === 'oracle-changed') ? 'oracle-changed' : 'promotion-refused';

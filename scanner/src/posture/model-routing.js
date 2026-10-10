@@ -1,4 +1,8 @@
 import { applyMeasuredTrust } from './model-trust.js';
+import { featureStatus } from './assurance/config.js';
+import { buildRoutingTask } from './routing/outcomes.js';
+import { routeConstrained } from './routing/decide.js';
+import { resolveRoutingControl } from './routing/control.js';
 // Capability-based model routing for cost-sensitive subagent dispatch.
 //
 // A declarative CWE/severity → model policy. When the orchestrator is about to
@@ -129,6 +133,42 @@ export function routeModelWithTrust(finding, ledger = null) {
     ledger,
     trustKeyFor(finding),
   );
+}
+
+// X-604: constrained, calibrated routing, behind the `model-routing` feature (off by default).
+//
+// With the feature off (or no configuration given) this returns EXACTLY what `routeModelWithTrust` returns, the same object shape, so
+// nothing existing changes (test/routing/unchanged-when-off.test.js pins the outputs). With it on, the capability route above becomes
+// the BASELINE: capability, privacy, context, minimum-quality and budget constraints are applied first (routing/decide.js), cost or
+// latency is optimised only among compliant candidates, and the decision carries its explanation. A blocked decision selects nothing:
+// `model` is null and `blocked` is true, so a caller can never mistake it for a route.
+const EXT_LANGUAGE = { js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', java: 'java', kt: 'kotlin', go: 'go', rb: 'ruby', php: 'php', cs: 'csharp', rs: 'rust', hs: 'haskell', nix: 'nix' };
+function languageOfFinding(finding) {
+  const m = typeof finding?.file === 'string' ? finding.file.match(/\.([A-Za-z0-9]+)$/) : null;
+  return (m && EXT_LANGUAGE[m[1].toLowerCase()]) || 'unknown';
+}
+
+export function routeModelWithPolicy(finding, ctx = {}) {
+  const baseline = routeModelWithTrust(finding, ctx.ledger || null);
+  if (!ctx.config || featureStatus(ctx.config, 'model-routing').status !== 'ok') return baseline;
+  // X-608.AC03: the operator can pin or disable adaptive routing. Disabled leaves the capability route exactly as it was; a pin chooses
+  // that model without optimisation (sending a prompt still passes the egress policy in the guarded adapter). A bad value fails closed.
+  const control = ctx.routingControl || resolveRoutingControl({ env: ctx.env || process.env, options: ctx.routingOptions || {} });
+  if (control.mode === 'disabled') return { ...baseline, routingControl: control };
+  if (control.mode === 'pinned') return { model: control.pin, effort: baseline.effort, reason: control.reason, trust: baseline.trust, baseline, pinned: true, routingControl: control };
+  const built = buildRoutingTask({
+    taskId: ctx.taskId || finding?.stableId || finding?.id || 'unidentified-task', taskKind: ctx.taskKind || 'repair',
+    language: ctx.language || languageOfFinding(finding), vulnClass: parseCwe(finding?.cwe) || 'no-cwe',
+    contextTokens: ctx.contextTokens ?? 0, requiredCapabilities: ctx.requiredCapabilities || [], dataClass: ctx.dataClass || 'source-code',
+    synthetic: ctx.synthetic === true,
+  });
+  if (!built.ok) return { model: null, effort: null, blocked: true, reason: `routing task is invalid: ${built.errors.map((e) => e.path).join(', ')}`, trust: baseline.trust, baseline };
+  const decision = routeConstrained({
+    task: built.task, candidates: ctx.candidates || [], calibration: ctx.calibration || null, policy: ctx.policy, now: ctx.now,
+    baselineRoute: baseline, egress: ctx.egress, scanRoot: ctx.scanRoot || null, manifestEgress: ctx.manifestEgress || null, allowSynthetic: ctx.allowSynthetic === true,
+  });
+  if (decision.status === 'blocked') return { model: null, effort: null, blocked: true, reason: decision.reason, trust: baseline.trust, baseline, decision };
+  return { model: decision.selected.model, effort: baseline.effort, reason: decision.reason, trust: baseline.trust, baseline, decision, constrained: decision.status === 'routed' };
 }
 
 // Route a list of findings. Returns [{ finding, model, effort, reason }, …].

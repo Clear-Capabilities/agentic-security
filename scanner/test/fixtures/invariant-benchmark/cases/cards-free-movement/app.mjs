@@ -1,0 +1,1 @@
+export function createApp() { const columns = new Set(['open', 'doing', 'done']); return { moveCard(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; if (!columns.has(p.to)) return { status: 422 }; ctx.store.write(key, { ...rec, status: p.to }); return { status: 200 }; } }; }

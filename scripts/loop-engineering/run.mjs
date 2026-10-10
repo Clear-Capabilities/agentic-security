@@ -9,7 +9,7 @@ import net from 'node:net';
 import { parseArgs, UsageError } from './lib/args.mjs';
 import {
   layout, ensureBase, newRunId, currentRunId, setCurrentRun, judgeLease, appendEvent, readEvents,
-  acquireRunLock, releaseRunLock, evidenceKey, HEARTBEAT_MS,
+  acquireRunLock, releaseRunLock, evidenceKey, HEARTBEAT_MS, readStateFile,
 } from './lib/state.mjs';
 import { atomicWriteJson, readJson, nowIso, sleep, redact } from './lib/util.mjs';
 import { loadProfile, validateProfile, ProfileError, insideRepo, suiteLaunchBlockers } from './lib/profile.mjs';
@@ -19,6 +19,8 @@ import { TreeIndex } from './lib/tree.mjs';
 import { assessAll, computeProgress } from './lib/progress.mjs';
 import { verifyRequirement, toolAvailable } from './lib/verifier.mjs';
 import { buildStatus, commandsFor, isTerminal } from './lib/status.mjs';
+import { captureFrozenInputs } from './lib/drift.mjs';
+import { buildCompletionReport } from './lib/report.mjs';
 import { initialState, startController } from './lib/controller.mjs';
 import { runGuardian } from './lib/guardian.mjs';
 import { runBounded, reapOwned } from './lib/proc.mjs';
@@ -43,6 +45,7 @@ const USAGE = `usage: node scripts/loop-engineering/run.mjs <command> [options]
   pause | resume                         checkpoint / continue (resume also restarts a dead controller)
   retry --requirement <id>               skip a backoff or re-evaluate an external blocker (caps are not bypassed)
   stop --run <id>                        stop this controller's owned processes, checkpoint, close the dashboard
+  report [--json] [--write]              completion report: unmet criteria, blockers, budget stops, evidence paths, next commands
   plan --next                            print the next dependency-ready requirement without starting a worker
   exec --deadline <s> [--label x] -- <cmd...>   run a command under a registered, bounded operation lease
 `;
@@ -69,7 +72,7 @@ function loadRunContext(repoRoot, runIdArg = null) {
   const runId = runIdArg || currentRunId(repoRoot);
   if (!runId) throw new UsageError('no run exists yet: run `init` first');
   const L = layout(repoRoot, runId);
-  const state = readJson(L.stateFile, null);
+  const state = readStateFile(L).state;
   if (!state) throw new UsageError(`run ${runId} has no state file`);
   return { runId, L, state };
 }
@@ -138,13 +141,20 @@ async function cmdInit(argv) {
     const m = loadManifest(root).manifest;
     const state = initialState({ runId, manifest: m, profilePath: a.profile, profileSha: psha, repoRoot: root });
     state.status = 'initialized'; state.statusReason = 'created by init; not started';
+    state.frozen = captureFrozenInputs({ repoRoot: root, prdPath: a.prd, profile });
     atomicWriteJson(L.stateFile, state);
     setCurrentRun(root, runId);
     appendEvent(L, 'init', { manifestVersion: m.manifestVersion });
   } else {
     const L = layout(root, runId);
-    st.profilePath = a.profile; st.profileSha = psha;
+    // An explicit re-initialisation is the ONLY way frozen inputs change. It re-freezes them and clears a recorded drift stop.
+    const refrozen = captureFrozenInputs({ repoRoot: root, prdPath: a.prd, profile });
+    const changed = st.frozen && (st.frozen.prdSha256 !== refrozen.prdSha256 || st.frozen.profileSha256 !== refrozen.profileSha256);
+    st.profilePath = a.profile; st.profileSha = psha; st.frozen = refrozen; delete st.drift;
+    st.runBlockers = (st.runBlockers || []).filter((b) => b.type !== 'drift');
+    if (st.status === 'blocked' && /^drift:/.test(st.statusReason || '')) { st.status = 'initialized'; st.statusReason = 'drift cleared by explicit re-initialisation'; }
     atomicWriteJson(L.stateFile, st);
+    if (changed) out('inputs changed since the previous init: evidence bound to the old PRD or acceptance definition is stale and will be re-verified');
     appendEvent(L, 'reinit', { manifestVersion: loadManifest(root).version });
   }
   out(`run record: ${runId} (status ${readJson(layout(root, runId).stateFile).status})`);
@@ -256,7 +266,7 @@ function printStarted(root, runId, info) {
 async function launchController(root, runId, serveSpec, { foreground }) {
   const L = layout(root, runId);
   mkdirSync(L.dir, { recursive: true });
-  const profilePath = readJson(L.stateFile, {}).profilePath || DEFAULT_PROFILE;
+  const profilePath = (readStateFile(L).state || {}).profilePath || DEFAULT_PROFILE;
   if (foreground) {
     return startController({ repoRoot: root, runId, profilePath, serveSpec });
   }
@@ -318,7 +328,7 @@ async function cmdResume(argv) {
   const { runId, L, state } = loadRunContext(root);
   if (state.status === 'completed') throw new UsageError('run is completed; nothing to resume');
   const lease = judgeLease(L.leaseFile);
-  if (lease.state === 'live' && !isTerminal(state.status)) {
+  if (lease.state === 'live' && !lease.lease.exited && !isTerminal(state.status)) {
     const ack = await sendControl(L, 'resume');
     out(`resume: ${ack.result}`);
     return ack.result === 'ok' ? 0 : 1;
@@ -350,8 +360,28 @@ async function cmdStatus(argv) {
   out(`states: ${Object.entries(st.counts).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(', ')}`);
   if (st.current) out(`current: ${st.current.requirement} (${st.current.phase}${st.current.attempt ? ` attempt ${st.current.attempt}` : ''})`);
   if (st.blockers?.length) for (const b of st.blockers) out(`run blocker: ${b.type}: ${b.detail}`);
+  if (st.final?.required) out(`final verification: ${st.final.ok ? 'passed on the current tree' : `not satisfied (${st.final.reasons.join('; ')})`}`);
+  if (st.drift) out(`DRIFT: ${st.drift.reasons.map((d) => `${d.input}${d.path ? ' ' + d.path : ''}: ${d.detail}`).join('; ')}`);
+  for (const l of st.summary.lines) out(l);
   const unmet = st.requirements.filter((r) => r.state !== 'verified');
   out(`remaining (${unmet.length}): ${unmet.slice(0, 12).map((r) => `${r.id}:${r.state}`).join(' ')}${unmet.length > 12 ? ' ...' : ''}`);
+  return 0;
+}
+
+async function cmdReport(argv) {
+  const a = parseArgs(argv, { flags: { json: { type: 'boolean' }, write: { type: 'boolean' } } });
+  const { runId, L } = loadRunContext(REPO_ROOT);
+  const rep = buildCompletionReport(buildStatus(REPO_ROOT, runId));
+  if (a.write) atomicWriteJson(L.completionReport, rep);
+  if (a.json) { out(JSON.stringify(rep, null, 2)); return 0; }
+  out(`run ${rep.runId}: ${rep.runStatus}${rep.statusReason ? ` (${rep.statusReason})` : ''}; verdict ${rep.verdict}`);
+  out(rep.claim);
+  out(`progress: ${rep.progress.verifiedPercent}% (${rep.progress.verifiedWeight}/${rep.progress.totalWeight} weight)`);
+  out(`unmet criteria (${rep.unmetCriteria.length}): ${rep.unmetCriteria.slice(0, 20).map((c) => c.criterion).join(' ')}${rep.unmetCriteria.length > 20 ? ' ...' : ''}`);
+  for (const b of rep.blockers) out(`blocker: ${b.scope}${b.requirement ? ' ' + b.requirement : ''} ${b.type}: ${b.detail}`);
+  for (const b of rep.budgetStops) out(`budget stop: ${b.kind}${b.requirement ? ' ' + b.requirement : ''}: ${b.detail}`);
+  out(`implemented and verified: ${rep.implemented.length}`);
+  for (const c of rep.nextCommands) out(`next: ${c.command}  (${c.bound})`);
   return 0;
 }
 
@@ -478,17 +508,17 @@ async function cmdExec(argv) {
 async function cmdController(argv) {
   const a = parseArgs(argv, { flags: { run: { type: 'string', required: true }, serve: { type: 'string' } } });
   const L = layout(REPO_ROOT, a.run);
-  const profilePath = readJson(L.stateFile, {}).profilePath || DEFAULT_PROFILE;
+  const profilePath = (readStateFile(L).state || {}).profilePath || DEFAULT_PROFILE;
   return startController({ repoRoot: REPO_ROOT, runId: a.run, profilePath, serveSpec: a.serve || null });
 }
 async function cmdGuardian(argv) {
   const a = parseArgs(argv, { flags: { run: { type: 'string', required: true }, serve: { type: 'string' } } });
   const L = layout(REPO_ROOT, a.run);
-  const profile = (() => { try { return loadProfile(resolve(REPO_ROOT, readJson(L.stateFile, {}).profilePath || DEFAULT_PROFILE)).profile; } catch { return null; } })();
+  const profile = (() => { try { return loadProfile(resolve(REPO_ROOT, (readStateFile(L).state || {}).profilePath || DEFAULT_PROFILE)).profile; } catch { return null; } })();
   return runGuardian({ repoRoot: REPO_ROOT, runId: a.run, serveSpec: a.serve || null, lingerSeconds: profile?.serve?.lingerSeconds ?? 3600 });
 }
 
-const COMMANDS = { init: cmdInit, preflight: cmdPreflight, start: cmdStart, status: cmdStatus, verify: cmdVerify, pause: cmdPause, resume: cmdResume, retry: cmdRetry, stop: cmdStop, plan: cmdPlan, exec: cmdExec, _controller: cmdController, _guardian: cmdGuardian };
+const COMMANDS = { init: cmdInit, preflight: cmdPreflight, start: cmdStart, status: cmdStatus, verify: cmdVerify, pause: cmdPause, resume: cmdResume, retry: cmdRetry, stop: cmdStop, plan: cmdPlan, exec: cmdExec, report: cmdReport, _controller: cmdController, _guardian: cmdGuardian };
 
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);

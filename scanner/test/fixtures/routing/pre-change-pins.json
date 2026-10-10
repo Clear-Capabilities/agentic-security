@@ -1,0 +1,239 @@
+{
+  "note": "Pinned from the code BEFORE X-601..X-604 changed anything. With the model-routing feature off, every value must stay byte-identical.",
+  "routeModelForFinding": [
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Critical severity — worth Opus 4.8 at high effort."
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "CWE-327 at high severity is a hard class (crypto / auth / deserialization / XXE) — Opus 4.8 at high effort."
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "CWE-79 is a common injection / traversal class — Sonnet 4.6 at medium effort."
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "CWE-22 is a common injection / traversal class — Sonnet 4.6 at medium effort."
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "CWE-209 at low severity is a simple / hardening class — Haiku 4.5 at low effort."
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Cross-file finding — needs Opus 4.8 at high effort to reason across files."
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "High severity — Sonnet 4.6 at medium effort."
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "low severity is a simple / hardening class — Haiku 4.5 at low effort."
+    }
+  ],
+  "routeModelWithTrust_noLedger": [
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Critical severity — worth Opus 4.8 at high effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "CWE-327 at high severity is a hard class (crypto / auth / deserialization / XXE) — Opus 4.8 at high effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "CWE-79 is a common injection / traversal class — Sonnet 4.6 at medium effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "CWE-22 is a common injection / traversal class — Sonnet 4.6 at medium effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "CWE-209 at low severity is a simple / hardening class — Haiku 4.5 at low effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Cross-file finding — needs Opus 4.8 at high effort to reason across files.",
+      "trust": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "High severity — Sonnet 4.6 at medium effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "low severity is a simple / hardening class — Haiku 4.5 at low effort.",
+      "trust": null
+    }
+  ],
+  "routeModelWithTrust_ledger": [
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Critical severity — worth Opus 4.8 at high effort. Downgrade withheld: only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-89::critical'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+      "trust": {
+        "allowed": false,
+        "n": 0,
+        "misses": 0,
+        "missRate": null,
+        "upperBound": null,
+        "reason": "only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-89::critical'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+        "applied": false
+      }
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "CWE-327 at high severity is a hard class (crypto / auth / deserialization / XXE) — Opus 4.8 at high effort. Downgrade withheld: only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-327::high'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+      "trust": {
+        "allowed": false,
+        "n": 0,
+        "misses": 0,
+        "missRate": null,
+        "upperBound": null,
+        "reason": "only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-327::high'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+        "applied": false
+      }
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "trust": {
+        "allowed": true,
+        "n": 400,
+        "misses": 0,
+        "missRate": 0,
+        "upperBound": 0.009512294334296508,
+        "reason": "0 miss(es) in 400 samples; 95% upper bound 1.0% is within the 5.0% bar, so the cheaper model is justified for 'claude-haiku-4-5::CWE-79::high'.",
+        "applied": true
+      },
+      "reason": "Downgraded to claude-haiku-4-5 on measured evidence: 0 miss(es) in 400 samples; 95% upper bound 1.0% is within the 5.0% bar, so the cheaper model is justified for 'claude-haiku-4-5::CWE-79::high'."
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "CWE-22 is a common injection / traversal class — Sonnet 4.6 at medium effort. Downgrade withheld: only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-22::medium'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+      "trust": {
+        "allowed": false,
+        "n": 0,
+        "misses": 0,
+        "missRate": null,
+        "upperBound": null,
+        "reason": "only 0 adjudicated sample(s) for 'claude-haiku-4-5::CWE-22::medium'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+        "applied": false
+      }
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "CWE-209 at low severity is a simple / hardening class — Haiku 4.5 at low effort.",
+      "trust": null
+    },
+    {
+      "model": "claude-opus-4-8",
+      "effort": "high",
+      "reason": "Cross-file finding — needs Opus 4.8 at high effort to reason across files. Downgrade withheld: only 0 adjudicated sample(s) for 'claude-haiku-4-5::no-cwe::medium'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+      "trust": {
+        "allowed": false,
+        "n": 0,
+        "misses": 0,
+        "missRate": null,
+        "upperBound": null,
+        "reason": "only 0 adjudicated sample(s) for 'claude-haiku-4-5::no-cwe::medium'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+        "applied": false
+      }
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "effort": "medium",
+      "reason": "High severity — Sonnet 4.6 at medium effort. Downgrade withheld: only 0 adjudicated sample(s) for 'claude-haiku-4-5::no-cwe::high'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+      "trust": {
+        "allowed": false,
+        "n": 0,
+        "misses": 0,
+        "missRate": null,
+        "upperBound": null,
+        "reason": "only 0 adjudicated sample(s) for 'claude-haiku-4-5::no-cwe::high'; 30 are required before a downgrade can be justified. No evidence is not permission — the stronger model stands.",
+        "applied": false
+      }
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "reason": "low severity is a simple / hardening class — Haiku 4.5 at low effort.",
+      "trust": null
+    }
+  ],
+  "summarizeRouting": {
+    "claude-opus-4-8": 3,
+    "claude-sonnet-4-6": 3,
+    "claude-haiku-4-5": 2
+  },
+  "cacheReport": "\n  Prompt-cache economics — this session\n  6 model turns\n\n  cache hit ratio     50.6%  (input-side tokens served from cache)\n  spent               $0.2165   (~$0.0361/turn)\n  ▶ saved by caching  $0.0940   vs. $0.3104 with no cache\n  invested in caches  $0.0247   (write premium over base input)\n\n  tokens: 30,450 cached-read · 27,400 cache-write · 2,330 fresh-in · 3,300 out\n\n  by model:\n    Opus 4.8     3 turns · $0.1203 · 66% cached\n    Sonnet 4.6   3 turns · $0.0962 · 35% cached\n\n  ⚠ cache leaks (2, ~$0.0556 wasted re-ingesting context):\n    · 1× cache expired (gap > 5-min TTL) — ~$0.0275\n    · 1× model switch (cache is model-scoped) — ~$0.0281\n    Keep one model + a stable system prompt within a working window to avoid these.\n",
+  "providerEntries": [
+    {
+      "p": "anthropic",
+      "id": "claude-sonnet-4-6",
+      "in": 3,
+      "out": 15,
+      "cached": 0.3
+    },
+    {
+      "p": "openai",
+      "id": "gpt-5.4",
+      "in": 2.5,
+      "out": 15,
+      "cached": 0.25
+    },
+    {
+      "p": "google",
+      "id": "gemini-3.1-pro",
+      "in": 2,
+      "out": 12,
+      "cached": 0.3
+    },
+    {
+      "p": "xai",
+      "id": "grok-4.3",
+      "in": 1.25,
+      "out": 2.5,
+      "cached": 0.2
+    }
+  ],
+  "sourcedAt": "2026-07-05",
+  "advisorTiers": [
+    "simple",
+    "complex",
+    "medium"
+  ],
+  "advisorCosts": [
+    0.11499999999999999,
+    0.023
+  ]
+}

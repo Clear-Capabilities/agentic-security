@@ -1,0 +1,13 @@
+{
+  "note": "Development cases for the QA-005 / QA-006 engine work. Authored by the tooling's developers, so every label here is flagged synthetic: these are DEVELOPMENT examples of a miss mechanism, not an independent population and not a sealed set.",
+  "cases": [
+    { "id": "guard-after-sink-js", "mechanism": "guard-dominance", "language": "javascript", "family": "ssrf", "cwe": "CWE-918", "file": "app.js", "startLine": 7, "endLine": 7 },
+    { "id": "guard-other-function-js", "mechanism": "guard-dominance", "language": "javascript", "family": "ssrf", "cwe": "CWE-918", "file": "app.js", "startLine": 12, "endLine": 12 },
+    { "id": "guard-closed-block-py", "mechanism": "guard-dominance", "language": "python", "family": "ssrf", "cwe": "CWE-918", "file": "fetch.py", "startLine": 15, "endLine": 15 },
+    { "id": "implicit-mvc-cs", "mechanism": "implicit-handler-parameters", "language": "csharp", "family": "open-redirect", "cwe": "CWE-601", "file": "RedirectController.cs", "startLine": 5, "endLine": 5 },
+    { "id": "spring-mapped-java", "mechanism": "implicit-handler-parameters", "language": "java", "family": "sql-injection", "cwe": "CWE-89", "file": "UserApi.java", "startLine": 14, "endLine": 14 },
+    { "id": "laravel-input-php", "mechanism": "request-object-sources", "language": "php", "family": "sql-injection", "cwe": "CWE-89", "file": "UsersController.php", "startLine": 8, "endLine": 8 },
+    { "id": "php-header-location", "mechanism": "sink-argument-context", "language": "php", "family": "open-redirect", "cwe": "CWE-601", "file": "redirect.php", "startLine": 3, "endLine": 3 },
+    { "id": "go-blank-lines", "mechanism": "go-line-attribution", "language": "go", "family": "command-injection", "cwe": "CWE-78", "file": "run.go", "startLine": 16, "endLine": 16 }
+  ]
+}

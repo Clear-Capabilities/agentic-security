@@ -73,6 +73,35 @@ Layer-2 taint engine. Walks the Layer-1 IR (`../ir/`) with field-sensitive forwa
 
 `engine.js` `dropGuardedFindings(findings, fc)` runs after all detectors and drops a CWE-918 (SSRF) finding when the sink window has a host allow/deny check (deny/allow-list, `getHost`/`hostname` comparison, RFC1918/`169.254.169.254` prefix check, `ipaddress`/`getaddrinfo`/`ssrf-req-filter`), or a CWE-22 (path) finding when the window has a containment guard (`basename`/`GetFileName`/`secure_filename`/`send_from_directory`, or canonicalize+`startsWith`). It's the single source of truth so every emitter (regex, structural, per-language flow, PY-SAST, CSHARP, GO) is treated uniformly. The window is **comment-stripped** (a "no allow-list / 169.254…" vuln comment must not read as a guard). Opt out: `AGENTIC_SECURITY_NO_GUARD_RECOGNITION=1`.
 
+### Guard recognition must prove DOMINANCE (`guard-dominance.js`, QA-005.AC02)
+
+`dropGuardedFindings` and the safe-sink-shape check used to clear a finding whenever guard-shaped TEXT sat within -25/+5 lines and shared an
+identifier with the sink line. That answers "is there guard-looking text nearby", not "is every path to the sink forced through this guard". A guard
+written AFTER the sink, one in a function nobody calls, one in a block that had already closed, a check whose failing branch only logs, a membership
+test computed and never branched on, and a line that merely DEFINES the allow-list all cleared real findings.
+
+`guardDominatesSink({ lines, guardIdx, sinkIdx, file })` now decides, over the same lines, and returns `{ dominates, reason }`. It is conservative
+toward KEEPING a finding: anything it cannot place is `not proven`. Rules: the guard precedes the sink; a data declaration is not a check; a boolean
+result needs a later branch on it; the guard's enclosing named function must contain the sink, or end before it with the sink's own code calling that
+helper first and the guard unavoidable inside the helper; the guard's block must still be open at the sink; a conditional guard must either contain the
+sink in its branch or have a failing branch that leaves (return, throw, raise, exit, abort, an HTTP error). Braces vs indentation comes from the file
+extension, else a whole-file vote. Known limit: polarity is not judged (`if (allowed) { return }` reads like a guard), and this is not a control-flow
+graph. A CWE-601 target guard (`IsLocalUrl`, a relative-path check, a host allow-list) joined the same pass.
+
+`_guardWindow` also stopped treating the `//` in `"https://"` as a comment start (it erased the allow-list check on that line and a neighbouring
+declaration stood in for it); `_stripCommentsKeepLines` is string-aware and keeps every newline so window indices are file indices.
+Guard-recognized drops are written to the suppression ledger with `id`, `cwe`, `family`, `line` and `guard-recognized:<kind>:dominates@<guardLine>:<why>`.
+Tests: `test/evaluation/guard-dominance.test.js`.
+
+### Sink argument context and request-object sources (QA-006)
+
+`match.requireStaticPrefix: { index, pattern }` (engine.js `_staticPrefixSatisfied`) gates a sink on the leading STATIC text of a partly tainted
+argument, read from the leftmost literal of a concatenation or template; an unknown leading piece fails closed. It separates
+`header("Location: " . $x)` (open redirect, `php-header-location`) from `header("X-Trace: " . $x)` (header injection only). Go's `http.Redirect` (target is
+argument 2) and `c.Redirect(code, url)` (argument 1) are sinks. Laravel `$request->input()/query()/post()/all()/...` are sources (receiver must be a
+request-named variable). `cs-aspnet-implicit-action-param` and `java-spring-implicit-mapped-param` are annotation sources fed by `ir/implicit-handler-params.js`.
+Tests: `test/evaluation/engine-mechanisms.test.js`.
+
 ## Entry points
 
 - `runTaintEngine(perFileIR, callGraph, opts)` — the public entry. Runs from `engine.js` when `AGENTIC_SECURITY_DEEP=1`. **R1 (PRD §5):** the CLI entry (`bin/agentic-security.js#cmdScan`) sets that env var by default for local/interactive scans (not in CI, and not when `--no-deep`/`AGENTIC_SECURITY_DEEP=0`), so the default `/scan --all` runs deep. In-process callers (tests, the cve-replay corpus) invoke `runScan()` directly without the CLI default and therefore stay deep-off unless they set the env var themselves (e.g. `test/deep-taint.test.js`).

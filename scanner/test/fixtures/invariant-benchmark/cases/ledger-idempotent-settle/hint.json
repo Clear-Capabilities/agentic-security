@@ -1,0 +1,10 @@
+{
+  "class": "value-conservation",
+  "action": "settle",
+  "source": "specification-mining",
+  "evidence": {
+    "file": "app.mjs",
+    "line": 1
+  },
+  "uncertainty": 0.7
+}

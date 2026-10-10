@@ -53,6 +53,15 @@ panel · `judge.js` shapes findings and dedupes against the prior scan ·
 one area), merged areas are capped, and hunter prompts for Haskell and Nix are redacted (split literals joined first) before they
 leave the process. `hunt` includes `.hs`, `.lhs` and `.nix`. With no endpoint every run is degraded and says so.
 
+## Invariant proposals (X-402)
+
+`lenses.js` `invariantProposalFor(candidate)` maps a candidate from a state-oriented lens (`authz`, `business-logic`, and
+`feature-abuse` when it is about tenants) to a PROPOSED invariant skeleton (`posture/invariants/lifecycle.js`): authored by the
+model, with the candidate as source evidence and a high uncertainty. `runDiscovery` reports them as `invariantProposals` only when
+`opts.invariantProposals = { config }` is passed AND the `invariant-scenarios` feature is enabled in that config; nothing else in the
+report changes. A proposal is a hypothesis: it can be run as a scenario and its violations are reported as candidates, but only a
+human reviewer's signed approval in the invariant ledger makes it a requirement, so a hunter never establishes its own ground truth.
+
 ## Advisory/gating separation (X-207)
 
 Hunt output stays advisory in code, not just by convention. `memory.js` writes only through

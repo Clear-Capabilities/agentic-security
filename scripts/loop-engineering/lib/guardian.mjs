@@ -10,6 +10,7 @@ import { startTimeOf, identityMatches } from './procscan.mjs';
 import { reapOwned } from './proc.mjs';
 import { createDashboard } from './server.mjs';
 import { buildStatus, renderStaticHtml, isTerminal } from './status.mjs';
+import { buildCompletionReport } from './report.mjs';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -63,7 +64,7 @@ export async function runGuardian({ repoRoot, runId, serveSpec, lingerSeconds = 
     if (isTerminal(readJson(L.stateFile, state).status) || reaped) {
       if (!endedAt) {
         endedAt = Date.now();
-        try { writeFileSync(L.statusHtml, renderStaticHtml(buildStatus(repoRoot, runId)), { mode: 0o600 }); } catch { /* fallback only */ }
+        try { const st = buildStatus(repoRoot, runId); writeFileSync(L.statusHtml, renderStaticHtml(st), { mode: 0o600 }); atomicWriteJson(L.completionReport, buildCompletionReport(st)); } catch { /* fallback only */ }
       }
       if (Date.now() - endedAt > lingerSeconds * 1000) break;
     } else endedAt = null;

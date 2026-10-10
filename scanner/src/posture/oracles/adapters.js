@@ -23,7 +23,10 @@
 // tree termination are not implemented on the namespace backend), which the
 // runner reports as `unsupported`, and no Linux outcome is claimed.
 import { defineOracle } from './oracle.js';
+import crypto from 'node:crypto';
 import { digestOf } from '../assurance/identity.js';
+import { expressionProblems } from '../invariants/expressions.js';
+import { evaluateAssertions, sanitizeSnapshot, eventSequence, hasDurableEffect } from '../invariants/state-assertions.js';
 
 const PLATFORMS = Object.freeze({
   darwin: { status: 'supported', note: 'executed by this repository\'s tests on the macOS development host (userspace confinement backend)' },
@@ -357,4 +360,172 @@ finish({ results });
   },
 });
 
-export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource, replayIdempotency, functionalRegression]);
+// ------------------------------------------------------------------ business state (X-404)
+
+const BS_MAX_OPS = 16;
+const BS_MAX_ITEMS = 12;
+
+function bsStepProblem(step, actorIds) {
+  if (!step || typeof step !== 'object' || Array.isArray(step)) return 'a step must be an object';
+  if (!actorIds.has(step.actor)) return 'a step actor must be a declared actor';
+  if (!isId(step.action)) return 'a step action must be an identifier';
+  if (step.args !== undefined) {
+    if (!Array.isArray(step.args) || step.args.length > 4) return 'step args must be an array of at most 4';
+    try { if (Buffer.byteLength(JSON.stringify(step.args)) > 400) return 'step args are too large'; } catch { return 'step args must be JSON'; }
+  }
+  return null;
+}
+
+/** Problems with one sequence of items (steps or deterministic parallel groups), counting operations toward the shared ceiling. */
+function bsSequenceProblem(items, actorIds, label) {
+  if (!Array.isArray(items) || items.length < 1 || items.length > BS_MAX_ITEMS) return `${label} must hold 1 to ${BS_MAX_ITEMS} items`;
+  let ops = 0;
+  for (const it of items) {
+    if (it && Array.isArray(it.parallel)) {
+      if (it.parallel.length < 2 || it.parallel.length > 4) return 'a parallel group holds 2 to 4 steps';
+      const sched = it.schedule;
+      if (!Array.isArray(sched) || sched.length !== it.parallel.length || [...sched].sort().join() !== it.parallel.map((_, i) => i).join()) return 'a parallel group needs a schedule that is a permutation of its steps';
+      for (const s of it.parallel) { const why = bsStepProblem(s, actorIds); if (why) return why; }
+      ops += it.parallel.length;
+    } else {
+      const why = bsStepProblem(it, actorIds);
+      if (why) return why;
+      ops += 1;
+    }
+  }
+  return ops > BS_MAX_OPS ? `${label} exceeds ${BS_MAX_OPS} operations` : null;
+}
+
+const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
+
+const businessState = defineOracle({
+  id: 'business-state', class: 'business-state', version: '1',
+  requiresFeature: 'invariant-scenarios',
+  description: 'Does a bounded stateful scenario drive an application into a state its invariant forbids? The harness gives the application a durable store and an effect recorder, plays a control sequence and an adversarial sequence (twice, to detect nondeterministic scheduling), and logs every durable write and emitted effect. The verifier evaluates the invariant\'s forbidden outcomes over that log; the response status is recorded but never decides.',
+  prerequisites: ['node-runtime', 'confinement-backend'],
+  platforms: PLATFORMS, budgets: COMMON_BUDGETS,
+  negativeControls: [{ id: 'tenant-scoped-writes', description: 'the same application scoping every write to the caller\'s tenant must leave the forbidden state unreached while its control flow still changes durable state', expectedOutcome: 'refuted' }],
+  fixtures: { dir: 'test/fixtures/oracles/business-state', positive: 'positive', negative: 'negative', inconclusive: 'inconclusive' },
+  limitations: [
+    'the application is a factory taking no arguments that returns action functions (ctx, ...args); ctx.store and ctx.emit are in-memory stand-ins, so durable state held anywhere else (a real database, a queue, the file system) is not observed',
+    'concurrency is cooperative scheduling inside one process with a fixed start order: it exercises interleavings at await points, not parallel execution, and a scenario whose two runs disagree is reported inconclusive rather than guessed',
+    'only the declared forbidden outcomes are checked, over the declared actors, tenants and steps; a clean result is a statement about this bounded scenario, not about the application',
+    'a target that recognises the oracle and forges its own log entries is not distinguishable from a real violation (the same limit every adapter states)',
+  ],
+  harnessSource: `${PROLOGUE}
+import crypto from 'node:crypto';
+const clone = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
+const actorOf = (id) => INPUT.actors.find((a) => a.id === id);
+async function play(items, phase) {
+  const data = new Map();
+  for (const s of INPUT.seed) data.set(s.key, clone(s.value));
+  const initial = Object.fromEntries(data);
+  const log = [];
+  const api = await Promise.resolve(fn());
+  async function runOp(opIndex, itemIndex, step) {
+    const a = actorOf(step.actor);
+    const entry = { item: itemIndex, op: opIndex, phase, actor: step.actor, action: step.action, ok: false, status: null, response: null, writes: [], events: [] };
+    log.push(entry);
+    const raw = [];
+    const ctx = {
+      id: a.id, tenant: a.tenant, role: a.role,
+      store: {
+        read: (k) => (data.has(String(k)) ? clone(data.get(String(k))) : null),
+        list: (p) => [...data.keys()].filter((k) => k.startsWith(String(p))).sort(),
+        write: (k, v) => { k = String(k); raw.push({ key: k, before: data.has(k) ? clone(data.get(k)) : null, after: clone(v) }); data.set(k, clone(v)); },
+        remove: (k) => { k = String(k); if (!data.has(k)) return; raw.push({ key: k, before: clone(data.get(k)), after: null }); data.delete(k); },
+      },
+      emit: (name, payload) => { entry.events.push({ name: String(name).slice(0, 64), key: payload && payload.key !== undefined ? String(payload.key).slice(0, 64) : null }); },
+    };
+    try {
+      const f = api && api[step.action];
+      if (typeof f !== 'function') throw new Error('no such action');
+      const r = await Promise.resolve(f.call(api, ctx, ...(step.args || [])));
+      entry.ok = true;
+      entry.status = r && typeof r.status === 'number' ? r.status : null;
+      try { entry.response = JSON.stringify(r === undefined ? null : r).slice(0, 300); } catch (e) { entry.response = null; }
+    } catch (e) { entry.error = text(e).slice(0, 80); }
+    const net = new Map();
+    for (const w of raw) { const p = net.get(w.key); net.set(w.key, p ? { key: w.key, before: p.before, after: w.after } : w); }
+    entry.writes = [...net.values()].filter((w) => JSON.stringify(w.before) !== JSON.stringify(w.after));
+  }
+  let i = 0;
+  for (const item of items) {
+    if (item.parallel) await Promise.allSettled(item.schedule.map((idx) => runOp(idx, i, item.parallel[idx])));
+    else await runOp(0, i, item);
+    i++;
+  }
+  const final = Object.fromEntries(data);
+  data.clear();
+  return { initial, steps: log, final, cleaned: data.size === 0 };
+}
+let c = null; let a1 = null; let a2 = null;
+try { c = await play(INPUT.control, 'control'); } catch (e) { out.controlFailed = true; }
+try { a1 = await play(INPUT.attack, 'attack'); a2 = await play(INPUT.attack, 'attack'); } catch (e) { out.attackFailed = true; }
+out.control = c; out.attack = a1;
+if (a1 && a2) out.replayDigest = crypto.createHash('sha256').update(JSON.stringify(a2)).digest('hex');
+if (JSON.stringify(out).length > 15000) { delete out.control; delete out.attack; out.oversize = true; }
+finish({});
+`,
+  validateInputs(i) {
+    if (!isId(i.export)) return 'export must be an identifier';
+    const inv = i.invariant;
+    if (!inv || typeof inv.id !== 'string' || !inv.id.startsWith('inv:') || !isStr(inv.key, 64) || !Number.isInteger(inv.revision) || !isStr(inv.class, 64)) return 'invariant needs id, key, revision and class';
+    if (!Array.isArray(i.actors) || i.actors.length < 1 || i.actors.length > 8 || !i.actors.every((a) => a && isStr(a.id, 64) && isStr(a.tenant, 64) && isStr(a.role, 64))) return 'actors must hold 1 to 8 entries with id, tenant and role';
+    const actorIds = new Set(i.actors.map((a) => a.id));
+    if (actorIds.size !== i.actors.length) return 'actor ids must be unique';
+    if (i.markers !== undefined && (!Array.isArray(i.markers) || i.markers.length > 16 || !i.markers.every((m) => m && isStr(m.tenant, 64) && isStr(m.marker, 64)))) return 'markers must be at most 16 entries of tenant and marker';
+    if (!Array.isArray(i.seed) || i.seed.length > 16) return 'seed must hold at most 16 records';
+    for (const s of i.seed) {
+      if (!s || !isStr(s.key, 64) || !s.value || typeof s.value !== 'object' || Array.isArray(s.value)) return 'every seed record needs a key and an object value';
+      try { if (Buffer.byteLength(JSON.stringify(s.value)) > 400) return 'a seed record is too large'; } catch { return 'seed values must be JSON'; }
+    }
+    const c = bsSequenceProblem(i.control, actorIds, 'control'); if (c) return c;
+    const a = bsSequenceProblem(i.attack, actorIds, 'attack'); if (a) return a;
+    if (!Array.isArray(i.forbidden) || i.forbidden.length < 1 || i.forbidden.length > 8) return 'forbidden must hold 1 to 8 expressions';
+    for (const f of i.forbidden) { const p = expressionProblems(f); if (p.length) return `forbidden: ${p[0]}`; }
+    if (!Array.isArray(i.cleanup) || i.cleanup.length !== 1 || i.cleanup[0]?.action !== 'discard-world') return 'cleanup must be exactly [{ action: "discard-world" }]';
+    return null;
+  },
+  prepare: (i) => ({ export: i.export, actors: i.actors.map((a) => ({ id: a.id, tenant: a.tenant, role: a.role })), seed: i.seed, control: i.control, attack: i.attack }),
+  interpret({ inputs, result }) {
+    if (!result || result.loadFailed) return { satisfied: null, preconditionsHeld: false, observed: { targetLoaded: false }, reason: 'the target failed to load' };
+    if (result.oversize) return { satisfied: null, preconditionsHeld: false, observed: { logWithinCap: false }, reason: 'the scenario log exceeded the size cap, so no assertion was evaluated' };
+    if (result.controlFailed || result.attackFailed || !result.control || !result.attack) return { satisfied: null, preconditionsHeld: false, observed: { applicationStarted: false }, reason: 'the application factory failed to start for the scenario' };
+    const actors = Object.fromEntries(inputs.actors.map((a) => [a.id, { tenant: a.tenant, role: a.role }]));
+    const common = { invariantId: inputs.invariant.id, forbidden: inputs.forbidden, actors, markers: inputs.markers || [] };
+    const controlResults = evaluateAssertions({ ...common, phaseLog: result.control });
+    const attackResults = evaluateAssertions({ ...common, phaseLog: result.attack });
+    const deterministic = typeof result.replayDigest === 'string' && result.replayDigest === sha256hex(JSON.stringify(result.attack));
+    const preconditions = {
+      controlRan: result.control.steps.length > 0 && result.control.steps.every((s) => s.ok === true),
+      controlDurableEffect: hasDurableEffect(result.control),
+      controlClean: controlResults.every((r) => !r.violated),
+      cleanedUp: result.control.cleaned === true && result.attack.cleaned === true,
+      deterministic,
+    };
+    const controlHeld = preconditions.controlRan && preconditions.controlDurableEffect && preconditions.controlClean && preconditions.cleanedUp;
+    // A forbidden outcome reached by the CONTROL flow is a violation too (the legitimate path itself breaks the contract); it is
+    // reported under its own phase and cannot be mistaken for an adversarial finding.
+    const assertionsAll = [...attackResults.map((r) => ({ ...r, phase: 'attack' })), ...controlResults.filter((r) => r.violated).map((r) => ({ ...r, phase: 'control' }))];
+    const violated = assertionsAll.filter((r) => r.violated);
+    const report = {
+      schema: 'agentic-security/business-state-report', invariant: { id: inputs.invariant.id, key: inputs.invariant.key, revision: inputs.invariant.revision, class: inputs.invariant.class },
+      preconditions, snapshots: { initial: sanitizeSnapshot(result.attack.initial), final: sanitizeSnapshot(result.attack.final) },
+      events: eventSequence(result.attack),
+      assertions: assertionsAll.map((r) => ({ id: r.id, phase: r.phase, op: r.op, violated: r.violated, ops: r.ops, detail: r.detail, evidenceId: r.evidenceId })),
+    };
+    const observed = {
+      preconditions, violatedAssertions: violated.map((r) => r.id), assertions: assertionsAll.length,
+      evidenceIds: assertionsAll.map((r) => r.evidenceId), reportDigest: digestOf(report),
+    };
+    const evidenceItems = assertionsAll.map((r) => ({ id: r.evidenceId, digest: digestOf({ id: r.id, phase: r.phase, op: r.op, violated: r.violated, ops: r.ops }) }));
+    const base = { observed, report, evidenceItems };
+    if (!deterministic) return { ...base, satisfied: null, preconditionsHeld: false, reason: 'the adversarial sequence did not reproduce itself across two fresh runs (nondeterministic scheduling), so no verdict is formed' };
+    if (violated.length) return { ...base, satisfied: true, preconditionsHeld: controlHeld, reason: `forbidden durable state reached: ${violated.map((r) => `${r.id} in the ${r.phase} sequence (${r.detail})`).join('; ').slice(0, 300)}` };
+    if (controlHeld) return { ...base, satisfied: false, preconditionsHeld: true, reason: 'the control flow changed durable state as intended and no forbidden outcome was observed in the adversarial sequence' };
+    return { ...base, satisfied: null, preconditionsHeld: false, reason: 'the control flow did not show the application working (no durable effect, an error, or a violation in the legitimate flow), so the absence of a violation proves nothing' };
+  },
+});
+
+export const ADAPTERS = Object.freeze([injection, authorization, stateTransition, sideEffect, parserResource, replayIdempotency, functionalRegression, businessState]);

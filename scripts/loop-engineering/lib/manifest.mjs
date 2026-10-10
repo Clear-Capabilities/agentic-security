@@ -153,6 +153,7 @@ export function createManifest({ repoRoot, prdPath, profile, profileSha, checkou
     acceptanceHash: computeAcceptanceHash(requirements),
     totals, checkout, tools, baselineGates,
     profile: { name: profile.name, sha256: profileSha, limits: profile.limits },
+    ...(profile.finalVerification?.required ? { finalVerification: { required: true, ...(profile.finalVerification.closure ? { closure: { releaseRequirement: profile.finalVerification.closure.releaseRequirement, expect: profile.finalVerification.closure.expect } } : {}) } } : {}),
     ...(profile.workstreams ? { workstreams: { order: profile.workstreams.order, labels: Object.fromEntries(profile.workstreams.order.map((k) => [k, profile.workstreams.definitions[k].label])), kinds: Object.fromEntries(profile.workstreams.order.map((k) => [k, profile.workstreams.definitions[k].kind])) } } : {}),
     requirements,
   };

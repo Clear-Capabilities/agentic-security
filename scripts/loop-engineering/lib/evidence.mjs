@@ -89,6 +89,9 @@ export function assessOne(ev, { key, manifest, req, tree, checkLogs = false }) {
   const c = checkEnvelope(ev, key, { checkLogs });
   const staleReasons = [];
   if (ev.requirement !== req.id) c.reasons.push('evidence is for a different requirement');
+  // Only evidence the controller (or the supervising operator's CLI) issued counts. A verify run launched BY a worker is real
+  // verifier output but not an independent act: it contributes nothing, and the controller re-issues its own after the attempt.
+  if (ev.invoker === 'worker-invoked') c.reasons.push('evidence was issued by a verify run launched by a worker, not by the controller');
   if (ev.manifest?.requirementHash !== requirementHash(req)) staleReasons.push('acceptance definition changed');
   if (ev.prdSha256 !== manifest.prd.sha256) staleReasons.push('PRD changed');
   if (ev.verifier?.hash !== verifierHash()) staleReasons.push('verifier changed');

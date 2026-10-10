@@ -20,7 +20,7 @@
     "vendor/java-parser/node_modules/lodash-es/package.json"
   ],
   "fileCount": {
-    "expected": 2648,
+    "expected": 2869,
     "tolerance": 150
   }
 }

@@ -6,11 +6,13 @@ export const modules = {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   H: () => (/* binding */ lensByKey),
+/* harmony export */   Hy: () => (/* binding */ lensByKey),
 /* harmony export */   LENSES: () => (/* binding */ LENSES),
-/* harmony export */   j: () => (/* binding */ buildHunterPrompt)
+/* harmony export */   gj: () => (/* binding */ invariantProposalFor),
+/* harmony export */   jM: () => (/* binding */ buildHunterPrompt)
 /* harmony export */ });
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(11723);
+/* harmony import */ var _posture_invariants_lifecycle_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(80891);
 //
 // The seven hunting lenses. Each hunter run is one (focus area × lens) pair.
 //
@@ -20,6 +22,7 @@ export const modules = {
 // same code than one told to look at crypto, so the union covers failure modes
 // no single prompt reaches. `wildcard` exists because a fixed taxonomy is a
 // ceiling, and the classes worth finding are the ones not on the list.
+
 
 const LENSES = Object.freeze([
   { key: 'injection', title: 'Injection', family: 'injection', cwe: 'CWE-74',
@@ -37,6 +40,23 @@ const LENSES = Object.freeze([
   { key: 'wildcard', title: 'Wildcard', family: 'other', cwe: 'CWE-710',
     brief: 'Anything the other lenses do not cover. Prefer the surprising and specific over the generic; report nothing rather than something already obvious.' },
 ]);
+
+// X-402: the lenses that reason about who may do what to whose data can propose an INVARIANT for a candidate they raise. The
+// proposal is a skeleton contract authored by the model (`proposed`, with the candidate as source evidence and a high uncertainty),
+// advisory until a reviewer approves it in the signed ledger. A lens whose candidates are not about state (injection, crypto) has
+// no mapping and proposes nothing.
+const TENANT_HINT = /tenant|idor|ownership|object reference|cross[- ]?(?:account|user|org)|leak|another user|other user/i;
+const WORKFLOW_HINT = /refund|order|status|workflow|state machine|out[- ]of[- ]order|step|approval|checkout|paid|ship/i;
+
+function invariantProposalFor(candidate) {
+  const text = `${candidate?.title || ''} ${candidate?.description || ''} ${candidate?.rationale || ''}`;
+  let cls = null;
+  if (candidate?.lens === 'authz') cls = TENANT_HINT.test(text) ? 'tenant-isolation' : 'privilege-constraint';
+  else if (candidate?.lens === 'feature-abuse' && TENANT_HINT.test(text)) cls = 'tenant-isolation';
+  else if (candidate?.lens === 'business-logic' && WORKFLOW_HINT.test(text)) cls = 'workflow-order';
+  if (!cls || typeof candidate.file !== 'string') return null;
+  return (0,_posture_invariants_lifecycle_js__WEBPACK_IMPORTED_MODULE_1__/* .inferredInvariant */ .mB)({ class: cls, source: 'discovery-lens', evidence: { file: candidate.file, line: Number.isInteger(candidate.line) ? candidate.line : null, lens: candidate.lens }, uncertainty: 0.85 });
+}
 
 function lensByKey(key) {
   if (typeof key !== 'string') return null;

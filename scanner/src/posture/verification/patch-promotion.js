@@ -23,6 +23,9 @@ import { isCommit, isPlainObject } from '../assurance/schema-kit.js';
 import { isIssuedReceipt } from '../oracles/oracle.js';
 
 const PROMOTION_ROLES = Object.freeze(['original', 'patched', 'functionalBaseline', 'functional']);
+// The oracle class the behaviour-preservation runs must come from. Default `functional-regression`; a proposal may name
+// `business-state` (X-406: an authorized-workflow scenario as the declared case). Nothing else is accepted.
+const FUNCTIONAL_CLASSES = Object.freeze({ 'functional-regression': 'functional-regression', 'business-state': 'business-state' });
 
 const ISSUED_PROMOTIONS = new WeakSet();
 
@@ -36,7 +39,7 @@ const same = (a, b) => digestOf(a ?? null) === digestOf(b ?? null);
 
 /**
  * @param {object} args
- * @param {object} args.proposal  { hypothesisId, revision, originalFiles, patchFiles }
+ * @param {object} args.proposal  { hypothesisId, revision, originalFiles, patchFiles, functionalOracle? }
  * @param {object} args.receipts  { original, patched, functionalBaseline, functional }, each issued by runOracle
  * @returns {{ ok: boolean, diffDigest: string|null, revision: string|null, reasons: {code,role,message}[], receiptDigests: object }}
  */
@@ -57,6 +60,11 @@ export function promotePatch({ proposal, receipts } = {}) {
   }
   if (!isCommit(proposal.revision)) {
     why('revision-unbound', null, 'a promotion is bound to one exact 40 or 64 character commit; none was given');
+    return out();
+  }
+  const functionalClass = proposal.functionalOracle === undefined ? 'functional-regression' : FUNCTIONAL_CLASSES[proposal.functionalOracle];
+  if (!functionalClass) {
+    why('bad-proposal', null, 'the functional check oracle must be functional-regression or business-state');
     return out();
   }
   const diffDigest = digestOf(proposal.patchFiles);
@@ -92,7 +100,7 @@ export function promotePatch({ proposal, receipts } = {}) {
   if (!same(functionalBaseline.oracle, functional.oracle) || functionalBaseline.request.inputsDigest !== functional.request.inputsDigest) {
     why('oracle-changed', 'functional', 'the functional check on the patched revision did not use the same oracle and cases as its baseline');
   }
-  if (functional.oracle.class !== 'functional-regression') why('oracle-changed', 'functional', 'the functional check is not a functional-regression oracle');
+  if (functional.oracle.class !== functionalClass) why('oracle-changed', 'functional', `the functional check is not a ${functionalClass} oracle`);
   if (original.oracle.class === 'functional-regression') why('oracle-changed', 'original', 'the exploit oracle must not be the functional-regression oracle');
   // equivalent disposable environments: one sanitized environment identity across every run
   const envDigest = digestOf(original.environment);

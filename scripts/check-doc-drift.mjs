@@ -64,6 +64,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The assurance pages' own check (DOC-001.AC03): referenced commands, scripts, schemas, variables and fixture paths exist, and no
+// page makes a universal safe or full-coverage claim. It runs in the same `--gate` as the link check below.
+import { checkAllAssuranceDocs, formatFinding as formatAssuranceFinding } from './check-assurance-docs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -328,7 +331,7 @@ export function checkFile(claudeMdPath) {
   return findings;
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const asJson = args.includes('--json');
   const strict = args.includes('--strict');
@@ -337,14 +340,18 @@ function main() {
   if (gate) {
     // Release-gate mode: link integrity only (deterministic, low-FP).
     const links = checkAllLinks(REPO);
-    if (!links.length) {
+    const assurance = await checkAllAssuranceDocs(REPO);
+    if (!links.length && !assurance.length) {
       console.log('doc-links: all user-facing markdown links resolve.');
+      console.log('assurance-docs: referenced commands, scripts, schemas, variables and paths exist; no universal claim.');
       process.exit(0);
     }
-    console.error(`doc-links: ${links.length} dangling link(s):`);
+    if (links.length) console.error(`doc-links: ${links.length} dangling link(s):`);
     for (const f of links) {
       console.error(`  ${path.relative(REPO, f.file)}:${f.line}  → ${f.ref}`);
     }
+    if (assurance.length) console.error(`assurance-docs: ${assurance.length} finding(s):`);
+    for (const f of assurance) console.error(`  ${formatAssuranceFinding(f, REPO)}`);
     process.exit(1);
   }
 
@@ -352,6 +359,7 @@ function main() {
   const allFindings = [];
   for (const f of files) allFindings.push(...checkFile(f));
   allFindings.push(...checkAllLinks(REPO));
+  allFindings.push(...(await checkAllAssuranceDocs(REPO)));
 
   if (asJson) {
     console.log(JSON.stringify({ scanned: files.length, findings: allFindings }, null, 2));
@@ -368,6 +376,8 @@ function main() {
           console.log(`  ${rel}:${f.line}  references \`${f.ref}\` — no file found at any plausible base path`);
         } else if (f.kind === 'dangling-link') {
           console.log(`  ${rel}:${f.line}  links to ${f.ref} — target does not exist`);
+        } else if (!f.resolved) {
+          console.log(`  ${formatAssuranceFinding(f, REPO)}`);
         } else {
           console.log(`  ${rel}:${f.line}  references \`${f.ref}\` — ${f.resolved} exists but does not export/mention "${f.ref.split(/[#:]/).pop()}"`);
         }
@@ -380,5 +390,5 @@ function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+  await main();
 }

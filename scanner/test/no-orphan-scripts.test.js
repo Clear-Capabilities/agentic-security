@@ -42,6 +42,9 @@ const ALLOWLIST = new Set([
   // named individually because the count grows with each corpus expansion.
   { glob: /^bench\/cve-replay\/generate-corpus.*\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
   { glob: /^bench\/cve-replay\/verify-tier5\.mjs$/, reason: 'one-shot corpus-authoring tool, operator-invoked' },
+  // Shared body of the ten protected suite wrappers beside it; each wrapper imports it as './relay.mjs' and pins its digest, and the
+  // wrappers are run by the loop controller (profile suites), not by an npm script.
+  { glob: /^scripts\/assurance-differentiation\/test\/relay\.mjs$/, reason: 'imported by the protected suite wrappers, which the loop controller runs' },
 
   // ── Stage 0 (S0.2/S0.3) resolution of the capability-audit orphan list ──────
   // Each entry below was individually investigated (not carried over from the

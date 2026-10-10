@@ -167,6 +167,10 @@ function _provenanceDebtForRepo(findings, now = Date.now()) {
 export async function runFleet({
   repos = [], concurrency = 4, stateFile, runScan,
   resume = true, previous = null, onProgress = () => {},
+  // X-704: repositories whose every durable portfolio work unit is verified and current
+  // (portfolio/work-units.js `fullyVerifiedRepositories`). They are skipped like a resumed completed repo,
+  // and, as with a resumed repo, the skip is reported in `skipped` rather than counted as scanned.
+  portfolioVerified = [],
 } = {}) {
   if (typeof runScan !== 'function') {
     return { ok: false, reason: 'no runScan supplied' };
@@ -176,7 +180,7 @@ export async function runFleet({
   const skipped = [];
 
   const queue = repos.filter((r) => {
-    if (resume && state.completed[r]) { skipped.push(r); return false; }
+    if ((resume && state.completed[r]) || portfolioVerified.includes(r)) { skipped.push(r); return false; }
     return true;
   });
 
@@ -408,8 +412,13 @@ export function renderFleetSummary(rollup) {
     if (prov.reposWithNoProvenDebt.length) bits.push(`${prov.reposWithNoProvenDebt.length} repo(s) with no complete-status provenance`);
     provClause = ` PROVENANCE: ${bits.join('; ')}.`;
   }
+  // X-707: portfolio progress is its own clause, present only when the `portfolio-assurance` feature attached it
+  // (portfolio/progress.js `attachPortfolioProgress`), so flag-off output is byte-identical. It states verified units and
+  // repositories separately from the scan counts above: a finished controller is not a passing portfolio.
+  const pp = rollup.portfolioProgress;
+  const portfolioClause = pp ? ` PORTFOLIO: ${pp.units.verified}/${pp.units.total} unit(s) verified, ${pp.coverage.fullyVerified}/${pp.coverage.total} repo(s) fully verified, ${pp.review.pending} pending human review; ${pp.completion.statement}` : '';
   return `${head}${rollup.scanned} repo(s) scanned, ${rollup.total} finding(s)`
-    + `${sev ? ` (${sev})` : ''}, ${rollup.proven} execution-proven.${nf}${govClause}${provClause}`;
+    + `${sev ? ` (${sev})` : ''}, ${rollup.proven} execution-proven.${nf}${govClause}${provClause}${portfolioClause}`;
 }
 
 /**

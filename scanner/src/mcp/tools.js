@@ -28,11 +28,14 @@ import { redactString, redactFinding } from './redact.js';
 import { _remediationOf, normalizeFindings } from '../report/index.js';
 // X-206: the one projection of the verification record, shared with the JSON report, the text report and the autopilot response.
 import { verificationFields } from '../posture/verification/projection.js';
+import { boundaryFields } from '../lineage/deployment/projection.js';
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
 import { redactFindingProvenance } from '../posture/provenance/schema.js';
 import { dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow } from './dataflow-tools.js';
+import { makeInvariantTools } from './invariant-tools.js';
+import { makePortfolioTools } from './portfolio-tools.js';
 
 // Lazy-loaded: these transitively pull in npm packages (@babel/core and
 // friends) that aren't available in the plugin-cache install path
@@ -604,6 +607,10 @@ export const explain_finding = {
       // X-206: the same verification projection the JSON and text reports carry; absent when the finding has no record.
       ...(f.verificationRecord && typeof f.verificationRecord === 'object'
         ? { verificationRecord: f.verificationRecord, ...verificationFields(f.verificationRecord, { replay: f.verificationReplay }) }
+        : {}),
+      // X-307: the same boundary projection the JSON and text reports carry; absent when the finding has no context.
+      ...(f.boundaryContext && typeof f.boundaryContext === 'object'
+        ? boundaryFields(f.boundaryContext)
         : {}),
     };
   },
@@ -1712,4 +1719,9 @@ export const apply_sca_upgrade = {
   },
 };
 
-export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow];
+// X-407: read-only scenario export; the factory takes this file's confinement so the two modules do not import each other.
+const { invariant_scenario_export } = makeInvariantTools({ confine: _confine, META });
+// X-707: read-only portfolio progress view, same factory shape.
+const { portfolio_progress } = makePortfolioTools({ confine: _confine, META });
+
+export const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, dataflow_get_graph, dataflow_get_node, dataflow_get_edge, dataflow_get_flow, invariant_scenario_export, portfolio_progress];

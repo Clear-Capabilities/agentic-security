@@ -23,6 +23,7 @@
 
 import { blankComments } from '../sast/_comment-strip.js';
 import { callSitesFromCfg } from './call-sites.js';
+import { IMPLICIT_SPRING_PARAM, isImplicitSpringMappedParam } from './implicit-handler-params.js';
 
 let _nodeIdSeq = 0;
 function nextNodeId() { return 'jn' + (++_nodeIdSeq); }
@@ -1082,6 +1083,11 @@ export async function parseJavaFile(file, raw) {
             || md.children?.methodDeclarator?.[0]?.children?.formalParameterList?.[0];
           const paramAnnotations = [];
           const paramTypes = {};
+          // QA-006: annotation simple names on the METHOD itself (`@GetMapping`), read from its modifiers.
+          const methodAnnotations = (md.children?.methodModifier || []).map((mm) => {
+            const ids = mm.children?.annotation?.[0]?.children?.typeName?.[0]?.children?.Identifier;
+            return ids?.length ? ids[ids.length - 1]?.image : null;
+          }).filter(Boolean);
           const params = (fpl?.children?.formalParameter || []).map((fp, idx) => {
             // Regular parameters nest under `variableParaRegularParameter`.
             // Varargs (`String... args`) instead use a distinct
@@ -1119,6 +1125,7 @@ export async function parseJavaFile(file, raw) {
             // the first, or a stacked annotation is silently dropped (the
             // same class of bug Task 3's C# regex needed a fix round for).
             const variableModifiers = vp?.children?.variableModifier || [];
+            const ownDecorators = [];
             for (const vm of variableModifiers) {
               const ann = vm.children?.annotation?.[0];
               // `typeName.children.Identifier` is an array of ALL
@@ -1133,8 +1140,12 @@ export async function parseJavaFile(file, raw) {
               const identifiers = ann?.children?.typeName?.[0]?.children?.Identifier;
               const decoratorName = identifiers?.length ? identifiers[identifiers.length - 1]?.image : undefined;
               if (decoratorName && paramName) {
+                ownDecorators.push(decoratorName);
                 paramAnnotations.push({ index: idx, name: paramName, decorator: decoratorName });
               }
+            }
+            if (paramName && isImplicitSpringMappedParam({ methodAnnotations, paramType, decorators: ownDecorators })) {
+              paramAnnotations.push({ index: idx, name: paramName, decorator: IMPLICIT_SPRING_PARAM });
             }
             return paramName;
           }).filter(Boolean);

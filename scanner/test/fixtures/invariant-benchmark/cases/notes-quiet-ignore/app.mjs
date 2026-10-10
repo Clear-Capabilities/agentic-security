@@ -1,0 +1,1 @@
+export function createApp() { return { editNote(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; if (rec.tenant === ctx.tenant) ctx.store.write(key, { ...rec, body: p.note }); return { status: 200 }; } }; }

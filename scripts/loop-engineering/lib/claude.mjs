@@ -70,13 +70,17 @@ export class StreamState {
     this.turns = 0; this.msgIds = new Set(); this.result = null; this.sessionId = null; this.model = null;
     this.malformed = 0; this.truncatedLines = 0; this.events = 0; this.toolsInFlight = new Set(); this.toolCalls = 0;
     this.lastText = ''; this.usage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 };
+    this.runningCostUsd = 0; // highest cost any streamed event has reported so far (a backstop to the CLI's own spend ceiling)
   }
   feed(line, truncated = false) {
     if (!line.trim()) return { kind: 'blank' };
     if (truncated) this.truncatedLines++;
     let ev;
+    if (line.charCodeAt(0) !== 123) { this.malformed++; return { kind: 'malformed' }; } // not an object: skip the costly parse and its exception
     try { ev = JSON.parse(line); } catch { this.malformed++; return { kind: 'malformed' }; }
     this.events++;
+    const reported = typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : (typeof ev.cost_usd === 'number' ? ev.cost_usd : null);
+    if (reported !== null && Number.isFinite(reported)) this.runningCostUsd = Math.max(this.runningCostUsd, reported);
     switch (ev.type) {
       case 'system': if (ev.session_id) this.sessionId = ev.session_id; if (ev.model) this.model = ev.model; return { kind: 'system' };
       case 'assistant': {

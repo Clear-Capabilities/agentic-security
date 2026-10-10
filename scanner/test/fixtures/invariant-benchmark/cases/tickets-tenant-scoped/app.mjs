@@ -1,0 +1,1 @@
+export function createApp() { return { commentTicket(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; if (rec.tenant !== ctx.tenant) return { status: 403 }; ctx.store.write(key, { ...rec, comment: p.note }); return { status: 200 }; } }; }

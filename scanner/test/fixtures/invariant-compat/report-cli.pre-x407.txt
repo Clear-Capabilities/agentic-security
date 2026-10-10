@@ -1,0 +1,6 @@
+[1mAgentic Security — 1 finding(s) across 1 file(s)[0m
+
+[31m[HIGH][0m [2mCWE-78[0m  src/orders.js:7  [1mCommand injection[0m
+        [2mfix:[0m pass arguments as an array
+
+[91mCritical:[0m 0    [31mHigh:[0m 1    [33mMedium:[0m 0    [32mLow:[0m 0    [36mInfo:[0m 0

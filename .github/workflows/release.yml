@@ -108,6 +108,7 @@ jobs:
           - { name: 'tests 4/4', group: tests, shard: '4/4' }
           - { name: 'benches-a', group: benches-a, shard: '' }
           - { name: 'benches-b', group: benches-b, shard: '' }
+          - { name: 'closure', group: closure, shard: '' }
           - { name: 'rest', group: rest, shard: '' }
     steps:
       - uses: actions/checkout@v7

@@ -1,0 +1,81 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "documents-tenant-isolation",
+  "revision": 1,
+  "name": "An actor never changes another tenant's record through archiveDocument",
+  "class": "tenant-isolation",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    },
+    {
+      "id": "globex"
+    }
+  ],
+  "actors": [
+    {
+      "id": "ana",
+      "tenant": "acme",
+      "role": "member"
+    },
+    {
+      "id": "gus",
+      "tenant": "globex",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "r-acme",
+      "kind": "record",
+      "tenant": "acme",
+      "key": "documents/acme-1",
+      "marker": "ACME-PRIVATE-7"
+    },
+    {
+      "id": "r-globex",
+      "kind": "record",
+      "tenant": "globex",
+      "key": "documents/globex-1",
+      "marker": "GLOBEX-PRIVATE-7"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "own-update",
+      "action": "archiveDocument",
+      "actors": [
+        "ana"
+      ],
+      "resource": "r-acme"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "no-cross-tenant-write",
+      "op": "cross-tenant-write",
+      "prefix": "documents/",
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:528dd6a642cc9dae"
+}

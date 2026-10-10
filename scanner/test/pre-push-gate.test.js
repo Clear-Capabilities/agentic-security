@@ -115,7 +115,7 @@ test('pre-push-gate — checks run cheapest-first: the guards and bundle integri
     'worktree-matches-push', 'push-blast-radius',
     'bundle-integrity', 'bundle-matches-source', 'package-contents', 'ci-parity', 'test-suite', 'corpus-gate', 'self-scan-gate',
     'mutation-gate', 'protection-verdict-gate', 'provenance-accuracy-gate', 'layer-recall-gate', 'language-support-gate',
-    'verification-conformance-static',
+    'verification-conformance-static', 'release-closure-static',
   ]);
 });
 
