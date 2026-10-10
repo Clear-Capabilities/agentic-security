@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   SCOPES, extractFiles, unionFiles, assertAllTestFilesCovered,
-  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, makeRunTemp, writeThenExit,
+  parseShard, assignShard, extraStepsForShard, resolveShard, EXTRA_STEPS, makeRunTemp, writeThenExit,  testConcurrencyFor,
 } from '../../scripts/run-unit-tests.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -168,4 +168,15 @@ test('the run gets a private temp root: test processes see it as their temp dir,
     assert.equal(fs.readdirSync(root).length, 1, 'the leak landed inside the private root, not the machine temp folder');
   } finally { cleanup(); }
   assert.equal(fs.existsSync(root), false, 'cleanup removed the root and everything in it');
+});
+
+test('the local runner uses half the CPUs (at least two), the hosted runner keeps the default, and an explicit value always wins', () => {
+  assert.equal(testConcurrencyFor({}, 12), 6);
+  assert.equal(testConcurrencyFor({}, 2), 2, 'never below two');
+  assert.equal(testConcurrencyFor({}, 1), 2);
+  assert.equal(testConcurrencyFor({ GITHUB_ACTIONS: 'true' }, 12), null, 'dedicated hosted runners keep the default');
+  assert.equal(testConcurrencyFor({ AGENTIC_SECURITY_TEST_CONCURRENCY: '3' }, 12), 3);
+  assert.equal(testConcurrencyFor({ AGENTIC_SECURITY_TEST_CONCURRENCY: '3', GITHUB_ACTIONS: 'true' }, 12), 3, 'the override wins on the hosted runner too');
+  assert.equal(testConcurrencyFor({ AGENTIC_SECURITY_TEST_CONCURRENCY: 'abc' }, 12), 6, 'an invalid override is ignored');
+  assert.equal(testConcurrencyFor({ AGENTIC_SECURITY_TEST_CONCURRENCY: '0' }, 12), 6, 'zero is not a concurrency');
 });

@@ -83,6 +83,20 @@ const SCANNER = path.join(HERE, '..', 'scanner');
 // too; nothing silently falls out of coverage, because
 // `assertAllTestFilesCovered` below cross-checks against every scoped
 // `test:*` script whose value contains `node --test`.
+/**
+ * How many test files run at once. `node --test` defaults to one fewer than the CPU count, and a good share of this suite spawns real
+ * processes (scans, controllers, sandboxes), so on a developer machine that is also running other work it oversubscribes the CPUs and
+ * the timing-bound tests fail without anything being wrong (a release gate that ran at a load average of 35 to 100 failed three different
+ * timing tests, all of which pass alone). Locally the default is half the CPUs; the hosted runners are dedicated and keep the default.
+ * AGENTIC_SECURITY_TEST_CONCURRENCY overrides either way. Returns null for "leave node's default".
+ */
+export function testConcurrencyFor(env = process.env, cpus = 4) {
+  const forced = Number.parseInt(env.AGENTIC_SECURITY_TEST_CONCURRENCY ?? '', 10);
+  if (Number.isInteger(forced) && forced >= 1) return forced;
+  if (env.GITHUB_ACTIONS === 'true') return null;
+  return Math.max(2, Math.floor(cpus / 2));
+}
+
 export const SCOPES = [
   'smoke', 'glob', 'sast', 'posture', 'dataflow', 'mcp',
   'report', 'bench-modules', 'lifecycle', 'eval', 'discovery', 'lineage',
@@ -254,7 +268,8 @@ function main(argv = process.argv.slice(2)) {
   };
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => finish(130));
 
-  const r = spawnSync(process.execPath, ['--test', ...mine], { cwd: SCANNER, stdio: 'inherit', env });
+  const conc = testConcurrencyFor(env, os.availableParallelism());
+  const r = spawnSync(process.execPath, ['--test', ...(conc ? [`--test-concurrency=${conc}`] : []), ...mine], { cwd: SCANNER, stdio: 'inherit', env });
   if (r.status !== 0) finish(r.status ?? 1);
 
   for (const step of extraStepsForShard(shard)) {

@@ -244,15 +244,19 @@ const NL = String.fromCharCode(10);
 // Before a timed-out group is killed, say what is in it and (on macOS) what each process is blocked in, so a hang that cannot be reproduced
 // leaves its evidence in the step log instead of only a timeout.
 const snapshot = () => {
+  // Hard budget: the kill below must never wait on diagnostics (a stack sample of every process under load once took longer than the outer
+  // deadline, the helper was killed, and the group it was meant to clean up survived).
+  const t0 = Date.now();
+  const left = () => Math.max(0, 12000 - (Date.now() - t0));
   try {
-    const ps = spawnSync('ps', ['-axo', 'pid,ppid,pgid,etime,state,pcpu,command'], { encoding: 'utf8' });
+    const ps = spawnSync('ps', ['-axo', 'pid,ppid,pgid,etime,state,pcpu,command'], { encoding: 'utf8', timeout: 5000 });
     const rows = (ps.stdout || '').split(NL).filter((l) => l.trim().split(/\\s+/)[2] === String(c.pid));
     console.error(NL + '--- closure runner: the step timed out; processes in its group ---' + NL + rows.join(NL));
     if (process.platform === 'darwin') {
-      for (const l of rows.slice(0, 8)) {
+      for (const l of rows.slice(0, 3)) {
         const pid = l.trim().split(/\\s+/)[0];
-        if (!pid) continue;
-        const sm = spawnSync('sample', [pid, '1', '-mayDie'], { encoding: 'utf8', timeout: 20000 });
+        if (!pid || left() < 1500) continue;
+        const sm = spawnSync('sample', [pid, '1', '-mayDie'], { encoding: 'utf8', timeout: Math.min(4000, left()) });
         console.error('--- sample of ' + pid + ' ---' + NL + (sm.stdout || '').split(NL).slice(0, 70).join(NL));
       }
     }
@@ -265,7 +269,7 @@ c.on('exit', (code, sig) => { clearTimeout(t); killGroup(); process.exit(timedOu
 
 export function defaultExec(cmd, args, { cwd, timeoutMs, env }) {
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', GROUP_RUNNER, String(timeoutMs), cmd, ...args],
-    { cwd, encoding: 'buffer', timeout: timeoutMs + 15_000, maxBuffer: 512 * 1024 * 1024, killSignal: 'SIGKILL', env });
+    { cwd, encoding: 'buffer', timeout: timeoutMs + 60_000, maxBuffer: 512 * 1024 * 1024, killSignal: 'SIGKILL', env });
   const timedOut = r.status === 124 || r.error?.code === 'ETIMEDOUT';
   return { status: timedOut ? null : r.status, signal: r.signal, timedOut, error: r.error && r.error.code !== 'ETIMEDOUT' ? String(r.error.message) : null, stdout: r.stdout || Buffer.alloc(0), stderr: r.stderr || Buffer.alloc(0) };
 }

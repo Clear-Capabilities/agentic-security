@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { read, REPO, SCANNER, script, run, blockWith, missingFrom } from './helpers.js';
+import { loadFactor } from '../helpers/load.js';
 import { PREREGISTERED_THRESHOLDS } from '../../src/posture/evaluation/protocol.js';
 import { INTERVAL_METHODS } from '../../src/posture/evaluation/interval.js';
 import { ROUTING_MINIMUMS, ROUTING_PROMOTION_TARGETS } from '../../src/posture/routing/calibration.js';
@@ -82,19 +83,19 @@ describe('[DOC-002.AC01] the policy cards carry provenance, leakage controls, st
 
 describe('[DOC-002.AC02] a contributor can reproduce evaluation and routing replay offline with documented bounded commands', () => {
   const time = (fn) => { const t = Date.now(); const r = fn(); return { r, ms: Date.now() - t }; };
-  const BOUND_MS = 60000;
+  const bound = () => 60000 * loadFactor();   // strict on an idle machine, scaled (capped) when the machine is oversubscribed
 
   test('[DOC-002.AC02] the synthetic evaluation prints the documented table and protocol hash, exits 0, and is bounded', () => {
     const { r, ms } = time(() => script('scripts/evaluation.mjs', ['synthetic']));
     assert.equal(r.status, 0, r.text);
-    assert.ok(ms < BOUND_MS, `took ${ms} ms`);
+    assert.ok(ms < bound(), `took ${ms} ms`);
     assert.deepEqual(missingFrom(blockWith(REPRO, 'SYNTHETIC suite: 3 authored files'), r.text), []);
   });
 
   test('[DOC-002.AC02] the miniature reproduction prints the documented controls, every one ok', () => {
     const { r, ms } = time(() => script('scripts/public-reproduction.mjs'));
     assert.equal(r.status, 0, r.text);
-    assert.ok(ms < BOUND_MS);
+    assert.ok(ms < bound());
     assert.deepEqual(missingFrom(blockWith(REPRO, 'PUBLIC MINIATURE REPRODUCTION'), r.text), []);
     assert.equal((r.stdout.match(/^\s+ok\s/gm) ?? []).length, 5);
   });
@@ -102,7 +103,7 @@ describe('[DOC-002.AC02] a contributor can reproduce evaluation and routing repl
   test('[DOC-002.AC02] the deployment ablation verifies its frozen set first and prints the documented arms', () => {
     const { r, ms } = time(() => script('scripts/evaluation.mjs', ['deployment-ablation']));
     assert.equal(r.status, 0, r.text);
-    assert.ok(ms < BOUND_MS);
+    assert.ok(ms < bound());
     assert.deepEqual(missingFrom(blockWith(REPRO, 'SYNTHETIC cases authored by the tooling developers'), r.text), []);
     const frozen = JSON.parse(read('scanner/test/fixtures/deployment-ablation/frozen.json'));
     assert.match(REPRO, new RegExp(frozen.frozenHash.replace('sha256:', 'sha256:')), 'the page records the committed frozen hash');
@@ -127,7 +128,7 @@ describe('[DOC-002.AC02] a contributor can reproduce evaluation and routing repl
   test('[DOC-002.AC02] routing replay prints the documented denominators and controls, exits 0, makes no paid call, and is bounded', () => {
     const { r, ms } = time(() => script('scripts/routing-replay.mjs'));
     assert.equal(r.status, 0, r.text);
-    assert.ok(ms < BOUND_MS);
+    assert.ok(ms < bound());
     const block = blockWith(REPRO, 'Routing replay report (SYNTHETIC): unmeasured').filter((l) => l.trim() !== '...');
     assert.deepEqual(missingFrom(block, r.text), []);
     assert.deepEqual(missingFrom(blockWith(REPRO, 'controls:'), r.text), []);
