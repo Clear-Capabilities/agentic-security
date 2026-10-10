@@ -338,20 +338,28 @@ describe('[CORE-003.AC02] every process in the tree ends on timeout, cancel and 
 });
 
 describe('[CORE-003.AC02] backends where termination or read denial is not proved refuse to run', () => {
-  test('the namespace backend refuses supervised execution rather than claim tree termination', async () => {
+  test('a namespace backend that cannot be established refuses supervised execution instead of running unsupervised', async (t) => {
+    // On a host where the namespace backend works this exact request RUNS (tree
+    // termination is then proved by linux-probes.js on the sandbox-linux job),
+    // so it is only a refusal test where the backend cannot be established.
+    const { detectBackend } = await import('../src/sandbox/capabilities.js');
+    if (detectBackend() === 'namespace') {
+      t.skip('SKIPPED, NOT PASSED: the namespace backend works on this host, so this refusal path cannot be exercised here');
+      return;
+    }
     const root = mkTestTmp('tb-ns-');
     const r = await runConfinedSupervised(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, force: 'namespace' });
     assert.equal(r.status, 'error');
-    assert.match(r.stderr, /not implemented or verified on the namespace backend/);
+    assert.match(r.stderr, /no kernel-namespace binary|could not be created|refusing to execute|not implemented or verified/);
     assert.equal(fs.existsSync(path.join(root, 'marker')), false);
   });
 
-  test('the namespace backend refuses a read-denial request instead of silently ignoring it', async () => {
+  test('the namespace backend refuses mediated network instead of silently ignoring it', async () => {
     const { runNamespace } = await import('../src/sandbox/backend-namespace.js');
     const root = mkTestTmp('tb-ns2-');
-    const r = runNamespace(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, denyReadPaths: ['/etc'] });
+    const r = runNamespace(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, networkProxyPort: 8080 });
     assert.equal(r.status, 'error');
-    assert.match(r.stderr, /read denial .* not implemented/);
+    assert.match(r.stderr, /mediated network .* not implemented/);
     assert.equal(fs.existsSync(path.join(root, 'marker')), false);
   });
 

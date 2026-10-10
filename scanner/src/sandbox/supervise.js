@@ -16,15 +16,17 @@
 //   4. The same cleanup runs on a normal exit, so a backgrounded grandchild
 //      cannot outlive a run that "succeeded".
 //
-// KNOWN GAP (not hidden): a descendant that double-forks and calls setsid
-// between two sweeps, with its parent exiting before the next sweep, is
-// reparented away from the tree and is not found. The sweep interval bounds the
-// window; it does not close it. Only a PID-namespace or cgroup boundary closes
-// it, and neither is available on the macOS backend.
+// KNOWN GAP on the userspace backend (not hidden): a descendant that
+// double-forks and calls setsid between two sweeps, with its parent exiting
+// before the next sweep, is reparented away from the tree and is not found. The
+// sweep interval bounds the window; it does not close it. Only a PID-namespace
+// or cgroup boundary closes it, and macOS has neither. The namespace backend
+// has the boundary (see `runConfinedSupervised`).
 import { spawn, spawnSync } from 'node:child_process';
 import { detectBackend } from './capabilities.js';
 import { runDisabled } from './backend-disabled.js';
 import { buildUserspaceInvocation } from './backend-userspace.js';
+import { buildNamespaceInvocation } from './backend-namespace.js';
 import { buildResult, errorResult } from './result.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -163,31 +165,48 @@ export function superviseSpawn(bin, args, {
  *
  * Backend coverage, stated plainly:
  *   userspace  supervised (verified by execution on macOS)
- *   namespace  REFUSED: tree termination has not been implemented and executed
- *              on the kernel-namespace backend, so the run does not happen
+ *   namespace  supervised ONLY where the PID namespace is created with
+ *              `--kill-child`: killing the unshare process then makes the
+ *              kernel kill every member of the namespace, however it detached
+ *              (setsid, double fork). Where the host's unshare lacks the flag
+ *              the run is refused, since the sweep alone would be the whole
+ *              guarantee. That it holds on a host is shown by the active probe
+ *              (`linux-probes.js`), not by this comment.
  *   disabled   refused, as always
  */
 export async function runConfinedSupervised(argv, opts = {}) {
   const backend = detectBackend({ force: opts.force });
   if (backend === 'disabled') return runDisabled(argv, opts);
-  if (backend !== 'userspace') {
+  if (backend !== 'userspace' && backend !== 'namespace') {
     return errorResult(backend, `process-tree termination is not implemented or verified on the ${backend} backend; refusing to execute`);
   }
-  const inv = buildUserspaceInvocation(argv, opts);
+  const inv = backend === 'userspace' ? buildUserspaceInvocation(argv, opts) : buildNamespaceInvocation(argv, opts);
   if (inv.error) return inv.error;
+  if (backend === 'namespace' && !inv.treeKill) {
+    inv.dispose();
+    return errorResult(backend, 'process-tree termination is not implemented or verified on the namespace backend (this host cannot make the kernel kill the namespace with its supervisor); refusing to execute');
+  }
   const r = await superviseSpawn(inv.bin, inv.args, {
     cwd: inv.cwd, env: inv.env, timeoutMs: opts.timeoutMs ?? 10000, graceMs: opts.graceMs ?? 1000,
     signal: opts.signal, maxOutputBytes: opts.maxOutputBytes,
   });
+  let rawStderr = r.stderr;
+  let unsupported = inv.unsupported;
+  if (backend === 'namespace') {
+    const fin = inv.finish(r.stderr, { hadError: !!r.spawnError || r.timedOut });
+    if (fin.error) return fin.error;
+    rawStderr = fin.stderr;
+    unsupported = fin.unsupported;
+  }
   const res = buildResult({
-    backend: 'userspace',
+    backend,
     spawnResult: {
       status: r.exitCode,
       stdout: r.stdout,
-      stderr: r.stderr,
+      stderr: rawStderr,
       error: r.timedOut ? { code: 'ETIMEDOUT' } : r.spawnError ? { code: 'SPAWN', message: r.spawnError } : null,
     },
-    unsupported: inv.unsupported,
+    unsupported,
   });
   let status = res.status;
   let stderr = res.stderr;

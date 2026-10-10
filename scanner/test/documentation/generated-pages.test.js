@@ -118,12 +118,12 @@ describe('[DOC-001.AC01] the capability matrix is read from the manifests and co
     }
   });
 
-  test('[DOC-001.AC01] the enforcement table states Linux unverified, macOS host-proved and Windows unsupported', () => {
+  test('[DOC-001.AC01] the enforcement table states Linux partially verified, macOS host-proved and Windows unsupported', () => {
     const rows = tableRows(md, 'Platform');
     const by = Object.fromEntries(rows.map((r) => [r[0], r]));
     const ps = platformStatements();
     assert.equal(by.linux[2], `\`${ps.linux.status}\``);
-    assert.equal(ps.linux.status, 'unverified');
+    assert.equal(ps.linux.status, 'partially-verified');
     assert.equal(by.darwin[2], `\`${ps.darwin.status}\``);
     assert.equal(ps.darwin.status, 'host-proved-not-advertised');
     assert.equal(by.win32[2], `\`${ps.win32.status}\``);

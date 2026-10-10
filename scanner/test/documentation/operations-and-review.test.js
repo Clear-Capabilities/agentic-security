@@ -210,7 +210,7 @@ describe('[DOC-003.AC03] the examples avoid interactive hangs and explain explic
 
   test('[DOC-003.AC03] unsupported enforcement platforms: all four documents say Linux is unverified and macOS is host-proved only, and so does the code', () => {
     const ps = platformStatements();
-    assert.equal(ps.linux.status, 'unverified');
+    assert.equal(ps.linux.status, 'partially-verified');
     assert.equal(ps.darwin.status, 'host-proved-not-advertised');
     assert.equal(ps.win32.status, 'unsupported');
     for (const [name, md] of [['controller', CONTROLLER], ['review', REVIEW], ['recovery', RECOVERY]]) {

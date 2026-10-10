@@ -126,7 +126,7 @@ and race-free recovery of a stale lock in a narrow window. None of it needs a ho
 ## Unsupported platforms for enforcement
 
 Portfolio coordination does not depend on the enforcement backend, but a work unit that runs a task under capability
-enforcement does: **Linux is unverified and macOS is host-proved only.** The capability runner returns a typed `blocked` result
+enforcement does: **Linux is partially verified (only what the hosted `sandbox-linux` job proved; mediated network and process-count caps remain unverified) and macOS is host-proved only.** The capability runner returns a typed `blocked` result
 naming the missing control when the backend it needs is not available, and the target never executes. A unit parked as `blocked`
 on that result is not progress, whatever else the portfolio completes. See the
 [capability matrix](../reference/assurance-capability-matrix.md).

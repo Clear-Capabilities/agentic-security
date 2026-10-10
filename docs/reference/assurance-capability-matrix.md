@@ -78,7 +78,7 @@ Limits of the invariant tooling, as the guide states them: the application is a 
 
 | Platform | Backend | Status | Note |
 | --- | --- | --- | --- |
-| linux | namespace | `unverified` | advertised for enforced mode, but the control probes in this module have not run on a Linux host from this workspace. Several controls are not implemented on the namespace backend (read confinement to declared roots, several write roots, mediated network, supervised tree termination), so enforced mode is blocked there until they are implemented and the sandbox-linux job shows them proved. Process-count caps are never claimed. |
+| linux | namespace | `partially-verified` | advertised for enforced mode. Proved by active probes on the hosted Linux runner (not on every Linux host): write-confinement, read-denial, env-scrub, network, tree-termination, file-size-limit, fs-read-confinement, fs-multi-root-write. Mediated network is NOT implemented on the namespace backend (an empty network namespace has no path to a proxy), so a task that declares a network destination is blocked on Linux, never allowed. Process-count caps are never claimed: the cause of the earlier non-refusal was found (the shell used for the resource prelude has no process-limit option, so the cap was never applied) and no replacement has been proved. The attack corpus is not run in the sandbox-linux job, so corpus coverage stays unverified on Linux. |
 | darwin | userspace | `host-proved-not-advertised` | the active probes can prove the controls on a macOS host, and tasks can run there for development only when the caller opts in; macOS is not an advertised enforced backend. |
 | win32 | none | `unsupported` | no isolation backend exists on Windows. |
 
