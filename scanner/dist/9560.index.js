@@ -1372,15 +1372,18 @@ function mk(prefix) { return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(
 function rm(p) { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* best effort */ } }
 const token = (p) => `${p}-${crypto.randomBytes(8).toString('hex')}`;
 
-async function probeFsRead(backend) {
-  if (backend !== 'userspace') return unsupported(`read confinement to declared roots is not implemented on the ${backend} backend`);
+// `run` is a seam so a test can hand the probe a runner that is deliberately
+// wrong (a read root left too wide, a root left writable) and see the probe say
+// so: a probe that cannot fail proves nothing.
+async function probeFsRead(backend, runner = runConfinedSupervised) {
+  if (backend !== 'userspace' && backend !== 'namespace') return unsupported(`read confinement to declared roots is not implemented on the ${backend} backend`);
   const root = mk('agsec-cap-r-'); const ro = mk('agsec-cap-ro-'); const outside = mk('agsec-cap-out-');
   try {
     const okTok = token('READABLE'); const secTok = token('SEALED');
     fs.writeFileSync(path.join(ro, 'r.txt'), okTok);
     fs.writeFileSync(path.join(outside, 's.txt'), secTok);
     fs.symlinkSync(path.join(outside, 's.txt'), path.join(ro, 'link'));
-    const run = (script, readRoots) => runConfinedSupervised(['/bin/sh', '-c', script], { root, readRoots, timeoutMs: 8000, graceMs: 300 });
+    const run = (script, readRoots) => runner(['/bin/sh', '-c', script], { root, readRoots, timeoutMs: 8000, graceMs: 300 });
     const pos = await run(`cat '${ro}/r.txt'`, [ro]);
     if (!pos.stdout.includes(okTok)) return notProved(`positive control failed: a file inside a declared root was not readable (${pos.status})`);
     const open = await run(`cat '${outside}/s.txt'`, [ro, outside]);
@@ -1399,13 +1402,13 @@ async function probeFsRead(backend) {
   } finally { rm(root); rm(ro); rm(outside); }
 }
 
-async function probeMultiWrite(backend) {
-  if (backend !== 'userspace') return unsupported(`several declared write roots are not implemented on the ${backend} backend`);
+async function probeMultiWrite(backend, runner = runConfinedSupervised) {
+  if (backend !== 'userspace' && backend !== 'namespace') return unsupported(`several declared write roots are not implemented on the ${backend} backend`);
   const root = mk('agsec-cap-w-'); const w1 = mk('agsec-cap-w1-'); const w2 = mk('agsec-cap-w2-');
   const ro = mk('agsec-cap-wro-'); const outside = mk('agsec-cap-wout-');
   try {
     const script = [`echo a > '${w1}/f'`, `echo b > '${w2}/f'`, `echo c > '${ro}/f'`, `echo d > '${outside}/f'`, 'true'].join('; ');
-    await runConfinedSupervised(['/bin/sh', '-c', script], { root, readRoots: [ro], writeRoots: [w1, w2], timeoutMs: 8000, graceMs: 300 });
+    await runner(['/bin/sh', '-c', script], { root, readRoots: [ro], writeRoots: [w1, w2], timeoutMs: 8000, graceMs: 300 });
     if (!fs.existsSync(path.join(w1, 'f')) || !fs.existsSync(path.join(w2, 'f'))) return notProved('positive control failed: a declared write root was not writable');
     if (fs.existsSync(path.join(ro, 'f'))) return notProved('a root declared read-only was writable');
     if (fs.existsSync(path.join(outside, 'f'))) return notProved('an undeclared directory was writable');
