@@ -4,7 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { defaultExec, gitFacts, GENERATED_OUTPUTS, applicability, CLOSURE_STEPS, CLOSURE_SCHEMA, planDigest, evaluateClosureRecord } from '../../../scripts/release-closure.mjs';
+import { mkTestTmp } from '../helpers/tmp.js';
+import { REPO, ALL_PRESENT, fakeExec } from '../helpers/closure-fixtures.js';
+import { runClosure, defaultExec, gitFacts, GENERATED_OUTPUTS, applicability, CLOSURE_STEPS, CLOSURE_SCHEMA, planDigest, evaluateClosureRecord } from '../../../scripts/release-closure.mjs';
 
 const porcelainExec = (porcelain) => (cmd, args) => {
   const a = args.join(' ');
@@ -72,4 +74,13 @@ test('[REL-001.AC02] a step that times out writes the process table of its group
   assert.match(err, /sleep 301/, 'the table names the stuck command');
   const gone = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /sleep 301/.test(l) && !/grep/.test(l));
   assert.deepEqual(gone, [], 'and the group is still killed afterwards');
+});
+
+test('[REL-001.AC02] a failing or incomplete step prints the tail of its own log, so a hosted failure is readable without the runner\'s files', () => {
+  const lines = [];
+  runClosure({ repoRoot: REPO, outDir: mkTestTmp('closure-tail-'), env: ALL_PRESENT, exec: fakeExec({ fail: ['smoke'], skipped: ['verification'] }), log: (l) => lines.push(l) });
+  const text = lines.join('');
+  assert.match(text, /--- smoke: /);
+  assert.match(text, /--- verification: /);
+  assert.ok(!/--- foundation: /.test(text), 'a passing step prints no tail');
 });
