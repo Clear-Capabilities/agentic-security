@@ -168,7 +168,7 @@ describe('[CORE-003.AC03] no signing material is exposed to workers', () => {
 
   const BACKEND = detectBackend();
   test('a confined target cannot read the real signing key at its DEFAULT location',
-    { skip: BACKEND === 'userspace' ? false : `SKIPPED, NOT PASSED: needs the probed userspace backend (selected '${BACKEND}')` },
+    { skip: (BACKEND === 'userspace' || BACKEND === 'namespace') ? false : `SKIPPED, NOT PASSED: needs a probed userspace or namespace backend (selected '${BACKEND}')` },
     async () => {
       const xdg = mkTestTmp('issuer-xdg-');
       const prev = process.env.XDG_CONFIG_HOME;

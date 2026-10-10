@@ -37,7 +37,7 @@ before(async () => {
   const backend = detectBackend();
   const report = await probeControls({});
   const unmet = unmetControls(report, [...DEFAULT_REQUIRED_CONTROLS, 'network']);
-  boundaryReady = backend === 'userspace' && unmet.length === 0;
+  boundaryReady = (backend === 'userspace' || backend === 'namespace') && unmet.length === 0;
   whyNot = `SKIPPED, NOT PASSED: the trust boundary cannot run on this host (backend '${backend}'); execution conformance is UNVERIFIED here`;
 });
 const needsBoundary = (fn) => (t) => (boundaryReady ? fn(t) : t.skip(whyNot));

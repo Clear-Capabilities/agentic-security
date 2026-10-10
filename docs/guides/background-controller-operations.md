@@ -155,8 +155,7 @@ Nothing in the controller changes its own rules, and a worker cannot loosen them
 ## Unsupported enforcement platforms
 
 The controller runs on macOS and Linux; Windows is unsupported and disclosed as such in the profile. That is about the controller.
-Enforcement of what a task may read, run and reach is a separate matter: **Linux is unverified** and enforced mode is blocked
-there; **macOS is host-proved for development only** and is not an advertised enforced backend; **Windows has no backend**. A
+Enforcement of what a task may read, run and reach is a separate matter: **Linux is partially verified** (only the controls the hosted `sandbox-linux` job proved; mediated network and process-count caps remain unverified, so a task that needs either is blocked there); **macOS is host-proved for development only** and is not an advertised enforced backend; **Windows has no backend**. A
 criterion that needs an unavailable backend ends `blocked`, naming it. It is never skipped into a pass, and raising a deadline
 does not make a slow machine pass. The per-platform table is in the [capability matrix](../reference/assurance-capability-matrix.md).
 

@@ -229,7 +229,7 @@ describe('[QA-002.AC03] the engine under test cannot read the label directory th
       return;
     }
     assert.equal(r.executed, true);
-    assert.equal(BACKEND, 'userspace', `an executed run implies an enforced backend, got ${BACKEND}`);
+    assert.ok(['userspace', 'namespace'].includes(BACKEND), `an executed run implies a proved backend, got ${BACKEND}`);
     assert.match(r.targetOutput.stdout, /DENIED/);
     assert.doesNotMatch(r.targetOutput.stdout, /LEAKED/);
     // Control: without the label directory declared, the same probe CAN read it, so the denial above is caused by `labelDirs`.

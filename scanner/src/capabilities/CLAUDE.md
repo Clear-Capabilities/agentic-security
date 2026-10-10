@@ -67,15 +67,20 @@ report says so. Without the opt-in an isolation-required task is `unsupported`
 (`platform-unsupported`). A control that is not proved BLOCKS the run (typed
 `blocked`, `missing-execution-backend`, the target never executes).
 
-**Linux is `unverified`.** The namespace backend does not implement read
-confinement to declared roots, several write roots, mediated network or
-supervised tree termination, so every Linux run is currently blocked with the
-missing control named. Nothing here asserts a Linux outcome that has not been
-executed; the `sandbox-linux` job is where it will be exercised. Process-count
-caps are never asserted on any backend (per-user and system-wide on macOS; they
-did not refuse on the hosted Linux runner in a previous release and the cause was
-never established); `maxProcesses` is carried and reported `unverified`, memory
-caps are carried and reported `not-enforced`.
+**Linux is `partially-verified`**, and only by the hosted `sandbox-linux` job. Its
+active probes proved write confinement, read denial, environment scrubbing, the
+no-network default, tree termination, the file-size limit, read confinement to
+declared roots and multi-root writes on the namespace backend (a pivoted tmpfs
+root; protected paths absent or masked; a PID namespace the kernel tears down).
+NOT verified: **mediated network** is not implemented on Linux (an empty network
+namespace has no path to a proxy), so a task that declares a destination is
+`blocked` there with `network-mediation is unsupported`, never allowed; and
+**process-count caps** are never asserted on any backend (on Linux the cause of
+the earlier non-refusal is that the resource prelude runs under dash, whose
+`ulimit` has no `-u`; no replacement is proved). `maxProcesses` is carried and
+reported `unverified`, memory caps `not-enforced`. The execution suites under
+`test/capabilities/` still skip on Linux (their helpers select the userspace
+backend only and several assertions encode macOS semantics); see the gaps below.
 
 ## Known limits (also in `REPORT_LIMITATIONS`)
 
@@ -107,8 +112,7 @@ attempts were stopped on this backend in this run; it does not show the sandbox 
 ### What is still not claimed
 
 Tool and delegation checks are policy at the tool boundary (the tool then runs in the server process): the
-runner remains the only enforcement layer. Linux stays `unverified` in every report, receipt and coverage
-record, and no Linux outcome is asserted. No process-count cap is asserted. The corpus is not wired into the
+runner remains the only enforcement layer. Linux is `partially-verified` in the platform statement (the controls listed there, on the hosted job only) and the attack-coverage record still says `unverified` for Linux, because the corpus is not run on Linux. No process-count cap is asserted. The corpus is not wired into the
 `sandbox-linux` CI job: it would need execution cases that skip loudly (never silently pass) on Linux, and that
 has not been shown from this workspace. The enforced-mode release gate (`enforcedModeReleaseGate`) is a library
 function used by the suite; it is not yet called from `scripts/release-check.mjs`.

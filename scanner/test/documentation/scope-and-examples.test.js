@@ -59,12 +59,12 @@ describe('[DOC-001.AC01] the scope page lists coverage, prerequisites, adapters,
     assert.match(SCOPE, /durable state outside an in-memory store/);
   });
 
-  test('[DOC-001.AC01] its enforced-backend statement equals the probe module: Linux unverified, macOS host-proved, Windows none', () => {
+  test('[DOC-001.AC01] its enforced-backend statement equals the probe module: Linux partially verified, macOS host-proved, Windows none', () => {
     const ps = platformStatements();
-    assert.equal(ps.linux.status, 'unverified');
+    assert.equal(ps.linux.status, 'partially-verified');
     assert.equal(ps.darwin.status, 'host-proved-not-advertised');
     assert.equal(ps.win32.status, 'unsupported');
-    assert.match(SCOPE, /Linux is advertised but `unverified`/);
+    assert.match(SCOPE, /Linux is advertised and `partially-verified`/);
     assert.match(SCOPE, /macOS is `host-proved-not-advertised`/);
     assert.match(SCOPE, /Windows has no backend/);
     assert.ok(!/Linux[^.\n]*\b(?:is|are) (?:fully )?(?:supported|verified|enforced)\b/.test(SCOPE.replace(/unverified/g, '')), 'the page must not claim Linux support');
