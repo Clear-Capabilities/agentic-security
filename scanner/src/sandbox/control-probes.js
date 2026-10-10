@@ -53,7 +53,7 @@ function probeWrite() {
 }
 
 function probeReadDenial(backend) {
-  if (backend !== 'userspace') return { state: 'unsupported', reason: `read denial of host paths is not implemented on the ${backend} backend` };
+  if (backend !== 'userspace' && backend !== 'namespace') return { state: 'unsupported', reason: `read denial of host paths is not implemented on the ${backend} backend` };
   const root = mk('agsec-probe-r-'); const secretDir = mk('agsec-probe-rs-');
   try {
     const secret = path.join(secretDir, 'sealed.txt');
@@ -103,7 +103,11 @@ async function probeNetwork() {
   } finally { server.close(); rm(root); }
 }
 
-async function probeTree() {
+async function probeTree(backend) {
+  // Inside a PID namespace the pids a payload records are not host pids, so the
+  // pid-based check below would test unrelated host processes. The namespace
+  // backend gets a probe that never turns a recorded pid into a signal.
+  if (backend === 'namespace') return probeTreeHeartbeat();
   const root = mk('agsec-probe-t-');
   try {
     // Three tree shapes: a plain background child, a grandchild, and one that
@@ -115,7 +119,7 @@ async function probeTree() {
       'wait',
     ].join('\n');
     const r = await runConfinedSupervised(['/bin/sh', '-c', script], { root, timeoutMs: 1500, graceMs: 300 });
-    if (r.backend !== 'userspace' || !r.supervised) {
+    if (!r.supervised) {
       return { state: 'unsupported', reason: `supervised tree termination is not implemented on the ${r.backend} backend (${r.status})` };
     }
     const pids = ['p1', 'p2', 'p3'].map((f) => { try { return Number(fs.readFileSync(path.join(root, f), 'utf8')); } catch { return NaN; } });
@@ -125,6 +129,52 @@ async function probeTree() {
     for (const p of live) { try { process.kill(p, 'SIGKILL'); } catch { /* probe cleanup */ } }
     if (live.length) return notProved(`processes survived the timeout: ${live.join(',')}`);
     return proved('timeout ended a three-process tree including a SIGTERM-ignoring member');
+  } finally { rm(root); }
+}
+
+/**
+ * A shell loop that appends a counter line to `$ROOT/hb<n>` every 200 ms and
+ * stops by itself after `max` lines, so a probe that finds a survivor cannot
+ * leave it running for ever.
+ */
+export function heartbeatShell(n, max = 300) {
+  return `i=0; while [ $i -lt ${max} ]; do i=$((i+1)); echo $i >> "$ROOT/hb${n}"; sleep 0.2; done`;
+}
+
+// Tree termination by heartbeat, for a backend whose payload pids are not host
+// pids. Four tree shapes each append a line to their own file every 200 ms: a
+// plain background loop, a grandchild, one that ignores SIGTERM, and a
+// double-forked member that left the session with setsid. After the supervised
+// run returns, a process that survived keeps appending. The positive control is
+// the same files: each must have advanced during the run, so a heartbeat that
+// could never advance cannot pass for a tree that was terminated.
+export async function probeTreeHeartbeat({ run = runConfinedSupervised, settleMs = 700 } = {}) {
+  const root = mk('agsec-probe-th-');
+  try {
+    const beat = (n) => heartbeatShell(n);
+    const script = [
+      `( ${beat(1)} ) &`,
+      `( ( ${beat(2)} ) & wait ) &`,
+      `( trap '' TERM; ${beat(3)} ) &`,
+      `( setsid /bin/sh -c '${beat(4)}' >/dev/null 2>&1 & ) &`,
+      'wait',
+    ].join('\n');
+    const r = await run(['/bin/sh', '-c', script], { root, timeoutMs: 1800, graceMs: 300 });
+    if (!r.supervised) {
+      return { state: 'unsupported', reason: `supervised tree termination is not implemented on the ${r.backend} backend (${r.status})` };
+    }
+    const lines = (n) => { try { return fs.readFileSync(path.join(root, `hb${n}`), 'utf8').split('\n').filter(Boolean).length; } catch { return 0; } };
+    const names = [1, 2, 3, 4];
+    const atReturn = names.map(lines);
+    const stalled = names.filter((n, i) => atReturn[i] < 3);
+    if (stalled.length) return notProved(`positive control failed: heartbeat ${stalled.join(',')} did not advance while the run was live`);
+    await sleep(settleMs);
+    const mid = names.map(lines);
+    await sleep(settleMs);
+    const late = names.map(lines);
+    const alive = names.filter((n, i) => late[i] > mid[i]);
+    if (alive.length) return notProved(`members of the tree were still running after the run ended (heartbeat ${alive.join(',')})`);
+    return proved('four tree shapes (background, grandchild, SIGTERM-ignoring, setsid double fork) all stopped when the run ended');
   } finally { rm(root); }
 }
 
@@ -177,7 +227,7 @@ export async function probeControls({ force, probes = {} } = {}) {
     await run('read-denial', () => probeReadDenial(backend));
     await run('env-scrub', probeEnv);
     await run('network', probeNetwork);
-    await run('tree-termination', probeTree);
+    await run('tree-termination', () => probeTree(backend));
     await run('file-size-limit', probeFileSize);
     controls['process-cap'] = probes['process-cap'] ? await probes['process-cap']() : UNPROBED_PROCESS_CAP;
   }
