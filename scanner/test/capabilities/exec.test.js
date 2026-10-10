@@ -265,24 +265,19 @@ describe('[X-503.AC03] injection, escape, spawning, flooding and orphan vectors 
   });
 
   test('the controller stays responsive while a flood, a storm and an orphan run', async () => {
-    // Judge the distribution of event-loop lag, not the single worst stall: on a busy machine the OS can deschedule this process for longer
-    // than any fixed bound, while a controller that really blocks on its children produces a huge lag AND almost no ticks.
-    const lags = []; let last = Date.now();
-    const timer = setInterval(() => { const now = Date.now(); lags.push(Math.max(0, now - last - 25)); last = now; }, 25);
-    try {
-      const pf = path.join(w, 'resp');
-      const script = `i=0; while [ $i -lt 12 ]; do ( sleep 300 & echo $! >> '${pf}'; wait ) & i=$((i+1)); done; yes > /dev/null & wait`;
-      const flood = run(bind({ filesystem: { write: [w] }, commands: [{ executable: '/usr/bin/yes', args: { mode: 'exact', values: [] } }], resources: { maxOutputBytes: 32768, timeoutMs: 8000 } }), { executable: '/usr/bin/yes', args: [] });
-      const storm = runShell(script, w, { resources: { timeoutMs: 2500 } });
-      const [a, b] = await Promise.all([flood, storm]);
-      assert.equal(a.outcome, 'output-limit');
-      assert.equal(b.outcome, 'timeout');
-      assert.equal(a.cleanup.complete && b.cleanup.complete, true);
-    } finally { clearInterval(timer); }
-    const sorted = [...lags].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0; const maxLag = sorted.at(-1) ?? 0;
-    assert.ok(lags.length > 40, `the event loop only turned ${lags.length} times: it was blocked`);
-    assert.ok(p95 < 400, `the controller's event loop lag was ${p95} ms at the 95th percentile`);
-    assert.ok(maxLag < 6000, `the controller's event loop stalled for ${maxLag} ms`);
+    // Event-loop UTILIZATION, not lag: a controller that blocks on its children keeps the loop busy the whole time (utilization 1.0, measured
+    // identically on an idle machine and under 24 CPU burners), while an async one idles waiting (0.002 to 0.05 in both). Wall-clock lag only
+    // measures how long the OS left this process descheduled, which a loaded machine makes arbitrarily large for correct code.
+    const elu0 = performance.eventLoopUtilization();
+    const pf = path.join(w, 'resp');
+    const script = `i=0; while [ $i -lt 12 ]; do ( sleep 300 & echo $! >> '${pf}'; wait ) & i=$((i+1)); done; yes > /dev/null & wait`;
+    const flood = run(bind({ filesystem: { write: [w] }, commands: [{ executable: '/usr/bin/yes', args: { mode: 'exact', values: [] } }], resources: { maxOutputBytes: 32768, timeoutMs: 8000 } }), { executable: '/usr/bin/yes', args: [] });
+    const storm = runShell(script, w, { resources: { timeoutMs: 2500 } });
+    const [a, b] = await Promise.all([flood, storm]);
+    assert.equal(a.outcome, 'output-limit');
+    assert.equal(b.outcome, 'timeout');
+    assert.equal(a.cleanup.complete && b.cleanup.complete, true);
+    const elu = performance.eventLoopUtilization(elu0).utilization;
+    assert.ok(elu < 0.5, `the controller's event loop was busy ${(elu * 100).toFixed(0)}% of the time: it blocked while the children ran`);
   });
 });
