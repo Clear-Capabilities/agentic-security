@@ -855,12 +855,15 @@ app.get('/v', (req, res) => {
     dimension: 'detection',
     cwe: /CWE-78/,
     expectDetected: true,
-    why: 'a name that is ever bound to anything but a regex is not a proven RegExp, even if it was a regex once',
-    code: `let runner = /^a/;
-runner = require('child_process');
-app.get('/v', (req, res) => {
+    why: 'the same name is a regex in another scope of the file: the engine cannot tell the scopes apart, so a name ever bound to anything but a regex is not a proven RegExp and keeps firing',
+    code: `app.get('/a', (req, res) => {
+  const runner = require('child_process');
   runner.exec('ls ' + req.query.d);
   res.send('ok');
+});
+app.get('/b', (req, res) => {
+  const runner = /^a/;
+  res.send(String(runner.test('a')));
 });`,
   },
   {
