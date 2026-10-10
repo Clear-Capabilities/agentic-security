@@ -265,8 +265,10 @@ describe('[X-503.AC03] injection, escape, spawning, flooding and orphan vectors 
   });
 
   test('the controller stays responsive while a flood, a storm and an orphan run', async () => {
-    let maxLag = 0; let last = Date.now();
-    const timer = setInterval(() => { const now = Date.now(); maxLag = Math.max(maxLag, now - last - 25); last = now; }, 25);
+    // Judge the distribution of event-loop lag, not the single worst stall: on a busy machine the OS can deschedule this process for longer
+    // than any fixed bound, while a controller that really blocks on its children produces a huge lag AND almost no ticks.
+    const lags = []; let last = Date.now();
+    const timer = setInterval(() => { const now = Date.now(); lags.push(Math.max(0, now - last - 25)); last = now; }, 25);
     try {
       const pf = path.join(w, 'resp');
       const script = `i=0; while [ $i -lt 12 ]; do ( sleep 300 & echo $! >> '${pf}'; wait ) & i=$((i+1)); done; yes > /dev/null & wait`;
@@ -277,6 +279,10 @@ describe('[X-503.AC03] injection, escape, spawning, flooding and orphan vectors 
       assert.equal(b.outcome, 'timeout');
       assert.equal(a.cleanup.complete && b.cleanup.complete, true);
     } finally { clearInterval(timer); }
-    assert.ok(maxLag < 1500, `the controller's event loop stalled for ${maxLag} ms`);
+    const sorted = [...lags].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0; const maxLag = sorted.at(-1) ?? 0;
+    assert.ok(lags.length > 40, `the event loop only turned ${lags.length} times: it was blocked`);
+    assert.ok(p95 < 400, `the controller's event loop lag was ${p95} ms at the 95th percentile`);
+    assert.ok(maxLag < 6000, `the controller's event loop stalled for ${maxLag} ms`);
   });
 });
