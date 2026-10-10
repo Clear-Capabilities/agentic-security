@@ -25,7 +25,6 @@ const REPO = resolve(HERE, '..', '..', '..');
 const FIXTURE = join(HERE, 'fixtures', 'assurance-prd-section8.md');
 const PROFILE_PATH = join(REPO, 'scripts', 'loop-engineering', 'profiles', 'assurance-differentiation.json');
 const HASKELL_PROFILE_PATH = join(REPO, 'scripts', 'loop-engineering', 'profiles', 'haskell-nix.json');
-const REAL_PRD = join(REPO, 'AGENTIC_SECURITY_DIFFERENTIATION_PRD.md');
 const IMPORTER_SHA256 = 'de00e52c6fef81eb5471d8853fcae47ac54dafcd83247a6705032d6710c07a9e';
 
 const fixtureText = () => readFileSync(FIXTURE, 'utf8');
@@ -112,14 +111,7 @@ test('[LOOP-001.AC01] altered acceptance text changes the acceptance hash and a 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('[real-prd] the committed fixture matches the real PRD structure when the untracked PRD is present', (t) => {
-  if (!existsSync(REAL_PRD)) { t.skip('AGENTIC_SECURITY_DIFFERENTIATION_PRD.md is not present in this checkout (it is untracked by convention); real-PRD parity NOT checked'); return; }
-  const real = parsePrd(readFileSync(REAL_PRD, 'utf8'));
-  const fix = parsePrd(fixtureText());
-  assert.deepEqual(real.totals, { requirements: 70, criteria: 210, weight: 269 });
-  const shape = (p) => p.requirements.map((r) => ({ id: r.id, weight: r.weight, dependencies: r.dependencies, suite: r.suite, criteria: r.criteria.map((c) => c.id) }));
-  assert.deepEqual(shape(fix), shape(real), 'fixture drifted from the real PRD structure; regenerate it');
-});
+// The comparison of this fixture with the real (untracked) document lives in loop-real-prd.test.js, a maintainer check outside test:loop.
 
 // ---------------------------------------------------------------- AC02
 

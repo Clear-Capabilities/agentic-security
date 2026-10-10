@@ -136,7 +136,7 @@ export function unionFiles(pkg, scopes = SCOPES) {
 // fifteen minutes that would starve every other test of CPU inside the combined run; the pre-push gate and release check run them too. `nixos-host` is the NixOS package and host suite (NIX-012): it fails
 // without a NixOS host and a nix binary, so it runs on one (`npm run test:nixos-host`): an unavailable tool is a FAILED criterion there, never a skip, so
 // they are run where the tools exist (`npm run test:language-tools`) and are part of the loop verifier and the release gate.
-export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity', 'extras', 'loop', 'language-stress', 'language-tools', 'language-gates', 'language-slow', 'nixos-host'] } = {}) {
+export function assertAllTestFilesCovered(pkg, { scopes = SCOPES, excluded = ['ci-parity', 'extras', 'loop', 'loop-real-prd', 'language-stress', 'language-tools', 'language-gates', 'language-slow', 'nixos-host'] } = {}) {
   const covered = new Set(unionFiles(pkg, scopes));
   const missing = [];
   for (const [key, value] of Object.entries(pkg.scripts || {})) {

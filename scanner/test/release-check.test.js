@@ -30,7 +30,7 @@ import {
   resolveGroups,
   groupNames,
   parseSelection,
-  main as runReleaseGate,
+  main as runReleaseGate,  closureGateScript, HOSTED_CLOSURE_NOTE,
 } from '../../scripts/release-check.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -746,4 +746,13 @@ test('the real CLI exits 2 on an unknown group and 0 on a cheap real group', () 
   assert.equal(ok.status, 0, ok.stderr);
   assert.match(ok.stderr, /Partial run passed/);
   assert.doesNotMatch(ok.stderr, /Release gate passed/);
+});
+
+test('[REL-001.AC03] the hosted runner runs only the static closure and says so; any other environment runs the full closure', () => {
+  assert.equal(closureGateScript({ GITHUB_ACTIONS: 'true' }), 'release:closure:static');
+  assert.equal(closureGateScript({}), 'release:closure:check');
+  assert.equal(closureGateScript({ GITHUB_ACTIONS: 'false' }), 'release:closure:check');
+  assert.equal(closureGateScript({ CI: 'true' }), 'release:closure:check', 'CI alone is not the hosted runner: only GITHUB_ACTIONS is');
+  assert.match(HOSTED_CLOSURE_NOTE, /NOT claimed by this leg/);
+  assert.match(HOSTED_CLOSURE_NOTE, /static closure/);
 });

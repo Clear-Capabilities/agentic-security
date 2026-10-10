@@ -12,12 +12,16 @@ import { createManifest, loadManifest, computeAcceptanceHash, writeManifest } fr
 import { MiniRepo, prdText } from './helpers.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const PRD_PATH = join(REPO, 'HASKELL_NIXOS_FULL_CAPABILITY_PRD.md');
+// The real document is untracked by convention (this repository is public), so a clean checkout, including the hosted release runner, has
+// no copy of it. These tests use the committed structural fixture of its section 8; the comparison with the real document is the separate
+// maintainer check `npm run test:loop-real-prd`.
+const PRD_REL = 'scripts/loop-engineering/test/fixtures/haskell-prd-section8.md';
+const PRD_PATH = join(REPO, PRD_REL);
 const PROFILE_PATH = join(REPO, 'scripts', 'loop-engineering', 'profiles', 'haskell-nix.json');
 const realPrd = () => readFileSync(PRD_PATH, 'utf8');
 const realProfile = () => loadProfile(PROFILE_PATH).profile;
 
-test('[LOOP-001.AC01] the real PRD imports to exactly the declared 57 requirements, 202 criteria and 220 weight', () => {
+test('[LOOP-001.AC01] the committed section-8 fixture of the Haskell/Nix PRD imports to exactly the declared 57 requirements, 202 criteria and 220 weight', () => {
   const parsed = parsePrd(realPrd());
   assert.deepEqual(parsed.totals, { requirements: 57, criteria: 202, weight: 220 });
   assert.deepEqual(parsed.declared, { requirements: 57, weight: 220, criteria: 202 });
@@ -43,10 +47,10 @@ function stateFreeView() {
   return root;
 }
 
-test('[LOOP-001.AC01] the frozen manifest built from the real PRD has no missing or circular dependencies and keeps weights', () => {
+test('[LOOP-001.AC01] the frozen manifest built from the section-8 fixture has no missing or circular dependencies and keeps weights', () => {
   const view = stateFreeView();
   let manifest;
-  try { ({ manifest } = createManifest({ repoRoot: view, prdPath: 'HASKELL_NIXOS_FULL_CAPABILITY_PRD.md', profile: realProfile(), profileSha: 'a'.repeat(64) })); } finally { rmSync(view, { recursive: true, force: true }); }
+  try { ({ manifest } = createManifest({ repoRoot: view, prdPath: PRD_REL, profile: realProfile(), profileSha: 'a'.repeat(64) })); } finally { rmSync(view, { recursive: true, force: true }); }
   const ids = new Set(manifest.requirements.map((r) => r.id));
   for (const r of manifest.requirements) for (const d of r.dependencies) assert.ok(ids.has(d), `${r.id} -> ${d} exists`);
   assert.equal(manifest.totals.weight, 220);

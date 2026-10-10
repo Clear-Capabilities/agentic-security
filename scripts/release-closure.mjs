@@ -331,6 +331,12 @@ export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, onl
       exitCode: r.status, counts, log: { path: path.relative(base, logPath), sha256: sha256(out), bytes: out.length, note: out.length > LOG_TAIL_NOTE_BYTES ? 'very large' : undefined }, endedAt: now(),
     });
     log(`${verdict.state.toUpperCase().padEnd(11)} ${step.id}${verdict.reason ? `: ${verdict.reason}` : ''}\n`);
+    if (verdict.state !== 'pass') {
+      // The step's own log stays on the runner; without its tail a hosted failure reads as a bare "exit 1".
+      const text = out.toString('utf8').split('\n').filter((l) => l.trim());
+      const failing = text.filter((l) => /^\s*(✖|not ok)\s/.test(l)).slice(0, 12);
+      log(`  --- ${step.id}: ${failing.length ? `first ${failing.length} failing test line(s)` : 'last lines of its output'} ---\n${(failing.length ? failing : text.slice(-25)).map((l) => `  | ${l.slice(0, 220)}`).join('\n')}\n`);
+    }
   }
   const after = gitFacts(repoRoot, exec);
   const record = {
