@@ -6,5 +6,5 @@ import { relaySuite } from './relay.mjs';
 await relaySuite({
   suite: 'foundation',
   files: ["test/posture/assurance-config.test.js","test/posture/assurance-contracts.test.js","test/posture/assurance-baseline.test.js","test/evidence-issuer.test.js","test/trust-boundary.test.js"],
-  expectHelper: 'aa1aa071ce0cf7247979785ba2556e5a024963e211ad0bf5300d535a4641e10b',
+  expectHelper: '437c578cf5938c881dd8a9d375a782ef84856e70b0392eaf83b5a477d1a13b97',
 });

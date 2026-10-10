@@ -11,7 +11,7 @@ import { validate } from './schema.mjs';
 import { loadSchema } from './manifest.mjs';
 
 export const VERIFIER_VERSION = '1.0.0';
-const VERIFIER_FILES = ['verifier.mjs', 'evidence.mjs', 'tap.mjs', 'tree.mjs', 'proc.mjs', 'procscan.mjs', 'oplease.mjs', 'manifest.mjs', 'prd-import.mjs', 'remote.mjs'];
+const VERIFIER_FILES = ['verifier.mjs', 'evidence.mjs', 'tap.mjs', 'tree.mjs', 'proc.mjs', 'procscan.mjs', 'oplease.mjs', 'manifest.mjs', 'prd-import.mjs', 'remote.mjs', 'bounds.mjs', 'netbound.mjs', 'child-leases.mjs'];
 let _vh = null;
 export function verifierHash() {
   if (_vh) return _vh;

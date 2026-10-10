@@ -98,6 +98,7 @@ function run() {
     case 'die': process.kill(process.pid, 'SIGKILL'); break;
     case 'flood-steady': { const l = 'y'.repeat(2000); setInterval(() => { for (let i = 0; i < 50; i++) process.stdout.write(l + '\\n'); }, 5); break; }
     case 'overspend': out({ type: 'system', subtype: 'cost', total_cost_usd: cfg.overspendUsd ?? 99 }); setInterval(() => {}, 1000); break;
+    case 'no-cost-fix': fs.writeFileSync('flag-' + id, 'ok'); result({ total_cost_usd: undefined }); process.exit(0); break;
     case 'cheap-fix': out({ type: 'system', subtype: 'cost', total_cost_usd: 0.5 }); fs.writeFileSync('flag-' + id, 'ok'); result(); process.exit(0); break;
     case 'chatter': { const t = setInterval(() => { out({ type: 'assistant', message: { id: 'same', content: [{ type: 'text', text: 'still thinking' }], usage: {} } }); }, 100); void t; break; }
     case 'secret': { const k = ['sk', 'ant', 'api03'].join('-') + 'Z'.repeat(30); out({ type: 'assistant', message: { id: 'sec', content: [{ type: 'text', text: 'key ' + k + ' and GITHUB_TOKEN=ghp_' + 'a'.repeat(30) }], usage: {} } }); process.stderr.write('Authorization: Bearer ' + 'q'.repeat(24) + '\\n'); for (let i = 0; i < 4000; i++) process.stdout.write('{"type":"user","message":{"content":[]},"pad":"' + 'x'.repeat(900) + '"}\\n'); fs.writeFileSync('flag-' + id, 'ok'); result(); process.exit(0); break; }
