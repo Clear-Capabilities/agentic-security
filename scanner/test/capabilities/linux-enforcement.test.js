@@ -155,7 +155,7 @@ describe('[X-502.AC01] the setup script asks the kernel for the right mounts, in
     }
     const maskCall = idx((c) => c.startsWith('mount -t tmpfs -o size=4k,mode=000 tmpfs ') && c.endsWith(`${nr}${sealed}`));
     assert.ok(maskCall > idx((c) => c === `mount --bind ${ro} ${nr}${ro}`), 'the protected directory must be masked after its root is bound');
-    const seal = idx((c) => c === `mount -o remount,ro ${nr}`);
+    const seal = idx((c) => c === `mount -o remount,bind,ro ${nr}`);
     const pivot = idx((c) => c.startsWith('pivot_root '));
     const umount = idx((c) => c === 'umount -l /.old');
     assert.ok(seal > maskCall && pivot > seal && umount > pivot, `bad order: seal=${seal} pivot=${pivot} umount=${umount}`);
@@ -324,10 +324,14 @@ describe('[X-502.AC01] reads and writes outside the allowed roots are blocked on
     const root = tmp('x502-live-'); const outside = tmp('x502-live-out-');
     fs.writeFileSync(path.join(outside, 'c.txt'), 'host-canary');
     const r = await runConfinedSupervised(['/bin/sh', '-c',
-      `( : > /rootwrite ) 2>&1; ls / 2>&1; cat '${outside}/c.txt' 2>&1; ls '${path.dirname(outside)}' 2>&1; true`], { root, readRoots: [] });
+      `( : > /rootwrite ) 2>&1; ls / 2>&1; cat '${outside}/c.txt' 2>&1; echo LISTING; ls -A '${path.dirname(outside)}' 2>&1; true`], { root, readRoots: [] });
     assert.equal(r.supervised, true, JSON.stringify(r));
     assert.ok(!r.stdout.includes('host-canary'), r.stdout);
-    assert.ok(!r.stdout.includes(path.basename(outside)), 'a sibling of an undeclared directory must not be listed');
+    // The error message of the failed read names the path; the directory
+    // listing is what must not.
+    const listing = r.stdout.split('LISTING\n')[1] ?? '';
+    assert.ok(listing.includes(path.basename(root)), `positive control: the declared root should be listed (${listing})`);
+    assert.ok(!listing.includes(path.basename(outside)), 'a sibling of an undeclared directory must not be listed');
     assert.ok(!fs.existsSync('/rootwrite'));
   });
 });

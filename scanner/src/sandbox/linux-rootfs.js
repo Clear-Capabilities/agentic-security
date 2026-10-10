@@ -216,7 +216,7 @@ done <<SBX_PLAN_EOF
 $SBX_PLAN
 SBX_PLAN_EOF
 mkdir "$NR/.old" || _fail "could not prepare the old-root mount point"
-"$SBX_MOUNT" -o remount,ro "$NR" || _fail "the new root could not be made read-only"
+_ro "$NR" || _fail "the new root could not be made read-only"
 cd "$NR" || _fail "could not enter the new root"
 "$SBX_PIVOT" "$NR" "$NR/.old" || _fail "pivot_root failed"
 cd / || _fail "could not enter the pivoted root"
