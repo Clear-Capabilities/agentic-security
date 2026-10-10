@@ -230,8 +230,16 @@ describe('[DOC-002.AC03] historical baselines, new measurements and aspirational
     for (const f of ['source-only TP 4, FP 4, FN 3', 'graph-enabled TP 7, FP 2, FN 0', 'false positives reduced 3, confirmed defects added 3, baseline defects lost 0, false positives added 1']) assert.ok(S2.includes(f), f);
     const inv = script('scripts/invariant-ablation.mjs', ['run', '--no-source']);
     if (inv.status === 0 && /approved-contract/.test(inv.stdout)) {
-      assert.match(inv.stdout.replace(/\s+/g, ' '), /approved-contract 100% \[68-100\] \(8\/8\) 100% \[68-100\] \(8\/8\)/);
-      assert.ok(S2.includes('approved contract precision 8/8, recall 8/8'));
+      const out = inv.stdout.replace(/\s+/g, ' ');
+      if (/UNMEASURED not executed/.test(out)) {
+        // A host that cannot run the trust boundary (the hosted Linux runner) executes no scenario: the honest output is 0/8 on every arm and
+        // every class UNMEASURED, never a supported claim. The doc's quoted 8/8 is the macOS figure, so it is checked only where scenarios ran.
+        assert.match(out, /approved-contract n\/a 0% \[0-32\] \(0\/8\)/);
+        assert.ok(!/\bSUPPORTED\b/.test(out), 'a host that executed nothing must not report a supported class');
+      } else {
+        assert.match(out, /approved-contract 100% \[68-100\] \(8\/8\) 100% \[68-100\] \(8\/8\)/);
+        assert.ok(S2.includes('approved contract precision 8/8, recall 8/8'));
+      }
     }
     const cmds = [...S2.matchAll(/^\| `([^`]+)` \|/gm)].map((m) => m[1]);
     assert.ok(cmds.length >= 6);

@@ -52,7 +52,7 @@
     "z3-solver": "^5.2.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@vercel/ncc": "^0.45.0",
     "java-parser": "^3.0.1"
   },
