@@ -157,6 +157,15 @@ export const MARK_NO_PRIVDROP = 'AGSEC_SANDBOX_PRIVDROP_UNAVAILABLE';
  */
 export const PIVOT_SETUP_SCRIPT = `
 _fail() { echo "${MARK_SETUP_FAILED} $1" >&2; exit 91; }
+# Make one bind mount read-only. A plain remount is tried first; some kernels
+# lock the flags a bind inherits inside a user namespace (nosuid, nodev, ...),
+# in which case the remount must restate them, so the second attempt reads the
+# mount's current options and replaces only the access mode.
+_ro() {
+  "$SBX_MOUNT" -o remount,bind,ro "$1" 2>/dev/null && return 0
+  _cur=$(while read -r _a _b _c _d _mp _o _rest; do if [ "$_mp" = "$1" ]; then echo "$_o"; break; fi; done < /proc/self/mountinfo)
+  case "$_cur" in *,*) "$SBX_MOUNT" -o "remount,bind,ro,\${_cur#*,}" "$1" ;; *) "$SBX_MOUNT" -o remount,bind,ro "$1" ;; esac
+}
 NR="$SBX_NEWROOT"
 [ -n "$NR" ] && [ -d "$NR" ] || _fail "no new root directory"
 "$SBX_MOUNT" --make-rprivate / || _fail "mount propagation could not be made private"
@@ -173,14 +182,14 @@ while IFS="$_tab" read -r _op _mode _p; do
         mkdir -p "$NR$_p" || _fail "could not prepare a mount point"
         "$SBX_MOUNT" --bind "$_p" "$NR$_p" || _fail "a path could not be made visible"
         if [ "$_mode" = ro ]; then
-          "$SBX_MOUNT" -o remount,bind,ro "$NR$_p" || _fail "a path could not be made read-only"
+          _ro "$NR$_p" || _fail "a path could not be made read-only"
         fi
       elif [ -e "$_p" ]; then
         mkdir -p "$NR\${_p%/*}" || _fail "could not prepare a mount point"
         [ -e "$NR$_p" ] || : > "$NR$_p" || _fail "could not prepare a file mount point"
         "$SBX_MOUNT" --bind "$_p" "$NR$_p" || _fail "a file could not be made visible"
         if [ "$_mode" = ro ]; then
-          "$SBX_MOUNT" -o remount,bind,ro "$NR$_p" || _fail "a file could not be made read-only"
+          _ro "$NR$_p" || _fail "a file could not be made read-only"
         fi
       fi
       ;;

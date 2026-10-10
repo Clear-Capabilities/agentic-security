@@ -292,7 +292,6 @@ describe('[CORE-003.AC02] the base controls are proved on the Linux namespace ba
     const r = await probeTreeHeartbeat({ run: leaky });
     assert.notEqual(r.state, 'proved', JSON.stringify(r));
     if (process.platform === 'linux') assert.match(r.reason, /still running/, 'the detached heartbeat must be seen surviving');
-    spawnSync('/usr/bin/pkill', ['-f', 'hb4'], { stdio: 'ignore' });
   });
 });
 

@@ -106,8 +106,29 @@ for (const [label, cmd] of [
 }
 line('');
 
+// ---------------------------------------------------------------- smoke
+// Before any assertion: run one trivial command through each mode and print
+// EVERYTHING, so that when a probe below reports "positive control failed" the
+// reason (a setup step that the kernel refused, with its marker) is already in
+// the log rather than needing another run to find out.
+line('=== smoke: one command per mode, full result (context, not proof) ===');
+if (backend === 'namespace') {
+  const { runNamespace } = await import(path.join(SCANNER, 'src', 'sandbox', 'backend-namespace.js'));
+  const { runConfinedSupervised } = await import(path.join(SCANNER, 'src', 'sandbox', 'supervise.js'));
+  const mk = () => fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'agsec-smoke-'));
+  const show = (label, r) => line(`${label}: ${JSON.stringify({ status: r.status, exitCode: r.exitCode, denied: r.denied, supervised: r.supervised, stdout: String(r.stdout).slice(0, 1500), stderr: String(r.stderr).slice(0, 1500) })}`);
+  const d1 = mk();
+  show('default mode', runNamespace(['/bin/sh', '-c', 'id; echo hi'], { root: d1, timeoutMs: 10000 }));
+  const d2 = mk();
+  show('capability mode (no read roots)', await runConfinedSupervised(['/bin/sh', '-c', 'id; echo "pid=$$"; ls -la /; echo ---; ls /proc | head -5; echo ---; head -40 /proc/self/mountinfo; echo hi'], { root: d2, readRoots: [], timeoutMs: 10000 }));
+  for (const d of [d1, d2]) fs.rmSync(d, { recursive: true, force: true });
+} else {
+  line('not run: no namespace backend');
+}
+line('');
+
 // ---------------------------------------------------------------- suites
-const base = runTests(['test/sandbox-escape.test.js', 'test/sandbox.test.js']);
+const base =runTests(['test/sandbox-escape.test.js', 'test/sandbox.test.js']);
 const cap = runTests(['test/capabilities/linux-enforcement.test.js']);
 
 line('');
