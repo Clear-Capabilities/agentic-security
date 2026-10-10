@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.163.1 - a regular expression's `.exec()` on request data is no longer reported as command injection
+
+The taint engine treated any call named `exec` as a command-execution sink regardless of its receiver, so `SEMVER.exec(req.query.v)` or `/^(\d+)/.exec(req.query.w)` produced a high-severity CWE-78 finding. Regular-expression matching on request data is everywhere in JavaScript, so this was a high-volume false positive (disclosed as a known issue in 0.163.0, present since at least 0.161.0).
+
+The `js-exec` sink now excludes a receiver the engine can confidently resolve to a `RegExp`: a regex literal, `RegExp(...)` or `new RegExp(...)`, or a variable whose every assignment in the file is one of those and which is never a parameter. Anything it cannot resolve keeps firing exactly as before, and `child_process.exec` (including destructured, aliased and `require('child_process')` forms) still fires; a name that is also bound to something else anywhere in the file is not trusted. The mutation bench gained 7 cases for this gate (3 where a regex must not fire, 4 where a real exec must still fire); the CVE-replay corpus and the per-layer recall baseline are unchanged. In this repository's own self-scan, the regular-expression calls that had been recorded as reviewed false positives disappear.
+
+**Not covered.** The IFDS, tabulation and backward-slice analyses call the sink matcher without the engine's receiver types, so a regex held in a variable is not recognised there (a regex literal as the receiver is); a name bound by an import or destructuring that leaves no assignment in the IR, and also assigned a regex in an unrelated scope of the same file, could be mistaken for a regex.
+
 ## 0.163.0 - the rest of the differentiation programme: deployment graph, invariants, capability enforcement, routing, portfolio assurance, evaluation machinery, loop controller and closure
 
 This completes the **implementation** of the Agentic Security Differentiation PRD (all 70 requirements are built, each with tests named by criterion id and deliberate-breakage checks). It does **not** close the PRD: the controller's real final verification ends `blocked`, and several gates need data or hosts this repository cannot supply. Read the status section before relying on anything here. Every new execution-capable feature is off by default and gated by the assurance feature flags.

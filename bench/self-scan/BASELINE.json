@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-10T06:06:46.364Z",
-  "commit": "ef6b6cedd86d51bce9445cc9784d86230f4e926b",
+  "generatedAt": "2026-10-10T14:32:56.474Z",
+  "commit": "3678e394c799fcc0b584fcdfdf62a92a8e5f5614",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 59,
+      "total": 56,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -33,7 +33,6 @@
         "loop-engineering/lib/claude.mjs": 1,
         "loop-engineering/lib/controller.mjs": 4,
         "loop-engineering/lib/server.mjs": 5,
-        "loop-engineering/lib/tap.mjs": 3,
         "nist-compliance/scan.py": 8,
         "owasp-llm-top10/scan.py": 1,
         "release-check.mjs": 1,
@@ -48,7 +47,7 @@
       }
     },
     "scanner/src": {
-      "total": 629,
+      "total": 621,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -109,7 +108,6 @@
         "language/nix-ir.js": 4,
         "language/nix-script-taint.js": 2,
         "language/nixos-hardening.js": 1,
-        "language/pragma.js": 1,
         "language/secrets.js": 1,
         "language/support-registry.js": 1,
         "language/witness.js": 2,
@@ -148,7 +146,6 @@
         "posture/assurance/bounded-io.js": 1,
         "posture/assurance/config.js": 1,
         "posture/assurance/rollback.js": 2,
-        "posture/assurance/schema-kit.js": 1,
         "posture/attack-playbooks.js": 2,
         "posture/auditor-walkthrough.js": 3,
         "posture/auth-posture-import.js": 3,
@@ -233,7 +230,6 @@
         "posture/provenance/lifecycle.js": 1,
         "posture/provenance/providers/config.js": 1,
         "posture/provenance/repo-lineage.js": 1,
-        "posture/provenance/sca-origin.js": 4,
         "posture/realtime-cve-monitor.js": 5,
         "posture/remediation-ledger.js": 1,
         "posture/retention-policy.js": 1,
@@ -250,7 +246,6 @@
         "posture/sca-upgrade.js": 4,
         "posture/sca-verdict.js": 1,
         "posture/scan-checkpoint.js": 2,
-        "posture/secret-history.js": 2,
         "posture/secret-live-check.js": 1,
         "posture/security-trend.js": 1,
         "posture/stack-playbook.js": 1,
