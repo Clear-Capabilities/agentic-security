@@ -102,16 +102,39 @@
 // confinement, so `--net` is part of every probed variant when `allowNetwork`
 // is false, and `--mount` is in every variant unconditionally because the
 // write confinement is built inside it.
+// TWO MODES. The default (legacy) mode above is unchanged: the whole host tree
+// stays visible and is rebound read-only. CAPABILITY MODE is entered when the
+// caller passes `readRoots` (an array, possibly empty): the process pivots into
+// a tmpfs root that holds only the runtime baseline and the declared roots (see
+// `linux-rootfs.js`), so a path outside them has no name at all. In both modes
+// `denyReadPaths` masks the named host paths (an empty tmpfs over a directory,
+// /dev/null over a file; absent in capability mode unless under a declared
+// root), and the process runs under a PID namespace created with
+// `--kill-child`: when the unshare process dies, the namespace's init gets
+// SIGKILL and the kernel kills every member, which no `setsid` or double fork
+// can leave. `--kill-child` is used only where `unshare` advertises it; where it
+// does not, `treeKill` is false and supervised execution is refused.
+//
+// Mediated network (a proxy reachable from inside an empty network namespace)
+// is NOT implemented. `networkProxyPort` is refused, so a task that needs a
+// network destination is blocked on this backend, never quietly allowed.
+//
+// Nothing above is a verification claim. What has been executed on a Linux
+// host is stated by `sandbox/CLAUDE.md` and evidenced only by the
+// `sandbox-linux` CI job's probes (`linux-probes.js`).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  resolveNamespaceBin, resolveMountBin, resolvePrivDropBin,
+  resolveNamespaceBin, resolveMountBin, resolvePrivDropBin, resolvePivotBin, resolveUmountBin,
   cachedNamespaceVariant, cacheNamespaceVariant,
 } from './capabilities.js';
 import { buildLimitPrelude, ambientRelativeMaxProcs } from './limits.js';
 import { buildResult, errorResult, buildConfinedEnv } from './result.js';
+import {
+  buildRootPlan, serializePlan, PIVOT_SETUP_SCRIPT, FINAL_SCRIPT, MARK_SETUP_FAILED, MARK_NO_PRIVDROP,
+} from './linux-rootfs.js';
 
 // Ordered most-portable-first. Each entry is only the PRIVILEGE-acquisition
 // prefix; the namespace flags themselves are appended identically to all of
@@ -131,34 +154,35 @@ const NS_PRIVILEGE_VARIANTS = Object.freeze([
   Object.freeze([]),
 ]);
 
-function _nsArgs(privilegeFlags, allowNetwork) {
+function _nsArgs(privilegeFlags, allowNetwork, killChild = false) {
   const a = [...privilegeFlags, '--mount', '--pid', '--ipc', '--uts', '--fork'];
+  if (killChild) a.push('--kill-child');
   if (!allowNetwork) a.push('--net');
   return a;
 }
 
-// Markers the confined shell writes to its own stderr so the parent can tell
-// a confinement-setup failure from ordinary program output. They are stripped
-// from the stderr handed back to the caller.
-//
-// A payload that PRINTS one of these strings can force `status:'error'` (or a
-// false `privilegeDrop` unenforced note). That is the safe direction: the
-// worst it achieves is making its own run look like it did not happen, which
-// no downstream tier reads as evidence of anything. It cannot make an
-// unconfined run look confined.
-const MARK_SETUP_FAILED = 'AGSEC_SANDBOX_SETUP_FAILED:';
-const MARK_NO_PRIVDROP = 'AGSEC_SANDBOX_PRIVDROP_UNAVAILABLE';
+/** Whether a resolved argument list carries the PID-namespace tree kill. */
+export function namespaceTreeKill(args) {
+  return Array.isArray(args) && args.includes('--kill-child');
+}
 
-// Runs inside the namespaces, still privileged, before the caller's command.
-// Builds the write confinement, then hands off to $SBX_FINAL with the
-// capability set dropped.
+// The markers live in linux-rootfs.js so both modes agree. A payload that
+// PRINTS one of these strings can force `status:'error'` (or a false
+// `privilegeDrop` unenforced note). That is the safe direction: the worst it
+// achieves is making its own run look like it did not happen, which no
+// downstream tier reads as evidence of anything. It cannot make an unconfined
+// run look confined.
+
+// Default mode: runs inside the namespaces, still privileged, before the
+// caller's command. Builds the write confinement, then hands off to $SBX_FINAL
+// with the capability set dropped.
 //
 // Order matters: the sandbox root is bound onto itself while the tree is still
 // writable, so the read-only pass and the read-write rebind of the root never
 // have to fight each other. Individual sub-mounts are best-effort (some pseudo
 // filesystems legitimately refuse a rebind); the canary check in $SBX_FINAL is
 // what actually decides whether the result is trustworthy.
-const SETUP_SCRIPT = `
+export const LEGACY_SETUP_SCRIPT = `
 _fail() { echo "${MARK_SETUP_FAILED} $1" >&2; exit 91; }
 "$SBX_MOUNT" --make-rprivate / || _fail "mount propagation could not be made private"
 "$SBX_MOUNT" -t proc proc /proc 2>/dev/null || true
@@ -175,6 +199,18 @@ done
 # it, so this is normally a no-op. Its return code is NOT the gate — the
 # executed in-root write check in $SBX_FINAL is, and that one fails closed.
 "$SBX_MOUNT" -o remount,bind,rw "$ROOT" 2>/dev/null || true
+if [ -n "$SBX_MASKS" ]; then
+  while IFS= read -r _m; do
+    [ -n "$_m" ] || continue
+    if [ -d "$_m" ]; then
+      "$SBX_MOUNT" -t tmpfs -o size=4k,mode=000 tmpfs "$_m" || _fail "a protected directory could not be masked"
+    elif [ -e "$_m" ]; then
+      "$SBX_MOUNT" --bind /dev/null "$_m" || _fail "a protected file could not be masked"
+    fi
+  done <<SBX_MASK_EOF
+$SBX_MASKS
+SBX_MASK_EOF
+fi
 if [ -n "$SBX_PRIVDROP" ] && "$SBX_PRIVDROP" --securebits=+noroot,+noroot_locked --bounding-set=-all --inh-caps=-all /bin/sh -c 'exit 0' 2>/dev/null; then
   exec "$SBX_PRIVDROP" --securebits=+noroot,+noroot_locked --bounding-set=-all --inh-caps=-all /bin/sh -c "$SBX_FINAL" _sbx "$@"
 fi
@@ -182,36 +218,31 @@ echo "${MARK_NO_PRIVDROP}" >&2
 exec /bin/sh -c "$SBX_FINAL" _sbx "$@"
 `;
 
-// Runs in the FINAL privilege state, immediately before the caller's command.
-// Both directions are checked by execution, every run: the out-of-root canary
-// must be refused, and an in-root write must succeed. Either check failing
-// means the sandbox is not what it claims, so the command is not run.
-const FINAL_SCRIPT = `
-_fail() { echo "${MARK_SETUP_FAILED} $1" >&2; exit 91; }
-if ( : > "$SBX_CANARY" ) 2>/dev/null; then
-  _fail "an out-of-root write is still possible; refusing to execute"
-fi
-if ! ( : > "$ROOT/.agsec-sbx-wcheck" ) 2>/dev/null; then
-  _fail "the sandbox root is not writable; refusing to execute"
-fi
-rm -f "$ROOT/.agsec-sbx-wcheck"
-cd "$ROOT" && exec "$@"
-`;
-
 /**
  * The first privilege variant under which the requested namespaces can
  * actually be created on this host, or null when none can. Probed by running
  * a trivial command — a reasoned expectation about which flags "should" work
  * is exactly what made this backend unusable on an unprivileged runner.
+ *
+ * `--kill-child` is added only when the binary advertises it in its help text;
+ * it is an addition to the confinement, never a requirement for it, so a host
+ * without it still gets the same confinement and simply reports `treeKill`
+ * false (see `namespaceTreeKill`).
  */
 export function resolveNamespaceArgs(bin, allowNetwork, { probeTimeoutMs = 5000 } = {}) {
   const key = `${bin}:${allowNetwork ? 'net' : 'nonet'}`;
   const cached = cachedNamespaceVariant(key);
   if (cached !== undefined) return cached;
 
+  let killChild = false;
+  try {
+    const help = spawnSync(bin, ['--help'], { encoding: 'utf8', timeout: probeTimeoutMs });
+    killChild = /--kill-child/.test(`${help.stdout || ''}${help.stderr || ''}`);
+  } catch { killChild = false; }
+
   let chosen = null;
   for (const variant of NS_PRIVILEGE_VARIANTS) {
-    const args = _nsArgs(variant, allowNetwork);
+    const args = _nsArgs(variant, allowNetwork, killChild);
     const probe = spawnSync(bin, [...args, '/bin/sh', '-c', 'exit 0'], {
       encoding: 'utf8', timeout: probeTimeoutMs, stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -237,33 +268,62 @@ function _setupFailureReason(stderr) {
   return null;
 }
 
-export function runNamespace(argv, {
+const _within = (parent, child) => child === parent || child.startsWith(parent.endsWith('/') ? parent : parent + '/');
+
+function _maskPaths(denyReadPaths, resolvedRoot) {
+  const out = [];
+  for (const p of denyReadPaths || []) {
+    if (typeof p !== 'string' || !p) continue;
+    let real = path.resolve(p);
+    try { real = fs.realpathSync(real); } catch { /* not present: nothing to mask, and nothing to read */ }
+    if (/[\0\n]/.test(real)) return { error: `a denied path cannot be carried into the mount setup (${JSON.stringify(p)})` };
+    if (_within(real, resolvedRoot)) return { error: `a denied path overlaps the sandbox root (${real})` };
+    if (!out.includes(real)) out.push(real);
+  }
+  return { paths: out };
+}
+
+/**
+ * Build the exact spawn invocation for a namespace-confined command, without
+ * running it. Shared by the synchronous runner and the supervised runner, so
+ * both are confined by the SAME setup. Returns `{ error }` in the documented
+ * error shape instead of throwing. On success the caller MUST call
+ * `inv.finish(rawStderr, {hadError})` exactly once after the process ends: it
+ * checks the host-side canary, extracts any setup failure, removes the
+ * temporary directories, and returns `{ error }` or `{ stderr, unsupported }`.
+ *
+ * @param {object} [deps]  test seam: tool resolvers and the argument resolver.
+ *   Cannot weaken the setup: it only changes WHERE the tools are found.
+ */
+export function buildNamespaceInvocation(argv, {
   root,
-  timeoutMs = 10000,
   allowNetwork = false,
   limits = {},
   env = {},
-  maxBuffer = 8 * 1024 * 1024,
   denyReadPaths = [],
-} = {}) {
-  // Documented shape, never a throw — see the same note in backend-userspace.
-  // Read denial is NOT implemented on this backend (its mount tree is rebound
-  // read-only, not detached). A caller that asks for it must get a refusal,
-  // never a run that silently leaves the path readable.
-  if (Array.isArray(denyReadPaths) && denyReadPaths.length) {
-    return errorResult('namespace', 'read denial of host paths is not implemented on this backend; refusing to execute');
+  readRoots = null,
+  writeRoots = [],
+  networkProxyPort = null,
+  cwd = null,
+} = {}, deps = {}) {
+  const d = {
+    nsBin: resolveNamespaceBin, mountBin: resolveMountBin, privDropBin: resolvePrivDropBin,
+    pivotBin: resolvePivotBin, umountBin: resolveUmountBin, nsArgs: resolveNamespaceArgs, ...deps,
+  };
+  if (!root) return { error: errorResult('namespace', 'runNamespace requires a sandbox root') };
+  if (networkProxyPort != null) {
+    return { error: errorResult('namespace', 'mediated network access is not implemented on this backend (an empty network namespace has no path to a proxy); refusing to execute') };
   }
-  if (!root) return errorResult('namespace', 'runNamespace requires a sandbox root');
 
-  const bin = resolveNamespaceBin();
-  if (!bin) return errorResult('namespace', 'no kernel-namespace binary found on this host');
+  const bin = d.nsBin();
+  if (!bin) return { error: errorResult('namespace', 'no kernel-namespace binary found on this host') };
 
   // Write confinement is built with this utility. No utility, no confinement,
   // no run — there is deliberately no branch that proceeds without it.
-  const mountBin = resolveMountBin();
+  const mountBin = d.mountBin();
   if (!mountBin) {
-    return errorResult('namespace',
-      'no filesystem-attach binary found on this host, so write confinement cannot be established; refusing to execute unconfined');
+    return { error: errorResult('namespace',
+      'no filesystem-attach binary found on this host, so write confinement cannot be established; refusing to execute unconfined') };
   }
 
   let resolvedRoot;
@@ -272,7 +332,30 @@ export function runNamespace(argv, {
     // hand to the child.
     resolvedRoot = fs.realpathSync(root);
   } catch (e) {
-    return errorResult('namespace', `sandbox root is not usable: ${e.message}`);
+    return { error: errorResult('namespace', `sandbox root is not usable: ${e.message}`) };
+  }
+
+  const strict = Array.isArray(readRoots);
+  const masked = _maskPaths(denyReadPaths, resolvedRoot);
+  if (masked.error) return { error: errorResult('namespace', masked.error) };
+
+  let plan = null;
+  let pivotBin = null; let umountBin = null;
+  if (strict) {
+    pivotBin = d.pivotBin();
+    umountBin = d.umountBin();
+    if (!pivotBin || !umountBin) {
+      return { error: errorResult('namespace', 'capability mode needs the root-switching and unmount tools, and this host lacks them; refusing to execute') };
+    }
+    plan = buildRootPlan({ root: resolvedRoot, readRoots, writeRoots, denyReadPaths: masked.paths, cwd });
+    if (!plan.ok) return { error: errorResult('namespace', `the filesystem plan is not acceptable: ${plan.error}`) };
+  } else if (cwd) {
+    // Default mode keeps its one working directory. Silently ignoring a
+    // requested directory would run the command somewhere the caller did not
+    // choose.
+    let wd = null;
+    try { wd = fs.realpathSync(cwd); } catch { /* handled below */ }
+    if (wd !== resolvedRoot) return { error: errorResult('namespace', 'a working directory other than the sandbox root needs capability mode (readRoots); refusing to execute') };
   }
 
   // Same per-uid RLIMIT_NPROC trap as the userspace backend, and worse here:
@@ -285,86 +368,117 @@ export function runNamespace(argv, {
   try {
     ({ prelude, unsupported } = buildLimitPrelude(effectiveLimits));
   } catch (e) {
-    return errorResult('namespace', `invalid resource limit: ${e.message}`);
+    return { error: errorResult('namespace', `invalid resource limit: ${e.message}`) };
   }
 
   // Fail closed: no usable variant means the confinement cannot be
   // established, so nothing is executed. There is deliberately no path that
   // drops confinement flags and runs anyway.
-  const nsArgs = resolveNamespaceArgs(bin, allowNetwork);
+  const nsArgs = d.nsArgs(bin, allowNetwork);
   if (!nsArgs) {
-    return errorResult('namespace', 'kernel namespaces could not be created on this host (unprivileged user-namespace creation appears to be denied); refusing to execute unconfined');
+    return { error: errorResult('namespace', 'kernel namespaces could not be created on this host (unprivileged user-namespace creation appears to be denied); refusing to execute unconfined') };
   }
 
   // The canary lives OUTSIDE the sandbox root, in a directory this process
   // just created and can write. If the confined shell can create it, the
   // confinement is not in force and the command is not run.
-  let canaryDir = null;
+  const made = [];
+  const dispose = () => { for (const p of made.splice(0)) { try { fs.rmSync(p, { recursive: true, force: true }); } catch { /* best effort */ } } };
+  let canaryDir; let newRoot = null;
   try {
     canaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-sbx-canary-'));
+    made.push(canaryDir);
+    if (strict) { newRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agsec-sbx-newroot-')); made.push(newRoot); }
   } catch (e) {
-    return errorResult('namespace', `could not create the confinement canary: ${e.message}`);
+    dispose();
+    return { error: errorResult('namespace', `could not create the confinement scratch directories: ${e.message}`) };
   }
   const canary = path.join(canaryDir, 'out-of-root.canary');
 
+  const sbxEnv = {
+    SBX_MOUNT: mountBin,
+    SBX_PRIVDROP: d.privDropBin() || '',
+    SBX_CANARY: canary,
+    SBX_FINAL: FINAL_SCRIPT,
+  };
+  let script;
+  if (strict) {
+    Object.assign(sbxEnv, {
+      SBX_STRICT: '1', SBX_NEWROOT: newRoot, SBX_PLAN: serializePlan(plan), SBX_PIVOT: pivotBin, SBX_UMOUNT: umountBin, SBX_CWD: plan.cwd,
+    });
+    script = PIVOT_SETUP_SCRIPT;
+  } else {
+    if (masked.paths.length) sbxEnv.SBX_MASKS = masked.paths.join('\n');
+    script = LEGACY_SETUP_SCRIPT;
+  }
+
+  return {
+    bin,
+    args: [...nsArgs, '/bin/sh', '-c', prelude + script, '_sbx', ...argv],
+    cwd: resolvedRoot,
+    env: { ...buildConfinedEnv({ root: resolvedRoot, env }), ...sbxEnv },
+    unsupported,
+    mode: strict ? 'capability' : 'default',
+    treeKill: namespaceTreeKill(nsArgs),
+    plan,
+    dispose,
+    finish(rawStderr, { hadError = false } = {}) {
+      try {
+        // Parent-side confirmation of the same fact the canary check asserts
+        // from the inside. Cheap, and it does not depend on the confined shell
+        // being honest about its own exit code.
+        if (fs.existsSync(canary)) {
+          return { error: errorResult('namespace',
+            'the confined process created a file outside the sandbox root: write confinement is NOT in force on this host') };
+        }
+      } finally { dispose(); }
+      const raw = String(rawStderr || '');
+      const setupFailure = _setupFailureReason(raw);
+      if (setupFailure && !hadError) {
+        // Confinement could not be established (or could not be proven). Nothing
+        // ran: the shell exits before `exec`ing the caller's command.
+        return { error: errorResult('namespace', `confinement could not be established: ${setupFailure}`) };
+      }
+      const eff = [...unsupported];
+      if (raw.includes(MARK_NO_PRIVDROP)) eff.push('privilegeDrop');
+      return { stderr: _cleanStderr(raw), unsupported: eff };
+    },
+  };
+}
+
+export function runNamespace(argv, opts = {}) {
+  const { timeoutMs = 10000, maxBuffer = 8 * 1024 * 1024 } = opts;
+  // Documented shape, never a throw — see the same note in backend-userspace.
+  const inv = buildNamespaceInvocation(argv, opts);
+  if (inv.error) return inv.error;
+
   let r;
   try {
-    r = spawnSync(
-      bin,
-      [...nsArgs, '/bin/sh', '-c', prelude + SETUP_SCRIPT, '_sbx', ...argv],
-      {
-        encoding: 'utf8',
-        timeout: timeoutMs,
-        // SIGKILL, not the SIGTERM default, and this is the whole reason the
-        // timeout did not work here. The direct child is pid 1 of a new PID
-        // namespace (`--pid --fork`), and the kernel does not deliver
-        // default-action signals to a namespace's pid 1 from outside it — a
-        // process with no handler installed for SIGTERM simply does not die.
-        // SIGKILL is the one signal that cannot be ignored or blocked, so it
-        // is the only signal that can bound a payload here.
-        //
-        // Found by CI, not by reasoning: the first Linux run of the tree-kill
-        // test recorded duration_ms 30057 against a 1200 ms budget with the
-        // payload run to completion. The comment above this function used to
-        // claim the opposite.
-        killSignal: 'SIGKILL',
-        maxBuffer,
-        cwd: resolvedRoot,
-        env: {
-          ...buildConfinedEnv({ root: resolvedRoot, env }),
-          SBX_MOUNT: mountBin,
-          SBX_PRIVDROP: resolvePrivDropBin() || '',
-          SBX_CANARY: canary,
-          SBX_FINAL: FINAL_SCRIPT,
-        },
-      },
-    );
-
-    // Parent-side confirmation of the same fact the canary check asserts from
-    // the inside. Cheap, and it does not depend on the confined shell being
-    // honest about its own exit code.
-    if (fs.existsSync(canary)) {
-      return errorResult('namespace',
-        'the confined process created a file outside the sandbox root: write confinement is NOT in force on this host');
-    }
-  } finally {
-    try { fs.rmSync(canaryDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    r = spawnSync(inv.bin, inv.args, {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+      // SIGKILL, not the SIGTERM default: the direct child is pid 1 of a new
+      // PID namespace, and the kernel does not deliver default-action signals
+      // to a namespace's pid 1 from outside it. SIGKILL cannot be ignored.
+      // Found by CI: the first Linux run of the tree-kill test recorded
+      // duration_ms 30057 against a 1200 ms budget. With `--kill-child` the
+      // same SIGKILL, delivered to the unshare process, also reaps the whole
+      // namespace (see the header).
+      killSignal: 'SIGKILL',
+      maxBuffer,
+      cwd: inv.cwd,
+      env: inv.env,
+    });
+  } catch (e) {
+    inv.dispose();
+    return errorResult('namespace', `the confined process could not be started: ${e.message}`);
   }
 
-  const rawStderr = r.stderr ?? '';
-  const setupFailure = _setupFailureReason(rawStderr);
-  if (setupFailure && !r.error) {
-    // Confinement could not be established (or could not be proven). Nothing
-    // ran: the shell exits before `exec`ing the caller's command.
-    return errorResult('namespace', `confinement could not be established: ${setupFailure}`);
-  }
-
-  const effectiveUnsupported = [...unsupported];
-  if (rawStderr.includes(MARK_NO_PRIVDROP)) effectiveUnsupported.push('privilegeDrop');
-
+  const fin = inv.finish(r.stderr ?? '', { hadError: !!r.error });
+  if (fin.error) return fin.error;
   return buildResult({
     backend: 'namespace',
-    spawnResult: { ...r, stderr: _cleanStderr(rawStderr) },
-    unsupported: effectiveUnsupported,
+    spawnResult: { ...r, stderr: fin.stderr },
+    unsupported: fin.unsupported,
   });
 }

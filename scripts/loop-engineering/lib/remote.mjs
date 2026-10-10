@@ -18,37 +18,53 @@
 // WHAT IT CANNOT DO. It trusts GitHub's account of what ran, and the committed workflow. It does not make hosted CI a substitute for a
 // local run where a local run is possible: it is only reached when a required tool is missing here.
 
-import { execFile } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { mkdirSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { sha256 } from './util.mjs';
 import { parseTap } from './tap.mjs';
+import { runBounded } from './proc.mjs';
+import { getBounds } from './bounds.mjs';
+import { boundedNetCall, netPolicy } from './netbound.mjs';
 
 export const REMOTE_VERSION = '1';
 
 // ASYNC, never execFileSync: a synchronous call freezes the controller's event loop (and its heartbeat) for as long as GitHub takes to answer.
-const defaultRun = (cmd, args, opts = {}) => new Promise((resolve, reject) => {
-  execFile(cmd, args, { encoding: 'utf8', timeout: opts.timeoutMs || 120_000, maxBuffer: 64 * 1024 * 1024, cwd: opts.cwd }, (err, stdout, stderr) => {
-    if (err) { err.stderr = err.stderr || stderr; reject(err); } else resolve(stdout);
-  });
-});
+// Runs under runBounded, so a timeout ends the command's whole PROCESS GROUP (gh and anything it started), TERM then KILL after the grace.
+const defaultRun = async (cmd, args, opts = {}) => {
+  const r = await runBounded({ argv: [cmd, ...args], cwd: opts.cwd, wallMs: opts.timeoutMs || 120_000, graceMs: getBounds().killGraceSeconds * 1000, label: `remote:${cmd}`, tailBytes: 64 * 1024 * 1024, env: { ...process.env, NO_COLOR: '1' } });
+  if (r.outcome === 'exited' && r.exitCode === 0) return r.stdoutTail;
+  const err = new Error(r.outcome === 'exited' ? `${cmd} exited ${r.exitCode}` : `${cmd}: ${r.outcome}${r.reason ? ` (${r.reason})` : ''}`);
+  err.stderr = r.stderrTail; err.code = r.outcome === 'timeout-wall' ? 'ETIMEDOUT' : r.exitCode;
+  throw err;
+};
 // A MONOTONIC clock for every deadline in this file. Date.now() jumps when the machine sleeps, so a 10-minute wait can expire before the
 // process has polled once; performance.now() does not advance while the machine is asleep, so a deadline measures time the controller was running.
 const monotonic = () => performance.now();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// A reset connection is not a verdict. Single-shot calls (dispatch, download) are retried a few times with a short backoff; a call that
-// still fails is reported as what it is. Polling calls already tolerate a failed poll.
+// A reset connection is not a verdict. Single-shot calls (dispatch, download) are retried with a backoff; a call that still fails is
+// reported as what it is. Polling calls already tolerate a failed poll.
+//
+// With a network policy (limits.networkRequestSeconds / networkRetries, set by the profile) EVERY call made through here gets a hard
+// per-request timeout, at most networkRetries retries, and a backoff capped by retryBackoffMaxSeconds; the timeout is enforced by a timer
+// race (netbound.mjs), so even a callee that never returns is cut at the bound. Without a policy the legacy tries/backoff apply.
 const TRANSIENT = /connection reset|ECONNRESET|ETIMEDOUT|EOF|timed? ?out|temporarily unavailable|502|503|504|TLS handshake|i\/o timeout/i;
-function retrying(run, tries = 4, backoffMs = 5000) {
+const isTransient = (e) => TRANSIENT.test(String(e.stderr || e.message));
+function retrying(run, tries = 4, backoffMs = 5000, policy = netPolicy()) {
+  if (policy) {
+    return (cmd, args, opts = {}) => boundedNetCall(
+      () => run(cmd, args, { ...opts, timeoutMs: Math.min(opts.timeoutMs || policy.requestMs, policy.requestMs) }),
+      { policy, baseBackoffMs: backoffMs, isTransient },
+    );
+  }
   return async (cmd, args, opts) => {
     let last;
     for (let i = 0; i < tries; i++) {
       try { return await run(cmd, args, opts); } catch (e) {
         last = e;
-        if (!TRANSIENT.test(String(e.stderr || e.message))) throw e;
+        if (!isTransient(e)) throw e;
         if (i < tries - 1) await sleep(backoffMs * (i + 1));
       }
     }
@@ -57,8 +73,8 @@ function retrying(run, tries = 4, backoffMs = 5000) {
 }
 
 /** Can a remote run be started from this checkout? Returns {ok, reason?, sha?, branch?, repo?}. */
-export async function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun }) {
-  const run = retrying(rawRun, 3, 3000);
+export async function remotePreflight({ repoRoot, workflow, run: rawRun = defaultRun, net = netPolicy() }) {
+  const run = retrying(rawRun, 3, 3000, net);
   const git = async (...a) => String(await run('git', a, { cwd: repoRoot })).trim();
   let dirty;
   try { dirty = await git('status', '--porcelain', '--untracked-files=all'); } catch (e) { return { ok: false, reason: `git status failed: ${String(e.message).slice(0, 120)}` }; }
@@ -81,9 +97,10 @@ export async function remotePreflight({ repoRoot, workflow, run: rawRun = defaul
  *   { status: 'ok'|'failed'|'unavailable', reason, criteria, counts, remote, files: [{path, sha256, bytes}], limitations }
  * `watchDigest` is the digest of the requirement's watched files computed LOCALLY; the runner must reproduce it.
  */
-export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run: rawRun = defaultRun, now = monotonic, pollMs = 20_000, logger = () => {}, retryBackoffMs = 5000 }) {
-  const run = retrying(rawRun, 4, retryBackoffMs);
-  const pre = await remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run });
+export async function runRemote({ repoRoot, evidenceDir, req, watch, watchDigest, remoteCfg, evaluateCriteria, run: rawRun = defaultRun, now = monotonic, pollMs = 20_000, logger = () => {}, retryBackoffMs = 5000, net = netPolicy() }) {
+  const run = retrying(rawRun, 4, retryBackoffMs, net);
+  // under a network policy the raw runner is wrapped exactly once, so retries are never multiplied by nesting
+  const pre = net ? await remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run: rawRun, net }) : await remotePreflight({ repoRoot, workflow: remoteCfg.workflow, run, net: null });
   if (!pre.ok) return { status: 'unavailable', reason: `hosted-CI verification is not possible: ${pre.reason}`, criteria: failAll(req, `hosted-CI verification is not possible: ${pre.reason}`), counts: zero(), files: [], limitations: [] };
 
   const nonce = randomBytes(6).toString('hex');

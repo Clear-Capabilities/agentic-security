@@ -27,6 +27,23 @@
     "claudeBudgetUsd": 50,
     "perAttemptBudgetUsd": 6,
     "retryBackoffMaxSeconds": 60,
+    "networkRequestSeconds": 15,
+    "networkRetries": 2,
+    "unknownBillingReserveUsd": 6,
+    "suiteCeilings": {
+      "standard": {
+        "ceilingSeconds": 120,
+        "childLeaseSeconds": 90
+      },
+      "runtime-integration": {
+        "ceilingSeconds": 900,
+        "childLeaseSeconds": 600
+      },
+      "full-evaluation": {
+        "ceilingSeconds": 7200,
+        "childLeaseSeconds": 3600
+      }
+    },
     "resource": {
       "maxRssMiB": 6144,
       "maxOutputMiB": 256,
@@ -34,6 +51,13 @@
       "minFreeDiskGiB": 5,
       "cpu": "No separate CPU cap: wall-clock deadlines bound CPU time. Disclosed, not silently omitted."
     }
+  },
+  "providerEnvelope": {
+    "enabled": false,
+    "capUsd": 25,
+    "unknownBillingReserveUsd": 25,
+    "preauthorization": null,
+    "note": "A separate, separately metered budget for controller-run steps that declare a cost (costUsd, or costUnknown for the reserve). Off by default: enabling it needs a preauthorization { by, at, capUsd } recorded here by a person. It is never paid from claudeBudgetUsd."
   },
   "worker": {
     "concurrency": 1,
@@ -157,42 +181,6 @@
     "git"
   ],
   "unenforced": [
-    {
-      "field": "subprocessWallSeconds",
-      "requested": 120,
-      "status": "unenforced",
-      "note": "Validated as finite only. Each suite and gate is bounded by its own timeoutSeconds, which is what is enforced."
-    },
-    {
-      "field": "networkRequestSeconds",
-      "requested": 15,
-      "status": "unsupported",
-      "note": "The controller has no network client or accounting; PRD CORE-004 owns bounded I/O for product code."
-    },
-    {
-      "field": "networkRetries",
-      "requested": 2,
-      "status": "unsupported",
-      "note": "As networkRequestSeconds."
-    },
-    {
-      "field": "suiteCeilings",
-      "requested": "120 / 900 / 7200 seconds with finite per-child leases",
-      "status": "partial",
-      "note": "Per-suite timeoutSeconds is enforced and ceilings are set per suite key; there is no separate per-child lease inside a suite wrapper."
-    },
-    {
-      "field": "providerEnvelopeUsd",
-      "requested": 25,
-      "status": "unsupported",
-      "note": "The controller meters only the model worker (claudeBudgetUsd). A separate provider or infrastructure envelope has no accounting; enabling one needs new resource accounting before it can be claimed."
-    },
-    {
-      "field": "unknownBillingReserve",
-      "requested": "stop paid tasks or use an upper-bound reserve",
-      "status": "partial",
-      "note": "perAttemptBudgetUsd is passed to the CLI as a ceiling and run spend is tracked from reported cost; a CLI that reports no cost is not given a defined upper-bound reserve."
-    },
     {
       "field": "budgetsAreCapsNotAuthorization",
       "requested": "claudeBudgetUsd 50 and perAttemptBudgetUsd 6",
@@ -532,6 +520,7 @@
   "suites": {
     "foundation": {
       "kind": "node-test",
+      "class": "standard",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -542,17 +531,21 @@
     },
     "loop": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
         "scripts/loop-engineering/test/loop-assurance-profile.test.js",
-        "scripts/loop-engineering/test/loop-assurance-runtime.test.js"
+        "scripts/loop-engineering/test/loop-assurance-runtime.test.js",
+        "scripts/loop-engineering/test/loop-bounds.test.js",
+        "scripts/loop-engineering/test/loop-spend.test.js"
       ],
       "timeoutSeconds": 900,
       "protectedWrapper": true
     },
     "documentation": {
       "kind": "node-test",
+      "class": "standard",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -563,6 +556,7 @@
     },
     "release": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -573,6 +567,7 @@
     },
     "evaluation": {
       "kind": "node-test",
+      "class": "full-evaluation",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -583,6 +578,7 @@
     },
     "verification": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -593,6 +589,7 @@
     },
     "deployment-graph": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -603,6 +600,7 @@
     },
     "invariants": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -613,6 +611,7 @@
     },
     "capabilities": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -623,6 +622,7 @@
     },
     "routing": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [
@@ -633,6 +633,7 @@
     },
     "portfolio": {
       "kind": "node-test",
+      "class": "runtime-integration",
       "cwd": ".",
       "executable": "node",
       "files": [

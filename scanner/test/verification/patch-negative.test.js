@@ -40,7 +40,7 @@ before(async () => {
   const backend = detectBackend();
   const report = await probeControls({});
   const unmet = unmetControls(report, [...DEFAULT_REQUIRED_CONTROLS, 'network']);
-  boundaryReady = backend === 'userspace' && unmet.length === 0;
+  boundaryReady = (backend === 'userspace' || backend === 'namespace') && unmet.length === 0;
   whyNot = `SKIPPED, NOT PASSED: the trust boundary cannot run on this host (backend '${backend}'); patch-negative execution is UNVERIFIED here`;
 });
 const needsBoundary = (fn) => (t) => (boundaryReady ? fn(t) : t.skip(whyNot));
@@ -233,7 +233,7 @@ describe('[X-204.AC02] an incomplete step prevents verified-fix and is named spe
 
   test('[X-204.AC02] runs in different environments are refused as environment-mismatch', needsBoundary(async () => {
     let n = 0;
-    const runOptions = { deps: { runInBoundary: async (...a) => { const res = await runInBoundary(...a); n++; return n === 4 ? { ...res, backend: 'namespace' } : res; } } };
+    const runOptions = { deps: { runInBoundary: async (...a) => { const res = await runInBoundary(...a); n++; return n === 4 ? { ...res, backend: res.backend === 'namespace' ? 'userspace' : 'namespace' } : res; } } };
     const r = await verifyPatchNegative(request(), { config: ON, runOptions });
     notVerified(r, 'environment-equivalence', 'environment-mismatch');
     assert.equal(r.promotion.ok, false);

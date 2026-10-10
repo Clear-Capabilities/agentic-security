@@ -21,13 +21,15 @@
 //
 //   node scripts/release-closure.mjs --static               # cheap plan integrity checks (pre-push)
 //   node scripts/release-closure.mjs --run [--out <dir>] [--only id,id]
-//   node scripts/release-closure.mjs --verify <record.json>
+//   node scripts/release-closure.mjs --verify <record.json> [--attest-from-ci]   # reads hosted CI via gh for the record's commit
+//   node scripts/release-closure.mjs --attest-from-ci [--commit <40-hex sha>]    # which remote steps hosted CI can attest
 //   node scripts/release-closure.mjs --list
 // Exit: 0 local gate holds / 1 it does not / 2 bad arguments.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { attestFromCi, describeAttestation, explainAttestation, realGh } from './release-attest.mjs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { digestOf } from '../scanner/src/posture/assurance/identity.js';
@@ -59,6 +61,21 @@ const npm = (script, extra = {}) => ({ run: { type: 'npm', script, expectTests: 
  * requirements a new suite closes. `needs` is what the step cannot run without;
  * `remote: { job }` marks a prerequisite only hosted CI can satisfy, naming the CI job that does.
  */
+// The nixos-runtime job is a two leg matrix and is marked continue-on-error at job level, so the workflow can be green while a leg
+// is red. Attestation therefore reads each LEG's own job conclusion and requires BOTH legs. Attempt 1 of the Nix installer and of the
+// emulated aarch64 guest are continue-on-error by design (attempt 2 is the gate), so a failed attempt 1 is tolerated, but the
+// emulated guest must have succeeded in at least one attempt. Step names must match ci.yml; a test pins that.
+const NIXOS_COMMON_STEPS = ['Isolated evaluation harness against a real evaluator', 'The flake builds from its committed lock', 'The NixOS example scans, and the opt-in evaluation states what it did'];
+const NIXOS_REMOTE = {
+  job: 'nixos-runtime',
+  legs: ['nixos-runtime (x86_64-linux)', 'nixos-runtime (aarch64-linux)'],
+  toleratedFailedSteps: ['Install Nix (attempt 1)', 'Emulated aarch64 NixOS guest, attempt 1 (runs the NIX-012 suite inside it)', 'Keep the log of a failed attempt 1'],
+  requiredSteps: {
+    'nixos-runtime (x86_64-linux)': [...NIXOS_COMMON_STEPS, 'Controlled NixOS VM test (runs the NIX-012 suite inside a NixOS guest)', ['Emulated aarch64 NixOS guest, attempt 1 (runs the NIX-012 suite inside it)', 'Emulated aarch64 NixOS guest, attempt 2 (only because attempt 1 failed)']],
+    'nixos-runtime (aarch64-linux)': NIXOS_COMMON_STEPS,
+  },
+};
+
 export const CLOSURE_STEPS = Object.freeze([
   { id: 'foundation', title: 'Foundation: baseline, contracts, trust boundary, issuer, configuration', area: 'new-suites', covers: ['CORE-001', 'CORE-002', 'CORE-003', 'CORE-004'], run: { type: 'node-test', files: FOUNDATION_FILES, expectTests: true }, timeoutSec: 600 },
   { id: 'evaluation', title: 'Real-code evaluation suite', area: 'new-suites', covers: ['QA-001', 'QA-008'], ...npm('test:evaluation'), timeoutSec: 1800 },
@@ -85,8 +102,8 @@ export const CLOSURE_STEPS = Object.freeze([
   { id: 'compat-layer-recall', title: 'Per-layer, per-language recall holds for every first-class language', area: 'compat-core-language', covers: [], ...npm('bench:layer-recall:check'), timeoutSec: 600 },
   // Remote prerequisites. They need a toolchain or a host this machine may not have; hosted CI has them. Locally they are
   // `unsupported` and are NEVER counted as passing.
-  { id: 'remote-haskell-toolchain', title: 'Haskell tests that need a real GHC toolchain', area: 'compat-haskell-nix', covers: [], ...npm('test:language-tools'), timeoutSec: 900, needs: { tools: ['ghc'], haskellModules: ['Web.Scotty', 'Network.Wai', 'Servant', 'Yesod'] }, remote: { job: 'language-tools-ghc' } },
-  { id: 'remote-nixos-host', title: 'NixOS host runtime suite (needs a real NixOS host)', area: 'compat-haskell-nix', covers: [], ...npm('test:nixos-host'), timeoutSec: 900, needs: { paths: ['/etc/NIXOS'] }, remote: { job: 'nixos-runtime' } },
+  { id: 'remote-haskell-toolchain', title: 'Haskell tests that need a real GHC toolchain', area: 'compat-haskell-nix', covers: [], ...npm('test:language-tools'), timeoutSec: 900, needs: { tools: ['ghc'], haskellModules: ['Web.Scotty', 'Network.Wai', 'Servant', 'Yesod'] }, remote: { job: 'language-tools-ghc', legs: ['language-tools-ghc'], requiredSteps: { 'language-tools-ghc': ['Route fixtures compile and the support gate that consumes the result'] } } },
+  { id: 'remote-nixos-host', title: 'NixOS host runtime suite (needs a real NixOS host)', area: 'compat-haskell-nix', covers: [], ...npm('test:nixos-host'), timeoutSec: 900, needs: { paths: ['/etc/NIXOS'] }, remote: NIXOS_REMOTE },
 ]);
 
 // ---------------------------------------------------------------- pure helpers
@@ -190,8 +207,10 @@ export function evaluateClosureRecord(record, current, opts = {}) {
       continue;
     }
     if (step.remote && rec.state === 'unsupported') {
-      const att = attestations.find((a) => a.stepId === step.id && a.commit === record.commit && a.conclusion === 'success');
-      if (!att) remotePending.push({ id: step.id, job: step.remote.job, state: rec.state, reason: rec.reason });
+      // Satisfied only by an attestation bound to THIS record's commit that covers every CI job the step names.
+      const mine = attestations.filter((a) => a && a.stepId === step.id);
+      const why = mine.map((a) => explainAttestation(step, a, record.commit));
+      if (!mine.length || !why.includes(null)) remotePending.push({ id: step.id, job: step.remote.job, state: rec.state, reason: rec.reason, ...(mine.length ? { attestationRejected: why[0] } : {}) });
       continue;
     }
     reasons.push(`step '${step.id}' is ${rec.state}${rec.reason ? `: ${rec.reason}` : ''}`);
@@ -221,6 +240,7 @@ export function checkClosurePlan({ steps = CLOSURE_STEPS, pkg, repoRoot = REPO, 
     }
     for (const f of stepFiles(s, pkg)) if (!fs.existsSync(path.join(repoRoot, 'scanner', f))) problems.push(`step '${s.id}': names ${f}, which does not exist`);
     if (s.remote && (!s.needs || !(s.needs.tools?.length || s.needs.paths?.length || s.needs.platforms?.length || s.needs.haskellModules?.length))) problems.push(`remote step '${s.id}' declares no local prerequisite, so it could never be reported unsupported`);
+    if (s.remote && !(s.remote.legs?.length)) problems.push(`remote step '${s.id}' names no CI job legs, so no attestation could ever cover it`);
     if (s.remote && ciJobs && !ciJobs.includes(s.remote.job)) problems.push(`remote step '${s.id}': hosted CI job '${s.remote.job}' does not exist in .github/workflows/ci.yml`);
   }
   if (releaseGroups) {
@@ -369,7 +389,7 @@ function ciJobNames(repoRoot) {
   try { return [...fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8').matchAll(/^ {2}([a-z0-9-]+):\s*$/gm)].map((m) => m[1]); } catch { return null; }
 }
 
-export async function main(argv, { out = process.stderr } = {}) {
+export async function main(argv, { out = process.stderr, gh = realGh } = {}) {
   const has = (f) => argv.includes(f);
   const val = (f) => { const i = argv.indexOf(f); return i === -1 ? null : argv[i + 1]; };
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8'));
@@ -381,12 +401,28 @@ export async function main(argv, { out = process.stderr } = {}) {
     out.write(`release closure plan is sound (${CLOSURE_STEPS.length} steps, ${REQUIRED_AREAS.length} required areas covered)\n`);
     return 0;
   }
+  if (has('--attest-from-ci') && !has('--verify')) {
+    // Standalone: ask hosted CI about one exact commit and say, per remote step, whether it can be attested. Exit 0 only if every one can.
+    const commit = val('--commit') || gitFacts(REPO).commit;
+    const res = await attestFromCi({ steps: CLOSURE_STEPS, commit, gh });
+    for (const l of describeAttestation(res)) out.write(`  ${l}\n`);
+    out.write(res.refusals.length ? `remote prerequisites NOT all attested for ${String(commit).slice(0, 12)} (evidence only; nothing is assumed)\n` : `every remote prerequisite is attested for ${String(commit).slice(0, 12)}\n`);
+    return res.refusals.length ? 1 : 0;
+  }
   if (has('--verify')) {
     const file = val('--verify');
     if (!file) { out.write('--verify needs a record path\n'); return 2; }
     let record;
     try { record = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { out.write(`cannot read ${file}: ${e.message}\n`); return 1; }
-    const v = evaluateClosureRecord(record, gitFacts(REPO), { pkg, readLog: readLogFor(path.dirname(file)) });
+    let attestations = [];
+    if (has('--attest-from-ci')) {
+      // The commit asked about is the record's own. A different --commit is refused: an attestation must never be reused across commits.
+      if (val('--commit') && val('--commit') !== record.commit) { out.write(`--commit ${val('--commit')} is not the record's commit ${record.commit}; refusing to attest another commit's evidence\n`); return 2; }
+      const res = await attestFromCi({ steps: CLOSURE_STEPS, commit: record.commit, gh });
+      for (const l of describeAttestation(res)) out.write(`  ${l}\n`);
+      attestations = res.attestations;
+    }
+    const v = evaluateClosureRecord(record, gitFacts(REPO), { pkg, readLog: readLogFor(path.dirname(file)), attestations });
     return report(v, out);
   }
   if (has('--run')) {
@@ -398,13 +434,13 @@ export async function main(argv, { out = process.stderr } = {}) {
     out.write(`record: ${path.join(base, `${record.commit.slice(0, 12)}.json`)}\n`);
     return record.partial ? 1 : report(v, out);
   }
-  out.write('usage: release-closure.mjs --static | --run [--out dir] [--only ids] | --verify <record> | --list\n');
+  out.write('usage: release-closure.mjs --static | --run [--out dir] [--only ids] | --verify <record> [--attest-from-ci] | --attest-from-ci [--commit sha] | --list\n');
   return 2;
 }
 
 function report(v, out) {
   for (const r of v.reasons) out.write(`  FAIL ${r}\n`);
-  for (const p of v.remotePending) out.write(`  NOT COUNTED (remote prerequisite) ${p.id}: ${p.state}${p.reason ? ` (${p.reason})` : ''}; satisfied only by hosted CI job '${p.job}' for this commit\n`);
+  for (const p of v.remotePending) out.write(`  NOT COUNTED (remote prerequisite) ${p.id}: ${p.state}${p.reason ? ` (${p.reason})` : ''}${p.attestationRejected ? `; an attestation was supplied but rejected: ${p.attestationRejected}` : ''}; satisfied only by hosted CI job '${p.job}' for this commit\n`);
   out.write(v.localOk
     ? `local release closure holds${v.publishable ? '; publishable' : '; NOT publishable until the remote prerequisites above are attested for this commit'}\n`
     : 'local release closure does NOT hold\n');

@@ -67,6 +67,16 @@ export const CONFINE_BINS_PRIVDROP = Object.freeze([
   '/usr/sbin/setpriv',
 ]);
 
+// The two further tools capability mode needs: `pivot_root` to enter the new
+// root and `umount` to detach the old one. Absent either, capability mode
+// cannot be established and fails closed (the legacy mode does not use them).
+export const CONFINE_BINS_PIVOT = Object.freeze([
+  '/usr/sbin/pivot_root', '/sbin/pivot_root', '/usr/bin/pivot_root', '/bin/pivot_root',
+]);
+export const CONFINE_BINS_UMOUNT = Object.freeze([
+  '/usr/bin/umount', '/bin/umount', '/sbin/umount', '/usr/sbin/umount',
+]);
+
 // Back-compat single-path exports: the first (canonical) candidate.
 export const CONFINE_BIN_USERSPACE = CONFINE_BINS_USERSPACE[0];
 export const CONFINE_BIN_NAMESPACE = CONFINE_BINS_NAMESPACE[0];
@@ -96,6 +106,8 @@ export function resolveUserspaceBin() { return resolveConfineBin(CONFINE_BINS_US
 export function resolveNamespaceBin() { return resolveConfineBin(CONFINE_BINS_NAMESPACE); }
 export function resolveMountBin() { return resolveConfineBin(CONFINE_BINS_MOUNT); }
 export function resolvePrivDropBin() { return resolveConfineBin(CONFINE_BINS_PRIVDROP); }
+export function resolvePivotBin() { return resolveConfineBin(CONFINE_BINS_PIVOT); }
+export function resolveUmountBin() { return resolveConfineBin(CONFINE_BINS_UMOUNT); }
 
 // Bounded on purpose: a capability check must never hang a scan. The probe is
 // a single `exit 0` under confinement, so anything beyond a couple of seconds

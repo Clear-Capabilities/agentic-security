@@ -384,7 +384,9 @@ describe('[X-507.AC03] reports distinguish requested, checked and enforced contr
       assert.equal(c.enforced, false, `${c.kind}: host-proved is not enforced`);
       assert.ok(Object.values(c.checked).includes('proved'), `${c.kind}: but its controls were checked and proved on this host`);
     }
-    assert.equal(rep.platforms.linux.status, 'unverified', 'no Linux outcome is asserted from this host');
+    assert.equal(rep.platforms.linux.status, 'partially-verified', 'Linux is only partially verified, and only by the hosted job');
+    assert.ok(rep.platforms.linux.unsupportedControls.includes('network-mediation'));
+    assert.ok(rep.platforms.linux.unassertedControls.includes('process-cap'));
     assert.equal(rep.platforms.darwin.status, 'host-proved-not-advertised');
     assert.equal(rep.resources.maxProcesses.enforced, false);
     assert.equal(rep.resources.maxProcesses.state, 'unverified', 'no process-count cap is claimed');
@@ -403,7 +405,7 @@ describe('[X-507.AC03] reports distinguish requested, checked and enforced contr
     assert.match(text, /accepts connections from any local process/);
     assert.match(text, /descendant/i);
     assert.match(text, /Process-count caps/);
-    assert.equal(rep.platforms.linux.status, 'unverified');
+    assert.equal(rep.platforms.linux.status, 'partially-verified');
     const noNet = syntheticEnforcedRun({});
     const bound2 = bind({ filesystem: { write: [tmp('rcpt-nn-')] }, commands: [{ executable: '/bin/echo', args: { mode: 'any' } }] });
     const rep2 = receiptReport(record(DOMAINS.VERIFIER, bound2, { ...noNet.result, report: buildCapabilityReport({ bound: bound2, probeReport: { backend: 'namespace', controls: {}, probeDigest: noNet.result.report.probeDigest }, level: 'none', required: requiredControlsFor(bound2.manifest) }) }));

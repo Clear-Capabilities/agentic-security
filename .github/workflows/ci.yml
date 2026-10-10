@@ -604,8 +604,23 @@ jobs:
             echo "EXIT_UNCONFINED_EGRESS=$?"
           fi
 
-      - name: Sandbox escape suite (fails if the namespace suite SKIPPED)
+      # Runs the escape suite, the capability-mode execution suite (its probes
+      # and their fault-injection counterparts), and the active probes once more
+      # as an evidence table. Exits non-zero if any required suite SKIPPED, any
+      # required control is not proved, or a control that must stay unasserted
+      # (process-count caps, network mediation) claims to be proved. A runner
+      # that cannot establish the namespaces therefore FAILS this job.
+      - name: Sandbox escape suite and Linux control probes (fails if any required suite SKIPPED)
         run: node scripts/sandbox-linux-verify.mjs
+
+      - name: Upload the probe evidence table
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: sandbox-linux-evidence
+          path: ${{ runner.temp }}/sandbox-linux-evidence.json
+          if-no-files-found: warn
 
   corpus:
     runs-on: ubuntu-latest

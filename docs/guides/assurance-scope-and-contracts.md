@@ -73,8 +73,9 @@ scenarios. See [business-logic invariants](business-logic-invariants.md).
 ## Enforced-backend capabilities
 
 An enforced task is released only on an advertised backend with every control it depends on proved by an active probe. On the
-platforms in this repository: Linux is advertised but `unverified` (the controls are not all implemented on its backend, so
-enforced mode is blocked there and nothing is asserted); macOS is `host-proved-not-advertised` (a task can run there for
+platforms in this repository: Linux is advertised and `partially-verified` (the filesystem, environment, no-network, tree-termination and file-size controls are
+proved by active probes on the hosted `sandbox-linux` job only; mediated network is not implemented there, so a task that declares a
+network destination is blocked, and process-count caps are never claimed); macOS is `host-proved-not-advertised` (a task can run there for
 development when the caller opts in, and the result says it is not enforced); Windows has no backend. A hook response, a tool
 allowlist or the presence of a container does not prove isolation. The standing limitations are listed on the matrix page.
 

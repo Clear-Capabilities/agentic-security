@@ -19,12 +19,14 @@
 // the wrapper fail instead of silently changing what "pass" means.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { availableParallelism } from 'node:os';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
 import { parseTap } from '../../loop-engineering/lib/tap.mjs';
+import { runLeasedChildren } from '../../loop-engineering/lib/child-leases.mjs';
+import { suiteBounds } from '../../loop-engineering/lib/bounds.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, '..', '..', '..');
@@ -44,21 +46,23 @@ export function filesOfScript(scope) {
 }
 
 /**
- * Run `files` (relative to scanner/) with the node test runner and return the parsed result.
- * `timeoutMs` bounds the child; on timeout the child is killed and the result says so.
+ * Run `files` (relative to scanner/) with the node test runner, ONE CHILD PER FILE, each under its own finite lease inside the suite's
+ * ceiling (LOOP-002). A child that outlives its lease is killed as a process group and the result names the file. Returns the parsed result.
+ * `ceilingMs` bounds the whole set and `leaseMs` each file; the children may run side by side up to `concurrency`.
  */
-export function runChild(files, { timeoutMs }) {
-  // NODE_TEST_CONTEXT marks "already inside a test run"; inherited, it makes the child runner refuse to run files and report zero tests.
-  const env = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' };
-  delete env.NODE_TEST_CONTEXT;
-  const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...files], {
-    cwd: SCANNER, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 512 * 1024 * 1024, killSignal: 'SIGKILL', env,
+export async function runChildren(files, { ceilingMs, leaseMs, concurrency = Math.max(1, Math.min(4, availableParallelism() - 1)) }) {
+  // NODE_TEST_CONTEXT marks "already inside a test run"; inherited, it makes the child runner refuse to run files and report zero tests (runBounded removes it).
+  const lr = await runLeasedChildren({
+    files, argvFor: (f) => [process.execPath, '--test', '--test-reporter=tap', f], cwd: SCANNER, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
+    ceilingSeconds: ceilingMs / 1000, childLeaseSeconds: leaseMs / 1000, graceMs: 2000, concurrency, label: 'wrapper-child',
   });
-  const out = `${r.stdout || ''}${r.stderr ? `\n--- stderr ---\n${r.stderr}` : ''}`;
+  const out = lr.children.map((c) => `${c.stdoutTail || ''}${c.stderrTail ? `\n--- stderr (${c.file}) ---\n${c.stderrTail}` : ''}`).join('\n');
+  const tests = lr.children.flatMap((c) => parseTap(c.stdoutTail || '').tests);
+  const spawnFailed = lr.children.find((c) => c.outcome === 'spawn-failed');
   return {
-    status: r.status, signal: r.signal, timedOut: r.error?.code === 'ETIMEDOUT',
-    spawnError: r.error && r.error.code !== 'ETIMEDOUT' ? String(r.error.message) : null,
-    out, tap: parseTap(r.stdout || ''),
+    status: lr.exitCode, signal: lr.children.find((c) => c.signal)?.signal ?? null, timedOut: lr.hung.length > 0 || lr.children.some((c) => c.outcome === 'not-run'),
+    hung: lr.hung, children: lr.children, lease: lr.lease, ceilingSeconds: lr.ceilingSeconds,
+    spawnError: spawnFailed ? String(spawnFailed.reason) : null, out, tap: { tests, summary: {} },
   };
 }
 
@@ -68,10 +72,11 @@ export function runChild(files, { timeoutMs }) {
  *   files | scope   explicit files (relative to scanner/) or the `test:<scope>` script that names them
  *   expectHelper    the helper digest the wrapper was frozen against
  *
- * The child's wall limit is the suite's own timeoutSeconds from the execution profile, less a margin
- * so the wrapper can still report a timeout instead of being killed by the controller first.
+ * The whole set's wall limit is the suite's own timeoutSeconds from the execution profile, less a margin so the wrapper can still report a
+ * timeout instead of being killed by the controller first. Each file is a child with its own lease from the suite class (limits.suiteCeilings),
+ * never more than what is left of that ceiling. `bounds` overrides both, for the wrapper's own tests only.
  */
-export async function relaySuite({ suite, files, scope, expectHelper }) {
+export async function relaySuite({ suite, files, scope, expectHelper, bounds = null }) {
   if (helperSha256() !== expectHelper) {
     test(`[${suite}] the shared wrapper helper matches the digest this wrapper was frozen against`, () => {
       assert.fail(`relay.mjs changed (now ${helperSha256()}); the supervising session must review it and re-pin every wrapper`);
@@ -87,11 +92,16 @@ export async function relaySuite({ suite, files, scope, expectHelper }) {
   });
   if (!list.length || list.some((f) => !existsSync(join(SCANNER, f)))) return;
 
-  const timeoutSeconds = JSON.parse(readFileSync(join(REPO, 'scripts', 'loop-engineering', 'profiles', 'assurance-differentiation.json'), 'utf8')).suites?.[suite]?.timeoutSeconds ?? 120;
-  const child = runChild(list, { timeoutMs: Math.max(1000, (timeoutSeconds - 10) * 1000) });
+  const profile = JSON.parse(readFileSync(join(REPO, 'scripts', 'loop-engineering', 'profiles', 'assurance-differentiation.json'), 'utf8'));
+  const timeoutSeconds = profile.suites?.[suite]?.timeoutSeconds ?? 120;
+  const sb = suiteBounds(profile, suite);
+  const ceilingMs = bounds?.ceilingSeconds ? bounds.ceilingSeconds * 1000 : Math.max(1000, Math.min(timeoutSeconds - 10, sb?.ceilingSeconds ?? Infinity) * 1000);
+  const leaseMs = bounds?.childLeaseSeconds ? bounds.childLeaseSeconds * 1000 : Math.min(ceilingMs, (sb?.childLeaseSeconds ?? timeoutSeconds) * 1000);
+  const child = await runChildren(list, { ceilingMs, leaseMs, concurrency: bounds?.concurrency });
   const digest = sha256(child.out);
   const tail = child.out.length > TAIL_BYTES ? child.out.slice(-TAIL_BYTES) : child.out;
   process.stdout.write(`# child run: ${list.length} file(s), exit ${child.status}, signal ${child.signal}, ${child.tap.tests.length} test line(s), output sha256 ${digest}, ${child.out.length} bytes\n`);
+  process.stdout.write(`# child leases: ${child.lease}s per file inside a ${child.ceilingSeconds}s ceiling; ${child.children.map((c) => `${c.file}=${c.outcome}`).join(', ')}\n`);
   process.stdout.write(`${tail.split('\n').map((l) => `# | ${l}`).join('\n')}\n`);
 
   // The node runner reports a file that registered no tests as one passing entry named after the file. That is not a test.
@@ -99,11 +109,15 @@ export async function relaySuite({ suite, files, scope, expectHelper }) {
   const realTests = child.tap.tests.filter((t) => !isFileEntry(t));
   test(`[${suite}] the child run exited 0, ran tests, and was not cut short`, () => {
     assert.equal(child.spawnError, null, `could not start the test runner: ${child.spawnError}`);
-    assert.equal(child.timedOut, false, 'the child run timed out and was killed');
+    assert.equal(child.timedOut, false, `the child run timed out and was killed: ${child.children.filter((c) => c.outcome !== 'exited').map((c) => `${c.file} (${c.outcome})`).join(', ')}`);
     assert.equal(child.signal, null, `the child run was ended by ${child.signal}`);
     assert.equal(child.status, 0, `the child run exited ${child.status}`);
     assert.ok(realTests.length > 0, 'the child ran zero tests; an empty selection fails');
   });
+  // One witness per file, so a hung or unstarted file is named in the result instead of vanishing into the aggregate.
+  for (const c of child.children) {
+    test(`[${suite}] ${c.file} finished within its lease`, () => assert.equal(c.outcome === 'exited', true, `${c.reason || c.outcome} (lease ${c.leaseSeconds}s of a ${child.ceilingSeconds}s ceiling)`));
+  }
   for (const t of child.tap.tests) {
     const name = t.name || '(unnamed test)';
     if (isFileEntry(t) && t.ok) test(`[${suite}] ${name} registered at least one test`, () => assert.fail(`${name} ran no tests; an empty file is not a pass`));

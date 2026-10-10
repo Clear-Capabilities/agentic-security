@@ -189,6 +189,18 @@ export async function runShip(ctx, opts = {}) {
       return `${version} is on npm${f.isLatest ? ' as latest' : ` (latest is ${f.latest})`}, attested, description ${f.descriptionLength} chars, README ${f.readmeLength} chars`;
     });
 
+    // ── hosted CI attestation of the remote closure prerequisites: EVIDENCE ONLY ────────────────────────────────
+    // After the release is out, say whether hosted CI attests the GHC and NixOS prerequisites for the released commit. This never blocks,
+    // fails or alters a release that already published: a refusal (a red job, a missing job, gh offline) is printed and recorded, nothing more.
+    try {
+      const { attestFromCi, describeAttestation } = await import('../release-attest.mjs');
+      const { CLOSURE_STEPS } = await import('../release-closure.mjs');
+      const res = await attestFromCi({ steps: CLOSURE_STEPS, commit: releaseSha, gh: async (args) => gh(args) });
+      log(`  hosted CI attestation of the remote closure prerequisites (informational; it does not gate or undo this release): ${res.refusals.length ? 'NOT all attested' : 'all attested'}`);
+      for (const l of describeAttestation(res)) log(`    ${l}`);
+      state.set({ remoteAttestation: { commit: releaseSha, attested: res.attestations.map((x) => x.stepId), refused: res.refusals.map((x) => ({ stepId: x.stepId, code: x.code })) } });
+    } catch (e) { log(`  hosted CI attestation could not be read (informational only; the release is unaffected): ${String(e.message || e).slice(0, 160)}`); }
+
     state.finish('done', true); state.set({ current: 'done', finished: ctx.now() });
     // the directory made for the gate is removed once the release is out; after a stop it is kept, so the gate's leftovers can be inspected
     if (autoTmp && ctx.removeTmpdir) ctx.removeTmpdir(autoTmp);

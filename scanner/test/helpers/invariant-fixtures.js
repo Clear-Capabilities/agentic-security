@@ -141,6 +141,6 @@ export async function boundaryProbe() {
   const backend = detectBackend();
   const report = await probeControls({});
   const unmet = unmetControls(report, [...DEFAULT_REQUIRED_CONTROLS, 'network']);
-  const ready = backend === 'userspace' && unmet.length === 0;
+  const ready = (backend === 'userspace' || backend === 'namespace') && unmet.length === 0;
   return { ready, why: `SKIPPED, NOT PASSED: the trust boundary cannot run on this host (backend '${backend}', unproved: ${unmet.map((u) => u.control).join(', ') || 'none'}); the execution tests are UNVERIFIED here` };
 }

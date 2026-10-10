@@ -205,6 +205,17 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     const marker = path.join(dir, 'ran');
     const bound = mkBound(dir);
     const r = await runCapabilityTask(bound, { ...REQ, args: [marker] }, { binding: bound.binding, config: CONFIG_ON });
+    if (BACKEND === 'namespace') {
+      // The Linux namespace backend IS the advertised one. Where the active probes prove every control the task
+      // depends on (the sandbox-linux job shows they do) it runs, labelled enforced; where any is not proved it is
+      // blocked and the target never runs. Both outcomes are asserted, neither is assumed.
+      if (r.executed) {
+        assert.equal(r.enforced, true); assert.equal(r.level, 'enforced'); assert.ok(fs.existsSync(marker));
+      } else {
+        assert.equal(r.status, 'blocked'); assert.ok(!fs.existsSync(marker));
+      }
+      return;
+    }
     assert.equal(r.executed, false);
     assert.ok(!fs.existsSync(marker), 'the command did not run');
     if (process.platform === 'darwin') {
@@ -223,6 +234,11 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     const marker = path.join(dir, 'ran');
     const bound = mkBound(dir);
     const r = await runCapabilityTask(bound, { ...REQ, args: [marker] }, { binding: bound.binding, config: cfg });
+    if (BACKEND === 'namespace') {
+      // Advertised backend: the gate lets it through, and it is only `enforced` if every probe proved.
+      assert.equal(r.executed ? r.enforced : r.status === 'blocked', true, JSON.stringify({ s: r.status, e: r.executed }));
+      return;
+    }
     assert.equal(r.executed, false);
     assert.ok(!fs.existsSync(marker));
     if (BACKEND === 'userspace') {
@@ -237,7 +253,9 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     assert.equal(isAdvertisedBackend('namespace', 'darwin'), false);
     assert.equal(isAdvertisedBackend('userspace', 'win32'), false);
     const p = platformStatements();
-    assert.equal(p.linux.status, 'unverified', 'Linux is advertised and unverified until the sandbox-linux job shows the probes proved');
+    assert.equal(p.linux.status, 'partially-verified', 'Linux is advertised and verified only for the controls the sandbox-linux job proved');
+    assert.ok(p.linux.verifiedControls.includes('fs-read-confinement'));
+    assert.ok(!p.linux.verifiedControls.includes('network-mediation') && !p.linux.verifiedControls.includes('process-cap'), 'unsupported and unasserted controls are never listed as verified');
     assert.equal(p.darwin.status, 'host-proved-not-advertised');
     assert.equal(p.win32.status, 'unsupported');
     assert.match(p.linux.note, /never claimed|not claimed|Process-count caps are never claimed/);

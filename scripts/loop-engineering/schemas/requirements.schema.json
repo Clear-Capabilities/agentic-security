@@ -59,7 +59,10 @@
               "files": { "type": "array", "items": { "type": "string" } },
               "expectedExitCode": { "type": "integer" },
               "timeoutSeconds": { "type": "integer", "minimum": 1 },
-              "requiresTools": { "type": "array", "items": { "type": "string" } }
+              "requiresTools": { "type": "array", "items": { "type": "string" } },
+              "suiteClass": { "type": "string" },
+              "ceilingSeconds": { "type": "number", "exclusiveMinimum": 0 },
+              "childLeaseSeconds": { "type": "number", "exclusiveMinimum": 0 }
             }
           }
         }

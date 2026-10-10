@@ -281,9 +281,9 @@ privilegeDrop`), the same mechanism `limits.js` uses for an unenforceable
 limit. It is never silently skipped, and the escape test that covers the
 rebind attack fails if it is missing rather than quietly passing.
 
-**None of the above has been executed anywhere yet.** It is asserted by
-`sandbox-escape.test.js`'s kernel-namespace suite, which skips on macOS. Until
-a CI log shows that suite `RAN`, this section describes code, not evidence.
+**Executed on a hosted Linux runner.** The `sandbox-linux` job ran the suite
+(see the verification sections below); this section describes code that has
+been exercised, on that runner image and kernel only.
 
 ## Timeout does not kill the process tree
 
@@ -297,18 +297,24 @@ inside the policy profile — their writes and egress remain confined — but th
 are still running and still consuming resources. A caller that needs a hard
 tree kill must implement it.
 
-The namespace backend is structurally better here: it runs the confined
-command under `--pid --fork`, so the direct child is pid 1 of a new PID
-namespace and killing it should take the namespace's processes with it. That
-is a reasoned expectation from the flags, **not** an executed result — it
-needs the same Linux-host verification as everything else on that backend.
+The namespace backend closes this with the kernel, not a sweep: the command
+runs under `--pid --fork --kill-child`, so when the `unshare` supervisor dies
+the namespace's init gets SIGKILL and the kernel kills every member, including
+a double-forked `setsid` descendant that no process-group or sweep logic can
+find. `--kill-child` is used only where `unshare` advertises it
+(`namespaceTreeKill`); without it supervised execution is refused. Proved by
+the `linux-probes.js` probes on the hosted runner (kill the supervisor, kill
+the init directly). Earlier text here said killing the direct child should reap
+the tree; CI showed it did not (the killed process was the supervisor, not the
+init) until `--kill-child` was added.
 
 ## Known limitation, deliberately accepted: reads are not confined
 
 The userspace policy allows `(allow file-read*)` globally — that backend
 confines **writes**, network egress, and resource use, but **not reads**. (The
-kernel-namespace backend has the same cut: per the section above its mount
-tree is rebound read-only, not detached, so everything on it stays readable.)
+kernel-namespace backend has the same cut in its DEFAULT mode: its mount
+tree is rebound read-only, not detached, so everything on it stays readable.
+Its capability mode, entered with `readRoots`, does confine reads; see below.)
 A confined command can read any file on the host the OS-level
 permissions allow, including outside the sandbox root. Exfiltration of
 readable host files (writing what was read to network or to a location the
@@ -364,20 +370,26 @@ then runs supervised with protected paths read-denied.
   default protected set is the key directory, common credential directories
   under the home directory, plus caller-supplied sealed-label and evidence
   directories. A denylist is a floor, not a claim of host-wide read isolation.
-  The namespace backend does NOT implement it and returns `status:'error'`
-  without executing when asked, so on Linux the boundary is `blocked`.
+  The namespace backend implements it by masking: an empty tmpfs over a
+  protected directory, `/dev/null` over a protected file (in capability mode a
+  protected path outside every declared root is simply absent). Proved by the
+  protected-canary probes on the hosted runner.
 - **Process trees** (`supervise.js`): own process group, periodic descendant
   sweep, SIGTERM, grace, SIGKILL, then a poll that confirms no survivors; the
   same cleanup runs on a clean exit. Cancel is an `AbortSignal` (status
   `cancelled`). Output is capped. Known gap: a double-fork plus setsid between
   two sweeps escapes; only a PID namespace or cgroup closes it. Supervised
-  execution exists ONLY for the userspace backend; `namespace` is refused
-  because tree termination has not been implemented and executed there.
+  execution exists for the userspace backend and for the namespace backend
+  where `--kill-child` is available (see above).
 - **Active probes**: write confinement, read denial, env scrub, network, tree
   termination and the file-size limit each run an attack plus a positive
   control through the real backend. `process-cap` is reported `unverified` on
-  every backend and must not be claimed enforced (per-uid and system-wide on
-  macOS, and it did not refuse on the hosted Linux runner in the last release).
+  every backend and must not be claimed enforced. Per-uid and system-wide on
+  macOS. On Linux the cause of the earlier non-refusal is now known: the
+  resource prelude is run by `/bin/sh`, which is dash on the hosted runner, and
+  dash's `ulimit` has no `-u` option (`ulimit: Illegal option -u` appears in
+  the `sandbox-linux` log), so the cap was never applied at all. No replacement
+  (for example `prlimit`) has been proved, so the cap stays unasserted.
   `capabilityReport()` carries the standing note that Linux enforcement is
   evidenced only where the `sandbox-linux` CI job ran the same probes.
 - **Status**: target output is returned labelled `untrusted` and is never parsed
@@ -396,7 +408,27 @@ then runs supervised with protected paths read-denied.
 - `writeRoots`: further writable subtrees (readable too). `cwd`: working directory, which must exist.
 - `networkProxyPort`: opens exactly one loopback port (`(remote ip "localhost:PORT")`); DNS, every other port and every other address stay denied.
 
-Verified by execution on macOS only (`test/capabilities/`, probes in `capabilities/probes.js`). The namespace backend implements none of these options; asked for them it ignores them, which is why the capability runner never asks it: its probes report these controls `unsupported` there and the run is blocked.
+Verified by execution on macOS only (`test/capabilities/`, probes in `capabilities/probes.js`). The namespace backend implements `readRoots`, `writeRoots`, `cwd` and
+`denyReadPaths` as **capability mode** (entered when `readRoots` is an array): a
+tmpfs root holding only the runtime baseline (`/usr`, `/bin`, `/lib*`, a few
+identity files, a fresh `/proc` and a minimal `/dev`) plus the declared roots,
+read-only for read roots and read-write for write roots, protected paths absent
+or masked, then `pivot_root` and a detached old root (`linux-rootfs.js` builds
+the plan and the setup script; `backend-namespace.js` runs it). Capability drop
+(`setpriv`, with no-new-privs) is required in this mode, not best effort.
+`networkProxyPort` is REFUSED: mediated network is not implemented on Linux, so
+a task that declares a destination is blocked there.
+
+### Linux evidence
+
+`linux-probes.js` and the generic probes in `control-probes.js` and
+`capabilities/probes.js` attack each control and pair it with a positive
+control; `test/capabilities/linux-enforcement.test.js` also runs every probe
+against a deliberately wrong runner (fault injection) and requires it to say so.
+`scripts/sandbox-linux-verify.mjs` (the `sandbox-linux` job) fails if a required
+suite skips, a required control is not proved, or a control that must stay
+unasserted claims to be proved, and uploads the evidence table. Exploratory runs
+on a local aarch64 VM are not evidence; only the hosted x86_64 job is.
 
 ## Extending this module
 

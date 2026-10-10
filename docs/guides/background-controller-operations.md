@@ -122,7 +122,21 @@ that finished with a passing final verification, and even then it is a finite st
 controller. Its limits are finite starting values: heartbeat every 5 seconds, stale after 15, worker idle stop at 180 seconds, no
 progress stop at 600, subprocess wall 120 with a 10 second kill grace, 3 attempts per requirement, 2 repeats of an identical
 failure, 150 attempts and 43200 seconds for the run. Its two money budgets (50 and 6 US dollars) are ceilings, not spending
-authorization. Controls the controller cannot enforce are listed in the profile as `unenforced` with a reason and are not claimed.
+authorization. Controls the controller cannot enforce are listed in the profile as `unenforced` with a reason and are not claimed;
+two remain (`budgetsAreCapsNotAuthorization`, `linuxEnforcementBackend`).
+
+What a hung or costly step does to a run, in operator terms:
+
+- **A hung helper or test.** A helper subprocess is killed with its whole process tree at 120 seconds (10 second grace). A suite is
+  killed at its class ceiling (120 / 900 / 7200 seconds), and inside a wrapper each test file has its own lease, so one hung file is
+  killed and named (`<file> finished within its lease` fails in the TAP, `hungFiles` appears in the evidence) instead of silently
+  spending the whole ceiling.
+- **A network call** (hosted-CI verification) is cut at 15 seconds, retried at most twice with a capped backoff, and then reported.
+- **A paid infrastructure step** (a gate that declares a cost) is run only when the separate provider envelope is enabled
+  and preauthorized in the profile, is charged before it runs, and is not run once the $25 envelope cannot cover it. Read it from
+  `report --json` under `budgets.providerEnvelope`; the model spend is a different figure.
+- **A worker whose cost was not reported** is charged the $6 reserve, not zero, and the run stops with `paused-budget` (reason starting
+  `unknown billing`) when the reserve no longer fits under the model cap. Raising any of these is a reviewed profile edit and a new `init`.
 
 To launch it for real:
 
@@ -155,8 +169,7 @@ Nothing in the controller changes its own rules, and a worker cannot loosen them
 ## Unsupported enforcement platforms
 
 The controller runs on macOS and Linux; Windows is unsupported and disclosed as such in the profile. That is about the controller.
-Enforcement of what a task may read, run and reach is a separate matter: **Linux is unverified** and enforced mode is blocked
-there; **macOS is host-proved for development only** and is not an advertised enforced backend; **Windows has no backend**. A
+Enforcement of what a task may read, run and reach is a separate matter: **Linux is partially verified** (only the controls the hosted `sandbox-linux` job proved; mediated network and process-count caps remain unverified, so a task that needs either is blocked there); **macOS is host-proved for development only** and is not an advertised enforced backend; **Windows has no backend**. A
 criterion that needs an unavailable backend ends `blocked`, naming it. It is never skipped into a pass, and raising a deadline
 does not make a slow machine pass. The per-platform table is in the [capability matrix](../reference/assurance-capability-matrix.md).
 
