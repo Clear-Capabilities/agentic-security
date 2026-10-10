@@ -166,6 +166,11 @@ function _fullyFlattenMemberChain(calleeExpr) {
 // "unknown", never as a signal to suppress or refuse (see this file's
 // "Unknown ≠ clean" global constraint).
 function _receiverTypeFor(calleeExpr, callContext) {
+  // A bare identifier receiver that every binding in this file initialises to a
+  // regex is a RegExp (see _regexNamesForFile). Checked before CHA, which
+  // cannot see a module-scope const from inside the handler that uses it.
+  if (calleeExpr && calleeExpr.kind === 'member' && calleeExpr.object && calleeExpr.object.kind === 'ident'
+      && _currentFile && _regexNamesByFile.get(_currentFile)?.has(calleeExpr.object.name)) return 'RegExp';
   if (!callContext || !callContext._cha) return null;
   const flat = _fullyFlattenMemberChain(calleeExpr);
   if (!flat || !flat.includes('.')) return null;
@@ -195,6 +200,45 @@ function _receiverTypeFor(calleeExpr, callContext) {
   // fallback anywhere in this function for exactly that reason.
   if (parts.length !== 2) return null;
   return classOfVar(callContext._cha, _currentFile, callContext._currentFnQid, parts[0]);
+}
+
+// File -> Set of identifier names that are provably RegExp objects: the name
+// is assigned at least once, EVERY assignment to it anywhere in the file (any
+// function, any scope, including module scope) is a regex literal or a
+// `RegExp(...)` / `new RegExp(...)` construction, and it is never a function
+// parameter. Name-based and file-wide on purpose: the IR has no scope
+// resolution, so a name that is ever bound to anything else is treated as
+// unknown, which keeps the catalog's conservative behaviour. Used so
+// `SEMVER.exec(s)` is not read as child_process.exec. Residual gap: a name
+// bound by an import or a destructuring that lowers to no assign node, AND
+// also assigned a regex in an unrelated scope of the same file.
+const _regexNamesByFile = new Map();
+
+function _isRegexInit(src) {
+  if (!src || typeof src !== 'object') return false;
+  if (src.kind === 'literal' && src.isRegex) return true;
+  return src.kind === 'call' && !!src.callee && src.callee.kind === 'ident' && src.callee.name === 'RegExp';
+}
+
+function _buildRegexNames(fns) {
+  _regexNamesByFile.clear();
+  const byFile = new Map();   // file -> Map(name -> boolean allRegex)
+  for (const fn of fns) {
+    if (!fn || !fn.file || !fn.cfg || !fn.cfg.nodes) continue;
+    let names = byFile.get(fn.file);
+    if (!names) { names = new Map(); byFile.set(fn.file, names); }
+    for (const p of fn.params || []) if (typeof p === 'string') names.set(p, false);
+    for (const n of Object.values(fn.cfg.nodes)) {
+      if (!n || n.kind !== 'assign' || typeof n.target !== 'string' || n.target.includes('.')) continue;
+      const prev = names.get(n.target);
+      names.set(n.target, (prev === undefined || prev === true) && _isRegexInit(n.source));
+    }
+  }
+  for (const [file, names] of byFile) {
+    const ok = new Set();
+    for (const [name, allRegex] of names) if (allRegex) ok.add(name);
+    if (ok.size) _regexNamesByFile.set(file, ok);
+  }
 }
 
 // Narrower than _flattenCalleeName: the name to hand to callGraph.resolve().
@@ -1987,7 +2031,7 @@ function analyzeFunction(fn, entryState, callContext) {
       for (const [nid, ctx] of ictx) {
         const node = nodes[nid];
         if (!node || node.kind !== 'call') continue;
-        const cat = matchSinkOrSanitizer(node.callee, _currentFile);
+        const cat = matchSinkOrSanitizer(node.callee, _currentFile, _receiverTypeFor(node.callee, callContext));
         const sink = cat && cat.find((e) => e.kind === 'sink');
         if (!sink) continue;
         const inS = inStates.get(nid) || new Set();
@@ -2001,7 +2045,7 @@ function analyzeFunction(fn, entryState, callContext) {
       if (implicitState.size) {
         for (const [nid, node] of Object.entries(nodes)) {
           if (!node || node.kind !== 'call') continue;
-          const cat = matchSinkOrSanitizer(node.callee, _currentFile);
+          const cat = matchSinkOrSanitizer(node.callee, _currentFile, _receiverTypeFor(node.callee, callContext));
           const sink = cat && cat.find((e) => e.kind === 'sink');
           if (!sink) continue;
           const inS = inStates.get(nid) || new Set();
@@ -2109,6 +2153,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   const fnList = [...callGraph.functions.values()].sort((a, b) =>
     a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0
   );
+  _buildRegexNames(fnList);
   // PRD W0.1 (SARD_80_F1_EXECUTION_PRD.md) — the main per-function loop below
   // silently `break`s once `n > fnLimit` (default 5000), which for a single
   // large SARD CWE directory (Java CWE-89 alone: 3668 files, 17604
