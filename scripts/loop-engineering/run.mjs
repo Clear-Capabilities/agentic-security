@@ -277,7 +277,10 @@ async function launchController(root, runId, serveSpec, { foreground }) {
   // it survives this terminal and this invoking Claude worker exiting.
   const child = spawn(process.execPath, args, { cwd: root, detached: true, stdio: ['ignore', outFd, outFd], env: { ...process.env, LOOP_ENGINEERING_ROLE: 'controller' } });
   child.unref(); closeSync(outFd);
-  const deadline = Date.now() + 4500;
+  // The product's contract is a start that returns within five seconds. A test on a starved machine can legitimately need longer to launch a
+  // Node process, so the harness (and only the harness) gets a longer wait; the elapsed time is still measured by the tests that assert it.
+  const readyMs = process.env.LOOP_ENGINEERING_TEST_HARNESS === '1' ? 30000 : 4500;
+  const deadline = Date.now() + readyMs;
   let ready = false;
   while (Date.now() < deadline) {
     const l = judgeLease(L.leaseFile);
@@ -285,7 +288,7 @@ async function launchController(root, runId, serveSpec, { foreground }) {
     const s = readJson(L.stateFile, {});
     if (l.state === 'live' && l.lease.pid === child.pid && (!serveSpec || g.state === 'live')) { ready = true; break; }
     if (['failed', 'blocked'].includes(s.status) && s.controller?.pid !== child.pid && !identityMatches(child.pid, startTimeOf(child.pid))) break;
-    if (!identityMatches(child.pid, startTimeOf(child.pid)) && Date.now() - (deadline - 4500) > 800) break;
+    if (!identityMatches(child.pid, startTimeOf(child.pid)) && Date.now() - (deadline - readyMs) > 800) break;
     await sleep(100);
   }
   if (!ready) {

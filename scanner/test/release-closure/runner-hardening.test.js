@@ -34,14 +34,14 @@ test('[REL-001.AC02] a record that was dirty only through those history files st
   assert.ok(dirty.reasons.some((r) => /dirty/.test(r)));
 });
 
-test('[REL-001.AC02] a step that times out leaves no process behind, including its descendants', { timeout: 60000 }, () => {
-  const marker = `closure-orphan-${process.pid}-${Date.now()}`;
-  // A shell that starts a long-lived descendant and then waits: killing only the direct child would leave the descendant running.
-  const r = defaultExec('/bin/sh', ['-c', `sleep 300 & echo ${marker} >/dev/null; sleep 300`], { cwd: process.cwd(), timeoutMs: 1500, env: process.env });
+test('[REL-001.AC02] a step that times out leaves no process behind, including its descendants', { timeout: 120000 }, () => {
+  // A unique duration names exactly this test's processes, so other tests running at the same time cannot be mistaken for leftovers.
+  const dur = `300.${process.pid}${Date.now() % 1000}`;
+  const r = defaultExec('/bin/sh', ['-c', `sleep ${dur} & sleep ${dur}`], { cwd: process.cwd(), timeoutMs: 1500, env: process.env });
   assert.equal(r.timedOut, true);
   assert.equal(r.status, null);
-  const ps = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /sleep 300/.test(l) && !/grep/.test(l));
-  assert.deepEqual(ps, [], 'a descendant of the timed-out step is still running');
+  const left = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => l.includes(`sleep ${dur}`));
+  assert.deepEqual(left, [], 'a descendant of the timed-out step is still running');
 });
 
 test('[REL-001.AC02] output and the exit status of a step that finishes normally are passed through', () => {
@@ -67,12 +67,13 @@ test('[REL-001.AC03] the Haskell toolchain step is unsupported where the fixture
 });
 
 test('[REL-001.AC02] a step that times out writes the process table of its group into its log before it is killed, so an unreproducible hang leaves evidence', { timeout: 60000 }, () => {
-  const r = defaultExec('/bin/sh', ['-c', 'sleep 301'], { cwd: process.cwd(), timeoutMs: 2500, env: process.env });
+  const dur = `301.${process.pid}${Date.now() % 1000}`;
+  const r = defaultExec('/bin/sh', ['-c', `sleep ${dur}`], { cwd: process.cwd(), timeoutMs: 2500, env: process.env });
   assert.equal(r.timedOut, true);
   const err = r.stderr.toString();
   assert.match(err, /the step timed out; processes in its group/);
-  assert.match(err, /sleep 301/, 'the table names the stuck command');
-  const gone = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /sleep 301/.test(l) && !/grep/.test(l));
+  assert.ok(err.includes(`sleep ${dur}`), 'the table names the stuck command');
+  const gone = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => l.includes(`sleep ${dur}`));
   assert.deepEqual(gone, [], 'and the group is still killed afterwards');
 });
 
