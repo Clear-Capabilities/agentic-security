@@ -376,6 +376,17 @@ export function plannedCheckIds({ fast = false } = {}) {
 // here (see `resolveGroups`), so adding a check to CHECKS without touching this
 // table runs it in `rest`; it can never fall out of the release.
 // ---------------------------------------------------------------------------
+/**
+ * Which closure script this environment can honestly run. The hosted runner is Linux, where the trust boundary is unverified and the
+ * execution suites correctly skip (a skip is a gap, never a pass), so the full closure can never hold there: it runs the static half
+ * (plan, wiring, files). The full closure is established on a host that can run the boundary, by the release orchestrator's verify step,
+ * which refuses to tag a commit unless it held.
+ */
+export function closureGateScript(env = process.env) {
+  return env.GITHUB_ACTIONS === 'true' ? 'release:closure:static' : 'release:closure:check';
+}
+export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan, wiring, files) was checked. The execution closure needs a host that can run the trust boundary, which this Linux runner cannot yet; it is established by the release orchestrator\'s verify step before a tag is created, and is NOT claimed by this leg.';
+
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],
   'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
@@ -1057,7 +1068,11 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
   evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
-  evaluate('release-closure-gate', () => runNpmGate('release:closure:check'));
+  evaluate('release-closure-gate', () => {
+    const script = closureGateScript();
+    const r = runNpmGate(script);
+    return script === 'release:closure:static' ? { ...r, warnings: [...(r.warnings || []), HOSTED_CLOSURE_NOTE] } : r;
+  });
 
   evaluate('calibration-holdout', () => {
     const r = runCalibrationHoldoutCheck(REPO);
