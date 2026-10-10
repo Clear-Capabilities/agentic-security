@@ -235,12 +235,30 @@ export function checkClosurePlan({ steps = CLOSURE_STEPS, pkg, repoRoot = REPO, 
 // Every command runs inside its own process group, killed as a whole on timeout and again when the command ends, so a hung step cannot leave
 // a process tree behind (a plain timeout kills only the direct child: an orphaned test runner outlived its step by 25 minutes this way).
 const GROUP_RUNNER = `
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 const [ms, cmd, ...args] = process.argv.slice(1);
 const c = spawn(cmd, args, { stdio: 'inherit', detached: true });
 let timedOut = false;
 const killGroup = () => { try { process.kill(-c.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
-const t = setTimeout(() => { timedOut = true; killGroup(); }, Number(ms));
+const NL = String.fromCharCode(10);
+// Before a timed-out group is killed, say what is in it and (on macOS) what each process is blocked in, so a hang that cannot be reproduced
+// leaves its evidence in the step log instead of only a timeout.
+const snapshot = () => {
+  try {
+    const ps = spawnSync('ps', ['-axo', 'pid,ppid,pgid,etime,state,pcpu,command'], { encoding: 'utf8' });
+    const rows = (ps.stdout || '').split(NL).filter((l) => l.trim().split(/\\s+/)[2] === String(c.pid));
+    console.error(NL + '--- closure runner: the step timed out; processes in its group ---' + NL + rows.join(NL));
+    if (process.platform === 'darwin') {
+      for (const l of rows.slice(0, 8)) {
+        const pid = l.trim().split(/\\s+/)[0];
+        if (!pid) continue;
+        const sm = spawnSync('sample', [pid, '1', '-mayDie'], { encoding: 'utf8', timeout: 20000 });
+        console.error('--- sample of ' + pid + ' ---' + NL + (sm.stdout || '').split(NL).slice(0, 70).join(NL));
+      }
+    }
+  } catch { /* diagnostics must never change the outcome */ }
+};
+const t = setTimeout(() => { timedOut = true; snapshot(); killGroup(); }, Number(ms));
 c.on('error', (e) => { console.error('could not start: ' + e.message); process.exit(127); });
 c.on('exit', (code, sig) => { clearTimeout(t); killGroup(); process.exit(timedOut ? 124 : (code ?? (sig ? 128 : 1))); });
 `;

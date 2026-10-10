@@ -63,3 +63,13 @@ test('[REL-001.AC03] the Haskell toolchain step is unsupported where the fixture
   assert.deepEqual(applicability(step, env(() => true)), { applicable: true });
   assert.equal(applicability(step, { platform: 'darwin', hasTool: () => true, exists: () => true }).applicable, false, 'an environment that cannot probe is treated as lacking the module');
 });
+
+test('[REL-001.AC02] a step that times out writes the process table of its group into its log before it is killed, so an unreproducible hang leaves evidence', { timeout: 60000 }, () => {
+  const r = defaultExec('/bin/sh', ['-c', 'sleep 301'], { cwd: process.cwd(), timeoutMs: 2500, env: process.env });
+  assert.equal(r.timedOut, true);
+  const err = r.stderr.toString();
+  assert.match(err, /the step timed out; processes in its group/);
+  assert.match(err, /sleep 301/, 'the table names the stuck command');
+  const gone = spawnSync('ps', ['-eo', 'command'], { encoding: 'utf8' }).stdout.split('\n').filter((l) => /sleep 301/.test(l) && !/grep/.test(l));
+  assert.deepEqual(gone, [], 'and the group is still killed afterwards');
+});
