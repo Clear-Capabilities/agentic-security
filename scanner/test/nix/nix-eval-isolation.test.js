@@ -205,3 +205,28 @@ test('[NIX-011.AC04] a successful controlled evaluation is target-scoped, reprod
   const src = readFileSync(join(SCANNER, 'src', 'language', 'nix-eval-isolation.js'), 'utf8').replace(/\/\/.*$/gm, '');
   assert.ok(!/nixos-rebuild|switch-to-configuration|['"`]build['"`]|nix-env|nixos-install/.test(src), 'no build or activation command exists in the code');
 });
+
+test('[NIX-011.AC01] the isolation probe settles when the temporary directory is too long for a unix socket path, instead of hanging', async () => {
+  // A unix socket path is limited to about 104 bytes. With a longer temporary directory the probe's socket could not be created, and the
+  // evaluation waited forever for a listen callback that never came (found when a release gate's temp directory was 72 characters).
+  const realTmp = process.env.TMPDIR;
+  const deep = mkTestTmp('nix-eval-longpath-');
+  let long = deep;
+  while (long.length < 130) { long = join(long, 'a-long-directory-name'); mkdirSync(long, { recursive: true }); }
+  process.env.TMPDIR = long;
+  const leftoverBefore = readdirSync('/tmp').filter((f) => f.startsWith('nep-')).length;
+  try {
+    let watchdog;
+    const settled = await Promise.race([
+      probeSandbox(SB, { limits: { probeDeadlineMs: 15000 } }),
+      new Promise((r) => { watchdog = setTimeout(() => r('HUNG'), 45000); }),
+    ]).finally(() => clearTimeout(watchdog));
+    assert.notEqual(settled, 'HUNG', 'the probe never settled: the socket listen was left waiting');
+    assert.ok(settled.reason === null || typeof settled.reason === 'string', 'the probe returned a result object');
+    if (sandboxed) assert.equal(settled.verified, true, `a sandbox that works must still verify with a long temp directory: ${settled.reason}`);
+    else assert.equal(settled.verified, false);
+  } finally {
+    if (realTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = realTmp;
+  }
+  assert.equal(readdirSync('/tmp').filter((f) => f.startsWith('nep-')).length, leftoverBefore, 'the fallback socket directory was removed');
+});

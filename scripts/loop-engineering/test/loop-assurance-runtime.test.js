@@ -46,6 +46,11 @@ const waitQuiet = async (repo) => {
   if (pid) await repo.waitFor(async () => !alive(pid), { timeoutMs: 20000, label: 'controller exit' });
   return repo.status();
 };
+// The completion report is written after the terminal status is persisted, so a reader that has just seen the status must wait for the file.
+const readReport = async (repo) => {
+  await repo.waitFor(async () => existsSync(repo.runPath('completion-report.json')), { timeoutMs: 15000, label: 'completion-report.json' });
+  return JSON.parse(readFileSync(repo.runPath('completion-report.json'), 'utf8'));
+};
 const eventsOf = (repo) => readFileSync(repo.runPath('events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const attemptEnds = (repo, req = null) => eventsOf(repo).filter((e) => e.type === 'attempt-end' && (!req || e.requirement === req));
 const attemptStarts = (repo, req = null) => eventsOf(repo).filter((e) => e.type === 'attempt-start' && (!req || e.requirement === req));
@@ -923,7 +928,7 @@ test('[LOOP-004.AC03] the completion report names every unmet criterion, blocker
     await boot(repo, null);
     const st = await waitQuiet(repo);
     assert.equal(st.status, 'blocked');
-    const file = JSON.parse(readFileSync(repo.runPath('completion-report.json'), 'utf8'));
+    const file = await readReport(repo);
     const cli = JSON.parse((await repo.cli(['report', '--json'])).stdout);
     for (const rep of [file, cli]) {
       assert.equal(rep.verdict, 'incomplete'); assert.match(rep.claim, /^Not complete\./);
@@ -946,7 +951,7 @@ test('[LOOP-004.AC03] the completion report names every unmet criterion, blocker
   try {
     await boot(spent, null);
     await waitTerminal(spent);
-    const rep = JSON.parse(readFileSync(spent.runPath('completion-report.json'), 'utf8'));
+    const rep = await readReport(spent);
     assert.ok(rep.budgetStops.some((b) => b.kind === 'run-budget' && /spend budget exhausted/.test(b.detail)));
     assert.equal(rep.runStatus, 'paused-budget');
   } finally { await spent.cleanup(); }
@@ -968,7 +973,7 @@ test('[LOOP-004.AC03] the report is resumable after a crash, claims completion o
     repo.setMode({ default: 'fix' });
     await repo.waitFor(async () => (await repo.status()).status === 'completed', { timeoutMs: 90000, label: 'completed' });
     await repo.waitFor(async () => { const l = JSON.parse(readFileSync(layout(repo.root, repo.runId()).leaseFile, 'utf8')); return l.exited === true && existsSync(repo.runPath('completion-report.json')); }, { timeoutMs: 20000, label: 'report written' });
-    const done = JSON.parse(readFileSync(repo.runPath('completion-report.json'), 'utf8'));
+    const done = await readReport(repo);
     assert.equal(done.verdict, 'verified-complete'); assert.deepEqual(done.unmetCriteria, []); assert.deepEqual(done.unmetRequirements, []);
     assert.match(done.claim, /finite budgets of the profile.*not a promise/s);
     assert.equal(done.final.ok, true); assert.ok(done.releaseEvidence.finalEvidence.endsWith('final-evidence.json') && existsSync(done.releaseEvidence.finalEvidence));

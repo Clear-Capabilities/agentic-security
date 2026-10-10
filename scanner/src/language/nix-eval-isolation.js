@@ -148,6 +148,15 @@ const un=net.connect(sock);un.on('connect',()=>{r.daemonSocket='CONNECTED';un.de
 setTimeout(()=>{r.timeout=true;console.log(JSON.stringify(r));process.exit(0)},8000);
 `;
 
+/** server.listen that settles: it resolves when listening and rejects on the server's error (a bare callback never fires on failure). */
+function listenOrReject(server, ...args) {
+  return new Promise((resolve, reject) => {
+    const onError = (e) => reject(e);
+    server.once('error', onError);
+    server.listen(...args, () => { server.off('error', onError); resolve(); });
+  });
+}
+
 /**
  * Prove the isolation of a backend with real attempts, independent of any evaluator flag. The result is
  * `verified` only if the one permitted read worked, the scratch write worked and every other attempt was refused.
@@ -160,12 +169,31 @@ export async function probeSandbox(sb, opts = {}) {
   for (const d of [allowed, scratch, outside]) mkdirSync(d);
   writeFileSync(join(allowed, 'a.txt'), 'allowed'); writeFileSync(join(outside, 'secret.txt'), 'secret');
   const script = join(base, 'probe.cjs'); writeFileSync(script, PROBE_SOURCE);
-  const sockPath = join(base, 'daemon.sock');
+  let sockPath = join(base, 'daemon.sock');
+  let sockDir = null;
   let connections = 0;
   const tcp = netServer((s) => { connections++; s.destroy(); });
-  const uds = netServer((s) => { connections++; s.destroy(); });
-  await new Promise((r) => tcp.listen(0, '127.0.0.1', r));
-  await new Promise((r) => uds.listen(sockPath, r));
+  let uds = netServer((s) => { connections++; s.destroy(); });
+  try {
+    await listenOrReject(tcp, 0, '127.0.0.1');
+    try {
+      await listenOrReject(uds, sockPath);
+    } catch (e) {
+      // A unix socket path is limited to about 104 bytes, and a temporary directory can easily be longer than that (macOS, CI runners).
+      // Without an error handler the listen call never completed and the whole evaluation hung. Retry in a short directory; the probe
+      // proves that the sandboxed process is refused, which does not depend on where the socket lives.
+      if (!['EINVAL', 'ENAMETOOLONG'].includes(e && e.code) || !existsSync('/tmp')) throw e;
+      uds.close();
+      uds = netServer((s) => { connections++; s.destroy(); });
+      sockDir = mkdtempSync('/tmp/nep-');
+      sockPath = join(sockDir, 'd.sock');
+      await listenOrReject(uds, sockPath);
+    }
+  } catch (e) {
+    tcp.close(); uds.close(); rmSync(base, { recursive: true, force: true });
+    if (sockDir) rmSync(sockDir, { recursive: true, force: true });
+    return { verified: false, backend: sb.backend, reason: `the probe could not create its listeners (${(e && e.code) || 'error'}): isolation is not verified`, attempts: {} };
+  }
   const port = tcp.address().port;
   try {
     const exe = opts.nodePath || process.execPath;
@@ -186,7 +214,7 @@ export async function probeSandbox(sb, opts = {}) {
     if (attempts.credentialEnv && attempts.credentialEnv !== 'absent') insufficient.push('a credential environment variable was visible');
     if (attempts.timeout) insufficient.push('the probe timed out');
     return { verified: insufficient.length === 0 && connections === 0, backend: sb.backend, reason: insufficient.length ? insufficient.join('; ') : (connections ? 'the probe listeners saw a connection' : null), attempts, listenerConnections: connections, insufficient };
-  } finally { tcp.close(); uds.close(); rmSync(base, { recursive: true, force: true }); }
+  } finally { tcp.close(); uds.close(); rmSync(base, { recursive: true, force: true }); if (sockDir) rmSync(sockDir, { recursive: true, force: true }); }
 }
 
 // ── 3. evaluator feature detection ───────────────────────────────────────────
