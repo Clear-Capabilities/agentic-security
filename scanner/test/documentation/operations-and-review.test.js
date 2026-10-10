@@ -41,7 +41,12 @@ describe('[DOC-003.AC01] the guides show finite background start, live status, p
     assert.ok(!/\bFAIL\b/.test(r.stdout), 'a step failed');
     for (const phase of ['finite background start, live status, pause, resume', 'cancellation', 'dependency invalidation', 'blocked recovery', 'final verification']) assert.ok(r.stdout.includes(phase), `the walk-through skipped: ${phase}`);
     // what the guide quotes is what the controller printed
-    assert.deepEqual(missingFrom(blockWith(CONTROLLER, '== finite background start'), r.text), []);
+    // The `states:` and `current:` lines of a live status are a snapshot of a worker that is still running, so their values depend on timing:
+    // require that a real run prints them in this shape, and compare everything else exactly.
+    const volatile = (l) => /^states: /.test(l) || /^current: /.test(l);
+    assert.deepEqual(missingFrom(blockWith(CONTROLLER, '== finite background start'), r.text, { ignore: volatile }), []);
+    assert.match(r.text, /\|\s*states: .*(?:verified|running|verifying|pending|blocked|stale|failed)/, 'a live status prints a states line');
+    assert.match(r.text, /\|\s*current: \S+ \([a-z][a-z ]*\d*\)/, 'a live status names the current requirement and what it is doing (a worker attempt, verifying, ...)');
   });
 
   test('[DOC-003.AC01] the walk-through removed every process and directory it made', () => {
