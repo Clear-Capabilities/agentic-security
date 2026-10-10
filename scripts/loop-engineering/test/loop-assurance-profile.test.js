@@ -428,13 +428,18 @@ test('[LOOP-001.AC03] the real profile carries the PRD section 7 limits as finit
     heartbeatSeconds: 5, workerIdleSeconds: 180, noProgressSeconds: 600, subprocessWallSeconds: 120, killGraceSeconds: 10,
     claudeAttemptSeconds: 1200, claudeMaxTurns: 80, attemptsPerRequirement: 3, sameFailureRepeats: 2,
     runWallSeconds: 43200, runMaxAttempts: 150, claudeBudgetUsd: 50, perAttemptBudgetUsd: 6, retryBackoffMaxSeconds: 60, resource: undefined,
+    networkRequestSeconds: 15, networkRetries: 2, unknownBillingReserveUsd: 6,
+    suiteCeilings: { standard: { ceilingSeconds: 120, childLeaseSeconds: 90 }, 'runtime-integration': { ceilingSeconds: 900, childLeaseSeconds: 600 }, 'full-evaluation': { ceilingSeconds: 7200, childLeaseSeconds: 3600 } },
   });
   assert.deepEqual({ ...p.limits.resource, cpu: undefined }, { maxRssMiB: 6144, maxOutputMiB: 256, maxLogMiB: 5, minFreeDiskGiB: 5, cpu: undefined });
   assert.equal(p.worker.concurrency, 1);
   assert.equal(p.worker.permissionMode, 'dontAsk');
   assert.deepEqual([p.serve.host, p.serve.port], ['127.0.0.1', 4317]);
   const gaps = new Map(p.unenforced.map((u) => [u.field, u]));
-  for (const f of ['networkRequestSeconds', 'networkRetries', 'providerEnvelopeUsd', 'budgetsAreCapsNotAuthorization', 'linuxEnforcementBackend']) assert.ok(gaps.has(f), `${f} is disclosed`);
+  for (const f of ['budgetsAreCapsNotAuthorization', 'linuxEnforcementBackend']) assert.ok(gaps.has(f), `${f} is disclosed`);
+  // Each of these became a real control, proven at its boundary in loop-bounds.test.js and loop-spend.test.js, so it must not be disclosed as a gap.
+  for (const f of ['subprocessWallSeconds', 'networkRequestSeconds', 'networkRetries', 'suiteCeilings', 'providerEnvelopeUsd', 'unknownBillingReserve']) assert.equal(gaps.has(f), false, `${f} is enforced and proven, so it must not be disclosed as a gap`);
+  assert.equal(p.providerEnvelope.enabled, false, 'the separate provider envelope ships OFF');
   // LOOP-002 made the heartbeat a real control (read from the profile, tested in loop-assurance-runtime.test.js), so it is no longer listed as unenforced.
   assert.equal(gaps.has('heartbeatSeconds'), false, 'heartbeatSeconds is enforced and proven, so it must not be disclosed as a gap');
   for (const u of p.unenforced) assert.ok(u.note.length > 20 && u.status, `${u.field} states a status and a reason`);

@@ -9,6 +9,7 @@ import { parsePrd, readPrd, categoryOf, ImportError, findCycles } from './prd-im
 import { validate } from './schema.mjs';
 import { layout } from './state.mjs';
 import { validateProfile, workstreamMatches } from './profile.mjs';
+import { suiteBounds } from './bounds.mjs';
 
 const SCHEMA_DIR = new URL('../schemas/', import.meta.url);
 export const loadSchema = (name) => JSON.parse(readFileSync(new URL(name, SCHEMA_DIR), 'utf8'));
@@ -58,6 +59,8 @@ export function buildRequirements({ parsed, profile, repoRoot }) {
         files: suite.files || [], expectedExitCode: 0, timeoutSeconds: suite.timeoutSeconds,
         ...(suite.requiresTools ? { requiresTools: suite.requiresTools } : {}),
         ...(suite.remote ? { remote: suite.remote } : {}),
+        // the suite class's ceiling and the lease each child file gets inside it (profiles with limits.suiteCeilings only)
+        ...(suiteBounds(profile, r.suite) ? { suiteClass: suiteBounds(profile, r.suite).class, ceilingSeconds: suiteBounds(profile, r.suite).ceilingSeconds, childLeaseSeconds: suiteBounds(profile, r.suite).childLeaseSeconds } : {}),
       },
       ...(r.extra ? { addedAfterBaseline: true } : {}),
     });

@@ -13,7 +13,7 @@
 // A fact that cannot be gathered is a missing fact, and a missing fact is an unmet item, never a skip.
 import { readFileSync, statSync, mkdirSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execBoundedSync } from './bounds.mjs';
 import { sha256, atomicWriteJson, atomicWriteFile, canonicalJson } from './util.mjs';
 import { listEvidence, assessOne } from './evidence.mjs';
 import { GATE_GROUPS, DELIVERABLE_KINDS } from './closure-config.mjs';
@@ -275,7 +275,7 @@ export function rehashReceipts(receipts) {
  * untracked must not make every closure impossible. Everything else untracked or modified counts.
  */
 export function gitFacts(repoRoot, { ignore = [] } = {}) {
-  const g = (...a) => { try { return execFileSync('git', a, { cwd: repoRoot, encoding: 'utf8', timeout: 30000, maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
+  const g = (...a) => { try { return execBoundedSync('git', a, { cwd: repoRoot, wallSeconds: 30, maxBuffer: 64 * 1024 * 1024 }).trim(); } catch { return null; } };
   const head = g('rev-parse', 'HEAD');
   const status = g('status', '--porcelain', '--', '.', ...ignore.map((p) => `:(exclude,literal)${p}`));
   if (head === null || status === null) return null;
@@ -318,7 +318,7 @@ export function fileSetDeliverable(kind, repoRoot, paths) {
 export function implementationDiff({ repoRoot, baseHead, outFile }) {
   if (!baseHead) return { kind: 'implementation-diff', status: 'missing', reason: 'the run recorded no base revision, so there is nothing to diff against' };
   let buf;
-  try { buf = execFileSync('git', ['diff', '--binary', '--no-color', baseHead, 'HEAD'], { cwd: repoRoot, maxBuffer: MAX_DIFF_BYTES + 1, timeout: 120000, stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) {
+  try { buf = execBoundedSync('git', ['diff', '--binary', '--no-color', baseHead, 'HEAD'], { cwd: repoRoot, maxBuffer: MAX_DIFF_BYTES + 1, wallSeconds: 120, encoding: 'buffer' }); } catch (e) {
     return { kind: 'implementation-diff', status: 'missing', reason: `git diff failed or exceeded ${MAX_DIFF_BYTES} bytes: ${e.code || e.message}` };
   }
   if (!buf.length) return { kind: 'implementation-diff', status: 'missing', reason: `no committed change since ${baseHead.slice(0, 12)}; an empty diff is not an implementation` };

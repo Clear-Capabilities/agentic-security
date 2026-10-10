@@ -2,7 +2,7 @@
 // (tracked + untracked-but-not-ignored), so the controller's own state
 // directory, node_modules and build caches are excluded by .gitignore and never
 // perturb a digest.
-import { execFileSync } from 'node:child_process';
+import { execBoundedSync } from './bounds.mjs';
 import { statSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { sha256, atomicWriteJson, readJson } from './util.mjs';
@@ -28,7 +28,7 @@ export function digestBytes(rel, buf) {
 }
 
 export function listRepoFiles(repoRoot) {
-  const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024, timeout: 60000 });
+  const out = execBoundedSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024, wallSeconds: 60, encoding: 'buffer' });
   const files = out.toString('utf8').split('\0').filter(Boolean);
   // Defence in depth: never digest controller state even if .gitignore is edited.
   return [...new Set(files)].filter((f) => !f.startsWith('.loop-engineering/') && !f.startsWith('.git/') && !DERIVED_FILES.has(f)).sort();

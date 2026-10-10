@@ -6,6 +6,7 @@ import { resolve, relative, isAbsolute } from 'node:path';
 import { sha256, canonicalJson } from './util.mjs';
 import { STALE_AFTER_MS } from './state.mjs';
 import { validateClosureConfig } from './closure-config.mjs';
+import { validateBoundsConfig } from './bounds.mjs';
 
 export class ProfileError extends Error {
   constructor(problems) { super(`invalid execution profile:\n  - ${problems.join('\n  - ')}`); this.name = 'ProfileError'; this.problems = problems; }
@@ -147,6 +148,7 @@ export function validateProfile(p, repoRoot) {
     if (!(s.requiresTools || []).length) problems.push(`suite ${name}: remote is only reached when a required tool is missing, so requiresTools must name one`);
   }
   for (const g of [...(p.baselineGates || []), ...(p.finalGates || [])]) checkCmd(`gate ${g.id}`, g);
+  validateBoundsConfig(p, problems);
   if (p.workstreams !== undefined) validateWorkstreams(p.workstreams, problems);
   if (p.unenforced !== undefined) validateUnenforced(p.unenforced, problems);
   if (!p.watch || !p.watch.LOOP) problems.push('watch globs missing');

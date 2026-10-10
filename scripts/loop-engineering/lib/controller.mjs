@@ -22,6 +22,8 @@ import { assessAll, computeProgress, formatPercent } from './progress.mjs';
 import { verifyRequirement, environmentInfo, toolAvailable } from './verifier.mjs';
 import { listEvidence, writeEvidence, verifierHash, requirementHash, effectiveWatch, VERIFIER_VERSION, sign } from './evidence.mjs';
 import { runBounded, OwnedSet, reapOwned } from './proc.mjs';
+import { configureBounds } from './bounds.mjs';
+import { envelopeConfig, chargeEnvelope, emptyProvider, modelCharge } from './envelope.mjs';
 import { startTimeOf, identityMatches, signalIdentity } from './procscan.mjs';
 import { AttemptWatchdog } from './watchdog.mjs';
 import { activeOpLeases } from './oplease.mjs';
@@ -119,6 +121,7 @@ export class Controller {
     validateProfile(profile, this.repoRoot);
     this.profile = profile; this.profileSha = psha;
     this.limits = profile.limits;
+    configureBounds(profile.limits);
     setLogCap(profile.limits.resource.maxLogMiB * 1048576);
     const m = loadManifest(this.repoRoot);
     if (!m.ok) throw Object.assign(new Error(m.error), { blocker: { type: 'invalid-manifest', detail: m.error } });
@@ -152,6 +155,10 @@ export class Controller {
     }
     this.S.controller = { pid: process.pid, start: startTimeOf(process.pid), startedAt: nowIso() };
     this.S.budgets.segmentStartedAt = Date.now();
+    // The separately metered provider/infrastructure envelope. Its accounting persists across restarts (an exhausted envelope is never reset);
+    // its configuration is the CURRENT profile's, and a state written before the envelope existed gets an empty meter.
+    this.envelope = envelopeConfig(profile);
+    this.S.budgets.provider = { ...emptyProvider(), ...(this.S.budgets.provider || {}), enabled: this.envelope.enabled, capUsd: this.envelope.present ? this.envelope.capUsd : null, preauthorizedBy: this.envelope.preauthorizedBy || null };
     this.driftCheckedAt = 0;
     const drift = this.driftProblem(true);
     if (drift) throw Object.assign(new Error(`drift: ${drift}`), { blocker: { type: 'drift', detail: drift } });
@@ -305,6 +312,9 @@ export class Controller {
   modelBudgetProblem() {
     const L = this.limits;
     const remaining = L.claudeBudgetUsd - this.S.budgets.usdUsed;
+    // Unknown billing: once an attempt has finished without a reported cost, the next paid attempt must fit its defined upper-bound
+    // reserve under the cap. Stopping here is the alternative to assuming the unreported spend was zero.
+    if (L.unknownBillingReserveUsd != null && this.S.budgets.billingUnknown && remaining < L.unknownBillingReserveUsd) return `unknown billing: the last attempt reported no cost, and the defined upper-bound reserve of $${L.unknownBillingReserveUsd} no longer fits under the $${L.claudeBudgetUsd} cap (used about $${this.S.budgets.usdUsed.toFixed(2)}, of which $${(this.S.budgets.usdReserved || 0).toFixed(2)} is reserve); paid work stops rather than assuming zero cost`;
     if (remaining < (L.minAttemptBudgetUsd ?? 1)) return `Claude spend budget exhausted (used about $${this.S.budgets.usdUsed.toFixed(2)} of $${L.claudeBudgetUsd}; token-derived amounts are estimates, not exact charges)`;
     return null;
   }
@@ -468,19 +478,21 @@ export class Controller {
     const cls = classifyWorker(run, stream);
     if (run.outcome === 'cancelled') cls.kind = this.abortReason === 'paused' || this.abortReason === 'stop' ? `interrupted-${this.abortReason}` : (termReason || 'cancelled');
     else if (termReason) cls.kind = termReason;
-    // Cost: a reported figure when the stream finished, otherwise a labelled estimate.
-    let cost = cls.costUsd, estimated = false;
-    if (cost == null && stream.runningCostUsd > 0) { cost = stream.runningCostUsd; estimated = true; }
-    if (cost == null) {
-      const u = stream.usage;
-      cost = (u.input * ESTIMATE_PRICING.input + u.output * ESTIMATE_PRICING.output + u.cacheRead * ESTIMATE_PRICING.cacheRead + u.cacheCreate * ESTIMATE_PRICING.cacheCreate) / 1e6;
-      estimated = true;
-    }
+    // Cost: a reported figure when the stream finished, otherwise a labelled estimate. With a defined unknown-billing reserve
+    // (limits.unknownBillingReserveUsd) an unreported figure is charged at least that upper bound, never zero. An attempt that never
+    // reached the model (the executable would not start, or a global blocker such as a missing login) cost nothing and is not reserved.
+    const u = stream.usage;
+    const tokenUsd = (u.input * ESTIMATE_PRICING.input + u.output * ESTIMATE_PRICING.output + u.cacheRead * ESTIMATE_PRICING.cacheRead + u.cacheCreate * ESTIMATE_PRICING.cacheCreate) / 1e6;
+    const neverBilled = typeof cls.costUsd !== 'number' && (run.outcome === 'spawn-failed' || cls.blockers.some((b) => GLOBAL_BLOCKERS.has(b.type)));
+    const mc = neverBilled ? { usd: 0, estimated: false, reserve: false } : modelCharge({ reportedUsd: cls.costUsd, runningUsd: stream.runningCostUsd, tokenUsd, reserveUsd: this.limits.unknownBillingReserveUsd ?? null });
+    const cost = mc.usd, estimated = mc.estimated;
     this.S.budgets.usdUsed += cost;
     if (estimated) this.S.budgets.usdEstimated += cost; else this.S.budgets.usdReported += cost;
-    this.emit('attempt-end', { requirement: req.id, attempt: attemptNo, kind: cls.kind, turns: cls.turns, costUsd: Number(cost.toFixed(4)), costIsEstimate: estimated, denials: cls.denials, blockers: cls.blockers.map((b) => b.type), outcome: run.outcome, reason: run.reason || termReason });
+    if (mc.reserve) { this.S.budgets.usdReserved = (this.S.budgets.usdReserved || 0) + cost; this.S.budgets.billingUnknown = true; }
+    else if (typeof cls.costUsd === 'number') this.S.budgets.billingUnknown = false;
+    this.emit('attempt-end', { requirement: req.id, attempt: attemptNo, kind: cls.kind, turns: cls.turns, costUsd: Number(cost.toFixed(4)), costIsEstimate: estimated, costIsUnknownBillingReserve: !!mc.reserve, denials: cls.denials, blockers: cls.blockers.map((b) => b.type), outcome: run.outcome, reason: run.reason || termReason });
     this.S.current = null;
-    return { kind: cls.kind, cls, run, attemptNo, cost, estimated };
+    return { kind: cls.kind, cls, run, attemptNo, cost, estimated, reserve: !!mc.reserve };
   }
 
   failureNotes(req) {
@@ -548,6 +560,16 @@ export class Controller {
 
   // ---- final phase ----------------------------------------------------------------
   async runGate(g, { keepOutput = false } = {}) {
+    // A step that declares a cost is paid infrastructure: it is charged to the separate envelope BEFORE it runs, and is not run at all when
+    // the envelope is off or the charge would pass its cap. The refusal is a failed gate with the reason, so no phase can pass over it.
+    const charge = chargeEnvelope(this.S.budgets.provider, this.envelope, g);
+    if (charge.paid) {
+      this.emit(charge.ok ? 'provider-charge' : 'provider-stop', { step: g.id, usd: charge.ok ? charge.charged : charge.usd, unknown: !!charge.unknown, usedUsd: this.S.budgets.provider.usedUsd, capUsd: this.envelope.capUsd, ...(charge.ok ? {} : { kind: charge.kind, reason: charge.reason }) });
+      this.save();
+    }
+    if (!charge.ok) {
+      return { id: g.id, argv: [g.executable, ...g.args], cwd: g.cwd, expectedExitCodes: g.expectedExitCodes || [0], exitCode: null, signal: null, outcome: 'not-run', durationMs: 0, ok: false, log: null, reason: charge.reason, paidStepRefused: charge.kind, ...(keepOutput ? { stdout: '' } : {}) };
+    }
     const logPath = join(this.L.logsDir, `final-${g.id}-${Date.now()}.log`);
     const r = await runGateCommand(g, { repoRoot: this.repoRoot, logPath, runId: this.runId, owned: this.owned, leasesDir: this.L.leasesDir });
     recordJob(this.L, r.run);

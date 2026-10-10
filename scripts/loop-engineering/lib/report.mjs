@@ -31,6 +31,7 @@ export function buildCompletionReport(status, { generatedAt = new Date().toISOSt
       if (b.type === 'repeated-failure') budgetStops.push({ kind: 'same-failure-repeats', requirement: r.id, detail: b.detail, limit: lim.sameFailureRepeats ?? null });
     }
   }
+  for (const st of bud.provider?.stops || []) budgetStops.push({ kind: `provider-envelope-${st.kind}`, step: st.step, detail: st.reason });
   const blockers = [
     ...(status.blockers || []).map((b) => ({ scope: 'run', type: b.type, detail: b.detail })),
     ...unmetRequirements.flatMap((r) => (r.blockers || []).map((b) => ({ scope: 'requirement', requirement: r.id, type: b.type, detail: b.detail }))),
@@ -57,7 +58,12 @@ export function buildCompletionReport(status, { generatedAt = new Date().toISOSt
     unmetCriteria: unmetRequirements.flatMap(criterionReasons),
     unmetRequirements: unmetRequirements.map((r) => ({ id: r.id, state: r.state, attempts: r.attempts, blockers: (r.blockers || []).map((b) => b.type) })),
     blockers, budgetStops,
-    budgets: { used: { attempts: bud.attemptsUsed ?? 0, usd: bud.usdUsed ?? 0, usdIsEstimateWhenKilled: true, wallMs: bud.wallUsedMs ?? 0 }, limits: { runMaxAttempts: lim.runMaxAttempts ?? null, claudeBudgetUsd: lim.claudeBudgetUsd ?? null, runWallSeconds: lim.runWallSeconds ?? null } },
+    budgets: {
+      used: { attempts: bud.attemptsUsed ?? 0, usd: bud.usdUsed ?? 0, usdIsEstimateWhenKilled: true, wallMs: bud.wallUsedMs ?? 0, usdUnknownBillingReserve: bud.usdReserved ?? 0 },
+      limits: { runMaxAttempts: lim.runMaxAttempts ?? null, claudeBudgetUsd: lim.claudeBudgetUsd ?? null, runWallSeconds: lim.runWallSeconds ?? null, unknownBillingReserveUsd: lim.unknownBillingReserveUsd ?? null },
+      // The separately metered provider/infrastructure envelope. Never merged into the model spend above.
+      ...(bud.provider ? { providerEnvelope: { enabled: bud.provider.enabled === true, capUsd: bud.provider.capUsd ?? null, usedUsd: bud.provider.usedUsd ?? 0, preauthorizedBy: bud.provider.preauthorizedBy ?? null, charges: bud.provider.charges || [], stops: bud.provider.stops || [] } } : {}),
+    },
     implemented: rows.filter((r) => r.state === 'verified').map((r) => ({ id: r.id, title: r.title, weight: r.weight, evidence: r.evidence?.id || null })),
     implementedButStale: rows.filter((r) => r.state === 'stale').map((r) => ({ id: r.id, reasons: r.staleReasons })),
     releaseEvidence: status.evidencePaths || {},

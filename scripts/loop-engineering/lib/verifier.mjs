@@ -9,18 +9,19 @@
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execBoundedSync } from './bounds.mjs';
 import { runBounded } from './proc.mjs';
+import { runLeasedChildren, mergeTap } from './child-leases.mjs';
 import { parseTap } from './tap.mjs';
 import { sha256, readJson, nowIso } from './util.mjs';
 import { writeEvidence, verifierHash, requirementHash, effectiveWatch, VERIFIER_VERSION } from './evidence.mjs';
 import { registerOpLease } from './oplease.mjs';
 import { runRemote } from './remote.mjs';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 export function toolAvailable(name) {
   if (name === 'node') return true;
-  try { execFileSync(process.platform === 'win32' ? 'where' : 'which', [name], { stdio: 'ignore' }); return true; } catch { return false; }
+  try { execBoundedSync(process.platform === 'win32' ? 'where' : 'which', [name], { wallSeconds: 10 }); return true; } catch { return false; }
 }
 
 export function environmentInfo() {
@@ -89,10 +90,14 @@ export async function verifyRequirement(ctx, req, opts = {}) {
     mkdirSync(join(L.evidenceDir, req.id), { recursive: true, mode: 0o700 });
     const lease = registerOpLease(L.leasesDir, { label: `verify ${req.id}`, deadlineSeconds: v.timeoutSeconds + 15 });
     try {
-      run = await runBounded({
+      const env = { ...process.env, LOOP_ENGINEERING_VERIFY: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
+      if (v.childLeaseSeconds && v.files.length > 1) {
+        // A suite of several files runs each as a child with its own finite lease, all inside the suite class's ceiling (LOOP-002).
+        run = await runLeasedSuite({ v, argv, cwdAbs, env, logPath, opts, ctx, reqId: req.id });
+      } else run = await runBounded({
         argv, cwd: cwdAbs, wallMs: v.timeoutSeconds * 1000, graceMs: opts.graceMs ?? 5000, logPath,
         maxLogBytes: opts.maxLogBytes ?? 5 * 1024 * 1024, tailBytes: 8 * 1024 * 1024, runId: ctx.runId, owned: ctx.owned, label: `verify:${req.id}`,
-        env: { ...process.env, LOOP_ENGINEERING_VERIFY: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+        env,
         maxRssBytes: opts.maxRssBytes ?? 0,
       });
     } finally { lease.release(); }
@@ -139,6 +144,7 @@ export async function verifyRequirement(ctx, req, opts = {}) {
       argv: remoteRecord ? ['hosted-ci', v.remote.workflow, String(remoteRecord.runId)] : [v.executable, ...argv.slice(1)], cwd: v.cwd, startedAt, endedAt: nowIso(), expectedExitCode: v.expectedExitCode, timeoutSeconds: v.timeoutSeconds,
       exitCode: run?.exitCode ?? (remoteRecord ? (result === 'pass' ? 0 : 1) : null), signal: run?.signal ?? null, outcome: run ? run.outcome : (remoteRecord ? 'hosted-ci' : (blocker ? 'blocked' : 'not-run')), durationMs: run?.durationMs ?? 0,
       orphansKilled: run?.orphansKilled?.length ?? 0, peakRssKb: run?.peakRssKb ?? 0,
+      ...(run?.children ? { children: run.children, hungFiles: run.hung } : {}),
     },
     counts, criteria,
     ...(blocker ? { blocker } : {}),
@@ -148,6 +154,27 @@ export async function verifyRequirement(ctx, req, opts = {}) {
   };
   const out = writeEvidence(L, req.id, envelope, key);
   return { evidence: out.evidence, file: out.file, tail: run ? (run.stdoutTail.slice(-4000) + '\n' + run.stderrTail.slice(-2000)) : '' };
+}
+
+// Leased execution of a multi-file suite, shaped like one runBounded result so everything downstream (TAP parsing, evidence) is unchanged.
+async function runLeasedSuite({ v, argv, cwdAbs, env, logPath, opts, ctx, reqId }) {
+  const [exe] = argv;
+  const t0 = Date.now();
+  const lr = await runLeasedChildren({
+    files: v.files, argvFor: (f) => [exe, '--test', '--test-reporter=tap', f], cwd: cwdAbs, env, ceilingSeconds: v.timeoutSeconds, childLeaseSeconds: v.childLeaseSeconds,
+    graceMs: opts.graceMs ?? 5000, concurrency: 2, label: `verify:${reqId}`, runId: ctx.runId, owned: ctx.owned, extra: { maxRssBytes: opts.maxRssBytes ?? 0 },
+  });
+  const cap = opts.maxLogBytes ?? 5 * 1024 * 1024;
+  const log = lr.children.map((c) => `### ${c.file} (${c.outcome}${c.reason ? `: ${c.reason}` : ''})\n${c.stdoutTail}${c.stderrTail ? `\n[err] ${c.stderrTail}` : ''}\n`).join('\n');
+  const buf = Buffer.from(log, 'utf8');
+  writeFileSync(logPath, buf.length > cap ? buf.subarray(0, cap) : buf, { mode: 0o600 });
+  const outcome = lr.outcome === 'exited' ? 'exited' : (['lease-expired', 'ceiling-expired', 'not-run'].includes(lr.outcome) ? 'timeout-wall' : lr.outcome);
+  return {
+    outcome, reason: lr.reason, exitCode: lr.exitCode, signal: null, stdoutTail: mergeTap(lr.children), stderrTail: '',
+    bytes: { stdout: lr.children.reduce((n, c) => n + (c.bytes?.stdout || 0), 0), stderr: lr.children.reduce((n, c) => n + (c.bytes?.stderr || 0), 0) },
+    logTruncated: buf.length > cap, durationMs: Date.now() - t0, orphansKilled: new Array(lr.children.reduce((n, c) => n + (c.orphansKilled || 0), 0)), peakRssKb: Math.max(0, ...lr.children.map((c) => c.peakRssKb || 0)),
+    children: lr.children.map((c) => ({ file: c.file, outcome: c.outcome, exitCode: c.exitCode, leaseSeconds: c.leaseSeconds, durationMs: c.durationMs })), hung: lr.hung,
+  };
 }
 
 export function loadJsonSafe(p) { return readJson(p, null); }

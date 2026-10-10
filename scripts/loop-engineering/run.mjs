@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Supervised-loop CLI. Every subcommand parses its options strictly: an unknown
 // flag is an error, never ignored. See docs/guides/loop-engineering.md.
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { execBoundedSync, configureBounds } from './lib/bounds.mjs';
 import { openSync, closeSync, mkdirSync, statfsSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,11 +51,14 @@ const USAGE = `usage: node scripts/loop-engineering/run.mjs <command> [options]
   exec --deadline <s> [--label x] -- <cmd...>   run a command under a registered, bounded operation lease
 `;
 
+// Loading the profile in force also configures the controller's own subprocess and network bounds from its limits.
+function loadProfileBounded(path) { const r = loadProfile(path); configureBounds(r.profile.limits); return r; }
+
 const out = (s = '') => process.stdout.write(s + '\n');
 const err = (s) => process.stderr.write(s + '\n');
 
 function gitInfo(root) {
-  const g = (...a) => { try { return execFileSync('git', a, { cwd: root, encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
+  const g = (...a) => { try { return execBoundedSync('git', a, { cwd: root, wallSeconds: 15 }).trim(); } catch { return null; } };
   const status = g('status', '--porcelain') || '';
   return { head: g('rev-parse', 'HEAD'), branch: g('rev-parse', '--abbrev-ref', 'HEAD'), dirtyFiles: status.split('\n').filter(Boolean).map((l) => l.slice(3)), dirtyCount: status ? status.split('\n').filter(Boolean).length : 0 };
 }
@@ -63,7 +67,7 @@ function toolVersions() {
   const v = {};
   v.node = process.version;
   for (const [name, args] of [['npm', ['--version']], ['git', ['--version']], ['python3', ['--version']], ['claude', ['--version']], ['nix', ['--version']], ['ghc', ['--version']], ['cabal', ['--version']], ['stack', ['--version']]]) {
-    try { v[name] = execFileSync(name, args, { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]; } catch { v[name] = null; }
+    try { v[name] = execBoundedSync(name, args, { wallSeconds: 8 }).trim().split('\n')[0]; } catch { v[name] = null; }
   }
   return v;
 }
@@ -106,7 +110,7 @@ async function cmdInit(argv) {
     const lease = judgeLease(L0.leaseFile);
     if (st && lease.state === 'live' && !isTerminal(st.status)) throw new UsageError(`run ${cur} is active; stop it before re-initialising`);
   }
-  const { profile, sha256: psha } = loadProfile(resolve(root, a.profile));
+  const { profile, sha256: psha } = loadProfileBounded(resolve(root, a.profile));
   validateProfile(profile, root);
   const checkout = gitInfo(root);
   const tools = toolVersions();
@@ -114,6 +118,11 @@ async function cmdInit(argv) {
   if (!a['skip-baseline-gates']) {
     out(`recording baseline gate results (${profile.baselineGates.length} gates, each bounded)...`);
     for (const g of profile.baselineGates) {
+      if (g.costUsd !== undefined || g.costUnknown) {
+        baselineGates.push({ id: g.id, argv: [g.executable, ...g.args], exitCode: null, outcome: 'skipped-paid', ok: false, recordedAt: nowIso(), note: 'a paid step is metered against the provider envelope by the controller, which is not running yet; it was not run at init' });
+        out(`  ${g.id}: skipped (paid step)`);
+        continue;
+      }
       const r = await runBounded({ argv: [g.executable, ...g.args], cwd: resolve(root, g.cwd), wallMs: g.timeoutSeconds * 1000, graceMs: 5000, label: `baseline:${g.id}`, env: { ...process.env, NO_COLOR: '1' } });
       baselineGates.push({ id: g.id, argv: [g.executable, ...g.args], exitCode: r.exitCode, outcome: r.outcome, durationMs: r.durationMs, ok: r.outcome === 'exited' && r.exitCode === 0, recordedAt: nowIso(), note: 'baseline result before any loop work; a failure here is pre-existing, not a regression' });
       out(`  ${g.id}: ${r.outcome === 'exited' ? `exit ${r.exitCode}` : r.outcome}`);
@@ -184,7 +193,7 @@ async function cmdPreflight(argv) {
   let profile = null;
   const st = runId ? readJson(layout(root, runId).stateFile, null) : null;
   try {
-    const p = loadProfile(resolve(root, st?.profilePath || DEFAULT_PROFILE));
+    const p = loadProfileBounded(resolve(root, st?.profilePath || DEFAULT_PROFILE));
     profile = p.profile; validateProfile(profile, root);
     add('profile', 'pass', `${profile.name}; finite budgets: ${profile.limits.runWallSeconds}s wall, ${profile.limits.runMaxAttempts} attempts, $${profile.limits.claudeBudgetUsd}; one worker`);
     add('permissions', 'pass', `scoped allow list (${profile.worker.allowedTools.length} entries), deny list (${profile.worker.disallowedTools.length}), mode ${profile.worker.permissionMode}; no bypass`);
@@ -311,7 +320,7 @@ async function cmdStart(argv) {
   const { runId, state } = loadRunContext(root);
   if (state.status === 'completed') throw new UsageError(`run ${runId} is already completed; run init to create a new run`);
   try {
-    const { profile } = loadProfile(resolve(root, state.profilePath || DEFAULT_PROFILE));
+    const { profile } = loadProfileBounded(resolve(root, state.profilePath || DEFAULT_PROFILE));
     validateProfile(profile, root);
     const blocked = suiteLaunchBlockers(profile, root);
     if (blocked.length) throw new UsageError(`refusing to launch: ${blocked.length} suite(s) cannot run yet: ${blocked.map((x) => `${x.suite} (${x.reason})`).join('; ')}`);
@@ -517,7 +526,7 @@ async function cmdController(argv) {
 async function cmdGuardian(argv) {
   const a = parseArgs(argv, { flags: { run: { type: 'string', required: true }, serve: { type: 'string' } } });
   const L = layout(REPO_ROOT, a.run);
-  const profile = (() => { try { return loadProfile(resolve(REPO_ROOT, (readStateFile(L).state || {}).profilePath || DEFAULT_PROFILE)).profile; } catch { return null; } })();
+  const profile = (() => { try { return loadProfileBounded(resolve(REPO_ROOT, (readStateFile(L).state || {}).profilePath || DEFAULT_PROFILE)).profile; } catch { return null; } })();
   return runGuardian({ repoRoot: REPO_ROOT, runId: a.run, serveSpec: a.serve || null, lingerSeconds: profile?.serve?.lingerSeconds ?? 3600 });
 }
 
