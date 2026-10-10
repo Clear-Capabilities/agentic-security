@@ -20,6 +20,19 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../../..');
 const CLI = path.join(REPO, 'scripts', 'baseline-capture.mjs');
 
+// The CLI is deterministic and finishes in well under a second. A Node/V8 deadlock while the process is exiting was seen once (the process had
+// already done its work and then never terminated), which with no timeout hung a whole release gate for 30 minutes. A hard timeout turns that
+// into a prompt retry; a CLI that hangs twice fails the test.
+function cliRun(args, opts = {}) {
+  let r;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL', ...opts });
+    if (r.error?.code !== 'ETIMEDOUT') return r;
+    process.stderr.write(`baseline-capture did not exit within 120 s (attempt ${attempt} of 2): ${args.join(' ')}\n`);
+  }
+  return r;
+}
+
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
 function run(cwd, cmd, args) {
@@ -311,7 +324,7 @@ test('[CORE-001.AC03] capture never modifies the tree, in-process or through the
     const statusBefore = run(root, 'git', ['status', '--porcelain=v1', '--untracked-files=all']);
     capture(root);
     assert.equal(treeDigest(root), before);
-    const cli = spawnSync(process.execPath, [CLI, '--root', root, '--json'], { encoding: 'utf8' });
+    const cli = cliRun(['--root', root, '--json']);
     assert.ok([0, 1].includes(cli.status), cli.stderr);
     assert.equal(treeDigest(root), before, 'the CLI changed the checkout');
     assert.equal(run(root, 'git', ['status', '--porcelain=v1', '--untracked-files=all']), statusBefore);
@@ -327,10 +340,10 @@ test('[CORE-001.AC03] output is refused inside source roots and over tracked fil
     assert.equal(assertSafeOutput(root, path.join(root, 'docs/baseline.json')).ok, true);
     assert.equal(assertSafeOutput(root, path.join(root, 'bench/baseline.json')).ok, true);
     assert.equal(assertSafeOutput(root, path.join(os.tmpdir(), 'elsewhere.json')).ok, true);
-    const refused = spawnSync(process.execPath, [CLI, '--root', root, '--out', path.join(root, 'scanner/src/baseline.json')], { encoding: 'utf8' });
+    const refused = cliRun(['--root', root, '--out', path.join(root, 'scanner/src/baseline.json')]);
     assert.equal(refused.status, 2);
     assert.ok(!fs.existsSync(path.join(root, 'scanner/src/baseline.json')));
-    assert.equal(spawnSync(process.execPath, [CLI, '--bogus'], { encoding: 'utf8' }).status, 2);
+    assert.equal(cliRun(['--bogus']).status, 2);
   } finally { cleanup(root); }
 });
 
@@ -338,11 +351,11 @@ test('[CORE-001.AC03] the CLI writes a valid manifest; --compare exits 0 when cu
   const recordedPath = path.join(os.tmpdir(), `bl-${process.pid}.json`);
   try {
     // the real checkout and the real inventory
-    const wrote = spawnSync(process.execPath, [CLI, '--out', recordedPath], { encoding: 'utf8' });
+    const wrote = cliRun(['--out', recordedPath]);
     assert.equal(wrote.status, 0, wrote.stderr + wrote.stdout);
     const recorded = JSON.parse(fs.readFileSync(recordedPath, 'utf8'));
     assert.deepEqual(validateBaseline(recorded), { ok: true, errors: [] });
-    const same = spawnSync(process.execPath, [CLI, '--compare', recordedPath], { encoding: 'utf8' });
+    const same = cliRun(['--compare', recordedPath]);
     assert.equal(same.status, 0, same.stdout);
     assert.match(same.stdout, /0 invalidated/);
 
@@ -353,7 +366,7 @@ test('[CORE-001.AC03] the CLI writes a valid manifest; --compare exits 0 when cu
     const { baselineId, capturedAt, ...rest } = stale;
     stale.baselineId = digestOf(rest);
     fs.writeFileSync(recordedPath, JSON.stringify(stale));
-    const invalidated = spawnSync(process.execPath, [CLI, '--compare', recordedPath], { encoding: 'utf8' });
+    const invalidated = cliRun(['--compare', recordedPath]);
     assert.equal(invalidated.status, 1, invalidated.stdout);
     assert.match(invalidated.stdout, /1 invalidated \(poc-replay\)/);
 
@@ -361,6 +374,12 @@ test('[CORE-001.AC03] the CLI writes a valid manifest; --compare exits 0 when cu
     const forged = structuredClone(recorded);
     forged.capabilities[0].sourceDigests[forged.capabilities[0].source[0]] = `sha256:${'0'.repeat(64)}`;
     fs.writeFileSync(recordedPath, JSON.stringify(forged));
-    assert.equal(spawnSync(process.execPath, [CLI, '--compare', recordedPath], { encoding: 'utf8' }).status, 2);
+    assert.equal(cliRun(['--compare', recordedPath]).status, 2);
   } finally { fs.rmSync(recordedPath, { force: true }); }
+});
+
+test('[CORE-001.AC03] the CLI ends with a natural exit, because an explicit process.exit() after real work can hang the runtime when the machine is busy', () => {
+  const src = fs.readFileSync(CLI, 'utf8').trimEnd();
+  assert.ok(!/process\.exit\(exit\);?\s*$/.test(src), 'the script ends with process.exit(exit): set process.exitCode instead');
+  assert.match(src, /process\.exitCode = exit;\s*$/);
 });

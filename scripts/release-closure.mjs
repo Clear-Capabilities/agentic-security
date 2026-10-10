@@ -85,7 +85,7 @@ export const CLOSURE_STEPS = Object.freeze([
   { id: 'compat-layer-recall', title: 'Per-layer, per-language recall holds for every first-class language', area: 'compat-core-language', covers: [], ...npm('bench:layer-recall:check'), timeoutSec: 600 },
   // Remote prerequisites. They need a toolchain or a host this machine may not have; hosted CI has them. Locally they are
   // `unsupported` and are NEVER counted as passing.
-  { id: 'remote-haskell-toolchain', title: 'Haskell tests that need a real GHC toolchain', area: 'compat-haskell-nix', covers: [], ...npm('test:language-tools'), timeoutSec: 900, needs: { tools: ['ghc'] }, remote: { job: 'language-tools-ghc' } },
+  { id: 'remote-haskell-toolchain', title: 'Haskell tests that need a real GHC toolchain', area: 'compat-haskell-nix', covers: [], ...npm('test:language-tools'), timeoutSec: 900, needs: { tools: ['ghc'], haskellModules: ['Web.Scotty', 'Network.Wai', 'Servant', 'Yesod'] }, remote: { job: 'language-tools-ghc' } },
   { id: 'remote-nixos-host', title: 'NixOS host runtime suite (needs a real NixOS host)', area: 'compat-haskell-nix', covers: [], ...npm('test:nixos-host'), timeoutSec: 900, needs: { paths: ['/etc/NIXOS'] }, remote: { job: 'nixos-runtime' } },
 ]);
 
@@ -127,6 +127,7 @@ export function applicability(step, env) {
   if (needs.platforms && !needs.platforms.includes(env.platform)) return { applicable: false, reason: `needs platform ${needs.platforms.join('/')}, this is ${env.platform}` };
   for (const t of needs.tools || []) if (!env.hasTool(t)) return { applicable: false, reason: `needs the tool '${t}', which is not available here` };
   for (const p of needs.paths || []) if (!env.exists(p)) return { applicable: false, reason: `needs ${p}, which is not present here` };
+  for (const m of needs.haskellModules || []) if (!env.canImportHaskell?.(m)) return { applicable: false, reason: `needs the Haskell module '${m}' importable by ghc, which it is not here` };
   return { applicable: true };
 }
 
@@ -219,7 +220,7 @@ export function checkClosurePlan({ steps = CLOSURE_STEPS, pkg, repoRoot = REPO, 
       for (const f of s.run.files) if (!fs.existsSync(path.join(repoRoot, 'scanner', f))) problems.push(`step '${s.id}': missing test file scanner/${f}`);
     }
     for (const f of stepFiles(s, pkg)) if (!fs.existsSync(path.join(repoRoot, 'scanner', f))) problems.push(`step '${s.id}': names ${f}, which does not exist`);
-    if (s.remote && (!s.needs || !(s.needs.tools?.length || s.needs.paths?.length || s.needs.platforms?.length))) problems.push(`remote step '${s.id}' declares no local prerequisite, so it could never be reported unsupported`);
+    if (s.remote && (!s.needs || !(s.needs.tools?.length || s.needs.paths?.length || s.needs.platforms?.length || s.needs.haskellModules?.length))) problems.push(`remote step '${s.id}' declares no local prerequisite, so it could never be reported unsupported`);
     if (s.remote && ciJobs && !ciJobs.includes(s.remote.job)) problems.push(`remote step '${s.id}': hosted CI job '${s.remote.job}' does not exist in .github/workflows/ci.yml`);
   }
   if (releaseGroups) {
@@ -231,18 +232,41 @@ export function checkClosurePlan({ steps = CLOSURE_STEPS, pkg, repoRoot = REPO, 
 
 // ---------------------------------------------------------------- running
 
+// Every command runs inside its own process group, killed as a whole on timeout and again when the command ends, so a hung step cannot leave
+// a process tree behind (a plain timeout kills only the direct child: an orphaned test runner outlived its step by 25 minutes this way).
+const GROUP_RUNNER = `
+import { spawn } from 'node:child_process';
+const [ms, cmd, ...args] = process.argv.slice(1);
+const c = spawn(cmd, args, { stdio: 'inherit', detached: true });
+let timedOut = false;
+const killGroup = () => { try { process.kill(-c.pid, 'SIGKILL'); } catch { /* the group is already gone */ } };
+const t = setTimeout(() => { timedOut = true; killGroup(); }, Number(ms));
+c.on('error', (e) => { console.error('could not start: ' + e.message); process.exit(127); });
+c.on('exit', (code, sig) => { clearTimeout(t); killGroup(); process.exit(timedOut ? 124 : (code ?? (sig ? 128 : 1))); });
+`;
+
 export function defaultExec(cmd, args, { cwd, timeoutMs, env }) {
-  const r = spawnSync(cmd, args, { cwd, encoding: 'buffer', timeout: timeoutMs, maxBuffer: 512 * 1024 * 1024, killSignal: 'SIGKILL', env });
-  return { status: r.status, signal: r.signal, timedOut: r.error?.code === 'ETIMEDOUT', error: r.error && r.error.code !== 'ETIMEDOUT' ? String(r.error.message) : null, stdout: r.stdout || Buffer.alloc(0), stderr: r.stderr || Buffer.alloc(0) };
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', GROUP_RUNNER, String(timeoutMs), cmd, ...args],
+    { cwd, encoding: 'buffer', timeout: timeoutMs + 15_000, maxBuffer: 512 * 1024 * 1024, killSignal: 'SIGKILL', env });
+  const timedOut = r.status === 124 || r.error?.code === 'ETIMEDOUT';
+  return { status: timedOut ? null : r.status, signal: r.signal, timedOut, error: r.error && r.error.code !== 'ETIMEDOUT' ? String(r.error.message) : null, stdout: r.stdout || Buffer.alloc(0), stderr: r.stderr || Buffer.alloc(0) };
 }
+
+/** Tracked files the bench runners append to; modified copies of exactly these do not count as a dirty tree. */
+export const GENERATED_OUTPUTS = Object.freeze(['bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);
 
 export function gitFacts(repoRoot, exec = defaultExec) {
   const g = (args) => { const r = exec('git', args, { cwd: repoRoot, timeoutMs: 60_000, env: process.env }); return r.status === 0 ? r.stdout.toString('utf8') : null; };
   const commit = g(['rev-parse', 'HEAD'])?.trim() || null;
   const tree = g(['rev-parse', 'HEAD^{tree}'])?.trim() || null;
   const porcelain = g(['status', '--porcelain']);
-  const dirtyPaths = porcelain === null ? ['(git status failed)'] : porcelain.split('\n').filter(Boolean).map((l) => l.slice(3));
-  return { commit, tree, dirtyPaths };
+  const entries = porcelain === null ? null : porcelain.split('\n').filter(Boolean).map((l) => ({ code: l.slice(0, 2), path: l.slice(3) }));
+  // The bench runners append to these tracked files on every run. They are outputs, never inputs to any step, so a modified (not deleted,
+  // not replaced) one does not make the tree dirty; they are listed in the record so nothing is hidden.
+  const isGenerated = (e) => GENERATED_OUTPUTS.includes(e.path) && e.code.trim() === 'M';
+  const dirtyPaths = entries === null ? ['(git status failed)'] : entries.filter((e) => !isGenerated(e)).map((e) => e.path);
+  const ignoredGeneratedOutputs = entries === null ? [] : entries.filter(isGenerated).map((e) => e.path);
+  return { commit, tree, dirtyPaths, ignoredGeneratedOutputs };
 }
 
 function defaultEnv(repoRoot, exec = defaultExec) {
@@ -250,6 +274,7 @@ function defaultEnv(repoRoot, exec = defaultExec) {
     platform: process.platform,
     hasTool: (t) => exec(process.platform === 'win32' ? 'where' : 'which', [t], { cwd: repoRoot, timeoutMs: 10_000, env: process.env }).status === 0,
     exists: (p) => fs.existsSync(p),
+    canImportHaskell: (m) => exec('ghc', ['-e', `import ${m}`], { cwd: repoRoot, timeoutMs: 60_000, env: process.env }).status === 0,
   };
 }
 
@@ -295,6 +320,7 @@ export function runClosure({ repoRoot = REPO, steps = CLOSURE_STEPS, outDir, onl
     commit: before.commit, tree: before.tree,
     treeClean: before.commit !== null && before.dirtyPaths.length === 0,
     dirtyPaths: before.dirtyPaths,
+    ignoredGeneratedOutputs: before.ignoredGeneratedOutputs,
     stable: before.commit === after.commit && before.tree === after.tree && JSON.stringify(before.dirtyPaths) === JSON.stringify(after.dirtyPaths),
     planDigest: planDigest(steps),
     partial: Boolean(only) && selected.length !== steps.length,
