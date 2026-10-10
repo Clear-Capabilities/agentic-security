@@ -80,4 +80,7 @@ if (o.json) {
   for (const p of manifest.problems) console.log(`PROBLEM ${p}`);
   if (o.out) console.log(`wrote ${o.out}`);
 }
-process.exit(exit);
+// A natural exit, not process.exit(): after this much work (several module loads, git, hashing) an explicit exit can deadlock inside the Node
+// runtime's platform shutdown when the machine is busy. Measured on this script under ten-way parallel load: 23 hangs in 600 runs with
+// process.exit(), 0 in 600 with the exit code set and the process left to end on its own.
+process.exitCode = exit;
