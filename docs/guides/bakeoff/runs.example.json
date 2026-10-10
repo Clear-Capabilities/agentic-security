@@ -1,0 +1,38 @@
+{
+  "this-engine": {
+    "workloadDigest": "sha256:a85e64c9f4244bce0ff717ed7d0a40c5732db2dcb87186dc63cca607e4d070f2",
+    "verificationStandard": "a finding counts when its CWE matches the answer key for the entry; no model confirmation is used",
+    "costUsd": null,
+    "results": {
+      "syn-cmd-py": {
+        "pre": [
+          {
+            "cwe": "CWE-78"
+          }
+        ],
+        "post": []
+      },
+      "syn-sqli-js": {
+        "pre": [
+          {
+            "cwe": "CWE-89"
+          },
+          {
+            "cwe": "CWE-639"
+          },
+          {
+            "cwe": "CWE-200"
+          }
+        ],
+        "post": [
+          {
+            "cwe": "CWE-639"
+          },
+          {
+            "cwe": "CWE-200"
+          }
+        ]
+      }
+    }
+  }
+}

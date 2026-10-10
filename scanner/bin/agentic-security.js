@@ -175,6 +175,12 @@ Commands:
   scan-baseline --current <f> --previous <f>
                                Finding-level diff between two scan JSON outputs.
                                Reports added / removed / changed findings.
+  boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--out <file>] [--json]
+                               Build a deployment boundary graph from local configuration
+                               (and optional sanitized traces) and attach a boundary context
+                               to each finding of a scan result. Read-only, local files only.
+                               Off by default: set AGENTIC_SECURITY_ASSURANCE_DEPLOYMENT_BOUNDARIES=1.
+                               Exit: 0 ok, 1 failed, 2 usage, 3 feature off or blocked.
   explore [path] [--port <n>] [--keep-open]
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
@@ -216,6 +222,30 @@ Commands:
   federate list [path] [--output <file>]
                                List every declared cross-repo link, reporting
                                whether each side still resolves.
+  invariants export --invariant <file> --fixture <dir> [--ledger <file>] [--commit <sha>] [--seed <n>] [--output <file>]
+                               Reproducible bounded business-logic scenario package for
+                               one contract (no fixture source, no secrets, not a proof
+                               of correctness). Needs the invariant-scenarios feature.
+  invariants coverage --invariant <file> | --invariants-dir <dir> [--ledger <file>] [--results <file>] [--json]
+                               Bounded business coverage: approved vs proposed contracts,
+                               exercised actors/states/transitions, explicit gaps.
+  portfolio progress --store <file> [--budgets <file>] [--findings <file>] [--blocking-severity <s>] [--json]
+                               Coverage-aware portfolio progress: verified units, blocked/failed/stale
+                               units, repository coverage, remaining budget, pending human review and
+                               stale workers. A finished controller is never reported as passed.
+                               Needs the portfolio-assurance feature.
+  portfolio retention plan|apply|verify-log --records <file> --root <dir> [--policy <file>] [--holds <file>] [--store <file>] [--log <file> --actor <name>]
+                               Retention by class (replay evidence, metadata, model traces, secrets)
+                               with legal holds; a required current receipt is never deleted and
+                               every deletion is logged first.
+  portfolio backend probe --mode local|shared --dir <dir>
+                               Is a storage backend usable? An unavailable shared backend is the
+                               typed blocked state; nothing falls back to a local write.
+  portfolio export --store <file> --out <file> | portfolio import --from <file> --mode <m> --dir <d>
+                               One self-checking, secret-free state file for an air-gapped machine.
+  invariants regress <artifact.json>
+                               Re-execute a verified-repair regression artifact from the
+                               file alone. Exit 0 passed, 1 failed, 3 not run.
   remediation open [path] --assessment <impact-report.json> --owner <id> --due <YYYY-MM-DD>
                                --control <text> --required-evidence <flowId,...>
                                [--id <itemId>] [--snapshot <commit>] [--allow-manual-attestation]
@@ -3898,6 +3928,48 @@ Do not suppress anything you are not certain is a false positive. When in doubt,
   return 0;
 }
 
+// `agentic-security boundaries --from <dir> [--findings <last-scan.json>] ...` (differentiation PRD, X-308 wiring).
+// Builds a deployment boundary graph from LOCAL configuration (and optional sanitized traces) and attaches a boundary context to
+// each finding of an existing scan result. Read-only and local: no network, no scan, no execution of configuration; the only
+// write is the report file named by --out. Behind the `deployment-boundaries` feature, which is OFF by default.
+// Exit codes: 0 report produced; 1 failed (invalid or unreadable input, ingest refused, --out refused); 2 usage error;
+// 3 the feature is disabled, blocked or unsupported on this platform (nothing was read).
+async function cmdBoundaries(args) {
+  const f = args.flags;
+  const usage = 'Usage: agentic-security boundaries --from <dir> [--findings <last-scan.json>] [--environment <name>] [--repository <name>] [--revision <sha>] [--root <project>] [--out <file>] [--json] [--now <iso>]';
+  if (typeof f.from !== 'string' || !f.from) { console.error(usage); return 2; }
+  for (const k of ['findings', 'environment', 'repository', 'revision', 'out', 'now', 'root']) {
+    if (f[k] !== undefined && (typeof f[k] !== 'string' || !f[k])) { console.error(`agentic-security boundaries: --${k} needs a value\n${usage}`); return 2; }
+  }
+  const scanRoot = path.resolve(f.root || '.');
+  const { resolveAssuranceConfig } = await import('../src/posture/assurance/config.js');
+  const { runBoundaries, renderBoundariesText } = await import('../src/lineage/deployment/boundaries-run.js');
+  const config = resolveAssuranceConfig({ scanRoot });
+  const result = runBoundaries({
+    config, from: path.resolve(f.from), environment: f.environment || 'prod', repository: f.repository || null, revision: f.revision || null,
+    findingsFile: f.findings ? path.resolve(f.findings) : null, verifySignature: _verifyLastScan, now: f.now,
+  });
+  if (result.status === 'disabled' || result.status === 'blocked' || result.status === 'unsupported') {
+    console.error(`agentic-security boundaries: not run (${result.status}): ${result.reason}`);
+    if (result.status === 'disabled') console.error('The deployment-boundaries feature is off by default. Enable it for one run with AGENTIC_SECURITY_ASSURANCE_DEPLOYMENT_BOUNDARIES=1.');
+    return 3;
+  }
+  if (result.status !== 'ok') { console.error(`agentic-security boundaries: ${result.reason}`); return 1; }
+  const report = result.report;
+  const body = f.json ? `${JSON.stringify(report, null, 2)}\n` : renderBoundariesText(report);
+  if (f.out) {
+    const outPath = path.resolve(f.out);
+    try {
+      let st = null;
+      try { st = fs.lstatSync(outPath); } catch { /* absent */ }
+      if (st && !st.isFile()) throw new Error('the output path is a symbolic link or not a regular file');
+      fs.writeFileSync(outPath, body, { mode: 0o644 });
+    } catch (e) { console.error(`agentic-security boundaries: cannot write ${outPath}: ${e.message}`); return 1; }
+    console.log(`agentic-security boundaries: wrote ${outPath}`);
+  } else writeStdout(body);
+  return 0;
+}
+
 // `agentic-security explore [path] [--port <n>] [--keep-open]` — Milestone 3,
 // sub-project Server, increment 1. Starts a local, read-only, loopback-only
 // HTTP server over an already-built, signed lineage graph
@@ -7073,6 +7145,7 @@ async function main() {
         startLspServer();
         return;
       }
+      case 'boundaries': process.exit(await cmdBoundaries(args));
       case 'explore':  process.exit(await cmdExplore(args));
       case 'dataflow': {
         const sub = args._[1];
@@ -7148,6 +7221,20 @@ async function main() {
           process.stderr.write(`agentic-security governance: unrecognized sub-command "${sub}" — must be "propose-edit".\n`);
           process.exit(2);
         }
+        break;
+      }
+      case 'portfolio': {
+        // X-707, X-708: coverage-aware portfolio progress, evidence retention and offline operation. The logic is in
+        // src/posture/portfolio/cli.js so tests run it without spawning this file. Off unless `portfolio-assurance` is on.
+        const { runPortfolioCommand } = await import('../src/posture/portfolio/cli.js');
+        process.exit(await runPortfolioCommand(args));
+        break;
+      }
+      case 'invariants': {
+        // X-405 to X-407: scenario export, bounded coverage and regression-artifact replay. The logic is in
+        // src/posture/invariants/cli.js so tests run it without spawning this file.
+        const { runInvariantsCommand } = await import('../src/posture/invariants/cli.js');
+        process.exit(await runInvariantsCommand(args));
         break;
       }
       case 'federate': {

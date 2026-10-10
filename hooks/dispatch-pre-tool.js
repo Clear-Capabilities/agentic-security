@@ -18,6 +18,7 @@
 const { evaluate } = require('./pre-edit-bodyguard.js');
 const { buildContextOutput } = require('./conversation-context.js');
 const { buildWarning } = require('./cache-invalidator-guard.js');
+const { capabilityAdvice } = require('./lib/capability-advice.js');
 
 function readStdinJSON() {
   return new Promise((resolve) => {
@@ -52,6 +53,9 @@ async function main() {
     process.stderr.write(decision.message + '\n'); // bodyguard warn-mode notice
   }
   if (warning) process.stderr.write(warning);       // cache-invalidation warning
+  // X-505: capability policy advice (inert unless the operator enabled the feature
+  // and named a manifest). Advisory: it explains, the runner enforces.
+  try { const adv = await capabilityAdvice(evt); if (adv) process.stderr.write(adv.join('\n') + '\n'); } catch { /* best-effort */ }
   if (context) process.stdout.write(context + '\n'); // findings/fix context → model
   process.exit(0);
 }

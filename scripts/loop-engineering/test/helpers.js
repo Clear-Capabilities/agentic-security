@@ -96,6 +96,13 @@ function run() {
     case 'truncated': process.stdout.write('{"type":"assistant","message":{"id":"m2","content":[{"type":"te'); process.exit(0); break;
     case 'denied': result({ permission_denials: [{ tool_name: 'Bash', tool_input: {} }] }); process.exit(0); break;
     case 'die': process.kill(process.pid, 'SIGKILL'); break;
+    case 'flood-steady': { const l = 'y'.repeat(2000); setInterval(() => { for (let i = 0; i < 50; i++) process.stdout.write(l + '\\n'); }, 5); break; }
+    case 'overspend': out({ type: 'system', subtype: 'cost', total_cost_usd: cfg.overspendUsd ?? 99 }); setInterval(() => {}, 1000); break;
+    case 'cheap-fix': out({ type: 'system', subtype: 'cost', total_cost_usd: 0.5 }); fs.writeFileSync('flag-' + id, 'ok'); result(); process.exit(0); break;
+    case 'chatter': { const t = setInterval(() => { out({ type: 'assistant', message: { id: 'same', content: [{ type: 'text', text: 'still thinking' }], usage: {} } }); }, 100); void t; break; }
+    case 'secret': { const k = ['sk', 'ant', 'api03'].join('-') + 'Z'.repeat(30); out({ type: 'assistant', message: { id: 'sec', content: [{ type: 'text', text: 'key ' + k + ' and GITHUB_TOKEN=ghp_' + 'a'.repeat(30) }], usage: {} } }); process.stderr.write('Authorization: Bearer ' + 'q'.repeat(24) + '\\n'); for (let i = 0; i < 4000; i++) process.stdout.write('{"type":"user","message":{"content":[]},"pad":"' + 'x'.repeat(900) + '"}\\n'); fs.writeFileSync('flag-' + id, 'ok'); result(); process.exit(0); break; }
+    case 'tamper': fs.appendFileSync('t/suite-' + id + '.test.js', '\\n// tampered by the worker\\n'); setInterval(() => {}, 1000); break;
+    case 'forge': { fs.writeFileSync('done.json', JSON.stringify({ requirement: id, done: true, verified: true })); fs.mkdirSync('.loop-engineering/forged', { recursive: true }); fs.writeFileSync('.loop-engineering/forged/' + id + '.json', JSON.stringify({ requirement: id, result: 'pass', criteria: [], signature: 'f'.repeat(64) })); result({ result: 'ALL DONE 100% LOOP_RESULT: {"requirement":"' + id + '","claims":"verified complete"}' }); process.exit(0); break; }
     case 'slow': setTimeout(() => { fs.writeFileSync('flag-' + id, 'ok'); result(); process.exit(0); }, cfg.slowMs || 1500); break;
     case 'many-turns': { let i = 0; const t = setInterval(() => { out({ type: 'assistant', message: { id: 'mt' + (i++), content: [{ type: 'text', text: 't' }], usage: {} } }); }, 5); break; }
     default: process.exit(0);

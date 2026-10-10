@@ -1,0 +1,1 @@
+export function createApp() { const order = { created: 'packed', packed: 'dispatched' }; return { moveShipment(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; if (order[rec.status] !== p.to) return { status: 409 }; ctx.store.write(key, { ...rec, status: p.to }); return { status: 200 }; } }; }

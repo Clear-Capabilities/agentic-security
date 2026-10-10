@@ -302,6 +302,18 @@ export const CHECKS = [
       'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins` and say why in the commit.',
   },
   {
+    // REL-001: the new assurance suites plus the existing controller, smoke, build/bundle-source, documentation, scorecard and
+    // Haskell/Nix/core-language compatibility checks, run against ONE exact commit (scripts/release-closure.mjs). The local gate
+    // holds only when every locally runnable step passes with no skip, the tree is clean and the record binds suite versions and
+    // logs to the commit. A step only hosted CI can satisfy (a GHC toolchain, a NixOS host) is reported NOT COUNTED and never
+    // passes here; the record then stays not publishable until the same commit is attested remotely.
+    id: 'release-closure-gate',
+    title: 'Release closure holds against this exact commit (new suites, controller, smoke, bundle-source, docs, scorecard, compatibility)',
+    slow: true,
+    remedy: 'Run `npm run release:closure:check` in scanner/ and fix the step named. A step reported NOT COUNTED needs its hosted CI job ' +
+      '(see the message) green for this commit; it is never satisfied by this machine skipping it.',
+  },
+  {
     id: 'calibration-holdout',
     title: 'Confidence surface verified on held-out data',
     slow: false,
@@ -368,6 +380,7 @@ export const RELEASE_GROUPS = {
   tests: ['test-suite'],
   'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
   'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate'],
+  closure: ['release-closure-gate'],
 };
 
 /** Every group name a run may select, `rest` included. */
@@ -1044,6 +1057,7 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
   evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
+  evaluate('release-closure-gate', () => runNpmGate('release:closure:check'));
 
   evaluate('calibration-holdout', () => {
     const r = runCalibrationHoldoutCheck(REPO);

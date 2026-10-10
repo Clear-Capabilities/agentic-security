@@ -254,6 +254,25 @@ export const NO_PROVENANCE_OVERRIDES = Object.freeze({
   'rs-extract-httprequest': 'http-body',
   'rs-extract-request': 'http-body',
   'rs-closure-extract-request': 'http-body',
+  // QA-006: request-bound handler parameters with no annotation, and the Laravel request accessors. A bound parameter or a merged request
+  // bag (input/all/only/except/collect/str/string) can come from the query string or the form, so, like the Flask values bag above, it is
+  // classed `http-query`; the single-channel accessors keep their own channel.
+  'cs-aspnet-implicit-action-param': 'http-query',
+  'java-spring-implicit-mapped-param': 'http-query',
+  'php-laravel-request-input': 'http-query',
+  'php-laravel-request-all': 'http-query',
+  'php-laravel-request-only': 'http-query',
+  'php-laravel-request-except': 'http-query',
+  'php-laravel-request-collect': 'http-query',
+  'php-laravel-request-str': 'http-query',
+  'php-laravel-request-string': 'http-query',
+  'php-laravel-request-query': 'http-query',
+  'php-laravel-request-post': 'http-body',
+  'php-laravel-request-json': 'http-body',
+  'php-laravel-request-getcontent': 'http-body',
+  'php-laravel-request-cookie': 'http-cookie',
+  'php-laravel-request-header': 'http-header',
+  'php-laravel-request-file': 'http-upload',
 });
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,19 @@
+{
+  "id": "compose-published-vs-internal",
+  "title": "The same handler with a published port and on an internal-only network",
+  "kind": "source-finding",
+  "defect": {
+    "family": "command-injection",
+    "file": "services/api/handler.js"
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "The compose file publishes port 8080 on all interfaces for the service."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "The service publishes no port and sits on an internal-only network."
+    }
+  }
+}

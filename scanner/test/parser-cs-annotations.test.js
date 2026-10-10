@@ -47,6 +47,23 @@ public class Helper {
 });
 
 test('parseCSharpFile: multiple parameters, only the attributed one is recorded', () => {
+  // A non-controller class: an unattributed parameter is just a parameter. (In a controller action it is request-bound by model
+  // binding and is recorded with the implicit marker instead; see test/evaluation/engine-mechanisms.test.js, QA-006.)
+  const code = `
+public class UserHelper {
+    public string Show([FromQuery] string q, string extra) {
+        return q;
+    }
+}
+`;
+  const ir = parseCSharpFile('UserHelper.cs', code);
+  assert.ok(ir);
+  const fn = ir.functions.find(f => f.name.includes('Show'));
+  assert.deepEqual(fn.params, ['q', 'extra']);
+  assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'FromQuery' }]);
+});
+
+test('parseCSharpFile: in a controller action the unattributed string parameter is recorded as implicitly request-bound, the explicit one is not duplicated', () => {
   const code = `
 public class UserController {
     public string Show([FromQuery] string q, string extra) {
@@ -54,11 +71,11 @@ public class UserController {
     }
 }
 `;
-  const ir = parseCSharpFile('UserController.cs', code);
-  assert.ok(ir);
-  const fn = ir.functions.find(f => f.name.includes('Show'));
-  assert.deepEqual(fn.params, ['q', 'extra']);
-  assert.deepEqual(fn.paramAnnotations, [{ index: 0, name: 'q', decorator: 'FromQuery' }]);
+  const fn = parseCSharpFile('UserController.cs', code).functions.find(f => f.name.includes('Show'));
+  assert.deepEqual(fn.paramAnnotations, [
+    { index: 0, name: 'q', decorator: 'FromQuery' },
+    { index: 1, name: 'extra', decorator: 'ImplicitMvcActionParam' },
+  ]);
 });
 
 test('parseCSharpFile: stacked attributes [Required][FromQuery] captures all decorators', () => {

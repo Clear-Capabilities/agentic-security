@@ -4,6 +4,7 @@ import { _isCustomSuppressed } from '../engine.js';
 import { alertFace, approveFace } from './mascot.js';
 import { SCANNER_VERSION } from '../posture/version.js';
 import { proofBlock } from '../posture/proof-artifact.js';
+import { portfolioAssuranceEnabled, scanVerdictWording, NOT_A_GUARANTEE } from '../posture/portfolio/wording.js';
 import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/legacy-compat.js';
 // Finding Provenance (M0/M1). NOTE the name: `findingProvenance` is the
 // git-origin record from posture/provenance/. It is NOT `finding.provenance`
@@ -14,8 +15,11 @@ import { applyLegacyCompat, legacyFieldDeprecationNotice } from '../pipeline/leg
 import { redactFindingProvenance, sanitizeForTerminal } from '../posture/provenance/schema.js';
 // X-206: the one projection of the verification record. This report, the MCP tools and the autopilot response all call it.
 import { verificationFields, verificationCoverage } from '../posture/verification/projection.js';
+import { invariantCoverageFields } from '../posture/invariants/coverage.js';
 // X-207: a hunt hypothesis is advisory and is never a finding in any gating output; promotion is the only way across.
 import { isAdvisoryHypothesis } from '../posture/verification/advisory-state.js';
+// X-307: the one projection of the deployment boundary context. Additive and present only when a finding carries a context.
+import { boundaryFields, boundaryCoverage } from '../lineage/deployment/projection.js';
 // Re-exported: FR-PROV-026. Lives in provenance/schema.js (shared with
 // posture/auditor-walkthrough.js, a second CLI renderer of the same
 // untrusted fields — see that module's header for why it lives there
@@ -340,6 +344,11 @@ export function normalizeFindings(scan){
       // a record (a plain scan output is byte-identical). `verificationReplay` is the typed prerequisite list of a replay attempt.
       ...(f.verificationRecord && typeof f.verificationRecord === 'object'
         ? { verificationRecord: f.verificationRecord, ...(f.verificationReplay ? { verificationReplay: f.verificationReplay } : {}), ...verificationFields(f.verificationRecord, { replay: f.verificationReplay }) }
+        : {}),
+      // X-307: the deployment boundary context and its projection, ADDITIVE and present only when a producer (the
+      // `deployment-boundaries` feature) attached one. A plain scan output is byte-identical.
+      ...(f.boundaryContext && typeof f.boundaryContext === 'object'
+        ? boundaryFields(f.boundaryContext)
         : {}),
       // Phase-1 next-gen P1.3 (FR-UX-1, FR-UX-2): calibrated probability +
       // 95% Wilson CI + sample size. Null when N < MIN_SAMPLES_FOR_CALIBRATION
@@ -753,6 +762,10 @@ export function toJSON(scan, meta={}, opts={}){
     // X-206: trusted-negative accounting over the findings that carry a verification record. Absent when none does, so a plain
     // scan's output is unchanged.
     ...(findings.some(f => f.verificationRecord) ? { verificationCoverage: verificationCoverage(findings.map(f => f.verificationRecord).filter(Boolean)) } : {}),
+    // X-307: boundary accounting over the findings that carry a context; absent when none does.
+    ...(findings.some(f => f.boundaryContext) ? { boundaryCoverage: boundaryCoverage(findings.map(f => f.boundaryContext).filter(Boolean)) } : {}),
+    // X-407: bounded business-logic coverage, when a caller attached one AND the invariant-scenarios feature is on (off by default).
+    ...invariantCoverageFields(scan.invariantCoverage),
   };
   if (opts.includeSuppressed) out.suppressed = scan.suppressions||[];
   return out;
@@ -932,6 +945,15 @@ export function verificationBlock(f) {
   return Array.isArray(text) && text.length ? text.map((l) => String(l).match(/^ */)[0] + sanitizeForTerminal(String(l))) : null;
 }
 
+/**
+ * X-307: the human-readable boundary block for a normalized finding, from the SAME projection the JSON and MCP surfaces carry.
+ * Null when the finding has no boundary context. Terminal control characters are stripped.
+ */
+export function boundaryBlock(f) {
+  const text = f?.boundaryView?.text;
+  return Array.isArray(text) && text.length ? text.map((l) => String(l).match(/^ */)[0] + sanitizeForTerminal(String(l))) : null;
+}
+
 export function toMarkdown(scan, meta={}){
   const findings = normalizeFindings(scan);
   const lines = ['# Agentic Security — Scan Report', ''];
@@ -972,6 +994,23 @@ export function toMarkdown(scan, meta={}){
       lines.push('');
       for (const f of withVerification) {
         const block = verificationBlock(f).join('\n');
+        lines.push(`**\`${f.file}:${f.line}\`**: ${f.vuln}`);
+        const fence = '`'.repeat(_mdFenceLen(block));
+        lines.push(fence);
+        lines.push(block);
+        lines.push(fence);
+        lines.push('');
+      }
+      lines.push('</details>');
+    }
+    // X-307: boundary blocks come from the shared projection, never a second renderer.
+    const withBoundary = bySev[sev].filter(f => boundaryBlock(f));
+    if (withBoundary.length) {
+      lines.push('');
+      lines.push('<details><summary>Deployment boundaries</summary>');
+      lines.push('');
+      for (const f of withBoundary) {
+        const block = boundaryBlock(f).join('\n');
         lines.push(`**\`${f.file}:${f.line}\`**: ${f.vuln}`);
         const fence = '`'.repeat(_mdFenceLen(block));
         lines.push(fence);
@@ -1480,6 +1519,8 @@ export function toCLI(scan, { verbose=false, color=true, provenance=false }={}){
     if (ex.fixCode) for (const ln of ex.fixCode.split('\n').slice(0, 6)) lines.push(`           ${c(ln, DIM)}`);
     const vblock = verificationBlock(f);
     if (vblock) for (const ln of vblock) lines.push(`        ${c(ln, DIM)}`);
+    const bblock = boundaryBlock(f);
+    if (bblock) for (const ln of bblock) lines.push(`        ${c(ln, DIM)}`);
     if (provenance) {
       // `f` here is already normalized, so its findingProvenance has been
       // through redactFindingProvenance — the email is gone before it can
@@ -1492,6 +1533,8 @@ export function toCLI(scan, { verbose=false, color=true, provenance=false }={}){
   const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity]||0) + 1;
   if (findings.some(f => f.verificationRecord)) lines.push(verificationCoverage(findings.map(f => f.verificationRecord).filter(Boolean)).lines[0]);
+  if (findings.some(f => f.boundaryContext)) lines.push(boundaryCoverage(findings.map(f => f.boundaryContext).filter(Boolean)).lines[0]);
+  { const ic = invariantCoverageFields(scan.invariantCoverage); if (ic.invariantCoverage) lines.push(...ic.invariantCoverage.lines); }
   lines.push(`${c('Critical:', SEV_COLOR.critical)} ${counts.critical}    ${c('High:', SEV_COLOR.high)} ${counts.high}    ${c('Medium:', SEV_COLOR.medium)} ${counts.medium}    ${c('Low:', SEV_COLOR.low)} ${counts.low}    ${c('Info:', SEV_COLOR.info)} ${counts.info}`);
   return lines.join('\n');
 }
@@ -1616,7 +1659,14 @@ export function toShipVerdict(scan, options = {}) {
   const clean = actionable.length === 0 && !scanIncomplete;
   lines.push(clean ? approveFace({ color }) : alertFace({ color }));
   lines.push(bar);
-  if (clean) {
+  // X-703.AC03: with the `portfolio-assurance` feature on, the headline is the bounded claim followed by scope and gaps. Off
+  // (the default) the wording below is unchanged, because existing output and documentation pin it.
+  const _bounded = portfolioAssuranceEnabled({ option: options.portfolioAssurance, scanRoot: options.scanRoot });
+  if (_bounded) {
+    const w = scanVerdictWording({ clean, scanIncomplete: !!scanIncomplete, actionableCount: actionable.length });
+    lines.push(c(`  ${w.icon}  ${w.headline}`, w.tier === 'ok' ? SEV_COLOR.low + BOLD : w.tier === 'incomplete' ? SEV_COLOR.high + BOLD : SEV_COLOR.critical + BOLD));
+    lines.push(c(`  Scope: completed supported checks only${scanIncomplete ? '; gaps listed below' : '; no gaps recorded by scan health'}. ${NOT_A_GUARANTEE}`, DIM));
+  } else if (clean) {
     lines.push(c('  ✅  Safe to deploy', SEV_COLOR.low + BOLD));
   } else if (actionable.length === 0) {
     lines.push(c('  ⚠️  Scan incomplete — cannot confirm safe to deploy', SEV_COLOR.high + BOLD));

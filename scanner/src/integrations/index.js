@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from '../util/yaml.js';
 import { statePath } from '../posture/state-dir.js';
+import { portfolioAssuranceEnabled, HEADLINE, BLOCKED_HEADLINE } from '../posture/portfolio/wording.js';
 
 function _configPath(scanRoot) {
   return statePath(scanRoot, 'integrations.yml');
@@ -36,12 +37,14 @@ export function buildSlackDigest(findings, summary, options = {}) {
   const project = options.project || 'project';
   const status = (summary.critical || 0) === 0 && (summary.high || 0) === 0
     ? '✅ safe to deploy' : '❌ not safe to deploy';
+  const statusLine = portfolioAssuranceEnabled({ option: options.portfolioAssurance })
+    ? (status.startsWith('✅') ? `✅ ${HEADLINE}` : `❌ ${BLOCKED_HEADLINE}`) + ' (completed supported checks only)' : status;
   const top = (findings || []).slice(0, 3);
 
   const lines = [
     `*🛡 agentic-security daily — ${new Date().toISOString().slice(0,10)}*`,
     `Project: \`${project}\``,
-    `Status: ${status}`,
+    `Status: ${statusLine}`,
     '',
     `*Findings:* ${summary.critical || 0} critical · ${summary.high || 0} high · ${summary.medium || 0} medium`,
   ];
@@ -66,7 +69,7 @@ export function buildDiscordDigest(findings, summary, options = {}) {
     embeds: [{
       title: `🛡 agentic-security — ${project}`,
       color: safe ? 0x2ecc71 : 0xe74c3c,
-      description: safe ? '✅ safe to deploy' : '❌ not safe to deploy',
+      description: portfolioAssuranceEnabled({ option: options.portfolioAssurance }) ? (safe ? `✅ ${HEADLINE} (completed supported checks only)` : `❌ ${BLOCKED_HEADLINE}`) : (safe ? '✅ safe to deploy' : '❌ not safe to deploy'),
       fields: [
         { name: 'Critical', value: String(summary.critical || 0), inline: true },
         { name: 'High',     value: String(summary.high || 0),     inline: true },

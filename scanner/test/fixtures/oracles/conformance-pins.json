@@ -11,6 +11,15 @@
         "inconclusive": "sha256:79da70edfa4cd5ae0c9b16c5a898459ab39cfb65d29ca2e2ad9d4f32ab524797"
       }
     },
+    "business-state": {
+      "logicDigest": "sha256:136fb25c8a5a701a56b0f8bea15767ab49ac7c0317ac8d15f70268717e44df28",
+      "scenario": "sha256:dffc0a40baa211fa6a08fb4ed98db1f85ec386cc26b7736bf0a43739aa2f8536",
+      "fixtures": {
+        "positive": "sha256:389417006f2d123268b203d0b4e75643f65e219c59246f99f923a1c9efc74724",
+        "negative": "sha256:8725e58c5cffee0ca3a809996f5ca766f51949e013c6267cfa10a512f1a9d076",
+        "inconclusive": "sha256:d92046825231c87026ce8d090cc66eb5b1d8662ec87d17e40af1f653cd11040f"
+      }
+    },
     "functional-regression": {
       "logicDigest": "sha256:ac62ae3f57c5c4a53e7b3de17cdadf209c18ae89bda79e230e02db03c75ff4be",
       "scenario": "sha256:9b5bb8a55f44365feb359fff3559effb95ef4e3ee0ac9897c04a1b6ac2fab952",

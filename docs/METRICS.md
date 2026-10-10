@@ -72,23 +72,33 @@ open-redirect, sql-injection, ssti, prototype-pollution, and 4 C/C++
 command-injection shapes) are documented as candidate future work, not a
 blocker.
 
-### Result — 220 entries, engine v0.151.3+ (measured 2026-09-14, pre-release)
+### Result — 220 entries, engine v0.162.0 plus the QA-005/QA-006 engine work (re-measured 2026-10-09)
 
 | language | entries | detected (any layer) | **detected by IR-TAINT** |
 |---|---:|---:|---:|
-| c# | 21 | 21 (100%) | 12 (57%) |
+| c# | 21 | 21 (100%) | 13 (62%) |
 | c/c++ | 11 | 11 (100%) | 2 (18%) |
-| go | 22 | 22 (100%) | 13 (59%) |
+| go | 22 | 22 (100%) | 14 (64%) |
 | java | 25 | 25 (100%) | 13 (52%) |
 | js/ts | 38 | 38 (100%) | 22 (58%) |
 | kotlin | 21 | 21 (100%) | 10 (48%) |
-| php | 23 | 23 (100%) | 13 (57%) |
+| php | 23 | 23 (100%) | 15 (65%) |
 | python | 32 | 32 (100%) | 21 (66%) |
 | ruby | 20 | 20 (100%) | 11 (55%) |
 | rust | 5 | 5 (100%) | 5 (100%) |
 | json | 1 | 1 (100%) | 0 (0%) |
 | terraform | 1 | 1 (100%) | 0 (0%) |
-| **total** | **220** | **220 (100%)** | **122 (55%)** |
+| **total** | **220** | **220 (100%)** | **126 (57%)** |
+
+**2026-10-09 re-measurement: 122 → 126 (55% → 57%).** Measured by `npm run bench:layer-recall` before and after the
+differentiation programme's QA-005/QA-006 engine work (same corpus, same 220 entries, deep mode forced on). Three languages moved and no
+language fell: c# 12 → 13 (`CVE-2019-0980-csharp-open-redirect`: an ASP.NET controller action's plain `string` parameter is request-bound with no
+attribute, so the taint layer had no source; `ir/implicit-handler-params.js`), go 13 → 14 (`CVE-2019-11538-go-open-redirect`: `http.Redirect` took its
+target in an argument position no sink named), php 13 → 15 (`CVE-2022-31626-laravel-sqli`: `$request->input()` was not a source;
+`CVE-2019-11539-php-open-redirect`: `header("Location: " . $x)` was reported only as header injection, the static prefix now selects the
+open-redirect sink). Each is a development-evidence repair, not a corpus-shaped one; the mechanisms, adversarial variants, benign controls and
+ablations are in `docs/guides/engine-mechanism-evidence.md`. Re-baselined deliberately with `npm run bench:layer-recall:update-baseline`.
+This gate compares for equality, so a rise had to be recorded here.
 
 **rust is new** (0 → 5, this session): Rust joined the first-class language
 set with a hand-rolled IR frontend (`scanner/src/ir/parser-rust.js`, the

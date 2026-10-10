@@ -1,0 +1,20 @@
+{
+  "class": "workflow-order",
+  "action": "moveCard",
+  "allowed": [
+    {
+      "from": "new",
+      "to": "paid"
+    },
+    {
+      "from": "paid",
+      "to": "shipped"
+    }
+  ],
+  "source": "specification-mining",
+  "evidence": {
+    "file": "app.mjs",
+    "line": 1
+  },
+  "uncertainty": 0.7
+}

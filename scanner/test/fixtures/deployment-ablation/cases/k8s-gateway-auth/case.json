@@ -1,0 +1,19 @@
+{
+  "id": "k8s-gateway-auth",
+  "title": "A public admin service with and without gateway authentication the adapters do not read",
+  "kind": "deployment-only",
+  "defect": {
+    "family": "deployment-exposure",
+    "file": null
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "A public ingress reaches an admin workload with secret access and no authentication in front of it."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "The ingress carries an external authentication annotation, so unauthenticated callers are refused. The adapters do not read ingress annotations, so the boundary graph cannot see this."
+    }
+  }
+}

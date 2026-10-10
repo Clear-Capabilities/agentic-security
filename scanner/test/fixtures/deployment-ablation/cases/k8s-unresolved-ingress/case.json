@@ -1,0 +1,19 @@
+{
+  "id": "k8s-unresolved-ingress",
+  "title": "Exposure the supplied configuration cannot fully resolve versus no ingress at all",
+  "kind": "source-finding",
+  "defect": {
+    "family": "command-injection",
+    "file": "services/api/handler.js"
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "An ingress routes /api to a Service whose manifest was not supplied (a typed gap). Declared by the fixture author: that Service exists and selects the workload, so the handler is exposed."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "No ingress exists; the Service is cluster-internal."
+    }
+  }
+}

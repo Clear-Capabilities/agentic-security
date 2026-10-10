@@ -229,6 +229,15 @@ export const CHECKS = [
     remedy: 'Run `npm run verification:conformance:static` in scanner/ and fix the adapter named. To change a pinned fixture or ' +
       'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins`.',
   },
+  {
+    // REL-001: the STATIC half of the release closure (plan covers every required area, every script and test file exists, the
+    // new suites are in SCOPES, the gate is in a release group, remote steps name a real hosted job). It runs nothing, so it
+    // fits the pre-push budget; the full closure against an exact commit runs in the release gate.
+    id: 'release-closure-static',
+    title: 'The release closure plan is sound (areas, scripts, scopes, release group, hosted jobs)',
+    npmScript: 'release:closure:static',
+    remedy: 'Run `npm run release:closure:static` in scanner/ and fix the problem it names (scripts/release-closure.mjs holds the plan).',
+  },
 ];
 
 /** Ids in execution order — cheapest first. */

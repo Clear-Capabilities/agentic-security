@@ -9,15 +9,17 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.162.0 |
-| Bundle SHA-256 | `b2da49a66de24f0bf9537000c36b3eb9adbf0121968dcc28e884e9c1f147694a` |
-| Commit | `c0be59116916c8d31226bd75916f6258541b90c6` |
+| Engine version | 0.163.0 |
+| Bundle SHA-256 | `b91f501cdd42eeeb4a4d813733871bce13c44067381e17def7a7230f66638f6a` |
+| Commit | `ef6b6cedd86d51bce9445cc9784d86230f4e926b` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
+| Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
+| Independent accuracy of THIS engine | unmeasured (no adjudicated real-code population has been run; see the historical record below, if present) |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-09T16:20:32.672Z |
+| Generated (UTC) | 2026-10-10T05:59:09.843Z |
 
 ## What these numbers are, and what they are not
 
@@ -157,14 +159,14 @@ Entries scored: 220
 
 | Language | IR-TAINT recall |
 | --- | --- |
-| c# | 12/21 (57.1%) |
+| c# | 13/21 (61.9%) |
 | c/c++ | 2/11 (18.2%) |
-| go | 13/22 (59.1%) |
+| go | 14/22 (63.6%) |
 | java | 13/25 (52.0%) |
 | js/ts | 22/38 (57.9%) |
 | json | 0/1 (0.0%) |
 | kotlin | 10/21 (47.6%) |
-| php | 13/23 (56.5%) |
+| php | 15/23 (65.2%) |
 | python | 21/32 (65.6%) |
 | ruby | 11/20 (55.0%) |
 | rust | 5/5 (100.0%) |
@@ -205,15 +207,15 @@ Treat it as a tripwire, never as a quality figure.
 
 | Target | Findings |
 | --- | --- |
-| `hooks` | 19 |
-| `scripts` | 53 |
+| `hooks` | 22 |
+| `scripts` | 59 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 561 |
+| `scanner/src` | 629 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -230,7 +232,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 352/434 (81.1%) |
+| 403/498 (80.9%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -321,7 +323,11 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
 - The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.
 
-## Independent evaluation population — the number that matters
+## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
+
+**This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
+engine this scorecard describes (0.163.0), it is a different population from the curated corpus above, and the two are
+never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both
 written here, which is why its detection rate sits at the ceiling by
@@ -356,9 +362,8 @@ to 1740 findings that is close to asking whether the codebase contains the bug
 class at all, a question with a much easier yes. It is kept because it is the
 only way to tell whether a change moved the engine or moved the benchmark.
 
-Against ~100% on the curated corpus above. **That gap is the most useful number
-in this document**, and publishing it is the point of the exercise. The figure
-went DOWN when the benchmark was corrected, and is published that way.
+This record is kept, dated and labelled because it is the last independent measurement the project made. It describes engine 0.141.0 only.
+It does not describe the engine above, and the curated-corpus rates earlier in this document are a different population that must not be read beside it as one claim.
 
 ### Held-out slice — never tuned against
 
@@ -392,6 +397,15 @@ very different once broken down this way.
 | no-finding-at-all | 737 |
 | finding-present-but-suppressed | 162 |
 | finding-present-wrong-file-or-cwe | 21 |
+
+## Real-code evaluation gates
+
+Status: **unmeasured** (no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated).
+
+The gates (per-language F1, micro and macro F1, pooled precision and recall, completion) are registered
+in a frozen protocol before any result is observed, and can read `pass` only on an independently
+adjudicated sealed population that meets the registered minimums. `insufficient-population` and
+`unmeasured` are honest blockers, not failures and not passes.
 
 ## Committed artifacts referenced (not re-run by this command)
 

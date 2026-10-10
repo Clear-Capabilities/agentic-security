@@ -1,7 +1,8 @@
 // LOOP-001: versioned manifest, baseline and execution profile.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, mkdtempSync, symlinkSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -30,8 +31,22 @@ test('[LOOP-001.AC01] the real PRD imports to exactly the declared 57 requiremen
   assert.deepEqual(crit.sort(), bullets.sort());
 });
 
+// A view of the repository without its controller state. createManifest reads the checkout's own frozen manifest to refuse a shrinking
+// scope, so building from REPO itself fails the moment this checkout holds an initialised run of a DIFFERENT document, which is exactly
+// the state the final gate runs this suite in. Everything else is symlinked, so suite files and watch paths still resolve.
+function stateFreeView() {
+  const root = mkdtempSync(join(tmpdir(), 'loop-manifest-view-'));
+  for (const n of readdirSync(REPO)) {
+    if (['.loop-engineering', '.git', 'node_modules'].includes(n)) continue;
+    try { symlinkSync(join(REPO, n), join(root, n)); } catch { /* a name that cannot be linked is not needed */ }
+  }
+  return root;
+}
+
 test('[LOOP-001.AC01] the frozen manifest built from the real PRD has no missing or circular dependencies and keeps weights', () => {
-  const { manifest } = createManifest({ repoRoot: REPO, prdPath: 'HASKELL_NIXOS_FULL_CAPABILITY_PRD.md', profile: realProfile(), profileSha: 'a'.repeat(64) });
+  const view = stateFreeView();
+  let manifest;
+  try { ({ manifest } = createManifest({ repoRoot: view, prdPath: 'HASKELL_NIXOS_FULL_CAPABILITY_PRD.md', profile: realProfile(), profileSha: 'a'.repeat(64) })); } finally { rmSync(view, { recursive: true, force: true }); }
   const ids = new Set(manifest.requirements.map((r) => r.id));
   for (const r of manifest.requirements) for (const d of r.dependencies) assert.ok(ids.has(d), `${r.id} -> ${d} exists`);
   assert.equal(manifest.totals.weight, 220);

@@ -205,6 +205,78 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/guides/assurance-documentation-index.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/assurance-examples.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/assurance-review.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/assurance-rollout-and-rollback.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/assurance-scope-and-contracts.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/background-controller-operations.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/bakeoff-recipe.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/business-logic-invariants.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/deployment-aware-support.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/engine-mechanism-evidence.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/evaluation-policy-card.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/evaluation-reporting.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/measurement-status.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/miniature-reproduction.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/offline-reproduction.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/portfolio-recovery.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/routing-policy-card.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/routing-replay.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/guides/verification-oracle-conformance.md",
       "taskId": "CORE-001-T03"
     },
@@ -230,6 +302,14 @@
     },
     {
       "path": "docs/lineage/PRIVACY_COMPARISON.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/reference/assurance-capability-matrix.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/reference/mcp-tool-contract.md",
       "taskId": "CORE-001-T03"
     },
     {

@@ -4,6 +4,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { sha256, canonicalJson } from './util.mjs';
+import { STALE_AFTER_MS } from './state.mjs';
+import { validateClosureConfig } from './closure-config.mjs';
 
 export class ProfileError extends Error {
   constructor(problems) { super(`invalid execution profile:\n  - ${problems.join('\n  - ')}`); this.name = 'ProfileError'; this.problems = problems; }
@@ -95,6 +97,12 @@ export function validateProfile(p, repoRoot) {
   const L = p.limits || {};
   for (const k of REQUIRED_LIMITS) {
     if (typeof L[k] !== 'number' || !Number.isFinite(L[k]) || L[k] <= 0) problems.push(`limits.${k} must be a finite positive number (budgets are never unbounded)`);
+  }
+  if (typeof L.heartbeatSeconds === 'number' && L.heartbeatSeconds * 3 > STALE_AFTER_MS / 1000) problems.push(`limits.heartbeatSeconds ${L.heartbeatSeconds} is too slow: a controller is judged stale after ${STALE_AFTER_MS / 1000}s, so the heartbeat must be at most ${STALE_AFTER_MS / 3000}s`);
+  if (p.finalVerification !== undefined && (typeof p.finalVerification !== 'object' || p.finalVerification === null || typeof p.finalVerification.required !== 'boolean')) problems.push('finalVerification must be { required: boolean }');
+  if (p.finalVerification?.closure !== undefined) {
+    if (!p.finalVerification.required) problems.push('finalVerification.closure needs finalVerification.required to be true');
+    problems.push(...validateClosureConfig(p.finalVerification.closure, (p.finalGates || []).map((g) => g.id)));
   }
   if (L.claudeBudgetUsd && L.perAttemptBudgetUsd && L.perAttemptBudgetUsd > L.claudeBudgetUsd) problems.push('limits.perAttemptBudgetUsd exceeds the whole-run budget');
   const W = p.worker || {};

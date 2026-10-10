@@ -1,0 +1,92 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "cards-free-movement",
+  "revision": 1,
+  "name": "Records move only along the allowed moveCard transitions",
+  "class": "workflow-order",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    }
+  ],
+  "actors": [
+    {
+      "id": "ana",
+      "tenant": "acme",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "rec",
+      "kind": "record",
+      "tenant": "acme",
+      "key": "cards/1"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "advance",
+      "action": "moveCard",
+      "actors": [
+        "ana"
+      ],
+      "resource": "rec"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "no-skipped-step",
+      "op": "transition-outside",
+      "prefix": "cards/",
+      "field": "status",
+      "allowed": [
+        {
+          "from": "open",
+          "to": "doing"
+        },
+        {
+          "from": "doing",
+          "to": "done"
+        },
+        {
+          "from": "done",
+          "to": "open"
+        },
+        {
+          "from": "open",
+          "to": "done"
+        },
+        {
+          "from": "doing",
+          "to": "open"
+        },
+        {
+          "from": "done",
+          "to": "doing"
+        }
+      ],
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:43a2000572cd4a92"
+}

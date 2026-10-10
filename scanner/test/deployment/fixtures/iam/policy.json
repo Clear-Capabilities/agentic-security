@@ -1,0 +1,8 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["dynamodb:GetItem", "dynamodb:Query"], "Resource": "arn:aws:dynamodb:us-east-1:111122223333:table/orders" },
+    { "Effect": "Allow", "Action": "dynamodb:PutItem", "Resource": "arn:aws:dynamodb:us-east-1:111122223333:table/orders" },
+    { "Effect": "Deny", "Action": "dynamodb:PutItem", "Resource": "arn:aws:dynamodb:us-east-1:111122223333:table/orders" }
+  ]
+}

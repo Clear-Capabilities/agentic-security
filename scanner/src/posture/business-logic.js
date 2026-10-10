@@ -17,6 +17,8 @@
 //     case. Heuristic: check the test-files corpus for any test asserting
 //     a 401 / 403 status against the route's path.
 
+import { inferredInvariant } from './invariants/lifecycle.js';
+
 const JS_TS_RE = /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i;
 const PY_RE    = /\.py$/i;
 
@@ -135,20 +137,25 @@ function emitAuthZMatrixFindings(matrix) {
 
 // ─── FR-LOGIC-2 State machine extraction ──────────────────────────────────
 
-function extractStateMachine(fileContents) {
+function collectStateSets(fileContents) {
   // Find sites where a literal set of statuses appears (e.g.
   // `STATUSES = ['pending', 'approved', 'rejected']` or an enum-like in TS).
-  // Then look for direct writes like `.status = "<not in set>"` and flag.
-  const stateSets = [];   // [{file, line, name, values: Set<string>}]
+  const stateSets = [];   // [{file, line, name, values: Set<string>, ordered: string[]}]
   for (const [fp, c] of Object.entries(fileContents || {})) {
     if (typeof c !== 'string' || !JS_TS_RE.test(fp)) continue;
     const re = /\b(STATUSES|STATES|PHASES|ALLOWED_STATUSES|[A-Z_]+_STATUSES)\s*=\s*\[\s*((?:['"][^'"]+['"]\s*,?\s*){2,})\]/g;
     let m;
     while ((m = re.exec(c))) {
       const values = [...m[2].matchAll(/['"]([^'"]+)['"]/g)].map(x => x[1]);
-      stateSets.push({ file: fp, line: _lineOf(c, m.index), name: m[1], values: new Set(values) });
+      stateSets.push({ file: fp, line: _lineOf(c, m.index), name: m[1], values: new Set(values), ordered: values });
     }
   }
+  return stateSets;
+}
+
+function extractStateMachine(fileContents) {
+  // Then look for direct writes like `.status = "<not in set>"` and flag.
+  const stateSets = collectStateSets(fileContents);
   if (!stateSets.length) return [];
   const findings = [];
   for (const [fp, c] of Object.entries(fileContents || {})) {
@@ -236,4 +243,19 @@ export function scanBusinessLogic(fileContents) {
 }
 
 // For tests + the no-dead-modules check.
+// X-402: a declared status list read as an inferred workflow contract. The declared order is the only evidence for the allowed
+// transitions (each value to the next), which is a guess a reviewer must confirm, so the proposal carries a high uncertainty and is
+// advisory until approved in the signed ledger.
+export function mineWorkflowInvariants(fileContents) {
+  const out = [];
+  for (const set of collectStateSets(fileContents)) {
+    const states = set.ordered.filter((v) => /^[A-Za-z0-9_.:/-]{1,64}$/.test(v));
+    if (states.length < 2) continue;
+    const allowed = states.slice(0, -1).map((from, i) => ({ from, to: states[i + 1] }));
+    const inv = inferredInvariant({ class: 'workflow-order', source: 'state-machine', evidence: { file: set.file, line: set.line, set: set.name }, uncertainty: 0.7, action: 'advance', allowed: allowed.slice(0, 16) });
+    if (inv) out.push(inv);
+  }
+  return out;
+}
+
 export const _internals = { extractAuthZMatrix, extractStateMachine, findNegativeTestGaps };

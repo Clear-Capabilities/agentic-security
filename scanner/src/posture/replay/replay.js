@@ -243,6 +243,7 @@ export async function replayManifest(bundle, o = {}) {
   const reproduced = manifest.expected ? run.outcome === manifest.expected.outcome : null;
   return {
     status: 'completed', executed: true, outcome: run.outcome, record: run.record, receipt: run.receipt, reproduced, disclosure: run.disclosure,
+    ...(run.report !== undefined ? { report: run.report } : {}),
     prerequisites: [], errors: [], run: run.run, environment: run.environment,
     attempt: attemptRecord(manifest.id, step.n, step.history, 'completed', { outcome: run.outcome }),
   };

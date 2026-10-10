@@ -8,7 +8,7 @@
 // separate untagged check compares the fixture with the real PRD when it exists.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, chmodSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, chmodSync, copyFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -274,6 +274,41 @@ test('[LOOP-001.AC03] validation and a bounded preflight succeed on a disposable
   } finally { await repo.cleanup(); }
 });
 
+test('[LOOP-001.AC03] preflight succeeds on the REAL profile with the REAL protected wrappers in a disposable checkout, and no model is called', async () => {
+  // Unlike disposable(), nothing about the suites is rewritten: the profile is the committed one and every wrapper file is the committed one.
+  const repo = new MiniRepo([{ id: 'LOOP-001', weight: 2, criteria: ['one'] }]);
+  copyFileSync(FIXTURE, repo.path('PRD.md'));
+  const bin = repo.path('stand-in-claude');
+  writeFileSync(bin, STAND_IN); chmodSync(bin, 0o755);
+  const p = profile();
+  const wrappers = new Set(Object.values(p.suites).flatMap((s) => s.files));
+  for (const f of wrappers) {
+    mkdirSync(dirname(repo.path(f)), { recursive: true });
+    copyFileSync(join(REPO, f), repo.path(f));
+  }
+  for (const f of ['relay.mjs']) {
+    copyFileSync(join(REPO, 'scripts', 'assurance-differentiation', 'test', f), repo.path('scripts', 'assurance-differentiation', 'test', f));
+  }
+  // only the worker command, the loopback port and the disk floor of a throwaway directory differ from the committed profile
+  p.worker.command = bin; p.serve.port = 0; p.limits.resource.minFreeDiskGiB = 1;
+  repo.writeProfile(p);
+  try {
+    assert.equal((await repo.init()).code, 0);
+    const r = await pre(repo);
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.equal(r.json.ok, true);
+    assert.equal(check(r, 'suites-runnable')?.status, 'pass', JSON.stringify(check(r, 'suites-runnable')));
+    for (const name of ['manifest', 'profile', 'claude-cli', 'verification-executables', 'process-isolation']) assert.equal(check(r, name)?.status, 'pass', `${name}: ${JSON.stringify(check(r, name))}`);
+    const calls = readFileSync(repo.path('stand-in-calls.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.equal(calls.some((c) => c.includes('--print')), false, 'preflight never runs a prompt');
+    // control: take one real wrapper away and the same preflight refuses
+    rmSync(repo.path('scripts', 'assurance-differentiation', 'test', 'routing.test.js'));
+    const bad = await pre(repo);
+    assert.equal(bad.code, 1);
+    assert.match(check(bad, 'suites-runnable').detail, /routing \(protected wrapper file\(s\) not found: scripts\/assurance-differentiation\/test\/routing\.test\.js/);
+  } finally { await repo.cleanup(); }
+});
+
 test('[LOOP-001.AC03] a nonexistent suite refuses launch with the suite and the reason, at init, preflight and start', async () => {
   // (a) a requirement whose suite key has no mapping: init refuses
   const unmapped = disposable((p) => { delete p.suites.routing; });
@@ -295,7 +330,12 @@ test('[LOOP-001.AC03] a nonexistent suite refuses launch with the suite and the 
     assert.equal(missingFile.exists('.loop-engineering/lock.json') && missingFile.read('.loop-engineering/lock.json').includes('pid'), false, 'no controller was started');
   } finally { await missingFile.cleanup(); }
   // (c) a suite declared not yet runnable is reported as a blocker, never silently passed
-  const declared = disposable(() => {}, { keepNotYetRunnable: true });
+  // the real profile no longer declares any suite blocked, so the declaration is injected to prove the refusal still works
+  const declared = disposable((p) => {
+    for (const [k, suite] of Object.entries(p.suites)) {
+      if (k !== 'loop') suite.notYetRunnable = { reason: `protected wrapper scripts/assurance-differentiation/test/${k}.test.js is not authored yet (PRD section 11.1 step 4); the supervising session must write and review it before init` };
+    }
+  });
   try {
     assert.equal((await declared.init()).code, 0);
     const r = await pre(declared);
@@ -402,14 +442,19 @@ test('[LOOP-001.AC03] the real profile carries the PRD section 7 limits as finit
   assert.equal(p.worker.permissionMode, 'dontAsk');
   assert.deepEqual([p.serve.host, p.serve.port], ['127.0.0.1', 4317]);
   const gaps = new Map(p.unenforced.map((u) => [u.field, u]));
-  for (const f of ['heartbeatSeconds', 'networkRequestSeconds', 'networkRetries', 'providerEnvelopeUsd', 'budgetsAreCapsNotAuthorization', 'linuxEnforcementBackend']) assert.ok(gaps.has(f), `${f} is disclosed`);
+  for (const f of ['networkRequestSeconds', 'networkRetries', 'providerEnvelopeUsd', 'budgetsAreCapsNotAuthorization', 'linuxEnforcementBackend']) assert.ok(gaps.has(f), `${f} is disclosed`);
+  // LOOP-002 made the heartbeat a real control (read from the profile, tested in loop-assurance-runtime.test.js), so it is no longer listed as unenforced.
+  assert.equal(gaps.has('heartbeatSeconds'), false, 'heartbeatSeconds is enforced and proven, so it must not be disclosed as a gap');
   for (const u of p.unenforced) assert.ok(u.note.length > 20 && u.status, `${u.field} states a status and a reason`);
-  // honest status of the registered suites on THIS checkout: loop is runnable, the rest are declared blockers
-  const blockers = new Map(suiteLaunchBlockers(p, REPO).map((b) => [b.suite, b.reason]));
-  assert.equal(blockers.has('loop'), false, 'the loop suite wrapper exists');
-  assert.equal(blockers.size, 10, 'every other suite is reported as a blocker');
-  for (const [k, reason] of blockers) assert.match(reason, /not yet runnable/, `${k} is declared, not silently passed`);
-  // control: a runnable suite reports no blocker, and the mutation path reports one
-  const q = profile(); delete q.suites.foundation.notYetRunnable;
-  assert.match(suiteLaunchBlockers(q, REPO).find((b) => b.suite === 'foundation').reason, /protected wrapper file\(s\) not found/);
+  // honest status of the registered suites on THIS checkout: every suite has its protected wrapper, none is declared blocked
+  assert.deepEqual(suiteLaunchBlockers(p, REPO), [], 'every registered suite is runnable on this checkout');
+  for (const [k, suite] of Object.entries(p.suites)) {
+    assert.equal(suite.notYetRunnable, undefined, `${k} is not declared blocked`);
+    for (const f of suite.files) assert.ok(existsSync(join(REPO, suite.cwd || '.', f)), `${k}: ${f} exists`);
+  }
+  // control, in both directions: a declaration is reported as a blocker, and so is a missing wrapper file
+  const q = profile(); q.suites.foundation.notYetRunnable = { reason: 'wrapper not authored' };
+  assert.match(suiteLaunchBlockers(q, REPO).find((b) => b.suite === 'foundation').reason, /declared not yet runnable: wrapper not authored/);
+  const m = profile(); m.suites.foundation.files = ['scripts/assurance-differentiation/test/no-such-wrapper.test.js'];
+  assert.match(suiteLaunchBlockers(m, REPO).find((b) => b.suite === 'foundation').reason, /protected wrapper file\(s\) not found/);
 });

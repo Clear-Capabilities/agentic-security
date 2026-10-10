@@ -141,7 +141,7 @@ one was caught by the module's own test, not in review.
 - **No throwing.** Every annotation in `engine.js` is wrapped `try { … } catch (_) {}`. Your annotator must degrade gracefully — set `null` on the field and continue.
 - **Dead-module test.** `npm run test:lifecycle` fails the build if you export a public symbol from a posture module that no other source file imports. Wire it in `engine.js` (or allowlist it with a written reason in `test/no-dead-modules.test.js`).
 
-## Assurance contracts, baseline and rollout config — `assurance/` (9 modules)
+## Assurance contracts, baseline and rollout config — `assurance/` (11 modules)
 
 Foundation for the differentiation work (CORE-001, CORE-002, CORE-004). All of it is pure or read-only, and **nothing in it is wired into `engine.js` or the scan/report path**: a default scan is byte-for-byte unaffected, which `test/posture/assurance-config.test.js` pins. Consumers (X-201 and later) import it directly.
 
@@ -153,6 +153,19 @@ Foundation for the differentiation work (CORE-001, CORE-002, CORE-004). All of i
 - **`config.js`**: the unified feature configuration. Reuses the env/`.agentic-security/*.yml` mechanism. Precedence: kill switch (`AGENTIC_SECURITY_NO_ASSURANCE` or `AGENTIC_SECURITY_NO_<FEATURE>`) > explicit override > `AGENTIC_SECURITY_ASSURANCE_<FEATURE>` > `.agentic-security/assurance.yml` > default (everything off). **A project file can never enable a `high-risk-execution` feature** (the file lives in the scanned repo); invalid configuration fails closed; unsupported platforms return a typed `unsupported` with the disclosure. `runFeature` returns typed `blocked`/`unsupported`/`degraded`/`disabled` results and never prompts.
 - **`bounded-io.js`**: `guardedModelCall` is the only route for new model/network calls. It owns no HTTP client (the transport is injected): feature gate, then `evaluateEgress` BEFORE the payload exists, then `redactPayload`, then the request-size limit, then deadline plus bounded retries, then output cap, with every decision appended to the existing egress audit chain. `readFileBounded`, `capOutput`, `withDeadline`, `retryBounded` enforce the limits `config.js` claims; `maxMemoryMiB` is carried for a runner and disclosed as not enforced here.
 - **`baseline.js`, `baseline-inventory.js`**: baseline capture (`scripts/baseline-capture.mjs`, `npm run baseline:capture`). Read-only; records HEAD, dirty paths, exact source and bundle digests, tool versions, entry points, the seven mappings and an 18-entry capability inventory (implemented / partial / unsupported / unmeasured, every path and exported symbol verified at capture time, a missing one is a reported problem). Unknown facts are `{status:'unknown', reason}` with no value. `evaluateBaseline` invalidates exactly the capabilities whose cited files changed and lists unrelated user changes as retained/introduced. The manifest is machine-specific, so it is generated on demand and not committed. When you change a capability's source or tests, update its inventory entry in the same change.
+
+- **`rollout.js`, `rollback.js` (REL-002).** Staged rollout and rollback. `rollout.js`: the three stages (`offline-fixtures`, `shadow-canary`,
+  `opt-in-supported`), the documented gates per feature and stage (`gatesFor`, `describeRollout`), an append-only ledger (`newLedger`), `promote`
+  (one stage at a time, every gate needs evidence that names its own suite and carries a sha256; the kill switch and an unsupported platform
+  block it; policy versions are never reused) and `effectiveMode` (an enabled feature below opt-in runs as `fixtures` or `shadow` and can never
+  change an outcome). `rollback.js`: `READER_POLICY` (per record kind, whether a previous reader is retained; four kinds honestly say no),
+  `planRollback`/`applyRollback` (restore the last known-good stage, append a `rollback` event, FLAG evidence and claims `stale` or
+  `incompatible`, never delete or rewrite), `EvidenceStore`/`guardedFeatureRun` (append-only, a thrown feature records a failure and costs no
+  evidence), and the known break: `verifyWithPreCore003Reader` is a faithful copy of the verifier before the `issuance` block existed, which
+  rejects every newly signed bundle; `exportLegacyBundle` is the migration path (verifies the original first, re-signs without issuance,
+  returns a sidecar carrying the dropped trust basis). Pure, consumed by tests and `docs/guides/assurance-rollout-and-rollback.md`; nothing in
+  the scan path imports them. Suite: `test/release-closure/` (`npm run test:release-closure`). The release closure itself (the plan, the
+  commit-bound record, the judge) is `scripts/release-closure.mjs`, not a posture module.
 
 Tests: `test/posture/assurance-{baseline,contracts,config}.test.js`, all in `test:posture`.
 
@@ -312,6 +325,324 @@ receipts, three tamper attempts, an unavailable prerequisite, cancellation, repl
 (`verification-conformance-gate`, in `RELEASE_GROUPS['benches-b']`) and, static half only, the pre-push gate
 (`verification-conformance-static`). Where the boundary cannot run, execution is reported `not-run`, never passed; `--require-execution`
 makes that a failure. A new adapter must be pinned deliberately (`--update-pins`).
+
+## Frozen evaluation protocol, label custody and layer ablations: `evaluation/` (QA-001, QA-002, QA-003)
+
+Offline measurement tooling, consumed by `scripts/evaluation.mjs` (`npm run evaluation -- <cmd>`, `npm run evaluation:synthetic`) and
+`test:evaluation`. Nothing here is wired into `engine.js` or the scan path, and a test pins that no module outside `evaluation/`
+imports it. **It builds machinery, not evidence.** No real adjudicated population, no real sealed set and no independent human
+review exist in this repository, so every real-code gate reads `insufficient-population` or `unmeasured`; the exercised suite
+(`synthetic.js`, fixtures in `test/fixtures/evaluation-synthetic/`) is authored by the tooling's developers and flagged
+`synthetic: true` everywhere, and `gates.js` refuses to count it toward any minimum. Do not quote a score from the synthetic suite
+as engine accuracy.
+
+- **`protocol.js` (QA-001).** `freezeProtocol` validates a draft and returns a deep-frozen protocol with `protocolHash` (a digest over
+  every semantic field). It pins engine/bundle digest, a clean measurement tree, tool and model versions, dataset licences, per-target
+  pre/post commits and tree digests, scope, matching policy, limits, thresholds and split membership. Thresholds are the PRD section 5
+  floor (`PREREGISTERED_THRESHOLDS`) and may be stricter, never looser or missing. `amendProtocol` yields a new versioned protocol with a
+  field diff and empty `comparableWith`; with ANY result bound to the protocol's hash it refuses (`POST_RESULT_CHANGE`), so a threshold,
+  matching rule or denominator cannot move after results are observed. `deriveSuccessorProtocol` is the only way forward and rejects a
+  sealed target a result already consumed (`SEALED_REUSE`). A target removed from the population must appear in `retired` with a reason
+  and stays in `originalTargetIds`. `assertBoundToProtocol` rejects a run scored under any other hash.
+- **`grouping.js`.** Union-find over pair id, normalised upstream (a fork resolves to its parent), advisory ids, commits and template
+  fingerprints; `assignSplits` places whole groups by a salted hash, `splitStraddles` is the check the protocol validator runs.
+- **`labels.js` (QA-002).** Defect labels need a root-cause id, affected commit, language, family, a reviewed location RANGE (a CWE
+  alone cannot be a label), evidence, and adjudication with at least two distinct reviewers who are not the proposer, recorded as
+  independent, plus non-model evidence. A candidate (advisory-only) label is valid data and never scoreable. Negatives are `safe-real`,
+  `patched` (post variant, paired to a defect) and `near-miss`. `matchFinding` matches by location plus family or CWE; CWE-only,
+  wrong-file, no-line and out-of-range each fail with a distinct reason. A finding with no line cannot be localised, so it never
+  matches (this is why the pattern-only layer scores zero on the synthetic suite: it reports no line, not a defect of the harness).
+  This module can validate that a label SAYS it was independently adjudicated, not that it was.
+- **`custody.js` (QA-002.AC03).** The custodian (verifier domain, role `custodian`) is the only writer of the label store; read needs the
+  trust-domain `sealed-labels` read grant and the sealed hash to match. `protectedTermsFrom` / `guardPrompt` / `auditWorkspace` /
+  `stageWorkspace` keep advisory prose, evidence refs, benchmark names, fixed-source hints, answer-key file names, advisory ids and
+  symlinks out of anything the engine or a prompt sees; a leaking tree is quarantined (removed, recorded as an outcome, never scanned).
+  These are PATTERN checks over known terms, not proof against a paraphrase. Process-level read denial of the label directory is the
+  sandbox boundary's job (`runInBoundary({ labelDirs })`, which reports `blocked` where the host cannot prove the control).
+- **`runner.js`, `scan-child.js` (QA-003).** `runEvaluation` records, per target and variant, status (`completed|timeout|error|unavailable|
+  quarantined`), findings, duration, cost (null when unmeasured, never zero), failure reason and input/output hashes. The engine runs in a
+  child process (killed by process group on timeout) over a staged copy, with a scrubbed environment. Run identity covers protocol,
+  engine, layer, provider, model, settings, cache, budget, seed, replicate, split and every target digest; labels are not part of it.
+  A tree that differs from the digest pinned in the protocol is refused. `runReplicates` checks deterministic reproduction and requires
+  at least three replicates for the stochastic (model-assisted) layer; `runAblations` runs `deterministic-only`, `deep-taint` and
+  `model-assisted` over identical targets and refuses incomparable configurations. `model-assisted` is `unavailable` without
+  `AGENTIC_SECURITY_LLM_ENDPOINT`, recorded as such.
+- **`score.js`.** End-to-end scoring: a timeout, error, unavailable or quarantined known positive is a MISS. Conditional-on-completion
+  metrics are reported beside it, labelled, never instead of it. False positives are counted only on adjudicated negatives. Findings no
+  adjudicated label accounts for go to a review queue and `unscored` (with counts and reasons), never auto-FP. Targets with no
+  adjudicated label are `unlabeled-target`.
+- **`gates.js`.** Judges a sealed-split score against the protocol's own thresholds. `pass` needs the population minimums (>=100 real,
+  adjudicated, non-synthetic sealed positives and negatives per core language, >=30 positives per family) AND a measured value over the
+  threshold; otherwise `insufficient-population` or `unmeasured`. A protocol failing its hash check, or a score from another protocol, is
+  `rejected`. The interval-lower-bound gate is `unmeasured` until the interval method is implemented (QA-004), so `overall` cannot be
+  `pass` in this build. `accuracy-scorecard.js` relays a gate report in an `evaluationGates` section (`summarizeEvaluationGates`),
+  forcing `unmeasured` for a synthetic or unmarked report; `scripts/scorecard.mjs` reads the gate report from the independent bench directory
+  when one has been written (none exists today).
+
+Tests: `test/evaluation/{protocol,grouping,labels,custody,runner,gates-scorecard}.test.js` (`npm run test:evaluation`).
+## Executable invariants, approval, scenarios and the business-state oracle: `invariants/` (X-401 to X-404)
+
+Same posture as the verification directories above: consumed, not wired into the default scan, every output addition additive, and
+everything off unless the **`invariant-scenarios`** feature (high-risk execution, operator-only, off by default) is enabled; running a
+scenario also needs `verification-oracles`. Suite: `npm run test:invariants` (`test/invariants/`, executed tests skip loudly where the
+trust boundary cannot run). Linux stays `unverified`: nothing here claims a Linux outcome. X-405 to X-408 (shrinking, repair
+verification, coverage and export, the held-out ablation) are described in the section after this one.
+
+- **`schema.js` + `expressions.js` (X-401).** The versioned invariant document: scope (an explicit application, entry, factory and
+  environment), tenants, actors, resources, allowed transitions, FORBIDDEN outcomes and an oracle binding. Five classes
+  (tenant-isolation, privilege-constraint, value-conservation, workflow-order, idempotency). Declarative only: forbidden outcomes are
+  expressions from a closed grammar (`EXPRESSIONS`), every string in them matches a conservative charset, so no field can carry code;
+  an op outside the grammar is rejected. Rejects ambiguous identities (duplicate actor/resource/transition/store key), dangling
+  references, a missing, unregistered or wrong-class oracle binding, and preserves author, revision and review state. The id is a
+  hash of the CONTENT (not the review), so an approval binds to exactly what was reviewed and an edit is a different contract.
+  `expressions.js` exists so the oracle adapter can validate expressions without importing the schema (the schema imports the
+  oracle registry; the registry imports the adapters).
+- **`lifecycle.js` (X-402).** Inferred versus approved. `inferredInvariant` builds a PROPOSED skeleton (inferred, with source
+  evidence and an uncertainty, authored by a model or by code); miners reuse it: `specification-mining.js` (`mineInvariantProposals`),
+  `business-logic.js` (`mineWorkflowInvariants`), `logic-claims.js` (`invariantFromLogicClaim`) and the discovery lenses
+  (`discovery/lenses.js` `invariantProposalFor`, surfaced by `runDiscovery` as `invariantProposals` only when asked AND the feature is
+  on). The approval ledger is append-only, hash-chained and HMAC-signed under the per-install key (`integrity.js`): a transition
+  records who, why, from, to, the authority it rests on, and the previous record. Only a HUMAN named by an explicit local reviewer
+  policy (or verified by `fix/approver-registry.js`) can approve, reject or supersede; a model, code or the proposer cannot, and with
+  no policy nothing can be approved. `classifyViolation` calls a settled `confirmed` result an APPROVED violation (may gate) only
+  when the ledger verifies and says approved, else a CANDIDATE violation (advisory); a document that merely claims approval is a
+  candidate, and a result without a receipt `runOracle` issued is `unverified`. `violationReport` keeps the two groups apart.
+  Limits, stated: symmetric HMAC is tamper-evidence for the operator, not third-party non-repudiation; the reviewer identity is a
+  claim checked against the operator's list, not authenticated; dropping the LAST record is not detectable; persistence is the
+  caller's (the ledger is plain data).
+- **`scenarios.js` (X-403).** `generateScenarios(invariant, { fixture, seed, bounds, config })`: five families (cross-tenant access,
+  privilege change, reordered workflow, duplicate request, concurrent operations), each with synthetic tenants and actors, a seeded
+  setup, a control sequence, an attack sequence, the forbidden outcomes and a cleanup. Bounded by actors, depth, requests,
+  scheduling (a parallel group is at most 4 steps with a SEEDED start order) and time (the budget becomes the run deadline); every
+  bound has a hard ceiling and an over-ceiling request is rejected, not clamped. Deterministic given the seed (no clock; ids are
+  hashes). Confined to contracts scoped to a `disposable-fixture` and to fixture files the caller supplies; a shared/production
+  scope, missing setup or a scenario that cannot be built is `unsupported` with its reason. `runScenario` builds a replay manifest
+  (`replay/replay.js`) so the environment, toolchain and oracle logic digest are pinned, then runs it. `run.js` (`verifyInvariant`)
+  is the one orchestration: generate, replay each scenario, classify against the ledger, report.
+- **`business-state` oracle (X-404)** in `oracles/adapters.js` (class `business-state`, `requiresFeature: 'invariant-scenarios'`,
+  fixtures `test/fixtures/oracles/business-state/`, pinned like every adapter). The harness gives the application an in-memory
+  durable store and an effect recorder (`ctx.store`, `ctx.emit`), plays a control sequence and the attack sequence TWICE (a
+  disagreement is `inconclusive`, never a verdict), and logs every durable write and emitted effect. `state-assertions.js`
+  evaluates the forbidden outcomes VERIFIER-SIDE over that log after the tree is dead: durable writes, leaked content, totals,
+  state moves and repeated effects decide; the response status is recorded in the event sequence and never decides, so a handler
+  answering 403 after writing another tenant's record is a violation. A forbidden outcome reached by the control flow counts too.
+  `refuted` needs the control flow to have visibly worked (durable effect, no error, clean, cleaned up). The result carries a
+  bounded `report` (preconditions, sanitized snapshots with secret-looking fields redacted, the event sequence, per-assertion
+  results with stable `ievd:` evidence ids); the ids are record evidence and the report digest is bound into the receipt.
+  Two small additive changes to shared code: `oracle.js` supports an optional per-adapter `requiresFeature` and optional
+  `judged.report`/`judged.evidenceItems`; `conformance.js` enables an adapter's `requiresFeature` for its execution checks.
+- **Limits, not hidden.** The application is a factory returning `(ctx, key, payload)` actions over an in-memory store: durable state
+  held in a real database, queue or file system is not observed. Concurrency is cooperative scheduling in one process (interleavings
+  at await points), not parallel execution. A clean result covers only the declared bounded scenario. A target that recognises the
+  oracle and forges its own log entries is not distinguishable from a real violation (the limit every adapter states).
+- **`deployment-ablation.js` (X-308).** A frozen, SYNTHETIC deployment-context ablation: the same source deployed under an exploitable and a
+  non-exploitable boundary configuration (`test/fixtures/deployment-ablation/`, seven cases, fourteen instances, kubernetes and compose
+  deployments). `freezeAblationSet` hash-pins each source tree, each deployment tree, the labels and the graph arm's decision rule and binds
+  the cases into a QA-001 protocol (`synthetic: true`, never counted toward a real-population gate); `verifyFrozenSet` refuses any drift
+  before a measurement. `runPairedAblation` scores a source-only arm (the QA-003 child-process scan) and a graph-enabled arm (the shipped
+  `runBoundaries` path plus a frozen demotion rule: demote only on `blocked`, or `none-found` in a graph with no gap) on the same
+  instances and reports paired counts (false positives reduced, confirmed defects added, baseline confirmed defects lost, false positives
+  added), precision, recall, runtime and coverage (unresolved, stale and unbound reported apart). Uncertainty is a SIMPLE paired case
+  bootstrap, labelled as such: the grouped bootstrap of QA-004 is not in this base. `adapterValidation` marks an adapter validated only with
+  a positive and a negative fixture and no lost defect; `docs/guides/deployment-aware-support.md` may claim only those (a test compares).
+  CLI: `npm run evaluation -- deployment-ablation [--json] [--write-frozen]`. The cases, labels and rule are authored by the tooling's
+  developers and one case exists because an earlier rule lost a defect on it, so the set is a mechanism check, not an estimate.
+
+Tests: `test/evaluation/{protocol,grouping,labels,custody,runner,gates-scorecard}.test.js` (`npm run test:evaluation`); the X-308 ablation is tested in `test/deployment/differentiation-ablation.test.js` (`npm run test:deployment`).
+
+## Shrinking, repair verification, coverage and the held-out ablation (X-405 to X-408)
+
+Same posture as above: consumed, not wired into the default scan, behind `invariant-scenarios`, every output addition additive. Suites:
+`test/invariants/{scenario-shrinking,invariant-repair,business-coverage,invariant-ablation}.test.js`. Guide: `docs/guides/business-logic-invariants.md`.
+
+- **`invariants/shrink.js` (X-405).** `shrinkScenario(scenario, { fixture, commit, config, budget })`: a greedy removal search (an attack step,
+  one member of a parallel group, a control step, a seed record), each candidate replayed through `runScenario` (so manifest, boundary,
+  receipt), kept only if it settles `confirmed` with every precondition held AND the same authoritative failing assertion (the first
+  violated outcome in the contract's order; identified by forbidden-outcome id and phase). Units a surviving step addresses, or that
+  carry an asserted marker, are guarded (recorded with a reason, never silently skipped). Budget: `maxRuns` and `timeBudgetMs`, each with
+  a hard ceiling and rejected, not clamped, above it; `minimal: true` only when a full pass kept nothing more. One confirming replay
+  sits outside the budget. `reproductionSignals` is a PATTERN check over the fixture text for clocks, randomness, timers, network and
+  package imports; `reproducibility.blockedBy` names concurrency (cooperative scheduling, two fresh runs disagreed), external
+  dependencies and prerequisites. `checkMinimization` re-derives from the two scenarios that the minimized one is a removal-subset
+  (invariant, fixture, actors, forbidden outcomes untouched; no step added; no sequence emptied; no referenced record dropped);
+  `verifyShrinkRecord` recomputes the digest, id and receipt links. `scenarios.js` gained `deriveScenario` (same pinned scenario, new
+  inputs, recomputed limits and id) and `exerciseOf`; `run.js` gained an optional `shrink` input and an `exercise` field per result.
+- **`invariants/repair.js` (X-406).** `verifyInvariantRepair` composes `verifyPatchNegative` (business-state as the declared behaviour
+  check: `req.functional.oracleId` and `promotePatch`'s `functionalOracle` are the two small additive changes in `verification/`) with
+  preservation legs for every other APPROVED contract on the fixture (baseline and patched, a pre-existing violation is not blamed on
+  the patch). Needs the violated contract approved in a verifying ledger or nothing runs. Blockers carry codes from `REASON_CODES`;
+  `reasonCodeFor` maps every patch-negative failure code and sends an unknown one to `setup-failed`. A preservation failure after a
+  promotion appends a `rejected` repair record. `patch-negative.js` now also counts a failed business-state control flow
+  (`observed.preconditions`) as a broken revision. A verified repair builds a regression artifact (exact patch, invariant document and
+  approval evidence, scenario, one pinned manifest per leg with its expected outcome, secret-checked); `runRegressionArtifact`
+  re-executes it from the artifact alone, `validateRegressionArtifact` detects an edit without running. Receipts do not cross a
+  process; the artifact crosses by re-execution. The approval evidence in it is a digest and a transition id: checking the HMAC needs
+  the operator's key.
+- **`invariants/coverage.js`, `export.js`, `project-input.js`, `cli.js` (X-407).** `businessCoverage` reports inventory by the VERIFIED
+  ledger, exercised actors/states/transitions from executed scenarios only, and gaps (`GAP_CODES`) that running more of the same cannot
+  remove; it always states it is a bounded sample. `invariantCoverageFields` is the one place a surface asks for the additive
+  `invariantCoverage` field (`report/index.js` JSON and CLI); flag off or nothing attached returns `{}`, pinned by
+  `test/fixtures/invariant-compat/`. `exportScenarios` builds the reproducible package (no fixture source; a scenario holding
+  secret-looking content is withheld by path; claims `exhaustive: false`); `verifyScenarioExport` detects edits. CLI:
+  `agentic-security invariants export|coverage|regress`; MCP: `invariant_scenario_export` (`mcp/invariant-tools.js`, read-only).
+- **`evaluation/invariant-ablation.js` (X-408).** Three arms (source-only engine scan, inferred contract, approved contract) over a frozen
+  synthetic benchmark (`test/fixtures/invariant-benchmark/`, `manifest.json` + `pin.json`, loader fails closed), one denominator and one
+  budget, flags produced before any label is read, Wilson intervals, paired counts, unique findings, scenario cost, and per-class
+  claims that are `supported` only from executed evidence meeting the registered policy (nothing executed is `unmeasured`). Driver:
+  `npm run bench:invariant-ablation -- run|verify|pin` (`scripts/invariant-ablation.mjs`). SYNTHETIC: authored and labelled by the
+  developers, no independent adjudication; a figure from it is not engine accuracy and not a real-world benefit claim.
+- **Limits, not hidden.** Same as the section above (in-memory store, cooperative concurrency, only declared outcomes). A shrunk
+  scenario is a smaller reproduction, not a root cause. A verified repair covers the declared scenario, workflows and the other
+  contracts' bounded scenarios only. Linux is not claimed anywhere here.
+- **`interval.js`, `report.js` (QA-004).** `groupedBootstrap` is the registered `grouped-bootstrap-95` method: percentile bootstrap over GROUPS
+  (grouping.js), 2000 resamples, seed = first 32 bits of sha256(protocolHash + statistic name), `unmeasured` with the reason below 10 independent
+  groups. `wilsonInterval` covers the completion rate. `buildAccuracyReport` publishes raw counts first, then P/R/F1 by language and family,
+  micro and macro, completion with an interval, and every disclosed gap (unscored labels and findings, negatives whose scan failed). A stratum below
+  the protocol's floor is `unmeasured` with raw counts and a separate `descriptive` figure. `score.js` now carries `perTarget` tallies (what the
+  bootstrap resamples) and scores repeated alerts of one flaw as ONE false positive (`clusterAlerts`, `alertsCollapsed`); `alertBurden` reports the
+  raw alerts a reviewer reads beside the root causes, so deduplication never hides burden. `checkPopulationsDisjoint` refuses a target in two of
+  regression, development, sealed, operational.
+- **`economics.js` (QA-004.AC03).** `accountCosts` keeps model, tool, cache (USD) and human-review (MINUTES) apart, treats an entry with no amount as
+  unmeasured (never zero; the ratios become lower bounds), and divides ALL machine spend, failed and duplicate attempts included, by DISTINCT confirmed
+  root causes and validated fixes. A confirmed outcome must name its root cause so a duplicate cannot be counted twice.
+- **`why-missed.js` (QA-005).** `classifyMiss` names the earliest failed stage for a labelled DEVELOPMENT miss (scan-execution, parser-ir,
+  source-modelling, propagation, sink-modelling, filters, suppression, deduplication, attribution) or `unknown` with a reason. A candidate observed
+  downstream (a reported finding, a dedupe loser, a ledger drop) is checked first because it proves the earlier stages worked. Evidence comes from
+  `scan-child.js` in `diagnose` mode (the suppression ledger incl. guard-recognized drops with finding id, CWE, family and the dominating guard line;
+  dedupe and rejected-guard stage evidence behind `AGENTIC_SECURITY_STAGE_EVIDENCE=1`, diagnostic only; sources, sinks, IR lowering).
+  `collectDiagnostics` refuses any sealed target. `compareMisses` gives before and after stage counts, the recovered defects with the stage that lost
+  each, and names new false positives instead of netting them. `dev-cases.js` builds the development case suite (`test/fixtures/engine-mechanisms/`,
+  every label flagged synthetic) that `scripts/dev-recovery.mjs` runs against ANY engine checkout, so a before and after is a measurement.
+- **`release-gate.js` (QA-007).** `evaluateReleaseGates` wraps `gates.js` (which now computes the per-language F1 lower bound from the grouped bootstrap
+  and adds the integrity gates `answer-key-leaks` and `denominator-intact`, and `no-regression-vs-baseline`) and decides whether a NEW accuracy claim is
+  allowed. The baseline comes only from a verified ledger: `appendSealedEvaluation` / `verifyLedger` (hash chain) / `signLedger` (the custodian signs the
+  head, so a rebuilt chain does not verify). `assessReleaseClaim` blocks a different detector digest (`detectorDigestOf`, evaluation tooling excluded) on
+  already-consumed sealed targets (`fresh-sealed-population-required`); old results are retained as evaluation-only. `signGateReport` signs an AGGREGATE
+  verdict (no per-case outcome) with a local Ed25519 key, trust basis `self-issued-local-key`, never independent certification.
+- **`bakeoff.js` (QA-008.AC02).** The bake-off manifest, generic comparator slots (no tool is named anywhere), adapters that mark an unavailable slot
+  `not-evaluated` with a typed reason, a comparability check (identical workload digest and verification standard) and a claim guard: accuracy and
+  cost claims only between evaluated, comparable participants; `superiority` is always `none claimed`. Scoring is `comparison.js`, unchanged.
+  Docs: `docs/guides/bakeoff-recipe.md`; the offline reproduction is `scripts/public-reproduction.mjs` (`npm run reproduce:mini`).
+
+Tests: `test/evaluation/{protocol,grouping,labels,custody,runner,gates-scorecard,reporting,why-missed,guard-dominance,engine-mechanisms,release-gate,publication}.test.js` (`npm run test:evaluation`; the two engine files are also in `test:dataflow`). Guides: `docs/guides/{evaluation-reporting,miniature-reproduction,bakeoff-recipe,engine-mechanism-evidence}.md`.
+
+## Release assurance, portable evidence and resumable portfolios: `portfolio/` (X-701 to X-708)
+
+Same posture as the sections above: consumed, not wired into the default scan. The one place it touches shipped output is the verdict
+wording, and that is additive behind the `portfolio-assurance` feature (`assurance/config.js`, default off, so flag-off output is
+byte-identical and no pinned fixture changed). **It builds machinery, not evidence**: no real release or portfolio exists, every
+fixture is flagged `synthetic: true`, and nothing here claims real-world assurance. Linux enforcement stays `unverified`; no Linux
+outcome is asserted. Suite: `npm run test:portfolio` (`test/portfolio/`).
+
+- **`manifest.js` (X-701).** `buildManifest` / `validateManifest`: the release assurance manifest on the assurance schema kit and
+  `identity.js` (id prefix `ram`, allowlisted fields, no clock). Binds subject repository and commit, dependency revisions, build
+  artifact digests, scope, graph snapshot digest, invariant versions and verification receipts. Every mandatory check is in exactly one
+  of completed / incomplete / unsupported / waived (incomplete and unsupported name their gaps, a waiver names its approver and reason),
+  and the blocking policy (id, digest, severity) is part of the record. Validation rejects evidence not bound to a declared receipt,
+  a receipt whose commit is not the bound commit of its repository, a mandatory check listed nowhere, and coverage or `complete` that
+  disagrees with the lists. Residual risks and coverage are machine-readable fields.
+- **`bundle.js` (X-702).** The portable bundle: an index file (bundle.json) plus `blobs/<sha256 hex>`. `exportBundle` writes the sanitized
+  findings (closed field set, snippets stay behind, secret shapes redacted, then refused if any survive), provenance, replay manifests,
+  toolchain identities and the cited receipts, index last. `verifyBundle` is the OFFLINE verifier (fs and crypto only, executes nothing
+  from the bundle): re-hashes every blob, rejects symlinks, oversize, bad names, missing roles, a modified index, a manifest that fails
+  validation and a cited receipt that is absent, and DISCLOSES replay prerequisites without attempting a replay. `importBundle`
+  verifies first, confines every destination, never overwrites. Limits are `BUNDLE_LIMITS`.
+- **`signing.js` (X-703).** `signAssuranceClaim` is a signer-domain act (`sandbox/trust-domains.js`, default deny: worker, target and
+  verifier are refused before a key is touched). The key lives in its own `assurance-signing/` directory (reusing `ensureKeyPair`) and may
+  be required to differ from the scan evidence key. The signed claim names manifest id and digest, bundle digest, commit, blocking policy,
+  coverage, the bounded headline, signer id, key id and the assurance policy. `verifyAssuranceClaim` is offline against an explicit
+  trust-root policy (`buildTrustPolicy`): unknown root, revoked root, a basis this build cannot verify, a tampered claim, a tampered or
+  missing bundle and a claim that does not match the bundle's manifest are each typed failures. The only verifiable basis is
+  `self-issued-local-key`, `independentlyCertified` is always false and inside the signed bytes. Private key material is never in an
+  envelope, policy, error or output.
+- **`wording.js` (X-703.AC03).** `assuranceStatement` renders "No blocking findings in completed supported checks", then scope, then
+  gaps, then the not-a-guarantee line. `report/index.js` `toShipVerdict` and `integrations/index.js` digests use it only when
+  `portfolioAssuranceEnabled` (option, else the assurance configuration); otherwise the old "Safe to deploy" strings are untouched.
+- **`work-units.js` (X-704).** `planPortfolio` (authorized repositories only, exact commits, stable `wu:` ids), a seven-state machine with
+  lease expiry, retry count and a hash-chained attempt record per unit (rewriting an attempt fails `verifyStore`), idempotent lease /
+  start / complete / fail by attempt id (a duplicate completion verifies once; a stale attempt, such as a zombie after lease expiry,
+  is refused), `progressOf` counting only verified units, locked atomic persistence (`openStore`, `mutateStore`; a corrupt store is an
+  error, never a reset) and `runPortfolio` (bounded concurrency, an executor that throws fails its unit). `fleet.js` `runFleet` accepts
+  `portfolioVerified` (from `fullyVerifiedRepositories`) and skips those repositories like a resumed completed one.
+- **`resume.js` (X-705).** Every verified result records one digest per dimension (code, policy, graph, invariant, oracle, toolchain;
+  `scan-checkpoint.js` `computeRunKey` / `computeGlobalKey` supply the code and toolchain digests). `planResume` reuses a unit only on a
+  full match; any other change `applyResume` invalidates: the old result moves to `stale` (inspectable with `inspectStale`), the unit
+  returns to pending in a new generation, `assessClaims` marks dependent claims stale. A graph-only change is narrowed by the drift
+  module (`lineage/deployment/drift.js` `planRescan`): a unit bound to hypotheses is reused only if the plan is complete and all its
+  hypotheses are in `skipped`; anything else fails closed.
+
+Tests: `test/portfolio/{manifest,bundle,signing,work-units,resume}.test.js` (`npm run test:portfolio`).
+## Calibrated model routing: `routing/` (X-601 to X-608)
+- **`scheduler.js` (X-706).** Bounded scheduling over the store. `scheduleNext` admits and leases ONE unit in a single locked transaction
+  (`mutateStore`), after checking five limits at two levels (portfolio and per repository: wall time, provider spend, requests, storage,
+  plus concurrency) against what is used PLUS what in-flight attempts have reserved PLUS the unit's own estimate. A unit with no
+  estimate is not leased (unknown is never zero). A refusal is `at-capacity` (a wait) or `exhausted` (will not recover), reported per
+  unit and per scope, and a refusal changes nothing. An attempt that ends with no usage report is charged its whole reservation; a
+  reported overrun is recorded (`overruns`) and shrinks what remains. Wall time is also enforced while a unit runs (the executor's
+  `signal` aborts at the unit's wall estimate). Fairness: priority is a WEIGHT (integer 1..8, default 1), never an order; the next lease
+  goes to the admissible repository with the lowest `leasesGranted / weight` (ties: repository name, then unit id), so a 120-unit
+  repository cannot starve a 1-unit one, weight 8 against 1 is served about eight times as often with the light one still served early,
+  and a repository that was blocked is owed service when it returns. A blocked or over-budget repository is skipped with a reason, never
+  waited on; an unaffordable unit does not block a cheaper sibling. `routingBudgetFor` hands the routing policy (`routing/decide.js`) the
+  smaller of the portfolio and repository dollar remainders, less reservations; `chargeModelSpend` charges a routing decision at its
+  upper cost bound and refuses a blocked or unbounded decision. No provider is called here. `createCancelScope().cancel` takes a scope
+  (`{unitId}`, `{repository}` or `{all}`; an empty scope is refused, never read as cancel-all), records it in the ledger so a process
+  that did not receive the call still honours it, aborts in-process attempts (work started with `ctx.spawn` runs under
+  `sandbox/supervise.js`, which ends the whole process tree and reports survivors), releases a lease ONLY when the attempt settled with no
+  survivor, otherwise leaves it to expire (so no other worker can start the unit while a descendant may live) and never re-leases it.
+  Verified units and receipts are untouched; the report is `incomplete` with the reason. `heartbeat` renews the lease and records a
+  heartbeat in one transaction; `runScheduled` heartbeats every `HEARTBEAT.intervalMs` (5 s) while an attempt runs and takes an optional
+  `backend`, probed before every lease (an unavailable one stops the run as `blocked`). Limits: the driver's heartbeat proves the
+  controlling process is alive, not that an in-process executor is making progress (the wall bound handles that); tree termination is
+  verified on the macOS userspace backend only and Linux enforcement stays `unverified`.
+- **`progress.js` (X-707).** ONE projection (`buildProgressView`) for the CLI, the MCP tool and the fleet summary, in the pattern of
+  `lineage/deployment/projection.js`. It keeps apart verified units (the only progress), blocked / failed / canceled / stale units with
+  reasons, per-repository coverage (fully-verified, partial, incomplete, not-started), per-limit budget (limit, used, reserved,
+  remaining; an unenforced limit says so), pending human review (blocked units plus `reviewItemsFromInvariantCoverage` and
+  `reviewItemsFromBoundaryContexts`), and every worker with its age, `live` or `stale` (stale after `HEARTBEAT.staleAfterMs`, 15 s;
+  silent workers are measured from their lease). `aggregateFindings` deduplicates by `stableId` ONLY, keeps every occurrence
+  (repository, environment, release, commit, file, line, severity) and lists affected releases separately; a finding with no stable id
+  is listed apart, never merged. `completion` states that a finished controller is not every unit verified and not any repository
+  passing (`passAssessment: 'not-implied'`). Additive behind `portfolio-assurance`: `attachPortfolioProgress` returns the SAME rollup
+  object when the feature is off, `renderFleetSummary` adds a PORTFOLIO clause only when the field is present, and
+  `test/fixtures/portfolio/pre-change-pins.json` (generated by `test/portfolio/make-pins.mjs` from code before the change) pins the
+  fleet rollup, summary and HTML. CLI `agentic-security portfolio progress`; MCP `portfolio_progress` (read-only, `mcp/portfolio-tools.js`).
+- **`backend.js` (X-708).** The storage backend interface (`probe`, `storeFile`, `withExclusive`, fenced `acquireLease` / `renewLease` /
+  `releaseLease`) and a file-lock reference implementation. `createLocalBackend` makes its directory; `createSharedBackend` requires a
+  marker written by an explicit `initSharedBackend`, so an unmounted path, an empty mount point, a symlink or a damaged marker is a typed
+  `blocked` (`openBackend` returns `{ ok: false, state: 'blocked', code }` and no backend; there is deliberately no fallback argument,
+  and a blocked open creates nothing). A backend that disappears mid-run stops `runScheduled` as `blocked` without recreating the
+  directory or writing anywhere else. Lease semantics, each tested with two REAL processes: mutual exclusion, monotonic fence, expiry
+  takeover, a replaced holder refused on renew and release. NOT claimed: network-filesystem safety (`describe()` reports it
+  `unverified`; the operator must verify exclusive-create atomicity on that mount), cross-host clock agreement, or race-free stale-lock
+  recovery (narrow window, documented). `exportState` / `verifyStateExport` / `importState`: one self-checking, secret-checked file for an
+  air-gapped machine; import verifies first and never overwrites.
+- **`retention.js` (X-708.AC01).** Retention by class (`replay-evidence`, `metadata`, `model-trace`, `secret`; defaults 365 / 730 / 30 / 0
+  days, ceilings 1095 / 1825 / 90 / 7, an over-ceiling setting is clamped and disclosed). Order: a required current receipt (named in
+  `currentReceiptIds`, or `requiredBy` a unit that is `verified` in the store NOW) is never deleted and an expired one is reported as
+  `expiredButRequired`; then a legal hold (validated and checked with `legal-hold.js`'s `isUnderHold`; by id, class or repository; a
+  malformed hold refuses the whole plan); then expiry. An unclassified or malformed record is kept and reported. `applyRetention` re-plans
+  against the live store, confines paths to the root (traversal, absolute paths, symlinks and directories refused), and logs each deletion
+  to a hash-chained log BEFORE removing the file (no log, no deletion; a broken log blocks every deletion). The log holds digests and sizes,
+  never content. CLI `agentic-security portfolio retention plan|apply|verify-log`.
+
+Tests: `test/portfolio/{manifest,bundle,signing,work-units,resume,scheduler,progress,retention,backend}.test.js` (`npm run test:portfolio`).
+`test/portfolio/proc-worker.mjs` is the child process the multi-process consistency tests spawn; it is not a test file.
+## Calibrated model routing: `routing/` (X-601 to X-604)
+
+Extends `model-routing.js`, `model-trust.js`, the provider catalog and cache economics; consumed, not wired into the scan or the interactive advisor. Everything is behind the **`model-routing`** feature (`assurance/config.js`, model-network risk, off by default, kill switch `AGENTIC_SECURITY_NO_MODEL_ROUTING`). With it off, `routeModelWithPolicy` returns exactly what `routeModelWithTrust` returns, and `test/routing/unchanged-when-off.test.js` recomputes the routing, trust, cache-economics, catalog and advisor outputs against `test/fixtures/routing/pre-change-pins.json` (generated from the code before any routing edit). Suite: `npm run test:routing`. **Machinery, not evidence:** no real routing outcome or adjudicated task exists in this repository, every population in the tests is SYNTHETIC (`test/helpers/routing-fixtures.js`), and the section 5 routing gate reads `unmeasured` (synthetic) or `insufficient-population`, never `pass`. No cost or quality improvement is claimed anywhere.
+
+- **`outcomes.js` (X-601).** Routing task record (kind: discovery, triage, verification-planning, repair; language; vulnerability class; context tokens and bucket; required capabilities; data class), the stratum key `kind|language|class|bucket` and its coarser parents, and the outcome record. `deriveRoutingLabel` is the only way to a decided label: independent adjudication (a human or verifier service that is not the model or its provider, with the adjudication version) or trusted execution (a `vrec:` verification record). Provider agreement, self-reported confidence, accepted suggestions, model judgement and majority vote are refused (`NOT_A_TRUTH_LABEL`) and the outcome is recorded `unknown`. Outcome records keep every status (failed, timeout, cancelled, provider-error, partial, blocked) and unknown or delayed correctness; an unreported count is `null`, never 0. `createOutcomeLedger` has no remove or overwrite.
+- **`economics.js` (X-602).** `priceBookFromCatalog` builds the versioned price book from `provider-catalog.js` (the catalog's dated snapshot stays the single price table). `costOf` splits input, cached input, output, retries and tool execution, and names price version, currency and billing basis. Unknown is `null` or a bounded `[lower, upper]` estimate, never 0 (an unpriced model, a subscription basis, an unreported token count, an unknown cache split, an unmeasured tool cost). A prediction goes in `predicted` and never fills `measured`. `cache-economics.js` (which prices Claude Code's own transcript) and `hooks/model-cost-advisor.js` are deliberately unchanged and pinned.
+- **`adapter.js` (X-602.AC03).** `createProviderAdapter(...).invoke` has no HTTP client: it goes through `guardedModelCall` (feature gate, egress policy before the prompt exists, redaction, request cap, deadline, bounded retries, audit chain) with an INJECTED transport. Telemetry is built from an allowlist (provider, model, endpoint host only, status, a fixed failure code, token counts, cache state, latency, byte counts); it never carries the prompt, the response, an error message or a credential. Provider failures, partial responses, cancellation, timeouts and cache hits each yield an outcome record.
+- **`calibration.js` (X-603).** `buildCalibration` fits per (model, version, stratum) quality on HELD-OUT outcomes with a time split, a model-version split (versions are never pooled) and group disjointness (a group on both sides is removed from the held-out side and counted). Uncertainty is `groupedBootstrap` from `evaluation/interval.js` (`unmeasured` below 10 groups). The label `reliable` needs at least 200 paired adjudicated tasks overall, 30 per stratum (`ROUTING_MINIMUMS`, a config cannot lower them), a measured interval and a stable development-versus-held-out rate; a synthetic population only ever gets `reliable-synthetic`. Otherwise the stratum carries `fallback-parent` (a reliable coarser stratum, named), `shifted` or `insufficient-evidence`, and an explicit fallback (`parent-stratum` or `baseline-model`). The artifact records the dataset hash, config hash, adjudication versions, counts and every exclusion by reason, and `verifyCalibration` rebuilds it byte for byte. `routingPopulationGate` is the population half of the PRD section 5 routing row only; the paired quality, cost and latency comparison is `promotion.js` (X-605).
+- **`decide.js` (X-604).** `routeConstrained` applies availability, capability, privacy (the egress policy, or a capability-manifest egress check), context window, reliable and fresh quality evidence whose LOWER bound meets the minimum, interval width and budget BEFORE minimising measured cost or latency. Every candidate lists all of its failing constraints. When nothing is acceptable the result is `fallback` (the existing capability route, only if it passes capability, privacy, context and budget, with quality marked UNVERIFIED) or `blocked` with a code; a constraint is never relaxed to find a route. `routeModelWithPolicy` in `model-routing.js` is the entry point; a blocked decision returns `model: null, blocked: true`.
+- **Limits, not hidden.** The provider catalog carries prices and cache models but not capabilities or context windows, so `candidateFromCatalog` takes them from the operator and an unknown window is rejected. Catalog prices are a dated snapshot. Cost bounds cover model tokens only. Telemetry redaction depends on the egress redaction patterns, which are pattern checks, not proof against every secret shape.
+- **`shadow.js` (X-605.AC01).** `createShadowRecorder().shadow()` records what `routeConstrained` WOULD pick and returns the production route it was given, the same object. It holds no transport or adapter (a test pins that the source cannot call a provider), so no paid call is possible by construction. A disabled routing control records nothing.
+- **`promotion.js` (X-605.AC02, AC03).** `freezeTaskSet` fixes the evaluation tasks by hash; `replayPaired` pairs each frozen task's baseline arm with the arm the shadow decision chose, from recorded outcomes. It issues a provider call only with BOTH an injected `invoke` and a bounded authorization (`authorizedBy`, finite `maxCalls`, `maxUsd`, `perCallUsdCeiling`, all under `REPLAY_LIMITS`); an `invoke` without them is refused (`UNBOUNDED_REPLAY`), an unknown cost is charged at the ceiling, and a replay that hits its bound is `truncated`. `evaluatePromotion` judges the PRD section 5 routing row (200 paired adjudicated overall, 30 per promoted stratum, quality difference lower bound above -0.02, median cost 20% lower or quality +0.05 at no higher median cost, p95 latency 1.2x) with the grouped bootstrap. Verdict precedence: `invalid` > `unmeasured` (synthetic) > `insufficient-population` > `fail` > `pass`. Invalidations: `cherry-picked` (pairs differ from the frozen set), `dropped-tasks` (no pair: no shadow record, missing or ambiguous outcome, bound reached), `unbounded-replay`, `truncated-replay`, `replay-edited`, `frozen-set-edited`. A failure status, a timeout, a blocked proposal or an unserved task is not-correct in the comparison and is reported, never dropped; an unadjudicated pair is counted apart and never imputed; an unknown cost or latency leaves the criterion unmet. The quality-gain path is stricter than the PRD wording (the lower bound must clear zero too).
+- **`drift.js`, `canary.js` (X-606).** `snapshotRoutingBasis` records what a policy was promoted on; `assessDrift` compares it with the present (model version, price entry, schema, recent decided quality) and returns a documented `fallback` or `shadow` state; `applyInvalidations` derives a calibration whose affected estimates are `invalidated` (quality, version, schema) or lose their measured cost (pricing), so `routeConstrained` refuses them. A cost-invalidated model ranks behind one with a valid measured cost, by the existing ranking rule. `createCanary` is finite by construction (no limits, no canary): task count, spend budget, error rate, consecutive-error outage, incorrect rate; a trip restores the known-good policy and only appends receipts. `activate` needs a `pass` promotion verdict. `routeUnderDrift` is the state-aware entry point.
+- **`feedback.js` (X-607).** `createFeedbackStore`: actors (human or verifier-service) registered with a key sign each record (HMAC); the first accepted label is the immutable original, a change is a correction citing the entry it corrects; an allowlist of fields is kept and the names of dropped fields only; unauthorized, unverifiable, tampered, duplicate and poisoned feedback is quarantined with a count and reason, and `applyToOutcomes` is what a calibration should be built from. `authorizePayload` / `sendToProvider` need the task policy AND the egress policy (or a capability manifest check) to allow source or evidence, and send only through the guarded adapter. Limit: a trusted-execution label cannot be recomputed from the outcome alone, so a flip of one is not detected here.
+- **`receipts.js`, `control.js`, `report.js` (X-608).** `createReceiptLog` is a hash-linked log of every shadow decision, replay, promotion, drift, canary, rollback and feedback decision (`exportReceipts`, `verifyReceiptChain`; tamper evidence, not a signature). `resolveRoutingControl` (option, then `AGENTIC_SECURITY_ROUTING`, then default; a bad value fails closed to `disabled`) is honoured by `routeModelWithPolicy` (disabled keeps the capability route, `pin:<model>` selects that model). `buildRoutingReplayReport` / `renderRoutingReport` / `buildPolicyCard` restate the verdict with exact denominators, intervals, measured cost, cache states and latency percentiles, restrict claims to the strata and model versions the gate passed, and keep unsupported strata and unmet gates listed. Reproduce offline with `npm run reproduce:routing` (`scripts/routing-replay.mjs`, controls, `--fault`); guide `docs/guides/routing-replay.md`. Everything in the tests and the script is generated and `synthetic`; the gate reads `unmeasured`, never `pass`, on it, and no advantage is claimed.
 
 ## Execution-proof tiers (R2)
 

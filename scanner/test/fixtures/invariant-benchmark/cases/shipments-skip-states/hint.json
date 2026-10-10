@@ -1,0 +1,20 @@
+{
+  "class": "workflow-order",
+  "action": "moveShipment",
+  "allowed": [
+    {
+      "from": "created",
+      "to": "packed"
+    },
+    {
+      "from": "packed",
+      "to": "dispatched"
+    }
+  ],
+  "source": "specification-mining",
+  "evidence": {
+    "file": "app.mjs",
+    "line": 1
+  },
+  "uncertainty": 0.7
+}

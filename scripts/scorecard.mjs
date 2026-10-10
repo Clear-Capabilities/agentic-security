@@ -230,6 +230,9 @@ function countPartiallyEvidenced(dir) {
       // than re-run inside `npm run scorecard`.
       whyMissed: readJsonIfPresent('bench/independent/why-missed-summary.json'),
     },
+    // QA-001/QA-003: the real-code gate report, written by `scripts/evaluation.mjs gates`. Absent until a real
+    // protocol exists, which the scorecard publishes as `unmeasured`.
+    evaluation: readJsonIfPresent('bench/independent/evaluation-gates.json'),
     // PRD F12.6 — publish the LIMITS beside the rates. Each of these three is a
     // caveat without which the corresponding number means something else than a
     // reader would assume.

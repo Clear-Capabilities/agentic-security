@@ -1,0 +1,28 @@
+{
+  "export": "createApp",
+  "invariant": {
+    "id": "inv:00000000000000aa",
+    "key": "orders-tenant-isolation",
+    "revision": 1,
+    "class": "tenant-isolation"
+  },
+  "actors": [
+    { "id": "alice", "tenant": "acme", "role": "member" },
+    { "id": "bob", "tenant": "globex", "role": "member" }
+  ],
+  "markers": [],
+  "seed": [
+    { "key": "orders/acme-1", "value": { "tenant": "acme", "note": "initial" } },
+    { "key": "orders/globex-1", "value": { "tenant": "globex", "note": "initial" } }
+  ],
+  "control": [
+    { "actor": "alice", "action": "updateOrder", "args": ["orders/acme-1", "legitimate"] }
+  ],
+  "attack": [
+    { "actor": "alice", "action": "updateOrder", "args": ["orders/globex-1", "overwritten"] }
+  ],
+  "forbidden": [
+    { "id": "no-cross-tenant-write", "op": "cross-tenant-write", "bind": "business-state", "prefix": "orders/" }
+  ],
+  "cleanup": [{ "action": "discard-world" }]
+}

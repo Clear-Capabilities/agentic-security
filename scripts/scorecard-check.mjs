@@ -141,7 +141,7 @@ export function evaluateScorecardFreshness({
   const independent = scorecardJson && scorecardJson.committedInputs && scorecardJson.committedInputs.independent;
   if (independent && independent.engineVersion && independent.engineVersion !== pkgVersion) {
     warnings.push(
-      `docs/scorecard.json's independent-population section ("the number that matters") was measured ` +
+      `docs/scorecard.json's independent-population record (a historical record once the engine moves on) was measured ` +
       `on engine ${independent.engineVersion}, but scanner/package.json is at ${pkgVersion}. This is ` +
       'expected to lag (the independent eval takes ~32 minutes and is not re-run every release) — ' +
       `but if it has been many releases, re-run \`npm run bench:independent\` and commit the refreshed RESULT.json.`

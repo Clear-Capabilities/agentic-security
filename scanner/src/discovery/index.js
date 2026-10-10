@@ -8,7 +8,7 @@
 // pass that half failed and reports "no findings" is indistinguishable from a
 // clean codebase unless it says so.
 import { partitionCallGraph, partitionNixFiles } from './partition.js';
-import { LENSES, lensByKey } from './lenses.js';
+import { LENSES, lensByKey, invariantProposalFor } from './lenses.js';
 import { runHunter } from './hunter.js';
 import { confirmAll } from './confirm.js';
 import { disprovePanel } from './disprove.js';
@@ -16,6 +16,7 @@ import { judgeCandidates } from './judge.js';
 import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan } from './memory.js';
 import { emitVerification, headCommit } from '../posture/verification/emit.js';
 import { promoteHypothesis } from '../posture/verification/hypothesis-promotion.js';
+import { featureStatus } from '../posture/assurance/config.js';
 
 // Bridge a candidate to the deterministic layer. A taint finding at or within
 // two lines of the candidate corroborates it; a modelled sink on the line
@@ -295,6 +296,18 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     if (e.ok) verificationRecords.push(e.record);
   }
 
+  // X-402: opt-in invariant proposals. A candidate from a state-oriented lens can suggest a contract; the suggestion is advisory,
+  // `proposed`, authored by the model and never approved here. Off unless `opts.invariantProposals = { config }` and the
+  // `invariant-scenarios` feature is enabled in that config.
+  let invariantProposals = null;
+  if (opts.invariantProposals && featureStatus(opts.invariantProposals.config, 'invariant-scenarios').status === 'ok') {
+    invariantProposals = [];
+    for (const f of fresh) {
+      const inv = invariantProposalFor({ lens: f.discovery?.lens, title: f.vuln, description: f.description, file: f.file, line: f.line });
+      if (inv) invariantProposals.push({ hypothesisId: f.stableId, invariant: inv });
+    }
+  }
+
   // X-207: opt-in promotion. A hypothesis crosses into a finding ONLY through `promoteHypothesis` (trusted verifier receipt,
   // explicit policy, audit record). `fresh` is unchanged; promoted findings and every decision's audit record are reported
   // separately, and nothing here writes `last-scan.json`. `opts.promote = { policy, verify(hypothesis) -> runOracle result }`.
@@ -316,6 +329,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
     fresh,
     verificationRecords,
     ...(promotions ? { promotions } : {}),
+    ...(invariantProposals ? { invariantProposals } : {}),
     duplicates,
     suppressed,
     // `refutedCandidates` holds RAW candidates straight from `disprovePanel`,

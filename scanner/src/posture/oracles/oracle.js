@@ -46,7 +46,7 @@ import path from 'node:path';
 import { runInBoundary } from '../../sandbox/trust-boundary.js';
 import { detectBackend } from '../../sandbox/capabilities.js';
 import { DOMAINS, settleVerification } from '../../sandbox/trust-domains.js';
-import { resolveAssuranceConfig, featureStatus } from '../assurance/config.js';
+import { resolveAssuranceConfig, featureStatus, FEATURES } from '../assurance/config.js';
 import { digestOf, digestOfBytes } from '../assurance/identity.js';
 import { isCommit, isPlainObject } from '../assurance/schema-kit.js';
 import { emitVerification } from '../verification/emit.js';
@@ -56,6 +56,8 @@ export const ORACLE_CLASSES = Object.freeze([
   'injection-execution', 'authorization-decision', 'state-transition', 'side-effect-reachability', 'parser-resource',
   // X-205 and X-204: a replayed request that repeats its effect, and a differential behaviour check for a patch.
   'replay-idempotency', 'functional-regression',
+  // X-404: durable business and tenant state judged over a bounded stateful scenario.
+  'business-state',
 ]);
 const PLATFORM_STATUSES = Object.freeze(['supported', 'unverified', 'unsupported']);
 export const FEATURE_ID = 'verification-oracles';
@@ -66,6 +68,7 @@ const RECEIPT_SCHEMA = 'agentic-security/oracle-receipt';
 const RESERVED_PREFIX = '__oracle_';
 const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_OBSERVED_BYTES = 4 * 1024;
+const MAX_REPORT_BYTES = 32 * 1024;
 const REQUEST_KEYS = ['oracleId', 'hypothesisId', 'finding', 'commit', 'files', 'entry', 'inputs', 'attempt', 'budgets', 'detectorOrigin'];
 const BUDGET_KEYS = ['timeoutMs', 'graceMs', 'maxOutputBytes', 'maxFileBytes', 'maxFiles'];
 
@@ -129,6 +132,7 @@ export function validateOracleSpec(spec) {
   }
   if (!isPlainObject(spec.fixtures) || !['dir', 'positive', 'negative', 'inconclusive'].every((k) => typeof spec.fixtures[k] === 'string' && spec.fixtures[k])) errs.push('fixtures need dir, positive, negative and inconclusive');
   if (!Array.isArray(spec.limitations) || spec.limitations.length === 0) errs.push('limitations must be stated');
+  if (spec.requiresFeature !== undefined && !(typeof spec.requiresFeature === 'string' && FEATURES[spec.requiresFeature])) errs.push('requiresFeature must name a known feature');
   if (typeof spec.harnessSource !== 'string' || !spec.harnessSource.includes('__INPUT__')) errs.push('harnessSource (verifier-authored) is required');
   for (const fn of ['prepare', 'validateInputs', 'interpret']) if (typeof spec[fn] !== 'function') errs.push(`${fn} must be a function`);
   return errs;
@@ -335,6 +339,14 @@ export async function runOracle(request, o = {}) {
     return none(gate.status === 'unsupported' ? 'unsupported' : 'not-run', `${FEATURE_ID} is not available: ${gate.reason}`, gate.status === 'unsupported' ? 'unsupported' : 'disabled', { gate });
   }
 
+  // 1b. an adapter may require a second feature of its own (X-404: stateful invariant scenarios are separately opt-in)
+  if (oracle.requiresFeature) {
+    const g2 = featureStatus(config, oracle.requiresFeature);
+    if (g2.status !== 'ok') {
+      return none(g2.status === 'unsupported' ? 'unsupported' : 'not-run', `${oracle.requiresFeature} is not available: ${g2.reason}`, g2.status === 'unsupported' ? 'unsupported' : 'disabled', { gate: g2 });
+    }
+  }
+
   // 2. prerequisites: an unmet one is `unsupported`, never a pass, and nothing executes
   const env = o.probeEnv || probeEnvironment();
   const unmet = [];
@@ -413,14 +425,22 @@ export async function runOracle(request, o = {}) {
       // identical record id); it is bound into the receipt instead.
       digest: digestOf({ oracle: oracle.logicDigest, observed }), source: `oracle:${oracle.id}@${oracle.version}`,
     }];
+    // An adapter may add per-assertion evidence items (stable ids, derived from the observed log) and a bounded report (sanitized
+    // snapshots, event sequence, assertion results). Both come from verifier-side interpretation, never from the target.
+    if (Array.isArray(judged.evidenceItems)) {
+      for (const it of judged.evidenceItems.slice(0, 16)) {
+        if (it && typeof it.id === 'string' && typeof it.digest === 'string') evidence.push({ id: it.id, kind: 'observation', producer: 'trusted-runner', digest: it.digest, source: `oracle:${oracle.id}@${oracle.version}` });
+      }
+    }
+    const report = judged.report !== undefined && Buffer.byteLength(JSON.stringify(judged.report) ?? '') <= MAX_REPORT_BYTES ? JSON.parse(JSON.stringify(judged.report)) : undefined;
     const out = finishWithRecord(oracle, req, 'completed', outcomeFields(oracle, req, {
       outcome, reason, attempt: attemptNo, evidence, preconditionsValid: evidenceIn.preconditionsHeld, backend: boundary.backend,
-    }), { executed: true, run: runInfo, environment, targetOutput: boundary.targetOutput });
+    }), { executed: true, run: runInfo, environment, targetOutput: boundary.targetOutput, ...(report !== undefined ? { report } : {}) });
     out.receipt = issueReceipt({
       schema: RECEIPT_SCHEMA, issuedBy: 'verifier',
       oracle: { id: oracle.id, class: oracle.class, version: oracle.version, logicDigest: oracle.logicDigest },
       request: { hypothesisId: req.hypothesisId, commit: req.commit ?? null, entry: req.entry, inputsDigest: digestOf(req.inputs), filesDigest: digestOf(req.files), attempt: attemptNo },
-      environment, run: runInfo, observed, harnessDigest,
+      environment, run: runInfo, observed, harnessDigest, reportDigest: report !== undefined ? digestOf(report) : null,
       settled: { outcome, satisfied: judged.satisfied, preconditionsHeld: evidenceIn.preconditionsHeld }, recordId: out.record?.id ?? null,
     });
     return out;

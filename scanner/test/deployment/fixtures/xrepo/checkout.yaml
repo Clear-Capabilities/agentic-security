@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: web-sa, namespace: shop}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: shop}
+spec:
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      serviceAccountName: web-sa
+      containers: [{name: web, image: example/web:1}]

@@ -1,0 +1,64 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.9.0",
+  "resource_changes": [
+    {
+      "address": "aws_iam_role.app",
+      "type": "aws_iam_role",
+      "name": "app",
+      "change": { "actions": ["create"], "after": { "name": "app-role" }, "after_unknown": {} }
+    },
+    {
+      "address": "aws_iam_role.pending",
+      "type": "aws_iam_role",
+      "name": "pending",
+      "change": { "actions": ["create"], "after": {}, "after_unknown": { "name": true } }
+    },
+    {
+      "address": "aws_iam_role_policy.app_s3",
+      "type": "aws_iam_role_policy",
+      "name": "app_s3",
+      "change": {
+        "actions": ["create"],
+        "after": { "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\"],\"Resource\":\"arn:aws:s3:::app-data/*\"},{\"Effect\":\"Deny\",\"Action\":\"s3:DeleteObject\",\"Resource\":\"arn:aws:s3:::app-data/*\"},{\"Effect\":\"Allow\",\"NotAction\":\"iam:*\",\"Resource\":\"*\"}]}" },
+        "after_unknown": { "role": true }
+      }
+    },
+    {
+      "address": "aws_lambda_function.worker",
+      "type": "aws_lambda_function",
+      "name": "worker",
+      "change": { "actions": ["create"], "after": { "function_name": "worker" }, "after_unknown": { "role": true } }
+    },
+    {
+      "address": "aws_s3_bucket.data",
+      "type": "aws_s3_bucket",
+      "name": "data",
+      "change": { "actions": ["create"], "after": { "bucket": "app-data", "acl": "private" }, "after_unknown": {} }
+    },
+    {
+      "address": "aws_security_group.web",
+      "type": "aws_security_group",
+      "name": "web",
+      "change": {
+        "actions": ["create"],
+        "after": { "name": "web-sg", "ingress": [{ "protocol": "tcp", "from_port": 443, "to_port": 443, "cidr_blocks": ["0.0.0.0/0"] }] },
+        "after_unknown": {}
+      }
+    },
+    {
+      "address": "aws_cloudfront_distribution.cdn",
+      "type": "aws_cloudfront_distribution",
+      "name": "cdn",
+      "change": { "actions": ["create"], "after": {}, "after_unknown": {} }
+    }
+  ],
+  "configuration": {
+    "root_module": {
+      "resources": [
+        { "address": "aws_iam_role_policy.app_s3", "expressions": { "role": { "references": ["aws_iam_role.app.id", "aws_iam_role.app"] } } },
+        { "address": "aws_lambda_function.worker", "expressions": { "role": { "references": ["aws_iam_role.pending.arn", "aws_iam_role.pending"] } } }
+      ]
+    }
+  }
+}

@@ -45,6 +45,7 @@
 // This is a v1. Promoted to a Roslyn-backed CST parser (analogous to
 // parser-py-cst.js) once we have a dotnet capability probe.
 
+import { IMPLICIT_MVC_PARAM, isImplicitCsActionParam } from './implicit-handler-params.js';
 import * as crypto from 'node:crypto';
 import { callSitesFromCfg } from './call-sites.js';
 import { matchBalancedCall } from './balanced-call.js';
@@ -270,6 +271,16 @@ function _extractClassFields(code, range) {
 // Innermost class whose range contains `pos` (a method declaration's match
 // offset), or null when the method sits outside any class (top-level
 // statements — legal but rare).
+function _enclosingClassRange(ranges, pos) {
+  let best = null;
+  for (const r of ranges) {
+    if (pos >= r.start && pos < r.end) {
+      if (!best || (r.end - r.start) < (best.end - best.start)) best = r;
+    }
+  }
+  return best;
+}
+
 function _enclosingClassName(ranges, pos) {
   let best = null;
   for (const r of ranges) {
@@ -1537,7 +1548,12 @@ export function parseCSharpFile(file, code) {
   while ((m = METHOD_RE.exec(code)) !== null) {
     const name = m[2];
     const className = _enclosingClassName(classRanges, m.index);
+    const classRange = _enclosingClassRange(classRanges, m.index);
     const paramsText = m[3] || '';
+    // [NonAction] sits in the attribute region just before the declaration.
+    // Only the attribute region of THIS member counts: cut at the previous statement or block end.
+    const attrRegion = code.slice(Math.max(0, m.index - 300), m.index + 1);
+    const nonAction = /\bNonAction\b/.test(attrRegion.slice(Math.max(attrRegion.lastIndexOf('}'), attrRegion.lastIndexOf(';')) + 1));
     const paramAnnotations = [];
     const paramTypes = {};
     // `keptIdx` tracks the parameter's position in the FILTERED array — the
@@ -1616,6 +1632,10 @@ export function parseCSharpFile(file, code) {
           paramAnnotations.push({ index: keptIdx, name: paramName, decorator });
         }
         if (paramType) paramTypes[paramName] = paramType;
+        // QA-006: a controller action's plain string parameter is bound from the request with no attribute at all.
+        if (isImplicitCsActionParam({ modifiers: m[0], rawType: nameTokens.filter(w => !/^(?:ref|out|params|in|this)$/.test(w)).join(' '), decorators, nonAction, classRange })) {
+          paramAnnotations.push({ index: keptIdx, name: paramName, decorator: IMPLICIT_MVC_PARAM });
+        }
         keptIdx++;
       }
       return paramName;

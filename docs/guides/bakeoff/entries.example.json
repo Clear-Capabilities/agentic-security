@@ -1,0 +1,10 @@
+[
+  {
+    "id": "syn-cmd-py",
+    "cwe": "CWE-78"
+  },
+  {
+    "id": "syn-sqli-js",
+    "cwe": "CWE-89"
+  }
+]

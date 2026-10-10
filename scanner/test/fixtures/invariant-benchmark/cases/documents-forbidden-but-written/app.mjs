@@ -1,0 +1,1 @@
+export function createApp() { return { archiveDocument(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; ctx.store.write(key, { ...rec, archived: true }); if (rec.tenant !== ctx.tenant) return { status: 403, error: 'forbidden' }; return { status: 200 }; } }; }

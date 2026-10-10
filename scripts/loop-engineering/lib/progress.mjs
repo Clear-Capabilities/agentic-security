@@ -17,7 +17,9 @@ export function assessAll({ L, manifest, tree, key, checkLogs = false }) {
   return map;
 }
 
-export function computeProgress(manifest, assessMap, runReqState = {}) {
+// `final` ({ required, ok, reasons }) is the stable-tree final verification. When a manifest requires it, 100 is
+// unreachable until it is fresh and passing: every requirement verified still reads 99.9 without it.
+export function computeProgress(manifest, assessMap, runReqState = {}, { final = null } = {}) {
   const byId = new Map(manifest.requirements.map((r) => [r.id, r]));
   const verifiedIds = new Set([...assessMap].filter(([, a]) => a.verified).map(([id]) => id));
   const rows = [];
@@ -74,8 +76,10 @@ export function computeProgress(manifest, assessMap, runReqState = {}) {
     for (const w of Object.values(workstreams)) w.verifiedPercent = formatPercent(w.verifiedWeight, w.totalWeight);
   }
   const categories = Object.fromEntries(Object.entries(cat).map(([k, c]) => [k, { label: CATEGORY_LABEL[k] || k, verifiedPercent: formatPercent(c.num, c.den), verifiedWeight: c.num, totalWeight: c.den, verifiedRequirements: c.verified, totalRequirements: c.requirements }]));
+  const finalPending = !!final?.required && !final.ok;
   return {
-    verifiedPercent: formatPercent(num, den),
+    verifiedPercent: finalPending ? Math.min(99.9, formatPercent(num, den)) : formatPercent(num, den),
+    ...(final?.required ? { finalGate: { required: true, ok: !!final.ok, reasons: final.reasons || [] } } : {}),
     verifiedWeight: num, totalWeight: den,
     verifiedRequirements: counts.verified, totalRequirements: manifest.requirements.length,
     passedCriteria: critPass, totalCriteria: critTotal,

@@ -10,7 +10,7 @@ export const modules = {
 /* harmony export */   proposeOllamaExplanation: () => (/* binding */ proposeOllamaExplanation)
 /* harmony export */ });
 /* unused harmony export buildExplainPrompt */
-/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(74831);
+/* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(11723);
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45712);
 /* harmony import */ var _providers_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(38947);
 /* harmony import */ var _ollama_provider_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(23837);

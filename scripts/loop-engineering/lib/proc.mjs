@@ -4,8 +4,9 @@
 // reparenting, TERM->KILL escalation, and a guaranteed orphan sweep.
 import { spawn } from 'node:child_process';
 import { createWriteStream, mkdirSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 import { dirname } from 'node:path';
-import { Deadline, randomId, sleep, tail, nowIso } from './util.mjs';
+import { Deadline, randomId, sleep, tail, nowIso, redact } from './util.mjs';
 import { listProcesses, descendantsOf, identityMatches, signalIdentity, scanEnvMarker, isAlive, startTimeOf } from './procscan.mjs';
 
 export const JOB_ENV = 'LOOP_ENGINEERING_JOB';
@@ -126,7 +127,20 @@ export async function runBounded(opts) {
     logStream.on('error', () => { /* never let logging kill the supervisor */ });
   }
   let logged = 0;
+  // With redactLog, the on-disk log is written line by line through the redactor, so a secret a child prints is never persisted.
+  const decoders = { '': new StringDecoder('utf8'), err: new StringDecoder('utf8') };
+  const pending = { '': '', err: '' };
+  const emitRedacted = (tag, text) => rawWriteLog(tag, Buffer.from(redact(text), 'utf8'));
   const writeLog = (tag, chunk) => {
+    if (!o.redactLog) return rawWriteLog(tag, chunk);
+    if (logged >= o.maxLogBytes) { result.logTruncated = true; return; }
+    pending[tag] += decoders[tag].write(chunk);
+    let nl;
+    while ((nl = pending[tag].indexOf('\n')) >= 0) { emitRedacted(tag, pending[tag].slice(0, nl + 1)); pending[tag] = pending[tag].slice(nl + 1); }
+    if (pending[tag].length > 65536) { emitRedacted(tag, pending[tag]); pending[tag] = ''; }
+  };
+  const flushRedacted = () => { for (const tag of Object.keys(pending)) { const rest = pending[tag] + decoders[tag].end(); pending[tag] = ''; if (rest) emitRedacted(tag, rest); } };
+  const rawWriteLog = (tag, chunk) => {
     if (!logStream) return;
     if (logged >= o.maxLogBytes) { result.logTruncated = true; return; }
     const room = o.maxLogBytes - logged;
@@ -284,6 +298,7 @@ export async function runBounded(opts) {
   result.endedAt = nowIso();
   result.durationMs = Math.round(Math.max(wall.elapsed(), 0));
   if (o.owned) for (const t of job.owned.values()) o.owned.remove(t.pid);
+  if (o.redactLog) flushRedacted();
   if (logStream) await new Promise((r) => logStream.end(r));
   return result;
 }

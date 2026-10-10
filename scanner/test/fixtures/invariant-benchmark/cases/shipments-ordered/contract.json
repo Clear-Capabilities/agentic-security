@@ -1,0 +1,76 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "shipments-workflow-fixed",
+  "revision": 1,
+  "name": "Records move only along the allowed moveShipment transitions",
+  "class": "workflow-order",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    }
+  ],
+  "actors": [
+    {
+      "id": "ana",
+      "tenant": "acme",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "rec",
+      "kind": "record",
+      "tenant": "acme",
+      "key": "shipments/1"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "advance",
+      "action": "moveShipment",
+      "actors": [
+        "ana"
+      ],
+      "resource": "rec"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "no-skipped-step",
+      "op": "transition-outside",
+      "prefix": "shipments/",
+      "field": "status",
+      "allowed": [
+        {
+          "from": "created",
+          "to": "packed"
+        },
+        {
+          "from": "packed",
+          "to": "dispatched"
+        }
+      ],
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:1c0e9858fb256482"
+}

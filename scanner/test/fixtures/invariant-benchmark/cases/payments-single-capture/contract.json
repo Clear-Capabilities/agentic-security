@@ -1,0 +1,66 @@
+{
+  "schema": "agentic-security/invariant",
+  "schemaVersion": "1.0.0",
+  "oracle": {
+    "adapter": "business-state",
+    "version": "1"
+  },
+  "author": {
+    "id": "benchmark-fixture-reviewer",
+    "kind": "human"
+  },
+  "review": {
+    "state": "proposed",
+    "origin": "authored"
+  },
+  "key": "payments-idempotent-concurrent-fixed",
+  "revision": 1,
+  "name": "A request delivered twice through charge takes effect once",
+  "class": "idempotency",
+  "scope": {
+    "application": "bench",
+    "entry": "app.mjs",
+    "factory": "createApp",
+    "environment": "disposable-fixture"
+  },
+  "tenants": [
+    {
+      "id": "acme"
+    }
+  ],
+  "actors": [
+    {
+      "id": "ana",
+      "tenant": "acme",
+      "role": "member"
+    }
+  ],
+  "resources": [
+    {
+      "id": "order",
+      "kind": "order",
+      "tenant": "acme",
+      "key": "payments/order-1"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "pay",
+      "action": "charge",
+      "actors": [
+        "ana"
+      ],
+      "resource": "order"
+    }
+  ],
+  "forbidden": [
+    {
+      "id": "single-effect",
+      "op": "duplicate-effect",
+      "event": "capture",
+      "max": 1,
+      "bind": "business-state"
+    }
+  ],
+  "id": "inv:897bac9e42c6dfe0"
+}

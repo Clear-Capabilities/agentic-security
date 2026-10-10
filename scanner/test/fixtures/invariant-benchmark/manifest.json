@@ -1,0 +1,159 @@
+{
+  "schema": "agentic-security/invariant-benchmark",
+  "version": 1,
+  "synthetic": true,
+  "purpose": "Exercise the paired source-only / inferred-contract / approved-contract comparison. Authored by the tooling developers; the labels are the authors' own and no independent adjudication exists. Says nothing about real-world benefit.",
+  "frozen": "Written before the first run and not edited after observing results. A change is a new version with a new pin.",
+  "counts": {
+    "cases": 15,
+    "defective": 8,
+    "valid": 7
+  },
+  "claimPolicy": {
+    "minDefectCasesPerClass": 1,
+    "minValidCasesPerClass": 1,
+    "minPrecision": 1,
+    "minRecall": 1,
+    "noLossVersusSourceOnly": true,
+    "requiresExecution": true
+  },
+  "cases": [
+    {
+      "id": "invoices-cross-tenant-update",
+      "class": "tenant-isolation",
+      "defective": true,
+      "note": "reviseInvoice writes any tenant's invoice"
+    },
+    {
+      "id": "documents-forbidden-but-written",
+      "class": "tenant-isolation",
+      "defective": true,
+      "note": "archives the record, then answers 403 to the other tenant"
+    },
+    {
+      "id": "projects-audit-side-write",
+      "class": "tenant-isolation",
+      "defective": true,
+      "note": "an access stamp is written to every project of every tenant"
+    },
+    {
+      "id": "tickets-tenant-scoped",
+      "class": "tenant-isolation",
+      "defective": false,
+      "note": "rejects other tenants before any write"
+    },
+    {
+      "id": "notes-quiet-ignore",
+      "class": "tenant-isolation",
+      "defective": false,
+      "note": "answers 200 to everyone and only ever writes the caller's own tenant"
+    },
+    {
+      "id": "plans-member-sets-quota",
+      "class": "privilege-constraint",
+      "defective": true,
+      "note": "setQuota never checks the role"
+    },
+    {
+      "id": "plans-admin-only",
+      "class": "privilege-constraint",
+      "defective": false,
+      "note": "only an admin may set the quota"
+    },
+    {
+      "id": "shipments-skip-states",
+      "class": "workflow-order",
+      "defective": true,
+      "note": "moveShipment accepts any target state"
+    },
+    {
+      "id": "shipments-ordered",
+      "class": "workflow-order",
+      "defective": false,
+      "note": "enforces created, packed, dispatched"
+    },
+    {
+      "id": "cards-free-movement",
+      "class": "workflow-order",
+      "defective": false,
+      "note": "a board where any column may follow any other is the intended design; a miner guessing an ordered chain would be wrong"
+    },
+    {
+      "id": "ledger-duplicate-credit",
+      "class": "value-conservation",
+      "defective": true,
+      "note": "a retried settlement credits the payee again without a debit"
+    },
+    {
+      "id": "ledger-idempotent-settle",
+      "class": "value-conservation",
+      "defective": false,
+      "note": "a retried settlement is recognised and ignored"
+    },
+    {
+      "id": "payments-concurrent-double-charge",
+      "class": "idempotency",
+      "defective": true,
+      "note": "check then act across an await: concurrent duplicates all pass the check"
+    },
+    {
+      "id": "payments-single-capture",
+      "class": "idempotency",
+      "defective": false,
+      "note": "marks the request before the await"
+    },
+    {
+      "id": "refunds-no-dedupe",
+      "class": "idempotency",
+      "defective": true,
+      "note": "no duplicate check at all"
+    }
+  ],
+  "files": {
+    "cases/invoices-cross-tenant-update/app.mjs": "sha256:9696fd809919fdb45a93604acf9e72e73a39cbaea2b61fbb87d8fc5c28af9042",
+    "cases/invoices-cross-tenant-update/contract.json": "sha256:eda5b4094e2d027b6f8315caa4bfa703da95ae116030c893fa063c10b418c5fa",
+    "cases/invoices-cross-tenant-update/hint.json": "sha256:47a6b4d77c86fd22a8ff2363887dddeabb1618d68792ea773d902288e25ce40c",
+    "cases/documents-forbidden-but-written/app.mjs": "sha256:6798c0cbd31601fbbaa2fbf6030c1e6f1123cc8dcc08e3f403fb9bf842dcbc37",
+    "cases/documents-forbidden-but-written/contract.json": "sha256:8f57ea9028b5e9494e5552a4e98110e87c4c409705bd0ec0fd25b57e0b30855c",
+    "cases/documents-forbidden-but-written/hint.json": "sha256:8123955a440ad993c4ef2ea75acd857f6ff500743e65d55899952135101cc141",
+    "cases/projects-audit-side-write/app.mjs": "sha256:9cadab0aacfc6fa6b47c33480a9e387e9dd674fb92a8ca317cf06b93971c442f",
+    "cases/projects-audit-side-write/contract.json": "sha256:1f2a0677c120badcd0baed655cf85c9b36d527b79e7a0d3508c6b087680eee00",
+    "cases/projects-audit-side-write/hint.json": "sha256:fe243e1ed7b454944ea4a90417d948ab8af4a3e38eb0797c7789a599d61ba52c",
+    "cases/tickets-tenant-scoped/app.mjs": "sha256:dfc6254114965174dc7faa4f7d9baacf362ce4c45b67733993f9ec114996b00a",
+    "cases/tickets-tenant-scoped/contract.json": "sha256:195e24e1d036dd4aab3b39e3306f80bff7564c1814a2753e90bf0b7ed44bdb96",
+    "cases/tickets-tenant-scoped/hint.json": "sha256:a54e476e1158895cea7756c1169382e69b148e9a7e7beada6a85af3192748e2c",
+    "cases/notes-quiet-ignore/app.mjs": "sha256:4fcedf3c4b22cf25b70293d3a3b555eea0329cc7b8e559da8f45e7ca8719ac97",
+    "cases/notes-quiet-ignore/contract.json": "sha256:601e515a0409b042324b7fac2dc99564f160a18cd39292550f3616979bce07da",
+    "cases/notes-quiet-ignore/hint.json": "sha256:e2346a44f1a3077909b168311b3b5b7d7574768fc583578c85ddf6b98fadccd1",
+    "cases/plans-member-sets-quota/app.mjs": "sha256:d22d64036769f815b9ac79e0682745d53f1593a4fc58b192396c53e57950cea1",
+    "cases/plans-member-sets-quota/contract.json": "sha256:796337892a8c69242b949653fc499fdaf8079212cdff44d448b355929813fd56",
+    "cases/plans-member-sets-quota/hint.json": "sha256:04d528708c78d47340cfb371cdc61ad865b5ff77a9789356f464129b7c401553",
+    "cases/plans-admin-only/app.mjs": "sha256:866377fc61efa9c91f1cd071acebe37c027b65f67f4ebba6eff3147510ccebf8",
+    "cases/plans-admin-only/contract.json": "sha256:9937316369e0b94487ca6e2fbafe64ae1f22306275b1cf6b741253e56104de63",
+    "cases/plans-admin-only/hint.json": "sha256:04d528708c78d47340cfb371cdc61ad865b5ff77a9789356f464129b7c401553",
+    "cases/shipments-skip-states/app.mjs": "sha256:b2bec43f625104c9c533e6d035199347d17ee45386eda642125f58f8b066055e",
+    "cases/shipments-skip-states/contract.json": "sha256:701e58303734bf94caaeb00bfbcbca36e482871deaf85bd31d5aa91f11453cb2",
+    "cases/shipments-skip-states/hint.json": "sha256:70cc96e8ae28cba673d0c07d8e041d43f8e91d1af19628b60829449093ed817c",
+    "cases/shipments-ordered/app.mjs": "sha256:0cc6586d759d03965b10ddb8c90373205cb4869d4f861eade1cad5545156fd7a",
+    "cases/shipments-ordered/contract.json": "sha256:685b368fa6e00759153868563168ecb7082bc2b3a5e1d59b5d6045b2d8d0d32d",
+    "cases/shipments-ordered/hint.json": "sha256:70cc96e8ae28cba673d0c07d8e041d43f8e91d1af19628b60829449093ed817c",
+    "cases/cards-free-movement/app.mjs": "sha256:b0c6036333bdd391dc4d86b3a5ed708a25da8dda335491b5709e24e391674c1d",
+    "cases/cards-free-movement/contract.json": "sha256:0ab18bc865b294ee7829c63be14f8826178c7bfd203e2a8d4e82c5bbf27c8cb4",
+    "cases/cards-free-movement/hint.json": "sha256:c14b626a8ce3d7e8c5125a6c582c78f9ea3231ecaa71c5b1d3e92a97c93af9b8",
+    "cases/ledger-duplicate-credit/app.mjs": "sha256:71bae992b5da94e2d72750ecb4cf7fde0121ba41dfdb3adf2c33d2d169e12889",
+    "cases/ledger-duplicate-credit/contract.json": "sha256:6488bb799b7102055b5dbbe457ef30c05f3f62e8a0cc79423e07b4921ae81091",
+    "cases/ledger-duplicate-credit/hint.json": "sha256:8a7dd6dc2fd512c8b68d85da34fe2033ec8f1a02bf514914433f62ddf07b70b5",
+    "cases/ledger-idempotent-settle/app.mjs": "sha256:b88a73b2330895c92776fdcade742f1df7fd84069fad6dfc84bd28bc001da4ee",
+    "cases/ledger-idempotent-settle/contract.json": "sha256:d42172102e9f79790f7b4d22ab483195ce696e190181b01feba30acb88ec6a90",
+    "cases/ledger-idempotent-settle/hint.json": "sha256:8a7dd6dc2fd512c8b68d85da34fe2033ec8f1a02bf514914433f62ddf07b70b5",
+    "cases/payments-concurrent-double-charge/app.mjs": "sha256:b8451a1eb2e198b77a8199438b29bb098b1ab1933278b882c67a5854a6c1ee9f",
+    "cases/payments-concurrent-double-charge/contract.json": "sha256:46693c3dbd26007517dcde3d125f5c5abaa387918043912c68f68a051cd82a32",
+    "cases/payments-concurrent-double-charge/hint.json": "sha256:e35e4d67ce837b9462526277f86a4124c6f70053aa047e80ddaa7e15099114c5",
+    "cases/payments-single-capture/app.mjs": "sha256:eaaf3b7ca1a97482043461fda2d5024547025322797b4690ab6e9c371e09fa1a",
+    "cases/payments-single-capture/contract.json": "sha256:8c3b45431cbc6d103a60ad3059a4835fa86c2e9f98ca3fead1754911f6d2eedf",
+    "cases/payments-single-capture/hint.json": "sha256:e35e4d67ce837b9462526277f86a4124c6f70053aa047e80ddaa7e15099114c5",
+    "cases/refunds-no-dedupe/app.mjs": "sha256:a9785acc24bae2f17a6bd74abfd8ee3291c871beecccbe64993f5dc4f75b5283",
+    "cases/refunds-no-dedupe/contract.json": "sha256:e64337bb8caa3bf791a9ddcff891e3f256193952f1762a12c8446e74c548c92b",
+    "cases/refunds-no-dedupe/hint.json": "sha256:cfc8e5e4e0c175839cf1459b864c5eb8dc9e849e538c4c3a1ef92ff73b15ddc3"
+  }
+}

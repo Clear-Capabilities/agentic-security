@@ -6,11 +6,15 @@ import { spawn } from 'node:child_process';
 import { openSync, closeSync, mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import {
-  layout, evidenceKey, appendEvent, recordJob, writeLease, judgeLease, acquireRunLock, releaseRunLock,
+  layout, evidenceKey, appendEvent, recordJob, writeLease, judgeLease, acquireRunLock, releaseRunLock, readStateFile,
   HEARTBEAT_MS,
 } from './state.mjs';
-import { atomicWriteJson, atomicWriteFile, readJson, nowIso, sleep, sha256, randomId, redact, Deadline } from './util.mjs';
+import { atomicWriteJson, atomicWriteFile, readJson, nowIso, sleep, sha256, randomId, redact, Deadline, setLogCap } from './util.mjs';
+import { detectDrift, driftSummary } from './drift.mjs';
+import { assessFinal, evaluateFinal, writeFinalEvidence } from './final.mjs';
+import { buildCompletionReport } from './report.mjs';
 import { loadManifest, checkPrdFresh } from './manifest.mjs';
 import { loadProfile, validateProfile } from './profile.mjs';
 import { TreeIndex } from './tree.mjs';
@@ -24,12 +28,35 @@ import { activeOpLeases } from './oplease.mjs';
 import { resolveBinary, detectClaude, buildWorkerArgs, StreamState, classifyWorker, buildPrompt } from './claude.mjs';
 import { buildStatus, renderStaticHtml, isTerminal } from './status.mjs';
 import { runGateCommand } from './gates.mjs';
+import { evaluateClosure, checkReceipts, gatherReceipts, rehashReceipts, gitFacts, parseMeasured, fileSetDeliverable, implementationDiff, prdLedger, unmetByRequirement, CLOSURE_SCHEMA } from './closure.mjs';
+import { buildAssuranceBundle } from './closure-bundle.mjs';
 
 const RUN_MJS = fileURLToPath(new URL('../run.mjs', import.meta.url));
+
+// The heartbeat runs on its OWN thread (its own event loop). A worker that floods stdout can saturate the controller's main
+// loop for seconds at a time; the lease must keep its cadence regardless, so liveness never depends on what the worker prints.
+// The thread also records when the main loop last ticked (mainTickAt), so a wedged main loop is visible rather than hidden
+// behind a healthy-looking beat.
+const HEARTBEAT_THREAD_SRC = `
+const { workerData: d } = require('node:worker_threads');
+const fs = require('node:fs');
+let seq = d.baseSeq;
+function beat() {
+  seq += 1;
+  const now = Date.now();
+  const lease = { runId: d.runId, pid: d.pid, start: d.start, seq, status: 'running', role: 'controller', thread: true, mainTick: d.shared[0], mainTickAt: d.shared[1], wallAt: now, at: new Date(now).toISOString() };
+  const tmp = d.file + '.' + d.pid + '.hb.tmp';
+  try { fs.writeFileSync(tmp, JSON.stringify(lease, null, 2) + '\\n', { mode: 0o600 }); fs.renameSync(tmp, d.file); } catch (e) { /* a missed beat is detectable by readers */ }
+}
+setInterval(beat, d.intervalMs);
+`;
+
 const GLOBAL_BLOCKERS = new Set(['auth-missing', 'unknown-cli-flag', 'worker-missing']);
 // Deliberately pessimistic list prices (USD per million tokens). Used ONLY when a
 // killed worker never emitted a result event; labelled as an estimate everywhere.
 const ESTIMATE_PRICING = { input: 15, output: 75, cacheRead: 1.5, cacheCreate: 18.75 };
+
+const relRowExists = (manifest) => manifest.requirements.some((r) => r.verification.kind === 'controller-final');
 
 export function initialState({ runId, manifest, profilePath, profileSha, repoRoot }) {
   return {
@@ -41,6 +68,10 @@ export function initialState({ runId, manifest, profilePath, profileSha, repoRoo
     current: null, requirements: {}, runBlockers: [], checkpoints: 0, lastProgressAt: null, lastHeartbeatAt: null,
     control: { handledSeq: 0, ack: null }, finalVerdict: null, restarts: 0,
   };
+}
+
+function loadProfileQuiet(profilePath, repoRoot) {
+  try { return loadProfile(resolve(repoRoot, profilePath)).profile; } catch { return null; }
 }
 
 export class Controller {
@@ -71,6 +102,7 @@ export class Controller {
   checkpoint(reason) {
     this.S.checkpoints += 1;
     this.save();
+    try { atomicWriteJson(this.L.stateBackup, this.S); } catch { /* the primary is already durable */ }
     this.emit('checkpoint', { n: this.S.checkpoints, reason });
   }
 
@@ -87,6 +119,7 @@ export class Controller {
     validateProfile(profile, this.repoRoot);
     this.profile = profile; this.profileSha = psha;
     this.limits = profile.limits;
+    setLogCap(profile.limits.resource.maxLogMiB * 1048576);
     const m = loadManifest(this.repoRoot);
     if (!m.ok) throw Object.assign(new Error(m.error), { blocker: { type: 'invalid-manifest', detail: m.error } });
     this.manifest = m.manifest;
@@ -101,7 +134,9 @@ export class Controller {
     mkdirSync(this.L.leasesDir, { recursive: true });
     mkdirSync(this.L.attemptsDir, { recursive: true });
     mkdirSync(this.L.logsDir, { recursive: true });
-    const existing = readJson(this.L.stateFile, null);
+    const { state: existing, source: stateSource } = readStateFile(this.L);
+    if (stateSource === 'corrupt') throw Object.assign(new Error('state.json is corrupt and no checkpoint backup exists; refusing to reinitialise (that would reset attempt counters). Restore it or create a new run with init.'), { blocker: { type: 'corrupt-checkpoint', detail: 'state.json unreadable, no state.json.bak' } });
+    if (stateSource === 'backup') this.emit('state-recovered', { from: 'state.json.bak' });
     this.S = existing || initialState({ runId: this.runId, manifest: this.manifest, profilePath: this.profilePath, profileSha: this.profileSha, repoRoot: this.repoRoot });
     if (existing) {
       if (existing.status !== 'initialized') this.S.restarts = (this.S.restarts || 0) + 1;
@@ -117,13 +152,46 @@ export class Controller {
     }
     this.S.controller = { pid: process.pid, start: startTimeOf(process.pid), startedAt: nowIso() };
     this.S.budgets.segmentStartedAt = Date.now();
+    this.driftCheckedAt = 0;
+    const drift = this.driftProblem(true);
+    if (drift) throw Object.assign(new Error(`drift: ${drift}`), { blocker: { type: 'drift', detail: drift } });
     this.S.status = 'running'; this.S.statusReason = null;
     this.emit('controller-start', { pid: process.pid, restarts: this.S.restarts, manifestVersion: this.manifest.manifestVersion });
     this.save();
     this.writeHeartbeat();
   }
 
-  writeHeartbeat() {
+  startHeartbeatThread(intervalMs) {
+    this.hbShared = new Float64Array(new SharedArrayBuffer(16));
+    this.hbShared[1] = Date.now();
+    try {
+      this.hbThread = new Worker(HEARTBEAT_THREAD_SRC, { eval: true, workerData: { file: this.L.leaseFile, runId: this.runId, pid: process.pid, start: this.S.controller.start, intervalMs, baseSeq: this.hbSeq + 1000, shared: this.hbShared } });
+      this.hbThread.on('error', (e) => { this.hbThread = null; this.emit('heartbeat-thread-error', { message: String(e.message || e) }); });
+      this.hbThread.unref();
+    } catch (e) {
+      this.hbThread = null; this.emit('heartbeat-thread-error', { message: String(e.message || e) });
+    }
+  }
+
+  // The main loop's own tick: sleep detection, guardian supervision, and the shared counter the heartbeat thread reports.
+  // Without the thread (it failed to start) the tick falls back to writing the lease itself.
+  mainTick() {
+    if (this.hbShared) { this.hbShared[0] += 1; this.hbShared[1] = Date.now(); }
+    this.writeHeartbeat({ lease: !this.hbThread });
+  }
+
+  // Frozen-input drift (LOOP-004.AC01). Throttled; `force` re-reads now.
+  driftProblem(force = false) {
+    if (!this.S.frozen) return null;
+    if (!force && Date.now() - this.driftCheckedAt < 1500) return this.S.drift ? driftSummary(this.S.drift.reasons) : null;
+    this.driftCheckedAt = Date.now();
+    const d = detectDrift({ repoRoot: this.repoRoot, frozen: this.S.frozen, profile: loadProfileQuiet(this.profilePath, this.repoRoot) });
+    if (!d.drifted) return null;
+    if (!this.S.drift) { this.S.drift = { at: nowIso(), reasons: d.reasons }; this.emit('drift-detected', { reasons: d.reasons }); }
+    return driftSummary(d.reasons);
+  }
+
+  writeHeartbeat({ lease = true } = {}) {
     this.hbSeq += 1;
     const monoDelta = performance.now() - this.lastHbMono;
     const wallDelta = Date.now() - this.lastHbWall;
@@ -135,9 +203,11 @@ export class Controller {
     }
     this.lastHbMono = performance.now(); this.lastHbWall = Date.now();
     this.S.lastHeartbeatAt = nowIso();
-    try {
-      writeLease(this.L.leaseFile, { runId: this.runId, pid: process.pid, start: this.S.controller.start, seq: this.hbSeq, status: this.S.status, role: 'controller' });
-    } catch { /* a missed beat is detectable by readers; do not crash */ }
+    if (lease) {
+      try {
+        writeLease(this.L.leaseFile, { runId: this.runId, pid: process.pid, start: this.S.controller.start, seq: this.hbSeq, status: this.S.status, role: 'controller' });
+      } catch { /* a missed beat is detectable by readers; do not crash */ }
+    }
     this.ensureGuardian();
   }
 
@@ -175,6 +245,10 @@ export class Controller {
         break;
       case 'stop': this.stopping = true; this.abortWorker('stop'); result = 'stopping'; break;
       case 'retry': result = this.retryRequirement(c.requirement); break;
+      // Test seam only (needs the harness enabled in the environment): pretend the wall clock jumped, as after a machine sleep.
+      case 'simulate-sleep': if (process.env.LOOP_ENGINEERING_TEST_HARNESS === '1') { this.lastHbWall -= 60000; result = 'simulated'; } else result = 'refused:not-in-test-harness'; break;
+      // Test seam only: starve the main loop for c.ms, as a flooding worker can, to prove the heartbeat does not depend on it.
+      case 'test-block-main': if (process.env.LOOP_ENGINEERING_TEST_HARNESS === '1') { const end = Date.now() + Math.min(Number(c.ms) || 0, 30000); while (Date.now() < end) { /* spin */ } result = 'blocked-main'; } else result = 'refused:not-in-test-harness'; break;
       default: result = `unknown-command:${c.command}`;
     }
     this.S.control.ack = { seq: c.seq, command: c.command, result, at: nowIso() };
@@ -208,7 +282,8 @@ export class Controller {
   refresh() {
     this.tree.build();
     this.assess = assessAll({ L: this.L, manifest: this.manifest, tree: this.tree, key: this.key });
-    this.progress = computeProgress(this.manifest, this.assess, this.S.requirements);
+    this.final = assessFinal({ file: this.L.finalEvidence, manifest: this.manifest, tree: this.tree, key: this.key });
+    this.progress = computeProgress(this.manifest, this.assess, this.S.requirements, { final: this.final });
     return this.progress;
   }
 
@@ -351,6 +426,7 @@ export class Controller {
     let termReason = null;
     const monitor = setInterval(() => {
       try {
+        this.handleControl().catch(() => {});
         wd.heartbeat();
         wd.setExternalLeases(activeOpLeases(this.L.leasesDir).length);
         // Substantive progress comes ONLY from new verifier-issued evidence that
@@ -365,6 +441,8 @@ export class Controller {
         }
         cur.lastActivityAt = new Date(wd.lastActivityAt).toISOString(); cur.turns = wd.turns;
         if (this.sleepDetected && !ac.signal.aborted) { termReason = 'interrupted-sleep'; ac.abort(); return; }
+        if (!ac.signal.aborted && this.driftProblem()) { termReason = 'interrupted-drift'; ac.abort(); return; }
+        if (!ac.signal.aborted && stream.runningCostUsd > budgetUsd) { termReason = 'attempt-budget'; ac.abort(); return; }
         const v = wd.check();
         if (v && !ac.signal.aborted) { termReason = v.reason; ac.abort(); }
       } catch { /* the watchdog must never throw into the event loop */ }
@@ -375,7 +453,7 @@ export class Controller {
     try {
       run = await runBounded({
         argv: launch.argv, stdin: launch.stdin, cwd: this.repoRoot, wallMs: this.limits.claudeAttemptSeconds * 1000 + 60000, graceMs: (this.mock?.graceMs ?? this.limits.killGraceSeconds * 1000),
-        idleMs: 0, signal: ac.signal, logPath, maxLogBytes: this.limits.resource.maxLogMiB * 1048576, runId: this.runId, owned: this.owned, label: `worker:${req.id}#${attemptNo}`,
+        idleMs: 0, signal: ac.signal, logPath, redactLog: true, maxLogBytes: this.limits.resource.maxLogMiB * 1048576, runId: this.runId, owned: this.owned, label: `worker:${req.id}#${attemptNo}`,
         maxRssBytes: this.limits.resource.maxRssMiB * 1048576, maxTotalBytes: this.limits.resource.maxOutputMiB * 1048576,
         env: { ...process.env, LOOP_ENGINEERING_WORKER: '1', LOOP_ENGINEERING_RUN: this.runId, LOOP_ENGINEERING_REQUIREMENT: req.id },
         onSpawn: ({ pid, start }) => { cur.pid = pid; cur.start = start; this.save(); },
@@ -392,6 +470,7 @@ export class Controller {
     else if (termReason) cls.kind = termReason;
     // Cost: a reported figure when the stream finished, otherwise a labelled estimate.
     let cost = cls.costUsd, estimated = false;
+    if (cost == null && stream.runningCostUsd > 0) { cost = stream.runningCostUsd; estimated = true; }
     if (cost == null) {
       const u = stream.usage;
       cost = (u.input * ESTIMATE_PRICING.input + u.output * ESTIMATE_PRICING.output + u.cacheRead * ESTIMATE_PRICING.cacheRead + u.cacheCreate * ESTIMATE_PRICING.cacheCreate) / 1e6;
@@ -468,13 +547,13 @@ export class Controller {
   }
 
   // ---- final phase ----------------------------------------------------------------
-  async runGate(g) {
+  async runGate(g, { keepOutput = false } = {}) {
     const logPath = join(this.L.logsDir, `final-${g.id}-${Date.now()}.log`);
     const r = await runGateCommand(g, { repoRoot: this.repoRoot, logPath, runId: this.runId, owned: this.owned, leasesDir: this.L.leasesDir });
     recordJob(this.L, r.run);
     const { run, stdoutTail, ...slim } = r;
-    void run; void stdoutTail;
-    return slim;
+    void run;
+    return keepOutput ? { ...slim, stdout: stdoutTail } : slim;
   }
 
   async finalPhase() {
@@ -542,6 +621,147 @@ export class Controller {
     return { relPass, remaining };
   }
 
+  // Generic final phase (profiles that declare finalVerification and have no release requirement of their own): every
+  // registered criterion and every release gate is re-run against ONE whole-tree digest, and the decision is a pure function.
+  async finalPhaseGeneric() {
+    if (this.manifest.finalVerification?.closure) return this.finalPhaseClosure();
+    this.S.finalRuns = (this.S.finalRuns || 0) + 1;
+    this.emit('final-start', { generic: true, run: this.S.finalRuns });
+    this.S.current = { requirement: null, phase: 'final', startedAt: nowIso(), pid: process.pid };
+    this.save();
+    const finalGates = this.profile.finalGates || [];
+    const gates = [];
+    const buildGate = finalGates.find((g) => g.id === 'build');
+    if (buildGate) gates.push(await this.runGate(buildGate));
+    this.tree.build();
+    const before = this.tree.wholeTree().digest;
+    const afterEach = [];
+    const results = [];
+    for (const r of this.manifest.requirements) {
+      if (this.stopping || this.paused) { this.S.current = null; return { aborted: 'interrupted' }; }
+      const out = await this.verify(r, { phase: 'final' });
+      this.tree.build(); afterEach.push(this.tree.wholeTree().digest);
+      const ev = out.evidence;
+      results.push({ id: r.id, result: ev.result, evidenceId: ev.evidenceId, skipped: ev.counts?.skipped || 0, blockerType: ev.blocker?.type || null });
+    }
+    for (const g of finalGates.filter((x) => x.id !== 'build')) {
+      if (this.stopping || this.paused) { this.S.current = null; return { aborted: 'interrupted' }; }
+      gates.push(await this.runGate(g));
+    }
+    this.tree.build();
+    const after = this.tree.wholeTree().digest;
+    const decision = evaluateFinal({ requirements: results, expectedRequirements: this.manifest.requirements.map((r) => r.id), gates, expectedGates: finalGates.map((g) => g.id), treeDigests: { before, afterEach, after } });
+    const report = { generatedAt: nowIso(), runId: this.runId, manifestVersion: this.manifest.manifestVersion, acceptanceHash: this.manifest.acceptanceHash, prdSha256: this.manifest.prd.sha256, treeDigestBefore: before, treeDigestAfter: after, treeStable: decision.stable, requirements: results, gates, remaining: decision.unmet.map((u) => `${u.kind}:${u.id}`), unmet: decision.unmet, environment: environmentInfo(), verdict: decision.verdict };
+    atomicWriteJson(this.L.finalReport, report);
+    writeFinalEvidence(this.L.finalEvidence, { runId: this.runId, acceptanceHash: this.manifest.acceptanceHash, prdSha256: this.manifest.prd.sha256, profileSha256: this.manifest.profile?.sha256, verdict: decision.verdict, stable: decision.stable, treeDigest: after, requirements: results, gates }, this.key);
+    this.S.finalVerdict = { at: nowIso(), verdict: decision.verdict, remaining: report.remaining, treeDigest: after };
+    this.S.current = null;
+    this.emit('final-end', { verdict: decision.verdict, remaining: report.remaining });
+    this.save();
+    return decision;
+  }
+
+  // Protected closure (REL-003). Order is the contract: build, verify every OTHER requirement in this phase, validate those receipts,
+  // THEN execute the closure requirement, run the gates and the measured gates, gather the deliverables, re-hash the evidence files
+  // and only then issue the one record. Every decision is evaluateClosure(); nothing here decides.
+  async finalPhaseClosure() {
+    const cfg = this.profile.finalVerification.closure;
+    const rel = this.manifest.requirements.find((r) => r.id === cfg.releaseRequirement);
+    const others = this.manifest.requirements.filter((r) => r !== rel);
+    this.S.finalRuns = (this.S.finalRuns || 0) + 1;
+    this.emit('final-start', { closure: true, run: this.S.finalRuns });
+    this.S.current = { requirement: null, phase: 'final', startedAt: nowIso(), pid: process.pid };
+    this.save();
+    const interrupted = () => { if (this.stopping || this.paused) { this.S.current = null; return true; } return false; };
+    const order = { phaseStartedAt: nowIso() };
+    const finalGates = this.profile.finalGates || [];
+    const gates = [];
+    const buildGate = finalGates.find((g) => g.id === 'build');
+    if (buildGate) gates.push(await this.runGate(buildGate));
+    this.tree.build();
+    const before = this.tree.wholeTree().digest;
+    const afterEach = [];
+    for (const r of others) {
+      if (interrupted()) return { aborted: 'interrupted' };
+      await this.verify(r, { phase: 'final' });
+      this.tree.build(); afterEach.push(this.tree.wholeTree().digest);
+    }
+    // AC01: the other receipts are validated BEFORE the closure criteria run.
+    order.validatedAt = nowIso();
+    const early = checkReceipts({ requirements: others, receipts: gatherReceipts({ L: this.L, manifest: this.manifest, tree: this.tree, key: this.key }), phaseStartedAt: order.phaseStartedAt });
+    this.emit('closure-receipts-validated', { requirements: others.length, unmet: early.unmet.length, passedCriteria: early.passedCriteria });
+    order.closureStartedAt = nowIso();
+    if (rel) {
+      if (interrupted()) return { aborted: 'interrupted' };
+      await this.verify(rel, { phase: 'final' });
+      this.tree.build(); afterEach.push(this.tree.wholeTree().digest);
+    }
+    for (const g of finalGates.filter((x) => x.id !== 'build')) {
+      if (interrupted()) return { aborted: 'interrupted' };
+      gates.push(await this.runGate(g));
+    }
+    const measured = [];
+    for (const m of cfg.measuredGates || []) {
+      if (interrupted()) return { aborted: 'interrupted' };
+      const r = await this.runGate({ id: `measured-${m.id}`, cwd: m.cwd || '.', executable: m.executable, args: m.args, timeoutSeconds: m.timeoutSeconds, expectedExitCodes: m.expectedExitCodes || [0] }, { keepOutput: true });
+      if (!r.ok) { measured.push({ id: m.id, group: m.group, ran: false, reason: r.reason || `exit ${r.exitCode}` }); continue; }
+      measured.push({ id: m.id, group: m.group, ran: true, ...parseMeasured(m.parse, r.stdout || '') });
+    }
+    this.tree.build();
+    const after = this.tree.wholeTree().digest;
+
+    const receipts = gatherReceipts({ L: this.L, manifest: this.manifest, tree: this.tree, key: this.key });
+    const git = gitFacts(this.repoRoot, { ignore: [this.manifest.prd.path] });
+    const facts = {
+      config: cfg, manifest: this.manifest, receipts, order, gates, expectedGates: finalGates.map((g) => g.id), measured,
+      treeDigests: { before, afterEach, after }, git,
+      limits: { profile: this.profile.limits, frozen: this.manifest.profile?.limits, used: { attemptsUsed: this.S.budgets.attemptsUsed, usdUsed: this.S.budgets.usdUsed, wallUsedMs: this.wallUsedMs() }, runBlockers: this.S.runBlockers },
+      scope: { platform: process.platform, supported: this.profile.platforms?.supported, unsupported: this.profile.platforms?.unsupported, files: fileSetDeliverable('scope', this.repoRoot, cfg.deliverables.scopeFiles || []).files },
+      deliverables: [],
+    };
+    // First pass without deliverables: it says which requirements are unmet, which the ledger and the bundle must reflect.
+    const prelim = evaluateClosure(facts);
+    const byReq = unmetByRequirement(prelim.unmet, this.manifest);
+    const outDir = join(this.L.dir, 'final');
+    const d = cfg.deliverables;
+    const measuredOpen = measured.filter((m) => !(m.status === 'pass' && m.synthetic !== true && m.ran !== false)).map((m) => m.id);
+    const withMeasured = (x) => (x.status === 'complete' && measuredOpen.length ? { ...x, status: 'open', reason: `measured gate(s) not measured: ${measuredOpen.join(', ')}; the files are present but the measurement is open` } : x);
+    const deliverables = [
+      implementationDiff({ repoRoot: this.repoRoot, baseHead: this.manifest.checkout?.head || null, outFile: join(outDir, 'implementation.diff') }),
+      prdLedger({ manifest: this.manifest, receipts, unmetByRequirement: byReq, outFile: join(outDir, 'prd-ledger.json') }),
+      withMeasured(fileSetDeliverable('scorecards', this.repoRoot, d.scorecards)),
+      fileSetDeliverable('policy-cards', this.repoRoot, d.policyCards),
+      fileSetDeliverable('replayable-fixtures', this.repoRoot, d.replayableFixtures),
+      buildAssuranceBundle({ repoRoot: this.repoRoot, config: cfg, manifest: this.manifest, receipts, unmetByReq: byReq, gates, measured, git, artifactPaths: d.artifacts, outDir: join(outDir, 'assurance-bundle'), toolchain: this.manifest.tools || {} }),
+    ];
+    facts.deliverables = deliverables;
+    // Atomic issuance: re-hash every cited evidence file immediately before the decision, so a file changed while the deliverables
+    // were being built is caught, then write the single record.
+    rehashReceipts(receipts);
+    order.issuedAt = nowIso();
+    const decision = evaluateClosure(facts);
+    const results = [...receipts.values()].map((rc) => ({ id: rc.id, result: rc.found ? rc.result : 'missing', evidenceId: rc.evidenceId || null, skipped: rc.counts?.skipped || 0, blockerType: rc.blockerType || null }));
+    const closureRec = {
+      schema: CLOSURE_SCHEMA, closed: decision.closed, counts: decision.counts, open: decision.open, unmetCount: decision.unmet.length, order,
+      receipts: [...receipts.values()].filter((rc) => rc.found).map((rc) => ({ id: rc.id, evidenceId: rc.evidenceId, file: rc.file, sha256: rc.fileSha256AtIssue })),
+      deliverables: deliverables.map(({ kind, status, path, sha256: sh, bundleDigest, reason }) => ({ kind, status, path, sha256: sh, bundleDigest, reason })),
+      git: git ? { head: git.head, dirty: git.dirty } : null, measured,
+    };
+    const report = {
+      generatedAt: nowIso(), runId: this.runId, manifestVersion: this.manifest.manifestVersion, acceptanceHash: this.manifest.acceptanceHash, prdSha256: this.manifest.prd.sha256,
+      treeDigestBefore: before, treeDigestAfter: after, treeStable: decision.stable, requirements: results, gates, remaining: [...decision.unmet.map((u) => `${u.kind}:${u.id}`), ...decision.open.map((o) => `open:${o.id}`)],
+      unmet: decision.unmet, open: decision.open, closure: closureRec, environment: environmentInfo(), verdict: decision.verdict,
+      nextCommands: decision.closed ? [] : ['node scripts/loop-engineering/run.mjs status --json', 'node scripts/loop-engineering/run.mjs report --json'],
+    };
+    atomicWriteJson(this.L.finalReport, report);
+    writeFinalEvidence(this.L.finalEvidence, { runId: this.runId, acceptanceHash: this.manifest.acceptanceHash, prdSha256: this.manifest.prd.sha256, profileSha256: this.manifest.profile?.sha256, verdict: decision.verdict, stable: decision.stable, treeDigest: after, requirements: results, gates, closure: closureRec }, this.key);
+    this.S.finalVerdict = { at: nowIso(), verdict: decision.verdict, remaining: report.remaining, treeDigest: after };
+    this.S.current = null;
+    this.emit('final-end', { verdict: decision.verdict, closed: decision.closed, remaining: report.remaining });
+    this.save();
+    return decision;
+  }
+
   // ---- terminal handling -----------------------------------------------------------
   settleTerminal(status, reason) {
     this.S.budgets.wallUsedMs = this.wallUsedMs(); this.S.budgets.segmentStartedAt = null;
@@ -549,6 +769,14 @@ export class Controller {
     this.setStatus(status, reason);
     this.checkpoint(`terminal: ${status}`);
     this.writeStaticStatus();
+    this.writeCompletionReport();
+  }
+
+  writeCompletionReport() {
+    try {
+      const st = buildStatus(this.repoRoot, this.runId, { tree: this.tree });
+      atomicWriteJson(this.L.completionReport, buildCompletionReport(st));
+    } catch { /* the report is also computable on demand with `report` */ }
   }
 
   writeStaticStatus() {
@@ -566,7 +794,9 @@ export class Controller {
   // ---- main loop --------------------------------------------------------------------
   async run() {
     await this.boot();
-    this.hb = setInterval(() => { try { this.writeHeartbeat(); } catch { /* reader detects stale */ } }, this.mock?.heartbeatMs ?? HEARTBEAT_MS);
+    const hbMs = this.mock?.heartbeatMs ?? Math.min(HEARTBEAT_MS, this.limits.heartbeatSeconds * 1000);
+    this.startHeartbeatThread(hbMs);
+    this.hb = setInterval(() => { try { this.mainTick(); } catch { /* reader detects stale */ } }, hbMs);
     this.statusTimer = setInterval(() => this.writeStaticStatus(), 30000);
     let exitStatus = 'completed';
     try {
@@ -574,6 +804,12 @@ export class Controller {
         await this.handleControl();
         if (this.stopping) { exitStatus = 'stopped'; break; }
         if (this.paused) { await sleep(300); continue; }
+        const dp = this.driftProblem();
+        if (dp) {
+          this.addRunBlocker({ type: 'drift', detail: dp });
+          this.settleTerminal('blocked', `drift: ${dp}. A legitimate change is made in the supervising session and takes effect only through an explicit init, which invalidates the evidence that depended on it.`);
+          exitStatus = 'blocked'; break;
+        }
         const bp = this.budgetProblem();
         const progress = this.refresh();
         if (progress.verifiedPercent === 100) { this.settleTerminal('completed', 'every required criterion freshly verified'); exitStatus = 'completed'; break; }
@@ -614,6 +850,18 @@ export class Controller {
           await sleep(Math.max(100, Math.min(2000, soonest - Date.now())));
           continue;
         }
+        if (this.manifest.finalVerification?.required && !relRowExists(this.manifest) && progress.requirements.every((r) => r.state === 'verified') && !this.final.ok) {
+          const fr = await this.finalPhaseGeneric();
+          if (fr.aborted) continue;
+          const p2 = this.refresh();
+          if (p2.verifiedPercent === 100) { this.settleTerminal('completed', 'every required criterion and release gate freshly verified on one stable source digest'); exitStatus = 'completed'; break; }
+          const reqFailures = fr.unmet.some((u) => ['requirement', 'skip'].includes(u.kind) || /^(criterion|receipt)-/.test(u.kind));
+          if (!reqFailures || (this.S.finalRuns || 0) >= this.limits.attemptsPerRequirement) {
+            this.settleTerminal('blocked', `final verification did not pass${(this.S.finalRuns || 0) >= this.limits.attemptsPerRequirement ? ` after ${this.S.finalRuns} runs (the cap is attemptsPerRequirement and is not reset)` : ''}: ${fr.unmet.map((u) => `${u.kind}:${u.id}`).join(', ')}`);
+            exitStatus = 'blocked'; break;
+          }
+          continue;
+        }
         const nonRelDone = progress.requirements.filter((r) => this.manifest.requirements.find((x) => x.id === r.id).verification.kind !== 'controller-final').every((r) => r.state === 'verified');
         const relRow = progress.requirements.find((r) => this.manifest.requirements.find((x) => x.id === r.id).verification.kind === 'controller-final');
         if (nonRelDone && relRow && relRow.state !== 'verified') {
@@ -650,6 +898,8 @@ export class Controller {
   }
 
   async shutdown(status) {
+    try { await this.hbThread?.terminate(); } catch { /* best effort */ }
+    this.hbThread = null;
     // Reap anything this controller owns before exiting, then release the lock.
     try { await reapOwned(this.owned.list(), this.runId, 2000); } catch { /* best effort */ }
     if (status === 'stopped') this.settleTerminal('stopped', 'stop requested');

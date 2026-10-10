@@ -1,0 +1,19 @@
+{
+  "id": "k8s-admin-grant-vs-no-grant",
+  "title": "A public admin service with and without a privilege grant",
+  "kind": "deployment-only",
+  "defect": {
+    "family": "deployment-exposure",
+    "file": null
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "A public ingress reaches an admin workload whose service account is bound to a secret-reading role."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "The same public ingress reaches the workload, but its service account has no role binding."
+    }
+  }
+}

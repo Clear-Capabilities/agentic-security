@@ -1,0 +1,56 @@
+{
+  "schema": "agentic-security/bakeoff-manifest",
+  "workload": {
+    "targetIds": [
+      "syn-cmd-py",
+      "syn-sqli-js"
+    ],
+    "treeDigests": {
+      "syn-cmd-py": "{\"pre\":\"sha256:7e050a6565927e66dbdad4bc2f72db81ca1989cc3054413b48d1b5b4d26b8b98\",\"post\":\"sha256:9d78673d043c0d75b99d390cef4570195054779437d5e0e6f6a4bdace7edcc4a\"}",
+      "syn-sqli-js": "{\"pre\":\"sha256:fc5eddf41b193cbceff2d1313171a84c3abb07752b5bd53b2d36ffe368708b0d\",\"post\":\"sha256:03bf3e5809744234a1bb8626608e04d9e3fd671c99e2bd329e12d1fca7730ea2\"}"
+    },
+    "workloadDigest": "sha256:a85e64c9f4244bce0ff717ed7d0a40c5732db2dcb87186dc63cca607e4d070f2"
+  },
+  "scope": {
+    "languages": [
+      "javascript",
+      "python"
+    ],
+    "families": [
+      "sql-injection",
+      "command-injection"
+    ]
+  },
+  "verification": {
+    "standard": "a finding counts when its CWE matches the answer key for the entry; no model confirmation is used"
+  },
+  "limits": {
+    "perTargetTimeoutMs": 120000,
+    "wallClockMs": 3600000,
+    "spendCeilingUsd": 0
+  },
+  "failurePolicy": "count-as-misses",
+  "participants": [
+    {
+      "slot": "this-engine",
+      "provider": {
+        "name": "local",
+        "model": null
+      }
+    },
+    {
+      "slot": "comparator-a",
+      "provider": {
+        "name": "operator-supplied",
+        "model": null
+      }
+    },
+    {
+      "slot": "comparator-b",
+      "provider": {
+        "name": "operator-supplied",
+        "model": null
+      }
+    }
+  ]
+}

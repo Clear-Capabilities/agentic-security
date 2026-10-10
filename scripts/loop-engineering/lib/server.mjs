@@ -14,7 +14,7 @@ import { loadManifest } from './manifest.mjs';
 
 const MAX_SSE = 8;
 
-const PAGE = (nonce) => `<!doctype html>
+export const PAGE = (nonce) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loop progress</title>
 <style>
@@ -40,6 +40,8 @@ select,button{font:inherit;padding:2px 6px} .pill{display:inline-block;padding:0
  <div><div class="mut">Budget</div><div id="budget">-</div></div>
 </div></div>
 <div id="alert" class="card bad" hidden></div>
+<h2>Summary</h2><pre id="summary"></pre>
+<h2>Workstreams</h2><div class="grid" id="wss"></div>
 <h2>Categories</h2><div class="grid" id="cats"></div>
 <h2>Current work</h2><div class="card" id="current">-</div>
 <h2>Active operations</h2><div class="card" id="ops">none</div>
@@ -70,6 +72,9 @@ function render(s){
  const a=$('alert');const probs=[];
  if(s.statusReason)probs.push(s.statusReason);(s.blockers||[]).forEach(x=>probs.push(x.type+': '+x.detail));
  a.hidden=!probs.length;a.textContent=probs.join(' | ');
+ $('summary').textContent=((s.summary&&s.summary.lines)||[]).join('\\n');
+ const wss=$('wss');wss.textContent='';
+ ((s.summary&&s.summary.workstreams)||[]).forEach(w=>{const d=t('div',null,'card');d.append(t('div',w.label+': '+w.verified+'/'+w.total+' verified'),t('div','stale '+w.stale+' | blocked '+w.blocked+' | failed '+w.failed,'mut'));wss.append(d)});
  const cats=$('cats');cats.textContent='';
  Object.entries(s.categories).forEach(([k,c])=>{const d=t('div',null,'card');d.append(t('div',c.label+': '+c.verifiedPercent+'%'),t('div',c.verifiedRequirements+'/'+c.totalRequirements+' requirements','mut'));const bar=t('div',null,'bar');const i=t('i');i.style.width=c.verifiedPercent+'%';bar.append(i);d.append(bar);cats.append(d)});
  const cur=$('current');cur.textContent='';

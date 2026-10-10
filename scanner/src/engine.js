@@ -243,6 +243,7 @@ import { applyLearnedCalibration } from './posture/triage-learning.js';
 import { annotateFormalVerification } from './dataflow/formal-verify.js';
 import { annotateProofGate } from './dataflow/proof-gate.js';
 import { applySanitizerGate } from './dataflow/sanitizer-gate.js';
+import { guardDominatesSink } from './dataflow/guard-dominance.js';
 import { annotateFalsification } from './posture/falsification.js';
 import { routeModelForFinding } from './posture/model-routing.js';
 import { buildEntrypointInventory } from './posture/entrypoint-inventory.js';
@@ -1468,10 +1469,38 @@ function _guardWindow(ctx, before = 25, after = 5) {
   const line = ctx.line || 1;
   const lo = Math.max(0, line - before);
   const hi = Math.min(ctx.lines.length, line + after);
-  return ctx.lines.slice(lo, hi).join('\n')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/\/\/[^\n]*/g, ' ')
-    .replace(/(^|[^\w'"`])#[^\n]*/g, '$1 ');
+  return _stripCommentsKeepLines(ctx.lines.slice(lo, hi).join('\n'));
+}
+
+// Comment removal that is aware of string literals and keeps every newline, so a line index in the result is a line index in the file.
+// The previous regex chain treated the `//` in `"https://"` as the start of a comment and erased the rest of the line, which is where the
+// allow-list check usually is (`in_array("https://" . $host, $allowed)`): a guard written on that line disappeared from the window and a
+// neighbouring declaration happened to stand in for it. Strings never span lines here; a stray apostrophe therefore costs at most one line.
+function _stripCommentsKeepLines(text) {
+  let out = '';
+  let i = 0; const n = text.length;
+  let quote = null;
+  while (i < n) {
+    const c = text[i]; const d = text[i + 1];
+    if (c === '\n') { quote = null; out += c; i++; continue; }
+    if (quote) {
+      out += c;
+      if (c === '\\' && i + 1 < n && text[i + 1] !== '\n') { out += text[i + 1]; i += 2; continue; }
+      if (c === quote) quote = null;
+      i++; continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; out += c; i++; continue; }
+    if (c === '/' && d === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const body = text.slice(i, end < 0 ? n : end + 2);
+      out += body.replace(/[^\n]/g, ' ');
+      i += body.length; continue;
+    }
+    if (c === '/' && d === '/') { while (i < n && text[i] !== '\n') { out += ' '; i++; } continue; }
+    if (c === '#' && (i === 0 || !/[\w'"`]/.test(text[i - 1]))) { while (i < n && text[i] !== '\n') { out += ' '; i++; } continue; }
+    out += c; i++;
+  }
+  return out;
 }
 
 // PRD R15: a guard-shaped token anywhere in the -25/+5 window used to be
@@ -1524,7 +1553,20 @@ function _guardMatchNearSinkIdentifier(ctx, guardRe, span = 2) {
   const w = _guardWindow(ctx);
   const re = new RegExp(guardRe.source, guardRe.flags.includes('g') ? guardRe.flags : guardRe.flags + 'g');
   const ids = _sinkLineIdentifiers(ctx);
-  if (!ids.size) return re.test(w); // can't correlate — fall back to the old shape-only check
+  // QA-005.AC02: text that LOOKS like a guard is not enough; it must dominate the sink. `_guardWindow` starts at `winLo` in the file.
+  const winLo = Math.max(0, (ctx.line || 1) - 25);
+  const sinkIdx = (ctx.line || 1) - 1;
+  const dominates = (windowLineIdx) => {
+    const v = guardDominatesSink({ lines: ctx.lines, guardIdx: winLo + windowLineIdx, sinkIdx, file: ctx.file });
+    if (v.dominates) ctx._guardEvidence = { guardLine: winLo + windowLineIdx + 1, dominance: v.reason };
+    else if (_stageEvidenceOn()) _stageEvidence.guard.push({ file: ctx.file || null, sinkLine: sinkIdx + 1, guardLine: winLo + windowLineIdx + 1, rejectedBecause: v.reason });
+    return v.dominates;
+  };
+  if (!ids.size) { // can't correlate by identifier: shape-only, but the shape must still dominate
+    let nm; const probe = new RegExp(re.source, re.flags);
+    while ((nm = probe.exec(w))) { if (dominates(w.slice(0, nm.index).split('\n').length - 1)) return true; if (nm.index === probe.lastIndex) probe.lastIndex++; }
+    return false;
+  }
   const wLines = w.split('\n');
   const sinkLineText = (ctx.lines && ctx.lines[(ctx.line || 1) - 1]) || '';
   let m;
@@ -1547,13 +1589,23 @@ function _guardMatchNearSinkIdentifier(ctx, guardRe, span = 2) {
     const hi = Math.min(wLines.length, guardLineIdx + span + 1);
     const local = wLines.slice(lo, hi).filter((l) => l !== sinkLineText).join('\n');
     for (const id of ids) {
-      if (new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(local)) return true;
+      if (new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(local) && dominates(guardLineIdx)) return true;
     }
   }
   return false;
 }
 
 function _hasSsrfHostGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _SSRF_HOST_GUARD_RE); }
+
+// An open-redirect (CWE-601) target guard: a framework's local-URL / safe-redirect predicate, a relative-path check (`startsWith("/")`),
+// or a host allow-list. QA-006: once the taint layer sees a handler's implicit request parameters, a redirect that is validated
+// by the framework's own predicate (`LocalRedirect(Url.IsLocalUrl(next) ? next : "/")`) reaches this pass like any other guarded
+// sink, and is cleared by the same rule as SSRF and path guards: the guard must name the sink's identifier AND dominate the sink.
+const _REDIRECT_GUARD_RE = new RegExp(
+  String.raw`\b(?:IsLocalUrl|is_safe_url|url_has_allowed_host_and_scheme|safe_redirect|safeRedirect|isSafeRedirect|isRelativeUrl|is_relative_url|validateRedirect|validate_redirect|SafeRedirect)\b`
+  + String.raw`|\.\s*(?:startsWith|startswith|StartsWith|HasPrefix)\s*\(\s*['"]/['"]\s*\)|\bstr_starts_with\s*\(|\bstrpos\s*\(\s*\$?\w+\s*,\s*['"]/['"]\s*\)`
+  + '|' + _SSRF_HOST_GUARD_RE.source, _SSRF_HOST_GUARD_RE.flags);
+function _hasRedirectGuard(ctx) { return _guardMatchNearSinkIdentifier(ctx, _REDIRECT_GUARD_RE); }
 
 // A path-traversal containment guard near the file sink: a basename/strip
 // helper that removes directory components, a framework safe-join, or a
@@ -1609,7 +1661,7 @@ function _hasXssOutputEncoding(ctx) {
 // detector produced them, using the same comment-stripped window guards.
 // Recall-safe: a genuinely-unguarded sink has no guard in its window (the
 // cve-replay vulnerable-tier TP count is the invariant that proves this).
-export function dropGuardedFindings(findings, fileContents) {
+export function dropGuardedFindings(findings, fileContents, onDrop = null) {
   if (!Array.isArray(findings)) return findings;
   const cache = new Map();
   const linesOf = (file) => {
@@ -1641,7 +1693,7 @@ export function dropGuardedFindings(findings, fileContents) {
     if (f.family === 'sibling-guard-omission') return true;
     const cwe = f.cwe || '';
     const isXss = cwe === 'CWE-79' && /reflected xss/i.test(f.vuln || '');
-    if (cwe !== 'CWE-918' && cwe !== 'CWE-22' && !isXss) return true;
+    if (cwe !== 'CWE-918' && cwe !== 'CWE-22' && cwe !== 'CWE-601' && !isXss) return true;
     // Flow-pair findings (REGEX parser) carry the line on sink/source, not at
     // the top level; fall back to those before parsing it out of the id.
     let line = f.line;
@@ -1655,10 +1707,12 @@ export function dropGuardedFindings(findings, fileContents) {
     if (typeof line !== 'number') return true;
     const lines = linesOf(f.file);
     if (!lines) return true;
-    const ctx = { lines, line };
-    if (cwe === 'CWE-918' && _hasSsrfHostGuard(ctx)) return false;
-    if (cwe === 'CWE-22' && _hasPathGuard(ctx)) return false;
-    if (isXss && _hasXssOutputEncoding(ctx)) return false;
+    const ctx = { lines, line, file: f.file };
+    const dropped = (kind) => { if (onDrop) onDrop(f, { kind, line, evidence: ctx._guardEvidence || null }); return false; };
+    if (cwe === 'CWE-918' && _hasSsrfHostGuard(ctx)) return dropped('ssrf-host-guard');
+    if (cwe === 'CWE-22' && _hasPathGuard(ctx)) return dropped('path-containment-guard');
+    if (cwe === 'CWE-601' && _hasRedirectGuard(ctx)) return dropped('redirect-target-guard');
+    if (isXss && _hasXssOutputEncoding(ctx)) return dropped('xss-output-encoding');
     return true;
   });
 }
@@ -2693,7 +2747,14 @@ const _PROTOCOL_CONSTANT_VAL_RE = new RegExp('^(?:'
 }
 // Module-level suppression log; cleared at the start of each runFullScan invocation.
 const _suppressionLog = [];
-function _resetSuppressions(){ _suppressionLog.length = 0; }
+function _resetSuppressions(){ _suppressionLog.length = 0; _stageEvidence.dedupe.length = 0; _stageEvidence.guard.length = 0; }
+// QA-005: stage-level diagnostics for the evaluation's why-missed analysis. DIAGNOSTIC ONLY: it records what the filter and
+// dedupe stages did and never changes a finding (test/posture-level pin: findings are identical with it on and off). Collected
+// only when AGENTIC_SECURITY_STAGE_EVIDENCE=1, because a normal scan has no reader for it.
+//   guard:  guard-shaped text the recognizer found but that did NOT dominate its sink, so did not clear the finding
+//   dedupe: findings collapsed into a winner, with the loser's own location kept (matchable identity)
+const _stageEvidence = { dedupe: [], guard: [] };
+const _stageEvidenceOn = () => process.env.AGENTIC_SECURITY_STAGE_EVIDENCE === '1';
 // R8: the per-file taint result minus the four arrays that are also appended
 // wholesale to the aggregates. Resume rebuilds those from the aggregate slices
 // so pfr[p] and the aggregates share object identity, exactly as in a normal run.
@@ -6587,6 +6648,7 @@ function dedupeFindingsWithEvidence(findings){
       : (SEV_RANK[f.severity]??9) < (SEV_RANK[kept.severity]??9);
     const winner = keepNew ? f : kept;
     const loser  = keepNew ? kept : f;
+    if(_stageEvidenceOn())_stageEvidence.dedupe.push({file,family:fam,winner:{id:winner.id||null,file:winner.file||null,line:winner.line??null,parser:winner.parser||null},loser:{id:loser.id||null,file:loser.file||null,line:loser.line??null,parser:loser.parser||null}});
     if(!winner.evidence)winner.evidence=[winner.parser||"UNKNOWN"];
     if(loser.parser&&!winner.evidence.includes(loser.parser))winner.evidence.push(loser.parser);
     if(loser.vuln&&loser.vuln!==winner.vuln){
@@ -9602,7 +9664,10 @@ function _deterministicFileTimings(timings) {
   // #1 — centralized SSRF/path guard recognition: drop CWE-918/CWE-22 findings
   // on code hardened by a host allow/deny check or a path containment guard,
   // regardless of which detector emitted them. Opt out: AGENTIC_SECURITY_NO_GUARD_RECOGNITION=1.
-  if(process.env.AGENTIC_SECURITY_NO_GUARD_RECOGNITION!=='1'){try{finalFindings=dropGuardedFindings(finalFindings,fc);}catch(_){}}
+  if(process.env.AGENTIC_SECURITY_NO_GUARD_RECOGNITION!=='1'){try{finalFindings=dropGuardedFindings(finalFindings,fc,(f,why)=>{
+    // QA-005.AC01: a guard-recognized drop is a suppression and goes in the ledger with the identity a later analysis needs to match it.
+    _suppressionLog.push({vuln:f.vuln,file:f.file,line:why.line,snippet:f.snippet||'',reason:'guard-recognized:'+why.kind+(why.evidence?':dominates@'+why.evidence.guardLine+':'+why.evidence.dominance:''),id:f.id||null,cwe:f.cwe||null,family:f.family||null});
+  });}catch(_){}}
   // 0.34.6: filter out Java FPs where a sanitizer pattern (argv-form ProcessBuilder,
   // parameterized prepareStatement, constant-folded dead-branch) is present.
   // applyJavaBenchSuppressions is a no-op on non-.java files.
@@ -11098,7 +11163,7 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
+  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

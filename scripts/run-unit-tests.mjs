@@ -86,7 +86,7 @@ const SCANNER = path.join(HERE, '..', 'scanner');
 export const SCOPES = [
   'smoke', 'glob', 'sast', 'posture', 'dataflow', 'mcp',
   'report', 'bench-modules', 'lifecycle', 'eval', 'discovery', 'lineage',
-  'server', 'haskell', 'nix', 'language', 'verification',
+  'server', 'haskell', 'nix', 'language', 'verification', 'deployment', 'evaluation', 'capabilities', 'invariants', 'portfolio', 'routing', 'documentation', 'release-closure',
 ];
 
 const FILE_RE = /test\/[\w.\-/]+\.test\.js/g;

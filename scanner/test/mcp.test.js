@@ -78,8 +78,8 @@ test('tools/list exposes the PRD-named tools', async () => {
     'append_agents_memory', 'append_scratchpad', 'apply_fix',
     'apply_sca_upgrade',
     'dataflow_get_edge', 'dataflow_get_flow', 'dataflow_get_graph', 'dataflow_get_node',
-    'explain_finding', 'find_rule_module', 'lookup_cve',
-    'query_cache_telemetry',
+    'explain_finding', 'find_rule_module', 'invariant_scenario_export', 'lookup_cve',
+    'portfolio_progress', 'query_cache_telemetry',
     'query_findings_memory', 'query_taint', 'query_triage_memory',
     'read_agents_memory', 'read_scratchpad', 'scan_diff',
     'synthesize_fix', 'synthesize_sca_upgrade', 'verify_fix',
@@ -856,8 +856,8 @@ test('stdio: spawned bin handles initialize+tools/list over NDJSON', async () =>
   await new Promise(r => child.on('exit', r));
   const lines = stdout.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
   assert.equal(lines[0].result.serverInfo.name, SERVER_NAME);
-  // 21 tools: 17 + 4 dataflow-tools (M4 MCP tools change).
-  assert.equal(lines[1].result.tools.length, 21);
+  // 23 tools: 17 + 4 dataflow-tools (M4 MCP tools change) + invariant_scenario_export (X-407) + portfolio_progress (X-707).
+  assert.equal(lines[1].result.tools.length, 23);
   await fsp.rm(tmpRoot, { recursive: true, force: true });
 });
 

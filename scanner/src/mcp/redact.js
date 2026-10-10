@@ -81,6 +81,21 @@ export function redactString(s) {
   return out;
 }
 
+/**
+ * The same provider-shape redaction as `redactString`, without its size caps:
+ * for a caller that must keep the whole payload and only remove secrets from it
+ * (the capability layer's outbound filtering). Returns the text and a count.
+ */
+export function redactSecretShapes(s) {
+  if (typeof s !== 'string' || !s) return { text: typeof s === 'string' ? s : '', redactions: 0 };
+  let out = s;
+  let redactions = 0;
+  for (const [re, kind] of PATTERNS) {
+    out = out.replace(re, () => { redactions++; return `[REDACTED:${kind}]`; });
+  }
+  return { text: out, redactions };
+}
+
 // Deep-redact every string in a finding-like object (mutates returned copy).
 export function redactFinding(f) {
   if (!f || typeof f !== 'object') return f;

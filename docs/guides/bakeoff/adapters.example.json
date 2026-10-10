@@ -1,0 +1,15 @@
+{
+  "this-engine": {
+    "available": true
+  },
+  "comparator-a": {
+    "available": false,
+    "reason": "not-installed",
+    "detail": "the operator has not installed anything for this slot"
+  },
+  "comparator-b": {
+    "available": false,
+    "reason": "no-licence",
+    "detail": "no licence for this slot on the machine that ran this example"
+  }
+}

@@ -27,6 +27,8 @@
 //   isAdmin / requireAdmin             → references admin role check
 //   requireAuth / mustBeLoggedIn       → references auth middleware / login flag
 
+import { inferredInvariant } from './invariants/lifecycle.js';
+
 const NAME_FAMILIES = [
   {
     label: 'ownership-check',
@@ -167,4 +169,28 @@ export function scanSpecificationDrift(fileContents) {
     }
   }
   return findings;
+}
+
+// X-402: the same name families, read as INTENT instead of as drift. A function named `validateOwnership` implies a tenant
+// isolation contract whether or not its body satisfies it; a function named `requireAdmin` implies a privilege constraint. Each
+// becomes a PROPOSED invariant (inferred, with its source and an uncertainty), a skeleton for a reviewer to revise. Nothing here
+// approves anything: a mined contract is a hypothesis and is advisory until a reviewer approves it in the signed ledger.
+const INVARIANT_CLASS_BY_FAMILY = Object.freeze({ 'ownership-check': 'tenant-isolation', 'authorization-check': 'privilege-constraint', 'admin-gate': 'privilege-constraint' });
+
+export function mineInvariantProposals(fileContents) {
+  const out = [];
+  if (!fileContents || typeof fileContents !== 'object') return out;
+  for (const [fp, text] of Object.entries(fileContents)) {
+    const lang = inferLang(fp);
+    if (!lang) continue;
+    for (const fn of extractFunctionBodies(text, lang)) {
+      for (const fam of NAME_FAMILIES) {
+        const cls = INVARIANT_CLASS_BY_FAMILY[fam.label];
+        if (!cls || !fam.nameRe.test(fn.name)) continue;
+        const inv = inferredInvariant({ class: cls, source: 'specification-mining', evidence: { file: fp, line: fn.startLine, function: fn.name, family: fam.label }, uncertainty: 0.65, action: fn.name });
+        if (inv) out.push(inv);
+      }
+    }
+  }
+  return out;
 }

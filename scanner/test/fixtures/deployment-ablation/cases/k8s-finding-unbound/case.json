@@ -1,0 +1,19 @@
+{
+  "id": "k8s-finding-unbound",
+  "title": "The same handler where no service binding is supplied",
+  "kind": "source-finding",
+  "defect": {
+    "family": "command-injection",
+    "file": "services/api/handler.js"
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "A public ingress routes /api to the service; no binding ties the finding to it."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "No ingress exists; no binding ties the finding to the service."
+    }
+  }
+}

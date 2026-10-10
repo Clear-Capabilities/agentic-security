@@ -983,6 +983,25 @@ function _literalArgSatisfied(argExprs, requireLiteralArg) {
   return !!checkArg && checkArg.kind === 'literal' && new RegExp(pattern).test(String(checkArg.value));
 }
 
+// QA-006: `match.requireStaticPrefix` -- the leading STATIC text of an argument that is partly tainted.
+// `header("Location: " . $next)` is an open redirect while `header("X-Trace: " . $v)` is only header injection;
+// both are the same callee, told apart by the literal text the tainted value is appended to. The prefix is
+// read from the leftmost literal of a concatenation or template; a leading non-literal means the prefix is
+// unknown and the requirement is NOT satisfied (fails closed, like requireLiteralArg).
+function _leadingLiteral(expr) {
+  if (!expr) return null;
+  if (expr.kind === 'literal') return typeof expr.value === 'string' ? expr.value : String(expr.value ?? '');
+  if (expr.kind === 'binary') return _leadingLiteral(expr.left);
+  if (expr.kind === 'tpl') { const p0 = (expr.parts || [])[0]; return p0 && p0.kind === 'literal' ? String(p0.value ?? '') : null; }
+  return null;
+}
+function _staticPrefixSatisfied(argExprs, requireStaticPrefix) {
+  const { index, pattern } = requireStaticPrefix;
+  const lead = _leadingLiteral((argExprs || [])[index]);
+  // Some frontends keep the literal's own quote characters in its value (PHP does); the prefix is the text inside them.
+  return lead !== null && new RegExp(pattern, 'i').test(lead.replace(/^\s*["'`]/, ''));
+}
+
 // SARD_80_F1 W5.49 — PHP's `sprintf("...%d...", $tainted)` is a PER-ARGUMENT
 // coercion sanitizer, distinct from `_isCoercionCall`'s whole-call model
 // (intval/floatval/etc, where the ENTIRE call's return value is the coerced
@@ -1111,6 +1130,7 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
         // precision annotator in this codebase take when evidence is
         // simply unavailable rather than affirmatively clean.
         if (e.match && e.match.requireLiteralArg && !_literalArgSatisfied(argExprs, e.match.requireLiteralArg)) continue;
+        if (e.match && e.match.requireStaticPrefix && !_staticPrefixSatisfied(argExprs, e.match.requireStaticPrefix)) continue;
         // `match.requireKeyword` — the KEYWORD-argument analogue of the
         // positional gate above, for languages where the dangerous form is
         // selected by a named argument rather than a positional literal.

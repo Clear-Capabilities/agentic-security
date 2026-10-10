@@ -1,0 +1,19 @@
+{
+  "id": "k8s-ingress-vs-internal",
+  "title": "The same handler behind a public ingress and behind an internal-only service",
+  "kind": "source-finding",
+  "defect": {
+    "family": "command-injection",
+    "file": "services/api/handler.js"
+  },
+  "deployments": {
+    "exploitable": {
+      "exploitable": true,
+      "rationale": "A public ingress routes /api to the service running the handler."
+    },
+    "non-exploitable": {
+      "exploitable": false,
+      "rationale": "No ingress exists; the only network policy admits a single internal batch workload."
+    }
+  }
+}

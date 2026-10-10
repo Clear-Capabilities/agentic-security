@@ -1,0 +1,1 @@
+export function createApp() { return { setQuota(ctx, key, p) { const rec = ctx.store.read(key); if (!rec) return { status: 404 }; if (ctx.role !== 'admin') return { status: 403 }; ctx.store.write(key, { ...rec, quota: p.amount }); return { status: 200 }; } }; }

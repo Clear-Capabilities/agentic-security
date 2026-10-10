@@ -8,6 +8,7 @@
 // no single prompt reaches. `wildcard` exists because a fixed taxonomy is a
 // ceiling, and the classes worth finding are the ones not on the list.
 import { redactPayload } from '../egress/redact.js';
+import { inferredInvariant } from '../posture/invariants/lifecycle.js';
 export const LENSES = Object.freeze([
   { key: 'injection', title: 'Injection', family: 'injection', cwe: 'CWE-74',
     brief: 'Untrusted input reaching an interpreter: SQL, shell, template, XPath, LDAP, or deserialization. Follow the value, not the function name.' },
@@ -24,6 +25,23 @@ export const LENSES = Object.freeze([
   { key: 'wildcard', title: 'Wildcard', family: 'other', cwe: 'CWE-710',
     brief: 'Anything the other lenses do not cover. Prefer the surprising and specific over the generic; report nothing rather than something already obvious.' },
 ]);
+
+// X-402: the lenses that reason about who may do what to whose data can propose an INVARIANT for a candidate they raise. The
+// proposal is a skeleton contract authored by the model (`proposed`, with the candidate as source evidence and a high uncertainty),
+// advisory until a reviewer approves it in the signed ledger. A lens whose candidates are not about state (injection, crypto) has
+// no mapping and proposes nothing.
+const TENANT_HINT = /tenant|idor|ownership|object reference|cross[- ]?(?:account|user|org)|leak|another user|other user/i;
+const WORKFLOW_HINT = /refund|order|status|workflow|state machine|out[- ]of[- ]order|step|approval|checkout|paid|ship/i;
+
+export function invariantProposalFor(candidate) {
+  const text = `${candidate?.title || ''} ${candidate?.description || ''} ${candidate?.rationale || ''}`;
+  let cls = null;
+  if (candidate?.lens === 'authz') cls = TENANT_HINT.test(text) ? 'tenant-isolation' : 'privilege-constraint';
+  else if (candidate?.lens === 'feature-abuse' && TENANT_HINT.test(text)) cls = 'tenant-isolation';
+  else if (candidate?.lens === 'business-logic' && WORKFLOW_HINT.test(text)) cls = 'workflow-order';
+  if (!cls || typeof candidate.file !== 'string') return null;
+  return inferredInvariant({ class: cls, source: 'discovery-lens', evidence: { file: candidate.file, line: Number.isInteger(candidate.line) ? candidate.line : null, lens: candidate.lens }, uncertainty: 0.85 });
+}
 
 export function lensByKey(key) {
   if (typeof key !== 'string') return null;

@@ -34,6 +34,10 @@ const FUNC_RE = new RegExp(
 
 function _splitStatements(body) {
   const out = [];
+  // Index (in `body`) of each statement's first character, so a caller can recover its real line. Blank lines and comment-only
+  // lines yield no statement, so counting statements undercounts lines wherever a function body has either.
+  const starts = [];
+  let bufStart = 0;
   let buf = '';
   let depth = 0;
   let inStr = null;
@@ -57,19 +61,24 @@ function _splitStatements(body) {
     if (c === '`') { inRaw = true; buf += c; continue; }
     if (c === '/' && body[i + 1] === '/') {
       while (i < body.length && body[i] !== '\n') i++;
+      // Leave the newline for the loop to see: swallowing it meant a comment line never ended its statement, so the next line was
+      // glued to whatever came before the comment and its line number was counted from the wrong place.
+      i--;
       continue;
     }
     if (c === '{' || c === '(' || c === '[') depth++;
     if (c === '}' || c === ')' || c === ']') depth--;
     if ((c === '\n' || c === ';') && depth === 0) {
       const t = buf.trim();
-      if (t) out.push(t);
+      if (t) { out.push(t); starts.push(bufStart + (buf.length - buf.trimStart().length)); }
       buf = '';
+      bufStart = i + 1;
       continue;
     }
     buf += c;
   }
-  if (buf.trim()) out.push(buf.trim());
+  if (buf.trim()) { out.push(buf.trim()); starts.push(bufStart + (buf.length - buf.trimStart().length)); }
+  out.lineOffsets = starts.map((idx) => _countNewlinesUpTo(body, idx));
   return out;
 }
 
@@ -399,17 +408,21 @@ function _link(nodes, src, dst) {
   if (!nodes[dst].pred.includes(src)) nodes[dst].pred.push(src);
 }
 
+// `startLine` is the line on which `bodyText` BEGINS (the line of its opening brace); each statement's line is that plus the
+// newlines before the statement, so blank lines and comments inside the body no longer pull later statements upward.
 function _buildCfg(bodyText, nodes, prevId, startLine) {
   const stmts = _splitStatements(bodyText);
   let prev = prevId;
   let line = startLine;
-  for (const stmt of stmts) {
+  for (let si = 0; si < stmts.length; si++) {
+    const stmt = stmts[si];
+    line = startLine + (stmts.lineOffsets ? stmts.lineOffsets[si] : 0);
     const s = stmt.trim();
     if (!s || s.startsWith('//')) { line++; continue; }
 
     // if statement with brace body
-    const ifMatch = s.match(/^if\s+([\s\S]+?)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/s) ||
-                    s.match(/^if\s+([\s\S]+?)\s*\{([\s\S]*)\}\s*$/s);
+    const ifMatch = s.match(/^if\s+([\s\S]+?)\s*\{([\s\S]*)\}(?:\s*else\s*\{([\s\S]*)\})?\s*$/sd) ||
+                    s.match(/^if\s+([\s\S]+?)\s*\{([\s\S]*)\}\s*$/sd);
     if (ifMatch) {
       const condText = ifMatch[1].replace(/;[^;]*$/, '').trim();
       const thenBody = ifMatch[2];
@@ -417,10 +430,10 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
       const ifNode = _addNode(nodes, { kind: 'if', cond: _lowerExpr(condText), line });
       _link(nodes, prev, ifNode);
       const join = _addNode(nodes, { kind: 'noop', line });
-      const thenTail = _buildCfg(thenBody, nodes, ifNode, line + 1);
+      const thenTail = _buildCfg(thenBody, nodes, ifNode, line + _countNewlinesUpTo(s, ifMatch.indices[2][0]));
       _link(nodes, thenTail, join);
       if (elseBody) {
-        const elseTail = _buildCfg(elseBody, nodes, ifNode, line + 1);
+        const elseTail = _buildCfg(elseBody, nodes, ifNode, line + _countNewlinesUpTo(s, ifMatch.indices[3][0]));
         _link(nodes, elseTail, join);
       } else {
         _link(nodes, ifNode, join);
@@ -431,7 +444,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
     }
 
     // for loop with brace body
-    const forMatch = s.match(/^for\s+([\s\S]*?)\s*\{([\s\S]*)\}\s*$/s);
+    const forMatch = s.match(/^for\s+([\s\S]*?)\s*\{([\s\S]*)\}\s*$/sd);
     if (forMatch) {
       const header = _addNode(nodes, { kind: 'loop-header', line });
       _link(nodes, prev, header);
@@ -446,7 +459,7 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
         _link(nodes, header, assignId);
         bodyPrev = assignId;
       }
-      const bodyTail = _buildCfg(loopBody, nodes, bodyPrev, line + 1);
+      const bodyTail = _buildCfg(loopBody, nodes, bodyPrev, line + _countNewlinesUpTo(s, forMatch.indices[2][0]));
       _link(nodes, bodyTail, header);
       const join = _addNode(nodes, { kind: 'noop', line });
       _link(nodes, header, join);
@@ -476,8 +489,9 @@ function _buildCfg(bodyText, nodes, prevId, startLine) {
         const callId = _addNode(nodes, { kind: 'call', line, callee: closureCall.callee, args: outerArgs });
         _link(nodes, prev, callId);
         const closureOffset = s.indexOf(closure.closureText);
-        const bodyStartLine = closureOffset >= 0
-          ? line + _countNewlinesUpTo(s, closureOffset)
+        const closureBodyIdx = closureOffset >= 0 ? s.indexOf(closure.body, closureOffset) : -1;
+        const bodyStartLine = closureBodyIdx >= 0
+          ? line + _countNewlinesUpTo(s, closureBodyIdx)
           : line;
         prev = _buildCfg(closure.body, nodes, callId, bodyStartLine);
         line += (s.match(/\n/g) || []).length + 1;
@@ -517,11 +531,14 @@ export function parseGoFile(file, code) {
     if (braceIdx < 0) continue;
     const extracted = _extractBody(code, braceIdx);
     if (!extracted) continue;
-    const startLine = _lineAt(code, m.index);
+    // FUNC_RE's leading boundary is a newline and its `\s*` then swallows every blank line before `func`, so m.index can sit
+    // several lines ABOVE the declaration (a blank line before a function is the gofmt norm). Every line below, the function's
+    // own and each statement's, is counted from here, so the keyword's offset is what must be measured.
+    const startLine = _lineAt(code, m.index + Math.max(0, m[0].indexOf('func')));
     const nodes = {};
     const entry = _addNode(nodes, { kind: 'entry', line: startLine });
     const exit = _addNode(nodes, { kind: 'exit', line: startLine });
-    const tail = _buildCfg(extracted.body, nodes, entry, startLine + 1);
+    const tail = _buildCfg(extracted.body, nodes, entry, _lineAt(code, braceIdx + 1));
     _link(nodes, tail, exit);
     const cfg = { entry, exit, nodes };
     functions.push({

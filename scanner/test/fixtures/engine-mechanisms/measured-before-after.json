@@ -1,0 +1,386 @@
+{
+  "note": "Measured with scripts/dev-recovery.mjs over the DEVELOPMENT case suite (scanner/test/fixtures/engine-mechanisms). Labels are authored by the developers and flagged synthetic: this shows the changes recover the mechanisms they were made for, not real-code accuracy. `before` is the engine at the commit this work started from (3fdf5409); `after` is the engine with the work.",
+  "command": "node scripts/dev-recovery.mjs --engine <checkout> --json --corpus",
+  "beforeCommit": "3fdf5409",
+  "before": {
+    "engine": "checkout",
+    "layer": "deep-taint",
+    "development": {
+      "micro": {
+        "tp": 5,
+        "fn": 3,
+        "fp": 0,
+        "tn": 8,
+        "precision": 1,
+        "recall": 0.625,
+        "f1": 0.7692307692307693
+      },
+      "cases": [
+        {
+          "id": "guard-after-sink-js",
+          "mechanism": "guard-dominance",
+          "language": "javascript",
+          "recovered": false,
+          "parsersOnPre": [
+            "ADV_STRUCTURAL",
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 2,
+          "rawAlertsPost": 2
+        },
+        {
+          "id": "guard-other-function-js",
+          "mechanism": "guard-dominance",
+          "language": "javascript",
+          "recovered": false,
+          "parsersOnPre": [
+            "ADV_STRUCTURAL",
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 2,
+          "rawAlertsPost": 2
+        },
+        {
+          "id": "guard-closed-block-py",
+          "mechanism": "guard-dominance",
+          "language": "python",
+          "recovered": false,
+          "parsersOnPre": [],
+          "irTaintOnPre": false,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 0,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "implicit-mvc-cs",
+          "mechanism": "implicit-handler-parameters",
+          "language": "csharp",
+          "recovered": true,
+          "parsersOnPre": [
+            "CSHARP"
+          ],
+          "irTaintOnPre": false,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "spring-mapped-java",
+          "mechanism": "implicit-handler-parameters",
+          "language": "java",
+          "recovered": true,
+          "parsersOnPre": [
+            "JAVA"
+          ],
+          "irTaintOnPre": false,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "laravel-input-php",
+          "mechanism": "request-object-sources",
+          "language": "php",
+          "recovered": true,
+          "parsersOnPre": [
+            "PHP"
+          ],
+          "irTaintOnPre": false,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "php-header-location",
+          "mechanism": "sink-argument-context",
+          "language": "php",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT",
+            "OPEN-REDIRECT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 2,
+          "rawAlertsPost": 1
+        },
+        {
+          "id": "go-blank-lines",
+          "mechanism": "go-line-attribution",
+          "language": "go",
+          "recovered": true,
+          "parsersOnPre": [
+            "GO",
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 2,
+          "rawAlertsPost": 0
+        }
+      ],
+      "falsePositives": 0,
+      "misses": 3
+    },
+    "corpus": {
+      "entries": 220,
+      "rawAlerts": 326,
+      "rootCauses": 305,
+      "irTaintFindings": 139,
+      "irTaintOnNonCodeLine": 8,
+      "byLanguage": {
+        "js": {
+          "irTaint": 23,
+          "nonCode": 0
+        },
+        "java": {
+          "irTaint": 14,
+          "nonCode": 0
+        },
+        "py": {
+          "irTaint": 24,
+          "nonCode": 0
+        },
+        "php": {
+          "irTaint": 16,
+          "nonCode": 0
+        },
+        "go": {
+          "irTaint": 13,
+          "nonCode": 8
+        },
+        "rb": {
+          "irTaint": 14,
+          "nonCode": 0
+        },
+        "cs": {
+          "irTaint": 12,
+          "nonCode": 0
+        },
+        "ts": {
+          "irTaint": 2,
+          "nonCode": 0
+        },
+        "kt": {
+          "irTaint": 11,
+          "nonCode": 0
+        },
+        "jsx": {
+          "irTaint": 1,
+          "nonCode": 0
+        },
+        "cpp": {
+          "irTaint": 4,
+          "nonCode": 0
+        },
+        "rs": {
+          "irTaint": 5,
+          "nonCode": 0
+        }
+      }
+    }
+  },
+  "after": {
+    "engine": "checkout",
+    "layer": "deep-taint",
+    "development": {
+      "micro": {
+        "tp": 8,
+        "fn": 0,
+        "fp": 0,
+        "tn": 8,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "cases": [
+        {
+          "id": "guard-after-sink-js",
+          "mechanism": "guard-dominance",
+          "language": "javascript",
+          "recovered": true,
+          "parsersOnPre": [
+            "ADV_STRUCTURAL",
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 3,
+          "rawAlertsPost": 2
+        },
+        {
+          "id": "guard-other-function-js",
+          "mechanism": "guard-dominance",
+          "language": "javascript",
+          "recovered": true,
+          "parsersOnPre": [
+            "ADV_STRUCTURAL",
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 3,
+          "rawAlertsPost": 2
+        },
+        {
+          "id": "guard-closed-block-py",
+          "mechanism": "guard-dominance",
+          "language": "python",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "implicit-mvc-cs",
+          "mechanism": "implicit-handler-parameters",
+          "language": "csharp",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "spring-mapped-java",
+          "mechanism": "implicit-handler-parameters",
+          "language": "java",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "laravel-input-php",
+          "mechanism": "request-object-sources",
+          "language": "php",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        },
+        {
+          "id": "php-header-location",
+          "mechanism": "sink-argument-context",
+          "language": "php",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT",
+            "MULTI-SINK"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 3,
+          "rawAlertsPost": 1
+        },
+        {
+          "id": "go-blank-lines",
+          "mechanism": "go-line-attribution",
+          "language": "go",
+          "recovered": true,
+          "parsersOnPre": [
+            "IR-TAINT"
+          ],
+          "irTaintOnPre": true,
+          "patchedStaysSilent": true,
+          "patchedStatus": "completed",
+          "rawAlertsPre": 1,
+          "rawAlertsPost": 0
+        }
+      ],
+      "falsePositives": 0,
+      "misses": 0
+    },
+    "corpus": {
+      "entries": 220,
+      "rawAlerts": 315,
+      "rootCauses": 305,
+      "irTaintFindings": 143,
+      "irTaintOnNonCodeLine": 0,
+      "byLanguage": {
+        "js": {
+          "irTaint": 23,
+          "nonCode": 0
+        },
+        "java": {
+          "irTaint": 14,
+          "nonCode": 0
+        },
+        "py": {
+          "irTaint": 24,
+          "nonCode": 0
+        },
+        "php": {
+          "irTaint": 18,
+          "nonCode": 0
+        },
+        "go": {
+          "irTaint": 14,
+          "nonCode": 0
+        },
+        "rb": {
+          "irTaint": 14,
+          "nonCode": 0
+        },
+        "cs": {
+          "irTaint": 13,
+          "nonCode": 0
+        },
+        "ts": {
+          "irTaint": 2,
+          "nonCode": 0
+        },
+        "kt": {
+          "irTaint": 11,
+          "nonCode": 0
+        },
+        "jsx": {
+          "irTaint": 1,
+          "nonCode": 0
+        },
+        "cpp": {
+          "irTaint": 4,
+          "nonCode": 0
+        },
+        "rs": {
+          "irTaint": 5,
+          "nonCode": 0
+        }
+      }
+    }
+  }
+}

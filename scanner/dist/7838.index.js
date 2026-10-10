@@ -820,7 +820,7 @@ async function verifyFix({
   let pn = null;
   if (patchNegative && typeof patchNegative === 'object') {
     try {
-      const { verifyPatchNegative } = await Promise.all(/* import() */[__webpack_require__.e(6239), __webpack_require__.e(5613)]).then(__webpack_require__.bind(__webpack_require__, 95613));
+      const { verifyPatchNegative } = await __webpack_require__.e(/* import() */ 6907).then(__webpack_require__.bind(__webpack_require__, 26907));
       pn = await verifyPatchNegative({
         hypothesisId: originalFindingStableId, ...patchNegative, patch: { files },
         commit: patchNegative.commit ?? (0,_verification_emit_js__WEBPACK_IMPORTED_MODULE_7__.headCommit)(scanRoot),

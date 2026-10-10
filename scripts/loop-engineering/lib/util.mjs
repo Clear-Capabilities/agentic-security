@@ -1,7 +1,7 @@
 // Shared primitives for the loop controller: hashing, atomic writes, redaction,
 // and a deadline clock that cannot be extended by machine sleep.
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, openSync, writeSync, fsyncSync, closeSync, renameSync, readFileSync, existsSync, appendFileSync, statSync } from 'node:fs';
+import { mkdirSync, openSync, writeSync, fsyncSync, closeSync, renameSync, readFileSync, existsSync, appendFileSync, statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -33,9 +33,32 @@ export function readJson(path, fallback = null) {
 export const fileExists = (p) => { try { return existsSync(p); } catch { return false; } };
 export function fileSize(p) { try { return statSync(p).size; } catch { return -1; } }
 
-export function appendJsonl(path, obj) {
+export const DEFAULT_LOG_CAP_BYTES = 5 * 1024 * 1024;
+let _logCap = DEFAULT_LOG_CAP_BYTES;
+export function setLogCap(bytes) { if (Number.isFinite(bytes) && bytes > 0) _logCap = bytes; }
+export const getLogCap = () => _logCap;
+
+// Bounded: once the file passes the cap it is rotated to `<file>.1` (replacing the
+// previous rotation), so on-disk retention is at most about twice the cap.
+export function appendJsonl(path, obj, { maxBytes = _logCap } = {}) {
   mkdirSync(dirname(path), { recursive: true });
   appendFileSync(path, JSON.stringify(obj) + '\n', { mode: 0o600 });
+  if (fileSize(path) > maxBytes) { try { renameSync(path, `${path}.1`); } catch { /* raced with another writer */ } }
+}
+
+// Cross-process exclusive section (created with O_EXCL, stolen when older than staleMs).
+export function withFileLock(lockPath, fn, { staleMs = 2000, waitMs = 1500 } = {}) {
+  const end = Date.now() + waitMs;
+  let held = false;
+  for (;;) {
+    try { const fd = openSync(lockPath, 'wx', 0o600); closeSync(fd); held = true; break; } catch (e) {
+      if (e.code !== 'EEXIST') break;
+      try { if (Date.now() - statSync(lockPath).mtimeMs > staleMs) { unlinkSync(lockPath); continue; } } catch { continue; }
+      if (Date.now() > end) break;
+      const t = Date.now() + 5; while (Date.now() < t) { /* brief spin: writers hold the lock for microseconds */ }
+    }
+  }
+  try { return fn(); } finally { if (held) { try { unlinkSync(lockPath); } catch { /* */ } } }
 }
 
 // Redaction for anything that reaches a log tail, event stream or dashboard.
