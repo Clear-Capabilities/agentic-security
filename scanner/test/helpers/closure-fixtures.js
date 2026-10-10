@@ -9,8 +9,8 @@ export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const PKG = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8'));
 export const COMMIT = 'a'.repeat(40);
 export const TREE = 'b'.repeat(40);
-export const ALL_PRESENT = { platform: 'linux', hasTool: () => true, exists: () => true };
-export const NO_REMOTE_TOOLS = { platform: 'darwin', hasTool: () => false, exists: () => false };
+export const ALL_PRESENT = { platform: 'linux', hasTool: () => true, exists: () => true, canImportHaskell: () => true };
+export const NO_REMOTE_TOOLS = { platform: 'darwin', hasTool: () => false, exists: () => false, canImportHaskell: () => false };
 
 const GOOD = 'ℹ tests 5\nℹ suites 0\nℹ pass 5\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\n';
 
