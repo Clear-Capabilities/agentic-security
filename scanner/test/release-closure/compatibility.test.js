@@ -85,7 +85,8 @@ test('[REL-001.AC03] a remote prerequisite that is unavailable locally is unsupp
 test('[REL-001.AC03] only a successful attestation for this exact commit satisfies a remote prerequisite', () => {
   const { record } = runClosure({ repoRoot: REPO, outDir: mkTestTmp('closure-remote-'), env: NO_REMOTE_TOOLS, exec: fakeExec() });
   const remote = CLOSURE_STEPS.filter((s) => s.remote);
-  const att = (s, over = {}) => ({ stepId: s.id, commit: COMMIT, conclusion: 'success', source: 'hosted-ci', ...over });
+  const legs = (s, commit) => (s.remote.legs || []).map((name, i) => ({ name, jobId: 1 + i, commit, conclusion: 'success' }));
+  const att = (s, over = {}) => ({ stepId: s.id, commit: COMMIT, conclusion: 'success', source: { kind: 'github-actions-jobs', legs: legs(s, over.commit || COMMIT) }, ...over });
   const judge = (attestations) => evaluateClosureRecord(record, CLEAN(record), { pkg: PKG, attestations });
   assert.equal(judge(remote.map((s) => att(s))).publishable, true, 'control: both attested for this commit');
   assert.equal(judge(remote.slice(1).map((s) => att(s))).publishable, false, 'one still missing');

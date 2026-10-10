@@ -126,7 +126,7 @@ export class ShipState {
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
   // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
-  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun'];
+  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
   set(patch) {
     for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
     this.data.updated = this.now(); this.save();

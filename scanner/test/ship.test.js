@@ -487,3 +487,22 @@ test('tmpdir: prepareTmpdir makes a new empty directory inside the OS temp folde
   assert.equal(fs.existsSync(named), true);
   fs.rmSync(base, { recursive: true, force: true });
 });
+
+test('[REL-003.AC03] flow: hosted CI attestation of the remote closure prerequisites is printed as evidence and never fails a published release', async () => {
+  const w = world(); const ctx = ctxFor(w); const lines = []; ctx.log = (l) => lines.push(l);
+  const r = await runShip(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, 'a missing attestation does not fail the release');
+  const text = lines.join('\n');
+  assert.match(text, /hosted CI attestation of the remote closure prerequisites \(informational; it does not gate or undo this release\): NOT all attested/);
+  assert.match(text, /NOT attested remote-nixos-host \[job-missing\]/);
+  assert.equal(ctx.state.data.remoteAttestation.attested.length, 0);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+  // and when asking for it blows up, the release still succeeds
+  const w2 = world(); const inner = w2.sh;
+  w2.sh = (cmd, args, o) => { if (cmd === 'gh' && args[0] === 'api') throw new Error('network down'); return inner(cmd, args, o); };
+  const ctx2 = ctxFor(w2); const lines2 = []; ctx2.log = (l) => lines2.push(l);
+  const r2 = await runShip(ctx2, { maxRetries: 2 });
+  assert.equal(r2.ok, true);
+  assert.match(lines2.join('\n'), /bad-response|informational only/);
+  fs.rmSync(ctx2._dir, { recursive: true, force: true });
+});

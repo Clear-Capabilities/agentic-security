@@ -95,6 +95,39 @@ them as passed. The record is `localOk` for what ran here and stays not publisha
 commit and the same step says `success`. An attestation for another commit, a failed run or another step does not count. A step
 that does run locally and fails is a hard failure, not a pending prerequisite.
 
+#### Attesting from hosted CI
+
+`node scripts/release-closure.mjs --attest-from-ci [--commit <40 character sha>]` asks GitHub, read-only through the `gh` CLI (no
+token is handled by the code), what the hosted `ci` workflow concluded for one exact commit, and reports per remote step whether
+it can be attested. Add `--verify <record>` to judge a record with those attestations; the commit asked about is then the
+record's own, and a different `--commit` is refused. The decision lives in `scripts/release-attest.mjs`.
+
+An attestation is produced only when every job the step names ran on exactly that commit, is completed, and concluded `success`.
+`remote-haskell-toolchain` is the `language-tools-ghc` job. `remote-nixos-host` is the `nixos-runtime` matrix, and BOTH legs,
+`nixos-runtime (x86_64-linux)` and `nixos-runtime (aarch64-linux)`, must be green. Nothing else produces one:
+
+- a missing job, or a job still queued or in progress, is no attestation (`job-missing`, `job-not-completed`);
+- a cancelled, skipped, neutral, timed out or failed job is no attestation (`job-cancelled`, `job-skipped`, and so on);
+- a job for another sha, in the listing or in its detail, is no attestation (`sha-mismatch`); a result is never carried across commits;
+- a partial matrix is no attestation: one green leg does not cover a red or missing one;
+- a job from another workflow is no attestation (`wrong-workflow`);
+- `gh` missing, not logged in, offline or answering with something unparseable is no attestation, with a typed reason
+  (`gh-unavailable`, `gh-unauthenticated`, `gh-offline`, `bad-response`), never a pass.
+
+The `nixos-runtime` job is marked `continue-on-error`, so the workflow can be green while the job is red. The attestation reads
+each job's own conclusion, never the workflow run's, and also reads the job's steps: any failed step refuses, except the steps the
+plan names as tolerated (the first attempt of the Nix installer and of the emulated aarch64 guest, which exist to be retried), and
+the steps the plan requires (the isolated evaluation, the flake build, the example scans, the NixOS VM test on x86_64, and the
+emulated guest in at least one attempt) must show `success`. When a job re-ran, the latest run decides. A test pins every step
+name against `.github/workflows/ci.yml`, so a rename cannot silently weaken this.
+
+The evaluator counts a remote step only through such an attestation, bound to the record's commit and covering every named job.
+Without attestations nothing changes: the steps stay `unsupported` and not counted. With them, the closure says `publishable`
+only if every remote step is attested and the local gate holds.
+
+`scripts/ship.mjs` prints the attestation result for the released commit after the npm check as an informational line. It is
+evidence, not a gate: a missing or refused attestation never fails or undoes a release that has already published.
+
 ## Rollback
 
 `planRollback` and `applyRollback` in `scanner/src/posture/assurance/rollback.js` restore the last known-good position.
