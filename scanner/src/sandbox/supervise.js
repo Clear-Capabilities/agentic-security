@@ -22,7 +22,7 @@
 // sweep interval bounds the window; it does not close it. Only a PID-namespace
 // or cgroup boundary closes it, and macOS has neither. The namespace backend
 // has the boundary (see `runConfinedSupervised`).
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { detectBackend } from './capabilities.js';
 import { runDisabled } from './backend-disabled.js';
 import { buildUserspaceInvocation } from './backend-userspace.js';
@@ -40,12 +40,21 @@ function groupAlive(pgid) {
 function signalPid(pid, sig) { try { process.kill(pid, sig); } catch { /* already gone */ } }
 function signalGroup(pgid, sig) { try { process.kill(-pgid, sig); } catch { /* already gone */ } }
 
-/** Descendants of `rootPid` plus members of its group, from one `ps` snapshot. */
+/**
+ * Descendants of `rootPid` plus members of its group, from one `ps` snapshot. Asynchronous on purpose: a synchronous `ps` blocks the
+ * controller's event loop for as long as the machine takes to run it (tens of milliseconds idle, far more under load), and this runs on
+ * every sweep.
+ */
 function snapshotTree(rootPid) {
-  const r = spawnSync('ps', ['-A', '-o', 'pid=,ppid=,pgid='], { encoding: 'utf8', timeout: 2000 });
-  if (r.error || r.status !== 0) return [];
+  return new Promise((resolve) => {
+    execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid='], { encoding: 'utf8', timeout: 2000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+      resolve(err ? [] : treeFromPs(stdout, rootPid));
+    });
+  });
+}
+function treeFromPs(stdout, rootPid) {
   const rows = [];
-  for (const line of String(r.stdout).split('\n')) {
+  for (const line of String(stdout).split('\n')) {
     const m = line.trim().split(/\s+/).map(Number);
     if (m.length === 3 && m.every(Number.isFinite)) rows.push({ pid: m[0], ppid: m[1], pgid: m[2] });
   }
@@ -86,27 +95,28 @@ export function superviseSpawn(bin, args, {
     let finishing = null;
     let timer = null;
 
-    const sweep = () => { if (pgid) for (const p of snapshotTree(pgid)) tracked.add(p); };
-    // sweepMs <= 0 turns the periodic sweep off. Each sweep is a SYNCHRONOUS `ps`, which blocks the controller's event loop for as long as
-    // it runs; on the namespace backend the kernel ends every member with the supervisor (--kill-child), so the periodic sweep adds nothing
-    // there and only costs responsiveness. The cleanup below still takes its own snapshots.
-    const sweeper = sweepMs > 0 ? setInterval(sweep, sweepMs) : null;
+    const sweep = async () => { if (pgid) for (const p of await snapshotTree(pgid)) tracked.add(p); };
+    // sweepMs <= 0 turns the periodic sweep off: on the namespace backend the kernel ends every member with the supervisor
+    // (--kill-child), so the periodic sweep adds nothing there. The cleanup below still takes its own snapshots. A sweep never overlaps the
+    // previous one, so a slow `ps` under load cannot pile up work.
+    let sweeping = false;
+    const sweeper = sweepMs > 0 ? setInterval(() => { if (sweeping) return; sweeping = true; sweep().finally(() => { sweeping = false; }); }, sweepMs) : null;
 
-    const survivors = () => {
-      sweep();
+    const survivors = async () => {
+      await sweep();
       return { live: [...tracked].filter(alive), group: groupAlive(pgid) };
     };
 
     async function terminate() {
       const t = _emptyTermination();
-      const before = survivors();
+      const before = await survivors();
       if (!before.group && before.live.length === 0) return t;
       t.signalled = 'SIGTERM';
       signalGroup(pgid, 'SIGTERM');
       for (const p of tracked) signalPid(p, 'SIGTERM');
       const deadline = Date.now() + graceMs;
       while (Date.now() < deadline) {
-        const s = survivors();
+        const s = await survivors();
         if (!s.group && s.live.length === 0) return t;
         await sleep(25);
       }
@@ -115,13 +125,13 @@ export function superviseSpawn(bin, args, {
       t.signalled = 'SIGKILL';
       const hard = Date.now() + 3000;
       while (Date.now() < hard) {
-        const s = survivors();
+        const s = await survivors();
         if (!s.group && s.live.length === 0) break;
         signalGroup(pgid, 'SIGKILL');
         for (const p of s.live) { signalPid(p, 'SIGKILL'); if (!t.killedPids.includes(p)) t.killedPids.push(p); }
         await sleep(25);
       }
-      const s = survivors();
+      const s = await survivors();
       t.survivors = s.live.length ? s.live : (s.group ? [-pgid] : []);
       return t;
     }

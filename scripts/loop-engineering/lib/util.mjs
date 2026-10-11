@@ -46,19 +46,35 @@ export function appendJsonl(path, obj, { maxBytes = _logCap } = {}) {
   if (fileSize(path) > maxBytes) { try { renameSync(path, `${path}.1`); } catch { /* raced with another writer */ } }
 }
 
-// Cross-process exclusive section (created with O_EXCL, stolen when older than staleMs).
-export function withFileLock(lockPath, fn, { staleMs = 2000, waitMs = 1500 } = {}) {
-  const end = Date.now() + waitMs;
-  let held = false;
+// Cross-process exclusive section. The lock file is created with O_EXCL and records its owner's pid.
+// A lock is taken over only when its owner is provably gone (the pid is not running) or, for a file
+// with no readable owner (a writer that died between create and write), when it is older than
+// staleMs. A live owner is NEVER overridden, however long it holds the lock: a process that was
+// merely descheduled under load must not lose its lock, and a waiter must never run the protected
+// section without the lock, because two writers would then share a sequence id. A waiter that
+// cannot get the lock within hardMs throws instead of proceeding.
+function lockOwnerAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+export function withFileLock(lockPath, fn, { staleMs = 2000, hardMs = 120000 } = {}) {
+  const end = Date.now() + hardMs;
   for (;;) {
-    try { const fd = openSync(lockPath, 'wx', 0o600); closeSync(fd); held = true; break; } catch (e) {
-      if (e.code !== 'EEXIST') break;
-      try { if (Date.now() - statSync(lockPath).mtimeMs > staleMs) { unlinkSync(lockPath); continue; } } catch { continue; }
-      if (Date.now() > end) break;
+    try { const fd = openSync(lockPath, 'wx', 0o600); try { writeSync(fd, String(process.pid)); } finally { closeSync(fd); } break; } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      let seen = null;
+      try { seen = { body: readFileSync(lockPath, 'utf8'), mtime: statSync(lockPath).mtimeMs }; } catch { continue; }
+      const owner = Number.parseInt(seen.body, 10);
+      const gone = Number.isInteger(owner) && owner > 0 ? !lockOwnerAlive(owner) : Date.now() - seen.mtime > staleMs;
+      if (gone) {
+        // Re-read immediately before removing so a lock that changed hands in between is left alone.
+        try { if (readFileSync(lockPath, 'utf8') === seen.body) unlinkSync(lockPath); } catch { /* raced */ }
+        continue;
+      }
+      if (Date.now() > end) throw new Error(`withFileLock: ${lockPath} is held by a live process (pid ${owner || 'unknown'}) for more than ${hardMs} ms`);
       const t = Date.now() + 5; while (Date.now() < t) { /* brief spin: writers hold the lock for microseconds */ }
     }
   }
-  try { return fn(); } finally { if (held) { try { unlinkSync(lockPath); } catch { /* */ } } }
+  try { return fn(); } finally { try { unlinkSync(lockPath); } catch { /* */ } }
 }
 
 // Redaction for anything that reaches a log tail, event stream or dashboard.
