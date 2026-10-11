@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.165.0  
+**Version:** 0.165.1  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -23,7 +23,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `frontend/` | Data Flow Explorer clickable prototype. Zero build step (plain ES modules); consumes the `DataFlowGraph v1` fixture via a build-time-generated, parity-tested copy. Milestone 0 (second half) of the Data Flow Explorer PRD. | `frontend/CLAUDE.md` |
 | `scanner/src/language/` | Haskell and Nix/NixOS: parsers, IRs, analyzers, fixers, support registry, resolved-pass wiring. Static by default; every limit disclosed; support status is measured per capability and generated into `docs/language-support.*`. | `scanner/src/language/CLAUDE.md` |
 | `scanner/src/discovery/` | LLM candidate discovery, gated by the deterministic engine. Propose → confirm → refute → judge. | `scanner/src/discovery/CLAUDE.md` |
-| `scanner/src/capabilities/` | Task capability manifests and runner-level enforcement of filesystem, structured commands and outbound network (loopback mediation proxy). Feature `capability-enforcement` is off by default and operator-only; enforced mode is advertised for Linux only and Linux is `unverified`, macOS runs are `host-proved`, never `enforced`. | `scanner/src/capabilities/CLAUDE.md` |
+| `scanner/src/capabilities/` | Task capability manifests and runner-level enforcement of filesystem, structured commands and outbound network (loopback mediation proxy). Feature `capability-enforcement` is off by default and operator-only; enforced mode is advertised for Linux only and Linux is `partially-verified` (only the controls the hosted `sandbox-linux` job proves; mediated network is unsupported), macOS runs are `host-proved`, never `enforced`. | `scanner/src/capabilities/CLAUDE.md` |
 | `scanner/src/mcp/` | MCP server. 17 tools (2 write: `apply_fix`, `apply_sca_upgrade`); OWASP MCP Top 10 hardened. | `scanner/src/mcp/CLAUDE.md` |
 | `scanner/src/ir/` | Layer-1 IR: Babel-based JS/TS; Python via stdlib `ast` subprocess (default, when python3 available) with regex fallback; `java-parser`-based Java. | `scanner/src/ir/CLAUDE.md` |
 | `scanner/src/lsp/` | LSP server wrapping `runScan`. Ships with the JetBrains + Neovim plugins. |  |
@@ -112,7 +112,7 @@ A bundle PROVES its contents are unmodified since signing. It does NOT prove the
 - **Tag a release (preferred).** Push a `vX.Y.Z` tag. `.github/workflows/release.yml` runs the full gate with `--no-cache` as parallel `gate` legs on clean runners (the test suite in four shards, two bench groups, and `rest`, defined by `RELEASE_GROUPS` in `scripts/release-check.mjs`, where `rest` is the computed complement so a new check can never be dropped), then a `publish` job that `needs` every leg re-verifies the bundle and package shape and runs `npm publish --provenance` via npm trusted publishing (OIDC, no token); only `publish` holds `id-token: write`, so the artifact carries a verifiable link back to this repository and commit.
 - **Local `npm publish`.** Still supported and still fully gated by `prepublishOnly`. It produces **no provenance attestation** — npm requires a trusted CI publisher with OIDC for that. Use it when you must; prefer the tag.
 
-**The closure gate differs by host.** `release-closure-gate` runs the full execution closure (new suites, controller, smoke, bundle-source, docs, scorecard, compatibility) wherever the trust boundary can run, and only the static half (plan, wiring, files) on the hosted Linux runner, where the boundary is unverified and the execution suites correctly skip (a skip is a gap, never a pass). `scripts/ship.mjs` runs the full closure on the maintainer's host before it tags, so a tag made another way skips that evidence; the hosted leg says so in its output and never claims the execution closure.
+**The closure gate differs by host.** `release-closure-gate` runs the full execution closure (new suites, controller, smoke, bundle-source, docs, scorecard, compatibility) wherever the trust boundary can run, and only the static half (plan, wiring, files) on the hosted Linux runner, where the execution suites run in the separate `sandbox-linux` job (which fails on any skip) rather than inside the release leg, because the full closure has never been timed on a hosted runner (a skip is a gap, never a pass). `scripts/ship.mjs` runs the full closure on the maintainer's host before it tags, so a tag made another way skips that evidence; the hosted leg says so in its output and never claims the execution closure.
 
 `workflow_dispatch` on the release workflow runs the gate and `npm pack --dry-run` without publishing, which is the cheapest way to check a release would go out cleanly.
 
