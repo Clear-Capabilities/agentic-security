@@ -24,7 +24,7 @@ import {
   createReceiptRecorder, receiptsFromRun, verifyChainIntegrity, assessCompleteness, signReceiptChain, verifyReceiptEnvelope,
   receiptReport, receiptDirectoryConflict, writeReceiptEnvelope, readReceiptEnvelope, RECEIPT_CHAIN_SCHEMA,
 } from '../../src/capabilities/receipts.js';
-import { SKIP, bind, run, tmp, ctxFor } from './helpers.js';
+import { SKIP, ON_LINUX, bind, run, tmp, ctxFor } from './helpers.js';
 
 function keypair() {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
@@ -100,24 +100,30 @@ describe('[X-507.AC01] receipts link task identity, capability version, backend,
     assert.equal(result.executed, true);
     const chain = record(DOMAINS.VERIFIER, bound, result);
     const start = chain.receipts[0].body;
-    assert.equal(start.observed.backend, 'userspace');
-    assert.equal(start.observed.level, 'host-proved');
-    assert.equal(start.observed.enforced, false);
+    // macOS: the userspace backend, host-proved, no enforcement claimed. Linux: the advertised namespace backend, enforced because every
+    // control it depends on was proved (checked below, control by control).
+    assert.equal(start.observed.backend, ON_LINUX ? 'namespace' : 'userspace');
+    assert.equal(start.observed.level, ON_LINUX ? 'enforced' : 'host-proved');
+    assert.equal(start.observed.enforced, ON_LINUX);
     assert.match(start.observed.probeDigest, /^sha256:/);
     assert.equal(start.observed.controls['write-confinement'], 'proved');
     const kinds = chain.receipts.filter((r) => r.kind === 'decision').map((r) => r.body.record.capability);
     assert.ok(kinds.includes('command') && kinds.includes('filesystem-write'));
     for (const r of chain.receipts.filter((x) => x.kind === 'decision')) {
-      assert.equal(r.body.record.backend, 'userspace');
-      assert.equal(r.body.record.enforced, false, 'a host-proved run claims no enforcement');
+      assert.equal(r.body.record.backend, ON_LINUX ? 'namespace' : 'userspace');
+      assert.equal(r.body.record.enforced, ON_LINUX, ON_LINUX ? 'an enforced run records enforcement' : 'a host-proved run claims no enforcement');
     }
     const out = chain.receipts.find((r) => r.kind === 'outcome').body;
     assert.equal(out.outcome, 'exited'); assert.equal(out.exitCode, 0); assert.equal(out.cleanupComplete, true);
     const keys = keypair();
     const v = verifyReceiptEnvelope(sign(chain, keys), keys.publicKeyPem, { binding: { taskId: bound.binding.taskId, policyVersion: 1, digest: bound.binding.digest } });
     assert.equal(v.ok, true); assert.equal(v.complete, true); assert.equal(v.current, true);
-    assert.equal(v.label, 'host-proved-not-enforced');
-    assert.equal(v.fullyEnforced, false);
+    assert.equal(v.label, ON_LINUX ? 'fully-enforced' : 'host-proved-not-enforced');
+    assert.equal(v.fullyEnforced, ON_LINUX);
+    if (ON_LINUX) {
+      // The claim is only as good as the probes behind it: the signed start receipt must carry every control the manifest depends on as proved.
+      for (const c of requiredControlsFor(bound.manifest)) assert.equal(start.observed.controls[c], 'proved', `${c} is claimed enforced but is not proved`);
+    }
   });
 
   test('the chain is signed in the signer domain with the self-issued trust label, and nothing else may sign or record', async () => {
@@ -376,13 +382,20 @@ describe('[X-507.AC03] reports distinguish requested, checked and enforced contr
       network: [{ host: 'api.example.com', port: 443, schemes: ['https'] }], resources: { maxProcesses: 1, maxMemoryMiB: 512 },
     });
     const result = await run(bound, { executable: '/bin/echo', args: ['r'] });
-    assert.equal(result.executed, true);
+    if (!ON_LINUX) assert.equal(result.executed, true);
     const rep = receiptReport(record(DOMAINS.VERIFIER, bound, result));
-    assert.equal(rep.level, 'host-proved');
-    assert.equal(rep.backend, 'userspace');
-    for (const c of rep.capabilities.filter((x) => ['filesystem-read', 'filesystem-write', 'command', 'network'].includes(x.kind))) {
-      assert.equal(c.enforced, false, `${c.kind}: host-proved is not enforced`);
-      assert.ok(Object.values(c.checked).includes('proved'), `${c.kind}: but its controls were checked and proved on this host`);
+    if (ON_LINUX) {
+      // This manifest declares a network destination, which the namespace backend cannot mediate, so the run is blocked rather than executed.
+      assert.equal(result.executed, false);
+      assert.equal(result.status, 'blocked');
+      assert.equal(rep.level, 'none');
+    } else {
+      assert.equal(rep.level, 'host-proved');
+      assert.equal(rep.backend, 'userspace');
+      for (const c of rep.capabilities.filter((x) => ['filesystem-read', 'filesystem-write', 'command', 'network'].includes(x.kind))) {
+        assert.equal(c.enforced, false, `${c.kind}: host-proved is not enforced`);
+        assert.ok(Object.values(c.checked).includes('proved'), `${c.kind}: but its controls were checked and proved on this host`);
+      }
     }
     assert.equal(rep.platforms.linux.status, 'partially-verified', 'Linux is only partially verified, and only by the hosted job');
     assert.ok(rep.platforms.linux.unsupportedControls.includes('network-mediation'));

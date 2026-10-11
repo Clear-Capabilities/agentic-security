@@ -16,10 +16,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ATTACK_CLASSES, KNOWN_LIMITS, buildAttackCoverage, enforcedModeReleaseGate } from '../../src/capabilities/attack-coverage.js';
 import { CASES, CASE_BY_ID, newFixture, findLeaks, leakedInRepo } from './adversarial/corpus.js';
-import { SKIP, BACKEND, CAN_RUN, bind, run, tmp } from './helpers.js';
+import { SKIP, BACKEND, CAN_RUN, ON_LINUX, bind, run, tmp } from './helpers.js';
 
 const results = [];
-const LEVEL = CAN_RUN ? 'host-proved' : 'none';
+// The level this host's backend reaches: the Linux namespace backend is the advertised one and runs `enforced` when its probes pass; the macOS
+// backend is `host-proved` only. A test below checks that a real run says the same, so this constant cannot drift from what the runner reports.
+const LEVEL = ON_LINUX ? 'enforced' : CAN_RUN ? 'host-proved' : 'none';
 
 describe('[X-508.AC01] the corpus covers prompt injection, build scripts, secret reads, exfiltration, tool confusion, descendants and verifier tampering', () => {
   test('every named attack class has at least one mandatory case, and ids are unique', () => {
@@ -85,6 +87,15 @@ describe('[X-508.AC02] the enforced supported backend blocks every mandatory esc
     });
   }
 
+  test('the level recorded for this host is the level a real run reports', { skip: SKIP }, async () => {
+    const dir = tmp('adv-level-');
+    const bound = bind({ filesystem: { write: [dir] }, commands: [{ executable: '/bin/echo', args: { mode: 'any' } }] });
+    const r = await run(bound, { executable: '/bin/echo', args: ['level'] });
+    assert.equal(r.status, 'ok', JSON.stringify({ s: r.status, c: r.code, m: r.reason }));
+    assert.equal(r.level, LEVEL);
+    assert.equal(r.enforced, LEVEL === 'enforced');
+  });
+
   test('a mandatory leak or error blocks the enforced-mode release; a clean run does not', () => {
     const base = [{ id: 'a', class: 'secret-read', outcome: 'blocked' }];
     const all = (outcomeFor = {}) => ATTACK_CLASSES.map((cls) => ({ id: `case-${cls}`, class: cls, mandatory: true, execution: true, outcome: outcomeFor[cls] ?? 'blocked' }));
@@ -129,10 +140,11 @@ describe('[X-508.AC03] tests record attack coverage and known limits and do not 
     assert.deepEqual(coverage.knownLimits, KNOWN_LIMITS);
     assert.equal(coverage.platforms.linux, 'unverified');
     assert.ok(coverage.cases.every((c) => typeof c.id === 'string' && ['blocked', 'skipped', 'known-limit'].includes(c.outcome)));
-    // honesty: on this host the backend is not an advertised enforced one
+    // honesty: only an advertised backend, with every mandatory execution case actually executed, could release enforced mode
     const gate = enforcedModeReleaseGate(coverage);
     assert.equal(gate.block, false, `the release gate found failures: ${gate.reasons.join('; ')}`);
-    assert.equal(gate.enforcedModeReleasable, false, 'this workspace cannot release enforced mode: Linux is unverified and the macOS backend is host-proved only');
+    assert.equal(gate.enforcedModeReleasable, LEVEL === 'enforced' && coverage.totals.skipped === 0,
+      'macOS (host-proved) and a skipped corpus never release enforced mode; the Linux namespace backend does only when every mandatory case ran');
     const out = path.join(tmp('adv-cov-'), 'attack-coverage.json');
     fs.writeFileSync(out, JSON.stringify(coverage, null, 2));
     assert.equal(JSON.parse(fs.readFileSync(out, 'utf8')).totals.cases, CASES.length);

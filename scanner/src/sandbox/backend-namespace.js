@@ -20,7 +20,8 @@
 //      same shape the userspace backend produces, which is the main reason
 //      this shape was chosen over `pivot_root` (see below).
 //
-//   3. RESOURCE CAPS — the shared `ulimit` prelude.
+//   3. RESOURCE CAPS — the shared `ulimit` prelude for the file-size and
+//      address-space caps; the process-count cap is applied by `prlimit` (below).
 //
 // WHY READ-ONLY REBIND RATHER THAN pivot_root. `pivot_root` into the sandbox
 // root is the stronger primitive: after detaching the old root, out-of-root
@@ -127,10 +128,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  resolveNamespaceBin, resolveMountBin, resolvePrivDropBin, resolvePivotBin, resolveUmountBin,
+  resolveNamespaceBin, resolveMountBin, resolvePrivDropBin, resolvePivotBin, resolveUmountBin, resolvePrlimitBin,
   cachedNamespaceVariant, cacheNamespaceVariant,
 } from './capabilities.js';
-import { buildLimitPrelude, ambientRelativeMaxProcs } from './limits.js';
+import { buildLimitPrelude, validateMaxProcs } from './limits.js';
 import { buildResult, errorResult, buildConfinedEnv } from './result.js';
 import {
   buildRootPlan, serializePlan, PIVOT_SETUP_SCRIPT, FINAL_SCRIPT, MARK_SETUP_FAILED, MARK_NO_PRIVDROP,
@@ -308,7 +309,7 @@ export function buildNamespaceInvocation(argv, {
 } = {}, deps = {}) {
   const d = {
     nsBin: resolveNamespaceBin, mountBin: resolveMountBin, privDropBin: resolvePrivDropBin,
-    pivotBin: resolvePivotBin, umountBin: resolveUmountBin, nsArgs: resolveNamespaceArgs, ...deps,
+    pivotBin: resolvePivotBin, umountBin: resolveUmountBin, prlimitBin: resolvePrlimitBin, nsArgs: resolveNamespaceArgs, ...deps,
   };
   if (!root) return { error: errorResult('namespace', 'runNamespace requires a sandbox root') };
   if (networkProxyPort != null) {
@@ -358,18 +359,31 @@ export function buildNamespaceInvocation(argv, {
     if (wd !== resolvedRoot) return { error: errorResult('namespace', 'a working directory other than the sandbox root needs capability mode (readRoots); refusing to execute') };
   }
 
-  // Same per-uid RLIMIT_NPROC trap as the userspace backend, and worse here:
-  // the confined shell has to fork several helpers to BUILD its confinement,
-  // so a fixed cap below the ambient count for this uid makes the setup itself
-  // fail and the sandbox look broken. See `ambientRelativeMaxProcs`.
-  const effectiveLimits = { ...limits, maxProcs: limits.maxProcs ?? ambientRelativeMaxProcs() };
+  // PROCESS-COUNT CAP. Not part of the shell prelude on this backend: that shell is
+  // often dash, whose `ulimit` has no `-u`, so a cap written there was never applied
+  // (found in the hosted log: `ulimit: Illegal option -u`). The cap is applied to the
+  // caller's command alone, by `prlimit` in the final stage, AFTER the confinement is
+  // built, because the setup itself forks and a cap below its needs would break it.
+  // It can bind inside the user namespace: RLIMIT_NPROC is waived only for a process
+  // holding CAP_SYS_RESOURCE or CAP_SYS_ADMIN in the INITIAL namespace, which a
+  // namespace root does not have (and the capability set is dropped anyway). There is
+  // no default cap (the old ambient-relative default was never applied here either);
+  // a caller that asks for one gets it, or an honest `unsupported` entry.
+  let nproc = null; let prlimitBin = null;
+  if (limits.maxProcs != null) {
+    try { nproc = validateMaxProcs(limits.maxProcs); } catch (e) {
+      return { error: errorResult('namespace', `invalid resource limit: ${e.message}`) };
+    }
+    prlimitBin = d.prlimitBin();
+  }
 
   let prelude, unsupported;
   try {
-    ({ prelude, unsupported } = buildLimitPrelude(effectiveLimits));
+    ({ prelude, unsupported } = buildLimitPrelude({ ...limits, maxProcs: null }));
   } catch (e) {
     return { error: errorResult('namespace', `invalid resource limit: ${e.message}`) };
   }
+  if (nproc != null && !prlimitBin) unsupported = [...unsupported, 'maxProcs'];
 
   // Fail closed: no usable variant means the confinement cannot be
   // established, so nothing is executed. There is deliberately no path that
@@ -401,6 +415,7 @@ export function buildNamespaceInvocation(argv, {
     SBX_CANARY: canary,
     SBX_FINAL: FINAL_SCRIPT,
   };
+  if (nproc != null && prlimitBin) { sbxEnv.SBX_NPROC = String(nproc); sbxEnv.SBX_PRLIMIT = prlimitBin; }
   let script;
   if (strict) {
     Object.assign(sbxEnv, {

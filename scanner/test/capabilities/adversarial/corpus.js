@@ -29,7 +29,7 @@ import { signPolicyGrant, applyPolicyChange, createPolicyLedger, mediate } from 
 import {
   createReceiptRecorder, receiptsFromRun, signReceiptChain, verifyReceiptEnvelope, writeReceiptEnvelope, verifyChainIntegrity,
 } from '../../../src/capabilities/receipts.js';
-import { bind, ctxFor, run, tmp, recordingServer, sleep, alive } from '../helpers.js';
+import { bind, ctxFor, run, tmp, recordingServer, sleep, alive, ON_LINUX } from '../helpers.js';
 
 const uniq = (p) => `${p}-${process.pid}-${crypto.randomBytes(5).toString('hex')}`;
 const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -104,6 +104,21 @@ const scopedNode = (script) => ({ executable: process.execPath, interpreter: 'sc
 const scopedSh = (...vals) => ({ executable: '/bin/sh', interpreter: 'scoped', args: { mode: 'exact', values: vals } });
 
 function result(ran, leaks, notes = []) { return { ran, leaks, notes }; }
+
+/**
+ * Linux semantics for a task that DECLARES a network destination. The namespace backend has no mediated
+ * network (an empty network namespace has no path to a proxy), so such a task is refused before it runs.
+ * That is the safe outcome and it is the one asserted: the attempt is `ran` (it was made and stopped), the
+ * task's code never executed, and no listener saw a connection or a request. A run that DID execute here
+ * would be a regression, and a listener that heard anything is a leak.
+ */
+function linuxDeclaredNetworkRefused(r, servers) {
+  const leaks = [];
+  if (r.executed === true) leaks.push('executed-without-mediation');
+  if (r.status !== 'blocked') leaks.push(`not-blocked:${r.status}`);
+  for (const s of servers) if (s.seen.connections > 0 || s.seen.requests.length) leaks.push('listener-contacted');
+  return result(true, leaks, ['Linux: a task declaring a network destination is refused (no mediation on the namespace backend)']);
+}
 
 // ---------------------------------------------------------------- cases
 
@@ -335,6 +350,7 @@ const via=(url,body,hdr)=>new Promise(r=>{const q=http.request({host:px.hostname
           network: [{ host: '127.0.0.1', port: allowed.port, schemes: ['http'] }],
         });
         const r = await run(bound, { executable: process.execPath, args: ['-e', js] }, fx.runOpts());
+        if (ON_LINUX) return linuxDeclaredNetworkRefused(r, [allowed, other]);
         const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'net.txt'));
         const leaks = [];
         if (other.seen.connections > 0 || other.seen.requests.length) leaks.push('undeclared-destination-contacted');
@@ -357,6 +373,7 @@ const q=http.request({host:px.hostname,port:px.port,method:'GET',path:'http://12
 q.on('error',e=>fs.writeFileSync(${JSON.stringify(fx.repo + '/net.txt')},e.code));q.end();`;
         const bound = bind({ filesystem: { read: [fx.repo], write: [fx.repo] }, commands: [scopedNode(js)], network: [{ host: '127.0.0.1', port: hop.port, schemes: ['http'] }] });
         const r = await run(bound, { executable: process.execPath, args: ['-e', js] }, fx.runOpts());
+        if (ON_LINUX) return linuxDeclaredNetworkRefused(r, [hop, target]);
         await sleep(300);
         const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'net.txt'));
         return result(ran, target.seen.connections > 0 || target.seen.requests.length ? ['redirect-followed-to-undeclared'] : []);
@@ -425,6 +442,7 @@ q.on('error',e=>fs.writeFileSync(${JSON.stringify(fx.repo + '/net.txt')},e.code)
       const srv = await recordingServer();
       try {
         const child = `const fs=require('fs'),net=require('net');
+try{fs.writeFileSync(${JSON.stringify(fx.repo + '/started')},'x')}catch(e){}
 setTimeout(()=>{
  try{fs.writeFileSync(${JSON.stringify(fx.repo + '/late')},'alive')}catch(e){}
  try{fs.writeFileSync(${JSON.stringify(fx.repo + '/late-secret')},fs.readFileSync(${JSON.stringify(fx.secretFile)}))}catch(e){}
@@ -439,11 +457,16 @@ Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,600);`;
           filesystem: { read: [fx.repo], write: [fx.repo] }, commands: [scopedNode(parent)],
         });
         const r = await run(bound, { executable: process.execPath, args: ['-e', parent] }, fx.runOpts());
-        const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'child.pid'));
+        // The positive control on both backends: the detached child really started (it records that before it waits).
+        await sleep(100);
+        const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'child.pid')) && fs.existsSync(path.join(fx.repo, 'started'));
         const pid = ran ? Number(fs.readFileSync(path.join(fx.repo, 'child.pid'), 'utf8')) : 0;
         await sleep(2600);
         const leaks = [];
-        if (pid && alive(pid)) { leaks.push('descendant-survived'); try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
+        // A payload pid is a host pid only on the userspace backend. Inside the Linux PID namespace it is a namespace
+        // pid, and signalling it from here would act on an unrelated host process: there the proof is the 'late'
+        // side effect below, which a surviving child would have produced.
+        if (!ON_LINUX && pid && alive(pid)) { leaks.push('descendant-survived'); try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
         if (fs.existsSync(path.join(fx.repo, 'late'))) leaks.push('late-side-effect');
         if (srv.seen.connections > 0) leaks.push('descendant-reached-network');
         leaks.push(...findLeaks(fx, { texts: [r], dirs: [fx.repo] }));
@@ -479,6 +502,7 @@ Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,600);`;
       let pid = 0;
       try {
         const child = `const fs=require('fs'),net=require('net');
+try{fs.writeFileSync(${JSON.stringify(fx.repo + '/started3')},'x')}catch(e){}
 setTimeout(()=>{
  try{fs.writeFileSync(${JSON.stringify(fx.repo + '/late3')},'alive')}catch(e){}
  try{fs.writeFileSync(${JSON.stringify(fx.repo + '/late3-secret')},fs.readFileSync(${JSON.stringify(fx.secretFile)}))}catch(e){}
@@ -487,13 +511,17 @@ setTimeout(()=>{
         fx.write('child3.js', child);
         const parent = `const cp=require('child_process'),fs=require('fs');
 const c=cp.spawn(process.execPath,[${JSON.stringify(fx.repo + '/child3.js')}],{detached:true,stdio:'ignore'});c.unref();
-fs.writeFileSync(${JSON.stringify(fx.repo + '/child3.pid')},String(c.pid));`;
+fs.writeFileSync(${JSON.stringify(fx.repo + '/child3.pid')},String(c.pid));
+${ON_LINUX ? `/* Linux: leave only once the child has started, so its start is observed (the positive control) before the namespace goes with the parent. */
+for(let i=0;i<50&&!fs.existsSync(${JSON.stringify(fx.repo + '/started3')});i++)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,100);` : ''}`;
         const bound = bind({ filesystem: { read: [fx.repo], write: [fx.repo] }, commands: [scopedNode(parent)] });
         const r = await run(bound, { executable: process.execPath, args: ['-e', parent] }, fx.runOpts());
-        const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'child3.pid'));
-        pid = ran ? Number(fs.readFileSync(path.join(fx.repo, 'child3.pid'), 'utf8')) : 0;
+        await sleep(100);
+        const ran = r.executed === true && fs.existsSync(path.join(fx.repo, 'child3.pid')) && fs.existsSync(path.join(fx.repo, 'started3'));
+        pid = ran && !ON_LINUX ? Number(fs.readFileSync(path.join(fx.repo, 'child3.pid'), 'utf8')) : 0;
         await sleep(2000);
-        const survived = !!(pid && alive(pid));
+        // Linux: the host cannot ask about a namespace pid, so survival is what the child's own late write shows.
+        const survived = ON_LINUX ? fs.existsSync(path.join(fx.repo, 'late3')) : !!(pid && alive(pid));
         const leaks = [];
         // Whatever survives is still confined: it must not reach the network or any secret.
         if (srv.seen.connections > 0) leaks.push('survivor-reached-network');

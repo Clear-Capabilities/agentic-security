@@ -180,7 +180,7 @@ export async function runConfinedSupervised(argv, opts = {}) {
   if (backend !== 'userspace' && backend !== 'namespace') {
     return errorResult(backend, `process-tree termination is not implemented or verified on the ${backend} backend; refusing to execute`);
   }
-  const inv = backend === 'userspace' ? buildUserspaceInvocation(argv, opts) : buildNamespaceInvocation(argv, opts);
+  const inv = backend === 'userspace' ? buildUserspaceInvocation(argv, opts) : buildNamespaceInvocation(argv, opts, opts.deps);
   if (inv.error) return inv.error;
   if (backend === 'namespace' && !inv.treeKill) {
     inv.dispose();

@@ -195,8 +195,40 @@ function probeFileSize() {
 
 const UNPROBED_PROCESS_CAP = {
   state: 'unverified',
-  reason: 'a process-count cap is per-uid and system-wide on macOS (a soft brake, not a wall) and did not refuse on the hosted Linux runner in the last release; no enforcement is claimed on any backend',
+  reason: 'a process-count cap is per-uid and system-wide on macOS (a soft brake, not a wall); no enforcement is claimed on that backend. On the Linux namespace backend the cap is probed (see probeProcessCap)',
 };
+
+const PROC_CAP_FORKS = 6;
+/** Forks `PROC_CAP_FORKS` concurrent children; each child announces itself, so a refusal shows as missing announcements. */
+export const PROC_CAP_SCRIPT = `i=0; while [ $i -lt ${PROC_CAP_FORKS} ]; do i=$((i+1)); ( echo CHILD_$i; sleep 1 ) & done; wait; echo DONE`;
+
+const countChildren = (r) => (String(r.stdout || '').match(/CHILD_\d/g) || []).length;
+
+/**
+ * The process-count cap on the namespace backend. A command that forks six
+ * concurrent children is run twice through the real backend: under a generous cap
+ * every child must start (the positive control: the probe can succeed, and the cap
+ * mechanism itself does not break ordinary forking), and under a cap far below
+ * what it needs the kernel must refuse some of them. RLIMIT_NPROC is not enforced
+ * for a process holding CAP_SYS_RESOURCE in the initial namespace, so whether it
+ * binds inside the user namespace is exactly what this measures rather than assumes.
+ *
+ * `run` is a seam so a test can hand it a runner that ignores the cap (or one that
+ * refuses everything) and see the probe say so.
+ */
+export function probeProcessCap({ run = runConfined, mode = {} } = {}) {
+  const root = mk('agsec-probe-p-');
+  try {
+    const cmd = ['/bin/sh', '-c', PROC_CAP_SCRIPT];
+    const generous = run(cmd, { root, ...mode, timeoutMs: 10000, limits: { maxProcs: 512 } });
+    const gOk = countChildren(generous);
+    if (gOk !== PROC_CAP_FORKS) return notProved(`positive control failed: only ${gOk} of ${PROC_CAP_FORKS} children started under a generous cap (${generous.status})`);
+    const tight = run(cmd, { root, ...mode, timeoutMs: 10000, limits: { maxProcs: 3 } });
+    const tOk = countChildren(tight);
+    if (tOk >= PROC_CAP_FORKS) return notProved(`the process-count cap did not refuse: all ${tOk} children started under a cap of 3`);
+    return proved(`${gOk} of ${PROC_CAP_FORKS} children started under a cap of 512; only ${tOk} under a cap of 3`);
+  } finally { rm(root); }
+}
 
 const _cache = new Map();
 export function resetProbeCache() { _cache.clear(); }
@@ -229,7 +261,9 @@ export async function probeControls({ force, probes = {} } = {}) {
     await run('network', probeNetwork);
     await run('tree-termination', () => probeTree(backend));
     await run('file-size-limit', probeFileSize);
-    controls['process-cap'] = probes['process-cap'] ? await probes['process-cap']() : UNPROBED_PROCESS_CAP;
+    if (probes['process-cap']) controls['process-cap'] = await probes['process-cap']();
+    else if (backend === 'namespace') await run('process-cap', () => probeProcessCap());
+    else controls['process-cap'] = UNPROBED_PROCESS_CAP;
   }
   const report = { platform: process.platform, backend, controls };
   if (!Object.keys(probes).length) _cache.set(backend, report);
@@ -259,7 +293,7 @@ export function capabilityReport(report) {
     notes: [
       'A state of proved was established by an active probe on THIS host in THIS process; it is not inherited from another platform.',
       'Linux enforcement cannot be exercised on a macOS host. It is evidenced only where the sandbox-linux CI job ran this same probe set.',
-      'Process-count caps are not claimed enforced on any backend.',
+      'A process-count cap is claimed only where its probe reports proved (the Linux namespace backend, on the hosted job); it is never claimed on the macOS backend.',
     ],
   };
 }
