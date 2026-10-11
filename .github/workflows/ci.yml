@@ -625,6 +625,17 @@ jobs:
           path: ${{ runner.temp }}/sandbox-linux-evidence.json
           if-no-files-found: warn
 
+      # The per-test report the loop controller reads back (gh run download) to accept tests that skipped on a host without the
+      # namespace backend. Uploaded even when the job failed: the report then says NOT VERIFIED and the reader refuses it.
+      - name: Upload the per-test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: sandbox-linux-test-report
+          path: ${{ runner.temp }}/sandbox-linux-test-report.json
+          if-no-files-found: warn
+
   corpus:
     runs-on: ubuntu-latest
     timeout-minutes: 45

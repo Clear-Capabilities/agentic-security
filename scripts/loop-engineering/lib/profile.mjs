@@ -147,6 +147,18 @@ export function validateProfile(p, repoRoot) {
     if (!Number.isInteger(r.timeoutSeconds) || r.timeoutSeconds <= 0) problems.push(`suite ${name}: remote.timeoutSeconds must be a positive integer`);
     if (!(s.requiresTools || []).length) problems.push(`suite ${name}: remote is only reached when a required tool is missing, so requiresTools must name one`);
   }
+  for (const [name, s] of Object.entries(p.suites || {})) {
+    if (s.attestFromCi === undefined) continue;
+    const a = s.attestFromCi;
+    const str = (x) => typeof x === 'string' && x.trim().length > 0;
+    if (!a || typeof a !== 'object' || Array.isArray(a)) { problems.push(`suite ${name}: attestFromCi must be an object`); continue; }
+    if (!str(a.job)) problems.push(`suite ${name}: attestFromCi.job must name the hosted CI job`);
+    if (!str(a.artifact)) problems.push(`suite ${name}: attestFromCi.artifact must name the per-test report artifact`);
+    if (a.workflow !== undefined && !str(a.workflow)) problems.push(`suite ${name}: attestFromCi.workflow must be a workflow name`);
+    if (a.requiredStep !== undefined && !str(a.requiredStep)) problems.push(`suite ${name}: attestFromCi.requiredStep must be a step name`);
+    if (a.groups !== undefined && (!Array.isArray(a.groups) || !a.groups.length || a.groups.some((g) => !str(g)))) problems.push(`suite ${name}: attestFromCi.groups must list report groups`);
+    if (s.kind !== 'node-test') problems.push(`suite ${name}: attestFromCi applies to node-test suites only`);
+  }
   for (const g of [...(p.baselineGates || []), ...(p.finalGates || [])]) checkCmd(`gate ${g.id}`, g);
   validateBoundsConfig(p, problems);
   if (p.workstreams !== undefined) validateWorkstreams(p.workstreams, problems);

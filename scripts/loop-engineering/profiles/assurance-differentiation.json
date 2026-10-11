@@ -618,7 +618,14 @@
         "scripts/assurance-differentiation/test/capabilities.test.js"
       ],
       "timeoutSeconds": 900,
-      "protectedWrapper": true
+      "protectedWrapper": true,
+      "attestFromCi": {
+        "job": "sandbox-linux",
+        "workflow": "ci",
+        "artifact": "sandbox-linux-test-report",
+        "groups": ["linux-enforcement"],
+        "requiredStep": "Sandbox escape suite and Linux control probes (fails if any required suite SKIPPED)"
+      }
     },
     "routing": {
       "kind": "node-test",

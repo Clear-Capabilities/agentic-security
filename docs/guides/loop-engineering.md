@@ -76,7 +76,8 @@ The percentage is **verified completion**, and only fresh, fully passing, indepe
   That is why the final phase re-verifies everything against one stable tree.
 
 A skipped test is a failure of its criterion here, and an unavailable compiler or Nix is a failed or **blocked** criterion,
-not a pass.
+not a pass. The one exception is a test covered by a commit-bound hosted attestation, reported as its own labelled source (see
+"Attested tests" below); every other skip still fails.
 
 ## Finite retries and failures
 
@@ -222,6 +223,51 @@ Anything else (a failed run, a wrong commit, a different digest, a missing leg o
 If the preflight cannot be met (dirty tree, commit not pushed, `gh` missing or not logged in) the requirement is `blocked` with the
 reason, not failed and not passed. `LOOP_REMOTE_VERIFY=0` turns the mode off. It trusts GitHub's account of what ran and the committed
 workflow; it is not a substitute for a local run where a local run is possible.
+
+## Attested tests: skipped here, passed on the hosted Linux job
+
+Some tests cannot run on the maintainer's host at all. The Linux kernel-namespace tests in
+`scanner/test/capabilities/linux-enforcement.test.js` skip on macOS, and a skipped required test counts as failed, so a suite that
+contains them can never pass locally. They do run, and must pass, on the hosted `sandbox-linux` CI job, which fails on any skip.
+
+A suite whose profile entry has an `attestFromCi` block (today: `capabilities`, which carries X-501 to X-508) may count a locally
+skipped test toward its criterion, and only on this evidence:
+
+1. The checkout's HEAD is a full sha and no tracked file differs from it (the hosted job tested those bytes and no others).
+2. A check run named `sandbox-linux` exists for exactly that sha, in the `ci` workflow, completed with conclusion `success`, with the
+   job's own `Sandbox escape suite and Linux control probes` step successful. The reader is the one `release-attest.mjs` uses; it reads
+   the job's conclusion, never the workflow run's, and never another commit's result.
+3. The job's per-test report (artifact `sandbox-linux-test-report`, written by `scripts/sandbox-linux-verify.mjs`) downloads through
+   `gh run download`, is the right kind, names the same commit and the same workflow run, says `VERIFIED`, and its digest over the
+   test list matches the list.
+4. Every entry in the report with the skipped test's exact name, in the groups the profile names (`linux-enforcement`), is `pass`.
+
+Typed refusals (each leaves the test skipped, and a skipped required test still fails): `bad-commit`, `working-tree-dirty`,
+`git-unavailable`, `sha-unknown` (never pushed), `gh-unavailable`, `gh-unauthenticated`, `gh-offline`, `gh-error`, `job-missing`,
+`job-not-completed`, `job-failure`, `job-cancelled`, `job-skipped`, `job-neutral`, `sha-mismatch`, `job-detail-not-success`,
+`wrong-workflow`, `step-failed`, `required-step-not-successful`, `bad-response`, `report-missing`, `report-malformed`,
+`report-wrong-kind`, `report-digest-mismatch`, `report-commit-mismatch`, `report-run-mismatch`, `report-not-verified`,
+`test-absent-from-report`, `test-skipped-in-ci`, `test-failed-in-ci`. They are written to the evidence `limitations` as
+`not attested [code]: <test name>`.
+
+What stays true, so nothing pretends this host ran them:
+
+- The evidence still reports the local skip count (`counts.skipped`). The covered tests are counted separately in
+  `counts.attestedSkipped`, listed in an `attestation` block labelled `attested-from-ci: sandbox-linux@<sha>` with the run id, job URL
+  and report digest, and each covered criterion carries that label as its `source`. The covered assertion is recorded as skipped and
+  `ok: false`, with an `attested` field; a locally passing test of the same criterion stays a local pass.
+- A local failure is never overridden. When anything failed here, or the run did not exit as expected, the attestation is not
+  even consulted. A `todo` is never attestable.
+- A skip that no valid attestation covers is still a failure. A criterion passes only if every tagged test has a local pass or a covered
+  skip; a requirement is verified only when no skip is left uncovered (`uncoveredSkips` in `lib/ci-attest.mjs`, used by the closure
+  receipts and the final decision). At closure the receipt's attestation is checked again for consistency and for being bound to the
+  checkout's HEAD (`attestation-invalid` otherwise).
+- It is evidence from a hosted run, not a claim that this host enforced anything, and it does not change the platform statement:
+  Linux remains `partially-verified`, by the hosted job only. It trusts GitHub's account of the job and the committed workflow, and a
+  report is only as strong as the repository's write controls over its artifacts; it makes a false claim traceable to a run, not
+  impossible. `LOOP_ATTEST_FROM_CI=0` turns the mode off.
+
+The profile change alters the frozen profile hash, so an existing run must be re-initialised (`init`) before it picks this up.
 
 An optional evaluator that is selected but cannot prove its isolation, or exceeds its deadline, is reported as
 `unsupported`, `blocked` or `timed_out` in the scan health; it is never a silent pass, and the loop treats the dependent

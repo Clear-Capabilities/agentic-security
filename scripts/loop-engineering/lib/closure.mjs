@@ -17,6 +17,7 @@ import { execBoundedSync } from './bounds.mjs';
 import { sha256, atomicWriteJson, atomicWriteFile, canonicalJson } from './util.mjs';
 import { listEvidence, assessOne } from './evidence.mjs';
 import { GATE_GROUPS, DELIVERABLE_KINDS } from './closure-config.mjs';
+import { uncoveredSkips, attestationProblem } from './ci-attest.mjs';
 
 export const CLOSURE_SCHEMA = 1;
 export { GATE_GROUPS, DELIVERABLE_KINDS };
@@ -70,7 +71,7 @@ export function checkDag(manifest, expect = null) {
  * tree; issued by the controller (never a worker-launched or operator verify); issued in THIS final phase; free of skipped tests; and
  * carries a pass for every criterion the manifest lists. -> { unmet[], passedCriteria }
  */
-export function checkReceipts({ requirements, receipts, phaseStartedAt }) {
+export function checkReceipts({ requirements, receipts, phaseStartedAt, head }) {
   const unmet = [];
   let passedCriteria = 0;
   const bad = new Set();
@@ -83,13 +84,18 @@ export function checkReceipts({ requirements, receipts, phaseStartedAt }) {
     if (rc.invoker !== 'controller') { add('receipt-not-independent', r.id, `receipt ${rc.evidenceId} was issued by "${rc.invoker}", not by the controller`, r.id); continue; }
     if (rc.phase !== 'final' || !rc.createdAt || (phaseStartedAt && rc.createdAt < phaseStartedAt)) { add('receipt-not-fresh', r.id, `receipt ${rc.evidenceId} was not issued in this final phase (phase "${rc.phase}", ${rc.createdAt})`, r.id); continue; }
     if (rc.blockerType) { add('criterion-blocked', r.id, `required backend unavailable (${rc.blockerType}); a blocked criterion is never a pass`, r.id); continue; }
-    if ((rc.counts?.skipped || 0) > 0) add('criterion-skipped', r.id, `${rc.counts.skipped} test(s) skipped; a skipped required test counts as failed`, r.id);
+    // A locally skipped test is covered only by a well-formed attestation bound to this checkout's commit (ci-attest.mjs); anything else
+    // keeps the skip as a failure. `head` undefined means the commit is not checked in this call.
+    const attProblem = attestationProblem(rc, head);
+    if (attProblem) add('attestation-invalid', r.id, `the receipt's hosted attestation is not accepted: ${attProblem}`, r.id);
+    const openSkips = uncoveredSkips(rc, head);
+    if (openSkips > 0) add('criterion-skipped', r.id, `${openSkips} test(s) skipped; a skipped required test counts as failed`, r.id);
     if (rc.result !== 'pass') add('criterion-failed', r.id, `receipt result is ${rc.result}`, r.id);
     for (const c of r.criteria) {
       const got = (rc.criteria || []).find((x) => x.id === c.id);
       if (!got) { add('criterion-missing', c.id, `the receipt carries no result for ${c.id}`, r.id); continue; }
       // a passing criterion inside a receipt that is itself failed or skipped is not counted; the receipt-level item above names why
-      if (got.state === 'pass') { if (rc.result === 'pass' && !(rc.counts?.skipped > 0)) passedCriteria += 1; continue; }
+      if (got.state === 'pass') { if (rc.result === 'pass' && !(openSkips > 0) && !attProblem) passedCriteria += 1; continue; }
       const kind = { fail: 'criterion-failed', skipped: 'criterion-skipped', blocked: 'criterion-blocked', waived: 'criterion-waived', stale: 'criterion-stale' }[got.state] || 'criterion-invalid';
       add(kind, c.id, `${c.id} is ${got.state}${got.reason ? `: ${got.reason}` : ''}${got.state === 'waived' ? '; a mandatory criterion cannot be waived into completion' : ''}`, r.id);
     }
@@ -188,8 +194,8 @@ export function evaluateClosure(f) {
 
   const others = reqs.filter((r) => r.id !== config.releaseRequirement);
   const phase = f.order?.phaseStartedAt;
-  const a = checkReceipts({ requirements: others, receipts: f.receipts, phaseStartedAt: phase });
-  const b = rel ? checkReceipts({ requirements: [rel], receipts: f.receipts, phaseStartedAt: phase }) : { unmet: [], passedCriteria: 0, badRequirements: new Set() };
+  const a = checkReceipts({ requirements: others, receipts: f.receipts, phaseStartedAt: phase, head: f.git ? f.git.head : null });
+  const b = rel ? checkReceipts({ requirements: [rel], receipts: f.receipts, phaseStartedAt: phase, head: f.git ? f.git.head : null }) : { unmet: [], passedCriteria: 0, badRequirements: new Set() };
   unmet.push(...a.unmet, ...b.unmet);
 
   // receipts are validated first, the closure requirement runs second, the record is issued last
@@ -255,7 +261,7 @@ export function gatherReceipts({ L, manifest, tree, key }) {
     out.set(r.id, {
       id: r.id, found: true, file: newest.file, fileSha256: fileSha(newest.file), evidenceId: ev.evidenceId,
       valid: a.valid, invalidReasons: a.invalidReasons, fresh: a.fresh, staleReasons: a.staleReasons,
-      invoker: ev.invoker, phase: ev.phase, result: ev.result, createdAt: ev.createdAt, counts: ev.counts,
+      invoker: ev.invoker, phase: ev.phase, result: ev.result, createdAt: ev.createdAt, counts: ev.counts, attestation: ev.attestation || null,
       criteria: (ev.criteria || []).map((c) => ({ id: c.id, state: c.state, reason: c.reason })), blockerType: ev.blocker?.type || null,
       logProblems: a.invalidReasons.filter((x) => /^log /.test(x)),
     });
