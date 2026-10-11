@@ -16,7 +16,7 @@ import { redactOutbound, sanitizeLogText, denialRecord, destinationClass } from 
 import { classifyAddress, normalizeHost } from '../../src/capabilities/address.js';
 import { decide } from '../../src/capabilities/decide.js';
 import { verifyEgressAuditLog } from '../../src/egress/audit.js';
-import { SKIP, bind, ctxFor, run, tmp, recordingServer, echoServer, viaProxy, sleep } from './helpers.js';
+import { SKIP, ON_LINUX, bind, ctxFor, run, tmp, recordingServer, echoServer, viaProxy, sleep } from './helpers.js';
 
 const CANARY = 'CANARY-NET-7f3a91c2d8e04b65';
 const VENDOR_TOKEN = `ghp_${'A1b2C3d4E5'.repeat(4)}`;
@@ -168,6 +168,16 @@ const via=(p)=>new Promise(r=>{const q=http.request({host:px.hostname,port:px.po
       resources: { timeoutMs: 20000 },
     });
     const r = await run(task, { executable: process.execPath, args: ['-e', script] });
+    if (ON_LINUX) {
+      // The namespace backend has no mediated network: an empty network namespace has no path to a proxy. A task that
+      // declares a destination is therefore BLOCKED, and its code never runs, rather than being quietly given either
+      // direct network access or none. Both listeners must have seen nothing.
+      assert.equal(r.status, 'blocked', JSON.stringify({ s: r.status, c: r.code, m: r.reason }));
+      assert.equal(r.executed, false);
+      assert.equal(A.seen.connections - aConn0, 0, 'the declared listener saw nothing');
+      assert.equal(B.seen.connections - bConn0, 0, 'the undeclared listener saw nothing');
+      return;
+    }
     assert.equal(r.executed, true, JSON.stringify({ s: r.status, c: r.code, m: r.reason, e: r.output?.stderr }));
     const out = JSON.parse(r.output.stdout.trim().split('\n').pop());
     assert.equal(out.proxyEnv, true, 'the whole tree is pointed at the proxy');
@@ -190,7 +200,8 @@ const via=(p)=>new Promise(r=>{const q=http.request({host:px.hostname,port:px.po
     const task = bind({ filesystem: { write: [dir] }, commands: [{ executable: process.execPath, interpreter: 'scoped', args: { mode: 'exact', values: ['-e', script] } }] });
     const before = A.seen.connections;
     const r = await run(task, { executable: process.execPath, args: ['-e', script] });
-    assert.deepEqual(JSON.parse(r.output.stdout.trim()), { r: 'EPERM', p: null });
+    // macOS: the policy refuses the socket call (EPERM). Linux: the network namespace has only a down loopback (ENETUNREACH).
+    assert.deepEqual(JSON.parse(r.output.stdout.trim()), { r: ON_LINUX ? 'ENETUNREACH' : 'EPERM', p: null });
     assert.equal(r.network, null);
     assert.equal(A.seen.connections, before);
   });
@@ -357,6 +368,12 @@ describe('[X-504.AC03] a denial records the destination class and policy reason,
     udp.on('message', () => { datagrams += 1; });
     await new Promise((r) => udp.bind(0, '127.0.0.1', r));
     const udpPort = udp.address().port;
+    // Positive control: both receivers are reachable from outside the boundary, so "saw nothing" below means something.
+    await new Promise((res, rej) => { const c = net.connect(S.port, '127.0.0.1', () => { c.destroy(); res(); }); c.on('error', rej); });
+    await new Promise((res) => { const u = dgram.createSocket('udp4'); u.send(Buffer.from('control'), udpPort, '127.0.0.1', () => { u.close(); res(); }); });
+    await sleep(200);
+    assert.equal(S.seen.connections, 1, 'the listener is reachable from outside the boundary');
+    assert.equal(datagrams, 1, 'the datagram receiver is reachable from outside the boundary');
     const script = `
 const dgram=require('dgram'),net=require('net'),dns=require('dns');
 const t=(p)=>Promise.race([p,new Promise(r=>setTimeout(()=>r('TIMEOUT'),2500))]);
@@ -369,9 +386,11 @@ const t=(p)=>Promise.race([p,new Promise(r=>setTimeout(()=>r('TIMEOUT'),2500))])
  console.log(JSON.stringify(out));
 })();`;
     try {
+      // On Linux a declared destination blocks the task (no mediation exists there), so the bypass attempts are made by a task that
+      // declares none; the listeners they target are still live and must still see nothing.
       const task = bind({
         filesystem: { write: [dir] },
-        network: [{ host: '127.0.0.1', port: S.port, schemes: ['http'] }],
+        ...(ON_LINUX ? {} : { network: [{ host: '127.0.0.1', port: S.port, schemes: ['http'] }] }),
         commands: [{ executable: process.execPath, interpreter: 'scoped', args: { mode: 'exact', values: ['-e', script] } }],
         resources: { timeoutMs: 20000 },
       });
@@ -383,8 +402,8 @@ const t=(p)=>Promise.race([p,new Promise(r=>setTimeout(()=>r('TIMEOUT'),2500))])
       assert.notEqual(out.dns, 'RESOLVED', 'the sandbox cannot resolve names');
       assert.notEqual(out.unix, 'CONNECTED', 'a local service socket is unreachable');
       await sleep(300);
-      assert.equal(datagrams, 0, 'the datagram receiver saw nothing');
-      assert.equal(S.seen.connections, 0, 'the declared listener saw no direct connection');
+      assert.equal(datagrams, 1, 'the datagram receiver saw nothing from the task (only the control)');
+      assert.equal(S.seen.connections, 1, 'the listener saw no direct connection from the task (only the control)');
     } finally { udp.close(); await S.close(); }
   });
 });

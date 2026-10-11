@@ -74,13 +74,18 @@ declared roots and multi-root writes on the namespace backend (a pivoted tmpfs
 root; protected paths absent or masked; a PID namespace the kernel tears down).
 NOT verified: **mediated network** is not implemented on Linux (an empty network
 namespace has no path to a proxy), so a task that declares a destination is
-`blocked` there with `network-mediation is unsupported`, never allowed; and
-**process-count caps** are never asserted on any backend (on Linux the cause of
-the earlier non-refusal is that the resource prelude runs under dash, whose
-`ulimit` has no `-u`; no replacement is proved). `maxProcesses` is carried and
-reported `unverified`, memory caps `not-enforced`. The execution suites under
-`test/capabilities/` still skip on Linux (their helpers select the userspace
-backend only and several assertions encode macOS semantics); see the gaps below.
+`blocked` there with `network-mediation is unsupported`, never allowed. The
+**process-count cap** IS proved on Linux (the `sandbox-linux` job's `process-cap`
+probe): the resource prelude runs under dash, whose `ulimit` has no `-u`, so the
+namespace backend applies the cap with `prlimit --nproc` to the task's command
+after the confinement is built, and `maxProcesses` in a manifest is passed through
+and reported `enforced` when the run is at the `enforced` level (on macOS it stays
+`unverified`: the cap is per-user and system-wide there). Memory caps are
+`not-enforced`. The capability, trust-boundary and corpus suites RUN on the Linux
+backend and assert Linux semantics (an undeclared path has no name, so a refusal
+is ENOENT or EROFS rather than `denied`; liveness is judged by heartbeat, not host
+pid; a declared network destination blocks the task); `sandbox-linux` fails if any
+of them skips.
 
 ## Known limits (also in `REPORT_LIMITATIONS`)
 
@@ -112,7 +117,5 @@ attempts were stopped on this backend in this run; it does not show the sandbox 
 ### What is still not claimed
 
 Tool and delegation checks are policy at the tool boundary (the tool then runs in the server process): the
-runner remains the only enforcement layer. Linux is `partially-verified` in the platform statement (the controls listed there, on the hosted job only) and the attack-coverage record still says `unverified` for Linux, because the corpus is not run on Linux. No process-count cap is asserted. The corpus is not wired into the
-`sandbox-linux` CI job: it would need execution cases that skip loudly (never silently pass) on Linux, and that
-has not been shown from this workspace. The enforced-mode release gate (`enforcedModeReleaseGate`) is a library
+runner remains the only enforcement layer. Linux is `partially-verified` in the platform statement (the controls listed there, on the hosted job only) and the attack-coverage record keeps `platforms.linux: 'unverified'` as a standing statement even though the corpus now runs on the hosted Linux runner inside the capabilities suite: turning that into a verified claim is a decision for the owners, not a side effect of the suite passing. The enforced-mode release gate (`enforcedModeReleaseGate`) is a library
 function used by the suite; it is not yet called from `scripts/release-check.mjs`.

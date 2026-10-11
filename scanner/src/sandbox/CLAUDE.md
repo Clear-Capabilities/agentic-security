@@ -383,13 +383,24 @@ then runs supervised with protected paths read-denied.
   where `--kill-child` is available (see above).
 - **Active probes**: write confinement, read denial, env scrub, network, tree
   termination and the file-size limit each run an attack plus a positive
-  control through the real backend. `process-cap` is reported `unverified` on
-  every backend and must not be claimed enforced. Per-uid and system-wide on
-  macOS. On Linux the cause of the earlier non-refusal is now known: the
-  resource prelude is run by `/bin/sh`, which is dash on the hosted runner, and
-  dash's `ulimit` has no `-u` option (`ulimit: Illegal option -u` appears in
-  the `sandbox-linux` log), so the cap was never applied at all. No replacement
-  (for example `prlimit`) has been proved, so the cap stays unasserted.
+  control through the real backend. `process-cap` is `unverified` on the macOS
+  backend and must not be claimed enforced there: the cap is per-uid and
+  system-wide, a soft brake. On Linux the earlier non-refusal had a known cause:
+  the resource prelude is run by `/bin/sh`, which is dash on the hosted runner,
+  and dash's `ulimit` has no `-u` option (`ulimit: Illegal option -u` appears in
+  the `sandbox-linux` log), so the cap was never applied at all. The namespace
+  backend now applies it with `prlimit --nproc=N --` (util-linux), in the final
+  stage and to the caller's command alone (`FINAL_SCRIPT`; a cap applied earlier
+  would starve the confinement setup of processes). Inside the user namespace the
+  limit binds: the kernel waives RLIMIT_NPROC only for a process holding
+  CAP_SYS_RESOURCE or CAP_SYS_ADMIN in the INITIAL namespace, and a namespace root
+  has neither (its capability set is dropped as well). With no requested cap none
+  is applied (the old ambient-relative default never took effect on Linux), and a
+  host without `prlimit` declares `maxProcs` in `unsupported` rather than dropping
+  it. `probeProcessCap` (`control-probes.js`) is the proof: six concurrent
+  children all start under a generous cap and the kernel refuses some under a cap
+  of 3, in default and in capability mode; `linux-enforcement.test.js` runs it
+  against runners that ignore the cap and that cap everything.
   `capabilityReport()` carries the standing note that Linux enforcement is
   evidenced only where the `sandbox-linux` CI job ran the same probes.
 - **Status**: target output is returned labelled `untrusted` and is never parsed

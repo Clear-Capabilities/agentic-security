@@ -9,11 +9,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { decide } from '../../src/capabilities/decide.js';
-import { SKIP, bind, ctxFor, run, tmp, alive, sleep } from './helpers.js';
+import { SKIP, ON_LINUX, bind, ctxFor, run, tmp, sleep } from './helpers.js';
 
 const exists = (p) => { try { fs.accessSync(p, fs.constants.X_OK); return true; } catch { return false; } };
 const INTERPRETERS = ['/bin/sh', '/bin/bash', '/bin/zsh', '/bin/dash', '/usr/bin/env', '/usr/bin/xargs', '/usr/bin/awk', '/usr/bin/perl', '/usr/bin/ruby', '/usr/bin/python3', process.execPath].filter(exists);
-const pidsIn = (file) => fs.readFileSync(file, 'utf8').split('\n').map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 1);
+
+// Liveness by HEARTBEAT, not by pid. Inside the Linux PID namespace a payload's
+// `$!` is a namespace pid, so `kill -0` from the host would be asking about an
+// unrelated host process and could answer either way. A member that is still alive
+// keeps appending to its file; one that was ended does not. Used on both backends,
+// so the same measurement judges both. Each member stops by itself after `max`
+// beats, so a survivor cannot outlive the test for ever.
+const beat = (file, max = 300) => `j=0; while [ $j -lt ${max} ]; do j=$((j+1)); echo $j >> '${file}'; sleep 0.2; done`;
+const beats = (f) => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).length; } catch { return 0; } };
+/**
+ * Every heartbeat file advanced while the task ran (the positive control: the
+ * member really was running), and none advances afterwards.
+ */
+async function assertEnded(files, label, { settleMs = 700 } = {}) {
+  const atReturn = files.map(beats);
+  files.forEach((f, i) => assert.ok(atReturn[i] >= 3, `${label}: ${path.basename(f)} never advanced while the task ran (${atReturn[i]} beats), so its death proves nothing`));
+  await sleep(settleMs);
+  const mid = files.map(beats);
+  await sleep(settleMs);
+  const late = files.map(beats);
+  files.forEach((f, i) => assert.equal(late[i], mid[i], `${label}: ${path.basename(f)} kept running after the task ended`));
+}
 
 function scopedShell(script, w, extra = {}) {
   return bind({
@@ -125,16 +146,13 @@ describe('[X-503.AC02] descendants inherit confinement and are terminated on dea
   });
 
   test('a deadline ends the whole process tree, including a grandchild, and reports the cleanup', async () => {
-    const pf = path.join(w, 'dl');
-    const script = `sleep 300 & echo $! >> '${pf}'; (sleep 300 & echo $! >> '${pf}'; wait) & wait`;
+    const f1 = path.join(w, 'dl1'); const f2 = path.join(w, 'dl2');
+    const script = `( ${beat(f1)} ) & ( ( ${beat(f2)} ) & wait ) & wait`;
     const r = await runShell(script, w, { resources: { timeoutMs: 1500 } });
     assert.equal(r.executed, true, JSON.stringify({ s: r.status, c: r.code, m: r.reason }));
     assert.equal(r.outcome, 'timeout');
     assert.equal(r.timedOut, true);
-    const pids = pidsIn(pf);
-    assert.ok(pids.length >= 2, 'both background processes started');
-    await sleep(150);
-    for (const p of pids) assert.equal(alive(p), false, `pid ${p} must be dead`);
+    await assertEnded([f1, f2], 'a deadline');
     assert.equal(r.cleanup.complete, true);
     assert.deepEqual(r.cleanup.survivors, []);
     assert.ok(['SIGTERM', 'SIGKILL'].includes(r.cleanup.signalled), 'the cleanup says how it ended the tree');
@@ -157,30 +175,29 @@ describe('[X-503.AC02] descendants inherit confinement and are terminated on dea
   });
 
   test('cancellation terminates the tree and says so', async () => {
-    const pf = path.join(w, 'cancel');
-    const script = `sleep 300 & echo $! >> '${pf}'; (sleep 300 & echo $! >> '${pf}'; wait) & wait`;
+    const f1 = path.join(w, 'cancel1'); const f2 = path.join(w, 'cancel2');
+    const script = `( ${beat(f1)} ) & ( ( ${beat(f2)} ) & wait ) & wait`;
     const ac = new AbortController();
-    setTimeout(() => ac.abort(), 700);
+    setTimeout(() => ac.abort(), 1200);
     const r = await runShell(script, w, {}, { signal: ac.signal });
     assert.equal(r.outcome, 'cancelled');
     assert.equal(r.cancelled, true);
-    await sleep(150);
-    for (const p of pidsIn(pf)) assert.equal(alive(p), false);
+    await assertEnded([f1, f2], 'a cancellation');
     assert.equal(r.cleanup.complete, true);
   });
 
   test('a process that outlives a normal exit is found and ended (orphans)', async () => {
-    const pf = path.join(w, 'orphan');
-    const script = `sleep 300 & echo $! >> '${pf}'; (sleep 300 & echo $! >> '${pf}') ; true`;
+    const f1 = path.join(w, 'orphan1'); const f2 = path.join(w, 'orphan2');
+    // The shell exits normally after one second, leaving two members behind (one of them double-forked).
+    const script = `( ${beat(f1)} ) & ( ( ${beat(f2)} ) & ) ; sleep 1; true`;
     const r = await runShell(script, w);
     assert.equal(r.outcome, 'exited');
     assert.equal(r.exitCode, 0);
-    const pids = pidsIn(pf);
-    assert.ok(pids.length >= 1);
-    await sleep(150);
-    for (const p of pids) assert.equal(alive(p), false, `orphan ${p} must be dead`);
+    await assertEnded([f1, f2], 'a normal exit');
     assert.equal(r.cleanup.complete, true);
-    assert.ok(r.cleanup.signalled, 'the run records that a cleanup signal was needed');
+    // macOS: the supervisor finds the survivors and signals them. Linux: the namespace's init exiting takes every member with it
+    // in the kernel, so there may be nothing left to signal; the heartbeat check above is the proof on both.
+    if (!ON_LINUX) assert.ok(r.cleanup.signalled, 'the run records that a cleanup signal was needed');
   });
 
   test('exhausting the output budget ends the task and its tree', async () => {
@@ -192,6 +209,27 @@ describe('[X-503.AC02] descendants inherit confinement and are terminated on dea
     assert.ok(r.output.stdout.length <= 65536, `returned output is capped (${r.output.stdout.length})`);
     assert.ok(Date.now() - t0 < 8000, 'the flood did not run to the deadline');
     assert.equal(r.cleanup.complete, true);
+  });
+
+  test('a process-count cap in the manifest refuses a fork storm on Linux and is not claimed on macOS', async () => {
+    const f = path.join(w, 'cap-kids');
+    const script = `i=0; while [ $i -lt 6 ]; do ( echo CHILD >> '${f}'; sleep 1 ) & i=$((i+1)); done; wait; true`;
+    const count = () => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).length; } catch { return 0; } };
+    // The positive control runs first: with a generous cap (or none on macOS) all six children start.
+    const generous = await runShell(script, w, { resources: { maxProcesses: 512, timeoutMs: 15000 } });
+    assert.equal(generous.executed, true, JSON.stringify({ s: generous.status, c: generous.code, m: generous.reason }));
+    assert.equal(count(), 6, 'every child starts under a generous cap');
+    fs.rmSync(f);
+    const tight = await runShell(script, w, { resources: { maxProcesses: 3, timeoutMs: 15000 } });
+    assert.equal(tight.executed, true);
+    if (ON_LINUX) {
+      assert.ok(count() < 6, `the kernel refused children under a cap of 3 (${count()} started)`);
+      assert.equal(tight.report.resources.maxProcesses.enforced, true);
+      assert.equal(tight.report.resources.maxProcesses.state, 'proved');
+    } else {
+      assert.equal(tight.report.resources.maxProcesses.enforced, false, 'a per-user system-wide cap is not claimed on macOS');
+      assert.equal(tight.report.resources.maxProcesses.state, 'unverified');
+    }
   });
 
   test('a file-size limit stops a runaway write', async () => {
@@ -253,15 +291,13 @@ describe('[X-503.AC03] injection, escape, spawning, flooding and orphan vectors 
 
   test('child spawning: a fork storm is bounded by the deadline and every member ends', async () => {
     const pf = path.join(w, 'storm');
-    const script = `i=0; while [ $i -lt 12 ]; do ( sleep 300 & echo $! >> '${pf}'; wait ) & i=$((i+1)); done; wait`;
+    const script = `i=0; while [ $i -lt 12 ]; do ( j=0; while [ $j -lt 300 ]; do j=$((j+1)); echo $j >> '${pf}'.$i; sleep 0.2; done ) & i=$((i+1)); done; wait`;
     const r = await runShell(script, w, { resources: { timeoutMs: 2500 } });
     assert.equal(r.outcome, 'timeout');
     assert.equal(r.cleanup.complete, true, `survivors: ${r.cleanup.survivors}`);
-    const pids = pidsIn(pf);
-    assert.ok(pids.length >= 8, `the storm started (${pids.length} members recorded)`);
-    await sleep(300);
-    const live = pids.filter(alive);
-    assert.deepEqual(live, [], 'no member of the storm is still running');
+    const members = Array.from({ length: 12 }, (_, i) => `${pf}.${i}`).filter((f) => beats(f) > 0);
+    assert.ok(members.length >= 8, `the storm started (${members.length} members recorded)`);
+    await assertEnded(members, 'the storm');
   });
 
   test('the controller stays responsive while a flood, a storm and an orphan run', async () => {

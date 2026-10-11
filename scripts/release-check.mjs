@@ -377,15 +377,19 @@ export function plannedCheckIds({ fast = false } = {}) {
 // table runs it in `rest`; it can never fall out of the release.
 // ---------------------------------------------------------------------------
 /**
- * Which closure script this environment can honestly run. The hosted runner is Linux, where the trust boundary is unverified and the
- * execution suites correctly skip (a skip is a gap, never a pass), so the full closure can never hold there: it runs the static half
- * (plan, wiring, files). The full closure is established on a host that can run the boundary, by the release orchestrator's verify step,
- * which refuses to tag a commit unless it held.
+ * Which closure script this environment can honestly run. The hosted leg runs the static half (plan, wiring, files). The reason is no
+ * longer that the execution suites skip: on a hosted Linux runner with unprivileged user namespaces allowed they now RUN and pass (the
+ * sandbox-linux job fails on any skip). What still blocks the full closure on the hosted leg is cost and unmeasured fit, not honesty:
+ * the closure re-runs every suite (its step timeouts sum to several hours; the evaluation step alone is allowed 30 minutes) inside
+ * ONE gate leg that has a 45 minute budget, duplicating the four test shards and the bench legs that already run in parallel; the
+ * controller and bundle-source steps have never been timed on a hosted runner; and the two remote steps depend on attestations from
+ * CI jobs for the exact commit. Until a hosted run of the whole closure has been timed and has passed, claiming it would be a guess.
+ * The full closure is established by the release orchestrator's verify step, which refuses to tag a commit unless it held.
  */
 export function closureGateScript(env = process.env) {
   return env.GITHUB_ACTIONS === 'true' ? 'release:closure:static' : 'release:closure:check';
 }
-export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan, wiring, files) was checked. The execution closure needs a host that can run the trust boundary, which this Linux runner cannot yet; it is established by the release orchestrator\'s verify step before a tag is created, and is NOT claimed by this leg.';
+export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan, wiring, files) was checked. The execution suites do run on a hosted Linux runner now, but the full closure has not been timed or passed inside the budget of this leg; it is established by the release orchestrator\'s verify step before a tag is created, and is NOT claimed by this leg.';
 
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],

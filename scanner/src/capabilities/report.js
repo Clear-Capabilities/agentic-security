@@ -13,8 +13,9 @@
 //
 // A capability that only an in-process check covers (tools, delegation) says so
 // and is never `enforced`; that check explains a decision, it does not stop the
-// task. Process-count caps are carried and reported `unverified`, on every
-// backend.
+// task. A process-count cap is `enforced` only on a run whose process-cap probe
+// proved it (the Linux namespace backend); on the macOS backend it is carried and
+// reported `unverified`.
 import { platformStatements } from './probes.js';
 
 const FS_READ = ['fs-read-confinement', 'read-denial'];
@@ -28,7 +29,7 @@ export const REPORT_LIMITATIONS = Object.freeze([
   'HTTPS is an opaque tunnel to a declared destination: its payload is not inspected. Plaintext HTTP is filtered for secrets before it is forwarded.',
   'The mediation proxy accepts connections from any local process. It only forwards to declared destinations, so the exposure is the declared set.',
   'A process that double-forks and calls setsid between two supervisor sweeps can outlive the task; only a PID namespace or cgroup closes that gap.',
-  'Process-count caps are per-user and system-wide on the host and did not refuse on a hosted Linux runner in a previous release; none is claimed enforced on any backend.',
+  'A process-count cap is enforced only on the Linux namespace backend, where it is applied by prlimit after the confinement is built and was proved by an active probe; on macOS it is per-user and system-wide on the host, a soft brake that is carried and not claimed.',
   'Address-space (memory) caps are not enforceable on macOS and are carried, not enforced.',
 ]);
 
@@ -73,7 +74,7 @@ export function buildCapabilityReport({ bound, probeReport, level, required }) {
       timeoutMs: { requested: m.resources.timeoutMs ?? null, enforced: level === 'enforced', by: 'supervisor deadline with process-tree termination' },
       maxOutputBytes: { requested: m.resources.maxOutputBytes ?? null, enforced: level === 'enforced', by: 'supervisor output cap with process-tree termination' },
       maxFileSizeKb: { requested: m.resources.maxFileSizeKb ?? null, enforced: level === 'enforced' && fileLimitProved, state: c['file-size-limit']?.state ?? 'not-probed' },
-      maxProcesses: { requested: m.resources.maxProcesses ?? null, enforced: false, state: 'unverified' },
+      maxProcesses: { requested: m.resources.maxProcesses ?? null, enforced: m.resources.maxProcesses != null && level === 'enforced' && c['process-cap']?.state === 'proved', state: c['process-cap']?.state === 'proved' ? 'proved' : 'unverified' },
       maxMemoryMiB: { requested: m.resources.maxMemoryMiB ?? null, enforced: false, state: 'not-enforced' },
     },
     limitations: [...REPORT_LIMITATIONS],

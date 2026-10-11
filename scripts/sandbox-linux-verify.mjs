@@ -18,9 +18,11 @@
 // `$RUNNER_TEMP/sandbox-linux-evidence.json`, and refuses to call anything verified that a
 // probe did not prove.
 //
-// What it does NOT do: assert anything about process-count caps. A diagnostic
-// prints what the runner's kernel did with a cap of 1, clearly labelled as not
-// a proof; the control stays unasserted.
+// The process-count cap is a REQUIRED proved control here. It is applied by
+// `prlimit` to the payload alone (the shell used for the resource prelude is dash on
+// the hosted image, whose `ulimit` has no `-u`), and the probe attacks it and pairs
+// it with a positive control. A diagnostic at the end prints what the kernel did
+// with an unprivileged `ulimit -u` and with the namespace cap, as context only.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -35,6 +37,7 @@ const SCANNER = path.join(ROOT, 'scanner');
 const REQUIRED_SUITE = 'kernel-namespace confinement — escape attempts';
 const REQUIRED_CAPABILITY_SUITES = [
   '[CORE-003.AC02] the base controls are proved on the Linux namespace backend',
+  '[X-503.AC03] the process-count cap binds inside the user namespace, in both directions',
   '[X-502.AC01] reads and writes outside the allowed roots are blocked on the Linux namespace backend',
   '[X-503.AC02] descendants are terminated by the kernel, including ones no sweep can find',
   '[CORE-003.AC01] protected paths are unreadable on the Linux namespace backend',
@@ -43,10 +46,10 @@ const REQUIRED_CAPABILITY_SUITES = [
 // Controls that must be `proved` for the Linux backend to be called verified.
 const REQUIRED_PROVED = [
   'write-confinement', 'read-denial', 'env-scrub', 'network', 'tree-termination', 'file-size-limit',
-  'fs-read-confinement', 'fs-multi-root-write',
+  'fs-read-confinement', 'fs-multi-root-write', 'process-cap',
 ];
 // Controls that must stay NOT proved on this backend (honesty checks).
-const MUST_NOT_BE_PROVED = ['process-cap', 'network-mediation'];
+const MUST_NOT_BE_PROVED = ['network-mediation'];
 
 function line(s = '') { process.stdout.write(`${s}\n`); }
 
@@ -151,8 +154,29 @@ for (const name of REQUIRED_CAPABILITY_SUITES) {
 }
 const capSkipped = cap.results.filter((r) => r.skipped);
 if (capSkipped.length) problems.push(`${capSkipped.length} test(s) in linux-enforcement.test.js SKIPPED`);
-if (cap.results.filter((r) => r.ok && !r.skipped).length < 25) problems.push('fewer tests ran in linux-enforcement.test.js than expected');
+if (cap.results.filter((r) => r.ok && !r.skipped).length < 50) problems.push('fewer tests ran in linux-enforcement.test.js than expected');
 if (cap.run.status !== 0) problems.push(`the linux-enforcement test process exited ${cap.run.status}`);
+
+// ---------------------------------------------------------------- execution suites
+// The suites that execute targets through the trust boundary must RUN on this host, not skip. Their file lists are read from the scoped
+// scripts in package.json so this cannot drift from what those scripts run. linux-enforcement.test.js is already covered above.
+const pkg = JSON.parse(fs.readFileSync(path.join(SCANNER, 'package.json'), 'utf8'));
+const EXEC_SCOPES = ['test:capabilities', 'test:verification', 'test:invariants', 'test:documentation'];
+const execFiles = [...new Set(EXEC_SCOPES.flatMap((s) => String(pkg.scripts[s] || '').match(/test\/[\w./-]+\.test\.js/g) || []))]
+  .filter((f) => f !== 'test/capabilities/linux-enforcement.test.js');
+execFiles.push('test/trust-boundary.test.js', 'test/evidence-issuer.test.js');
+if (execFiles.length < 30) problems.push(`only ${execFiles.length} execution-suite files were found in package.json; the scope lists were not read`);
+line('');
+const exe = runTests(execFiles);
+line('');
+line('=== execution suites: RAN / SKIPPED summary ===');
+const exeSkipped = exe.results.filter((r) => r.skipped);
+const exeRan = exe.results.filter((r) => r.ok && !r.skipped);
+line(`ran and passed: ${exeRan.length}; skipped: ${exeSkipped.length}; failed: ${exe.results.filter((r) => !r.ok).length}`);
+for (const r of exeSkipped) line(`SKIPPED :: ${r.name}`);
+if (exe.run.status !== 0) problems.push(`the execution-suite test process exited ${exe.run.status}`);
+if (exeSkipped.length) problems.push(`${exeSkipped.length} test(s) in the execution suites SKIPPED on a host that has the backend: ${exeSkipped.map((r) => r.name).slice(0, 5).join(' | ')}`);
+if (exeRan.length < 300) problems.push(`only ${exeRan.length} execution-suite tests ran; far fewer than expected`);
 
 // ---------------------------------------------------------------- probe table
 line('');
@@ -189,7 +213,7 @@ try {
 
 // ---------------------------------------------------------------- diagnostic
 line('');
-line('=== DIAGNOSTIC (not a proof, not gated): process-count cap on this runner ===');
+line('=== DIAGNOSTIC (context, not a proof; the gated proof is the process-cap probe above): process-count cap on this runner ===');
 {
   const un = spawnSync('sh', ['-c', 'ulimit -u 1 2>&1; echo "ulimit -u now: $(ulimit -u)"; (sleep 0.05 &) ; echo "background fork rc=$?"; sleep 0.2'], { encoding: 'utf8', timeout: 8000 });
   line(`unconfined, cap 1: ${String(un.stdout + un.stderr).trim().replace(/\n/g, ' | ')}`);
@@ -200,7 +224,7 @@ line('=== DIAGNOSTIC (not a proof, not gated): process-count cap on this runner 
     line(`namespace, cap 1: status=${r.status} exit=${r.exitCode} stdout=${JSON.stringify(r.stdout.trim())} stderr=${JSON.stringify(String(r.stderr).trim().slice(0, 300))}`);
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  line('The process cap stays UNASSERTED on every backend regardless of the above.');
+  line('The gated proof of the namespace process cap is the process-cap probe in the evidence table above, not these lines.');
 }
 
 // ---------------------------------------------------------------- verdict

@@ -54,6 +54,8 @@ export function buildLimitPrelude({
  * e.g. `'0 2>/dev/null; true'` swallows the failure. Coerce and reject
  * anything that is not a finite, non-negative number.
  */
+export function validateMaxProcs(v) { return _num('maxProcs', v); }
+
 function _num(name, v) {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) {

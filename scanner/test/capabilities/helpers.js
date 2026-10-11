@@ -10,7 +10,7 @@ import { mkTestTmp } from '../helpers/tmp.js';
 
 export const REV = 'a'.repeat(40);
 export const BACKEND = detectBackend();
-export const CAN_RUN = BACKEND === 'userspace';
+export const CAN_RUN = BACKEND === 'userspace' || BACKEND === 'namespace';
 // A skip is a declared gap, never a pass. Every execution test names why.
 export const SKIP = CAN_RUN ? false : `SKIPPED, NOT PASSED: execution tests need a probed userspace backend (selected '${BACKEND}'); UNVERIFIED here`;
 
@@ -89,4 +89,52 @@ export function viaProxy(proxyPort, { url, method = 'GET', headers = {}, body = 
     if (body !== null) req.write(body);
     req.end();
   });
+}
+
+// ---------------------------------------------------------------------------
+// Platform-aware expectations. The two backends refuse an out-of-root access in
+// different, equally real ways, and a test must assert the one the host has,
+// never a weaker common denominator.
+//
+//   userspace (macOS)  the kernel policy denies the call; the result carries
+//                      `denied: true`.
+//   namespace (Linux)  capability mode pivots into a root that holds only the
+//                      declared paths, so an undeclared path has NO NAME: the call
+//                      fails with ENOENT (or EROFS for a read-only root). That is
+//                      a stronger isolation than a denial, and it is not reported
+//                      as `denied`.
+// ---------------------------------------------------------------------------
+export const ON_LINUX = BACKEND === 'namespace';
+
+/** The OS, not the policy, refused the access: nonzero exit plus this backend's refusal evidence. */
+export function assertOsRefused(assert, r, label = 'the access') {
+  assert.notEqual(r.exitCode, 0, `${label} must fail`);
+  if (ON_LINUX) {
+    assert.match(String(r.output?.stderr ?? ''), /No such file or directory|Read-only file system|Permission denied/, `${label}: the namespace backend's refusal evidence (the path has no name, or its root is read-only)`);
+  } else {
+    assert.equal(r.denied, true, `${label}: the denial was observed`);
+  }
+}
+
+/**
+ * A run's honesty about its level. On an advertised backend (the Linux namespace
+ * backend) a run is `enforced` only because every control it depends on was
+ * proved; on the macOS backend it is `host-proved` and claims no enforcement.
+ */
+export function assertLevelHonest(assert, r) {
+  if (ON_LINUX) {
+    assert.equal(r.level, 'enforced');
+    assert.equal(r.enforced, true);
+    for (const c of r.report.capabilities.filter((x) => x.enforcedBy === 'runner')) {
+      assert.equal(c.enforced, true, `${c.kind} claims enforcement`);
+      for (const [k, st] of Object.entries(c.checked)) {
+        if (k === 'network-mediation') continue;
+        assert.equal(st, 'proved', `${c.kind} claims enforcement but control ${k} is ${st}`);
+      }
+    }
+  } else {
+    assert.equal(r.level, 'host-proved');
+    assert.equal(r.enforced, false);
+    assert.ok(r.report.capabilities.every((c) => c.enforced === false), 'no capability claims enforcement on a host-proved run');
+  }
 }

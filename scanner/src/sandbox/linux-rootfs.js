@@ -251,6 +251,13 @@ if ! ( : > "$ROOT/.agsec-sbx-wcheck" ) 2>/dev/null; then
 fi
 rm -f "$ROOT/.agsec-sbx-wcheck"
 _cwd="\${SBX_CWD:-$ROOT}"
-unset SBX_PLAN SBX_FINAL SBX_MOUNT SBX_UMOUNT SBX_PIVOT SBX_PRIVDROP SBX_NEWROOT SBX_MASKS SBX_CANARY SBX_STRICT SBX_CWD
+_nproc="$SBX_NPROC"; _prlimit="$SBX_PRLIMIT"
+unset SBX_PLAN SBX_FINAL SBX_MOUNT SBX_UMOUNT SBX_PIVOT SBX_PRIVDROP SBX_NEWROOT SBX_MASKS SBX_CANARY SBX_STRICT SBX_CWD SBX_NPROC SBX_PRLIMIT
+# The process-count cap is applied last, to the caller's command only: the checks
+# above fork, and so does the setup before them. A prlimit that cannot run stops
+# the command (the exec fails), never lets it run uncapped.
+if [ -n "$_nproc" ]; then
+  cd "$_cwd" && exec "$_prlimit" --nproc="$_nproc" -- "$@"
+fi
 cd "$_cwd" && exec "$@"
 `;

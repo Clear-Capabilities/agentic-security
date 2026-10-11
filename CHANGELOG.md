@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.165.0 - Linux process-count cap proved on a hosted runner; the execution suites run on Linux
+
+**The process-count cap works on Linux and is proved.** The cap was never applied before because the resource prelude ran under `dash`, which has no `ulimit -u`. The namespace backend now applies it with `prlimit --nproc` to the task's command only, after the confinement is built. On the hosted x86_64 `sandbox-linux` job, six concurrent children all start under a cap of 512 and only one starts under a cap of 3, in default mode and in capability mode. The probe is paired with fault injection: it fails against a runner that drops the cap and against one that caps everything. A requested cap is never silently dropped; a host without `prlimit` reports it unsupported. `process-cap` is verified for Linux only after that hosted result, and stays unverified on macOS.
+
+**The execution suites now run on Linux with Linux semantics, with no skips.** The capabilities, trust-boundary and attack-corpus suites assert ENOENT or EROFS evidence for out-of-root access instead of macOS-style denial, use heartbeats instead of host pids for liveness, and expect a declared network destination to block the task. No assertion was weakened. A skip in the trust-boundary suite is gone. The hosted `sandbox-linux` job now also runs the capabilities, verification, invariants, documentation, trust-boundary and evidence-issuer suites and fails on any skip: 737 tests ran and passed, 0 skipped, 0 failed.
+
+**A responsiveness defect found by the hosted run.** The supervisor's periodic synchronous `ps` sweep kept the controller's event loop 58 to 62 percent busy on Linux. It is off for the namespace backend, where the kernel already kills the namespace with its supervisor.
+
+**Still open.** The hosted release leg still runs only the static closure: running the full closure there has never been timed on a hosted runner and would duplicate the test shards. Mediated network remains unsupported on Linux. The process-count behaviour was checked on kernel 6.8 only; older kernels count the limit per real uid system-wide, so a small cap could behave differently. The real-code accuracy gates and the routing promotion gate still need independently adjudicated data that code cannot produce, so the PRD closure verification still reports not complete.
+
 ## 0.164.0 - Linux isolation proved on a hosted runner, six controller limits enforced, closure evidence from CI
 
 Closing gaps from the Differentiation PRD that software can close. The gaps that remain are named at the end; none of them is hidden by this release.

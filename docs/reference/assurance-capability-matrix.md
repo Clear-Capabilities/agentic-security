@@ -78,7 +78,7 @@ Limits of the invariant tooling, as the guide states them: the application is a 
 
 | Platform | Backend | Status | Note |
 | --- | --- | --- | --- |
-| linux | namespace | `partially-verified` | advertised for enforced mode. Proved by active probes on the hosted Linux runner (not on every Linux host): write-confinement, read-denial, env-scrub, network, tree-termination, file-size-limit, fs-read-confinement, fs-multi-root-write. Mediated network is NOT implemented on the namespace backend (an empty network namespace has no path to a proxy), so a task that declares a network destination is blocked on Linux, never allowed. Process-count caps are never claimed: the cause of the earlier non-refusal was found (the shell used for the resource prelude has no process-limit option, so the cap was never applied) and no replacement has been proved. The attack corpus is not run in the sandbox-linux job, so corpus coverage stays unverified on Linux. |
+| linux | namespace | `partially-verified` | advertised for enforced mode. Proved by active probes on the hosted Linux runner (not on every Linux host): write-confinement, read-denial, env-scrub, network, tree-termination, file-size-limit, fs-read-confinement, fs-multi-root-write, process-cap (a per-user-namespace process-count cap applied with prlimit after the confinement is built; the shell ulimit it replaces does not exist in dash). Mediated network is NOT implemented on the namespace backend (an empty network namespace has no path to a proxy), so a task that declares a network destination is blocked on Linux, never allowed. Process-count caps are claimed on Linux only, and only as that probe shows them; memory caps are not enforced. The attack corpus is not run in the sandbox-linux job, so corpus coverage stays unverified on Linux. |
 | darwin | userspace | `host-proved-not-advertised` | the active probes can prove the controls on a macOS host, and tasks can run there for development only when the caller opts in; macOS is not an advertised enforced backend. |
 | win32 | none | `unsupported` | no isolation backend exists on Windows. |
 
@@ -91,7 +91,7 @@ Standing limitations, stated in every capability report:
 - HTTPS is an opaque tunnel to a declared destination: its payload is not inspected. Plaintext HTTP is filtered for secrets before it is forwarded.
 - The mediation proxy accepts connections from any local process. It only forwards to declared destinations, so the exposure is the declared set.
 - A process that double-forks and calls setsid between two supervisor sweeps can outlive the task; only a PID namespace or cgroup closes that gap.
-- Process-count caps are per-user and system-wide on the host and did not refuse on a hosted Linux runner in a previous release; none is claimed enforced on any backend.
+- A process-count cap is enforced only on the Linux namespace backend, where it is applied by prlimit after the confinement is built and was proved by an active probe; on macOS it is per-user and system-wide on the host, a soft brake that is carried and not claimed.
 - Address-space (memory) caps are not enforceable on macOS and are carried, not enforced.
 
 ## Evidence

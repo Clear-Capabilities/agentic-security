@@ -34,7 +34,7 @@ export const KNOWN_LIMITS = Object.freeze([
   'HTTPS to a declared destination is an opaque tunnel: its payload is not inspected.',
   'The mediation proxy accepts connections from any local process, and forwards only to the declared destinations.',
   'Tool and delegation checks are policy at the tool boundary (in-process); only the runner enforces.',
-  'Process-count caps are not asserted on any backend.',
+  'A process-count cap is claimed only on the Linux namespace backend, where an active probe proved it on the hosted job; it is not claimed on macOS.',
 ]);
 
 /**

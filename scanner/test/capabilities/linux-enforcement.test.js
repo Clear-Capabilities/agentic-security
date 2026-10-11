@@ -25,7 +25,7 @@ import { detectBackend } from '../../src/sandbox/capabilities.js';
 import { buildNamespaceInvocation } from '../../src/sandbox/backend-namespace.js';
 import { runConfinedSupervised } from '../../src/sandbox/supervise.js';
 import { probeControls } from '../../src/sandbox/control-probes.js';
-import { probeTreeHeartbeat } from '../../src/sandbox/control-probes.js';
+import { probeTreeHeartbeat, probeProcessCap } from '../../src/sandbox/control-probes.js';
 import {
   buildRootPlan, serializePlan, PIVOT_SETUP_SCRIPT, FINAL_SCRIPT, BASELINE_DIRS, MARK_SETUP_FAILED,
 } from '../../src/sandbox/linux-rootfs.js';
@@ -268,6 +268,73 @@ describe('[X-502.AC03] the invocation builder fails closed instead of running wi
   });
 });
 
+describe('[X-503.AC02] a process-count cap reaches the command through prlimit, never through the shell ulimit', () => {
+  const tools = {
+    nsBin: () => '/x/unshare', mountBin: () => '/x/mount', privDropBin: () => '/x/setpriv', pivotBin: () => '/x/pivot_root', umountBin: () => '/x/umount',
+    prlimitBin: () => '/x/prlimit',
+    nsArgs: () => ['--user', '--map-root-user', '--mount', '--pid', '--ipc', '--uts', '--fork', '--kill-child', '--net'],
+  };
+  const root = tmp('x503-cap-');
+
+  test('a requested cap is carried to the final stage and is not written into the shell prelude (dash has no ulimit -u)', () => {
+    const inv = buildNamespaceInvocation(['/bin/true'], { root, limits: { maxProcs: 40 }, readRoots: [] }, tools);
+    assert.equal(inv.error, undefined, JSON.stringify(inv.error));
+    try {
+      assert.equal(inv.env.SBX_NPROC, '40'); assert.equal(inv.env.SBX_PRLIMIT, '/x/prlimit');
+      assert.ok(!inv.args.join(' ').includes('ulimit -u'), 'the shell prelude must not carry the process cap');
+      assert.ok(FINAL_SCRIPT.includes('--nproc='), 'the final stage applies it');
+      assert.ok(!inv.unsupported.includes('maxProcs'));
+    } finally { inv.dispose(); }
+  });
+
+  test('no requested cap means none is applied (the old ambient-relative default was never real on this backend)', () => {
+    const inv = buildNamespaceInvocation(['/bin/true'], { root, readRoots: [] }, tools);
+    try { assert.equal(inv.env.SBX_NPROC, undefined); assert.equal(inv.env.SBX_PRLIMIT, undefined); } finally { inv.dispose(); }
+  });
+
+  test('a host without prlimit declares the cap unsupported instead of dropping it silently', () => {
+    const inv = buildNamespaceInvocation(['/bin/true'], { root, limits: { maxProcs: 40 }, readRoots: [] }, { ...tools, prlimitBin: () => null });
+    try {
+      assert.ok(inv.unsupported.includes('maxProcs'));
+      assert.equal(inv.env.SBX_NPROC, undefined);
+    } finally { inv.dispose(); }
+  });
+
+  test('a non-numeric cap is refused before anything runs', () => {
+    for (const bad of ['5; id', -1, Infinity, NaN]) {
+      const inv = buildNamespaceInvocation(['/bin/true'], { root, limits: { maxProcs: bad } }, tools);
+      assert.equal(inv.error?.status, 'error', String(bad));
+    }
+  });
+
+  const finalWith = (env, logFile) => {
+    const dir = tmp('x503-final-');
+    const rootDir = path.join(dir, 'root'); fs.mkdirSync(rootDir);
+    const stub = path.join(dir, 'prlimit');
+    fs.writeFileSync(stub, `#!/bin/sh\necho "prlimit $*" >> '${logFile(dir)}'\nshift 2\nexec "$@"\n`, { mode: 0o755 });
+    const r = spawnSync('/bin/sh', ['-c', FINAL_SCRIPT, '_sbx', '/bin/sh', '-c', 'echo ran > "$ROOT/payload.out"'], {
+      encoding: 'utf8', env: { PATH: '/usr/bin:/bin', ROOT: rootDir, SBX_CANARY: path.join(dir, 'nope', 'c'), ...env(dir, stub) },
+    });
+    const log = fs.existsSync(logFile(dir)) ? fs.readFileSync(logFile(dir), 'utf8') : '';
+    return { r, log, ran: fs.existsSync(path.join(rootDir, 'payload.out')) };
+  };
+
+  test('the final stage runs the command under prlimit --nproc=N when a cap is set, and not otherwise', () => {
+    const capped = finalWith((d, stub) => ({ SBX_NPROC: '12', SBX_PRLIMIT: stub }), (d) => path.join(d, 'log'));
+    assert.equal(capped.r.status, 0, capped.r.stderr);
+    assert.equal(capped.ran, true);
+    assert.match(capped.log, /^prlimit --nproc=12 -- \/bin\/sh -c /m);
+    const uncapped = finalWith(() => ({}), (d) => path.join(d, 'log'));
+    assert.equal(uncapped.ran, true); assert.equal(uncapped.log, '', 'prlimit is not involved without a cap');
+  });
+
+  test('a prlimit that cannot run stops the command: it never runs uncapped', () => {
+    const r = finalWith((d) => ({ SBX_NPROC: '12', SBX_PRLIMIT: path.join(d, 'missing-prlimit') }), (d) => path.join(d, 'log'));
+    assert.notEqual(r.r.status, 0);
+    assert.equal(r.ran, false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Execution (needs the real backend)
 // ---------------------------------------------------------------------------
@@ -279,7 +346,7 @@ describe('[CORE-003.AC02] the base controls are proved on the Linux namespace ba
     for (const c of ['write-confinement', 'read-denial', 'env-scrub', 'network', 'tree-termination', 'file-size-limit']) {
       assert.match(states[c], /^proved/, `${c} -> ${states[c]}`);
     }
-    assert.equal(report.controls['process-cap'].state, 'unverified', 'a process-count cap must stay unasserted');
+    assert.match(states['process-cap'], /^proved/, `process-cap -> ${states['process-cap']}`);
   });
 
   test('the heartbeat tree probe cannot pass against a runner that leaks a detached member (probe sensitivity)', async () => {
@@ -292,6 +359,42 @@ describe('[CORE-003.AC02] the base controls are proved on the Linux namespace ba
     const r = await probeTreeHeartbeat({ run: leaky });
     assert.notEqual(r.state, 'proved', JSON.stringify(r));
     if (process.platform === 'linux') assert.match(r.reason, /still running/, 'the detached heartbeat must be seen surviving');
+  });
+});
+
+describe('[X-503.AC03] the process-count cap binds inside the user namespace, in both directions', { skip: SKIP }, () => {
+  test('default mode: six concurrent children start under a generous cap and the kernel refuses them under a cap of 3', async () => {
+    const r = probeProcessCap();
+    assert.equal(r.state, 'proved', JSON.stringify(r));
+  });
+
+  test('capability mode: the same, in the pivoted root', async () => {
+    const r = probeProcessCap({ mode: { readRoots: [] } });
+    assert.equal(r.state, 'proved', JSON.stringify(r));
+  });
+
+  test('FAULT INJECTION: a runner that drops the cap is caught (the tight run starts every child)', async () => {
+    const { runConfined } = await import('../../src/sandbox/index.js');
+    const uncapped = (a, o) => runConfined(a, { ...o, limits: {} });
+    const r = probeProcessCap({ run: uncapped });
+    assert.equal(r.state, 'not-proved', JSON.stringify(r));
+    assert.match(r.reason, /did not refuse/);
+  });
+
+  test('FAULT INJECTION: a runner that caps everything tightly fails the probe positive control (a probe that can never succeed proves nothing)', async () => {
+    const { runConfined } = await import('../../src/sandbox/index.js');
+    const tight = (a, o) => runConfined(a, { ...o, limits: { maxProcs: 3 } });
+    const r = probeProcessCap({ run: tight });
+    assert.equal(r.state, 'not-proved', JSON.stringify(r));
+    assert.match(r.reason, /positive control failed/);
+  });
+
+  test('the cap applies to the command alone: the confinement setup still has the processes it needs under a small cap', async () => {
+    const { runConfined } = await import('../../src/sandbox/index.js');
+    const root = tmp('x503-small-');
+    const r = runConfined(['/bin/sh', '-c', 'echo SETUP_AND_START_OK'], { root, readRoots: [], limits: { maxProcs: 8 }, timeoutMs: 10000 });
+    assert.equal(r.status, 'ok', JSON.stringify(r));
+    assert.match(r.stdout, /SETUP_AND_START_OK/);
   });
 });
 

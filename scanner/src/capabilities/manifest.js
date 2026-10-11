@@ -44,8 +44,8 @@ const MANIFEST_REQUIRED = ['schema', 'schemaVersion', 'taskId', 'repository', 'p
 
 // Resource limits a manifest can carry. The first three come straight from the
 // assurance config (same ranges), the file-size cap is enforced by the sandbox
-// prelude, and the last two are CARRIED but never claimed enforced: see
-// `RESOURCE_ENFORCEMENT` in runner.js.
+// prelude, the process-count cap is enforced on the Linux namespace backend only (prlimit, proved by an
+// active probe), and the memory cap is CARRIED but never claimed enforced.
 export const RESOURCE_RANGES = Object.freeze({
   timeoutMs: { min: LIMITS.timeoutMs.min, max: LIMITS.timeoutMs.max },
   maxOutputBytes: { min: LIMITS.maxOutputBytes.min, max: LIMITS.maxOutputBytes.max },
