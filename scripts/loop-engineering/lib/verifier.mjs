@@ -17,6 +17,7 @@ import { sha256, readJson, nowIso } from './util.mjs';
 import { writeEvidence, verifierHash, requirementHash, effectiveWatch, VERIFIER_VERSION } from './evidence.mjs';
 import { registerOpLease } from './oplease.mjs';
 import { runRemote } from './remote.mjs';
+import { attestSkippedTests, uncoveredSkips } from './ci-attest.mjs';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 export function toolAvailable(name) {
@@ -32,16 +33,23 @@ function failAll(req, reason) {
   return req.criteria.map((c) => ({ id: c.id, state: 'fail', reason, assertions: [] }));
 }
 
-export function evaluateCriteria(req, tap, suiteOk) {
+/**
+ * `attested` (optional): { names: Set<string>, source } naming locally SKIPPED tests that a commit-bound hosted attestation covers
+ * (ci-attest.mjs). It can only turn a skipped (never todo, never failed) tagged test into an attested one. The criterion still lists
+ * the test as skipped; the pass is labelled with its source so it is never read as a local run.
+ */
+export function evaluateCriteria(req, tap, suiteOk, attested = null) {
   return req.criteria.map((c) => {
     const tag = `[${c.id}]`;
     const hits = tap.tests.filter((t) => t.name.includes(tag));
     if (!hits.length) return { id: c.id, state: 'fail', reason: `no test is tagged ${tag}`, assertions: [] };
-    const bad = hits.filter((t) => !t.ok || t.skip || t.todo);
-    const assertions = hits.map((t) => ({ name: t.name, ok: t.ok && !t.skip && !t.todo, skipped: t.skip || t.todo }));
+    const isAttested = (t) => !!attested && t.skip && !t.todo && t.ok && attested.names.has(t.name);
+    const bad = hits.filter((t) => !isAttested(t) && (!t.ok || t.skip || t.todo));
+    const assertions = hits.map((t) => ({ name: t.name, ok: t.ok && !t.skip && !t.todo, skipped: t.skip || t.todo, ...(isAttested(t) ? { attested: attested.source } : {}) }));
     if (bad.length) return { id: c.id, state: 'fail', reason: bad.some((t) => t.skip || t.todo) ? 'a tagged test was skipped/todo (counts as failed)' : 'a tagged test failed', assertions };
     void suiteOk;
-    return { id: c.id, state: 'pass', assertions };
+    const via = hits.filter(isAttested);
+    return { id: c.id, state: 'pass', assertions, ...(via.length ? { source: attested.source, attestedTests: via.map((t) => t.name) } : {}) };
   });
 }
 
@@ -63,6 +71,7 @@ export async function verifyRequirement(ctx, req, opts = {}) {
   let criteria, counts = { tests: 0, pass: 0, fail: 0, skipped: 0 };
   let run = null, result = 'fail', blocker = null, reason = null;
   let remoteRecord = null, remoteFiles = [];
+  let attestation = null;
   const logPath = join(L.evidenceDir, req.id, `${String(Date.now())}.log`);
 
   const missingFiles = v.files.filter((f) => !existsSync(resolve(cwdAbs, f)));
@@ -109,11 +118,30 @@ export async function verifyRequirement(ctx, req, opts = {}) {
       fail: tap.summary.fail ?? top.filter((t) => !t.ok).length,
       skipped: (tap.summary.skipped ?? 0) + (tap.summary.todo ?? 0),
     };
-    criteria = evaluateCriteria(req, tap, true);
+    // A locally skipped test may be accepted from a hosted attestation, and only when nothing failed or timed out here: a local failure is
+    // never overridden, and a run cut short proves nothing about the tests it did not reach.
+    let attested = null;
+    const skippedTests = top.filter((t) => t.skip && !t.todo && t.ok);
+    const wantAttest = v.attestFromCi && skippedTests.length > 0 && process.env.LOOP_ATTEST_FROM_CI !== '0'
+      && run.outcome === 'exited' && run.exitCode === v.expectedExitCode && !top.some((t) => !t.ok && !t.skip)
+      && counts.skipped === skippedTests.length && counts.fail === 0;
+    if (wantAttest) {
+      const names = [...new Set(skippedTests.map((t) => t.name))];
+      const res = await (opts.attest?.run || attestSkippedTests)({ skippedNames: names, cfg: v.attestFromCi, repoRoot, ...(opts.attest?.deps || {}) });
+      if (res.covered.length) {
+        const set = new Set(res.covered);
+        attested = { names: set, source: res.source };
+        counts.attestedSkipped = skippedTests.filter((t) => set.has(t.name)).length;
+        attestation = { kind: 'attested-from-ci', source: res.source, job: res.job, commit: res.commit, runId: res.runId, jobUrl: res.jobUrl, reportSha256: res.reportSha256, covered: skippedTests.filter((t) => set.has(t.name)).map((t) => t.name) };
+        limitations.push(`${counts.attestedSkipped} locally skipped test(s) were NOT run on this host; they are accepted from the hosted ${res.job} job (run ${res.runId}) at ${res.commit}. ${res.source}. This is evidence from that run, not a claim this host enforced anything.`);
+      }
+      for (const u of res.uncovered) limitations.push(`not attested [${u.code}]: ${u.name}${u.detail ? ` (${String(u.detail).slice(0, 160)})` : ''}`);
+    }
+    criteria = evaluateCriteria(req, tap, true, attested);
     if (run.outcome !== 'exited') reason = `${run.outcome}${run.reason ? `: ${run.reason}` : ''}`;
     else if (run.exitCode !== v.expectedExitCode) reason = `exit code ${run.exitCode}, expected ${v.expectedExitCode}`;
     else if (counts.tests <= 0 || !top.length) reason = 'suite ran zero tests (empty selection fails)';
-    else if (counts.skipped > 0) reason = `${counts.skipped} test(s) skipped/todo; skipped required tests count as failed`;
+    else if (uncoveredSkips({ counts, attestation }) > 0) reason = `${uncoveredSkips({ counts, attestation })} test(s) skipped/todo and not covered by an attestation; skipped required tests count as failed`;
     if (run.logTruncated) limitations.push('log truncated at the configured cap');
     const allPass = criteria.every((c) => c.state === 'pass');
     result = !reason && allPass ? 'pass' : 'fail';
@@ -150,6 +178,7 @@ export async function verifyRequirement(ctx, req, opts = {}) {
     ...(blocker ? { blocker } : {}),
     logs: run ? { combined: { path: logPath, sha256: logSha, bytes: run.bytes.stdout + run.bytes.stderr } } : Object.fromEntries(remoteFiles.map((f, i) => [`remote${i}`, f])),
     ...(remoteRecord ? { remote: remoteRecord } : {}),
+    ...(attestation ? { attestation } : {}),
     limitations,
   };
   const out = writeEvidence(L, req.id, envelope, key);

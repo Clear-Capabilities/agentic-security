@@ -87,6 +87,14 @@ is ENOENT or EROFS rather than `denied`; liveness is judged by heartbeat, not ho
 pid; a declared network destination blocks the task); `sandbox-linux` fails if any
 of them skips.
 
+`sandbox-linux` also writes a per-test report (`sandbox-linux-test-report`, artifact of the
+job). The loop controller reads it back, for the exact commit, to accept the six
+Linux-namespace tests that SKIP on a host without the backend
+(`docs/guides/loop-engineering.md`, "Attested tests"). That is evidence from the
+hosted run, reported as its own source (`attested-from-ci: sandbox-linux@<sha>`)
+beside the unchanged local skip count; it is not a claim that the local host
+enforced anything and it does not change `partially-verified`.
+
 ## Known limits (also in `REPORT_LIMITATIONS`)
 
 Descendant exec is not allowlisted; ancestors of declared roots expose metadata;

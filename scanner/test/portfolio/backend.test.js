@@ -9,6 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { mkTestTmp } from '../helpers/tmp.js';
+import { loadFactor } from '../helpers/load.js';
 import {
   FileLockBackend, createLocalBackend, createSharedBackend, initSharedBackend, openBackend, exportState, verifyStateExport, importState, BACKEND_MARKER, BACKEND_MARKER_SCHEMA, STATE_EXPORT_SCHEMA, BLOCK_CODES, BACKEND_LIMITS,
 } from '../../src/posture/portfolio/backend.js';
@@ -202,43 +203,47 @@ describe('[X-708.AC02] a customer-operated shared backend supports leases with t
   });
 
   test('[X-708.AC02] two real processes drain one shared portfolio together: every unit is verified once, none ran twice, and spend is charged once per unit', async () => {
-    // Every safety property is asserted on every attempt. That BOTH processes got work depends on the scheduler (one can finish the whole
-    // queue before the other starts), so the overlap is required in at least one of up to three fresh attempts, which keeps the guard
-    // against a single-process run without making a release depend on one scheduling roll.
-    let overlapped = false;
-    for (let attempt = 1; attempt <= 3 && !overlapped; attempt++) {
-      const { dir, backend } = shared(); const execDir = mkTestTmp('exec2-');
-      openStore(backend.storeFile(), manyUnitsPlan({ a: 8, b: 8, c: 4 }));
-      const startAt = Date.now() + 900; const syncDir = mkTestTmp('sync-'); const peers = ['proc-A', 'proc-B'];
-      const [p1, p2] = await Promise.all([
-        child({ kind: 'shared', mode: 'drain', dir, holder: 'proc-A', startAt, execDir, concurrency: 2, slots: 4, syncDir, peers }),
-        child({ kind: 'shared', mode: 'drain', dir, holder: 'proc-B', startAt, execDir, concurrency: 2, slots: 4, syncDir, peers }),
-      ]);
-      assert.equal(p1.code, 0, p1.err); assert.equal(p2.code, 0, p2.err);
-      const store = readStore(backend.storeFile());
-      assert.equal(Object.values(store.units).filter((u) => u.state === 'verified').length, 20);
-      const files = fs.readdirSync(execDir);
-      assert.equal(files.length, 20, `one execution marker per unit, got ${files.join(',')}`);
-      assert.equal(files.filter((f) => f.startsWith('DUP-')).length, 0, 'no unit was executed by two processes');
-      assert.equal(p1.result.executed.length + p2.result.executed.length, 20);
-      const led = readLedger(backend.storeFile());
-      assert.equal(Object.keys(led.reservations).length, 0, 'every reservation was settled');
-      assert.equal(Object.keys(led.settled).length, 20, 'one settlement per unit, never two');
-      assert.ok(Object.values(led.settled).every((h) => h === 'reported'));
-      assert.equal(led.usage.portfolio.storageBytes, 20 * 10, 'each unit was charged once for its storage reservation');
-      overlapped = p1.result.executed.length > 0 && p2.result.executed.length > 0;
-    }
-    assert.ok(overlapped, 'both processes did real work in at least one of three attempts');
+    // Overlap is made certain by a rendezvous in the child, not hoped for from the scheduler: every executor call in a process waits until
+    // each peer process also holds a unit, so neither can finish the queue before the other starts, however slowly a process loads. The
+    // wait is on the peers' state (announced, or provably gone), never on a fixed number of seconds; the cap below is only a hang guard,
+    // scaled by the machine's load. One attempt, every property asserted: there is no retry that could hide a lost overlap.
+    const { dir, backend } = shared(); const execDir = mkTestTmp('exec2-');
+    openStore(backend.storeFile(), manyUnitsPlan({ a: 8, b: 8, c: 4 }));
+    const syncDir = mkTestTmp('sync-'); const peers = ['proc-A', 'proc-B'];
+    const rendezvousCapMs = Math.round(60_000 * loadFactor());
+    // the barrier only lines the starts up when the machine allows it; correctness does not depend on it
+    const startAt = Date.now() + 900;
+    const [p1, p2] = await Promise.all([
+      child({ kind: 'shared', mode: 'drain', dir, holder: 'proc-A', startAt, execDir, concurrency: 2, slots: 4, syncDir, peers, rendezvousCapMs }),
+      child({ kind: 'shared', mode: 'drain', dir, holder: 'proc-B', startAt, execDir, concurrency: 2, slots: 4, syncDir, peers, rendezvousCapMs }),
+    ]);
+    assert.equal(p1.code, 0, p1.err); assert.equal(p2.code, 0, p2.err);
+    const store = readStore(backend.storeFile());
+    assert.equal(Object.values(store.units).filter((u) => u.state === 'verified').length, 20, `every unit verified; states: ${JSON.stringify(Object.values(store.units).filter((u) => u.state !== 'verified').map((u) => [u.id, u.state, u.events?.at(-1)?.reason]))}`);
+    const files = fs.readdirSync(execDir);
+    assert.equal(files.length, 20, `one execution marker per unit, got ${files.join(',')}`);
+    assert.equal(files.filter((f) => f.startsWith('DUP-')).length, 0, 'no unit was executed by two processes');
+    assert.equal(p1.result.executed.length + p2.result.executed.length, 20);
+    assert.ok(p1.result.executed.length > 0 && p2.result.executed.length > 0, `both processes did real work (A ${p1.result.executed.length}, B ${p2.result.executed.length})`);
+    const led = readLedger(backend.storeFile());
+    assert.equal(Object.keys(led.reservations).length, 0, 'every reservation was settled');
+    assert.equal(Object.keys(led.settled).length, 20, 'one settlement per unit, never two');
+    assert.ok(Object.values(led.settled).every((h) => h === 'reported'));
+    assert.equal(led.usage.portfolio.storageBytes, 20 * 10, 'each unit was charged once for its storage reservation');
   });
 
   test('[X-708.AC02] an abandoned lock is recovered after the stale window, a fresh lock is never broken, and a lock is released only by its owner', () => {
     const { dir } = shared();
-    const quick = new FileLockBackend({ kind: 'shared-dir', root: dir, requireMarker: true, lockStaleMs: 200, lockWaitMs: 150 });
+    // The stale window is far larger than any scheduling pause, so "a fresh lock" stays fresh however long this process is descheduled
+    // between writing the lock and the backend reading its age (a 200 ms window made that a race on a loaded machine); the abandoned lock
+    // is then aged explicitly to well past the window. Both halves of the rule are still exercised.
+    const STALE = 60_000;
+    const quick = new FileLockBackend({ kind: 'shared-dir', root: dir, requireMarker: true, lockStaleMs: STALE, lockWaitMs: 150 });
     quick.withExclusive('seed', () => 1); // creates .locks
     const lock = path.join(dir, '.locks', 'abandoned.lock');
     fs.writeFileSync(lock, JSON.stringify({ token: 'dead-holder', pid: 999999 }));
     assert.throws(() => quick.withExclusive('abandoned', () => 'x', { waitMs: 100 }), (e) => e.code === 'LOCK_TIMEOUT', 'a fresh lock held by someone else is respected');
-    const old = new Date(Date.now() - 5000); fs.utimesSync(lock, old, old);
+    const old = new Date(Date.now() - 10 * STALE); fs.utimesSync(lock, old, old);
     assert.equal(quick.withExclusive('abandoned', () => 'recovered'), 'recovered');
     // the owner's release must not delete a lock that was recovered and re-taken by someone else meanwhile
     quick.withExclusive('swap', () => { fs.writeFileSync(path.join(dir, '.locks', 'swap.lock'), JSON.stringify({ token: 'someone-else' })); });

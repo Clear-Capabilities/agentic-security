@@ -30,6 +30,7 @@ import { activeOpLeases } from './oplease.mjs';
 import { resolveBinary, detectClaude, buildWorkerArgs, StreamState, classifyWorker, buildPrompt } from './claude.mjs';
 import { buildStatus, renderStaticHtml, isTerminal } from './status.mjs';
 import { runGateCommand } from './gates.mjs';
+import { uncoveredSkips } from './ci-attest.mjs';
 import { evaluateClosure, checkReceipts, gatherReceipts, rehashReceipts, gitFacts, parseMeasured, fileSetDeliverable, implementationDiff, prdLedger, unmetByRequirement, CLOSURE_SCHEMA } from './closure.mjs';
 import { buildAssuranceBundle } from './closure-bundle.mjs';
 
@@ -664,7 +665,7 @@ export class Controller {
       const out = await this.verify(r, { phase: 'final' });
       this.tree.build(); afterEach.push(this.tree.wholeTree().digest);
       const ev = out.evidence;
-      results.push({ id: r.id, result: ev.result, evidenceId: ev.evidenceId, skipped: ev.counts?.skipped || 0, blockerType: ev.blocker?.type || null });
+      results.push({ id: r.id, result: ev.result, evidenceId: ev.evidenceId, skipped: uncoveredSkips(ev), blockerType: ev.blocker?.type || null });
     }
     for (const g of finalGates.filter((x) => x.id !== 'build')) {
       if (this.stopping || this.paused) { this.S.current = null; return { aborted: 'interrupted' }; }
@@ -762,7 +763,7 @@ export class Controller {
     rehashReceipts(receipts);
     order.issuedAt = nowIso();
     const decision = evaluateClosure(facts);
-    const results = [...receipts.values()].map((rc) => ({ id: rc.id, result: rc.found ? rc.result : 'missing', evidenceId: rc.evidenceId || null, skipped: rc.counts?.skipped || 0, blockerType: rc.blockerType || null }));
+    const results = [...receipts.values()].map((rc) => ({ id: rc.id, result: rc.found ? rc.result : 'missing', evidenceId: rc.evidenceId || null, skipped: uncoveredSkips(rc, git ? git.head : null), blockerType: rc.blockerType || null }));
     const closureRec = {
       schema: CLOSURE_SCHEMA, closed: decision.closed, counts: decision.counts, open: decision.open, unmetCount: decision.unmet.length, order,
       receipts: [...receipts.values()].filter((rc) => rc.found).map((rc) => ({ id: rc.id, evidenceId: rc.evidenceId, file: rc.file, sha256: rc.fileSha256AtIssue })),

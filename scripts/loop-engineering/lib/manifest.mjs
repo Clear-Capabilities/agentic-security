@@ -59,6 +59,8 @@ export function buildRequirements({ parsed, profile, repoRoot }) {
         files: suite.files || [], expectedExitCode: 0, timeoutSeconds: suite.timeoutSeconds,
         ...(suite.requiresTools ? { requiresTools: suite.requiresTools } : {}),
         ...(suite.remote ? { remote: suite.remote } : {}),
+        // locally skipped tests of this suite may be accepted from a commit-bound hosted attestation (lib/ci-attest.mjs)
+        ...(suite.attestFromCi ? { attestFromCi: suite.attestFromCi } : {}),
         // the suite class's ceiling and the lease each child file gets inside it (profiles with limits.suiteCeilings only)
         ...(suiteBounds(profile, r.suite) ? { suiteClass: suiteBounds(profile, r.suite).class, ceilingSeconds: suiteBounds(profile, r.suite).ceilingSeconds, childLeaseSeconds: suiteBounds(profile, r.suite).childLeaseSeconds } : {}),
       },

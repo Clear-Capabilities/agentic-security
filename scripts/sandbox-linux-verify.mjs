@@ -29,6 +29,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildReport } from './loop-engineering/lib/ci-attest.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCANNER = path.join(ROOT, 'scanner');
 
@@ -226,6 +228,31 @@ line('=== DIAGNOSTIC (context, not a proof; the gated proof is the process-cap p
   }
   line('The gated proof of the namespace process cap is the process-cap probe in the evidence table above, not these lines.');
 }
+
+// ---------------------------------------------------------------- per-test report
+// A machine-readable list of every test this job ran and how it ended, bound to the commit and run that produced it. The loop
+// controller can accept a test that SKIPPED on a host without the namespace backend only on the strength of this report, read back
+// from a succeeded `sandbox-linux` job for the exact commit (scripts/loop-engineering/lib/ci-attest.mjs). The report is evidence from
+// this hosted run. It claims nothing about any other host, and it is not written as a pass: `verdict` is VERIFIED only when this
+// script is about to exit 0.
+try {
+  const tests = [
+    ...base.results.map((r) => ({ group: 'sandbox-escape', name: r.name, status: r.skipped ? 'skip' : r.ok ? 'pass' : 'fail' })),
+    ...cap.results.map((r) => ({ group: 'linux-enforcement', name: r.name, status: r.skipped ? 'skip' : r.ok ? 'pass' : 'fail' })),
+    ...exe.results.map((r) => ({ group: 'execution', name: r.name, status: r.skipped ? 'skip' : r.ok ? 'pass' : 'fail' })),
+  ];
+  const report = buildReport({
+    commit: process.env.AGENTIC_ATTEST_SHA || process.env.GITHUB_SHA, testedSha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    backend, platform: process.platform, tests, problems: problems.length,
+  });
+  const out = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'sandbox-linux-test-report.json');
+  fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+  line(`per-test report written to ${out} (${tests.length} tests, verdict ${report.verdict})`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const n = (g, st) => tests.filter((t) => t.group === g && t.status === st).length;
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### sandbox-linux per-test report\nverdict: ${report.verdict}; commit ${report.commit}\n\n| group | pass | skip | fail |\n|---|---|---|---|\n${['sandbox-escape', 'linux-enforcement', 'execution'].map((g) => `| ${g} | ${n(g, 'pass')} | ${n(g, 'skip')} | ${n(g, 'fail')} |`).join('\n')}\n`);
+  }
+} catch (e) { line(`could not write the per-test report: ${e.message}`); }
 
 // ---------------------------------------------------------------- verdict
 line('');
