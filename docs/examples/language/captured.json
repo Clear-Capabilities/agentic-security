@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "engineVersion": "0.165.1",
+  "engineVersion": "0.166.0",
   "bundleSha256": "5a4520f3bff6f1e77c0bb2bfaa0346b11c1447eb3a8433bc1661d2f58c03537a",
   "examples": {
     "haskell-app/vulnerable": {
