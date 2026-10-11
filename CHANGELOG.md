@@ -9,6 +9,10 @@
 > make the history less accurate, not more.
 
 
+## 0.165.1 - documentation: the project guide no longer says the execution suites skip on hosted Linux
+
+Documentation-only correction. The root `CLAUDE.md` still described Linux as `unverified` and said the execution suites skip on the hosted runner; since 0.165.0 they run in the `sandbox-linux` job (which fails on any skip) and Linux is recorded as `partially-verified`. The release leg itself still runs only the static closure, now stated with the real reason: the full closure has never been timed inside a hosted leg's budget. No code changed.
+
 ## 0.165.0 - Linux process-count cap proved on a hosted runner; the execution suites run on Linux
 
 **The process-count cap works on Linux and is proved.** The cap was never applied before because the resource prelude ran under `dash`, which has no `ulimit -u`. The namespace backend now applies it with `prlimit --nproc` to the task's command only, after the confinement is built. On the hosted x86_64 `sandbox-linux` job, six concurrent children all start under a cap of 512 and only one starts under a cap of 3, in default mode and in capability mode. The probe is paired with fault injection: it fails against a runner that drops the cap and against one that caps everything. A requested cap is never silently dropped; a host without `prlimit` reports it unsupported. `process-cap` is verified for Linux only after that hosted result, and stays unverified on macOS.
