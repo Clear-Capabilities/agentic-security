@@ -77,6 +77,15 @@ export const CONFINE_BINS_UMOUNT = Object.freeze([
   '/usr/bin/umount', '/bin/umount', '/sbin/umount', '/usr/sbin/umount',
 ]);
 
+// The process-limit utility. The resource prelude runs under `/bin/sh`, which is dash on
+// many Linux hosts, and dash's `ulimit` has no `-u`: a process-count cap written there is
+// never applied. The namespace backend therefore applies the cap with this tool, in the
+// final stage and only to the caller's command (a cap applied earlier would starve the
+// confinement setup of the processes it needs). Absent => the cap is declared unsupported.
+export const CONFINE_BINS_PRLIMIT = Object.freeze([
+  '/usr/bin/prlimit', '/bin/prlimit', '/usr/local/bin/prlimit', '/usr/sbin/prlimit', '/sbin/prlimit',
+]);
+
 // Back-compat single-path exports: the first (canonical) candidate.
 export const CONFINE_BIN_USERSPACE = CONFINE_BINS_USERSPACE[0];
 export const CONFINE_BIN_NAMESPACE = CONFINE_BINS_NAMESPACE[0];
@@ -107,6 +116,7 @@ export function resolveNamespaceBin() { return resolveConfineBin(CONFINE_BINS_NA
 export function resolveMountBin() { return resolveConfineBin(CONFINE_BINS_MOUNT); }
 export function resolvePrivDropBin() { return resolveConfineBin(CONFINE_BINS_PRIVDROP); }
 export function resolvePivotBin() { return resolveConfineBin(CONFINE_BINS_PIVOT); }
+export function resolvePrlimitBin() { return resolveConfineBin(CONFINE_BINS_PRLIMIT); }
 export function resolveUmountBin() { return resolveConfineBin(CONFINE_BINS_UMOUNT); }
 
 // Bounded on purpose: a capability check must never hang a scan. The probe is

@@ -20,7 +20,7 @@ import { runCapabilityTask } from '../../src/capabilities/runner.js';
 import { resolveAssuranceConfig } from '../../src/posture/assurance/config.js';
 import { unmetControls } from '../../src/sandbox/control-probes.js';
 import { digestOf } from '../../src/posture/assurance/identity.js';
-import { BACKEND, SKIP, CONFIG_ON, bind, ctxFor, run, tmp, manifest } from './helpers.js';
+import { BACKEND, SKIP, CONFIG_ON, bind, ctxFor, run, tmp, manifest, assertOsRefused, assertLevelHonest } from './helpers.js';
 
 const CAT = { executable: '/bin/cat', args: { mode: 'prefix', values: [] } };
 const TOUCH = { executable: '/usr/bin/touch', args: { mode: 'prefix', values: [] } };
@@ -60,8 +60,7 @@ describe('[X-502.AC01] reads and writes outside allowed roots are blocked at the
     const r = await exec('/bin/cat', [outside]);
     assert.equal(r.executed, true);
     assert.ok(!JSON.stringify(r).includes(canary), 'the canary is nowhere in the result');
-    assert.equal(r.denied, true, 'the denial was observed');
-    assert.notEqual(r.exitCode, 0);
+    assertOsRefused(assert, r, 'a read outside every root');
   });
 
   test('a write outside the roots, and into a read-only root, creates nothing', async () => {
@@ -70,7 +69,7 @@ describe('[X-502.AC01] reads and writes outside allowed roots are blocked at the
       const r = await exec('/usr/bin/touch', [t]);
       assert.equal(r.executed, true);
       assert.ok(!fs.existsSync(t), `${t} must not exist`);
-      assert.equal(r.denied, true);
+      assertOsRefused(assert, r, `a write to ${path.basename(path.dirname(t))}`);
     }
   });
 
@@ -78,11 +77,11 @@ describe('[X-502.AC01] reads and writes outside allowed roots are blocked at the
     for (const p of [path.join(dir, 'ro/link'), path.join(dir, 'ro/dirlink/secret.txt')]) {
       const r = await exec('/bin/cat', [p]);
       assert.ok(!JSON.stringify(r).includes(canary), `reading through ${path.basename(p)} must not leak`);
-      assert.equal(r.denied, true);
+      assertOsRefused(assert, r, `reading through ${path.basename(p)}`);
     }
     const w = await exec('/usr/bin/touch', [path.join(dir, 'work/outdir/pwned')]);
     assert.ok(!fs.existsSync(path.join(dir, 'outside/pwned')), 'a write through a link inside a write root must not land outside it');
-    assert.equal(w.denied, true);
+    assertOsRefused(assert, w, 'a write through a link');
     // The policy layer agrees that the path is not inside the roots, and says why.
     assert.equal(decide(bound, { kind: 'filesystem-read', path: path.join(dir, 'ro/link') }, ctxFor(bound)).code, 'symlink-escape');
     assert.equal(decide(bound, { kind: 'filesystem-write', path: path.join(dir, 'work/outdir/pwned') }, ctxFor(bound)).code, 'symlink-escape');
@@ -92,7 +91,7 @@ describe('[X-502.AC01] reads and writes outside allowed roots are blocked at the
     const sneaky = `${path.join(dir, 'ro')}/../outside/secret.txt`;
     const r = await exec('/bin/cat', [sneaky]);
     assert.ok(!JSON.stringify(r).includes(canary));
-    assert.equal(r.denied, true);
+    assertOsRefused(assert, r, 'a parent-directory traversal');
     assert.equal(decide(bound, { kind: 'filesystem-read', path: sneaky }, ctxFor(bound)).code, 'path-traversal');
     const inside = `${path.join(dir, 'ro')}/sub/../a.txt`;
     assert.equal(decide(bound, { kind: 'filesystem-read', path: inside }, ctxFor(bound)).code, 'path-traversal', 'even a harmless .. is refused: the kernel and the lexical form can disagree');
@@ -101,17 +100,15 @@ describe('[X-502.AC01] reads and writes outside allowed roots are blocked at the
   test('paths outside the roots cannot even be listed, so their contents cannot be probed', async () => {
     const r = await exec('/bin/ls', [path.join(dir, 'outside')]);
     assert.ok(!r.output.stdout.includes('secret.txt'));
-    assert.equal(r.denied, true);
+    assertOsRefused(assert, r, 'listing an undeclared directory');
   });
 
-  test('the run is honest about what it is: confined on this host, not an advertised enforced backend', async () => {
+  test('the run is honest about what it is: host-proved on macOS, enforced on Linux only because every control was proved', async () => {
     const r = await exec('/bin/cat', [path.join(dir, 'ro/a.txt')]);
-    assert.equal(r.level, 'host-proved');
-    assert.equal(r.enforced, false);
-    assert.ok(r.report.capabilities.every((c) => c.enforced === false), 'no capability claims enforcement on a host-proved run');
+    assertLevelHonest(assert, r);
     const fsRead = r.report.capabilities.find((c) => c.kind === 'filesystem-read');
     assert.equal(fsRead.checked['fs-read-confinement'], 'proved');
-    assert.ok(r.capabilityDecisions.length > 0 && r.capabilityDecisions.every((d) => d.enforced === false));
+    assert.ok(r.capabilityDecisions.length > 0 && r.capabilityDecisions.every((d) => d.enforced === (BACKEND === 'namespace')));
   });
 });
 
@@ -174,7 +171,9 @@ console.log(JSON.stringify(out));`;
     const r = await run(bound, { executable: '/bin/sh', args: ['-c', script] }, { home, labelDirs: [labels], evidenceDirs: [evidence] });
     assert.equal(r.executed, true, JSON.stringify({ s: r.status, c: r.code, m: r.reason }));
     for (const c of Object.values(canaries)) assert.ok(!JSON.stringify(r).includes(c));
-    assert.equal(r.denied, true);
+    // `cat` of a protected file fails (the script ends with `true`, so the exit code is 0): the refusal shows in stderr.
+    if (BACKEND === 'namespace') assert.match(String(r.output.stderr), /No such file or directory|Permission denied/, 'the protected paths have no name inside the namespace');
+    else assert.equal(r.denied, true);
   });
 
   test('a manifest root that contains protected material is blocked before anything runs', async () => {
@@ -255,10 +254,12 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     const p = platformStatements();
     assert.equal(p.linux.status, 'partially-verified', 'Linux is advertised and verified only for the controls the sandbox-linux job proved');
     assert.ok(p.linux.verifiedControls.includes('fs-read-confinement'));
-    assert.ok(!p.linux.verifiedControls.includes('network-mediation') && !p.linux.verifiedControls.includes('process-cap'), 'unsupported and unasserted controls are never listed as verified');
+    assert.ok(!p.linux.verifiedControls.includes('network-mediation'), 'an unsupported control is never listed as verified');
+    assert.ok(p.linux.verifiedControls.includes('process-cap'), 'the process-count cap was proved by the hosted job');
     assert.equal(p.darwin.status, 'host-proved-not-advertised');
     assert.equal(p.win32.status, 'unsupported');
-    assert.match(p.linux.note, /never claimed|not claimed|Process-count caps are never claimed/);
+    assert.match(p.linux.note, /Mediated network is NOT implemented/);
+    assert.match(p.linux.note, /process-cap/);
   });
 
   test('a backend with incomplete controls blocks: it is never a warning or a quiet fallback', async () => {
@@ -344,8 +345,15 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     assert.equal(decide(bound, { kind: 'command', executable: '/usr/bin/touch', args: [path.join(dir, 'x')] }, ctxFor(bound)).decision, 'allow');
     const r = await run(bound, { ...REQ, args: [path.join(dir, 'x')] });
     assert.equal(r.executed, true);
-    assert.equal(r.enforced, false);
-    assert.equal(r.level, 'host-proved');
+    // The allowlist said "allow" in both cases. What differs is whether the BACKEND is an advertised one.
+    assertLevelHonest(assert, r);
+    // The other direction: take one proved control away and the same allowlisted command is refused outright.
+    const weakened = await runCapabilityTask(bound, { ...REQ, args: [path.join(dir, 'y')] }, {
+      binding: bound.binding, config: CONFIG_ON, allowUnadvertisedBackend: true,
+      controlProbes: { 'write-confinement': async () => ({ state: 'not-proved', reason: 'fault injection' }) },
+    });
+    assert.equal(weakened.executed, false, 'an allowlisted command does not run on a backend whose control is not proved');
+    assert.ok(!fs.existsSync(path.join(dir, 'y')));
   });
 });
 

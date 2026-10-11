@@ -27,7 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runConfined } from './index.js';
 import { buildNamespaceInvocation } from './backend-namespace.js';
-import { heartbeatShell } from './control-probes.js';
+import { heartbeatShell, probeProcessCap } from './control-probes.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const NODE = process.execPath;
@@ -174,5 +174,6 @@ export async function runLinuxProbes() {
   await step('protected-canary-masked:default', () => probeProtectedCanaryMasked({ run: (a, o) => runConfined(a, { ...o, readRoots: undefined }) }));
   await step('protected-canary-masked:capability', () => probeProtectedCanaryMasked());
   await step('capability-network', () => probeCapabilityNetwork());
+  await step('process-cap:capability', () => probeProcessCap({ mode: { readRoots: [] } }));
   return out;
 }

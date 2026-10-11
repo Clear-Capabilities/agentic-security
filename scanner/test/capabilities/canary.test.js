@@ -10,7 +10,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SKIP, bind, run, tmp, recordingServer } from './helpers.js';
+import { SKIP, ON_LINUX, bind, run, tmp, recordingServer } from './helpers.js';
 
 const uniq = (p) => `${p}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -124,6 +124,29 @@ const send=(p,u,h,b)=>new Promise(r=>{const q=http.request({host:px.hostname,por
       commands: [{ executable: process.execPath, interpreter: 'scoped', args: { mode: 'exact', values: ['-e', script] } }],
       resources: { timeoutMs: 20000 },
     });
+    if (ON_LINUX) {
+      // No mediated network on the namespace backend: a task that declares a destination is refused before it runs, so none of the
+      // proxied routes exists. The remaining route, a direct socket, is attacked by a task that declares nothing.
+      const refused = await run(bound, { executable: process.execPath, args: ['-e', script] }, { canaries: [value] });
+      assert.equal(refused.status, 'blocked'); assert.equal(refused.executed, false);
+      assert.equal(S.seen.requests.length, 0); assert.equal(S.seen.connections, 0);
+      const directOnly = `const fs=require('fs'),net=require('net');
+const c=fs.readFileSync(${JSON.stringify(path.join(ro, 'data.txt'))},'utf8');
+net.connect(${S.port},'127.0.0.1').on('connect',function(){this.write(c);console.log(JSON.stringify({read:c.length,direct:'CONNECTED'}));process.exit(0)}).on('error',e=>{console.log(JSON.stringify({read:c.length,direct:e.code}));process.exit(0)});`;
+      const nonet = bind({
+        filesystem: { read: [ro], write: [w] },
+        commands: [{ executable: process.execPath, interpreter: 'scoped', args: { mode: 'exact', values: ['-e', directOnly] } }],
+        resources: { timeoutMs: 20000 },
+      });
+      const d = await run(nonet, { executable: process.execPath, args: ['-e', directOnly] }, { canaries: [value] });
+      assert.equal(d.executed, true, JSON.stringify({ s: d.status, c: d.code, m: d.reason, e: d.output?.stderr }));
+      const o = JSON.parse(d.output.stdout.trim().split('\n').pop());
+      assert.equal(o.read, value.length, 'the task did read the canary (the positive control)');
+      assert.equal(o.direct, 'ENETUNREACH', 'the direct route is closed by the network namespace');
+      assert.equal(S.seen.requests.length, 0); assert.equal(S.seen.connections, 0, 'the listener saw nothing');
+      assert.ok(!JSON.stringify(d).includes(value));
+      return;
+    }
     const r = await run(bound, { executable: process.execPath, args: ['-e', script] }, { canaries: [value] });
     assert.equal(r.executed, true, JSON.stringify({ s: r.status, c: r.code, m: r.reason, e: r.output?.stderr }));
     const out = JSON.parse(r.output.stdout.trim().split('\n').pop());

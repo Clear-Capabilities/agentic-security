@@ -22,8 +22,9 @@ import {
 import { mkTestTmp } from './helpers/tmp.js';
 
 const BACKEND = detectBackend();
-const ENFORCED = BACKEND === 'userspace';
-const why = `SKIPPED, NOT PASSED: the enforced-boundary attacks need a probed userspace backend (selected '${BACKEND}'); UNVERIFIED here`;
+const ENFORCED = BACKEND === 'userspace' || BACKEND === 'namespace';
+const ON_LINUX = BACKEND === 'namespace';
+const why = `SKIPPED, NOT PASSED: the enforced-boundary attacks need a probed backend, userspace or namespace (selected '${BACKEND}'); UNVERIFIED here`;
 const skipUnlessEnforced = ENFORCED ? false : why;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
@@ -247,15 +248,21 @@ describe('[CORE-003.AC01] a malicious target cannot cross the boundary', { skip:
 describe('[CORE-003.AC02] controls are proved by active probes on the advertised backend', { skip: skipUnlessEnforced }, () => {
   test('every control reports a state with evidence, and the matrix is honest', async () => {
     const rep = capabilityReport(await probeControls());
-    assert.equal(rep.backend, 'userspace');
+    assert.equal(rep.backend, BACKEND);
     for (const c of CONTROLS) assert.ok(rep.controls[c], c);
     for (const c of ['write-confinement', 'read-denial', 'env-scrub', 'network', 'tree-termination', 'file-size-limit']) {
       assert.equal(rep.controls[c].state, 'proved', `${c}: ${JSON.stringify(rep.controls[c])}`);
       assert.ok(rep.controls[c].evidence, `${c} has no evidence`);
     }
-    // never claimed: a process-count cap
-    assert.notEqual(rep.controls['process-cap'].state, 'proved');
-    assert.match(rep.controls['process-cap'].reason, /no enforcement is claimed/);
+    if (ON_LINUX) {
+      // Linux: the process-count cap is probed (an attack plus a positive control) and carries evidence like the others.
+      assert.equal(rep.controls['process-cap'].state, 'proved', JSON.stringify(rep.controls['process-cap']));
+      assert.ok(rep.controls['process-cap'].evidence);
+    } else {
+      // macOS: a process-count cap is per-uid and system-wide, a soft brake; never claimed.
+      assert.notEqual(rep.controls['process-cap'].state, 'proved');
+      assert.match(rep.controls['process-cap'].reason, /no enforcement is claimed/);
+    }
     assert.ok(rep.notes.some((n) => /Linux enforcement cannot be exercised on a macOS host/.test(n)));
   });
 });
@@ -282,7 +289,9 @@ describe('[CORE-003.AC02] every process in the tree ends on timeout, cancel and 
     assert.deepEqual(r.termination.survivors, []);
     assert.ok(elapsed < 4000, `took ${elapsed} ms`);
     const pids = await pidsFrom(root, ['a', 'b', 'c']);
-    for (const p of pids) assert.equal(alive(p), false, `pid ${p} survived`);
+    // A payload's `$!` is a host pid only on the userspace backend; inside the Linux PID namespace it is a namespace pid. `ps` on the
+    // host sees every member by its command line on both backends, so that is the check that runs everywhere.
+    if (!ON_LINUX) for (const p of pids) assert.equal(alive(p), false, `pid ${p} survived`);
     for (const n of ['7311', '7312', '7313']) assert.equal(psHas(`sleep ${n}`), 0, `sleep ${n} is an orphan`);
     assert.equal(r.termination.signalled, 'SIGKILL', 'a TERM-ignoring member must force the SIGKILL escalation');
   });
@@ -298,7 +307,7 @@ describe('[CORE-003.AC02] every process in the tree ends on timeout, cancel and 
     assert.equal(r.status, 'cancelled');
     assert.equal(r.cancelled, true);
     const [pid] = await pidsFrom(root, ['a']);
-    assert.equal(alive(pid), false);
+    if (!ON_LINUX) assert.equal(alive(pid), false);
     assert.equal(psHas('sleep 7321'), 0);
   });
 
@@ -307,7 +316,7 @@ describe('[CORE-003.AC02] every process in the tree ends on timeout, cancel and 
     const r = await runConfinedSupervised(['/bin/sh', '-c', 'sleep 7331 & echo $! > "$ROOT/a"; exit 0'], { root, timeoutMs: 5000, graceMs: 300 });
     assert.equal(r.status, 'ok');
     const [pid] = await pidsFrom(root, ['a']);
-    assert.equal(alive(pid), false, 'leftover descendant survived a clean exit');
+    if (!ON_LINUX) assert.equal(alive(pid), false, 'leftover descendant survived a clean exit');
     assert.equal(psHas('sleep 7331'), 0);
   });
 
@@ -338,20 +347,23 @@ describe('[CORE-003.AC02] every process in the tree ends on timeout, cancel and 
 });
 
 describe('[CORE-003.AC02] backends where termination or read denial is not proved refuse to run', () => {
-  test('a namespace backend that cannot be established refuses supervised execution instead of running unsupervised', async (t) => {
-    // On a host where the namespace backend works this exact request RUNS (tree
-    // termination is then proved by linux-probes.js on the sandbox-linux job),
-    // so it is only a refusal test where the backend cannot be established.
-    const { detectBackend } = await import('../src/sandbox/capabilities.js');
-    if (detectBackend() === 'namespace') {
-      t.skip('SKIPPED, NOT PASSED: the namespace backend works on this host, so this refusal path cannot be exercised here');
-      return;
-    }
+  test('a namespace backend that cannot be established, or cannot kill the namespace with its supervisor, refuses supervised execution instead of running unsupervised', async () => {
+    // Where the namespace backend cannot be established the request is refused outright. Where it WORKS, the same request runs (tree
+    // termination is then proved by linux-probes.js on the sandbox-linux job), so the refusal is exercised by taking away the one thing
+    // supervised execution depends on: the flag that makes the kernel kill the namespace with its supervisor.
+    const { resolveNamespaceArgs } = await import('../src/sandbox/backend-namespace.js');
+    const withoutTreeKill = { nsArgs: (bin, net) => resolveNamespaceArgs(bin, net)?.filter((a) => a !== '--kill-child') ?? null };
     const root = mkTestTmp('tb-ns-');
-    const r = await runConfinedSupervised(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, force: 'namespace' });
+    const r = await runConfinedSupervised(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, force: 'namespace', deps: withoutTreeKill });
     assert.equal(r.status, 'error');
     assert.match(r.stderr, /no kernel-namespace binary|could not be created|refusing to execute|not implemented or verified/);
     assert.equal(fs.existsSync(path.join(root, 'marker')), false);
+    if (BACKEND === 'namespace') {
+      // The positive control: the very same request, with the flag left in, runs.
+      const ok = await runConfinedSupervised(['/bin/sh', '-c', `echo ran > "$ROOT/marker"`], { root, force: 'namespace' });
+      assert.equal(ok.status, 'ok', JSON.stringify({ s: ok.status, e: ok.stderr }));
+      assert.equal(fs.existsSync(path.join(root, 'marker')), true);
+    }
   });
 
   test('the namespace backend refuses mediated network instead of silently ignoring it', async () => {
