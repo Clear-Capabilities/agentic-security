@@ -399,10 +399,13 @@ describe('[X-507.AC03] reports distinguish requested, checked and enforced contr
     }
     assert.equal(rep.platforms.linux.status, 'partially-verified', 'Linux is only partially verified, and only by the hosted job');
     assert.ok(rep.platforms.linux.unsupportedControls.includes('network-mediation'));
-    assert.ok(rep.platforms.linux.unassertedControls.includes('process-cap'));
+    assert.ok(rep.platforms.linux.verifiedControls.includes('process-cap'), 'the hosted sandbox-linux job proved the process-count cap');
+    assert.deepEqual(rep.platforms.linux.unassertedControls, []);
     assert.equal(rep.platforms.darwin.status, 'host-proved-not-advertised');
+    // macOS: the cap is per-user and system-wide, so it is never claimed. Linux: this run was blocked (a declared destination cannot be
+    // mediated), so nothing was enforced even though the control itself is proved on this host.
     assert.equal(rep.resources.maxProcesses.enforced, false);
-    assert.equal(rep.resources.maxProcesses.state, 'unverified', 'no process-count cap is claimed');
+    assert.equal(rep.resources.maxProcesses.state, ON_LINUX ? 'proved' : 'unverified');
     assert.equal(rep.resources.maxMemoryMiB.state, 'not-enforced');
   });
 
@@ -417,7 +420,7 @@ describe('[X-507.AC03] reports distinguish requested, checked and enforced contr
     assert.match(text, /HTTPS is an opaque tunnel/);
     assert.match(text, /accepts connections from any local process/);
     assert.match(text, /descendant/i);
-    assert.match(text, /Process-count caps/);
+    assert.match(text, /process-count cap is enforced only on the Linux namespace backend/i);
     assert.equal(rep.platforms.linux.status, 'partially-verified');
     const noNet = syntheticEnforcedRun({});
     const bound2 = bind({ filesystem: { write: [tmp('rcpt-nn-')] }, commands: [{ executable: '/bin/echo', args: { mode: 'any' } }] });

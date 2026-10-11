@@ -211,6 +211,27 @@ describe('[X-503.AC02] descendants inherit confinement and are terminated on dea
     assert.equal(r.cleanup.complete, true);
   });
 
+  test('a process-count cap in the manifest refuses a fork storm on Linux and is not claimed on macOS', async () => {
+    const f = path.join(w, 'cap-kids');
+    const script = `i=0; while [ $i -lt 6 ]; do ( echo CHILD >> '${f}'; sleep 1 ) & i=$((i+1)); done; wait; true`;
+    const count = () => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).length; } catch { return 0; } };
+    // The positive control runs first: with a generous cap (or none on macOS) all six children start.
+    const generous = await runShell(script, w, { resources: { maxProcesses: 512, timeoutMs: 15000 } });
+    assert.equal(generous.executed, true, JSON.stringify({ s: generous.status, c: generous.code, m: generous.reason }));
+    assert.equal(count(), 6, 'every child starts under a generous cap');
+    fs.rmSync(f);
+    const tight = await runShell(script, w, { resources: { maxProcesses: 3, timeoutMs: 15000 } });
+    assert.equal(tight.executed, true);
+    if (ON_LINUX) {
+      assert.ok(count() < 6, `the kernel refused children under a cap of 3 (${count()} started)`);
+      assert.equal(tight.report.resources.maxProcesses.enforced, true);
+      assert.equal(tight.report.resources.maxProcesses.state, 'proved');
+    } else {
+      assert.equal(tight.report.resources.maxProcesses.enforced, false, 'a per-user system-wide cap is not claimed on macOS');
+      assert.equal(tight.report.resources.maxProcesses.state, 'unverified');
+    }
+  });
+
   test('a file-size limit stops a runaway write', async () => {
     const big = path.join(w, 'big');
     const bound = bind({ filesystem: { write: [w] }, commands: [{ executable: '/bin/dd', args: { mode: 'prefix', values: [] } }], resources: { maxFileSizeKb: 64 } });

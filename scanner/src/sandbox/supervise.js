@@ -87,7 +87,10 @@ export function superviseSpawn(bin, args, {
     let timer = null;
 
     const sweep = () => { if (pgid) for (const p of snapshotTree(pgid)) tracked.add(p); };
-    const sweeper = setInterval(sweep, sweepMs);
+    // sweepMs <= 0 turns the periodic sweep off. Each sweep is a SYNCHRONOUS `ps`, which blocks the controller's event loop for as long as
+    // it runs; on the namespace backend the kernel ends every member with the supervisor (--kill-child), so the periodic sweep adds nothing
+    // there and only costs responsiveness. The cleanup below still takes its own snapshots.
+    const sweeper = sweepMs > 0 ? setInterval(sweep, sweepMs) : null;
 
     const survivors = () => {
       sweep();
@@ -126,7 +129,8 @@ export function superviseSpawn(bin, args, {
     function finish() {
       if (finishing) return finishing;
       finishing = (async () => {
-        clearInterval(sweeper); clearTimeout(timer);
+        if (sweeper) clearInterval(sweeper);
+        clearTimeout(timer);
         const termination = await terminate();
         try { child.stdout?.destroy(); child.stderr?.destroy(); } catch { /* ignore */ }
         resolve({ spawnError, exitCode, exitSignal, stdout, stderr, timedOut, cancelled, outputCapped, termination });
@@ -188,7 +192,7 @@ export async function runConfinedSupervised(argv, opts = {}) {
   }
   const r = await superviseSpawn(inv.bin, inv.args, {
     cwd: inv.cwd, env: inv.env, timeoutMs: opts.timeoutMs ?? 10000, graceMs: opts.graceMs ?? 1000,
-    signal: opts.signal, maxOutputBytes: opts.maxOutputBytes,
+    signal: opts.signal, maxOutputBytes: opts.maxOutputBytes, ...(backend === 'namespace' ? { sweepMs: 0 } : {}),
   });
   let rawStderr = r.stderr;
   let unsupported = inv.unsupported;

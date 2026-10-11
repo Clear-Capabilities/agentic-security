@@ -162,7 +162,7 @@ describe('[X-508.AC03] tests record attack coverage and known limits and do not 
     assert.match(limits, /Linux is unverified/);
     assert.match(limits, /double-forks/);
     assert.match(limits, /opaque tunnel/);
-    assert.match(limits, /Process-count caps are not asserted/);
+    assert.match(limits, /process-count cap is claimed only on the Linux namespace backend/);
   });
 
   test('a skipped execution case is recorded as a skip, never as a pass', () => {

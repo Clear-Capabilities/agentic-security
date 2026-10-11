@@ -254,10 +254,12 @@ describe('[X-502.AC03] a platform without equivalent enforcement is explicitly u
     const p = platformStatements();
     assert.equal(p.linux.status, 'partially-verified', 'Linux is advertised and verified only for the controls the sandbox-linux job proved');
     assert.ok(p.linux.verifiedControls.includes('fs-read-confinement'));
-    assert.ok(!p.linux.verifiedControls.includes('network-mediation') && !p.linux.verifiedControls.includes('process-cap'), 'unsupported and unasserted controls are never listed as verified');
+    assert.ok(!p.linux.verifiedControls.includes('network-mediation'), 'an unsupported control is never listed as verified');
+    assert.ok(p.linux.verifiedControls.includes('process-cap'), 'the process-count cap was proved by the hosted job');
     assert.equal(p.darwin.status, 'host-proved-not-advertised');
     assert.equal(p.win32.status, 'unsupported');
-    assert.match(p.linux.note, /never claimed|not claimed|Process-count caps are never claimed/);
+    assert.match(p.linux.note, /Mediated network is NOT implemented/);
+    assert.match(p.linux.note, /process-cap/);
   });
 
   test('a backend with incomplete controls blocks: it is never a warning or a quiet fallback', async () => {

@@ -190,7 +190,12 @@ export async function runCapabilityTask(bound, request, opts = {}) {
       denyReadPaths: protectedPaths,
       env: taskEnv, networkProxyPort: proxy ? proxy.port : null,
       timeoutMs, graceMs: 1000, maxOutputBytes, signal, force,
-      limits: m.resources.maxFileSizeKb ? { maxFileSizeKb: m.resources.maxFileSizeKb } : {},
+      limits: {
+        ...(m.resources.maxFileSizeKb ? { maxFileSizeKb: m.resources.maxFileSizeKb } : {}),
+        // Only the namespace backend applies it (prlimit, after the confinement is built). The macOS backend keeps its own ambient-relative
+        // default: a requested cap there would be per-user and system-wide, which is not what the manifest asked for.
+        ...(m.resources.maxProcesses && backend === 'namespace' ? { maxProcs: m.resources.maxProcesses } : {}),
+      },
     });
     const executed = r.supervised === true;
     if (!executed) {
