@@ -239,7 +239,8 @@ skipped test toward its criterion, and only on this evidence:
    the job's conclusion, never the workflow run's, and never another commit's result.
 3. The job's per-test report (artifact `sandbox-linux-test-report`, written by `scripts/sandbox-linux-verify.mjs`) downloads through
    `gh run download`, is the right kind, names the same commit and the same workflow run, says `VERIFIED`, and its digest over the
-   test list matches the list.
+   test list matches the list. On a pull_request run the job checks out a merge ref, so the report is bound to the PR head (the sha the
+   check run attaches to) and records the merge ref it actually tested as `testedSha`; on a push or tag run the two are the same.
 4. Every entry in the report with the skipped test's exact name, in the groups the profile names (`linux-enforcement`), is `pass`.
 
 Typed refusals (each leaves the test skipped, and a skipped required test still fails): `bad-commit`, `working-tree-dirty`,

@@ -74,9 +74,9 @@ export function realGit(cwd) {
  * Build the per-test report the hosted job uploads (used by scripts/sandbox-linux-verify.mjs, so the writer and the reader below share
  * one definition). `tests`: [{ group, name, status: 'pass'|'skip'|'fail' }]. `verdict` is VERIFIED only when the job is about to exit 0.
  */
-export function buildReport({ commit, runId, runAttempt = null, backend, platform, tests, problems, now = new Date() }) {
+export function buildReport({ commit, testedSha = null, runId, runAttempt = null, backend, platform, tests, problems, now = new Date() }) {
   return {
-    schema: 1, kind: REPORT_KIND, commit: commit || null, runId: runId || null, runAttempt: runAttempt || null, backend, platform, generatedAt: now.toISOString(),
+    schema: 1, kind: REPORT_KIND, commit: commit || null, testedSha: testedSha || null, runId: runId || null, runAttempt: runAttempt || null, backend, platform, generatedAt: now.toISOString(),
     verdict: problems === 0 ? 'VERIFIED' : 'NOT VERIFIED', problems,
     testsSha256: createHash('sha256').update(JSON.stringify(tests)).digest('hex'), tests,
   };

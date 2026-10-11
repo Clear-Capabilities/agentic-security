@@ -614,6 +614,10 @@ jobs:
       # implement, claims to be proved. A runner that cannot establish the namespaces
       # therefore FAILS this job.
       - name: Sandbox escape suite and Linux control probes (fails if any required suite SKIPPED)
+        # A pull_request run checks out a merge ref, so GITHUB_SHA is not the sha the check run attaches to. The report is bound to the
+        # check run's sha (the PR head); the merge ref actually tested is recorded beside it as testedSha.
+        env:
+          AGENTIC_ATTEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/sandbox-linux-verify.mjs
 
       - name: Upload the probe evidence table

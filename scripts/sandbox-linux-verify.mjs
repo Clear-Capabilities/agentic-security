@@ -242,7 +242,7 @@ try {
     ...exe.results.map((r) => ({ group: 'execution', name: r.name, status: r.skipped ? 'skip' : r.ok ? 'pass' : 'fail' })),
   ];
   const report = buildReport({
-    commit: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    commit: process.env.AGENTIC_ATTEST_SHA || process.env.GITHUB_SHA, testedSha: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
     backend, platform: process.platform, tests, problems: problems.length,
   });
   const out = path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'sandbox-linux-test-report.json');
