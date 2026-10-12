@@ -1,0 +1,7 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-ssrf",
+  "lang": "javascript", "sources": { "app.mjs": "app.mjs" },
+  "run": ["{{NODE}}", "app.mjs", "{{CALLBACK_URL}}"],
+  "oracle": { "type": "outbound_callback" },
+  "network": "callback"
+}

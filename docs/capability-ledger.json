@@ -253,6 +253,10 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/guides/exploit-proof-fabric.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/guides/measurement-status.md",
       "taskId": "CORE-001-T03"
     },
@@ -277,11 +281,23 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/guides/rule-compiler.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/guides/verification-oracle-conformance.md",
       "taskId": "CORE-001-T03"
     },
     {
       "path": "docs/guides/verification-schema-migration.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/exploit-proof-fabric.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/rule-compiler.md",
       "taskId": "CORE-001-T03"
     },
     {

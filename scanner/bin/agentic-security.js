@@ -1528,6 +1528,7 @@ async function cmdProfile(args) {
 // /triage list | assign | transition | trend
 async function cmdTriage(args) {
   const target = path.resolve(args._[args._.length - 1] && !args._[args._.length - 1].startsWith('--') ? args._[args._.length - 1] : '.');
+  const sub = args._[1];
   // ollama-offline-prd.md §34 — `triage --explain <finding-id>` is read-only
   // narrative generation, not triage's own assign/transition/lock state
   // machine, so it doesn't need the pro-tier gate below (and is checked
@@ -1599,12 +1600,17 @@ async function cmdTriage(args) {
     }
     return 0;
   }
+  if (sub === 'exploit' || (sub === 'validate' && args.flags.execution)) {
+    if (sub === 'exploit' && !args.flags.prove) { console.error('triage exploit requires --prove (it executes a reproducer in an isolated environment).'); return 4; }
+    const last = args._[args._.length - 1];
+    const exploitTarget = path.resolve(args.flags.root || (last && !String(last).startsWith('--') && last !== args._[1] && last !== args._[2] ? last : '.'));
+    return (await import('../src/posture/proof-fabric/cli.js')).cmdProve(args, exploitTarget);
+  }
   const profile = loadProfile(target);
   if (profile.profile !== 'pro') {
     console.error('Triage is a pro-mode feature. Run `agentic-security profile set pro` to enable.');
     return 4;
   }
-  const sub = args._[1];
   // Sync first so list reflects the latest scan.
   const lastScanPath = statePath(target, 'findings.json');
   if (fs.existsSync(lastScanPath)) {
@@ -1618,10 +1624,16 @@ async function cmdTriage(args) {
     if (args.flags.assignee) filter.assignee = args.flags.assignee;
     if (args.flags.unassigned) filter.unassigned = true;
     const items = triage.list(target, filter);
-    const hdr = ['ID', 'Severity', 'State', 'Assignee', 'File:Line', 'Vuln'].join('  ');
+    // --evidence (PRD 1): an optional, read-only column naming the latest stored exploit-proof evidence state for a
+    // finding, when one exists. Decoupled from triage's own open/fixed state machine on purpose — proof evidence and
+    // triage workflow state answer different questions and must not be conflated.
+    const showEvidence = !!args.flags.evidence;
+    const latestProofFn = showEvidence ? (await import('../src/posture/proof-fabric/store.js')).latestProof : null;
+    const hdr = ['ID', 'Severity', 'State', 'Assignee', 'File:Line', 'Vuln', ...(showEvidence ? ['Evidence'] : [])].join('  ');
     console.log(hdr);
     console.log('─'.repeat(80));
     for (const t of items.slice(0, 50)) {
+      const evidence = showEvidence ? (latestProofFn(target, t.id)?.record?.state ?? 'none') : null;
       console.log([
         t.id.slice(0, 16),
         (t.severity || '').padEnd(8),
@@ -1629,6 +1641,7 @@ async function cmdTriage(args) {
         (t.assignee || '—').padEnd(20),
         `${t.file}:${t.line}`.padEnd(40),
         t.vuln,
+        ...(showEvidence ? [evidence] : []),
       ].join('  '));
     }
     return 0;
@@ -1740,8 +1753,14 @@ async function cmdOrgScan(args) {
 
 // /rules validate | rules lock
 async function cmdRules(args) {
-  const target = path.resolve(args._[2] || '.');
   const sub = args._[1];
+  // Self-learning finding-to-rule compiler (PRD 3): synthesize/evaluate/promote/status/rollback a DETECTION rule
+  // from one confirmed finding — distinct from validate/lock below (rules.yml override linting and pack locking).
+  // Dispatches to its own module rather than inlining here, same convention as `triage exploit`/`proof`.
+  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback') {
+    return (await import('../src/posture/rule-compiler/cli.js')).cmdRules(args, path.resolve(args.flags.root || '.'));
+  }
+  const target = path.resolve(args._[2] || '.');
   if (sub === 'validate') {
     const r = validateOverrides(target);
     if (r.ok) { console.log('✓ rules.yml is valid'); return 0; }
@@ -1755,7 +1774,7 @@ async function cmdRules(args) {
     console.log(`  scanner: ${lock.scannerVersion}  rulePackHash: ${lock.rulePackHash}`);
     return 0;
   }
-  console.error('rules validate | rules lock'); return 4;
+  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> | rules evaluate|promote|status|rollback <rule-id>'); return 4;
 }
 
 // `agentic-security secure [--launch]` — smart router. One command picks the
@@ -3617,6 +3636,21 @@ async function cmdFix(args) {
   const fixMeta = (approvedBy || approvalReason || patchAuthor)
     ? { approval: { approvedBy: approvedBy || '', reason: approvalReason || '' }, ...(patchAuthor ? { author: patchAuthor } : {}) }
     : null;
+  // --require-proof: the patch is applied ONLY if the original exploit is confirmed beforehand and demonstrably blocked
+  // afterwards (posture/proof-fabric/fix-proof.js). Missing reproducer, unavailable environment or an incomplete replay all refuse.
+  if (args.flags['require-proof']) {
+    const { loadReproducerFor } = await import('../src/posture/proof-fabric/cli.js');
+    const { verifyFixWithProof, formatFixProof } = await import('../src/posture/proof-fabric/fix-proof.js');
+    const { verifyFix } = await import('../src/posture/fix-verify.js');
+    const loaded = loadReproducerFor(scanRoot, f.id, args.flags.reproducer);
+    if (!loaded) { console.error(`--require-proof: no reproducer for ${f.id}. Refusing to apply; nothing was executed. Supply --reproducer <file>.`); return 4; }
+    const files = { [f.file]: newContent };
+    const staticVerification = await verifyFix({ scanRoot, originalFindingStableId: f.stableId || null, files, recordMetrics: false });
+    const siblings = (last.findings || []).filter((x) => x.id !== f.id && x.file !== f.file && (x.vuln === f.vuln || x.cwe === f.cwe)).map((x) => ({ id: x.id, file: x.file, line: x.line }));
+    const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings });
+    console.log(formatFixProof(fp));
+    if (!fp.verified) { console.error('\nRefusing to apply: the fix is not proof-verified (--require-proof).'); return 4; }
+  }
   let result = await applyVerifiedFix({
     scanRoot,
     finding: { file: f.file, id: f.id, stableId: f.stableId || null, ruleId: f.cwe || f.title, vuln: f.vuln || f.title },
@@ -7077,6 +7111,7 @@ async function main() {
       case 'undo':     process.exit(await cmdUndo(args));
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
+      case 'proof':    process.exit(await (await import('../src/posture/proof-fabric/cli.js')).cmdProof(args, path.resolve(args.flags.root || '.')));
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));
       case 'rules':    process.exit(await cmdRules(args));

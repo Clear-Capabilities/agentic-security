@@ -155,3 +155,5 @@ accumulating. See it via `/agentic-security:posture --report-card`.
 
 - [Scanning](scanning.md) · [Responding to a leaked secret](leaked-secrets.md)
 - [CI setup](ci-setup.md) — stop new vulns from merging in the first place
+- [Exploit proof](exploit-proof-fabric.md) — go further than the verify step above: execute a real, bounded exploit attempt against the unpatched and patched code (`triage exploit --prove`, `fix --require-proof`)
+- [The rule compiler](rule-compiler.md) — turn one confirmed finding into a reviewed, promoted deterministic detection rule that catches unseen structural siblings for free

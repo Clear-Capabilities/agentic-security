@@ -37,6 +37,14 @@ describe('userspace confinement — escape attempts', { skip }, () => {
     assert.match(r.stdout, /ok/);
   });
 
+  test('GOOD: a command that redirects its own output to /dev/null still runs (regression)', () => {
+    // Previously EPERM: posix_spawn opens /dev/null to back an ignored fd BEFORE exec, and the default profile had
+    // no write allowance for /dev/null (only capability mode did), so the spawn itself failed and the target never ran.
+    const r = runUserspace(['/bin/sh', '-c', `echo marker > $ROOT/ran.txt 2>/dev/null; true > /dev/null`], { root });
+    assert.equal(r.status, 'ok', r.stderr);
+    assert.equal(fs.existsSync(path.join(root, 'ran.txt')), true, 'the command never ran');
+  });
+
   test('BAD: a write outside the sandbox root is blocked and creates no file', () => {
     const target = path.join(outside, 'escape.txt');
     const r = runUserspace(['/bin/sh', '-c', `echo bad > ${target}`], { root });

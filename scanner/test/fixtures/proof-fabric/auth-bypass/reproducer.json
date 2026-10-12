@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-auth-bypass",
+  "lang": "javascript", "sources": { "app.mjs": "app.mjs" },
+  "env": { "GUARDED_RESOURCE_VALUE": "{{SECRET:auth}}" },
+  "run": ["{{NODE}}", "app.mjs", "admin-debug"],
+  "oracle": { "type": "authentication_bypass", "params": { "secret": "auth" } },
+  "network": "none"
+}

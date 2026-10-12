@@ -58,7 +58,6 @@ const ALLOWLIST = new Set([
   'path-predicates.js::_internalPredicateNames',
   // ── posture/* future-API surface (kept for API symmetry, no caller yet) ──
   'blast-radius.js::collectProjectSignals',
-  'custom-rules.js::runRule',
   'deterministic.js::computeRulePackHash',
   'deterministic.js::buildLockfile',
   'deterministic.js::readLockfile',

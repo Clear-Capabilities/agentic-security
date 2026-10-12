@@ -959,8 +959,8 @@ function forgetRefuted(memory) {
 
 // EXTERNAL MODULE: ./src/posture/verification/emit.js
 var emit = __webpack_require__(85578);
-// EXTERNAL MODULE: ./src/posture/oracles/oracle.js + 1 modules
-var oracle = __webpack_require__(14642);
+// EXTERNAL MODULE: ./src/posture/oracles/oracle.js
+var oracle = __webpack_require__(15991);
 // EXTERNAL MODULE: ./src/posture/assurance/verification-record.js
 var verification_record = __webpack_require__(29668);
 // EXTERNAL MODULE: ./src/posture/assurance/identity.js

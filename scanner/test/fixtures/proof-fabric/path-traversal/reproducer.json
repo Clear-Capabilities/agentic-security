@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-path-traversal",
+  "lang": "javascript", "sources": { "app.mjs": "app.mjs" },
+  "run": ["{{NODE}}", "app.mjs", "../escaped.txt"],
+  "watch": { "fs": "escaped.txt" },
+  "oracle": { "type": "filesystem_mutation", "params": { "canary": "fs" } },
+  "network": "none"
+}

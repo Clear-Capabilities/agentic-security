@@ -770,7 +770,7 @@ async function verifyFix({
   let pocLeg = { status: 'not-requested', reason: null, tier: null };
   if (poc?.code) {
     try {
-      const { proveFinding } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 1291));
+      const { proveFinding } = await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 17908));
       const proved = await proveFinding({ ...(poc.finding || {}), poc }, { files });
       const tier = proved.proofTier;
       pocLeg = tier === 'execution-proven'

@@ -1,0 +1,7 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-insecure-deserialization",
+  "lang": "javascript", "sources": { "app.mjs": "app.mjs" },
+  "run": ["{{NODE}}", "app.mjs", "fs.writeFileSync('{{CANARY:command}}','x')"],
+  "oracle": { "type": "command_execution", "params": { "canary": "command" } },
+  "network": "none"
+}
