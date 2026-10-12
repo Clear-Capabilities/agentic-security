@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.168.0",
-    "bundleSha256": "9444e40759885491c495ceb57ff8e0e475ee277434236667a9ebf8ac9d29be83",
-    "commit": "3358d1815d414d73587efd5b326f1bc357f1f00e",
+    "engineVersion": "0.169.0",
+    "bundleSha256": "84aea0a9b1b9d9655ff0b32a45fbf00b9f352101c4c0822cd3d10e0ea34d55bc",
+    "commit": "a0355a93b92abb5a321fac797be0d6e6ec1d9d38",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-12T18:55:48.680Z",
+    "generatedAt": "2026-10-12T23:39:11.527Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 647,
+        "total": 650,
         "byFile": {
           "(deep-engine)": 1,
           "badge.js": 3,
@@ -678,6 +678,7 @@
           "lineage/observation-store.js": 2,
           "lineage/recipient-registry.js": 1,
           "lineage/remediation.js": 6,
+          "lineage/runtime-assurance.js": 3,
           "llm-validator/agent-tools.js": 4,
           "llm-validator/consistency.js": 1,
           "llm-validator/index.js": 4,
@@ -2060,9 +2061,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.168.0",
-    "commit": "3358d1815d414d73587efd5b326f1bc357f1f00e",
-    "bundleSha256": "9444e40759885491c495ceb57ff8e0e475ee277434236667a9ebf8ac9d29be83",
+    "engineVersion": "0.169.0",
+    "commit": "a0355a93b92abb5a321fac797be0d6e6ec1d9d38",
+    "bundleSha256": "84aea0a9b1b9d9655ff0b32a45fbf00b9f352101c4c0822cd3d10e0ea34d55bc",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

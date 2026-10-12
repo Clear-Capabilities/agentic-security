@@ -9,6 +9,43 @@
 > make the history less accurate, not more.
 
 
+## 0.169.0 - runtime-corroborated security twin: 4 new telemetry adapters, honest runtime assurance, a `runtime` CLI
+
+Extends the existing Milestone 5 "Runtime-Corroborated Digital Twin" machinery (closed-world `RuntimeObservation`
+contract, a 3-rung static-to-runtime match ladder, a non-mutating overlay) rather than building a second one —
+closing the real gap that machinery had: only one hand-authored JSONL telemetry format could feed it.
+
+**Four new telemetry adapters.** `otel-json` (OpenTelemetry JSON trace export, one draft per span), `envoy-access-log`
+(Envoy's default JSON access log, including `response_flags` → an allow/deny security decision), `k8s-audit-log`
+(Kubernetes `audit.k8s.io` JSONL — `objectRef`/`responseStatus.code`, deliberately never `user.username`), and a
+generic JSON-lines `http-access-log`. Each is a pure, zero-fs parser reading only approved, non-payload metadata
+(destination host/port/scheme, service name, protocol/TLS, store table, queue topic) and dropping everything else
+(query strings, headers, usernames, bodies) — matching the existing contract's own reject-not-redact discipline.
+One new, narrowly-scoped attribute key, `network.securityDecision` (a closed `allowed|denied` enum, not a free-form
+identifier), carries the one new fact these formats need that the existing vocabulary didn't have a slot for.
+
+**Honest runtime assurance.** A new `runtime-assurance.js` reports `runtimeStatus: complete|partial|unavailable` —
+`unavailable` whenever no observation store was ever consulted, never a silent "no risk." `runtime status`,
+`runtime reconcile` (diagnostic drift detection against the current graph, never auto-rewriting a stored
+observation) and `runtime query` (two real graph-backed queries, plus honest, named disclosure of the three
+PRD-example queries this architecture genuinely cannot answer) round out a new top-level `runtime` CLI dispatcher;
+`runtime ingest` is a thin shim over the already-shipped `dataflow observations import` — zero duplicated logic.
+
+**A real, grounded demonstration, not an asserted-away fixture.** A small app (`scanner/test/fixtures/runtime-twin/`)
+proves all 5 of the PRD's named fixture properties in one scenario against the real built CLI: a database write
+that executes and is observed allowed; an outbound call that never executes and is never observed; an unrecognized
+host that IS observed but matches nothing in the static graph (reported `unmatched`, never dropped); a PII flow
+crossing a trust boundary to a third party whose destination can never be runtime-corroborated by any adapter here
+— a genuine, disclosed architectural limit; and a queue publish observed denied by authorization.
+
+**What this deliberately does not do, disclosed rather than silently dropped.** No Data Flow Explorer UI/HTTP-server
+wiring (`scanner/src/server/CLAUDE.md`'s own deferred list already named `runtime/` among the endpoints the
+read-only local server does not serve — bolting one on here without that file's own scoping-doc-plus-test-suite
+rigor would be a real regression). No authenticated-identity field (the existing contract omits it as a
+payload-smuggling risk). No route/function-symbol match rungs or the 3 additional PRD-named edge states
+(`RUNTIME_BLOCKED`/`RUNTIME_POLICY_VIOLATION`/`RUNTIME_EXPLOIT_CORRELATED`) — real, separately-scoped future work.
+See `docs/implementation-status/runtime-corroborated-twin.md` for the full itemized status.
+
 ## 0.168.0 - fleet: multi-repository scan orchestration and cross-repository dependency blast radius
 
 A real, honestly-scoped slice of the organization-wide security graph recommendation: a new CLI command group,

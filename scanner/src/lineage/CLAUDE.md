@@ -946,6 +946,25 @@ layer, without collecting a single payload value.
 | `coverage.js` / `index.js` (extended, additively) | `buildGraphWithCoverage` composes a default `correlateObservations` closure over a **pre-loaded** `opts.runtimeObservations` array (never a raw path); `index.js` performs the ONE read per `buildLineageGraph` call (`fs.existsSync(dir) ? loadObservations(scanRoot) : null` — the `null` is deliberate, see below). |
 | `bin/agentic-security.js` (`dataflow observations import\|list`, `dataflow twin`) | The AC-29 proof surface — see `commands/dataflow.md`'s own `## Runtime observations (FR-505)` / `## Runtime Digital Twin layers (AC-29)` sections for the full CLI reference. `observations import` is dry-run-by-default and refuses the WHOLE import on any rejected record; `observations list` never prints an attribute key or value; `dataflow twin` is read-only and never writes into `.agentic-security/`. |
 
+### PRD "Runtime-Corroborated Security Twin" addendum (2026-10-13) — closes the real telemetry-input gap
+
+`observation-adapters.js` gained four more adapters alongside `native-jsonl`: `otel-json`
+(OpenTelemetry JSON trace export, one draft per span), `envoy-access-log` (Envoy's default JSON
+access log, `response_flags` → the new `network.securityDecision` attribute), `k8s-audit-log`
+(Kubernetes `audit.k8s.io` JSONL — `objectRef`/`responseStatus.code`, deliberately never
+`user.username`), `http-access-log` (generic JSON-lines access log). All four are pure (zero
+imports) and follow the exact same `(text, context) -> {drafts, errors}` contract, dropping every
+field with no safe, approved destination. `runtime-observation.js` gained exactly one new attribute
+key, `network.securityDecision` (a closed `allowed|denied` enum, deliberately narrower than the
+generic identifier-value grammar every other key gets) — no identity field was added; that remains
+a deliberate, disclosed omission. `runtime-assurance.js` (new) reports `runtimeStatus:
+complete|partial|unavailable`, read by the new top-level `runtime` CLI (`runtime ingest/status/
+reconcile/query`, `commands/runtime.md`) — `ingest` shims the existing `dataflow observations
+import`, the rest are new but read-only over the existing correlation/store functions. The 3-rung
+match ladder, the 3-valued `OBSERVATION_LAYERS`, and the server/UI deferral above are ALL
+unchanged — see `docs/implementation-status/runtime-corroborated-twin.md` for the full scope
+decision and what was deliberately left out.
+
 ### The five AC-29 properties a future UI increment inherits, and must not break
 
 A future UI increment (deferred here — see the out-of-scope list below) sits

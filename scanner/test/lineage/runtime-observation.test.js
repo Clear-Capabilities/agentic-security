@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   RUNTIME_OBSERVATION_VERSION, RUNTIME_OBSERVATION_FIELDS, RUNTIME_OBSERVATION_ADAPTERS,
-  RUNTIME_ATTRIBUTE_KEYS, RUNTIME_ARRAY_ATTRIBUTE_KEYS,
+  RUNTIME_ATTRIBUTE_KEYS, RUNTIME_ARRAY_ATTRIBUTE_KEYS, RUNTIME_SECURITY_DECISION_VALUES,
   RUNTIME_ATTRIBUTE_MAX_VALUE_LENGTH, RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH, RUNTIME_ATTRIBUTE_MAX_KEYS,
   EVENT_COUNT_BANDS, RUNTIME_MATCH_METHODS, RUNTIME_MATCH_CONFIDENCE, OBSERVATION_LAYERS,
   validateObservationAttributes, validateRuntimeObservation,
@@ -50,7 +50,9 @@ test('RO/1a: every exported enum is frozen and has exactly the documented values
     'matchedNodeIds', 'matchedEdgeIds', 'matchedFlowIds', 'attributes', 'eventCountBand',
     'firstObservedAt', 'lastObservedAt', 'matchMethod', 'matchConfidence', 'retention', 'importedAt',
   ]);
-  assert.deepEqual([...RUNTIME_OBSERVATION_ADAPTERS], ['native-jsonl']);
+  assert.deepEqual([...RUNTIME_OBSERVATION_ADAPTERS], [
+    'native-jsonl', 'otel-json', 'envoy-access-log', 'k8s-audit-log', 'http-access-log',
+  ]);
   assert.deepEqual([...EVENT_COUNT_BANDS], ['1', '2-10', '11-100', '101-1k', '1k+']);
   assert.deepEqual([...RUNTIME_MATCH_METHODS], ['destination_literal', 'store_table', 'queue_topic', 'unmatched']);
   assert.deepEqual([...RUNTIME_MATCH_CONFIDENCE], ['high', 'medium', 'low', 'ambiguous']);
@@ -72,6 +74,9 @@ test('RO/1b: RUNTIME_ATTRIBUTE_KEYS is exactly FR-505\'s own four named metadata
     'network.protocol', 'network.transport', 'tls.version', 'tls.cipher', 'tls.verified',
     // schema/attribute NAMES already approved for telemetry
     'schema.name', 'schema.attributeNames',
+    // the one security-DECISION field (PRD "Runtime-Corroborated Security
+    // Twin" §P0-1), added for the K8s audit adapter
+    'network.securityDecision',
   ]);
   assert.ok(!RUNTIME_ATTRIBUTE_KEYS.includes('destination.path'), 'destination.path must no longer be an approved key');
   // Every array-valued key must itself be an approved key.
@@ -243,7 +248,11 @@ test('RO/4h: the validator NEVER mutates, deletes, or scrubs — it reports', ()
 
 test('RO/5a: every approved attribute key validates with a scalar value', () => {
   for (const key of RUNTIME_ATTRIBUTE_KEYS) {
-    const value = RUNTIME_ARRAY_ATTRIBUTE_KEYS.includes(key) ? ['user_id', 'created_at'] : 'x';
+    // network.securityDecision is a closed two-value enum, not a generic
+    // identifier — 'x' is not one of its legal values, so it needs its
+    // own value here (proven rejected-when-wrong separately in RO/10).
+    const value = RUNTIME_ARRAY_ATTRIBUTE_KEYS.includes(key) ? ['user_id', 'created_at']
+      : key === 'network.securityDecision' ? 'allowed' : 'x';
     _ok(validateObservationAttributes({ [key]: value }), `approved key ${key}`);
   }
   _ok(validateObservationAttributes({ 'destination.port': 443 }), 'number');
@@ -446,6 +455,33 @@ test('RO/5f: attribute errors surface through validateRuntimeObservation, not on
 test('RO/5g: attributes must be a plain object', () => {
   for (const bad of [null, 'x', 42, [], undefined]) {
     _named(validateRuntimeObservation(_obs({ attributes: bad })), '$.attributes');
+  }
+});
+
+// ── RO/10: network.securityDecision — the one closed-enum attribute ────
+
+test('RO/10a: RUNTIME_SECURITY_DECISION_VALUES is exactly the documented two values, frozen', () => {
+  assert.deepEqual([...RUNTIME_SECURITY_DECISION_VALUES], ['allowed', 'denied']);
+  assert.ok(Object.isFrozen(RUNTIME_SECURITY_DECISION_VALUES));
+});
+
+test('RO/10b: network.securityDecision accepts only its two closed values', () => {
+  _ok(validateObservationAttributes({ 'network.securityDecision': 'allowed' }), 'allowed');
+  _ok(validateObservationAttributes({ 'network.securityDecision': 'denied' }), 'denied');
+});
+
+test('RO/10c: network.securityDecision rejects every value that is not one of the two, including identifier-shaped near-misses that the generic scalar check alone would have accepted', () => {
+  for (const bad of ['allow', 'deny', 'true', 'false', 'yes', 'no', '200', 'ALLOWED', '']) {
+    const r = validateObservationAttributes({ 'network.securityDecision': bad });
+    assert.equal(r.valid, false, `"${bad}" must be rejected — this field is a closed allow/deny enum, not a free-form identifier`);
+    _named(r, '$.attributes["network.securityDecision"]');
+  }
+  // Non-string values are rejected the same way (the enum check runs
+  // before any type coercion, so a number or boolean never happens to
+  // satisfy it by accident).
+  for (const bad of [1, true, null, ['allowed']]) {
+    const r = validateObservationAttributes({ 'network.securityDecision': bad });
+    assert.equal(r.valid, false, `${JSON.stringify(bad)} must be rejected`);
   }
 });
 

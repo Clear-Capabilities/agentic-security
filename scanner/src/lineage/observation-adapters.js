@@ -262,6 +262,370 @@ export function parseNativeJsonlObservations(text, context) {
   return { drafts, errors };
 }
 
+// ── The four PRD "Runtime-Corroborated Security Twin" adapters ─────────
+//
+// Each of the four parsers below follows the identical contract the
+// native-jsonl adapter above already established: pure (zero imports, no
+// fs, never throws), `(text, context) -> {drafts, errors}`, one
+// `{line, message}` error per malformed line (never a value echo), every
+// OTHER line still parses. Each produces drafts carrying ONLY attribute
+// keys already on `RUNTIME_ATTRIBUTE_KEYS` (`runtime-observation.js`) —
+// none of these parsers imports that file (this module stays zero-import
+// by contract), so an attribute key typo here is caught one layer up, at
+// import time, exactly like the native-jsonl adapter's own documented
+// two-layer split. Each adapter deliberately DROPS every field of its
+// source format with no safe, approved destination — a raw URL path/query
+// string, a user agent, a client IP, a trace/span id, a username/identity
+// — rather than inventing a new attribute key to carry it (PRD "Privacy
+// Protection" P0-7: schema/field classification only, never a captured
+// value). What each adapter keeps and drops is documented at its own
+// definition.
+
+const _IDENTIFIER_ATTR_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+// Only ever WRITES a value that already looks like an approved identifier
+// — never force-sanitizes an unsafe value into a misleadingly different
+// one. Returns `null` (meaning "drop this attribute") for anything that
+// doesn't already look safe, rather than guessing.
+function _safeIdentifierOrNull(v) {
+  if (typeof v !== 'string' || v.length === 0) return null;
+  return _IDENTIFIER_ATTR_RE.test(v) ? v : null;
+}
+
+// `"host:port"` -> `{host, port}` (port `null` when absent/unparseable).
+// Never a full URL parse — this shape (Envoy's `upstream_host`, a bare
+// `host:port` pair) has no scheme/path to confuse it with.
+function _splitHostPort(v) {
+  if (typeof v !== 'string' || v.length === 0) return { host: null, port: null };
+  const i = v.lastIndexOf(':');
+  if (i === -1) return { host: _safeIdentifierOrNull(v), port: null };
+  const host = v.slice(0, i);
+  const portStr = v.slice(i + 1);
+  const port = /^[0-9]{1,5}$/.test(portStr) ? Number(portStr) : null;
+  return { host: _safeIdentifierOrNull(host), port };
+}
+
+function _draftBase(context, environmentOverride) {
+  const { version, adapter, source, environment, windowStart, windowEnd, importedAt, retention } = context;
+  return {
+    version, adapter, source,
+    environment: environmentOverride !== undefined ? environmentOverride : environment,
+    windowStart, windowEnd, retention, importedAt,
+  };
+}
+
+/**
+ * OpenTelemetry JSON trace export (the standard OTLP/JSON `resourceSpans`
+ * document — a SINGLE JSON object, never JSONL; this is the format
+ * `otlptracehttp` with `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json`
+ * writes). One draft per span. Reads only well-known OpenTelemetry
+ * semantic-convention attribute keys — `server.address`/`net.peer.name`,
+ * `server.port`/`net.peer.port`, `url.scheme`/`http.scheme`,
+ * `network.protocol.name`, `db.system`/`db.name`,
+ * `messaging.destination.name` — mapped onto the approved
+ * `destination.*`/`network.protocol`/`schema.name` keys; `resource`-level
+ * `service.name` is carried as `service.name`. Every other span
+ * attribute (`http.url`'s full query string, `http.request.header.*`,
+ * `gen_ai.*` prompt/completion content, trace/span ids themselves) is
+ * dropped — none has a safe, approved destination. `eventCountBand` is
+ * always `'1'`: a single exported span is a single observed event, never
+ * an aggregate count OTel itself does not report.
+ */
+export function parseOtelJsonObservations(text, context) {
+  if (typeof text !== 'string' || !_isPlainObject(context)) {
+    return { drafts: [], errors: [{ line: 0, message: 'parseOtelJsonObservations requires a string text and a plain-object context' }] };
+  }
+
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return { drafts: [], errors: [{ line: 0, message: 'invalid JSON: expected one OTLP/JSON resourceSpans document' }] };
+  }
+  if (!_isPlainObject(doc) || !Array.isArray(doc.resourceSpans)) {
+    return { drafts: [], errors: [{ line: 0, message: 'expected a JSON object with a top-level "resourceSpans" array (the OTLP/JSON export shape)' }] };
+  }
+
+  const _attrMap = (attrs) => {
+    const m = {};
+    if (!Array.isArray(attrs)) return m;
+    for (const a of attrs) {
+      if (!_isPlainObject(a) || typeof a.key !== 'string' || !_isPlainObject(a.value)) continue;
+      const v = a.value;
+      if (typeof v.stringValue === 'string') m[a.key] = v.stringValue;
+      else if (typeof v.intValue === 'number' || typeof v.intValue === 'string') m[a.key] = String(v.intValue);
+      else if (typeof v.boolValue === 'boolean') m[a.key] = v.boolValue;
+    }
+    return m;
+  };
+
+  // Nanoseconds-since-epoch (OTLP's own wire unit) as a string or number
+  // -> ISO-8601. Returns null (never a fabricated "now") when absent or
+  // unparseable, letting the caller fall back to the import window.
+  const _isoFromUnixNano = (v) => {
+    if (v === undefined || v === null) return null;
+    const n = typeof v === 'string' ? Number(v) : v;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const ms = Math.round(n / 1e6);
+    const d = new Date(ms);
+    return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+  };
+
+  const drafts = [];
+  for (const rs of doc.resourceSpans) {
+    if (!_isPlainObject(rs)) continue;
+    const resourceAttrs = _attrMap(rs.resource?.attributes);
+    const serviceName = _safeIdentifierOrNull(resourceAttrs['service.name']);
+
+    for (const ss of Array.isArray(rs.scopeSpans) ? rs.scopeSpans : []) {
+      if (!_isPlainObject(ss)) continue;
+      for (const span of Array.isArray(ss.spans) ? ss.spans : []) {
+        if (!_isPlainObject(span)) continue;
+        const a = _attrMap(span.attributes);
+
+        const attributes = {};
+        if (serviceName) attributes['service.name'] = serviceName;
+        const host = _safeIdentifierOrNull(a['server.address'] ?? a['net.peer.name']);
+        if (host) attributes['destination.host'] = host;
+        const portRaw = a['server.port'] ?? a['net.peer.port'];
+        const port = /^[0-9]{1,5}$/.test(String(portRaw ?? '')) ? Number(portRaw) : null;
+        if (port !== null) attributes['destination.port'] = port;
+        const scheme = _safeIdentifierOrNull(a['url.scheme'] ?? a['http.scheme']);
+        if (scheme) attributes['destination.scheme'] = scheme;
+        const protocol = _safeIdentifierOrNull(a['network.protocol.name']);
+        if (protocol) attributes['network.protocol'] = protocol;
+        const storeService = _safeIdentifierOrNull(a['db.system'] ?? a['db.name'] ?? a['messaging.destination.name']);
+        if (storeService) attributes['destination.service'] = storeService;
+
+        if (Object.keys(attributes).length === 0) continue; // nothing safe to report for this span
+
+        const at = _isoFromUnixNano(span.startTimeUnixNano) ?? context.windowStart;
+        drafts.push({
+          ..._draftBase(context),
+          attributes,
+          eventCountBand: '1',
+          firstObservedAt: at,
+          lastObservedAt: _isoFromUnixNano(span.endTimeUnixNano) ?? at,
+        });
+      }
+    }
+  }
+
+  return { drafts, errors: [] };
+}
+
+/**
+ * Envoy's default JSON access log (`json_format` logging, one JSON
+ * object per line). Reads `upstream_host` (split into
+ * `destination.host`/`destination.port`), `upstream_cluster` (as
+ * `destination.service`), `protocol` (normalized — Envoy writes
+ * `"HTTP/1.1"`, which contains `/` and is not an approved identifier
+ * shape; lowercased and `/` stripped, e.g. `"http1.1"`), and
+ * `response_flags` (`'-'`/empty means no flag, i.e. allowed; a non-empty
+ * flags string, e.g. `"UAEX"` for unauthorized, is treated as `'denied'`
+ * via `network.securityDecision`). `start_time`/`end_time` (or
+ * `start_time` alone, with `duration` in milliseconds added) feed
+ * `firstObservedAt`/`lastObservedAt`. Everything else — client address,
+ * request path/query, user agent, request id, response code's own exact
+ * value — is dropped.
+ */
+export function parseEnvoyAccessLogObservations(text, context) {
+  if (typeof text !== 'string' || !_isPlainObject(context)) {
+    return { drafts: [], errors: [{ line: 0, message: 'parseEnvoyAccessLogObservations requires a string text and a plain-object context' }] };
+  }
+
+  const drafts = [];
+  const errors = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (rawLine.trim().length === 0) continue;
+    const line = i + 1;
+
+    let record;
+    try {
+      record = JSON.parse(rawLine);
+    } catch {
+      errors.push({ line, message: `invalid JSON on line ${line}` });
+      continue;
+    }
+    if (!_isPlainObject(record)) {
+      errors.push({ line, message: `record on line ${line} must be a JSON object` });
+      continue;
+    }
+
+    const { host, port } = _splitHostPort(record.upstream_host);
+    const cluster = _safeIdentifierOrNull(record.upstream_cluster);
+    const protocol = typeof record.protocol === 'string'
+      ? _safeIdentifierOrNull(record.protocol.toLowerCase().replace(/\//g, ''))
+      : null;
+
+    const attributes = {};
+    if (host) attributes['destination.host'] = host;
+    if (port !== null) attributes['destination.port'] = port;
+    if (cluster) attributes['destination.service'] = cluster;
+    if (protocol) attributes['network.protocol'] = protocol;
+    if (typeof record.response_flags === 'string') {
+      attributes['network.securityDecision'] = record.response_flags.trim().length === 0 || record.response_flags.trim() === '-' ? 'allowed' : 'denied';
+    }
+
+    if (Object.keys(attributes).length === 0) continue; // nothing safe/present to report for this line
+
+    const startIso = typeof record.start_time === 'string' && Number.isFinite(Date.parse(record.start_time))
+      ? record.start_time : context.windowStart;
+    let endIso = typeof record.end_time === 'string' && Number.isFinite(Date.parse(record.end_time))
+      ? record.end_time : null;
+    if (endIso === null && typeof record.duration === 'number' && Number.isFinite(record.duration)) {
+      endIso = new Date(Date.parse(startIso) + record.duration).toISOString();
+    }
+
+    drafts.push({
+      ..._draftBase(context),
+      attributes,
+      eventCountBand: '1',
+      firstObservedAt: startIso,
+      lastObservedAt: endIso ?? startIso,
+    });
+  }
+
+  return { drafts, errors };
+}
+
+/**
+ * Kubernetes `audit.k8s.io` audit-event JSONL (one event object per
+ * line — the default `webhook`/file backend format). Reads `objectRef`
+ * (`namespace` + `resource`, joined as `"<namespace>:<resource>"` into
+ * `destination.service` — never `objectRef.name`, which is frequently a
+ * user-chosen, potentially sensitive resource name) and
+ * `responseStatus.code` (mapped to `network.securityDecision`: `< 400`
+ * is `'allowed'`, `>= 400` is `'denied'` — a client error is treated as a
+ * decision here because the audit log's own admission/authorization
+ * failures surface as 401/403/409, which is exactly the "security
+ * decision" fact this adapter exists to carry). `requestReceivedTimestamp`/
+ * `stageTimestamp` feed the observed-at window. **`user.username` and
+ * every request/response body field are deliberately never read** — a
+ * K8s audit event's `user` block is exactly the "authenticated identity"
+ * PRD 2 names, and `runtime-observation.js`'s own contract has no
+ * approved field for it (a deliberate, disclosed scope boundary — see
+ * this PRD's implementation-status doc).
+ */
+export function parseK8sAuditLogObservations(text, context) {
+  if (typeof text !== 'string' || !_isPlainObject(context)) {
+    return { drafts: [], errors: [{ line: 0, message: 'parseK8sAuditLogObservations requires a string text and a plain-object context' }] };
+  }
+
+  const drafts = [];
+  const errors = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (rawLine.trim().length === 0) continue;
+    const line = i + 1;
+
+    let record;
+    try {
+      record = JSON.parse(rawLine);
+    } catch {
+      errors.push({ line, message: `invalid JSON on line ${line}` });
+      continue;
+    }
+    if (!_isPlainObject(record)) {
+      errors.push({ line, message: `record on line ${line} must be a JSON object` });
+      continue;
+    }
+
+    const objectRef = _isPlainObject(record.objectRef) ? record.objectRef : {};
+    const namespace = _safeIdentifierOrNull(objectRef.namespace);
+    const resource = _safeIdentifierOrNull(objectRef.resource);
+    const code = record.responseStatus && typeof record.responseStatus === 'object' ? record.responseStatus.code : undefined;
+
+    const attributes = {};
+    if (namespace && resource) attributes['destination.service'] = `${namespace}:${resource}`;
+    else if (resource) attributes['destination.service'] = resource;
+    if (typeof code === 'number' && Number.isFinite(code)) {
+      attributes['network.securityDecision'] = code < 400 ? 'allowed' : 'denied';
+    }
+
+    if (Object.keys(attributes).length === 0) continue;
+
+    const observedAt = typeof record.requestReceivedTimestamp === 'string' && Number.isFinite(Date.parse(record.requestReceivedTimestamp))
+      ? record.requestReceivedTimestamp
+      : (typeof record.stageTimestamp === 'string' && Number.isFinite(Date.parse(record.stageTimestamp)) ? record.stageTimestamp : context.windowStart);
+
+    drafts.push({
+      ..._draftBase(context),
+      attributes,
+      eventCountBand: '1',
+      firstObservedAt: observedAt,
+      lastObservedAt: observedAt,
+    });
+  }
+
+  return { drafts, errors };
+}
+
+/**
+ * A generic JSON-lines HTTP access log (one JSON object per line — the
+ * shape a structured reverse proxy or load-balancer access log normalizes
+ * to; deliberately not an Apache/Nginx TEXT combined-log parser, which
+ * would need its own separate, much larger format-string handling).
+ * Reads `host`/`destination_host` -> `destination.host`,
+ * `upstream`/`upstream_service` -> `destination.service`, `scheme` ->
+ * `destination.scheme`. `timestamp` (or `time`) feeds the observed-at
+ * window. Request path/query, client IP, user agent, status code's own
+ * value, and every header are dropped.
+ */
+export function parseHttpAccessLogObservations(text, context) {
+  if (typeof text !== 'string' || !_isPlainObject(context)) {
+    return { drafts: [], errors: [{ line: 0, message: 'parseHttpAccessLogObservations requires a string text and a plain-object context' }] };
+  }
+
+  const drafts = [];
+  const errors = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    if (rawLine.trim().length === 0) continue;
+    const line = i + 1;
+
+    let record;
+    try {
+      record = JSON.parse(rawLine);
+    } catch {
+      errors.push({ line, message: `invalid JSON on line ${line}` });
+      continue;
+    }
+    if (!_isPlainObject(record)) {
+      errors.push({ line, message: `record on line ${line} must be a JSON object` });
+      continue;
+    }
+
+    const host = _safeIdentifierOrNull(record.host ?? record.destination_host);
+    const upstream = _safeIdentifierOrNull(record.upstream ?? record.upstream_service);
+    const scheme = _safeIdentifierOrNull(record.scheme);
+
+    const attributes = {};
+    if (host) attributes['destination.host'] = host;
+    if (upstream) attributes['destination.service'] = upstream;
+    if (scheme) attributes['destination.scheme'] = scheme;
+
+    if (Object.keys(attributes).length === 0) continue;
+
+    const ts = record.timestamp ?? record.time;
+    const observedAt = typeof ts === 'string' && Number.isFinite(Date.parse(ts)) ? ts : context.windowStart;
+
+    drafts.push({
+      ..._draftBase(context),
+      attributes,
+      eventCountBand: '1',
+      firstObservedAt: observedAt,
+      lastObservedAt: observedAt,
+    });
+  }
+
+  return { drafts, errors };
+}
+
 // The adapter registry — a frozen, module-level lookup. `adapterFor`
 // returns `null` for anything unknown, NEVER a default: an unimplemented
 // adapter name (e.g. `'otlp'`, deferred per the scoping doc's §4.3 ruling)
@@ -269,6 +633,10 @@ export function parseNativeJsonlObservations(text, context) {
 // someday exist.
 const _ADAPTERS = Object.freeze({
   'native-jsonl': Object.freeze({ name: 'native-jsonl', parse: parseNativeJsonlObservations }),
+  'otel-json': Object.freeze({ name: 'otel-json', parse: parseOtelJsonObservations }),
+  'envoy-access-log': Object.freeze({ name: 'envoy-access-log', parse: parseEnvoyAccessLogObservations }),
+  'k8s-audit-log': Object.freeze({ name: 'k8s-audit-log', parse: parseK8sAuditLogObservations }),
+  'http-access-log': Object.freeze({ name: 'http-access-log', parse: parseHttpAccessLogObservations }),
 });
 
 /**

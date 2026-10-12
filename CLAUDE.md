@@ -2,7 +2,7 @@
 
 Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.168.0  
+**Version:** 0.169.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -35,7 +35,7 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `bench/language-support/` | Haskell/Nix support measurement (`measure.mjs`), frozen-holdout promotion (`promote.mjs`), registry build and freshness gate (`check.mjs`, `npm run bench:language-support:check`), perf (`perf.mjs`). Family-scoped scoring, per-layer; the corpus is synthetic (QA-001, `scanner/test/language/corpora/`). Re-measuring counts as repeated holdout use. | `scanner/src/language/CLAUDE.md` |
 | `bench/mutation/` | Metamorphic + adversarial mutation gate (`npm run bench:mutation:check`). Scores **verdict-flip correctness**, not detection count: a semantics-preserving rewrite must not move the verdict, a semantics-changing near-miss must. This is the anti-overfitting check — accumulating patterns cannot raise the score, and an engine that games a family check fails it. Each case declares a `dimension`: `sanitization` (does the engine label the flow sanitized) or `detection` (does the finding fire at all — needed for gates like R6's receiver-type check, where there is no sanitizer to have an opinion about). Both still score verdict-flip, never count. |  |
 | `bench/owasp-benchmark-v1.2/`, `bench/sard-juliet-java/`, `bench/polyglot/` | External benches (gitignored, regenerated). |  |
-| `commands/` | Slash-command markdown files. 14 dispatchers: `secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`, `dataflow`, `governance`, `remediation`, `federate`. Every capability is a mode of a dispatcher (e.g. CI gates live at `/setup --ci`, the red/blue/auditor deep-dive at `/triage --deep`); the legacy single-purpose aliases redirect via `hooks/legacy-alias-redirect.js`. |  |
+| `commands/` | Slash-command markdown files. 15 dispatchers: `secure`, `find-and-fix-everything`, `scan`, `triage`, `fix`, `posture`, `compliance`, `supply`, `setup`, `labs`, `dataflow`, `governance`, `remediation`, `federate`, `runtime`. Every capability is a mode of a dispatcher (e.g. CI gates live at `/setup --ci`, the red/blue/auditor deep-dive at `/triage --deep`); the legacy single-purpose aliases redirect via `hooks/legacy-alias-redirect.js`. |  |
 | `agents/` | Sub-agent system prompts. Edit-capable agents follow `agents/_CONFINEMENT.md`. |  |
 | `hooks/` | Claude Code hook scripts + `hooks.json`. |  |
 | `.githooks/` | Committed **git** hooks (distinct from `hooks/` above, which is editor integration). Currently `pre-push`, a shim over `scripts/pre-push-gate.mjs`. Activated per clone via `core.hooksPath` — see "Pre-push gate". |  |
