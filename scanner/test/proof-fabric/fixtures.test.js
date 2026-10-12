@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proveFinding } from '../../src/posture/proof-fabric/orchestrator.js';
-import { sandboxAvailable } from '../../src/sandbox/index.js';
+import { sandboxAvailable, detectBackend } from '../../src/sandbox/index.js';
 
 const FIXTURES_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../fixtures/proof-fabric');
 const CLASSES = fs.readdirSync(FIXTURES_ROOT).filter((n) => fs.existsSync(path.join(FIXTURES_ROOT, n, 'reproducer.json')));
@@ -16,8 +16,16 @@ const CLASSES = fs.readdirSync(FIXTURES_ROOT).filter((n) => fs.existsSync(path.j
 for (const cls of CLASSES) {
   const dir = path.join(FIXTURES_ROOT, cls);
   const reproducer = JSON.parse(fs.readFileSync(path.join(dir, 'reproducer.json'), 'utf8'));
+  // Mediated network (the runner's own loopback callback listener) needs the userspace backend specifically —
+  // runner.js refuses `network: 'callback'` on anything else, and that is correct: mediated network is documented
+  // as unsupported on the Linux namespace backend (root CLAUDE.md, src/sandbox/CLAUDE.md). A callback-mode fixture
+  // genuinely cannot reach EXPLOIT_CONFIRMED there, so the test must skip, loudly, rather than fail or pass vacuously.
+  const needsCallback = reproducer.network === 'callback';
+  const skip = !sandboxAvailable() ? 'no confinement backend on this host'
+    : (needsCallback && detectBackend() !== 'userspace') ? `mediated network (network: 'callback') is unsupported on the ${detectBackend()} backend`
+    : false;
 
-  test(`fixture ${cls}: vulnerable implementation reaches EXPLOIT_CONFIRMED`, { skip: !sandboxAvailable() && 'no confinement backend on this host' }, async () => {
+  test(`fixture ${cls}: vulnerable implementation reaches EXPLOIT_CONFIRMED`, { skip }, async () => {
     const r = await proveFinding({
       finding: { id: reproducer.findingId, stableId: reproducer.findingId, parser: 'IR-TAINT' },
       reproducer, sourceRoot: path.join(dir, 'vulnerable'), policy: { timeoutMs: 15000 },
@@ -27,7 +35,7 @@ for (const cls of CLASSES) {
     assert.equal(r.independentReplay.status, 'confirmed');
   });
 
-  test(`fixture ${cls}: mitigated implementation is never EXPLOIT_CONFIRMED by the same reproducer`, { skip: !sandboxAvailable() && 'no confinement backend on this host' }, async () => {
+  test(`fixture ${cls}: mitigated implementation is never EXPLOIT_CONFIRMED by the same reproducer`, { skip }, async () => {
     const r = await proveFinding({
       finding: { id: reproducer.findingId, stableId: reproducer.findingId, parser: 'IR-TAINT' },
       reproducer, sourceRoot: path.join(dir, 'mitigated'), policy: { timeoutMs: 15000 },
