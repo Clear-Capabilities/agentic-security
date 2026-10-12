@@ -10,10 +10,11 @@ export const modules = {
 /* harmony export */   ensurePolicyKeyPair: () => (/* binding */ ensurePolicyKeyPair),
 /* harmony export */   loadPolicyBundles: () => (/* binding */ loadPolicyBundles),
 /* harmony export */   loadPolicyPublicKey: () => (/* binding */ loadPolicyPublicKey),
+/* harmony export */   rE: () => (/* binding */ computePolicyDrift),
 /* harmony export */   resolveEffectivePolicy: () => (/* binding */ resolveEffectivePolicy),
 /* harmony export */   signPolicyBundle: () => (/* binding */ signPolicyBundle)
 /* harmony export */ });
-/* unused harmony exports POLICY_BUNDLE_SCHEMA, SCOPES, canonicalPolicyBytes, verifyPolicyBundle, computePolicyDrift */
+/* unused harmony exports POLICY_BUNDLE_SCHEMA, SCOPES, canonicalPolicyBytes, verifyPolicyBundle */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_os__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(48161);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
