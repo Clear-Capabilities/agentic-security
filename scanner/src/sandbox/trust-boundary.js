@@ -58,7 +58,7 @@ export async function runInBoundary(argv, o = {}) {
   const {
     root, labelDirs = [], evidenceDirs = [], denyReadPaths = [], env = {},
     allowNetwork = false, timeoutMs = 10000, graceMs = 1000, signal, force, limits,
-    maxOutputBytes, controlProbes,
+    maxOutputBytes, controlProbes, networkProxyPort = null,
   } = o;
   const required = [...(o.require || DEFAULT_REQUIRED_CONTROLS)];
   if (!allowNetwork && !required.includes('network')) required.push('network');
@@ -94,6 +94,7 @@ export async function runInBoundary(argv, o = {}) {
   const r = await runConfinedSupervised(argv, {
     root, timeoutMs, graceMs, signal, force, allowNetwork, limits, maxOutputBytes,
     env, denyReadPaths: protectedPaths,
+    ...(networkProxyPort != null ? { networkProxyPort } : {}),
   });
   const executed = r.status !== 'disabled' && !(r.status === 'error' && !r.supervised);
   const run = { ...r, executed };

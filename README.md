@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.166.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.167.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -228,8 +228,8 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 **Find and fix problems**
 - **`find-and-fix-everything`** — One-shot scan + fix every severity in one command. The "just make it safe" path for **vibecoders** (people building with an AI agent doing most of the typing).
 - **`scan`** — Run the scanner. Modes: full / diff / watch / baseline / archaeology / scanner-meta. `--watch` re-scans incrementally on every file change and prints a live risk-delta.
-- **`triage`** — Decide on findings. Modes: id / show / explain / validate / tournament / red-team / exploit / query / deep (red/blue/auditor deep-dive on one finding).
-- **`fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate. Every patch — deterministic or agent-composed — is re-verified (rescan-clean + no new ≥medium + lint) before it's written; `--all` runs independent findings in parallel and never halts on the first failure.
+- **`triage`** — Decide on findings. Modes: id / show / explain / validate / tournament / red-team / exploit / query / deep (red/blue/auditor deep-dive on one finding). `--exploit --format ...` is narrative PoC generation; the real CLI `triage exploit <id> --prove` is a different thing entirely — it executes a bounded, serialized reproducer inside the confined sandbox and requires 3/3 reproduction plus an independently re-run replay before calling anything `EXPLOIT_CONFIRMED` — see [Exploit proof](docs/guides/exploit-proof-fabric.md).
+- **`fix`** — Remediation. Modes: id / all / pr / sca / compliance / rotate-secret / vault / harden / trim / generate. Every patch — deterministic or agent-composed — is re-verified (rescan-clean + no new ≥medium + lint) before it's written; `--all` runs independent findings in parallel and never halts on the first failure. `fix --apply --require-proof` additionally refuses to write unless the original exploit reproduces beforehand and is demonstrably blocked afterward. A real `rules synthesize|evaluate|promote|status|rollback` CLI (not a slash command) turns one confirmed finding into a reviewed, promoted deterministic detection rule — see [the rule compiler](docs/guides/rule-compiler.md).
 
 **Reporting and audits**
 - **`posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.

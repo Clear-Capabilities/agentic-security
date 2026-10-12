@@ -9,6 +9,55 @@
 > make the history less accurate, not more.
 
 
+## 0.167.0 - execution-backed exploit proof, and a self-learning rule compiler that turns one confirmed finding into a deterministic detection rule
+
+Two new, independently opt-in capabilities, each off by default until explicitly invoked.
+
+**Execution-backed exploit proof (`triage exploit --prove`, `fix --require-proof`).** A new evidence-state ladder
+(`CANDIDATE` → `STATICALLY_CORROBORATED` → `REPRODUCER_GENERATED` → `REPRODUCED` → `EXPLOIT_CONFIRMED` →
+`FIX_REPLAY_BLOCKED` → `FIX_VERIFIED`), separate from severity and confidence, reached only by executing a bounded,
+serialized reproducer inside the existing confined sandbox (`src/sandbox/`) and judging the result with one of nine
+deterministic oracles — never a model. `EXPLOIT_CONFIRMED` requires 3 of 3 reproductions (configurable) plus an
+independent re-run in a fresh environment that receives only the reproducer, the finding id, the oracle and the
+revision, never the reasoning that found it. `fix --apply --require-proof` extends the existing fix-verify
+vocabulary (never a competing definition of "verified"): it refuses to write a patch unless the original exploit is
+confirmed beforehand and the SAME reproducer is demonstrably blocked, in every attempt, afterward. New CLI: `proof
+show|replay|doctor`, `triage exploit <id> --prove`, `triage list --evidence`. Eight fixture classes (SQL injection,
+command injection, path traversal, SSRF, auth bypass, insecure deserialization, unsafe file write, and a real
+AddressSanitizer-backed buffer overflow in C) are tested both directions: vulnerable reaches `EXPLOIT_CONFIRMED`,
+mitigated never does. Guide: `docs/guides/exploit-proof-fabric.md`.
+
+Building the fixture corpus surfaced two real, pre-existing defects, each fixed with its own regression test: the
+default (non-capability) confined sandbox profile had no write allowance for `/dev/null`, so any confined command
+redirecting output there (`stdio: 'ignore'`, a common pattern) failed to spawn at all with a silent `EPERM`; and
+the proof runner's own loopback callback listener read the wrong `process.argv` index for a `node -e` invocation,
+so every callback request crashed it (observed by the client as `ECONNRESET`).
+
+**Self-learning finding-to-rule compiler (`rules synthesize|evaluate|promote|status|rollback`).** Turns one
+confirmed finding into a reviewed, promoted, deterministic custom rule — compiled into the EXISTING pattern-rule
+engine (`posture/custom-rules.js`), never a second matcher. A candidate rule (its pattern supplied by a model or a
+human; nothing here calls one) must clear a promotion gate — precision ≥95%, recall ≥80%, zero protected-negative
+failures, by default — against an automatically generated corpus that includes deterministic, semantics-preserving
+structural mutations (variable rename, wrap-in-function, indirection) of both the vulnerable and the patched code,
+before an append-only, hash-chained lifecycle ledger lets it advance from `CANDIDATE` to `VALIDATED` to `PROMOTED`.
+A promoted rule is published to the existing `.agentic-security/rules/` directory, so it is live on the very next
+scan with no code change, and gets regression fixtures in the project's own existing `vulnerable`/`clean`
+convention. Demonstrated end to end on a real, grounded miss: the deterministic engine does not recognize
+`db.rawQuery(...)` string concatenation as a SQL sink (verified by a real scan); after promotion, the rule catches
+not just the original finding but an unseen structural sibling — different file, renamed identifiers, extra
+indirection — with zero model calls. Guide: `docs/guides/rule-compiler.md`.
+
+A duplicate command name was caught before shipping: the PRD's own example CLI shape collided with the pre-existing
+`rules validate`/`rules lock` (rule-pack override linting and lockfile writing). A first draft added a second,
+competing `case 'rules':` switch arm, which JavaScript resolves to the first match — silently making the original
+two subcommands permanently unreachable. Fixed by folding the new subcommands into the existing dispatcher instead.
+
+**Still open.** Neither capability has a model-driven proposal step (both expect the candidate pattern/reproducer
+supplied by the caller); container execution for the proof fabric is detected but not implemented, so execution
+always runs in the existing lower-assurance local sandbox and says so; the rule compiler implements three of the
+PRD's seven listed mutator kinds. Full detail and honest remaining gaps in
+`docs/implementation-status/{exploit-proof-fabric,rule-compiler}.md`.
+
 ## 0.166.0 - the closure accepts hosted Linux test evidence for tests that skip on a non-Linux host; the shared-portfolio drain test is deterministic
 
 **Hosted Linux evidence for skipped tests, kept separate and labelled.** On a macOS host the capabilities suite skips six Linux-namespace tests, and a skipped required test counts as failed, so requirements X-501 to X-508 could never verify there even though the same tests run and pass on the hosted `sandbox-linux` job (which fails on any skip). The controller's verification can now count a locally skipped test only when a commit-bound attestation shows that the `sandbox-linux` check run for the exact commit succeeded and that the named test passed in that job's per-test report (uploaded as the `sandbox-linux-test-report` artifact, bound to the commit, the run and a digest). Anything else (wrong or never-pushed commit, job missing, in progress, failed, cancelled or skipped, test absent or skipped in the report, malformed or forged report, `gh` unavailable, a dirty tree) produces a typed refusal and the skip stays open. Local results are never rewritten: the local skip count is unchanged, covered tests are reported as a separate source (`attested-from-ci: sandbox-linux@<sha>`), and a local failure or abnormal exit never triggers a lookup. It is opt-in per profile (`attestFromCi`, capabilities suite only) and `LOOP_ATTEST_FROM_CI=0` turns it off. This is evidence from a hosted run, not a claim that the local host enforced anything; Linux stays `partially-verified`. The new test file has 60 tests, including every refusal and forged-report cases, and 12 hand-made mutants of the new code (nine caught; two proved equivalent; the remaining three guards are only caught together). A live read against the real hosted run covered all six tests and refused an invented one. Writing the reader exposed one real defect: on pull-request runs the job's commit is the merge ref, so the report is now bound to the pull request head and records the merge ref actually tested as `testedSha`.

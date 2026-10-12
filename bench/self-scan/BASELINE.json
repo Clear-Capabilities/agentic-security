@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-10T14:32:56.474Z",
-  "commit": "3678e394c799fcc0b584fcdfdf62a92a8e5f5614",
+  "generatedAt": "2026-10-12T14:50:05.783Z",
+  "commit": "fc60a771f3a5c5f5a55d44a18a8fab80d2ab519a",
   "targets": {
     "hooks": {
       "total": 21,
@@ -47,7 +47,7 @@
       }
     },
     "scanner/src": {
-      "total": 621,
+      "total": 638,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -226,6 +226,9 @@
         "posture/pre-incident-archaeology.js": 1,
         "posture/production-feedback.js": 1,
         "posture/profile.js": 4,
+        "posture/proof-fabric/cli.js": 3,
+        "posture/proof-fabric/runner.js": 3,
+        "posture/proof-fabric/store.js": 1,
         "posture/provenance/cache.js": 1,
         "posture/provenance/lifecycle.js": 1,
         "posture/provenance/providers/config.js": 1,
@@ -236,6 +239,8 @@
         "posture/risk-dollars.js": 3,
         "posture/root-cause-sweep.js": 1,
         "posture/router.js": 3,
+        "posture/rule-compiler/cli.js": 5,
+        "posture/rule-compiler/store.js": 5,
         "posture/rule-overrides.js": 5,
         "posture/rule-pack-signing.js": 8,
         "posture/rule-synthesis.js": 3,

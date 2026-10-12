@@ -109,6 +109,19 @@ Pass `--tournament` to walk findings ranked by `compositeRisk` (descending) inst
 
 Tournament mode produces the same final state (`triage-feedback.json` + cross-repo memory bridge writes), but the ordering + one-keystroke-decision UI is the cleaner workflow for a focused triage pass.
 
+## Execution-backed exploit proof (`triage exploit --prove`)
+
+Different from the `--exploit`/`--validate`/`--red-team` modes above, which are narrative or model-reasoned. `triage exploit <finding-id> --prove` is a real CLI subcommand (not agent-orchestrated) that EXECUTES a bounded, serialized reproducer inside the existing confined sandbox and reports one of the evidence states `CANDIDATE` → `STATICALLY_CORROBORATED` → `REPRODUCER_GENERATED` → `REPRODUCED` → `EXPLOIT_CONFIRMED`. `EXPLOIT_CONFIRMED` requires 3 of 3 successful reproductions (configurable via `--attempts`/`--required`) AND an independent re-run in a fresh environment that receives only the reproducer, the finding id, the oracle and the revision — never the reasoning that found it. A deterministic oracle (not a model) decides whether the attempt succeeded.
+
+```bash
+agentic-security triage exploit <finding-id> --prove --reproducer ./repro.json
+agentic-security proof show <finding-id>
+agentic-security proof replay <finding-id>
+agentic-security proof doctor
+```
+
+A reproducer is a small JSON document naming the files, build/run argv and oracle (`command_execution`, `unauthorized_db_read`, `crash_sanitizer`, `outbound_callback`, …). There is no reproducer-generation tool yet — see [the exploit proof guide](../docs/guides/exploit-proof-fabric.md) for the schema and worked fixtures. Nothing runs unless you supply one, and nothing here ever executes against a production host. Full detail, including what `--require-proof` does for `/fix`, is in that guide.
+
 ## Consolidated modes (v0.85.0+)
 
 `/triage` now also routes:

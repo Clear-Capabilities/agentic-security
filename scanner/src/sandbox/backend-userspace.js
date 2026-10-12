@@ -50,11 +50,17 @@ function _profile({ allowNetwork, proxyPort = null, denyRead = [], confineReads 
     readRoots.forEach((_, i) => lines.push(`(allow file-read* (subpath (param "RD${i}")))`));
     writeRoots.forEach((_, i) => lines.push(`(allow file-read* (subpath (param "WR${i}")))`));
     metaLiterals.forEach((_, i) => lines.push(`(allow file-read-metadata (literal (param "META${i}")))`));
-    lines.push('(allow file-write* (literal "/dev/null"))');
   }
   // Read denial (CORE-003). SBPL is last-match-wins, so these deny rules MUST
   // come after every read allow.
   denyRead.forEach((_, i) => lines.push(`(deny file-read* (subpath (param "DENY${i}")))`));
+  // /dev/null is a kernel sink: writing to it (`stdio: 'ignore'`, `> /dev/null`, a piped-to-null redirect — all
+  // common and harmless) cannot leak data or escape confinement. Allowed unconditionally, in BOTH the default and
+  // capability-mode profiles (it used to be capability-mode only, which left the far more common default profile
+  // denying it: `posix_spawn` opens /dev/null to set up an ignored fd BEFORE exec, so the spawn itself failed with
+  // EPERM — any target that redirects a child's output to /dev/null never ran at all, silently, under the default
+  // profile only).
+  lines.push('(allow file-write* (literal "/dev/null"))');
   lines.push('(allow file-write* (subpath (param "ROOT")))');
   writeRoots.forEach((_, i) => lines.push(`(allow file-write* (subpath (param "WR${i}")))`));
   if (allowNetwork) lines.push('(allow network*)');

@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-buffer-overflow",
+  "lang": "c", "sources": { "app.c": "app.c" },
+  "build": ["{{CC}}", "-g", "-O0", "-fsanitize=address", "-fno-omit-frame-pointer", "-o", "app", "app.c"],
+  "run": ["{{ROOT}}/app", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+  "oracle": { "type": "crash_sanitizer" },
+  "network": "none"
+}
