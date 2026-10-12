@@ -257,6 +257,10 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/guides/fleet.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/guides/measurement-status.md",
       "taskId": "CORE-001-T03"
     },
@@ -294,6 +298,10 @@
     },
     {
       "path": "docs/implementation-status/exploit-proof-fabric.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/fleet.md",
       "taskId": "CORE-001-T03"
     },
     {
@@ -1906,6 +1914,39 @@
       "documents": [
         "commands/federate.md",
         "docs/guides/data-flow-explorer.md"
+      ]
+    },
+    {
+      "id": "CAP-116",
+      "kind": "command",
+      "title": "fleet (CLI only): multi-repository scan orchestration and cross-repository dependency blast radius",
+      "sources": [
+        "command:fleet"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command group (init|scan|status|resume|query) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "fleet-graph.js reads npm/go/cargo/pypi manifests only; it has no Cabal/Stack manifest reader, so a Haskell repository in a fleet contributes no dependency-graph edges today."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "fleet-graph.js has no flake.nix/default.nix reader; a Nix repository in a fleet is scanned (via the existing per-repo scan path) but contributes no dependency-graph edges."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "fleet is a multi-repository source-scan orchestrator; it has no runtime or NixOS-host execution surface of its own to apply this to."
+      },
+      "entryPoints": [
+        "scanner/src/posture/fleet/cli.js",
+        "scanner/src/posture/fleet.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/fleet.md"
       ]
     }
   ],

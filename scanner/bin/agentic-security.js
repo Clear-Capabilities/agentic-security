@@ -7115,6 +7115,7 @@ async function main() {
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));
       case 'rules':    process.exit(await cmdRules(args));
+      case 'fleet':    process.exit(await (await import('../src/posture/fleet/cli.js')).cmdFleet(args, path.resolve(args.flags.root || '.')));
       case 'rule':     process.exit(await cmdRule(args));
       case 'tickets':  process.exit(await cmdTickets(args));
       case 'secure':   process.exit(await cmdSecure(args));

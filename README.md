@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.167.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.168.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -242,6 +242,7 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 **Experimental**
 - **`labs`** — Experimental + AI-driven. Modes: claude-audit / model-rescan / synthesize-rule / cross-repo / risk-dollars / time-to-fix / llm.
 - **`hunt`** *(CLI-only — no slash command)* — LLM discovery over the call-graph partition, gated by the deterministic engine (see [What makes it different](#what-makes-it-different)). Run it as `agentic-security hunt --root <dir>`; `--lens a,b` narrows the angles. Needs `AGENTIC_SECURITY_LLM_ENDPOINT`, is token-expensive, capped at 2000 files, and is advisory — it never gates a build and never writes to `last-scan.json`.
+- **`fleet`** *(CLI-only — no slash command)* — `fleet init|scan|status|resume|query --depends-on <repo-id>`. Scan a declared set of repositories in one invocation (bounded concurrency, resumable, honest per-repo rollup, reusing the existing fleet orchestration) and ask which repositories depend — directly or transitively, by declared package name — on a given one, so a flaw in a shared library's actual organization-wide reach is a query, not a guess. See [Fleet](docs/guides/fleet.md).
 
 Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-security:scan`); `hunt` is the one CLI-only exception. Every legacy single-purpose alias still works and is redirected to its new mode automatically. There is no per-subcommand `--help` — only bare `agentic-security help` prints usage; passing `--help` after any subcommand is silently ignored as an unset flag and the command runs for real instead.
 

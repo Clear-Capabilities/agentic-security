@@ -561,6 +561,18 @@ for (const [eco, ex] of [['haskell', PP], ['nix', PP]]) {
     assert.notEqual(d.status, 0); assert.ok(d.text.length > 0, 'a link to a node that does not resolve is refused');
   });
 }
+// CAP-116 (fleet, PRD 4): the first genuinely not-applicable ledger entry, matching the ledger's own
+// haskell/nix/nixosExecution justification (fleet-graph.js has no Cabal/Stack/flake.nix reader).
+MATRIX['CAP-116'] = {
+  na: {
+    reason: 'fleet-graph.js reads npm/go/cargo/pypi manifests only; it has no Cabal/Stack/flake.nix reader, so a '
+      + 'Haskell or Nix repository in a fleet contributes no dependency-graph edges and the feature has no '
+      + 'ecosystem-specific CLI behavior to execute here.',
+    behavior: 'A Haskell or Nix repository included in a fleet.yaml is still scanned through the existing '
+      + 'per-repository scan path (unaffected by this feature) and appears in the fleet rollup; it simply never '
+      + 'becomes a node or edge in the cross-repository dependency graph fleet query reads.',
+  },
+};
 
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
