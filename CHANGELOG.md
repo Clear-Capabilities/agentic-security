@@ -9,6 +9,48 @@
 > make the history less accurate, not more.
 
 
+## 0.168.0 - fleet: multi-repository scan orchestration and cross-repository dependency blast radius
+
+A real, honestly-scoped slice of the organization-wide security graph recommendation: a new CLI command group,
+`fleet init|scan|status|resume|query`, built almost entirely on existing machinery rather than a new engine.
+
+**The manifest and the scan.** `fleet.yaml` declares an organization and a list of `{id, path}` repositories
+(plus `workers` and `perRepoTimeout`), validated closed-world — an unknown key, a duplicate id, a non-kebab id or
+an unresolvable path refuses the whole manifest. `fleet scan fleet.yaml` drives the EXISTING `posture/fleet.js`
+(`runFleet`) over that list: bounded concurrency, a resumable on-disk checkpoint, per-repository isolation (one
+repo exploding never takes the run down), and an honest rollup (a failed repo is reported failed, never folded
+into "0 findings"). No new scanning engine was written for this.
+
+**The new part: a cross-repository dependency graph.** Built purely from each repository's own package manifest
+(`package.json`/`go.mod`/`Cargo.toml`/`requirements.txt`/`pyproject.toml` — name plus dependencies), with no
+deployment configuration required, so a fleet of plain application repositories works immediately. `fleet query
+--depends-on <repo-id>` answers "which repositories depend on this one, directly or transitively, and through
+what path" — a real question about organization-wide blast radius, not a guess.
+
+**A real, grounded demonstration, not an asserted-away fixture.** A four-repository synthetic organization
+(frontend, payments-api, shared-auth-lib, payments-worker) where only `shared-auth-lib` carries an actual
+command-injection vulnerability the deterministic engine genuinely finds (the same confirmed-detected shape —
+`req.body.host` into `child_process.exec` — already used in this repository's own fixtures). The blast-radius
+query correctly reports `frontend` and `payments-api` as direct dependents and `payments-worker` as a transitive
+one, through `payments-api`, at the right depth, with the right path.
+
+**A bug this process itself caught, twice.** A first draft of the fleet CLI wrapped `runScan()`'s own
+`{ scan, meta }` return value in a SECOND `{ scan }` object; `runFleet`'s internal summarizer reads fields
+defensively rather than throwing on the wrong shape, so every repository silently reported zero findings with no
+error of any kind. Found by running the CLI against the fixture and noticing the finding count was wrong, not by
+the automated test — whose own fixture at the time also happened to use a vulnerability shape the deterministic
+engine does not actually flag (an unlabeled function parameter reaching `exec`, no recognized untrusted source).
+Both are fixed, and the fixture now uses the same confirmed-detected shape the test asserts against.
+
+**Still open, and disclosed as such** (`docs/implementation-status/fleet.md`): no Internet-facing/regulated-data
+overlay — the fuller "which Internet-facing app can reach PCI data through this component" question needs the
+existing deployment-boundary graph's trust-zone model layered on top of this dependency graph, not attempted
+here; no natural-language query parser (`--depends-on <repo-id>` is the one supported shape); no SQLite-backed
+storage (reuses the existing flat-JSON fleet checkpoint; `posture/portfolio/backend.js`'s existing storage
+abstraction is the natural place for a SQLite implementation later); no persisted job queue with lease/retry
+(reuses in-process `runFleet` rather than the heavier, operator-only `portfolio/work-units.js` scheduler); matching
+across repositories is by declared package name only, with no ecosystem disambiguation.
+
 ## 0.167.0 - execution-backed exploit proof, and a self-learning rule compiler that turns one confirmed finding into a deterministic detection rule
 
 Two new, independently opt-in capabilities, each off by default until explicitly invoked.
