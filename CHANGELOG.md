@@ -9,6 +9,29 @@
 > make the history less accurate, not more.
 
 
+## 0.171.0 - documentation: surface every shipped PRD capability in the README and docs index
+
+A documentation-only release. Auditing the docs against the actual CLI surface after PRD 5 shipped found
+several real gaps — not cosmetic, actively misleading in one case — and fixed them:
+
+- **README.md said built container images are NOT scanned.** That line predated `image scan`/`image verify`
+  (PRD 5, shipped in 0.170.0) and was flatly false by the time it shipped. Corrected, with a link to the new
+  guide below.
+- **Seven of the repo's 17 slash-command dispatchers had no entry in README's own Commands list**:
+  `dataflow`, `governance`, `remediation`, `federate`, `image`, `provenance`, `runtime`. Added, grouped under
+  two new categories ("Data Flow Explorer" and "Source-to-artifact & runtime").
+- **`docs/guides/runtime-twin.md` (PRD 2's own user guide) was an orphan** — reachable from one internal
+  cross-link, linked from neither README.md nor docs/README.md. Linked from both.
+- **PRD 5 (Source-to-Artifact Security & Provenance) had no user-facing guide at all**, only the internal
+  `docs/implementation-status/` tracking doc. Added `docs/guides/artifact-provenance.md`.
+- **`docs/reference/cli.md` — "every command, flag, and exit code" — was missing `proof`, `rules`, `fleet`,
+  `runtime`, `image`, `provenance`, and `supply` entirely** from its own Commands table (the literal CLI
+  surface of PRDs 1, 3, 4, 2, and 5). Added all seven.
+- Added two new "What makes it different" bullets (runtime corroboration, source-to-artifact tracing) and a
+  `supply --vex` mode mention to README's Commands list.
+
+No code changed; `scanner/dist/agentic-security.mjs` is unchanged.
+
 ## 0.170.0 - source-to-artifact security & provenance: a new `src/artifact/` package, `image`/`provenance` CLI, VEX
 
 Binds a finding to the actual **built artifact** (a container image, today) that ships it — closing the gap

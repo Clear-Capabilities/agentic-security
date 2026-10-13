@@ -1,5 +1,5 @@
 ---
-description: Scan a built container image archive (OCI/Docker tar) for its real inventory, vulnerabilities, and signature/attestation state.
+description: Scan a built container image (OCI/Docker tar) for inventory, vulnerabilities, and signature/attestation state.
 argument-hint: "scan|verify <archive-or-digest> [flags]"
 ---
 

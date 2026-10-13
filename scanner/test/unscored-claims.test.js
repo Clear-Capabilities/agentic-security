@@ -75,27 +75,31 @@ test('no shipped agent claims a measured accuracy it does not have', () => {
 
 // ── PRD F4.4 — container scope, stated ──────────────────────────────────────
 //
-// `scanContainer` reads Dockerfiles. It does not read a built image: no
-// base-image CVE lookup, no layer secret extraction, no digest verification of
-// something pulled from a registry. The README listed "containers" among twelve
-// pillars with no qualification, and a reader reasonably infers image scanning
-// from that word.
-//
-// F4.4's options were "scan images" or "say it is out of scope". Building image
-// scanning is a feature, not a disclosure fix; the scope is therefore stated.
-// The silence was the problem — an unqualified pillar name reads as coverage.
+// `scanContainer` reads Dockerfiles; it does not read a built image. That used
+// to be an unqualified gap ("containers" was listed among twelve pillars with
+// no qualification, and a reader reasonably inferred image scanning from that
+// word). PRD 5 (Source-to-Artifact Security & Provenance, 0.170.0) closed most
+// of that gap for real: `agentic-security image scan`/`image verify` do base-
+// image CVE correlation (reusing the SCA pipeline) and layer secret extraction
+// against a local docker-archive/oci-archive tar. What remains out of scope —
+// a local Docker-daemon reference and a remote OCI registry reference — is
+// now the thing that must stay honestly disclosed, not the whole feature.
 
-test('the README does not imply built-image scanning', () => {
+test('the README states built images ARE scanned, by a named command', () => {
   const readme = fs.readFileSync(path.join(REPO, 'README.md'), 'utf8');
-  assert.match(readme, /Built images are NOT scanned/i,
-    'the container pillar must state that images are out of scope');
+  assert.match(readme, /agentic-security image scan/,
+    'the container pillar must name the real command that scans a built image');
   assert.match(readme, /base-image CVE|layer secret/i,
-    'it must name what is absent, not just gesture at a limitation');
+    'it must name what the command actually does, not just gesture at a feature');
 });
 
-test('the container scope note names an alternative rather than leaving a hole', () => {
-  // A limitation with no suggested path leaves the reader stuck. Naming the
-  // alternative is what turns a gap into a boundary.
+test('the remaining image-scanning gap (daemon ref, registry ref) stays disclosed', () => {
+  // Closing most of a gap is not license to go silent on what's left. A
+  // limitation with no suggested path leaves the reader stuck — naming the
+  // alternative (the full guide) is what turns a remaining gap into a boundary.
   const readme = fs.readFileSync(path.join(REPO, 'README.md'), 'utf8');
-  assert.match(readme, /dedicated image scanner/i);
+  assert.match(readme, /Docker-daemon image reference|remote OCI registry reference/i,
+    'the un-implemented input shapes must stay named, not silently dropped');
+  assert.match(readme, /docs\/guides\/artifact-provenance\.md/,
+    'must point to the full guide for what is and is not supported');
 });

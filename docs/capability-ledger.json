@@ -257,10 +257,6 @@
       "taskId": "CORE-001-T03"
     },
     {
-      "path": "docs/guides/fleet.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
       "path": "docs/guides/measurement-status.md",
       "taskId": "CORE-001-T03"
     },
@@ -342,10 +338,6 @@
     },
     {
       "path": "docs/implementation-status/runtime-corroborated-twin.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
-      "path": "docs/guides/runtime-twin.md",
       "taskId": "CORE-001-T03"
     },
     {
@@ -1933,7 +1925,8 @@
       "kind": "command",
       "title": "fleet (CLI only): multi-repository scan orchestration and cross-repository dependency blast radius",
       "sources": [
-        "command:fleet"
+        "command:fleet",
+        "docs/guides/fleet.md"
       ],
       "modes": [],
       "modesJustification": "CLI-only command group (init|scan|status|resume|query) with no named report modes.",
@@ -1966,7 +1959,8 @@
       "kind": "command",
       "title": "runtime: ingest/correlate/query runtime telemetry against the lineage graph",
       "sources": [
-        "command:runtime"
+        "command:runtime",
+        "docs/guides/runtime-twin.md"
       ],
       "modes": [],
       "modesInventoryTask": "CORE-001-T02",
@@ -2012,7 +2006,8 @@
       "kind": "command",
       "title": "image: scan/verify a built container image archive for inventory, vulnerabilities, signature/attestation",
       "sources": [
-        "command:image"
+        "command:image",
+        "docs/guides/artifact-provenance.md"
       ],
       "modes": [],
       "modesInventoryTask": "CORE-001-T02",
@@ -2049,7 +2044,8 @@
       ],
       "documents": [
         "commands/image.md",
-        "docs/implementation-status/source-to-artifact-provenance.md"
+        "docs/implementation-status/source-to-artifact-provenance.md",
+        "docs/guides/artifact-provenance.md"
       ]
     },
     {

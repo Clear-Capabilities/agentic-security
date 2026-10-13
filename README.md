@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.170.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.171.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -234,7 +234,18 @@ Not sure where to start? Just run **`/agentic-security:secure`** (also: `--tour`
 **Reporting and audits**
 - **`posture`** — Posture + reporting. Modes: status / report-card / harness / trend / threat / playbook / mgmt / cache.
 - **`compliance`** — Compliance + auditor flows. Modes: report / walkthrough / attestation / audit / pr / privacy. Also a real CLI subcommand: `agentic-security compliance [--gap|--list|--walkthrough <id>] [--format cli|json|md] [--fail-on gap]`.
-- **`supply`** — Supply chain. Modes: check / sbom / cve-alerts / license.
+- **`supply`** — Supply chain. Modes: check / sbom / cve-alerts / license / `--vex <image-archive>` (VEX statements — affected / not affected / fixed / under investigation — for a scanned image artifact; see [Source-to-artifact provenance](docs/guides/artifact-provenance.md)).
+
+**Data Flow Explorer**
+- **`dataflow`** — Export/diff/watch the already-scanned Data Flow Explorer graph, apply a what-if scenario, or assess blast-radius impact: `export` / `diff` / `watch` / `scenario apply` / `impact assess` / `observations import` / `observations list` / `twin`. See [Code Boundaries](#code-boundaries) below and the [Data Flow Explorer guide](docs/guides/data-flow-explorer.md).
+- **`governance`** — Propose a validated, reviewable edit to the operator-declared recipient-governance config (`propose-edit`). Previews the diff by default; `--yes` re-validates, backs up, writes atomically, and appends an audit event.
+- **`remediation`** — Track a Data Flow Explorer blast-radius finding as a work item against real rescan evidence: `open` / `update` / `verify` / `accept-risk` / `reopen-check` / `list`. A later regression reopens a `verified` item automatically.
+- **`federate`** — Declare (`declare`) or list (`list`) a link between a node in this repo's scanned graph and a node in a separately-scanned remote repo's graph; each repo's own graph artifact stays unmodified.
+
+**Source-to-artifact & runtime**
+- **`image`** — Scan (`scan`) or verify signatures/attestations (`verify`) for a built container image archive (OCI/Docker tar): real inventory, base-image CVE correlation (reusing this engine's own SCA pipeline), layer secret analysis, and DSSE attestation verification. Never executes the image. See [Source-to-artifact provenance](docs/guides/artifact-provenance.md).
+- **`provenance`** — `trace` a scanned image artifact's provenance graph (Git Commit → Build → OCI Digest → SBOM Component → Finding → Deployment) and, with `--source <dir>`, detect drift between what's fixed in source and what's still running — the "stale deployment" Killer Demonstration. See [Source-to-artifact provenance](docs/guides/artifact-provenance.md).
+- **`runtime`** — Ingest runtime telemetry (`ingest --adapter otel-json|envoy-access-log|k8s-audit-log|http-access-log|native-jsonl`), correlate it against the scanned Data Flow Explorer graph, and report an honest `complete`/`partial`/`unavailable` assurance status (`status`/`reconcile`/`query`). See [Runtime-Corroborated Security Twin](docs/guides/runtime-twin.md).
 
 **Set up guardrails**
 - **`setup`** — Workflow installers + guards. Modes: hooks / ci / predeploy / bodyguard / destructive-guard / model-optimizer. `--ci` generates a multi-provider CI gate; `--predeploy` blocks vercel/fly/wrangler deploys on critical findings.
@@ -253,7 +264,7 @@ Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-sec
 - **Plain-English findings with dollar-cost estimates.** Best/likely/worst-case exposure, grounded in IBM Cost of a Data Breach 2024 and 25+ public settlement records, honestly labeled `scenario_default` until you configure your own organization's inputs — see [Risk in dollars](docs/guides/risk-dollars.md). Not CVE numbers.
 - **Intercepts insecure AI-generated code before it hits disk.** The `/setup --bodyguard` hook blocks SQLi via concat, hardcoded API keys, `eval` on user input, and more — in real time, as your AI writes.
 - **12-pillar scan in one command.** SAST, SCA, secrets, IaC, LLM safety, MCP agent-tool audit, auth/authZ, pipeline integrity, container **build files**, deploy config, supply chain, and trend tracking.
-  <br>_Container scope: Dockerfiles and compose files are analysed as source. **Built images are NOT scanned** — no base-image CVE lookup, no layer secret extraction, no digest-pinning verification of a pulled image. If you need image scanning, run a dedicated image scanner alongside this one._
+  <br>_Container scope: Dockerfiles and compose files are analysed as source by `scan`. **Built images** (OCI/Docker tar archives) are scanned separately via `agentic-security image scan` — real base-image CVE correlation (reusing this engine's own SCA pipeline), layer secret extraction (including a secret added then deleted by a later layer but still recoverable), and signature/attestation verification. Not yet implemented, disclosed rather than silently dropped: a local Docker-daemon image reference or a remote OCI registry reference as direct input — see [Source-to-artifact provenance](docs/guides/artifact-provenance.md)._
 - **Function-level reachability across every dependency.** OSV ecosystem_specific parsing, GHSA fix-commit analysis, vendored code fingerprinting, Java IR call-graph matching, and LLM-assisted function extraction — not just a hardcoded hints list.
 - **SCA reachability tiers.** Every dependency classified as `function-reachable`, `import-reachable`, `build-only`, `manifest-only`, or `transitive-only` — so you fix what matters.
 - **CISA KEV + EPSS prioritization.** Separates "this could theoretically be bad" from "people are running scripts that exploit this today."
@@ -264,6 +275,8 @@ Every slash command is invoked as `/agentic-security:<name>` (e.g. `/agentic-sec
 - **Coverage you can audit.** Enumerates every attacker-reachable entry point — HTTP handlers, queue consumers, cron jobs, CLI args, uploads — and reports the disposition of each, so you can see it looked at your whole attack surface, not just where a finding happened to fire. A confirmed finding then triggers a repo-wide sweep for sibling instances the detectors missed, with honest "N found / M candidate / K mitigated" accounting.
 - **An LLM discovery layer the deterministic engine keeps honest.** `hunt` partitions your call graph into disjoint focus areas and sends each through seven independent lenses — injection, authorization, crypto, business logic, feature abuse, chained, wildcard — to propose the flaws no rule can encode. Nothing it proposes is taken on faith: every candidate is routed back through the taint engine for corroboration, then faces a three-angle panel prompted to *refute* it, and only a majority refutation drops it. Severity comes from the evidence tier, never from the model, so this layer cannot emit `critical`. If the endpoint is missing or the panel goes silent, the report says so in plain words rather than reporting a clean run it did not earn. See [Deterministic vs. model-assisted](docs/concepts.md#deterministic-vs-model-assisted).
 - **Hardens itself against the code it scans.** A tested threat model treats attacker-authored finding text as untrusted input everywhere it reaches an LLM prompt or a rendered PR/issue report — so the tool can't be turned against you by the repo it's auditing. See [Agent threat model](docs/AGENT_THREAT_MODEL.md).
+- **Corroborates static findings against what actually happened.** `runtime ingest` layers real telemetry (OpenTelemetry, Envoy, Kubernetes audit logs, HTTP access logs) onto the already-scanned graph and reports an honest `complete`/`partial`/`unavailable` assurance status — never silently reads "no telemetry imported" as "no risk." See [Runtime-Corroborated Security Twin](docs/guides/runtime-twin.md).
+- **Traces a finding to the exact artifact that ships it.** `image scan` + `provenance trace` connect Git commit → build → OCI digest → SBOM component → finding → deployment, and catch the case a CVE scanner alone can't: source is fixed, but the deployed image still isn't — `SOURCE: FIXED` / `DEPLOYED ARTIFACT: STILL VULNERABLE` / `PRODUCTION EXPOSURE: PRESENT`. See [Source-to-artifact provenance](docs/guides/artifact-provenance.md).
 
 Deep engine details — [architecture](docs/ARCHITECTURE.md) · [finding lifecycle](docs/architecture/finding-lifecycle.md).
 
