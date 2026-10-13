@@ -5778,6 +5778,295 @@ async function cmdRuntimeQuery(args) {
   return 0;
 }
 
+// ─── PRD 5: Source-to-Artifact Security & Provenance ───────────────────────
+// `image scan/verify`, `provenance trace`, `supply vex`. See
+// docs/implementation-status/source-to-artifact-provenance.md for the full
+// scope, naming-collision discipline (why the graph field below is
+// `artifactProvenanceGraph`, never a bare `.provenance`), and what is
+// deliberately NOT implemented (local-daemon image / remote registry
+// reference inputs; keyless Rekor signature lookup).
+
+function _readFileOrError(target) {
+  const abs = path.resolve(target);
+  if (!fs.existsSync(abs)) return { ok: false, message: `no such file: ${target}` };
+  if (!fs.statSync(abs).isFile()) return { ok: false, message: `${target} is not a file` };
+  try {
+    return { ok: true, buf: fs.readFileSync(abs) };
+  } catch (err) {
+    return { ok: false, message: `failed to read ${target}: ${err.message}` };
+  }
+}
+
+function _artifactScanDigestHex(digestOrTarget) {
+  const s = String(digestOrTarget || '');
+  const hex = s.startsWith('sha256:') ? s.slice(7) : s;
+  return /^[0-9a-f]{64}$/.test(hex) ? hex : null;
+}
+
+// Parses an archive fresh and runs inventory + vuln correlation — the one
+// real analysis path every `image scan`/`provenance trace`/`supply vex`
+// invocation that isn't reading a stored result funnels through.
+async function _scanArchiveFresh(buf) {
+  const { buildImageInventory } = await import('../src/artifact/inventory.js');
+  const { ImageArchiveError } = await import('../src/artifact/image-archive.js');
+  const { TarSafetyError } = await import('../src/artifact/safe-tar.js');
+  const { parseManifests, queryOSV } = await import('../src/sca/index.js');
+  const { correlateImageVulnerabilities } = await import('../src/artifact/vuln-correlate.js');
+  const { analyzeLayerSecrets } = await import('../src/artifact/layer-secrets.js');
+  const { scanCredentials } = await import('../src/secrets/index.js');
+
+  let built;
+  try {
+    built = buildImageInventory(buf, { manifestParser: parseManifests });
+  } catch (err) {
+    if (err instanceof ImageArchiveError || err instanceof TarSafetyError) return { ok: false, message: err.message };
+    throw err;
+  }
+  const { vulnerabilities } = await correlateImageVulnerabilities({
+    inventory: built.inventory, fileContents: built.mergedFilesystem.fileContents, queryOSVFn: queryOSV,
+  });
+  const secrets = analyzeLayerSecrets({
+    readLayersResult: built.readLayersResult, deletedPaths: built.mergedFilesystem.deletedPaths, detectFn: scanCredentials,
+  });
+  return {
+    ok: true,
+    built,
+    record: {
+      inventory: built.inventory,
+      vulnerabilities,
+      secrets: { deletedButRecoverable: secrets.deletedButRecoverable, totalFindings: secrets.findings.length },
+      scannedAt: new Date().toISOString(),
+    },
+  };
+}
+
+async function _persistArtifactScan(record) {
+  const { statePath, safeWriteState } = await import('../src/posture/state-dir.js');
+  const root = process.cwd();
+  const hex = _artifactScanDigestHex(record.inventory.digest);
+  if (!hex) return false; // defensive: digest is always well-formed sha256:<hex> from image-archive.js
+  return safeWriteState(statePath(root, 'artifact-scans', `${hex}.json`), JSON.stringify(record, null, 2), { category: 'artifact-scans' });
+}
+
+// Resolves `target` to a scan record: a digest/sha256:<hex> that matches a
+// PREVIOUSLY `image scan`-ned, persisted record is loaded from state;
+// anything else is treated as an archive file path and parsed fresh. This
+// is what lets `provenance trace <digest>` and `supply vex <digest>` work
+// after an earlier `image scan <path>` without re-reading the archive.
+async function _resolveArtifactScan(target) {
+  const hex = _artifactScanDigestHex(target);
+  if (hex) {
+    const { statePath } = await import('../src/posture/state-dir.js');
+    const storedPath = statePath(process.cwd(), 'artifact-scans', `${hex}.json`);
+    if (fs.existsSync(storedPath)) {
+      try {
+        return { ok: true, record: JSON.parse(fs.readFileSync(storedPath, 'utf8')) };
+      } catch (err) {
+        return { ok: false, message: `stored scan at ${storedPath} is corrupt: ${err.message}` };
+      }
+    }
+    return { ok: false, message: `no stored scan for digest ${target} — run "image scan" on the archive first` };
+  }
+  const read = _readFileOrError(target);
+  if (!read.ok) return read;
+  const scanned = await _scanArchiveFresh(read.buf);
+  if (!scanned.ok) return scanned;
+  return { ok: true, record: scanned.record };
+}
+
+async function cmdImageScan(args) {
+  const target = args._[2];
+  if (!target) {
+    process.stderr.write('agentic-security image scan: provide a path to a docker-archive or oci-archive tar (OCI tar / Docker tar — see commands/image.md for the two supported input shapes).\n');
+    return 2;
+  }
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'cli') {
+    process.stderr.write('agentic-security image scan: --format must be json|cli.\n');
+    return 2;
+  }
+  const read = _readFileOrError(target);
+  if (!read.ok) { process.stderr.write(`agentic-security image scan: ${read.message}\n`); return 1; }
+
+  const scanned = await _scanArchiveFresh(read.buf);
+  if (!scanned.ok) { process.stderr.write(`agentic-security image scan: ${scanned.message}\n`); return 1; }
+
+  await _persistArtifactScan(scanned.record);
+
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify(scanned.record, null, 2) + '\n');
+    return 0;
+  }
+  const { inventory, vulnerabilities, secrets } = scanned.record;
+  const vulnCount = vulnerabilities.filter((v) => v.type === 'vulnerable_dep').length;
+  process.stdout.write([
+    `Image digest: ${inventory.digest} (${inventory.digestKind})`,
+    `OS/architecture: ${inventory.os}/${inventory.architecture}`,
+    `OS packages: ${inventory.osPackages.length}, application packages: ${inventory.appPackages.length}`,
+    `Vulnerabilities (OSV): ${vulnCount}`,
+    `Secrets deleted-but-recoverable from an earlier layer: ${secrets.deletedButRecoverable.length}`,
+    inventory.materializationTruncated ? 'NOTE: some layer content exceeded the scan size cap and was skipped.' : '',
+  ].filter(Boolean).join('\n') + '\n');
+  return 0;
+}
+
+async function cmdImageVerify(args) {
+  const target = args._[2];
+  if (!target) {
+    process.stderr.write('agentic-security image verify: provide a path to a docker-archive or oci-archive tar, or a previously-scanned digest.\n');
+    return 2;
+  }
+  const resolved = await _resolveArtifactScan(target);
+  if (!resolved.ok) { process.stderr.write(`agentic-security image verify: ${resolved.message}\n`); return 1; }
+  const { inventory } = resolved.record;
+
+  const { verifyImageSignature, verifyProvenanceAttestation } = await import('../src/artifact/signature.js');
+
+  let signature = null;
+  let publicKeyPem = null;
+  let attestation = null;
+  if (typeof args.flags.signature === 'string') {
+    const r = _readFileOrError(args.flags.signature);
+    if (!r.ok) { process.stderr.write(`agentic-security image verify: --signature: ${r.message}\n`); return 1; }
+    signature = r.buf;
+  }
+  if (typeof args.flags['public-key'] === 'string') {
+    const r = _readFileOrError(args.flags['public-key']);
+    if (!r.ok) { process.stderr.write(`agentic-security image verify: --public-key: ${r.message}\n`); return 1; }
+    publicKeyPem = r.buf.toString('utf8');
+  }
+  if (typeof args.flags.attestation === 'string') {
+    const r = _readFileOrError(args.flags.attestation);
+    if (!r.ok) { process.stderr.write(`agentic-security image verify: --attestation: ${r.message}\n`); return 1; }
+    try { attestation = JSON.parse(r.buf.toString('utf8')); } catch (err) {
+      process.stderr.write(`agentic-security image verify: --attestation is not valid JSON: ${err.message}\n`);
+      return 1;
+    }
+  }
+
+  const signatureResult = verifyImageSignature({ digest: inventory.digest, signature, publicKeyPem });
+  const attestationResult = verifyProvenanceAttestation({ digest: inventory.digest, envelope: attestation, publicKeyPem });
+
+  const result = { digest: inventory.digest, signature: signatureResult, attestation: attestationResult };
+  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  // Exit non-zero only on a definite "invalid" — "missing"/"unavailable" are
+  // honest reports of absent material, not a failed check, and must not be
+  // conflated with a cryptographic failure a CI gate should actually block on.
+  return (signatureResult.state === 'invalid' || attestationResult.state === 'invalid') ? 1 : 0;
+}
+
+async function cmdProvenanceTrace(args) {
+  const target = args._[2];
+  if (!target) {
+    process.stderr.write('agentic-security provenance trace: provide a path to an image archive, or a previously-scanned digest.\n');
+    return 2;
+  }
+  const resolved = await _resolveArtifactScan(target);
+  if (!resolved.ok) { process.stderr.write(`agentic-security provenance trace: ${resolved.message}\n`); return 1; }
+  const { inventory, vulnerabilities } = resolved.record;
+
+  let deployment = null;
+  if (typeof args.flags['deployment-id'] === 'string') {
+    deployment = {
+      id: args.flags['deployment-id'],
+      environment: typeof args.flags['deployment-environment'] === 'string' ? args.flags['deployment-environment'] : null,
+      digest: typeof args.flags['deployment-digest'] === 'string' ? args.flags['deployment-digest'] : null,
+      evidence: 'operator-declared',
+    };
+  }
+
+  const { buildArtifactProvenanceGraph, traceArtifactProvenanceGraph } = await import('../src/artifact/provenance-graph.js');
+  const artifactProvenanceGraph = buildArtifactProvenanceGraph({ inventory, vulnerabilities, deployment });
+  const commitNode = artifactProvenanceGraph.nodes.find((n) => n.kind === 'gitCommit');
+  const trace = traceArtifactProvenanceGraph(artifactProvenanceGraph, commitNode.id);
+
+  let mismatch = null;
+  if (typeof args.flags.source === 'string') {
+    const sourceRoot = path.resolve(args.flags.source);
+    const lastScanPath = path.join(sourceRoot, '.agentic-security', 'last-scan.json');
+    if (!fs.existsSync(lastScanPath)) {
+      process.stderr.write(`agentic-security provenance trace: --source "${args.flags.source}" has no .agentic-security/last-scan.json — run "scan" there first.\n`);
+      return 1;
+    }
+    const sourceScan = JSON.parse(fs.readFileSync(lastScanPath, 'utf8'));
+    const { detectSourceArtifactMismatch } = await import('../src/artifact/mismatch.js');
+    mismatch = detectSourceArtifactMismatch({
+      sourceVulnerabilities: sourceScan.supplyChain || [],
+      artifactVulnerabilities: vulnerabilities,
+      artifactComponents: [...inventory.osPackages, ...inventory.appPackages],
+    });
+  }
+
+  const format = args.flags.format ?? 'json';
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify({ artifactProvenanceGraph, trace, mismatch }, null, 2) + '\n');
+    return 0;
+  }
+
+  const lines = [`Artifact digest: ${inventory.digest}`, `Source commit: ${commitNode.known ? commitNode.sha : '(not declared — no org.opencontainers.image.revision label)'}`];
+  if (mismatch) {
+    lines.push('');
+    if (mismatch.scenarioA.length > 0) {
+      lines.push('SOURCE: FIXED');
+      lines.push('DEPLOYED ARTIFACT: STILL VULNERABLE');
+      lines.push('PRODUCTION EXPOSURE: PRESENT');
+      lines.push(`  ${mismatch.scenarioA.length} vulnerabilit${mismatch.scenarioA.length === 1 ? 'y' : 'ies'} present in this artifact, already fixed in current source: ${mismatch.scenarioA.map((v) => v.osvId).join(', ')}`);
+    }
+    if (mismatch.scenarioB.length > 0) {
+      lines.push(`${mismatch.scenarioA.length > 0 ? '' : 'SOURCE: VULNERABLE\n'}BUILT ARTIFACT: AFFECTED COMPONENT ABSENT`);
+      lines.push(`  ${mismatch.scenarioB.length} vulnerabilit${mismatch.scenarioB.length === 1 ? 'y' : 'ies'} flagged in current source did not actually ship in this artifact: ${mismatch.scenarioB.map((v) => v.osvId).join(', ')}`);
+    }
+    if (!mismatch.hasMismatch) lines.push('No mismatch: current source and this deployed artifact agree.');
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+  return 0;
+}
+
+async function cmdSupplyVex(args) {
+  const target = args._[2];
+  if (!target) {
+    process.stderr.write('agentic-security supply vex: provide a path to an image archive, or a previously-scanned digest.\n');
+    return 2;
+  }
+  const resolved = await _resolveArtifactScan(target);
+  if (!resolved.ok) { process.stderr.write(`agentic-security supply vex: ${resolved.message}\n`); return 1; }
+  const { inventory, vulnerabilities } = resolved.record;
+
+  let reachabilityByKey = new Map();
+  if (typeof args.flags.source === 'string') {
+    const sourceRoot = path.resolve(args.flags.source);
+    const lastScanPath = path.join(sourceRoot, '.agentic-security', 'last-scan.json');
+    if (fs.existsSync(lastScanPath)) {
+      const sourceScan = JSON.parse(fs.readFileSync(lastScanPath, 'utf8'));
+      for (const sc of (sourceScan.supplyChain || [])) {
+        if (sc.type !== 'vulnerable_dep') continue;
+        const key = sc.purl || `${sc.ecosystem}:${sc.name}`;
+        const reachable = sc.functionReachable === 'reachable' ? true : sc.functionReachable === 'unreachable' ? false : null;
+        if (reachable !== null) reachabilityByKey.set(key, { reachable, reason: sc.reachabilityTier || null });
+      }
+    }
+  }
+
+  const { deriveVexStatus } = await import('../src/artifact/vex.js');
+  const artifactComponents = [...inventory.osPackages, ...inventory.appPackages];
+  const statements = vulnerabilities.filter((v) => v.type === 'vulnerable_dep').map((v) => {
+    const key = v.purl || `${v.ecosystem}:${v.name}`;
+    const reachability = reachabilityByKey.get(key) || null;
+    const vex = deriveVexStatus({ vulnerability: v, artifactComponents, reachability });
+    return { purl: v.purl || null, name: v.name, ecosystem: v.ecosystem, osvId: v.osvId, ...vex };
+  });
+
+  const format = args.flags.format ?? 'json';
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify({ digest: inventory.digest, statements }, null, 2) + '\n');
+    return 0;
+  }
+  const lines = [`VEX for ${inventory.digest}:`];
+  for (const s of statements) lines.push(`  ${s.osvId} (${s.name}): ${s.status}${s.justification ? ` [${s.justification}]` : ''}`);
+  process.stdout.write(lines.join('\n') + '\n');
+  return 0;
+}
+
 // Mirrors posture/fix-history.js's own _writeAtomicAndSync (temp file in
 // the same directory, fsync, then rename over the target) — a crash
 // mid-write must never leave recipient-profiles.json as invalid JSON,
@@ -7520,6 +7809,48 @@ async function main() {
         else if (sub === 'query') { process.exit(await cmdRuntimeQuery(args)); }
         else {
           process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", or "query".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'image': {
+        // PRD 5 (Source-to-Artifact Security & Provenance) names this
+        // literal CLI shape. `scan` parses + correlates; `verify` checks
+        // signature/attestation material only (never re-runs correlation).
+        const sub = args._[1];
+        if (sub === 'scan') { process.exit(await cmdImageScan(args)); }
+        else if (sub === 'verify') { process.exit(await cmdImageVerify(args)); }
+        else {
+          process.stderr.write(`agentic-security image: unrecognized sub-command "${sub}" — must be "scan" or "verify".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'provenance': {
+        // NOT `posture/provenance/`'s git-commit finding provenance, NOT
+        // `sca/sigstore-verify.js`'s package-build provenance — this is PRD
+        // 5's own artifact provenance graph (Git Commit -> Build -> OCI
+        // Digest -> SBOM Component -> Finding -> Deployment). See
+        // docs/implementation-status/source-to-artifact-provenance.md's
+        // naming-discipline section.
+        const sub = args._[1];
+        if (sub === 'trace') { process.exit(await cmdProvenanceTrace(args)); }
+        else {
+          process.stderr.write(`agentic-security provenance: unrecognized sub-command "${sub}" — must be "trace".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'supply': {
+        // The `/supply` SLASH COMMAND (commands/supply.md) is a different
+        // layer entirely — Claude Code UI sugar that shells out to `scan
+        // --only sca`/`cve-watch`. This is PRD 5's own literal CLI shape,
+        // `agentic-security supply vex`, operating on an IMAGE ARTIFACT
+        // rather than a source directory.
+        const sub = args._[1];
+        if (sub === 'vex') { process.exit(await cmdSupplyVex(args)); }
+        else {
+          process.stderr.write(`agentic-security supply: unrecognized sub-command "${sub}" — must be "vex".\n`);
           process.exit(2);
         }
         break;

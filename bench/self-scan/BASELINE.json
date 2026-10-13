@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-12T23:44:40.910Z",
-  "commit": "a0355a93b92abb5a321fac797be0d6e6ec1d9d38",
+  "generatedAt": "2026-10-13T04:19:41.636Z",
+  "commit": "ce94d5389358cba39f0cb3225d82e06e2480a7d1",
   "targets": {
     "hooks": {
       "total": 21,
@@ -47,9 +47,11 @@
       }
     },
     "scanner/src": {
-      "total": 650,
+      "total": 652,
       "byFile": {
         "(deep-engine)": 1,
+        "artifact/provenance-graph.js": 1,
+        "artifact/signature.js": 1,
         "badge.js": 3,
         "capabilities/decide.js": 1,
         "capabilities/outbound.js": 2,

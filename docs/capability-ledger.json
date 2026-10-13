@@ -347,6 +347,10 @@
     {
       "path": "docs/guides/runtime-twin.md",
       "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/source-to-artifact-provenance.md",
+      "taskId": "CORE-001-T03"
     }
   ],
   "entries": [
@@ -2002,6 +2006,95 @@
         "docs/implementation-status/runtime-corroborated-twin.md",
         "docs/guides/runtime-twin.md"
       ]
+    },
+    {
+      "id": "CAP-118",
+      "kind": "command",
+      "title": "image: scan/verify a built container image archive for inventory, vulnerabilities, signature/attestation",
+      "sources": [
+        "command:image"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/image.md",
+        "scanner/src/artifact/CLAUDE.md"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/image.md",
+        "docs/implementation-status/source-to-artifact-provenance.md"
+      ]
+    },
+    {
+      "id": "CAP-119",
+      "kind": "command",
+      "title": "provenance: trace an artifact's provenance graph and detect source-vs-deployment drift",
+      "sources": [
+        "command:provenance"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/provenance.md",
+        "scanner/src/artifact/CLAUDE.md"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/provenance.md"
+      ]
     }
   ],
   "docReviews": {
@@ -2367,6 +2460,16 @@
         "path": "commands/runtime.md",
         "outcome": "reviewed",
         "basis": "runtime correlates telemetry against the lineage graph regardless of source language; CAP-117 covers the haskell/nix applicability and CLI proof."
+      },
+      {
+        "path": "commands/image.md",
+        "outcome": "reviewed",
+        "basis": "image scans a built artifact (container image) regardless of its source language; CAP-118 covers the haskell/nix applicability and CLI proof."
+      },
+      {
+        "path": "commands/provenance.md",
+        "outcome": "reviewed",
+        "basis": "provenance traces an artifact's own provenance graph regardless of source language; CAP-119 covers the haskell/nix applicability and CLI proof."
       }
     ]
   }

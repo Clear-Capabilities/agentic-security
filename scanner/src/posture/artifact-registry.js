@@ -95,6 +95,14 @@ export const ARTIFACT_REGISTRY = [
   // clears by default, same as last-scan.json itself.
   { name: 'lineage-graph.json', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'lineage-graph.json.sig', kind: 'file', classification: 'generated', retentionClass: 'scan' },
+  // PRD 5 (Source-to-Artifact Security & Provenance): one <digest-hex>.json
+  // per `image scan`-ned artifact (src/artifact/inventory.js's inventory +
+  // vuln-correlate.js's vulnerabilities + layer-secrets.js's summary), so
+  // `provenance trace <digest>`/`supply vex <digest>` can re-reference an
+  // already-scanned archive without re-parsing the tar. A rescan
+  // regenerates it byte-for-byte from the same archive, so 'generated'/
+  // 'scan' — same bucket as last-scan.json/lineage-graph.json above.
+  { name: 'artifact-scans', kind: 'dir', classification: 'generated', retentionClass: 'scan', source: 'bin/agentic-security.js (_persistArtifactScan)' },
   // X-016: Haskell/Nix analysis metadata (capability status, parser/resolver ledger, limitations, input digests) and the
   // language BOM, written by src/language/state-artifacts.js beside last-scan.json. Paths and digests only, never source
   // text. Scan-class retention for the metadata; the BOM is evidence.

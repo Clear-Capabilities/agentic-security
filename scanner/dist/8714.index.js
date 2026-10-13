@@ -81,8 +81,8 @@ function persistLanguageArtifacts(root, scan) {
   const out = [];
   const put = (name, body) => {
     const fp = (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(root, name);
-    if (!(0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(fp, body)) return false;
-    try { (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(`${fp}.sig`, (0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_2__/* .signLastScan */ .lU)(body)); } catch { /* the signature is best effort, as for last-scan.json */ }
+    if (!(0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.safeWriteState)(fp, body)) return false;
+    try { (0,_posture_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.safeWriteState)(`${fp}.sig`, (0,_posture_integrity_js__WEBPACK_IMPORTED_MODULE_2__/* .signLastScan */ .lU)(body)); } catch { /* the signature is best effort, as for last-scan.json */ }
     out.push({ name, sha256: sha256(body) });
     return true;
   };

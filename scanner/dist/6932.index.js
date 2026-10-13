@@ -851,9 +851,9 @@ async function cmdScan(args, root, { resumeOnly = false } = {}) {
   });
   if (resumeOnly && result.skipped.length === manifest.repositories.length) console.error('[fleet] nothing to resume — every repository was already complete.');
 
-  (0,state_dir/* safeWriteState */.Ep)(prevRollupFile, JSON.stringify(result.rollup, null, 2));
+  (0,state_dir.safeWriteState)(prevRollupFile, JSON.stringify(result.rollup, null, 2));
   const graph = buildFleetDependencyGraph(manifest.repositories);
-  (0,state_dir/* safeWriteState */.Ep)(graphPath(root), JSON.stringify({ organization: manifest.organization, builtAt: new Date().toISOString(), ...graph }, null, 2));
+  (0,state_dir.safeWriteState)(graphPath(root), JSON.stringify({ organization: manifest.organization, builtAt: new Date().toISOString(), ...graph }, null, 2));
 
   console.log(renderFleetSummary(result.rollup));
   console.log(`\nRepositories requested: ${manifest.repositories.length}`);

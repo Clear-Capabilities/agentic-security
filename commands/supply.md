@@ -15,6 +15,7 @@ Supply chain dispatcher.
 | `--sbom` | Conversational SBOM exploration — query deps, drift, transitive paths in natural language |
 | `--cve-alerts` | One-shot check now for new CVEs against installed deps, plus help scheduling recurring checks |
 | `--license` | License-graph view: per-component license, transitive copyleft, dual-license traps. Backed by `license-graph.js`. |
+| `--vex <image-archive>` | VEX statements (affected/not affected/fixed/under investigation) for a scanned image artifact — PRD "Source-to-Artifact Security & Provenance"'s literal `agentic-security supply vex` CLI shape. **Takes an image archive path, not a source directory** — see the dedicated note below. |
 
 Add `--json` to any mode for machine-readable output.
 
@@ -25,7 +26,7 @@ PATH_ARG="."
 JSON=""
 for arg in "$@"; do
   case "$arg" in
-    --check|--sbom|--cve-alerts|--license) FLAG="$arg" ;;
+    --check|--sbom|--cve-alerts|--license|--vex) FLAG="$arg" ;;
     --json) JSON="--format json" ;;
     *) PATH_ARG="$arg" ;;
   esac
@@ -35,6 +36,9 @@ case "$FLAG" in
   --check)
     node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs scan "$PATH_ARG" --only sca ${JSON:---format cli}
     ec=$?; [ $ec -le 3 ] && exit 0 || exit $ec ;;
+  --vex)
+    node ${CLAUDE_PLUGIN_ROOT}/scanner/dist/agentic-security.mjs supply vex "$PATH_ARG" ${JSON:---format cli}
+    exit $? ;;
   --sbom|--license)
     if [ ! -f "$PATH_ARG/.agentic-security/last-scan.json" ]; then
       echo "No prior scan found. Running one now (this also computes the SBOM diff / license graph)..."
@@ -64,6 +68,19 @@ The `sbomDiff` object is `{ findings, summary: {added, removed, bumped, substitu
 
 The `licenseGraph` object is `{ findings, summary: {total, deny, review, allow, unknown}, distributionMode }` — `findings` are the actual violations (copyleft-in-SaaS, dual-license traps, denied licenses per `.agentic-security/license-policy.yml` if one exists); `summary` is the per-component breakdown. Walk the user through any `deny`/`review` entries first, then offer the full per-component table if they want it.
 
+### `--vex <image-archive>` — a different layer than every other mode
+
+Every other mode here operates on a SOURCE DIRECTORY (`PATH_ARG` defaults to `.`). `--vex` instead takes a
+path to a built image archive (a `docker save`-shaped or OCI-layout tar, or a `sha256:<hex>` digest from a
+prior `/image scan`) — the PRD's own literal CLI shape operates on the deployed artifact, not source. The
+output is a list of `{purl, osvId, status, justification, evidence}` per advisory, where `status` is one of
+`affected`/`not_affected`/`fixed`/`under_investigation`. `not_affected` is only ever returned with positive
+evidence (the component is absent from the artifact, or confirmed unreachable) — never from the mere
+absence of information. See `commands/image.md` and
+`docs/implementation-status/source-to-artifact-provenance.md` for the full picture (inventory, vulnerability
+correlation, signature/attestation verification, and the provenance-graph `trace` command this mode is a
+sibling of).
+
 ### `--cve-alerts` — after the block runs
 
 This is a **one-shot check**, not a persistent subscription — nothing in this session can stay running after the conversation ends. Report `newAdvisories` from the JSON output now. Then, if the user wants ongoing monitoring, offer to help them wire `agentic-security cve-watch` into a scheduled GitHub Actions workflow (cron trigger) or their existing CI cron, the same way `/setup --ci` generates a workflow file — this command does not do that generation itself.
@@ -87,4 +104,4 @@ the check says the dependencies were **not assessed**; it never reports them cle
 
 ## Implementation
 
-`--check` routes to the built-in SCA engine via the real `scan --only sca` CLI invocation above. `--sbom` and `--license` read `scan.sbomDiff` / `scan.licenseGraph` (`posture/sbom-diff.js` / `posture/license-graph.js`) from `.agentic-security/last-scan.json`, running a scan first if none exists. `--cve-alerts` runs the real `cve-watch` CLI subcommand (`posture/cve-alert-daemon.js`) as a one-shot check.
+`--check` routes to the built-in SCA engine via the real `scan --only sca` CLI invocation above. `--sbom` and `--license` read `scan.sbomDiff` / `scan.licenseGraph` (`posture/sbom-diff.js` / `posture/license-graph.js`) from `.agentic-security/last-scan.json`, running a scan first if none exists. `--cve-alerts` runs the real `cve-watch` CLI subcommand (`posture/cve-alert-daemon.js`) as a one-shot check. `--vex` routes to the real `agentic-security supply vex` CLI subcommand (`src/artifact/vex.js`'s `deriveVexStatus`, over an `image scan`-produced inventory).
