@@ -20,9 +20,14 @@ context. Run `agentic-security help` for the live, in-CLI flag listing.
 | `undo` | Revert the most recent applied fix. `--list` shows history; `--all` reverts everything; `--compact` archives terminal entries. |
 | `accept --finding <id>` | Soft-suppress a finding for 30 days. |
 | `compliance` | Assess the last scan against a framework. `--list`, `--walkthrough <id>`, `--gap`, `--privacy`, `--format cli\|json\|md`, `--fail-on gap`. See [compliance guide](../guides/compliance.md). |
+| `supply [--check\|--sbom\|--cve-alerts\|--license\|--vex <image-archive>]` | Supply chain: SCA + SBOM + CVE alerts + license analysis. `--vex <image-archive>` emits a VEX statement (affected/not affected/fixed/under investigation) per advisory for a scanned image artifact — see [Source-to-artifact provenance](../guides/artifact-provenance.md). |
+| `triage exploit <id> --prove` | Execute a bounded, serialized reproducer for one finding inside the confined sandbox; requires 3/3 reproduction plus an independently re-run replay before reporting `EXPLOIT_CONFIRMED`. See [Exploit proof](../guides/exploit-proof-fabric.md). |
+| `proof [--id <finding>]` | Lower-level entry point into the same proof fabric `triage exploit --prove` calls — the evidence-state ladder from `CANDIDATE` to `FIX_VERIFIED`. See [Exploit proof](../guides/exploit-proof-fabric.md). |
+| `rules synthesize\|evaluate\|promote\|status\|rollback <finding-id>` | Turn one confirmed, proven finding into a reviewed, promoted deterministic detection rule: synthesize a candidate, score it on a mutated corpus, promote (or roll back) through an append-only, hash-chained lifecycle ledger. See [Rule compiler](../guides/rule-compiler.md). CLI-only, no slash-command equivalent. |
 | `setup [dir]` | Install the `/security-*` shortcut commands into a project. |
 | `harness [path]` | Multi-harness config audit: scans `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, and more. `--include-home` also sweeps `~/`. |
 | `hunt --root <dir>` | LLM discovery over the call-graph partition (advisory; needs `AGENTIC_SECURITY_LLM_ENDPOINT`). `--lens a,b` narrows the angles. CLI-only. |
+| `fleet init\|scan\|status\|resume\|query --depends-on <repo-id>` | Scan a declared set of repositories (`fleet.yaml`) in one invocation — bounded concurrency, resumable — and query which repositories depend, directly or transitively, on a given one. See [Fleet](../guides/fleet.md). CLI-only. |
 | `digest --slack <url>` | Post a security digest to Slack (or `--discord <url>`). Reads the last scan. |
 | `cve-watch --root <dir>` | One-shot check for new CVEs against installed dependencies. |
 | `verify [--finding <id>]` | Re-run the verifier loop on last-scan findings. `--live --target <url>` executes PoCs. |
@@ -34,6 +39,9 @@ context. Run `agentic-security help` for the live, in-CLI flag listing.
 | `governance propose-edit --patch <file.json> [--yes]` | Propose a validated, reviewable edit to `recipient-profiles.json` (preview → confirm → audit-logged write). |
 | `remediation open\|update\|verify\|accept-risk\|reopen-check\|list` | Track a remediation item against a blast-radius assessment. Closing it requires a clean rescan or an explicitly permitted manual attestation; a later regression reopens it automatically. |
 | `federate declare\|list` | Declare (or list) a link between a node in this repo's scanned graph and a node in a separately-scanned remote repo's graph — each repo's graph stays its own separate, unmodified artifact. |
+| `runtime ingest\|status\|reconcile\|query` | Ingest runtime telemetry (`--adapter native-jsonl\|otel-json\|envoy-access-log\|k8s-audit-log\|http-access-log`), correlate it against the scanned Data Flow Explorer graph, and report an honest `complete`/`partial`/`unavailable` assurance status. See [Runtime-Corroborated Security Twin](../guides/runtime-twin.md). |
+| `image scan\|verify <archive-or-digest>` | Scan a built container image archive (OCI/Docker tar) for inventory, vulnerabilities (reusing the SCA pipeline), and layer secrets, or verify its signature/DSSE attestation. Never executes the image. See [Source-to-artifact provenance](../guides/artifact-provenance.md). |
+| `provenance trace <archive-or-digest> [--source <dir>]` | Build an image artifact's provenance graph (Git Commit → Build → OCI Digest → SBOM Component → Finding → Deployment) and, with `--source`, detect drift between a source fix and what's still deployed. See [Source-to-artifact provenance](../guides/artifact-provenance.md). |
 | `reset` | Wipe accumulated learned state under `.agentic-security/` (preserves operator-authored config). `--yes`, `--keep <...>`. |
 | `export [--root <dir>] --out <dir>` | Copy every present state artifact (regardless of classification) to `<dir>`, plus an `export-manifest.json` with per-item `{name, classification, retentionClass, status, sha256}`. |
 | `legal-hold add --artifact <name> --owner <id> --reason <text> [--expires <date>]` | Place a legal hold on a state artifact, blocking its deletion by `reset`. `expires` is optional — omit for an indefinite hold. |
@@ -139,3 +147,8 @@ assess, `1` only with `--fail-on gap` and a failing control.
 - [Configuration & env vars](configuration.md)
 - [Guides](../guides/) — every command shown in context
 - [Data Flow Explorer guide](../guides/data-flow-explorer.md) — `explore`/`dataflow`/`governance`/`remediation`/`federate` in context
+- [Runtime-Corroborated Security Twin](../guides/runtime-twin.md) — `runtime` in context
+- [Source-to-artifact provenance](../guides/artifact-provenance.md) — `image`/`provenance`/`supply --vex` in context
+- [Exploit proof](../guides/exploit-proof-fabric.md) — `proof`/`triage exploit --prove` in context
+- [Rule compiler](../guides/rule-compiler.md) — `rules` in context
+- [Fleet](../guides/fleet.md) — `fleet` in context

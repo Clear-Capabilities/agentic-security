@@ -1,5 +1,5 @@
 ---
-description: Trace a scanned image artifact's provenance graph and detect whether it has drifted from current source — the Source-to-Artifact "stale deployment" check.
+description: Trace a scanned image artifact's provenance graph and detect drift between source and what's deployed.
 argument-hint: "trace <archive-or-digest> [--source <dir>] [flags]"
 ---
 

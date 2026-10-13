@@ -35,6 +35,8 @@ links each, into the docs on this page:
 - [Scan health](walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
 - [Assurance modes](walkthroughs/assurance-modes.md) — `advisory` / `standard` / `strict`, real captured output
 - [Architecture: the finding lifecycle](architecture/finding-lifecycle.md) — the real module pipeline, detector to report
+- [Runtime-Corroborated Security Twin](guides/runtime-twin.md) — corroborate a static finding against real telemetry, honestly `complete`/`partial`/`unavailable`
+- [Source-to-artifact provenance](guides/artifact-provenance.md) — trace a finding to the exact container image digest that ships it, and catch a fix that never reached production
 
 **Privacy** — trace where sensitive data actually goes
 - [Data Flow Explorer](guides/data-flow-explorer.md) — the field-level graph, browsable locally in your own terminal
@@ -69,6 +71,9 @@ One page per job, each with copy-paste commands and expected output:
 - **[Nix and NixOS](guides/nix-nixos.md)**: scan a flake or a configuration: effective options, hardening, build trust, store secrets, closures, optional evaluation
 - **[Installing on NixOS](guides/nixos-install.md)**: run the scanner on a NixOS host, offline use, and what has not been verified
 - **[Background implementation loop](guides/loop-engineering.md)**: the bounded runbook used to build and verify the Haskell/Nix work (a development tool, not part of the scanner)
+- **[Fleet](guides/fleet.md)** — scan a declared set of repositories in one invocation and query cross-repository dependency reach
+- **[Runtime-Corroborated Security Twin](guides/runtime-twin.md)** — ingest OpenTelemetry/Envoy/Kubernetes-audit/HTTP-access-log telemetry and reconcile it against the scanned Data Flow Explorer graph
+- **[Source-to-artifact provenance](guides/artifact-provenance.md)** — scan a built container image archive, verify its signature/attestation, and trace whether a source fix actually reached what's deployed
 
 ## Walkthroughs
 
