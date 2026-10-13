@@ -136,7 +136,7 @@ function addLegalHold(scanRoot, { artifact, owner, reason, expires_at } = {}) {
   const holds = _loadRaw(scanRoot);
   holds.push(hold);
   const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, LEGAL_HOLD_FILE);
-  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(fp, JSON.stringify(holds, null, 2) + '\n')) {
+  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.safeWriteState)(fp, JSON.stringify(holds, null, 2) + '\n')) {
     return { ok: false, reason: 'state writes are disabled (--no-state) or this is not a safe state directory' };
   }
   return { ok: true, hold };
@@ -152,7 +152,7 @@ function removeLegalHold(scanRoot, artifact) {
   const removedCount = holds.length - remaining.length;
   if (removedCount > 0) {
     const fp = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.statePath)(scanRoot, LEGAL_HOLD_FILE);
-    (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__/* .safeWriteState */ .Ep)(fp, JSON.stringify(remaining, null, 2) + '\n');
+    (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_1__.safeWriteState)(fp, JSON.stringify(remaining, null, 2) + '\n');
   }
   return removedCount;
 }

@@ -313,7 +313,7 @@ function saveProof(scanRoot, record) {
   const enc = (0,_encryption_provider_js__WEBPACK_IMPORTED_MODULE_3__/* .maybeEncryptForWrite */ .v2)(scanRoot, PROOFS_DIR, text);
   if (!enc.ok) return { ok: false, reason: enc.reason };
   const file = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, PROOFS_DIR, findingKey(record.findingId), `${safe.recordDigest}.json`);
-  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .safeWriteState */ .Ep)(file, enc.content)) return { ok: false, reason: 'state write refused' };
+  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.safeWriteState)(file, enc.content)) return { ok: false, reason: 'state write refused' };
   return { ok: true, file, digest: safe.recordDigest, encrypted: enc.encrypted };
 }
 

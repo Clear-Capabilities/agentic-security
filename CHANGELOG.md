@@ -9,6 +9,43 @@
 > make the history less accurate, not more.
 
 
+## 0.170.0 - source-to-artifact security & provenance: a new `src/artifact/` package, `image`/`provenance` CLI, VEX
+
+Binds a finding to the actual **built artifact** (a container image, today) that ships it — closing the gap
+between "this dependency has a CVE" and "this specific image digest actually ships it." A new, isolated
+`scanner/src/artifact/` package reuses the existing SCA pipeline (manifest parsers, OS-package-DB parser,
+OSV/KEV/EPSS correlation) rather than building a parallel one.
+
+**OCI image scanning + inventory.** A hand-rolled, hardened tar/gzip reader (`safe-tar.js`) — hard caps on entry
+count/size/archive size, a native decompression-bomb guard, and a path-safety check that flags (never silently
+normalizes) a `..`/absolute tar entry path. Parses a `docker save`-shaped archive or an OCI-layout archive into
+digest/OS/architecture/base-image/layers/entrypoint/build-labels, with OS and application packages extracted
+through the exact same parsers every other SCA finding in this codebase uses. Never executes the image — no
+`docker run`, no daemon required for the archive path.
+
+**Layer secret analysis.** A secret added in one layer and deleted by a later overlay whiteout is still sitting
+in that earlier layer's raw tar bytes — detected and reported (value always masked/redacted, the detector is
+injected, same shape `posture/secret-history.js` already uses for the git-history analog).
+
+**Signature + attestation verification**, states exactly `verified`/`invalid`/`missing`/`unavailable` — a
+detached-signature check over the image digest, plus REAL DSSE (Pre-Authentication Encoding) verification for
+in-toto/SLSA provenance attestations, so a real cosign-keyed attestation bundle verifies here given the matching
+public key. Never treats missing material as verified.
+
+**The provenance graph** (Git Commit → Build → OCI Digest → SBOM Component → Finding → Deployment) and
+**source-vs-artifact mismatch detection** — the PRD's own "Killer Demonstration": a developer fixes a
+vulnerability in source, but production is still running the old image. `SOURCE: FIXED` / `DEPLOYED ARTIFACT:
+STILL VULNERABLE` / `PRODUCTION EXPOSURE: PRESENT`, proven end-to-end against the real built CLI. **VEX**
+statements (affected/not affected/fixed/under investigation) — `not affected` only ever from positive evidence
+(component absent, or confirmed unreachable), never from absence of information.
+
+**CLI:** `agentic-security image scan/verify`, `agentic-security provenance trace`, `agentic-security supply vex`
+— the PRD's own literal CLI shape. New slash commands `/image`, `/provenance`; `/supply` gained a `--vex` mode.
+
+**Deliberately NOT done, disclosed:** a local Docker daemon image reference and a remote OCI registry reference
+as `image scan` inputs (only local docker-archive/oci-archive tar files); keyless Rekor-transparency-log
+signature verification. See `docs/implementation-status/source-to-artifact-provenance.md`.
+
 ## 0.169.0 - runtime-corroborated security twin: 4 new telemetry adapters, honest runtime assurance, a `runtime` CLI
 
 Extends the existing Milestone 5 "Runtime-Corroborated Digital Twin" machinery (closed-world `RuntimeObservation`

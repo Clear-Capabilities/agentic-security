@@ -712,13 +712,13 @@ function loadLedger(scanRoot) {
 function saveLedger(scanRoot, ledger) {
   if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = (0,state_dir.statePath)(scanRoot, DIR, 'ledger.json');
-  return { ok: (0,state_dir/* safeWriteState */.Ep)(f, JSON.stringify(ledger, null, 2)) };
+  return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(ledger, null, 2)) };
 }
 
 function saveIR(scanRoot, ir) {
   if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = external_node_path_.join(ruleDir(scanRoot, ir.id), 'ir.json');
-  return { ok: (0,state_dir/* safeWriteState */.Ep)(f, JSON.stringify(ir, null, 2)), file: f };
+  return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(ir, null, 2)), file: f };
 }
 
 function loadIR(scanRoot, id) {
@@ -729,7 +729,7 @@ function loadIR(scanRoot, id) {
 function saveEvaluation(scanRoot, id, evaluation) {
   if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = external_node_path_.join(ruleDir(scanRoot, id), 'evaluation.json');
-  return { ok: (0,state_dir/* safeWriteState */.Ep)(f, JSON.stringify(evaluation, null, 2)) };
+  return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(evaluation, null, 2)) };
 }
 
 /** Write the regression fixtures a promoted rule needs: the SAME vulnerable/clean convention `runRuleTests`
@@ -741,11 +741,11 @@ function writeFixtures(scanRoot, ir, corpus) {
   const written = [];
   for (const p of corpus.positives) {
     const f = external_node_path_.join(base, 'vulnerable', `${p.label.replace(/[^a-z0-9_-]/gi, '_')}.${ext}`);
-    if ((0,state_dir/* safeWriteState */.Ep)(f, p.code)) written.push(f);
+    if ((0,state_dir.safeWriteState)(f, p.code)) written.push(f);
   }
   for (const n of corpus.negatives) {
     const f = external_node_path_.join(base, 'clean', `${n.label.replace(/[^a-z0-9_-]/gi, '_')}.${ext}`);
-    if ((0,state_dir/* safeWriteState */.Ep)(f, n.code)) written.push(f);
+    if ((0,state_dir.safeWriteState)(f, n.code)) written.push(f);
   }
   return { ok: true, written, glob: external_node_path_.join(base, '**', '*') };
 }
@@ -772,7 +772,7 @@ function publishCustomRule(scanRoot, ir) {
     `  message: ${JSON.stringify(doc.message)}`,
     '',
   ].join('\n');
-  return { ok: (0,state_dir/* safeWriteState */.Ep)(f, yamlText), file: f };
+  return { ok: (0,state_dir.safeWriteState)(f, yamlText), file: f };
 }
 
 function unpublishCustomRule(scanRoot, id) {

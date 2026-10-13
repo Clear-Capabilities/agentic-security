@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSnapshot } from '../../src/language/haskell-sca.js';
+import { buildDockerArchive } from '../helpers/build-tar-fixture.js';
 
 const SCANNER = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BIN = join(SCANNER, 'bin', 'agentic-security.js');
@@ -576,6 +577,40 @@ for (const [eco, ex] of [['haskell', HS], ['nix', NX]]) {
     const q = cli(dir, ['runtime', 'query', '--list', dir]);
     assert.equal(q.status, 0, q.text);
     assert.ok(/internet-facing-to-sensitive/.test(q.text));
+  });
+}
+// CAP-118/CAP-119 (image/provenance, PRD 5): applicable to both ecosystems — `image scan`/`provenance
+// trace` operate on a BUILT ARTIFACT (a container image archive), never on the source project itself,
+// so the CLI surface runs identically regardless of which source language built the image. Executed
+// (not merely asserted): a synthetic docker-archive is written inside a real haskell/nix example
+// directory and scanned/traced from there, proving the command works from within either project's cwd.
+for (const [eco, ex] of [['haskell', HS], ['nix', NX]]) {
+  cell('CAP-118', eco, () => {
+    const dir = example(ex);
+    const archive = join(dir, 'image.tar');
+    writeFileSync(archive, buildDockerArchive({
+      config: { labels: { 'org.opencontainers.image.revision': 'deadbeef' } },
+      layers: [{ files: [{ name: 'app/package.json', content: '{"dependencies":{}}' }] }],
+    }));
+    const s = cli(dir, ['image', 'scan', archive]);
+    assert.equal(s.status, 0, s.text);
+    const j = s.json();
+    assert.match(j.inventory.digest, /^sha256:[0-9a-f]{64}$/);
+  });
+}
+for (const [eco, ex] of [['haskell', HS], ['nix', NX]]) {
+  cell('CAP-119', eco, () => {
+    const dir = example(ex);
+    const archive = join(dir, 'image.tar');
+    writeFileSync(archive, buildDockerArchive({
+      config: { labels: { 'org.opencontainers.image.revision': 'deadbeef' } },
+      layers: [{ files: [{ name: 'app/package.json', content: '{"dependencies":{}}' }] }],
+    }));
+    const t = cli(dir, ['provenance', 'trace', archive]);
+    assert.equal(t.status, 0, t.text);
+    const j = t.json();
+    const commit = j.artifactProvenanceGraph.nodes.find((n) => n.kind === 'gitCommit');
+    assert.equal(commit.sha, 'deadbeef');
   });
 }
 // CAP-116 (fleet, PRD 4): the first genuinely not-applicable ledger entry, matching the ledger's own
