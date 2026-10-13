@@ -135,10 +135,16 @@ export const RUNTIME_OBSERVATION_FIELDS = Object.freeze([
   'firstObservedAt', 'lastObservedAt', 'matchMethod', 'matchConfidence', 'retention', 'importedAt',
 ]);
 
-// Only one adapter is actually implemented today — an unimplemented
-// adapter name must be rejected, not accepted on faith that it will
-// someday exist (RO/3b).
-export const RUNTIME_OBSERVATION_ADAPTERS = Object.freeze(['native-jsonl']);
+// An unimplemented adapter name must be rejected, not accepted on faith
+// that it will someday exist (RO/3b). The four PRD "Runtime-Corroborated
+// Security Twin" adapters (`observation-adapters.js`) were added
+// alongside `native-jsonl` as the real P0 telemetry-input gap that PRD
+// closes — OTLP's own richer, evolving attribute surface stays deferred
+// (`'otel-json'` here is this codebase's own minimal OTLP/JSON reader,
+// never the full semantic-conventions vocabulary).
+export const RUNTIME_OBSERVATION_ADAPTERS = Object.freeze([
+  'native-jsonl', 'otel-json', 'envoy-access-log', 'k8s-audit-log', 'http-access-log',
+]);
 
 // FR-505's own four named metadata families: service/workload identity,
 // endpoint/destination identity, protocol/TLS metadata, and schema/
@@ -160,7 +166,22 @@ export const RUNTIME_ATTRIBUTE_KEYS = Object.freeze([
   'network.protocol', 'network.transport', 'tls.version', 'tls.cipher', 'tls.verified',
   // schema/attribute NAMES already approved for telemetry
   'schema.name', 'schema.attributeNames',
+  // the one security-DECISION field (PRD "Runtime-Corroborated Security
+  // Twin" §P0-1's "security decision" family) — added for the K8s audit
+  // adapter, which is defined by the exact allow/deny fact this key
+  // records. A closed two-value enum, never a free-form identifier: see
+  // RUNTIME_SECURITY_DECISION_VALUES below and its own dedicated check in
+  // validateObservationAttributes.
+  'network.securityDecision',
 ]);
+
+// The closed enum for 'network.securityDecision' — deliberately narrower
+// than the generic identifier-value check every other scalar attribute
+// gets, since this field has exactly two legitimate values and nothing
+// else should ever be accepted under it (not 'allow'/'deny', not 'true'/
+// 'false', not a raw HTTP status code — an adapter normalizes to one of
+// these two strings itself).
+export const RUNTIME_SECURITY_DECISION_VALUES = Object.freeze(['allowed', 'denied']);
 
 // The one attribute key whose value is an array rather than a scalar —
 // itself must be a member of RUNTIME_ATTRIBUTE_KEYS.
@@ -269,6 +290,18 @@ export function validateObservationAttributes(attributes) {
       if (!Array.isArray(value) || value.length > RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH
         || !value.every((x) => _isAttributeName(x))) {
         err(`$.attributes["${key}"]`, `must be an array of at most ${RUNTIME_ATTRIBUTE_MAX_ARRAY_LENGTH} attribute-name-shaped strings (letters, digits, underscore only, starting with a letter, 64 characters max) — an element containing ':', '.', '-', whitespace, or other punctuation is how a payload arrives disguised as an attribute name`);
+      }
+      continue;
+    }
+    if (key === 'network.securityDecision') {
+      // A closed two-value enum, deliberately narrower than the generic
+      // identifier-value check below — this field has exactly two
+      // legitimate values, and accepting anything identifier-shaped
+      // ('unknown', 'maybe', a raw status code string) would let an
+      // adapter smuggle an unreviewed vocabulary through a field whose
+      // whole purpose is a binary allow/deny fact.
+      if (!RUNTIME_SECURITY_DECISION_VALUES.includes(value)) {
+        err(`$.attributes["${key}"]`, `must be one of ${RUNTIME_SECURITY_DECISION_VALUES.join('|')} — this field records a closed allow/deny fact, never a free-form identifier`);
       }
       continue;
     }

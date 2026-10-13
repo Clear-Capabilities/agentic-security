@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-12T18:28:05.845Z",
-  "commit": "c6d6209fe6fcfb36070743dc5c50b3d5f6b282f7",
+  "generatedAt": "2026-10-12T23:44:40.910Z",
+  "commit": "a0355a93b92abb5a321fac797be0d6e6ec1d9d38",
   "targets": {
     "hooks": {
       "total": 21,
@@ -47,7 +47,7 @@
       }
     },
     "scanner/src": {
-      "total": 647,
+      "total": 650,
       "byFile": {
         "(deep-engine)": 1,
         "badge.js": 3,
@@ -125,6 +125,7 @@
         "lineage/observation-store.js": 2,
         "lineage/recipient-registry.js": 1,
         "lineage/remediation.js": 6,
+        "lineage/runtime-assurance.js": 3,
         "llm-validator/agent-tools.js": 4,
         "llm-validator/consistency.js": 1,
         "llm-validator/index.js": 4,

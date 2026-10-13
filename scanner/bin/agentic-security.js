@@ -5561,6 +5561,223 @@ async function cmdDataflowTwin(args) {
   return 0;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// PRD "Runtime-Corroborated Security Twin" — the `runtime` dispatcher.
+//
+// `runtime ingest`/`runtime status`/`runtime reconcile`/`runtime query`
+// is the literal CLI shape that PRD names. It is NOT a parallel command
+// surface: `ingest` is a thin shim over the already-shipped
+// `dataflow observations import` (zero duplicated logic — it reshapes
+// `args._` and delegates); `status`/`reconcile`/`query` are genuinely new
+// (the assurance report and the reconciliation/query reports did not
+// exist before this PRD), but all three are built entirely on the
+// already-shipped `correlateObservations`/`matchObservationToGraph`/
+// `loadObservationImports` — no second correlation engine, no second
+// observation store.
+
+async function cmdRuntimeIngest(args) {
+  // args._ = ['runtime', 'ingest', <path>?]. cmdDataflowObservationsImport
+  // reads args._[3] as its own path slot (its own dispatch assumes
+  // ['dataflow', 'observations', 'import', <path>?]) — reshape rather
+  // than duplicate its ~150 lines of validation/import logic.
+  const target = args._[2] || '.';
+  const shimmed = { ...args, _: ['dataflow', 'observations', 'import', target] };
+  return cmdDataflowObservationsImport(shimmed);
+}
+
+async function _loadRuntimeInputs(targetAbs) {
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) return { ok: false, message: loaded.message };
+
+  const dir = statePath(targetAbs, 'runtime-observations');
+  let importRecords = null;
+  let observations = null;
+  if (fs.existsSync(dir)) {
+    const store = await import('../src/lineage/observation-store.js');
+    importRecords = store.loadObservationImports(targetAbs);
+    observations = store.loadObservations(targetAbs);
+  }
+  return { ok: true, graph: loaded.graph, importRecords, observations };
+}
+
+async function cmdRuntimeStatus(args) {
+  const target = args._[2] || '.';
+  const targetAbs = path.resolve(target);
+  const format = args.flags.format ?? 'json';
+  if (format !== 'json' && format !== 'markdown') {
+    process.stderr.write(`agentic-security runtime status: --format must be one of json|markdown (got ${JSON.stringify(format)}).\n`);
+    return 2;
+  }
+
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security runtime status: ${loaded.message}\n`);
+    return 1;
+  }
+
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const windowStart = typeof args.flags['window-start'] === 'string' ? args.flags['window-start'] : null;
+  const windowEnd = typeof args.flags['window-end'] === 'string' ? args.flags['window-end'] : null;
+
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart, windowEnd });
+
+  const { computeRuntimeAssurance } = await import('../src/lineage/runtime-assurance.js');
+  const assurance = computeRuntimeAssurance({ importRecords: loaded.importRecords, correlation });
+
+  if (format === 'json') {
+    process.stdout.write(JSON.stringify(assurance, null, 2) + '\n');
+    return 0;
+  }
+
+  const lines = [];
+  lines.push('# Runtime Assurance', '');
+  lines.push(`**runtimeStatus:** \`${assurance.runtimeStatus}\``, '');
+  lines.push(`- Telemetry window: ${assurance.telemetryWindow.start ?? '(none)'} .. ${assurance.telemetryWindow.end ?? '(none)'}`);
+  lines.push(`- Last observed: ${assurance.freshness.lastObservedAt ?? '(none)'}${assurance.freshness.stale ? ' (STALE)' : ''}`);
+  lines.push(`- Mapping: ${assurance.mappingPercentage === null ? '(no observations)' : `${assurance.mappingPercentage}%`} (${assurance.unmatchedObservationCount} of ${assurance.totalObservationCount} unmatched)`);
+  lines.push(`- Parse failures: ${assurance.parseFailures} — ${assurance.parseFailuresNote}`);
+  lines.push('', '## Limitations', '');
+  for (const l of assurance.limitations) lines.push(`- ${l}`);
+  lines.push('');
+  process.stdout.write(lines.join('\n'));
+  return 0;
+}
+
+async function cmdRuntimeReconcile(args) {
+  const target = args._[2] || '.';
+  const targetAbs = path.resolve(target);
+
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security runtime reconcile: ${loaded.message}\n`);
+    return 1;
+  }
+  if (loaded.observations === null) {
+    process.stdout.write(JSON.stringify({ checked: 0, drifted: [], note: 'No runtime observation store exists for this scan — nothing to reconcile.' }, null, 2) + '\n');
+    return 0;
+  }
+
+  // Deliberately diagnostic-only: `matchObservationToGraph` is re-run here
+  // purely to COMPARE against each record's own already-stored match — it
+  // never rewrites the stored record. `observation-correlation.js`'s own
+  // header explains why `correlateObservations` itself must never re-run
+  // the ladder (a stored observation must stay honest about what it was
+  // actually checked against at import time); `reconcile` exists
+  // precisely to surface drift for an operator to decide on, not to
+  // silently apply it.
+  const { matchObservationToGraph } = await import('../src/lineage/observation-correlation.js');
+  const drifted = [];
+  for (const obs of loaded.observations) {
+    const fresh = matchObservationToGraph(loaded.graph, obs);
+    const same = fresh.matchMethod === obs.matchMethod
+      && fresh.matchConfidence === obs.matchConfidence
+      && JSON.stringify([...fresh.matchedFlowIds].sort()) === JSON.stringify([...obs.matchedFlowIds].sort());
+    if (!same) {
+      drifted.push({
+        observationId: obs.id,
+        stored: { matchMethod: obs.matchMethod, matchConfidence: obs.matchConfidence, matchedFlowIds: obs.matchedFlowIds },
+        currentGraph: { matchMethod: fresh.matchMethod, matchConfidence: fresh.matchConfidence, matchedFlowIds: fresh.matchedFlowIds },
+      });
+    }
+  }
+  process.stdout.write(JSON.stringify({
+    checked: loaded.observations.length,
+    drifted,
+    note: drifted.length > 0
+      ? 'These observations would match differently against the CURRENT graph than what is stored — the graph changed since import. Re-import with `runtime ingest` to update the stored match; nothing was changed automatically.'
+      : 'Every stored observation still matches the current graph identically.',
+  }, null, 2) + '\n');
+  return 0;
+}
+
+const _RUNTIME_SENSITIVE_CLASSES = ['PII', 'PHI', 'PCI', 'FIN', 'CREDENTIALS'];
+
+const _RUNTIME_QUERIES = Object.freeze({
+  'internet-facing-to-sensitive': {
+    description: 'Internet-facing flows observed reaching sensitive data (PRD example: "Show Internet-facing flows observed reaching PCI data").',
+    run(graph, correlation) {
+      const nodesById = new Map(graph.nodes.map((n) => [n.id, n]));
+      const dataElementsById = new Map(graph.dataElements.map((d) => [d.id, d]));
+      return graph.flows.filter((f) => {
+        if (correlation.byFlow[f.id]?.layer !== 'runtime_observed') return false;
+        const sink = nodesById.get(f.sink);
+        if (sink?.externality?.value !== 'external') return false;
+        return f.dataElementIds.some((id) => (dataElementsById.get(id)?.dataClasses ?? []).some((c) => _RUNTIME_SENSITIVE_CLASSES.includes(c)));
+      }).map((f) => f.id);
+    },
+  },
+  'sensitive-crossing-boundary': {
+    description: 'Sensitive-data paths observed crossing a trust boundary (PRD example: "Show sensitive-data paths observed crossing trust boundaries").',
+    run(graph, correlation) {
+      const edgesById = new Map(graph.edges.map((e) => [e.id, e]));
+      const dataElementsById = new Map(graph.dataElements.map((d) => [d.id, d]));
+      return graph.flows.filter((f) => {
+        if (correlation.byFlow[f.id]?.layer !== 'runtime_observed') return false;
+        const crosses = f.edgeIds.some((id) => (edgesById.get(id)?.boundaryCrossings ?? []).length > 0);
+        if (!crosses) return false;
+        return f.dataElementIds.some((id) => (dataElementsById.get(id)?.dataClasses ?? []).some((c) => _RUNTIME_SENSITIVE_CLASSES.includes(c)));
+      }).map((f) => f.id);
+    },
+  },
+});
+
+// PRD-named example queries this architecture cannot honestly answer —
+// disclosed, never silently omitted. "Runtime flows absent from the
+// static graph" needs a config-declared/auto-correlated edge mechanism
+// (M5 7a / M2 F2-F3, both out of scope here — every RuntimeObservation
+// matches an EXISTING static node, it never mints a new one). "Vulnerable
+// functions actually exercised in production" and "identities using
+// risky paths" both need identity/function-level telemetry this
+// contract's closed-world schema deliberately omits (see this PRD's
+// implementation-status doc).
+const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({
+  'runtime-flows-absent-from-static': 'Needs a config-declared/auto-correlated edge mechanism (not built — see M5 7a / M2 F2-F3 in scanner/src/lineage/CLAUDE.md) — every RuntimeObservation matches an existing static graph node, it never mints a new one.',
+  'vulnerable-functions-in-production': 'Needs function/symbol-level runtime telemetry; this adapter set only matches destinations (route/service/table/topic), never a function symbol.',
+  'identities-using-risky-paths': 'The RuntimeObservation contract deliberately carries no identity field (a payload-smuggling risk) — see this PRD\'s implementation-status doc for why.',
+});
+
+async function cmdRuntimeQuery(args) {
+  const name = args._[2];
+  if (!name || args.flags.list) {
+    process.stdout.write('Supported queries:\n');
+    for (const [k, v] of Object.entries(_RUNTIME_QUERIES)) process.stdout.write(`  ${k} — ${v.description}\n`);
+    process.stdout.write('\nNamed but NOT supported by this architecture (disclosed, not silently omitted):\n');
+    for (const [k, v] of Object.entries(_RUNTIME_QUERIES_NOT_SUPPORTED)) process.stdout.write(`  ${k} — ${v}\n`);
+    // --list is always a successful, intentional operation (exit 0);
+    // calling `runtime query` with neither a name nor --list is the only
+    // real misuse here.
+    return args.flags.list ? 0 : 2;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(_RUNTIME_QUERIES_NOT_SUPPORTED, name)) {
+    process.stdout.write(JSON.stringify({ query: name, supported: false, reason: _RUNTIME_QUERIES_NOT_SUPPORTED[name] }, null, 2) + '\n');
+    return 0;
+  }
+  const query = _RUNTIME_QUERIES[name];
+  if (!query) {
+    process.stderr.write(`agentic-security runtime query: unrecognized query "${name}" — run with --list to see every supported (and disclosed-unsupported) query name.\n`);
+    return 2;
+  }
+
+  const target = args._[3] || '.';
+  const targetAbs = path.resolve(target);
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) {
+    process.stderr.write(`agentic-security runtime query: ${loaded.message}\n`);
+    return 1;
+  }
+
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+
+  const flowIds = query.run(loaded.graph, correlation);
+  process.stdout.write(JSON.stringify({ query: name, supported: true, flowIds }, null, 2) + '\n');
+  return 0;
+}
+
 // Mirrors posture/fix-history.js's own _writeAtomicAndSync (temp file in
 // the same directory, fsync, then rename over the target) — a crash
 // mid-write must never leave recipient-profiles.json as invalid JSON,
@@ -7284,6 +7501,25 @@ async function main() {
         else if (sub === 'list') { process.exit(await cmdFederateList(args)); }
         else {
           process.stderr.write(`agentic-security federate: unrecognized sub-command "${sub}" — must be "declare" or "list".\n`);
+          process.exit(2);
+        }
+        break;
+      }
+      case 'runtime': {
+        // NOT a `dataflow` subcommand — PRD "Runtime-Corroborated Security
+        // Twin" names this literal CLI shape (`runtime ingest/status/
+        // reconcile/query`). `ingest` is a thin shim over the already-
+        // shipped `dataflow observations import`; `status`/`reconcile`/
+        // `query` are new, built entirely on the already-shipped
+        // correlation/match/store functions. See cmdRuntimeStatus's own
+        // header comment above.
+        const sub = args._[1];
+        if (sub === 'ingest') { process.exit(await cmdRuntimeIngest(args)); }
+        else if (sub === 'status') { process.exit(await cmdRuntimeStatus(args)); }
+        else if (sub === 'reconcile') { process.exit(await cmdRuntimeReconcile(args)); }
+        else if (sub === 'query') { process.exit(await cmdRuntimeQuery(args)); }
+        else {
+          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", or "query".\n`);
           process.exit(2);
         }
         break;

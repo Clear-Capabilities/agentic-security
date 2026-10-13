@@ -152,4 +152,5 @@ Without an advisory snapshot the dependency half of a Haskell or Nix scan is not
 - [Fixing vulnerabilities](fixing-vulnerabilities.md)
 - [CI setup](ci-setup.md)
 - [Fleet](fleet.md) — scan a declared set of repositories in one invocation and query cross-repository blast radius
+- [Runtime-corroborated security twin](runtime-twin.md) — corroborate the static graph against OpenTelemetry/Envoy/Kubernetes/HTTP telemetry
 - [CLI reference](../reference/cli.md) · [Configuration & env vars](../reference/configuration.md)

@@ -339,6 +339,14 @@
     {
       "path": "docs/standards/README.md",
       "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/runtime-corroborated-twin.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/guides/runtime-twin.md",
+      "taskId": "CORE-001-T03"
     }
   ],
   "entries": [
@@ -1948,6 +1956,52 @@
         "README.md",
         "docs/guides/fleet.md"
       ]
+    },
+    {
+      "id": "CAP-117",
+      "kind": "command",
+      "title": "runtime: ingest/correlate/query runtime telemetry against the lineage graph",
+      "sources": [
+        "command:runtime"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "commands/runtime.md",
+        "scanner/src/lineage/CLAUDE.md"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "commands/runtime.md",
+        "docs/implementation-status/runtime-corroborated-twin.md",
+        "docs/guides/runtime-twin.md"
+      ]
     }
   ],
   "docReviews": {
@@ -2308,6 +2362,11 @@
         "path": "docs/ROADMAP.md",
         "outcome": "edited",
         "basis": "Remaining truthful limitations: the ghc, nix and NixOS host verification."
+      },
+      {
+        "path": "commands/runtime.md",
+        "outcome": "reviewed",
+        "basis": "runtime correlates telemetry against the lineage graph regardless of source language; CAP-117 covers the haskell/nix applicability and CLI proof."
       }
     ]
   }

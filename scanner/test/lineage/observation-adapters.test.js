@@ -37,6 +37,10 @@ import { fileURLToPath } from 'node:url';
 import {
   NATIVE_JSONL_RECORD_KEYS,
   parseNativeJsonlObservations,
+  parseOtelJsonObservations,
+  parseEnvoyAccessLogObservations,
+  parseK8sAuditLogObservations,
+  parseHttpAccessLogObservations,
   adapterFor,
 } from '../../src/lineage/observation-adapters.js';
 import {
@@ -87,10 +91,18 @@ test('AD/1a: adapterFor returns the native-jsonl adapter, and null for anything 
   assert.equal(native.name, 'native-jsonl');
   assert.equal(typeof native.parse, 'function');
 
-  assert.equal(adapterFor('otlp'), null, 'OTLP is deferred to increment 2 (scoping doc §4.3) — never silently accepted');
+  assert.equal(adapterFor('otlp'), null, 'the full OTLP semantic-conventions vocabulary is deferred — otel-json below is this codebase\'s own minimal reader, never accepted under the name "otlp"');
   assert.equal(adapterFor(null), null);
   assert.equal(adapterFor(undefined), null);
   assert.equal(adapterFor('NATIVE-JSONL'), null, 'adapter names are not case-folded');
+});
+
+test('AD/1b: adapterFor returns all four PRD "Runtime-Corroborated Security Twin" adapters', () => {
+  for (const name of ['otel-json', 'envoy-access-log', 'k8s-audit-log', 'http-access-log']) {
+    const a = adapterFor(name);
+    assert.equal(a.name, name);
+    assert.equal(typeof a.parse, 'function');
+  }
 });
 
 // =====================================================================
@@ -262,4 +274,170 @@ test('AD/7a: every draft from the clean fixture round-trips through observationI
 test('NATIVE_JSONL_RECORD_KEYS is frozen and exactly the 5 documented keys', () => {
   assert.deepEqual(NATIVE_JSONL_RECORD_KEYS, ['environment', 'attributes', 'eventCountBand', 'firstObservedAt', 'lastObservedAt']);
   assert.ok(Object.isFrozen(NATIVE_JSONL_RECORD_KEYS));
+});
+
+// =====================================================================
+// The four PRD "Runtime-Corroborated Security Twin" adapters.
+// Each draft is round-tripped through `validateRuntimeObservation` the
+// same way AD/7a proves native-jsonl's own drafts — this is the real
+// proof each adapter produces something the closed-world contract
+// actually accepts, not just that its own parse function returns.
+// =====================================================================
+
+function _roundTrip(draft) {
+  const graph = { nodes: [], edges: [], flows: [] };
+  const record = {
+    ...draft,
+    id: observationId(draft, [JSON.stringify(draft.attributes)]),
+    ...matchObservationToGraph(graph, draft),
+  };
+  return validateRuntimeObservation(record);
+}
+
+test('AD/OTEL-1: a real OTLP/JSON resourceSpans document produces one draft per span with safe attributes only', () => {
+  const doc = {
+    resourceSpans: [{
+      resource: { attributes: [{ key: 'service.name', value: { stringValue: 'checkout-service' } }] },
+      scopeSpans: [{
+        spans: [
+          {
+            name: 'POST /charge',
+            startTimeUnixNano: '1785664800000000000',
+            endTimeUnixNano: '1785664800500000000',
+            attributes: [
+              { key: 'server.address', value: { stringValue: 'api.stripe.com' } },
+              { key: 'server.port', value: { intValue: '443' } },
+              { key: 'url.scheme', value: { stringValue: 'https' } },
+              { key: 'http.url', value: { stringValue: 'https://api.stripe.com/v1/charges?key=secret' } },
+              { key: 'http.request.header.authorization', value: { stringValue: 'Bearer sk_live_xxx' } },
+            ],
+          },
+        ],
+      }],
+    }],
+  };
+  const { drafts, errors } = parseOtelJsonObservations(JSON.stringify(doc), baseContext({ adapter: 'otel-json' }));
+  assert.equal(errors.length, 0);
+  assert.equal(drafts.length, 1);
+  const d = drafts[0];
+  assert.deepEqual(d.attributes, {
+    'service.name': 'checkout-service',
+    'destination.host': 'api.stripe.com',
+    'destination.port': 443,
+    'destination.scheme': 'https',
+  });
+  assert.ok(!('http.url' in d.attributes) && !('http.request.header.authorization' in d.attributes),
+    'the query string and the auth header must never be carried — neither has a safe destination');
+  assert.equal(d.eventCountBand, '1');
+  assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
+});
+
+test('AD/OTEL-2: a malformed or non-OTLP-shaped document is one honest error, never a crash', () => {
+  for (const text of ['not json', '{}', '{"resourceSpans": "x"}', JSON.stringify({ foo: 'bar' })]) {
+    const { drafts, errors } = parseOtelJsonObservations(text, baseContext({ adapter: 'otel-json' }));
+    assert.equal(drafts.length, 0);
+    assert.equal(errors.length, 1);
+  }
+});
+
+test('AD/ENVOY-1: a real Envoy JSON access log line maps upstream_host/cluster/protocol/response_flags safely', () => {
+  const line = JSON.stringify({
+    upstream_host: '10.0.4.12:8443',
+    upstream_cluster: 'payments-service',
+    protocol: 'HTTP/1.1',
+    response_flags: '-',
+    start_time: '2026-08-02T10:00:00.000Z',
+    duration: 42,
+    'x-forwarded-for': '203.0.113.9', // deliberately NOT an approved field — must never appear in attributes
+  });
+  const { drafts, errors } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
+  assert.equal(errors.length, 0);
+  assert.equal(drafts.length, 1);
+  const d = drafts[0];
+  assert.deepEqual(d.attributes, {
+    'destination.host': '10.0.4.12',
+    'destination.port': 8443,
+    'destination.service': 'payments-service',
+    'network.protocol': 'http1.1',
+    'network.securityDecision': 'allowed',
+  });
+  assert.ok(!('x-forwarded-for' in d.attributes), 'the client IP header must never be carried');
+  assert.equal(d.lastObservedAt, new Date(Date.parse('2026-08-02T10:00:00.000Z') + 42).toISOString());
+  assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
+});
+
+test('AD/ENVOY-2: a non-empty response_flags reads network.securityDecision as denied', () => {
+  const line = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: 'UAEX' });
+  const { drafts } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
+  assert.equal(drafts[0].attributes['network.securityDecision'], 'denied');
+});
+
+test('AD/ENVOY-3: a malformed line is one error naming its line number; other lines still parse', () => {
+  const text = 'not json\n' + JSON.stringify({ upstream_host: 'a.b:443' }) + '\n';
+  const { drafts, errors } = parseEnvoyAccessLogObservations(text, baseContext({ adapter: 'envoy-access-log' }));
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].line, 1);
+  assert.equal(drafts.length, 1);
+});
+
+test('AD/K8S-1: a real k8s audit event maps objectRef/responseStatus safely, never the username', () => {
+  const line = JSON.stringify({
+    objectRef: { apiVersion: 'v1', resource: 'secrets', namespace: 'payments', name: 'db-credentials' },
+    verb: 'get',
+    responseStatus: { code: 403 },
+    requestReceivedTimestamp: '2026-08-02T11:00:00.000Z',
+    user: { username: 'alice@example.com' }, // deliberately NOT an approved field — must never appear
+  });
+  const { drafts, errors } = parseK8sAuditLogObservations(line + '\n', baseContext({ adapter: 'k8s-audit-log' }));
+  assert.equal(errors.length, 0);
+  assert.equal(drafts.length, 1);
+  const d = drafts[0];
+  assert.deepEqual(d.attributes, {
+    'destination.service': 'payments:secrets',
+    'network.securityDecision': 'denied',
+  });
+  assert.ok(!('user' in d) && JSON.stringify(d).indexOf('alice') === -1, 'the username must never be carried anywhere in the draft');
+  assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
+});
+
+test('AD/K8S-2: a successful (< 400) response reads network.securityDecision as allowed', () => {
+  const line = JSON.stringify({ objectRef: { resource: 'pods', namespace: 'default' }, responseStatus: { code: 200 } });
+  const { drafts } = parseK8sAuditLogObservations(line + '\n', baseContext({ adapter: 'k8s-audit-log' }));
+  assert.equal(drafts[0].attributes['network.securityDecision'], 'allowed');
+});
+
+test('AD/HTTP-1: a generic JSON access-log line maps host/upstream/scheme safely', () => {
+  const line = JSON.stringify({
+    host: 'gateway.internal', upstream: 'checkout-service', scheme: 'https',
+    path: '/charge?card=4111111111111111', user_agent: 'curl/8.0', // deliberately NOT approved fields
+  });
+  const { drafts, errors } = parseHttpAccessLogObservations(line + '\n', baseContext({ adapter: 'http-access-log' }));
+  assert.equal(errors.length, 0);
+  assert.equal(drafts.length, 1);
+  const d = drafts[0];
+  assert.deepEqual(d.attributes, {
+    'destination.host': 'gateway.internal',
+    'destination.service': 'checkout-service',
+    'destination.scheme': 'https',
+  });
+  assert.ok(!('path' in d.attributes) && !('user_agent' in d.attributes), 'the path/query string and user agent must never be carried');
+  assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
+});
+
+test('AD/HTTP-2: a line with nothing safe to report yields no draft, never a fabricated one', () => {
+  const line = JSON.stringify({ path: '/x', user_agent: 'curl' });
+  const { drafts, errors } = parseHttpAccessLogObservations(line + '\n', baseContext({ adapter: 'http-access-log' }));
+  assert.equal(errors.length, 0);
+  assert.equal(drafts.length, 0);
+});
+
+test('AD/NEW-ADAPTERS: all four new adapters never throw on malformed input shapes', () => {
+  for (const parse of [parseOtelJsonObservations, parseEnvoyAccessLogObservations, parseK8sAuditLogObservations, parseHttpAccessLogObservations]) {
+    for (const bad of [null, undefined, 42, {}, []]) {
+      assert.doesNotThrow(() => parse(bad, baseContext()));
+    }
+    for (const bad of [null, undefined, 'x', 42, []]) {
+      assert.doesNotThrow(() => parse('{}', bad));
+    }
+  }
 });

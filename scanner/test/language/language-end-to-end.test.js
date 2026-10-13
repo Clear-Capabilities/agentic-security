@@ -561,6 +561,23 @@ for (const [eco, ex] of [['haskell', PP], ['nix', PP]]) {
     assert.notEqual(d.status, 0); assert.ok(d.text.length > 0, 'a link to a node that does not resolve is refused');
   });
 }
+// CAP-117 (runtime, PRD 2): applicable to both ecosystems — `runtime status`/`runtime query` operate
+// on the already-built DataFlowGraph v1, which haskell-view.js/nix-view.js also produce, so the CLI
+// surface runs identically regardless of source language. Executed (not merely asserted) against a
+// real scanned haskell/nix example, honestly reporting runtimeStatus 'unavailable' since no telemetry
+// was ever ingested for these examples.
+for (const [eco, ex] of [['haskell', HS], ['nix', NX]]) {
+  cell('CAP-117', eco, () => {
+    const dir = example(ex); cli(dir, ['scan', dir, '--format', 'json']);
+    const s = cli(dir, ['runtime', 'status', dir]);
+    assert.equal(s.status, 0, s.text);
+    const j = s.json();
+    assert.equal(j.runtimeStatus, 'unavailable', 'no telemetry was ever ingested for this example — must never silently read as risk-free');
+    const q = cli(dir, ['runtime', 'query', '--list', dir]);
+    assert.equal(q.status, 0, q.text);
+    assert.ok(/internet-facing-to-sensitive/.test(q.text));
+  });
+}
 // CAP-116 (fleet, PRD 4): the first genuinely not-applicable ledger entry, matching the ledger's own
 // haskell/nix/nixosExecution justification (fleet-graph.js has no Cabal/Stack/flake.nix reader).
 MATRIX['CAP-116'] = {
