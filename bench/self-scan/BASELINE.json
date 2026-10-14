@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-13T04:19:41.636Z",
-  "commit": "ce94d5389358cba39f0cb3225d82e06e2480a7d1",
+  "generatedAt": "2026-10-14T22:55:14.958Z",
+  "commit": "3f12344b0cf66b6b581515fdaf998f28f5317dcd",
   "targets": {
     "hooks": {
       "total": 21,
@@ -47,7 +47,7 @@
       }
     },
     "scanner/src": {
-      "total": 652,
+      "total": 665,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/provenance-graph.js": 1,
@@ -59,6 +59,16 @@
         "capabilities/proxy.js": 3,
         "capabilities/receipts.js": 3,
         "capabilities/recovery.js": 1,
+        "context-intelligence/adapters/haskell-hie.js": 1,
+        "context-intelligence/canonical.js": 1,
+        "context-intelligence/cli.js": 1,
+        "context-intelligence/config.js": 1,
+        "context-intelligence/controls.js": 2,
+        "context-intelligence/entrypoints.js": 1,
+        "context-intelligence/evaluation/index.js": 3,
+        "context-intelligence/evaluation/runner.js": 1,
+        "context-intelligence/files.js": 1,
+        "context-intelligence/store.js": 1,
         "dataflow/cross-service-taint.js": 5,
         "dataflow/exploit-prover.js": 1,
         "dataflow/ifds-precise.js": 3,
