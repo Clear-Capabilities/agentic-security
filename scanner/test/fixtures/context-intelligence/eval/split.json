@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "dci-eval-split/1",
+  "rule": "assigned once, by the authors, before any scored run; a case sits in exactly one split; prompts are developed against 'dev' only",
+  "dev": ["c01", "c02", "c03", "c04", "c05", "c06", "c07"],
+  "holdout": ["c08", "c09", "c10", "c11"]
+}

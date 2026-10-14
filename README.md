@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.171.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.172.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -190,6 +190,7 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 - [Haskell and Nix support](docs/language-support.md): the measured, per-capability status behind every claim, with its denominators
 - [Finding provenance](docs/guides/finding-provenance.md) — which commit introduced a finding
 - [Local AI with Ollama](docs/guides/ollama.md) — run validation/fix/hunt against a model on your own machine, no cloud calls
+- [Deterministic Context Intelligence](docs/guides/context-intelligence.md) — opt-in `context` command: per-entry-point, hash-bound context bundles and citation-checked reviews
 
 **AppSec** — set the gate, read the evidence
 - [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings

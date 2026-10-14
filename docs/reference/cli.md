@@ -27,6 +27,7 @@ context. Run `agentic-security help` for the live, in-CLI flag listing.
 | `setup [dir]` | Install the `/security-*` shortcut commands into a project. |
 | `harness [path]` | Multi-harness config audit: scans `.claude/`, `.cursor/`, `.codex/`, `.gemini/`, and more. `--include-home` also sweeps `~/`. |
 | `hunt --root <dir>` | LLM discovery over the call-graph partition (advisory; needs `AGENTIC_SECURITY_LLM_ENDPOINT`). `--lens a,b` narrows the angles. CLI-only. |
+| `context build\|inspect\|diff\|review\|status\|eval\|verify\|export\|cleanup` | Deterministic Context Intelligence: resolve entry points, write one inspectable hash-bound context bundle each (`build`, no model, no network), and optionally run focused single-call reviews over them (`review`, needs `AGENTIC_SECURITY_LLM_ENDPOINT`, advisory). Opt-in and additive: the default scan and `hunt` are unchanged. See [Context Intelligence](../guides/context-intelligence.md). |
 | `fleet init\|scan\|status\|resume\|query --depends-on <repo-id>` | Scan a declared set of repositories (`fleet.yaml`) in one invocation — bounded concurrency, resumable — and query which repositories depend, directly or transitively, on a given one. See [Fleet](../guides/fleet.md). CLI-only. |
 | `digest --slack <url>` | Post a security digest to Slack (or `--discord <url>`). Reads the last scan. |
 | `cve-watch --root <dir>` | One-shot check for new CVEs against installed dependencies. |
