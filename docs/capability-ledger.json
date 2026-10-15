@@ -2091,6 +2091,53 @@
       "documents": [
         "commands/provenance.md"
       ]
+    },
+    {
+      "id": "CAP-120",
+      "kind": "doc-link",
+      "title": "context: build hash-bound per-entry-point context bundles and run focused, citation-checked reviews (opt-in)",
+      "sources": [
+        "docs/guides/context-intelligence.md",
+        "docs/architecture/context-intelligence.md",
+        "docs/architecture/DCI_INTEGRATION_AUDIT.md"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nix": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "X-016",
+          "X-005"
+        ]
+      },
+      "nixosExecution": {
+        "applicability": "applicable",
+        "status": "proposed",
+        "requirements": [
+          "NIX-012",
+          "X-016"
+        ]
+      },
+      "entryPoints": [
+        "scanner/src/context-intelligence/cli.js"
+      ],
+      "suites": [
+        "language-governance"
+      ],
+      "documents": [
+        "docs/guides/context-intelligence.md",
+        "docs/architecture/context-intelligence.md",
+        "docs/architecture/DCI_INTEGRATION_AUDIT.md"
+      ]
     }
   ],
   "docReviews": {

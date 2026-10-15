@@ -613,6 +613,18 @@ for (const [eco, ex] of [['haskell', HS], ['nix', NX]]) {
     assert.equal(commit.sha, 'deadbeef');
   });
 }
+// CAP-120 (context, deterministic context intelligence): applicable to both ecosystems. `context build` runs
+// against a real example project from its own cwd. Haskell resolves the Scotty routes into bundles; Nix has no
+// entry-point surface, so the build completes honestly with zero entry points and no claim of coverage.
+for (const [eco, ex, expectBundles] of [['haskell', HS, 3], ['nix', NX, 0]]) {
+  cell('CAP-120', eco, () => {
+    const dir = example(ex);
+    const b = cli(dir, ['context', 'build']);
+    assert.equal(b.status, 0, b.text);
+    assert.match(b.text, new RegExp(`bundles built ${expectBundles}:`));
+    assert.match(b.text, /does not mean the route is safe/);
+  });
+}
 // CAP-116 (fleet, PRD 4): the first genuinely not-applicable ledger entry, matching the ledger's own
 // haskell/nix/nixosExecution justification (fleet-graph.js has no Cabal/Stack/flake.nix reader).
 MATRIX['CAP-116'] = {

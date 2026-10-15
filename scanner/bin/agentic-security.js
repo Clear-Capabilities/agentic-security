@@ -181,6 +181,11 @@ Commands:
                                to each finding of a scan result. Read-only, local files only.
                                Off by default: set AGENTIC_SECURITY_ASSURANCE_DEPLOYMENT_BOUNDARIES=1.
                                Exit: 0 ok, 1 failed, 2 usage, 3 feature off or blocked.
+  context <build|inspect|diff|review|status|eval|verify|export|cleanup> [--root <dir>]
+                               Deterministic Context Intelligence (opt-in, additive): resolve entry points,
+                               write one inspectable, hash-bound context bundle each, and optionally run
+                               focused single-call model reviews over them. 'context build' makes no model
+                               call and no network call. Run 'agentic-security context' for the full usage.
   explore [path] [--port <n>] [--keep-open]
                                Start a local, read-only server over an
                                already-scanned lineage graph (run
@@ -7636,6 +7641,7 @@ async function main() {
       case 'calibration-feedback': process.exit(await cmdCalibrationFeedback(args));
       case 'calibration-report': process.exit(await cmdCalibrationReport(args));
       case 'hunt':     process.exit(await cmdHunt(args));
+      case 'context':  process.exit(await (await import('../src/context-intelligence/cli.js')).cmdContext(args));
       case 'compliance': process.exit(await cmdCompliance(args));
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));

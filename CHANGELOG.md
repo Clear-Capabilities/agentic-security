@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.172.0 - Deterministic Context Intelligence (`context` command)
+
+An opt-in, additive subsystem. The default scan, `hunt` and every existing command are unchanged.
+
+- `agentic-security context build` resolves entry points (JavaScript and TypeScript, Python, Haskell, plus the surfaces the existing inventory recognises) and writes one inspectable, hash-bound context bundle each. No model call, no network call. A bundle is `complete` only when nothing material was unresolved, omitted, capped or split.
+- Protection states are explicit per dimension (present, not present, not seen, not resolved, omitted due to budget, evaluated and ineffective for a control that runs after the sensitive operation), with observed versus inferred evidence.
+- `context review` runs focused single-call reviews over frozen bundles through the existing model resolver, egress policy and redaction. Citations are verified against the bundle, severity comes only from the existing confirmation tier, and the bounded queue retries, caches, checkpoints and resumes. A job with no verified result is reported as missing coverage; `--strict` exits 3 on it.
+- `context diff`, `inspect`, `verify`, `export`, `status`, `cleanup`, and an offline batch export and import.
+- Optional read-only compiler metadata import for Haskell (`hie-export/1`), validated against the source snapshot. Automatic metadata builds and a provider batch API are blocked and documented as such.
+- `context eval` scores a bundled synthetic suite with a scripted reader. It is labelled synthetic on its face and supports no accuracy claim; intervals are unmeasured below 10 independent cases, and the holdout split is ledgered.
+- A batch import bug found while testing: a stored declined result no longer blocks importing a good result for the same job.
+- Registered `context-intelligence` and `context-intelligence.json` in the state artifact registry.
+
+See [the guide](docs/guides/context-intelligence.md).
+
 ## 0.171.0 - documentation: surface every shipped PRD capability in the README and docs index
 
 A documentation-only release. Auditing the docs against the actual CLI surface after PRD 5 shipped found

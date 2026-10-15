@@ -27,6 +27,8 @@ links each, into the docs on this page:
 - [Reading a finding's evidence](walkthroughs/finding-evidence.md) — every real field, explained one at a time
 - [Examples gallery](examples/README.md) — thirteen real findings, one screen each
 - [Local AI with Ollama](guides/ollama.md) — the fix/validate/hunt stages, running on your own machine
+- [Deterministic Context Intelligence](guides/context-intelligence.md) — per-entry-point, hash-bound context bundles and focused, citation-checked reviews (`context` command; opt-in)
+  - [Architecture](architecture/context-intelligence.md) and [integration audit](architecture/DCI_INTEGRATION_AUDIT.md)
 - [Haskell](guides/haskell.md): default scan, Cabal/Stack inputs, sources and sinks, web routes, dependencies, verified fixes, limits
 - [Nix and NixOS](guides/nix-nixos.md): flakes and configurations: static, declared, effective, evaluated and runtime scope; hardening, store secrets, closures
 - [Installing on NixOS](guides/nixos-install.md): running the scanner itself on a NixOS host; what has not been verified
