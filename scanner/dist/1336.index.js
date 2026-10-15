@@ -786,7 +786,6 @@ const low_level_1 = __webpack_require__(36928);
 const types_1 = __webpack_require__(86345);
 const utils_1 = __webpack_require__(88805);
 const FALLBACK_PRECISION = 17;
-const asyncMutex = new async_mutex_1.Mutex();
 function isCoercibleRational(obj) {
     // prettier-ignore
     const r = ((obj !== null &&
@@ -803,7 +802,47 @@ function isCoercibleRational(obj) {
 function createApi(Z3, em) {
     // TODO(ritave): Create a custom linting rule that checks if the provided callbacks to cleanup
     //               Don't capture `this`
-    const cleanup = new FinalizationRegistry(callback => callback());
+    //
+    function runFinalizer(callback) {
+        try {
+            callback();
+        }
+        catch (e) {
+            // Finalizers must not throw; ignore errors from freeing already-released objects.
+        }
+    }
+    let asyncCallsInFlight = 0;
+    let pendingFinalizers = [];
+    function flushPendingFinalizers() {
+        while (asyncCallsInFlight === 0 && pendingFinalizers.length > 0) {
+            const callbacks = pendingFinalizers;
+            pendingFinalizers = [];
+            callbacks.forEach(runFinalizer);
+        }
+    }
+    const cleanup = new FinalizationRegistry(runFinalizer);
+    const cleanupAfterAsync = new FinalizationRegistry(callback => {
+        if (asyncCallsInFlight > 0) {
+            pendingFinalizers.push(callback);
+        }
+        else {
+            runFinalizer(callback);
+        }
+    });
+    // One mutex per module: a call abandoned on one module must not block calls on other modules.
+    const asyncMutex = new async_mutex_1.Mutex();
+    function runAsync(fn) {
+        return asyncMutex.runExclusive(async () => {
+            asyncCallsInFlight++;
+            try {
+                return await fn();
+            }
+            finally {
+                asyncCallsInFlight--;
+                flushPendingFinalizers();
+            }
+        });
+    }
     function enableTrace(tag) {
         Z3.enable_trace(tag);
     }
@@ -847,6 +886,7 @@ function createApi(Z3, em) {
             Object.entries(options).forEach(([key, value]) => check(Z3.set_param_value(cfg, key, value.toString())));
         }
         const contextPtr = Z3.mk_context_rc(cfg);
+        Z3.enable_concurrent_dec_ref(contextPtr);
         Z3.set_ast_print_mode(contextPtr, low_level_1.Z3_ast_print_mode.Z3_PRINT_SMTLIB2_COMPLIANT);
         Z3.del_config(cfg);
         function _assertContext(...ctxs) {
@@ -1298,7 +1338,7 @@ function createApi(Z3, em) {
         // expression simplification //
         ///////////////////////////////
         async function simplify(e) {
-            const result = await Z3.simplify(contextPtr, e.ast);
+            const result = await runAsync(() => Z3.simplify(contextPtr, e.ast));
             return _toExpr(check(result));
         }
         /////////////
@@ -2179,7 +2219,7 @@ function createApi(Z3, em) {
             return new BoolImpl(check(Z3.mk_char_is_digit(contextPtr, ch.ast)));
         }
         async function polynomialSubresultants(p, q, x) {
-            const result = await Z3.polynomial_subresultants(contextPtr, p.ast, q.ast, x.ast);
+            const result = await runAsync(() => Z3.polynomial_subresultants(contextPtr, p.ast, q.ast, x.ast));
             return new AstVectorImpl(check(result));
         }
         class AstImpl {
@@ -2281,7 +2321,7 @@ function createApi(Z3, em) {
                     _assertContext(expr);
                     return expr.ast;
                 });
-                const result = await asyncMutex.runExclusive(() => check(Z3.solver_check_assumptions(contextPtr, this.ptr, assumptions)));
+                const result = await runAsync(() => check(Z3.solver_check_assumptions(contextPtr, this.ptr, assumptions)));
                 switch (result) {
                     case low_level_1.Z3_lbool.Z3_L_FALSE:
                         return 'unsat';
@@ -2363,7 +2403,7 @@ function createApi(Z3, em) {
             }
             async cube(vars, cutoff = 0xFFFFFFFF) {
                 const tempVars = vars ?? new AstVectorImpl();
-                const result = await asyncMutex.runExclusive(() => check(Z3.solver_cube(contextPtr, this.ptr, tempVars.ptr, cutoff)));
+                const result = await runAsync(() => check(Z3.solver_cube(contextPtr, this.ptr, tempVars.ptr, cutoff)));
                 return new AstVectorImpl(result);
             }
             async getConsequences(assumptions, variables) {
@@ -2378,7 +2418,7 @@ function createApi(Z3, em) {
                     _assertContext(v);
                     Z3.ast_vector_push(contextPtr, varsVec.ptr, v.ast);
                 });
-                const r = await asyncMutex.runExclusive(() => check(Z3.solver_get_consequences(contextPtr, this.ptr, asmsVec.ptr, varsVec.ptr, consVec.ptr)));
+                const r = await runAsync(() => check(Z3.solver_get_consequences(contextPtr, this.ptr, asmsVec.ptr, varsVec.ptr, consVec.ptr)));
                 let status;
                 switch (r) {
                     case low_level_1.Z3_lbool.Z3_L_FALSE:
@@ -2554,7 +2594,7 @@ function createApi(Z3, em) {
                     _assertContext(expr);
                     return expr.ast;
                 });
-                const result = await asyncMutex.runExclusive(() => check(Z3.optimize_check(contextPtr, this.ptr, assumptions)));
+                const result = await runAsync(() => check(Z3.optimize_check(contextPtr, this.ptr, assumptions)));
                 switch (result) {
                     case low_level_1.Z3_lbool.Z3_L_FALSE:
                         return 'unsat';
@@ -2636,7 +2676,7 @@ function createApi(Z3, em) {
             }
             async query(query) {
                 _assertContext(query);
-                const result = await asyncMutex.runExclusive(() => check(Z3.fixedpoint_query(contextPtr, this.ptr, query.ast)));
+                const result = await runAsync(() => check(Z3.fixedpoint_query(contextPtr, this.ptr, query.ast)));
                 switch (result) {
                     case low_level_1.Z3_lbool.Z3_L_FALSE:
                         return 'unsat';
@@ -2651,7 +2691,7 @@ function createApi(Z3, em) {
             async queryRelations(...relations) {
                 relations.forEach(rel => _assertContext(rel));
                 const decls = relations.map(rel => rel.ptr);
-                const result = await asyncMutex.runExclusive(() => check(Z3.fixedpoint_query_relations(contextPtr, this.ptr, decls)));
+                const result = await runAsync(() => check(Z3.fixedpoint_query_relations(contextPtr, this.ptr, decls)));
                 switch (result) {
                     case low_level_1.Z3_lbool.Z3_L_FALSE:
                         return 'unsat';
@@ -3316,7 +3356,7 @@ function createApi(Z3, em) {
                     goalToUse = goal;
                 }
                 _assertContext(goalToUse);
-                const result = await Z3.tactic_apply(contextPtr, this.ptr, goalToUse.ptr);
+                const result = await runAsync(() => Z3.tactic_apply(contextPtr, this.ptr, goalToUse.ptr));
                 const applyResult = new ApplyResultImpl(check(result));
                 // Wrap with Proxy to enable indexer access
                 return new Proxy(applyResult, applyResultHandler);
@@ -3619,7 +3659,7 @@ function createApi(Z3, em) {
                     myPtr = valueOrPtr;
                 }
                 this.ptr = myPtr;
-                cleanup.register(this, () => Z3.rcf_del(contextPtr, myPtr), this);
+                cleanupAfterAsync.register(this, () => Z3.rcf_del(contextPtr, myPtr), this);
             }
             add(other) {
                 _assertContext(other);
@@ -4007,6 +4047,10 @@ function createApi(Z3, em) {
             }
             length() {
                 return new ArithImpl(check(Z3.mk_seq_length(contextPtr, this.ast)));
+            }
+            power(exponent) {
+                const exponentExpr = isArith(exponent) ? exponent : Int.val(exponent);
+                return new SeqImpl(check(Z3.mk_seq_power(contextPtr, this.ast, exponentExpr.ast)));
             }
             at(index) {
                 const indexExpr = isArith(index) ? index : Int.val(index);
@@ -4913,7 +4957,7 @@ function createApi(Z3, em) {
             mkCharIsDigit,
             polynomialSubresultants,
         };
-        cleanup.register(ctx, () => Z3.del_context(contextPtr));
+        cleanupAfterAsync.register(ctx, () => Z3.del_context(contextPtr));
         return ctx;
     }
     return {
@@ -5093,6 +5137,9 @@ function killThreads(em) {
             if (!em.PThread.unusedWorkers.length && !em.PThread.runningWorkers.length) {
                 clearInterval(intervalHandle);
                 clearTimeout(timeoutHandle);
+                // Reject any async call abandoned by the termination and clear its keep-alive timers,
+                // so that later calls are not blocked and the process can exit.
+                em.async_cancel?.(new Error('Z3 threads were terminated'));
                 resolve();
             }
         }, 100);
@@ -5182,6 +5229,7 @@ var Z3_sort_kind;
     Z3_sort_kind[Z3_sort_kind["Z3_RE_SORT"] = 12] = "Z3_RE_SORT";
     Z3_sort_kind[Z3_sort_kind["Z3_CHAR_SORT"] = 13] = "Z3_CHAR_SORT";
     Z3_sort_kind[Z3_sort_kind["Z3_TYPE_VAR"] = 14] = "Z3_TYPE_VAR";
+    Z3_sort_kind[Z3_sort_kind["Z3_FINITE_FIELD_SORT"] = 15] = "Z3_FINITE_FIELD_SORT";
     Z3_sort_kind[Z3_sort_kind["Z3_UNKNOWN_SORT"] = 1000] = "Z3_UNKNOWN_SORT";
 })(Z3_sort_kind || (exports.Z3_sort_kind = Z3_sort_kind = {}));
 var Z3_ast_kind;
@@ -5379,37 +5427,38 @@ var Z3_decl_kind;
     Z3_decl_kind[Z3_decl_kind["Z3_OP_SEQ_MAPI"] = 1570] = "Z3_OP_SEQ_MAPI";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_SEQ_FOLDL"] = 1571] = "Z3_OP_SEQ_FOLDL";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_SEQ_FOLDLI"] = 1572] = "Z3_OP_SEQ_FOLDLI";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_TO_INT"] = 1573] = "Z3_OP_STR_TO_INT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_INT_TO_STR"] = 1574] = "Z3_OP_INT_TO_STR";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_UBV_TO_STR"] = 1575] = "Z3_OP_UBV_TO_STR";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_SBV_TO_STR"] = 1576] = "Z3_OP_SBV_TO_STR";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_TO_CODE"] = 1577] = "Z3_OP_STR_TO_CODE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_FROM_CODE"] = 1578] = "Z3_OP_STR_FROM_CODE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_STRING_LT"] = 1579] = "Z3_OP_STRING_LT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_STRING_LE"] = 1580] = "Z3_OP_STRING_LE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_PLUS"] = 1581] = "Z3_OP_RE_PLUS";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_STAR"] = 1582] = "Z3_OP_RE_STAR";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_OPTION"] = 1583] = "Z3_OP_RE_OPTION";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_CONCAT"] = 1584] = "Z3_OP_RE_CONCAT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_UNION"] = 1585] = "Z3_OP_RE_UNION";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_RANGE"] = 1586] = "Z3_OP_RE_RANGE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_DIFF"] = 1587] = "Z3_OP_RE_DIFF";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_INTERSECT"] = 1588] = "Z3_OP_RE_INTERSECT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_LOOP"] = 1589] = "Z3_OP_RE_LOOP";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_POWER"] = 1590] = "Z3_OP_RE_POWER";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_COMPLEMENT"] = 1591] = "Z3_OP_RE_COMPLEMENT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_EMPTY_SET"] = 1592] = "Z3_OP_RE_EMPTY_SET";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_FULL_SET"] = 1593] = "Z3_OP_RE_FULL_SET";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_FULL_CHAR_SET"] = 1594] = "Z3_OP_RE_FULL_CHAR_SET";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_OF_PRED"] = 1595] = "Z3_OP_RE_OF_PRED";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_REVERSE"] = 1596] = "Z3_OP_RE_REVERSE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_DERIVATIVE"] = 1597] = "Z3_OP_RE_DERIVATIVE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_CONST"] = 1598] = "Z3_OP_CHAR_CONST";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_LE"] = 1599] = "Z3_OP_CHAR_LE";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_TO_INT"] = 1600] = "Z3_OP_CHAR_TO_INT";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_TO_BV"] = 1601] = "Z3_OP_CHAR_TO_BV";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_FROM_BV"] = 1602] = "Z3_OP_CHAR_FROM_BV";
-    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_IS_DIGIT"] = 1603] = "Z3_OP_CHAR_IS_DIGIT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_SEQ_POWER"] = 1573] = "Z3_OP_SEQ_POWER";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_TO_INT"] = 1574] = "Z3_OP_STR_TO_INT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_INT_TO_STR"] = 1575] = "Z3_OP_INT_TO_STR";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_UBV_TO_STR"] = 1576] = "Z3_OP_UBV_TO_STR";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_SBV_TO_STR"] = 1577] = "Z3_OP_SBV_TO_STR";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_TO_CODE"] = 1578] = "Z3_OP_STR_TO_CODE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_STR_FROM_CODE"] = 1579] = "Z3_OP_STR_FROM_CODE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_STRING_LT"] = 1580] = "Z3_OP_STRING_LT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_STRING_LE"] = 1581] = "Z3_OP_STRING_LE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_PLUS"] = 1582] = "Z3_OP_RE_PLUS";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_STAR"] = 1583] = "Z3_OP_RE_STAR";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_OPTION"] = 1584] = "Z3_OP_RE_OPTION";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_CONCAT"] = 1585] = "Z3_OP_RE_CONCAT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_UNION"] = 1586] = "Z3_OP_RE_UNION";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_RANGE"] = 1587] = "Z3_OP_RE_RANGE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_DIFF"] = 1588] = "Z3_OP_RE_DIFF";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_INTERSECT"] = 1589] = "Z3_OP_RE_INTERSECT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_LOOP"] = 1590] = "Z3_OP_RE_LOOP";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_POWER"] = 1591] = "Z3_OP_RE_POWER";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_COMPLEMENT"] = 1592] = "Z3_OP_RE_COMPLEMENT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_EMPTY_SET"] = 1593] = "Z3_OP_RE_EMPTY_SET";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_FULL_SET"] = 1594] = "Z3_OP_RE_FULL_SET";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_FULL_CHAR_SET"] = 1595] = "Z3_OP_RE_FULL_CHAR_SET";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_OF_PRED"] = 1596] = "Z3_OP_RE_OF_PRED";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_REVERSE"] = 1597] = "Z3_OP_RE_REVERSE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_RE_DERIVATIVE"] = 1598] = "Z3_OP_RE_DERIVATIVE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_CONST"] = 1599] = "Z3_OP_CHAR_CONST";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_LE"] = 1600] = "Z3_OP_CHAR_LE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_TO_INT"] = 1601] = "Z3_OP_CHAR_TO_INT";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_TO_BV"] = 1602] = "Z3_OP_CHAR_TO_BV";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_FROM_BV"] = 1603] = "Z3_OP_CHAR_FROM_BV";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_CHAR_IS_DIGIT"] = 1604] = "Z3_OP_CHAR_IS_DIGIT";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_LABEL"] = 1792] = "Z3_OP_LABEL";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_LABEL_LIT"] = 1793] = "Z3_OP_LABEL_LIT";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_DT_CONSTRUCTOR"] = 2048] = "Z3_OP_DT_CONSTRUCTOR";
@@ -5488,6 +5537,11 @@ var Z3_decl_kind;
     Z3_decl_kind[Z3_decl_kind["Z3_OP_INTERNAL"] = 49165] = "Z3_OP_INTERNAL";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_RECURSIVE"] = 49166] = "Z3_OP_RECURSIVE";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_UNINTERPRETED"] = 49167] = "Z3_OP_UNINTERPRETED";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_FF_NUM"] = 53248] = "Z3_OP_FF_NUM";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_FF_ADD"] = 53249] = "Z3_OP_FF_ADD";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_FF_MUL"] = 53250] = "Z3_OP_FF_MUL";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_FF_NEG"] = 53251] = "Z3_OP_FF_NEG";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_FF_BITSUM"] = 53252] = "Z3_OP_FF_BITSUM";
 })(Z3_decl_kind || (exports.Z3_decl_kind = Z3_decl_kind = {}));
 var Z3_param_kind;
 (function (Z3_param_kind) {
@@ -5636,6 +5690,22 @@ async function init(initModule, moduleOverrides = {}) {
             mk_real_sort: Mod._Z3_mk_real_sort,
             mk_bv_sort: Mod._Z3_mk_bv_sort,
             mk_finite_domain_sort: Mod._Z3_mk_finite_domain_sort,
+            mk_finite_field_sort: function (c, prime) {
+                return Mod.ccall('Z3_mk_finite_field_sort', 'number', ['number', 'string'], [c, prime]);
+            },
+            get_finite_field_sort_size: function (c, s) {
+                return Mod.ccall('Z3_get_finite_field_sort_size', 'string', ['number', 'number'], [c, s]);
+            },
+            mk_ff_add: function (c, args) {
+                return Mod.ccall('Z3_mk_ff_add', 'number', ['number', 'number', 'array'], [c, args.length, intArrayToByteArr(args)]);
+            },
+            mk_ff_mul: function (c, args) {
+                return Mod.ccall('Z3_mk_ff_mul', 'number', ['number', 'number', 'array'], [c, args.length, intArrayToByteArr(args)]);
+            },
+            mk_ff_neg: Mod._Z3_mk_ff_neg,
+            mk_ff_bitsum: function (c, args) {
+                return Mod.ccall('Z3_mk_ff_bitsum', 'number', ['number', 'number', 'array'], [c, args.length, intArrayToByteArr(args)]);
+            },
             mk_array_sort: Mod._Z3_mk_array_sort,
             mk_array_sort_n: function (c, domain, range) {
                 return Mod.ccall('Z3_mk_array_sort_n', 'number', ['number', 'number', 'array', 'number'], [
@@ -6095,6 +6165,7 @@ async function init(initModule, moduleOverrides = {}) {
             mk_seq_replace_re_all: Mod._Z3_mk_seq_replace_re_all,
             mk_seq_at: Mod._Z3_mk_seq_at,
             mk_seq_nth: Mod._Z3_mk_seq_nth,
+            mk_seq_power: Mod._Z3_mk_seq_power,
             mk_seq_length: Mod._Z3_mk_seq_length,
             mk_seq_index: Mod._Z3_mk_seq_index,
             mk_seq_last_index: Mod._Z3_mk_seq_last_index,
@@ -7789,7 +7860,7 @@ var readyPromise = new Promise((resolve, reject) => {
   readyPromiseResolve = resolve;
   readyPromiseReject = reject;
 });
-["_malloc","_free","_set_throwy_error_handler","_set_noop_error_handler","_async_Z3_eval_smtlib2_string","_async_Z3_simplify","_async_Z3_simplify_ex","_async_Z3_solver_check","_async_Z3_solver_check_assumptions","_async_Z3_solver_cube","_async_Z3_solver_get_consequences","_async_Z3_tactic_apply","_async_Z3_tactic_apply_ex","_async_Z3_optimize_check","_async_Z3_algebraic_roots","_async_Z3_algebraic_eval","_async_Z3_fixedpoint_query","_async_Z3_fixedpoint_query_relations","_async_Z3_fixedpoint_query_from_lvl","_async_Z3_polynomial_subresultants","_Z3_global_param_set","_Z3_global_param_reset_all","_Z3_global_param_get","_Z3_mk_config","_Z3_del_config","_Z3_set_param_value","_Z3_mk_context","_Z3_mk_context_rc","_Z3_del_context","_Z3_inc_ref","_Z3_dec_ref","_Z3_update_param_value","_Z3_get_global_param_descrs","_Z3_interrupt","_Z3_enable_concurrent_dec_ref","_Z3_mk_params","_Z3_params_inc_ref","_Z3_params_dec_ref","_Z3_params_set_bool","_Z3_params_set_uint","_Z3_params_set_double","_Z3_params_set_symbol","_Z3_params_to_string","_Z3_params_validate","_Z3_param_descrs_inc_ref","_Z3_param_descrs_dec_ref","_Z3_param_descrs_get_kind","_Z3_param_descrs_size","_Z3_param_descrs_get_name","_Z3_param_descrs_get_documentation","_Z3_param_descrs_to_string","_Z3_mk_int_symbol","_Z3_mk_string_symbol","_Z3_mk_uninterpreted_sort","_Z3_mk_type_variable","_Z3_mk_bool_sort","_Z3_mk_int_sort","_Z3_mk_real_sort","_Z3_mk_bv_sort","_Z3_mk_finite_domain_sort","_Z3_mk_array_sort","_Z3_mk_array_sort_n","_Z3_mk_tuple_sort","_Z3_mk_enumeration_sort","_Z3_mk_list_sort","_Z3_mk_constructor","_Z3_constructor_num_fields","_Z3_del_constructor","_Z3_mk_datatype","_Z3_mk_polymorphic_datatype","_Z3_mk_datatype_sort","_Z3_mk_constructor_list","_Z3_del_constructor_list","_Z3_mk_datatypes","_Z3_query_constructor","_Z3_mk_func_decl","_Z3_mk_app","_Z3_mk_const","_Z3_mk_fresh_func_decl","_Z3_mk_fresh_const","_Z3_mk_rec_func_decl","_Z3_add_rec_def","_Z3_mk_true","_Z3_mk_false","_Z3_mk_eq","_Z3_mk_distinct","_Z3_mk_not","_Z3_mk_ite","_Z3_mk_iff","_Z3_mk_implies","_Z3_mk_xor","_Z3_mk_and","_Z3_mk_or","_Z3_mk_add","_Z3_mk_mul","_Z3_mk_sub","_Z3_mk_unary_minus","_Z3_mk_div","_Z3_mk_mod","_Z3_mk_rem","_Z3_mk_power","_Z3_mk_abs","_Z3_mk_lt","_Z3_mk_le","_Z3_mk_gt","_Z3_mk_ge","_Z3_mk_divides","_Z3_mk_int2real","_Z3_mk_real2int","_Z3_mk_is_int","_Z3_mk_bvnot","_Z3_mk_bvredand","_Z3_mk_bvredor","_Z3_mk_bvand","_Z3_mk_bvor","_Z3_mk_bvxor","_Z3_mk_bvnand","_Z3_mk_bvnor","_Z3_mk_bvxnor","_Z3_mk_bvneg","_Z3_mk_bvadd","_Z3_mk_bvsub","_Z3_mk_bvmul","_Z3_mk_bvudiv","_Z3_mk_bvsdiv","_Z3_mk_bvurem","_Z3_mk_bvsrem","_Z3_mk_bvsmod","_Z3_mk_bvult","_Z3_mk_bvslt","_Z3_mk_bvule","_Z3_mk_bvsle","_Z3_mk_bvuge","_Z3_mk_bvsge","_Z3_mk_bvugt","_Z3_mk_bvsgt","_Z3_mk_concat","_Z3_mk_extract","_Z3_mk_sign_ext","_Z3_mk_zero_ext","_Z3_mk_repeat","_Z3_mk_bit2bool","_Z3_mk_bvshl","_Z3_mk_bvlshr","_Z3_mk_bvashr","_Z3_mk_rotate_left","_Z3_mk_rotate_right","_Z3_mk_ext_rotate_left","_Z3_mk_ext_rotate_right","_Z3_mk_int2bv","_Z3_mk_bv2int","_Z3_mk_bvadd_no_overflow","_Z3_mk_bvadd_no_underflow","_Z3_mk_bvsub_no_overflow","_Z3_mk_bvsub_no_underflow","_Z3_mk_bvsdiv_no_overflow","_Z3_mk_bvneg_no_overflow","_Z3_mk_bvmul_no_overflow","_Z3_mk_bvmul_no_underflow","_Z3_mk_select","_Z3_mk_select_n","_Z3_mk_store","_Z3_mk_store_n","_Z3_mk_const_array","_Z3_mk_map","_Z3_mk_array_default","_Z3_mk_as_array","_Z3_mk_set_sort","_Z3_mk_empty_set","_Z3_mk_full_set","_Z3_mk_set_add","_Z3_mk_set_del","_Z3_mk_set_union","_Z3_mk_set_intersect","_Z3_mk_set_difference","_Z3_mk_set_complement","_Z3_mk_set_member","_Z3_mk_set_subset","_Z3_mk_array_ext","_Z3_mk_finite_set_sort","_Z3_is_finite_set_sort","_Z3_get_finite_set_sort_basis","_Z3_mk_finite_set_empty","_Z3_mk_finite_set_singleton","_Z3_mk_finite_set_union","_Z3_mk_finite_set_intersect","_Z3_mk_finite_set_difference","_Z3_mk_finite_set_member","_Z3_mk_finite_set_size","_Z3_mk_finite_set_subset","_Z3_mk_finite_set_map","_Z3_mk_finite_set_filter","_Z3_mk_finite_set_range","_Z3_mk_numeral","_Z3_mk_real","_Z3_mk_real_int64","_Z3_mk_int","_Z3_mk_unsigned_int","_Z3_mk_int64","_Z3_mk_unsigned_int64","_Z3_mk_bv_numeral","_Z3_mk_seq_sort","_Z3_is_seq_sort","_Z3_get_seq_sort_basis","_Z3_mk_re_sort","_Z3_is_re_sort","_Z3_get_re_sort_basis","_Z3_mk_string_sort","_Z3_mk_char_sort","_Z3_is_string_sort","_Z3_is_char_sort","_Z3_mk_string","_Z3_mk_lstring","_Z3_mk_u32string","_Z3_is_string","_Z3_get_string","_Z3_get_lstring","_Z3_get_string_length","_Z3_get_string_contents","_Z3_mk_seq_empty","_Z3_mk_seq_unit","_Z3_mk_seq_concat","_Z3_mk_seq_prefix","_Z3_mk_seq_suffix","_Z3_mk_seq_contains","_Z3_mk_str_lt","_Z3_mk_str_le","_Z3_mk_seq_extract","_Z3_mk_seq_replace","_Z3_mk_seq_replace_all","_Z3_mk_seq_replace_re","_Z3_mk_seq_replace_re_all","_Z3_mk_seq_at","_Z3_mk_seq_nth","_Z3_mk_seq_length","_Z3_mk_seq_index","_Z3_mk_seq_last_index","_Z3_mk_seq_map","_Z3_mk_seq_mapi","_Z3_mk_seq_foldl","_Z3_mk_seq_foldli","_Z3_mk_str_to_int","_Z3_mk_int_to_str","_Z3_mk_string_to_code","_Z3_mk_string_from_code","_Z3_mk_ubv_to_str","_Z3_mk_sbv_to_str","_Z3_mk_seq_to_re","_Z3_mk_seq_in_re","_Z3_mk_re_plus","_Z3_mk_re_star","_Z3_mk_re_option","_Z3_mk_re_union","_Z3_mk_re_concat","_Z3_mk_re_range","_Z3_mk_re_allchar","_Z3_mk_re_loop","_Z3_mk_re_power","_Z3_mk_re_intersect","_Z3_mk_re_complement","_Z3_mk_re_diff","_Z3_mk_re_empty","_Z3_mk_re_full","_Z3_mk_char","_Z3_mk_char_le","_Z3_mk_char_to_int","_Z3_mk_char_to_bv","_Z3_mk_char_from_bv","_Z3_mk_char_is_digit","_Z3_mk_linear_order","_Z3_mk_partial_order","_Z3_mk_piecewise_linear_order","_Z3_mk_tree_order","_Z3_mk_transitive_closure","_Z3_mk_pattern","_Z3_mk_bound","_Z3_mk_forall","_Z3_mk_exists","_Z3_mk_quantifier","_Z3_mk_quantifier_ex","_Z3_mk_forall_const","_Z3_mk_exists_const","_Z3_mk_quantifier_const","_Z3_mk_quantifier_const_ex","_Z3_mk_lambda","_Z3_mk_lambda_const","_Z3_get_symbol_kind","_Z3_get_symbol_int","_Z3_get_symbol_string","_Z3_get_sort_name","_Z3_get_sort_id","_Z3_sort_to_ast","_Z3_is_eq_sort","_Z3_get_sort_kind","_Z3_get_bv_sort_size","_Z3_get_finite_domain_sort_size","_Z3_get_array_arity","_Z3_get_array_sort_domain","_Z3_get_array_sort_domain_n","_Z3_get_array_sort_range","_Z3_get_tuple_sort_mk_decl","_Z3_get_tuple_sort_num_fields","_Z3_get_tuple_sort_field_decl","_Z3_is_recursive_datatype_sort","_Z3_get_datatype_sort_num_constructors","_Z3_get_datatype_sort_constructor","_Z3_get_datatype_sort_recognizer","_Z3_get_datatype_sort_constructor_accessor","_Z3_datatype_update_field","_Z3_get_relation_arity","_Z3_get_relation_column","_Z3_mk_atmost","_Z3_mk_atleast","_Z3_mk_pble","_Z3_mk_pbge","_Z3_mk_pbeq","_Z3_func_decl_to_ast","_Z3_is_eq_func_decl","_Z3_get_func_decl_id","_Z3_get_decl_name","_Z3_get_decl_kind","_Z3_get_domain_size","_Z3_get_arity","_Z3_get_domain","_Z3_get_range","_Z3_get_decl_num_parameters","_Z3_get_decl_parameter_kind","_Z3_get_decl_int_parameter","_Z3_get_decl_double_parameter","_Z3_get_decl_symbol_parameter","_Z3_get_decl_sort_parameter","_Z3_get_decl_ast_parameter","_Z3_get_decl_func_decl_parameter","_Z3_get_decl_rational_parameter","_Z3_app_to_ast","_Z3_get_app_decl","_Z3_get_app_num_args","_Z3_get_app_arg","_Z3_is_eq_ast","_Z3_get_ast_id","_Z3_get_ast_hash","_Z3_get_sort","_Z3_is_well_sorted","_Z3_get_bool_value","_Z3_get_ast_kind","_Z3_is_app","_Z3_is_ground","_Z3_get_depth","_Z3_is_numeral_ast","_Z3_is_algebraic_number","_Z3_to_app","_Z3_to_func_decl","_Z3_get_numeral_string","_Z3_get_numeral_binary_string","_Z3_get_numeral_decimal_string","_Z3_get_numeral_double","_Z3_get_numerator","_Z3_get_denominator","_Z3_get_numeral_small","_Z3_get_numeral_int","_Z3_get_numeral_uint","_Z3_get_numeral_uint64","_Z3_get_numeral_int64","_Z3_get_numeral_rational_int64","_Z3_get_algebraic_number_lower","_Z3_get_algebraic_number_upper","_Z3_pattern_to_ast","_Z3_get_pattern_num_terms","_Z3_get_pattern","_Z3_get_index_value","_Z3_is_quantifier_forall","_Z3_is_quantifier_exists","_Z3_is_lambda","_Z3_get_quantifier_weight","_Z3_get_quantifier_skolem_id","_Z3_get_quantifier_id","_Z3_get_quantifier_num_patterns","_Z3_get_quantifier_pattern_ast","_Z3_get_quantifier_num_no_patterns","_Z3_get_quantifier_no_pattern_ast","_Z3_get_quantifier_num_bound","_Z3_get_quantifier_bound_name","_Z3_get_quantifier_bound_sort","_Z3_get_quantifier_body","_Z3_simplify","_Z3_simplify_ex","_Z3_simplify_get_help","_Z3_simplify_get_param_descrs","_Z3_update_term","_Z3_substitute","_Z3_substitute_vars","_Z3_substitute_funs","_Z3_translate","_Z3_mk_model","_Z3_model_inc_ref","_Z3_model_dec_ref","_Z3_model_eval","_Z3_model_get_const_interp","_Z3_model_has_interp","_Z3_model_get_func_interp","_Z3_model_get_num_consts","_Z3_model_get_const_decl","_Z3_model_get_num_funcs","_Z3_model_get_func_decl","_Z3_model_get_num_sorts","_Z3_model_get_sort","_Z3_model_get_sort_universe","_Z3_model_translate","_Z3_is_as_array","_Z3_get_as_array_func_decl","_Z3_add_func_interp","_Z3_add_const_interp","_Z3_func_interp_inc_ref","_Z3_func_interp_dec_ref","_Z3_func_interp_get_num_entries","_Z3_func_interp_get_entry","_Z3_func_interp_get_else","_Z3_func_interp_set_else","_Z3_func_interp_get_arity","_Z3_func_interp_add_entry","_Z3_func_entry_inc_ref","_Z3_func_entry_dec_ref","_Z3_func_entry_get_value","_Z3_func_entry_get_num_args","_Z3_func_entry_get_arg","_Z3_open_log","_Z3_append_log","_Z3_close_log","_Z3_toggle_warning_messages","_Z3_set_ast_print_mode","_Z3_ast_to_string","_Z3_pattern_to_string","_Z3_sort_to_string","_Z3_func_decl_to_string","_Z3_model_to_string","_Z3_benchmark_to_smtlib_string","_Z3_parse_smtlib2_string","_Z3_parse_smtlib2_file","_Z3_eval_smtlib2_string","_Z3_mk_parser_context","_Z3_parser_context_inc_ref","_Z3_parser_context_dec_ref","_Z3_parser_context_add_sort","_Z3_parser_context_add_decl","_Z3_parser_context_from_string","_Z3_get_error_code","_Z3_set_error","_Z3_get_error_msg","_Z3_get_version","_Z3_get_full_version","_Z3_enable_trace","_Z3_disable_trace","_Z3_reset_memory","_Z3_finalize_memory","_Z3_mk_goal","_Z3_goal_inc_ref","_Z3_goal_dec_ref","_Z3_goal_precision","_Z3_goal_assert","_Z3_goal_inconsistent","_Z3_goal_depth","_Z3_goal_reset","_Z3_goal_size","_Z3_goal_formula","_Z3_goal_num_exprs","_Z3_goal_is_decided_sat","_Z3_goal_is_decided_unsat","_Z3_goal_translate","_Z3_goal_convert_model","_Z3_goal_to_string","_Z3_goal_to_dimacs_string","_Z3_mk_tactic","_Z3_tactic_inc_ref","_Z3_tactic_dec_ref","_Z3_mk_probe","_Z3_probe_inc_ref","_Z3_probe_dec_ref","_Z3_tactic_and_then","_Z3_tactic_or_else","_Z3_tactic_par_or","_Z3_tactic_par_and_then","_Z3_tactic_try_for","_Z3_tactic_when","_Z3_tactic_cond","_Z3_tactic_repeat","_Z3_tactic_skip","_Z3_tactic_fail","_Z3_tactic_fail_if","_Z3_tactic_fail_if_not_decided","_Z3_tactic_using_params","_Z3_mk_simplifier","_Z3_simplifier_inc_ref","_Z3_simplifier_dec_ref","_Z3_solver_add_simplifier","_Z3_simplifier_and_then","_Z3_simplifier_using_params","_Z3_get_num_simplifiers","_Z3_get_simplifier_name","_Z3_simplifier_get_help","_Z3_simplifier_get_param_descrs","_Z3_simplifier_get_descr","_Z3_probe_const","_Z3_probe_lt","_Z3_probe_gt","_Z3_probe_le","_Z3_probe_ge","_Z3_probe_eq","_Z3_probe_and","_Z3_probe_or","_Z3_probe_not","_Z3_get_num_tactics","_Z3_get_tactic_name","_Z3_get_num_probes","_Z3_get_probe_name","_Z3_tactic_get_help","_Z3_tactic_get_param_descrs","_Z3_tactic_get_descr","_Z3_probe_get_descr","_Z3_probe_apply","_Z3_tactic_apply","_Z3_tactic_apply_ex","_Z3_apply_result_inc_ref","_Z3_apply_result_dec_ref","_Z3_apply_result_to_string","_Z3_apply_result_get_num_subgoals","_Z3_apply_result_get_subgoal","_Z3_mk_solver","_Z3_mk_simple_solver","_Z3_mk_solver_for_logic","_Z3_mk_solver_from_tactic","_Z3_solver_translate","_Z3_solver_import_model_converter","_Z3_solver_get_help","_Z3_solver_get_param_descrs","_Z3_solver_set_params","_Z3_solver_inc_ref","_Z3_solver_dec_ref","_Z3_solver_interrupt","_Z3_solver_push","_Z3_solver_pop","_Z3_solver_reset","_Z3_solver_get_num_scopes","_Z3_solver_assert","_Z3_solver_assert_and_track","_Z3_solver_from_file","_Z3_solver_from_string","_Z3_solver_get_assertions","_Z3_solver_get_units","_Z3_solver_get_trail","_Z3_solver_get_non_units","_Z3_solver_get_levels","_Z3_solver_congruence_root","_Z3_solver_congruence_next","_Z3_solver_congruence_explain","_Z3_solver_solve_for","_Z3_solver_register_on_clause","_Z3_solver_propagate_init","_Z3_solver_propagate_fixed","_Z3_solver_propagate_final","_Z3_solver_propagate_eq","_Z3_solver_propagate_diseq","_Z3_solver_propagate_created","_Z3_solver_propagate_decide","_Z3_solver_propagate_on_binding","_Z3_solver_next_split","_Z3_solver_propagate_declare","_Z3_solver_propagate_register","_Z3_solver_propagate_register_cb","_Z3_solver_propagate_consequence","_Z3_solver_set_initial_value","_Z3_solver_check","_Z3_solver_check_assumptions","_Z3_get_implied_equalities","_Z3_solver_get_consequences","_Z3_solver_cube","_Z3_solver_get_model","_Z3_solver_get_proof","_Z3_solver_get_unsat_core","_Z3_solver_get_reason_unknown","_Z3_solver_get_statistics","_Z3_solver_to_string","_Z3_solver_to_dimacs_string","_Z3_stats_to_string","_Z3_stats_inc_ref","_Z3_stats_dec_ref","_Z3_stats_size","_Z3_stats_get_key","_Z3_stats_is_uint","_Z3_stats_is_double","_Z3_stats_get_uint_value","_Z3_stats_get_double_value","_Z3_get_estimated_alloc_size","_Z3_algebraic_is_value","_Z3_algebraic_is_pos","_Z3_algebraic_is_neg","_Z3_algebraic_is_zero","_Z3_algebraic_sign","_Z3_algebraic_add","_Z3_algebraic_sub","_Z3_algebraic_mul","_Z3_algebraic_div","_Z3_algebraic_root","_Z3_algebraic_power","_Z3_algebraic_lt","_Z3_algebraic_gt","_Z3_algebraic_le","_Z3_algebraic_ge","_Z3_algebraic_eq","_Z3_algebraic_neq","_Z3_algebraic_roots","_Z3_algebraic_eval","_Z3_algebraic_get_poly","_Z3_algebraic_get_i","_Z3_mk_ast_vector","_Z3_ast_vector_inc_ref","_Z3_ast_vector_dec_ref","_Z3_ast_vector_size","_Z3_ast_vector_get","_Z3_ast_vector_set","_Z3_ast_vector_resize","_Z3_ast_vector_push","_Z3_ast_vector_translate","_Z3_ast_vector_to_string","_Z3_mk_ast_map","_Z3_ast_map_inc_ref","_Z3_ast_map_dec_ref","_Z3_ast_map_contains","_Z3_ast_map_find","_Z3_ast_map_insert","_Z3_ast_map_erase","_Z3_ast_map_reset","_Z3_ast_map_size","_Z3_ast_map_keys","_Z3_ast_map_to_string","_Z3_mk_fixedpoint","_Z3_fixedpoint_inc_ref","_Z3_fixedpoint_dec_ref","_Z3_fixedpoint_add_rule","_Z3_fixedpoint_add_fact","_Z3_fixedpoint_assert","_Z3_fixedpoint_query","_Z3_fixedpoint_query_relations","_Z3_fixedpoint_get_answer","_Z3_fixedpoint_get_reason_unknown","_Z3_fixedpoint_update_rule","_Z3_fixedpoint_get_num_levels","_Z3_fixedpoint_get_cover_delta","_Z3_fixedpoint_add_cover","_Z3_fixedpoint_get_statistics","_Z3_fixedpoint_register_relation","_Z3_fixedpoint_set_predicate_representation","_Z3_fixedpoint_get_rules","_Z3_fixedpoint_get_assertions","_Z3_fixedpoint_set_params","_Z3_fixedpoint_get_help","_Z3_fixedpoint_get_param_descrs","_Z3_fixedpoint_to_string","_Z3_fixedpoint_from_string","_Z3_fixedpoint_from_file","_Z3_mk_fpa_rounding_mode_sort","_Z3_mk_fpa_round_nearest_ties_to_even","_Z3_mk_fpa_rne","_Z3_mk_fpa_round_nearest_ties_to_away","_Z3_mk_fpa_rna","_Z3_mk_fpa_round_toward_positive","_Z3_mk_fpa_rtp","_Z3_mk_fpa_round_toward_negative","_Z3_mk_fpa_rtn","_Z3_mk_fpa_round_toward_zero","_Z3_mk_fpa_rtz","_Z3_mk_fpa_sort","_Z3_mk_fpa_sort_half","_Z3_mk_fpa_sort_16","_Z3_mk_fpa_sort_single","_Z3_mk_fpa_sort_32","_Z3_mk_fpa_sort_double","_Z3_mk_fpa_sort_64","_Z3_mk_fpa_sort_quadruple","_Z3_mk_fpa_sort_128","_Z3_mk_fpa_nan","_Z3_mk_fpa_inf","_Z3_mk_fpa_zero","_Z3_mk_fpa_fp","_Z3_mk_fpa_numeral_float","_Z3_mk_fpa_numeral_double","_Z3_mk_fpa_numeral_int","_Z3_mk_fpa_numeral_int_uint","_Z3_mk_fpa_numeral_int64_uint64","_Z3_mk_fpa_abs","_Z3_mk_fpa_neg","_Z3_mk_fpa_add","_Z3_mk_fpa_sub","_Z3_mk_fpa_mul","_Z3_mk_fpa_div","_Z3_mk_fpa_fma","_Z3_mk_fpa_sqrt","_Z3_mk_fpa_rem","_Z3_mk_fpa_round_to_integral","_Z3_mk_fpa_min","_Z3_mk_fpa_max","_Z3_mk_fpa_leq","_Z3_mk_fpa_lt","_Z3_mk_fpa_geq","_Z3_mk_fpa_gt","_Z3_mk_fpa_eq","_Z3_mk_fpa_is_normal","_Z3_mk_fpa_is_subnormal","_Z3_mk_fpa_is_zero","_Z3_mk_fpa_is_infinite","_Z3_mk_fpa_is_nan","_Z3_mk_fpa_is_negative","_Z3_mk_fpa_is_positive","_Z3_mk_fpa_to_fp_bv","_Z3_mk_fpa_to_fp_float","_Z3_mk_fpa_to_fp_real","_Z3_mk_fpa_to_fp_signed","_Z3_mk_fpa_to_fp_unsigned","_Z3_mk_fpa_to_ubv","_Z3_mk_fpa_to_sbv","_Z3_mk_fpa_to_real","_Z3_fpa_get_ebits","_Z3_fpa_get_sbits","_Z3_fpa_is_numeral","_Z3_fpa_is_numeral_nan","_Z3_fpa_is_numeral_inf","_Z3_fpa_is_numeral_zero","_Z3_fpa_is_numeral_normal","_Z3_fpa_is_numeral_subnormal","_Z3_fpa_is_numeral_positive","_Z3_fpa_is_numeral_negative","_Z3_fpa_get_numeral_sign_bv","_Z3_fpa_get_numeral_significand_bv","_Z3_fpa_get_numeral_sign","_Z3_fpa_get_numeral_significand_string","_Z3_fpa_get_numeral_significand_uint64","_Z3_fpa_get_numeral_exponent_string","_Z3_fpa_get_numeral_exponent_int64","_Z3_fpa_get_numeral_exponent_bv","_Z3_mk_fpa_to_ieee_bv","_Z3_mk_fpa_to_fp_int_real","_Z3_mk_optimize","_Z3_optimize_inc_ref","_Z3_optimize_dec_ref","_Z3_optimize_assert","_Z3_optimize_assert_and_track","_Z3_optimize_assert_soft","_Z3_optimize_maximize","_Z3_optimize_minimize","_Z3_optimize_push","_Z3_optimize_pop","_Z3_optimize_set_initial_value","_Z3_optimize_check","_Z3_optimize_get_reason_unknown","_Z3_optimize_get_model","_Z3_optimize_get_unsat_core","_Z3_optimize_set_params","_Z3_optimize_get_param_descrs","_Z3_optimize_get_lower","_Z3_optimize_get_upper","_Z3_optimize_get_lower_as_vector","_Z3_optimize_get_upper_as_vector","_Z3_optimize_to_string","_Z3_optimize_from_string","_Z3_optimize_from_file","_Z3_optimize_get_help","_Z3_optimize_get_statistics","_Z3_optimize_get_assertions","_Z3_optimize_get_objectives","_Z3_optimize_translate","_Z3_polynomial_subresultants","_Z3_rcf_del","_Z3_rcf_mk_rational","_Z3_rcf_mk_small_int","_Z3_rcf_mk_pi","_Z3_rcf_mk_e","_Z3_rcf_mk_infinitesimal","_Z3_rcf_mk_roots","_Z3_rcf_add","_Z3_rcf_sub","_Z3_rcf_mul","_Z3_rcf_div","_Z3_rcf_neg","_Z3_rcf_inv","_Z3_rcf_power","_Z3_rcf_lt","_Z3_rcf_gt","_Z3_rcf_le","_Z3_rcf_ge","_Z3_rcf_eq","_Z3_rcf_neq","_Z3_rcf_num_to_string","_Z3_rcf_num_to_decimal_string","_Z3_rcf_get_numerator_denominator","_Z3_rcf_is_rational","_Z3_rcf_is_algebraic","_Z3_rcf_is_infinitesimal","_Z3_rcf_is_transcendental","_Z3_rcf_extension_index","_Z3_rcf_transcendental_name","_Z3_rcf_infinitesimal_name","_Z3_rcf_num_coefficients","_Z3_rcf_coefficient","_Z3_rcf_interval","_Z3_rcf_num_sign_conditions","_Z3_rcf_sign_condition_sign","_Z3_rcf_num_sign_condition_coefficients","_Z3_rcf_sign_condition_coefficient","_Z3_fixedpoint_query_from_lvl","_Z3_fixedpoint_get_ground_sat_answer","_Z3_fixedpoint_get_rules_along_trace","_Z3_fixedpoint_get_rule_names_along_trace","_Z3_fixedpoint_add_invariant","_Z3_fixedpoint_get_reachable","_Z3_qe_model_project","_Z3_qe_model_project_skolem","_Z3_qe_model_project_with_witness","_Z3_model_extrapolate","_Z3_qe_lite","getExceptionMessage","incrementExceptionRefcount","decrementExceptionRefcount","___indirect_function_table","onRuntimeInitialized"].forEach((prop) => {
+["_malloc","_free","_set_throwy_error_handler","_set_noop_error_handler","_async_Z3_eval_smtlib2_string","_async_Z3_simplify","_async_Z3_simplify_ex","_async_Z3_solver_check","_async_Z3_solver_check_assumptions","_async_Z3_solver_cube","_async_Z3_solver_get_consequences","_async_Z3_tactic_apply","_async_Z3_tactic_apply_ex","_async_Z3_optimize_check","_async_Z3_algebraic_roots","_async_Z3_algebraic_eval","_async_Z3_fixedpoint_query","_async_Z3_fixedpoint_query_relations","_async_Z3_fixedpoint_query_from_lvl","_async_Z3_polynomial_subresultants","_Z3_global_param_set","_Z3_global_param_reset_all","_Z3_global_param_get","_Z3_mk_config","_Z3_del_config","_Z3_set_param_value","_Z3_mk_context","_Z3_mk_context_rc","_Z3_del_context","_Z3_inc_ref","_Z3_dec_ref","_Z3_update_param_value","_Z3_get_global_param_descrs","_Z3_interrupt","_Z3_enable_concurrent_dec_ref","_Z3_mk_params","_Z3_params_inc_ref","_Z3_params_dec_ref","_Z3_params_set_bool","_Z3_params_set_uint","_Z3_params_set_double","_Z3_params_set_symbol","_Z3_params_to_string","_Z3_params_validate","_Z3_param_descrs_inc_ref","_Z3_param_descrs_dec_ref","_Z3_param_descrs_get_kind","_Z3_param_descrs_size","_Z3_param_descrs_get_name","_Z3_param_descrs_get_documentation","_Z3_param_descrs_to_string","_Z3_mk_int_symbol","_Z3_mk_string_symbol","_Z3_mk_uninterpreted_sort","_Z3_mk_type_variable","_Z3_mk_bool_sort","_Z3_mk_int_sort","_Z3_mk_real_sort","_Z3_mk_bv_sort","_Z3_mk_finite_domain_sort","_Z3_mk_finite_field_sort","_Z3_get_finite_field_sort_size","_Z3_mk_ff_add","_Z3_mk_ff_mul","_Z3_mk_ff_neg","_Z3_mk_ff_bitsum","_Z3_mk_array_sort","_Z3_mk_array_sort_n","_Z3_mk_tuple_sort","_Z3_mk_enumeration_sort","_Z3_mk_list_sort","_Z3_mk_constructor","_Z3_constructor_num_fields","_Z3_del_constructor","_Z3_mk_datatype","_Z3_mk_polymorphic_datatype","_Z3_mk_datatype_sort","_Z3_mk_constructor_list","_Z3_del_constructor_list","_Z3_mk_datatypes","_Z3_query_constructor","_Z3_mk_func_decl","_Z3_mk_app","_Z3_mk_const","_Z3_mk_fresh_func_decl","_Z3_mk_fresh_const","_Z3_mk_rec_func_decl","_Z3_add_rec_def","_Z3_mk_true","_Z3_mk_false","_Z3_mk_eq","_Z3_mk_distinct","_Z3_mk_not","_Z3_mk_ite","_Z3_mk_iff","_Z3_mk_implies","_Z3_mk_xor","_Z3_mk_and","_Z3_mk_or","_Z3_mk_add","_Z3_mk_mul","_Z3_mk_sub","_Z3_mk_unary_minus","_Z3_mk_div","_Z3_mk_mod","_Z3_mk_rem","_Z3_mk_power","_Z3_mk_abs","_Z3_mk_lt","_Z3_mk_le","_Z3_mk_gt","_Z3_mk_ge","_Z3_mk_divides","_Z3_mk_int2real","_Z3_mk_real2int","_Z3_mk_is_int","_Z3_mk_bvnot","_Z3_mk_bvredand","_Z3_mk_bvredor","_Z3_mk_bvand","_Z3_mk_bvor","_Z3_mk_bvxor","_Z3_mk_bvnand","_Z3_mk_bvnor","_Z3_mk_bvxnor","_Z3_mk_bvneg","_Z3_mk_bvadd","_Z3_mk_bvsub","_Z3_mk_bvmul","_Z3_mk_bvudiv","_Z3_mk_bvsdiv","_Z3_mk_bvurem","_Z3_mk_bvsrem","_Z3_mk_bvsmod","_Z3_mk_bvult","_Z3_mk_bvslt","_Z3_mk_bvule","_Z3_mk_bvsle","_Z3_mk_bvuge","_Z3_mk_bvsge","_Z3_mk_bvugt","_Z3_mk_bvsgt","_Z3_mk_concat","_Z3_mk_extract","_Z3_mk_sign_ext","_Z3_mk_zero_ext","_Z3_mk_repeat","_Z3_mk_bit2bool","_Z3_mk_bvshl","_Z3_mk_bvlshr","_Z3_mk_bvashr","_Z3_mk_rotate_left","_Z3_mk_rotate_right","_Z3_mk_ext_rotate_left","_Z3_mk_ext_rotate_right","_Z3_mk_int2bv","_Z3_mk_bv2int","_Z3_mk_bvadd_no_overflow","_Z3_mk_bvadd_no_underflow","_Z3_mk_bvsub_no_overflow","_Z3_mk_bvsub_no_underflow","_Z3_mk_bvsdiv_no_overflow","_Z3_mk_bvneg_no_overflow","_Z3_mk_bvmul_no_overflow","_Z3_mk_bvmul_no_underflow","_Z3_mk_select","_Z3_mk_select_n","_Z3_mk_store","_Z3_mk_store_n","_Z3_mk_const_array","_Z3_mk_map","_Z3_mk_array_default","_Z3_mk_as_array","_Z3_mk_set_sort","_Z3_mk_empty_set","_Z3_mk_full_set","_Z3_mk_set_add","_Z3_mk_set_del","_Z3_mk_set_union","_Z3_mk_set_intersect","_Z3_mk_set_difference","_Z3_mk_set_complement","_Z3_mk_set_member","_Z3_mk_set_subset","_Z3_mk_array_ext","_Z3_mk_finite_set_sort","_Z3_is_finite_set_sort","_Z3_get_finite_set_sort_basis","_Z3_mk_finite_set_empty","_Z3_mk_finite_set_singleton","_Z3_mk_finite_set_union","_Z3_mk_finite_set_intersect","_Z3_mk_finite_set_difference","_Z3_mk_finite_set_member","_Z3_mk_finite_set_size","_Z3_mk_finite_set_subset","_Z3_mk_finite_set_map","_Z3_mk_finite_set_filter","_Z3_mk_finite_set_range","_Z3_mk_numeral","_Z3_mk_real","_Z3_mk_real_int64","_Z3_mk_int","_Z3_mk_unsigned_int","_Z3_mk_int64","_Z3_mk_unsigned_int64","_Z3_mk_bv_numeral","_Z3_mk_seq_sort","_Z3_is_seq_sort","_Z3_get_seq_sort_basis","_Z3_mk_re_sort","_Z3_is_re_sort","_Z3_get_re_sort_basis","_Z3_mk_string_sort","_Z3_mk_char_sort","_Z3_is_string_sort","_Z3_is_char_sort","_Z3_mk_string","_Z3_mk_lstring","_Z3_mk_u32string","_Z3_is_string","_Z3_get_string","_Z3_get_lstring","_Z3_get_string_length","_Z3_get_string_contents","_Z3_mk_seq_empty","_Z3_mk_seq_unit","_Z3_mk_seq_concat","_Z3_mk_seq_prefix","_Z3_mk_seq_suffix","_Z3_mk_seq_contains","_Z3_mk_str_lt","_Z3_mk_str_le","_Z3_mk_seq_extract","_Z3_mk_seq_replace","_Z3_mk_seq_replace_all","_Z3_mk_seq_replace_re","_Z3_mk_seq_replace_re_all","_Z3_mk_seq_at","_Z3_mk_seq_nth","_Z3_mk_seq_power","_Z3_mk_seq_length","_Z3_mk_seq_index","_Z3_mk_seq_last_index","_Z3_mk_seq_map","_Z3_mk_seq_mapi","_Z3_mk_seq_foldl","_Z3_mk_seq_foldli","_Z3_mk_str_to_int","_Z3_mk_int_to_str","_Z3_mk_string_to_code","_Z3_mk_string_from_code","_Z3_mk_ubv_to_str","_Z3_mk_sbv_to_str","_Z3_mk_seq_to_re","_Z3_mk_seq_in_re","_Z3_mk_re_plus","_Z3_mk_re_star","_Z3_mk_re_option","_Z3_mk_re_union","_Z3_mk_re_concat","_Z3_mk_re_range","_Z3_mk_re_allchar","_Z3_mk_re_loop","_Z3_mk_re_power","_Z3_mk_re_intersect","_Z3_mk_re_complement","_Z3_mk_re_diff","_Z3_mk_re_empty","_Z3_mk_re_full","_Z3_mk_char","_Z3_mk_char_le","_Z3_mk_char_to_int","_Z3_mk_char_to_bv","_Z3_mk_char_from_bv","_Z3_mk_char_is_digit","_Z3_mk_linear_order","_Z3_mk_partial_order","_Z3_mk_piecewise_linear_order","_Z3_mk_tree_order","_Z3_mk_transitive_closure","_Z3_mk_pattern","_Z3_mk_bound","_Z3_mk_forall","_Z3_mk_exists","_Z3_mk_quantifier","_Z3_mk_quantifier_ex","_Z3_mk_forall_const","_Z3_mk_exists_const","_Z3_mk_quantifier_const","_Z3_mk_quantifier_const_ex","_Z3_mk_lambda","_Z3_mk_lambda_const","_Z3_get_symbol_kind","_Z3_get_symbol_int","_Z3_get_symbol_string","_Z3_get_sort_name","_Z3_get_sort_id","_Z3_sort_to_ast","_Z3_is_eq_sort","_Z3_get_sort_kind","_Z3_get_bv_sort_size","_Z3_get_finite_domain_sort_size","_Z3_get_array_arity","_Z3_get_array_sort_domain","_Z3_get_array_sort_domain_n","_Z3_get_array_sort_range","_Z3_get_tuple_sort_mk_decl","_Z3_get_tuple_sort_num_fields","_Z3_get_tuple_sort_field_decl","_Z3_is_recursive_datatype_sort","_Z3_get_datatype_sort_num_constructors","_Z3_get_datatype_sort_constructor","_Z3_get_datatype_sort_recognizer","_Z3_get_datatype_sort_constructor_accessor","_Z3_datatype_update_field","_Z3_get_relation_arity","_Z3_get_relation_column","_Z3_mk_atmost","_Z3_mk_atleast","_Z3_mk_pble","_Z3_mk_pbge","_Z3_mk_pbeq","_Z3_func_decl_to_ast","_Z3_is_eq_func_decl","_Z3_get_func_decl_id","_Z3_get_decl_name","_Z3_get_decl_kind","_Z3_get_domain_size","_Z3_get_arity","_Z3_get_domain","_Z3_get_range","_Z3_get_decl_num_parameters","_Z3_get_decl_parameter_kind","_Z3_get_decl_int_parameter","_Z3_get_decl_double_parameter","_Z3_get_decl_symbol_parameter","_Z3_get_decl_sort_parameter","_Z3_get_decl_ast_parameter","_Z3_get_decl_func_decl_parameter","_Z3_get_decl_rational_parameter","_Z3_app_to_ast","_Z3_get_app_decl","_Z3_get_app_num_args","_Z3_get_app_arg","_Z3_is_eq_ast","_Z3_get_ast_id","_Z3_get_ast_hash","_Z3_get_sort","_Z3_is_well_sorted","_Z3_get_bool_value","_Z3_get_ast_kind","_Z3_is_app","_Z3_is_ground","_Z3_get_depth","_Z3_is_numeral_ast","_Z3_is_algebraic_number","_Z3_to_app","_Z3_to_func_decl","_Z3_get_numeral_string","_Z3_get_numeral_binary_string","_Z3_get_numeral_decimal_string","_Z3_get_numeral_double","_Z3_get_numerator","_Z3_get_denominator","_Z3_get_numeral_small","_Z3_get_numeral_int","_Z3_get_numeral_uint","_Z3_get_numeral_uint64","_Z3_get_numeral_int64","_Z3_get_numeral_rational_int64","_Z3_get_algebraic_number_lower","_Z3_get_algebraic_number_upper","_Z3_pattern_to_ast","_Z3_get_pattern_num_terms","_Z3_get_pattern","_Z3_get_index_value","_Z3_is_quantifier_forall","_Z3_is_quantifier_exists","_Z3_is_lambda","_Z3_get_quantifier_weight","_Z3_get_quantifier_skolem_id","_Z3_get_quantifier_id","_Z3_get_quantifier_num_patterns","_Z3_get_quantifier_pattern_ast","_Z3_get_quantifier_num_no_patterns","_Z3_get_quantifier_no_pattern_ast","_Z3_get_quantifier_num_bound","_Z3_get_quantifier_bound_name","_Z3_get_quantifier_bound_sort","_Z3_get_quantifier_body","_Z3_simplify","_Z3_simplify_ex","_Z3_simplify_get_help","_Z3_simplify_get_param_descrs","_Z3_update_term","_Z3_substitute","_Z3_substitute_vars","_Z3_substitute_funs","_Z3_translate","_Z3_mk_model","_Z3_model_inc_ref","_Z3_model_dec_ref","_Z3_model_eval","_Z3_model_get_const_interp","_Z3_model_has_interp","_Z3_model_get_func_interp","_Z3_model_get_num_consts","_Z3_model_get_const_decl","_Z3_model_get_num_funcs","_Z3_model_get_func_decl","_Z3_model_get_num_sorts","_Z3_model_get_sort","_Z3_model_get_sort_universe","_Z3_model_translate","_Z3_is_as_array","_Z3_get_as_array_func_decl","_Z3_add_func_interp","_Z3_add_const_interp","_Z3_func_interp_inc_ref","_Z3_func_interp_dec_ref","_Z3_func_interp_get_num_entries","_Z3_func_interp_get_entry","_Z3_func_interp_get_else","_Z3_func_interp_set_else","_Z3_func_interp_get_arity","_Z3_func_interp_add_entry","_Z3_func_entry_inc_ref","_Z3_func_entry_dec_ref","_Z3_func_entry_get_value","_Z3_func_entry_get_num_args","_Z3_func_entry_get_arg","_Z3_open_log","_Z3_append_log","_Z3_close_log","_Z3_toggle_warning_messages","_Z3_set_ast_print_mode","_Z3_ast_to_string","_Z3_pattern_to_string","_Z3_sort_to_string","_Z3_func_decl_to_string","_Z3_model_to_string","_Z3_benchmark_to_smtlib_string","_Z3_parse_smtlib2_string","_Z3_parse_smtlib2_file","_Z3_eval_smtlib2_string","_Z3_mk_parser_context","_Z3_parser_context_inc_ref","_Z3_parser_context_dec_ref","_Z3_parser_context_add_sort","_Z3_parser_context_add_decl","_Z3_parser_context_from_string","_Z3_get_error_code","_Z3_set_error","_Z3_get_error_msg","_Z3_get_version","_Z3_get_full_version","_Z3_enable_trace","_Z3_disable_trace","_Z3_reset_memory","_Z3_finalize_memory","_Z3_mk_goal","_Z3_goal_inc_ref","_Z3_goal_dec_ref","_Z3_goal_precision","_Z3_goal_assert","_Z3_goal_inconsistent","_Z3_goal_depth","_Z3_goal_reset","_Z3_goal_size","_Z3_goal_formula","_Z3_goal_num_exprs","_Z3_goal_is_decided_sat","_Z3_goal_is_decided_unsat","_Z3_goal_translate","_Z3_goal_convert_model","_Z3_goal_to_string","_Z3_goal_to_dimacs_string","_Z3_mk_tactic","_Z3_tactic_inc_ref","_Z3_tactic_dec_ref","_Z3_mk_probe","_Z3_probe_inc_ref","_Z3_probe_dec_ref","_Z3_tactic_and_then","_Z3_tactic_or_else","_Z3_tactic_par_or","_Z3_tactic_par_and_then","_Z3_tactic_try_for","_Z3_tactic_when","_Z3_tactic_cond","_Z3_tactic_repeat","_Z3_tactic_skip","_Z3_tactic_fail","_Z3_tactic_fail_if","_Z3_tactic_fail_if_not_decided","_Z3_tactic_using_params","_Z3_mk_simplifier","_Z3_simplifier_inc_ref","_Z3_simplifier_dec_ref","_Z3_solver_add_simplifier","_Z3_simplifier_and_then","_Z3_simplifier_using_params","_Z3_get_num_simplifiers","_Z3_get_simplifier_name","_Z3_simplifier_get_help","_Z3_simplifier_get_param_descrs","_Z3_simplifier_get_descr","_Z3_probe_const","_Z3_probe_lt","_Z3_probe_gt","_Z3_probe_le","_Z3_probe_ge","_Z3_probe_eq","_Z3_probe_and","_Z3_probe_or","_Z3_probe_not","_Z3_get_num_tactics","_Z3_get_tactic_name","_Z3_get_num_probes","_Z3_get_probe_name","_Z3_tactic_get_help","_Z3_tactic_get_param_descrs","_Z3_tactic_get_descr","_Z3_probe_get_descr","_Z3_probe_apply","_Z3_tactic_apply","_Z3_tactic_apply_ex","_Z3_apply_result_inc_ref","_Z3_apply_result_dec_ref","_Z3_apply_result_to_string","_Z3_apply_result_get_num_subgoals","_Z3_apply_result_get_subgoal","_Z3_mk_solver","_Z3_mk_simple_solver","_Z3_mk_solver_for_logic","_Z3_mk_solver_from_tactic","_Z3_solver_translate","_Z3_solver_import_model_converter","_Z3_solver_get_help","_Z3_solver_get_param_descrs","_Z3_solver_set_params","_Z3_solver_inc_ref","_Z3_solver_dec_ref","_Z3_solver_interrupt","_Z3_solver_push","_Z3_solver_pop","_Z3_solver_reset","_Z3_solver_get_num_scopes","_Z3_solver_assert","_Z3_solver_assert_and_track","_Z3_solver_from_file","_Z3_solver_from_string","_Z3_solver_get_assertions","_Z3_solver_get_units","_Z3_solver_get_trail","_Z3_solver_get_non_units","_Z3_solver_get_levels","_Z3_solver_congruence_root","_Z3_solver_congruence_next","_Z3_solver_congruence_explain","_Z3_solver_solve_for","_Z3_solver_register_on_clause","_Z3_solver_propagate_init","_Z3_solver_propagate_fixed","_Z3_solver_propagate_final","_Z3_solver_propagate_eq","_Z3_solver_propagate_diseq","_Z3_solver_propagate_created","_Z3_solver_propagate_decide","_Z3_solver_propagate_on_binding","_Z3_solver_next_split","_Z3_solver_propagate_declare","_Z3_solver_propagate_register","_Z3_solver_propagate_register_cb","_Z3_solver_propagate_consequence","_Z3_solver_set_initial_value","_Z3_solver_check","_Z3_solver_check_assumptions","_Z3_get_implied_equalities","_Z3_solver_get_consequences","_Z3_solver_cube","_Z3_solver_get_model","_Z3_solver_get_proof","_Z3_solver_get_unsat_core","_Z3_solver_get_reason_unknown","_Z3_solver_get_statistics","_Z3_solver_to_string","_Z3_solver_to_dimacs_string","_Z3_stats_to_string","_Z3_stats_inc_ref","_Z3_stats_dec_ref","_Z3_stats_size","_Z3_stats_get_key","_Z3_stats_is_uint","_Z3_stats_is_double","_Z3_stats_get_uint_value","_Z3_stats_get_double_value","_Z3_get_estimated_alloc_size","_Z3_algebraic_is_value","_Z3_algebraic_is_pos","_Z3_algebraic_is_neg","_Z3_algebraic_is_zero","_Z3_algebraic_sign","_Z3_algebraic_add","_Z3_algebraic_sub","_Z3_algebraic_mul","_Z3_algebraic_div","_Z3_algebraic_root","_Z3_algebraic_power","_Z3_algebraic_lt","_Z3_algebraic_gt","_Z3_algebraic_le","_Z3_algebraic_ge","_Z3_algebraic_eq","_Z3_algebraic_neq","_Z3_algebraic_roots","_Z3_algebraic_eval","_Z3_algebraic_get_poly","_Z3_algebraic_get_i","_Z3_mk_ast_vector","_Z3_ast_vector_inc_ref","_Z3_ast_vector_dec_ref","_Z3_ast_vector_size","_Z3_ast_vector_get","_Z3_ast_vector_set","_Z3_ast_vector_resize","_Z3_ast_vector_push","_Z3_ast_vector_translate","_Z3_ast_vector_to_string","_Z3_mk_ast_map","_Z3_ast_map_inc_ref","_Z3_ast_map_dec_ref","_Z3_ast_map_contains","_Z3_ast_map_find","_Z3_ast_map_insert","_Z3_ast_map_erase","_Z3_ast_map_reset","_Z3_ast_map_size","_Z3_ast_map_keys","_Z3_ast_map_to_string","_Z3_mk_fixedpoint","_Z3_fixedpoint_inc_ref","_Z3_fixedpoint_dec_ref","_Z3_fixedpoint_add_rule","_Z3_fixedpoint_add_fact","_Z3_fixedpoint_assert","_Z3_fixedpoint_query","_Z3_fixedpoint_query_relations","_Z3_fixedpoint_get_answer","_Z3_fixedpoint_get_reason_unknown","_Z3_fixedpoint_update_rule","_Z3_fixedpoint_get_num_levels","_Z3_fixedpoint_get_cover_delta","_Z3_fixedpoint_add_cover","_Z3_fixedpoint_get_statistics","_Z3_fixedpoint_register_relation","_Z3_fixedpoint_set_predicate_representation","_Z3_fixedpoint_get_rules","_Z3_fixedpoint_get_assertions","_Z3_fixedpoint_set_params","_Z3_fixedpoint_get_help","_Z3_fixedpoint_get_param_descrs","_Z3_fixedpoint_to_string","_Z3_fixedpoint_from_string","_Z3_fixedpoint_from_file","_Z3_mk_fpa_rounding_mode_sort","_Z3_mk_fpa_round_nearest_ties_to_even","_Z3_mk_fpa_rne","_Z3_mk_fpa_round_nearest_ties_to_away","_Z3_mk_fpa_rna","_Z3_mk_fpa_round_toward_positive","_Z3_mk_fpa_rtp","_Z3_mk_fpa_round_toward_negative","_Z3_mk_fpa_rtn","_Z3_mk_fpa_round_toward_zero","_Z3_mk_fpa_rtz","_Z3_mk_fpa_sort","_Z3_mk_fpa_sort_half","_Z3_mk_fpa_sort_16","_Z3_mk_fpa_sort_single","_Z3_mk_fpa_sort_32","_Z3_mk_fpa_sort_double","_Z3_mk_fpa_sort_64","_Z3_mk_fpa_sort_quadruple","_Z3_mk_fpa_sort_128","_Z3_mk_fpa_nan","_Z3_mk_fpa_inf","_Z3_mk_fpa_zero","_Z3_mk_fpa_fp","_Z3_mk_fpa_numeral_float","_Z3_mk_fpa_numeral_double","_Z3_mk_fpa_numeral_int","_Z3_mk_fpa_numeral_int_uint","_Z3_mk_fpa_numeral_int64_uint64","_Z3_mk_fpa_abs","_Z3_mk_fpa_neg","_Z3_mk_fpa_add","_Z3_mk_fpa_sub","_Z3_mk_fpa_mul","_Z3_mk_fpa_div","_Z3_mk_fpa_fma","_Z3_mk_fpa_sqrt","_Z3_mk_fpa_rem","_Z3_mk_fpa_round_to_integral","_Z3_mk_fpa_min","_Z3_mk_fpa_max","_Z3_mk_fpa_leq","_Z3_mk_fpa_lt","_Z3_mk_fpa_geq","_Z3_mk_fpa_gt","_Z3_mk_fpa_eq","_Z3_mk_fpa_is_normal","_Z3_mk_fpa_is_subnormal","_Z3_mk_fpa_is_zero","_Z3_mk_fpa_is_infinite","_Z3_mk_fpa_is_nan","_Z3_mk_fpa_is_negative","_Z3_mk_fpa_is_positive","_Z3_mk_fpa_to_fp_bv","_Z3_mk_fpa_to_fp_float","_Z3_mk_fpa_to_fp_real","_Z3_mk_fpa_to_fp_signed","_Z3_mk_fpa_to_fp_unsigned","_Z3_mk_fpa_to_ubv","_Z3_mk_fpa_to_sbv","_Z3_mk_fpa_to_real","_Z3_fpa_get_ebits","_Z3_fpa_get_sbits","_Z3_fpa_is_numeral","_Z3_fpa_is_numeral_nan","_Z3_fpa_is_numeral_inf","_Z3_fpa_is_numeral_zero","_Z3_fpa_is_numeral_normal","_Z3_fpa_is_numeral_subnormal","_Z3_fpa_is_numeral_positive","_Z3_fpa_is_numeral_negative","_Z3_fpa_get_numeral_sign_bv","_Z3_fpa_get_numeral_significand_bv","_Z3_fpa_get_numeral_sign","_Z3_fpa_get_numeral_significand_string","_Z3_fpa_get_numeral_significand_uint64","_Z3_fpa_get_numeral_exponent_string","_Z3_fpa_get_numeral_exponent_int64","_Z3_fpa_get_numeral_exponent_bv","_Z3_mk_fpa_to_ieee_bv","_Z3_mk_fpa_to_fp_int_real","_Z3_mk_optimize","_Z3_optimize_inc_ref","_Z3_optimize_dec_ref","_Z3_optimize_assert","_Z3_optimize_assert_and_track","_Z3_optimize_assert_soft","_Z3_optimize_maximize","_Z3_optimize_minimize","_Z3_optimize_push","_Z3_optimize_pop","_Z3_optimize_set_initial_value","_Z3_optimize_check","_Z3_optimize_get_reason_unknown","_Z3_optimize_get_model","_Z3_optimize_get_unsat_core","_Z3_optimize_set_params","_Z3_optimize_get_param_descrs","_Z3_optimize_get_lower","_Z3_optimize_get_upper","_Z3_optimize_get_lower_as_vector","_Z3_optimize_get_upper_as_vector","_Z3_optimize_to_string","_Z3_optimize_from_string","_Z3_optimize_from_file","_Z3_optimize_get_help","_Z3_optimize_get_statistics","_Z3_optimize_get_assertions","_Z3_optimize_get_objectives","_Z3_optimize_translate","_Z3_polynomial_subresultants","_Z3_rcf_del","_Z3_rcf_mk_rational","_Z3_rcf_mk_small_int","_Z3_rcf_mk_pi","_Z3_rcf_mk_e","_Z3_rcf_mk_infinitesimal","_Z3_rcf_mk_roots","_Z3_rcf_add","_Z3_rcf_sub","_Z3_rcf_mul","_Z3_rcf_div","_Z3_rcf_neg","_Z3_rcf_inv","_Z3_rcf_power","_Z3_rcf_lt","_Z3_rcf_gt","_Z3_rcf_le","_Z3_rcf_ge","_Z3_rcf_eq","_Z3_rcf_neq","_Z3_rcf_num_to_string","_Z3_rcf_num_to_decimal_string","_Z3_rcf_get_numerator_denominator","_Z3_rcf_is_rational","_Z3_rcf_is_algebraic","_Z3_rcf_is_infinitesimal","_Z3_rcf_is_transcendental","_Z3_rcf_extension_index","_Z3_rcf_transcendental_name","_Z3_rcf_infinitesimal_name","_Z3_rcf_num_coefficients","_Z3_rcf_coefficient","_Z3_rcf_interval","_Z3_rcf_num_sign_conditions","_Z3_rcf_sign_condition_sign","_Z3_rcf_num_sign_condition_coefficients","_Z3_rcf_sign_condition_coefficient","_Z3_fixedpoint_query_from_lvl","_Z3_fixedpoint_get_ground_sat_answer","_Z3_fixedpoint_get_rules_along_trace","_Z3_fixedpoint_get_rule_names_along_trace","_Z3_fixedpoint_add_invariant","_Z3_fixedpoint_get_reachable","_Z3_qe_model_project","_Z3_qe_model_project_skolem","_Z3_qe_model_project_with_witness","_Z3_model_extrapolate","_Z3_qe_lite","getExceptionMessage","incrementExceptionRefcount","decrementExceptionRefcount","___indirect_function_table","onRuntimeInitialized"].forEach((prop) => {
   if (!Object.getOwnPropertyDescriptor(readyPromise, prop)) {
     Object.defineProperty(readyPromise, prop, {
       get: () => abort('You are getting ' + prop + ' on the Promise object, instead of the instance. Use .then() to get called back with the instance, see the MODULARIZE docs in src/settings.js'),
@@ -7846,9 +7917,12 @@ if (ENVIRONMENT_IS_NODE) {
 let threadTimeouts = [];
 
 let capability = null;
-function resolve_async(val) {
+let next_async_call_id = 0;
+let current_async_call_id = 0;
+
+function resolve_async(call_id, val) {
   // setTimeout is a workaround for https://github.com/emscripten-core/emscripten/issues/15900
-  if (capability == null) {
+  if (capability == null || capability.id !== call_id >>> 0) {
     return;
   }
   let cap = capability;
@@ -7859,8 +7933,8 @@ function resolve_async(val) {
   }, 0);
 }
 
-function reject_async(val) {
-  if (capability == null) {
+function reject_async(call_id, val) {
+  if (capability == null || capability.id !== call_id >>> 0) {
     return;
   }
   let cap = capability;
@@ -7876,11 +7950,47 @@ Module.async_call = function (f, ...args) {
     throw new Error(`you can't execute multiple async functions at the same time; let the previous one finish first`);
   }
   let promise = new Promise((resolve, reject) => {
-    capability = { resolve, reject };
+    next_async_call_id = (next_async_call_id + 1) >>> 0;
+    if (next_async_call_id === 0) {
+      next_async_call_id = 1;
+    }
+    capability = { id: next_async_call_id, resolve, reject };
   });
-  f(...args);
+  current_async_call_id = capability.id;
+  try {
+    f(...args);
+  } finally {
+    current_async_call_id = 0;
+  }
   return promise;
 };
+
+function clear_thread_timeouts() {
+  while (threadTimeouts.length > 0) {
+    clearTimeout(threadTimeouts.shift());
+  }
+}
+
+// Abandons the pending async call (if any): rejects its promise so that callers waiting on it
+// (and any mutex guarding it) are released, and clears the keep-alive timers so the process can exit.
+// Only call this once the worker threads running the call have been terminated (see killThreads).
+Module.async_cancel = function (reason) {
+  clear_thread_timeouts();
+  if (capability !== null) {
+    reject_async(capability.id, reason !== undefined ? reason : new Error('async call was cancelled'));
+  }
+};
+
+// If the module aborts (e.g. a trap on a worker thread), the pending async call can never settle.
+{
+  const userOnAbort = Module['onAbort'];
+  Module['onAbort'] = function (what) {
+    Module.async_cancel(new Error('Z3 module aborted: ' + what));
+    if (typeof userOnAbort === 'function') {
+      userOnAbort(what);
+    }
+  };
+}
 // end include: /home/runner/work/z3/z3/src/api/js/src/low-level/async-wrapper.js
 
 
@@ -8959,91 +9069,107 @@ function dbg(...args) {
 // === Body ===
 
 var ASM_CONSTS = {
-  21595056: () => { reject_async(new Error("Memory allocation failed")); },  
- 21595113: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21595168: () => { reject_async(new Error("Memory allocation failed")); },  
- 21595225: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21595280: () => { reject_async(new Error("Memory allocation failed")); },  
- 21595337: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21595392: () => { reject_async(new Error("Memory allocation failed")); },  
- 21595449: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21595504: () => { reject_async(new Error("Memory allocation failed")); },  
- 21595561: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21595616: ($0) => { resolve_async($0); },  
- 21595639: () => { reject_async(new Error('failed with unknown exception')); },  
- 21595701: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21595748: () => { clearTimeout(threadTimeouts.shift()); },  
- 21595790: ($0) => { resolve_async($0); },  
- 21595813: () => { reject_async(new Error('failed with unknown exception')); },  
- 21595875: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21595922: () => { clearTimeout(threadTimeouts.shift()); },  
- 21595964: ($0) => { resolve_async($0); },  
- 21595987: () => { reject_async(new Error('failed with unknown exception')); },  
- 21596049: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21596096: () => { clearTimeout(threadTimeouts.shift()); },  
- 21596138: ($0) => { resolve_async($0); },  
- 21596161: () => { reject_async(new Error('failed with unknown exception')); },  
- 21596223: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21596270: () => { clearTimeout(threadTimeouts.shift()); },  
- 21596312: ($0) => { resolve_async($0); },  
- 21596335: () => { reject_async(new Error('failed with unknown exception')); },  
- 21596397: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21596444: () => { clearTimeout(threadTimeouts.shift()); },  
- 21596486: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21596541: ($0) => { resolve_async(UTF8ToString($0)); },  
- 21596578: () => { reject_async(new Error('failed with unknown exception')); },  
- 21596640: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21596687: () => { clearTimeout(threadTimeouts.shift()); },  
- 21596729: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21596784: ($0) => { resolve_async($0); },  
- 21596807: () => { reject_async('failed with unknown exception'); },  
- 21596858: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21596905: () => { clearTimeout(threadTimeouts.shift()); },  
- 21596947: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21597002: ($0) => { resolve_async($0); },  
- 21597025: () => { reject_async('failed with unknown exception'); },  
- 21597076: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21597123: () => { clearTimeout(threadTimeouts.shift()); },  
- 21597165: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21597220: ($0) => { resolve_async($0); },  
- 21597243: () => { reject_async('failed with unknown exception'); },  
- 21597294: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21597341: () => { clearTimeout(threadTimeouts.shift()); },  
- 21597383: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21597438: ($0) => { resolve_async($0); },  
- 21597461: () => { reject_async('failed with unknown exception'); },  
- 21597512: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21597559: () => { clearTimeout(threadTimeouts.shift()); },  
- 21597601: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21597656: ($0) => { resolve_async($0); },  
- 21597679: () => { reject_async('failed with unknown exception'); },  
- 21597730: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21597777: () => { clearTimeout(threadTimeouts.shift()); },  
- 21597819: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21597874: ($0) => { resolve_async($0); },  
- 21597897: () => { reject_async('failed with unknown exception'); },  
- 21597948: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21597995: () => { clearTimeout(threadTimeouts.shift()); },  
- 21598037: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21598092: ($0) => { resolve_async($0); },  
- 21598115: () => { reject_async('failed with unknown exception'); },  
- 21598166: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21598213: () => { clearTimeout(threadTimeouts.shift()); },  
- 21598255: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21598310: ($0) => { resolve_async($0); },  
- 21598333: () => { reject_async('failed with unknown exception'); },  
- 21598384: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21598431: () => { clearTimeout(threadTimeouts.shift()); },  
- 21598473: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21598528: ($0) => { resolve_async($0); },  
- 21598551: () => { reject_async('failed with unknown exception'); },  
- 21598602: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21598649: () => { clearTimeout(threadTimeouts.shift()); },  
- 21598691: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21598746: ($0) => { resolve_async($0); },  
- 21598769: () => { reject_async('failed with unknown exception'); },  
- 21598820: ($0) => { reject_async(new Error(UTF8ToString($0))); },  
- 21598867: () => { clearTimeout(threadTimeouts.shift()); }
+  21603448: () => { return current_async_call_id; },  
+ 21603482: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21603543: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21603598: () => { return current_async_call_id; },  
+ 21603632: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21603693: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21603748: () => { return current_async_call_id; },  
+ 21603782: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21603843: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21603898: () => { return current_async_call_id; },  
+ 21603932: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21603993: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21604048: () => { return current_async_call_id; },  
+ 21604082: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21604143: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21604198: ($0, $1) => { resolve_async($1, $0); },  
+ 21604225: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21604291: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21604342: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21604384: ($0, $1) => { resolve_async($1, $0); },  
+ 21604411: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21604477: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21604528: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21604570: ($0, $1) => { resolve_async($1, $0); },  
+ 21604597: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21604663: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21604714: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21604756: ($0, $1) => { resolve_async($1, $0); },  
+ 21604783: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21604849: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21604900: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21604942: ($0, $1) => { resolve_async($1, $0); },  
+ 21604969: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21605035: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21605086: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21605128: () => { return current_async_call_id; },  
+ 21605162: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21605217: ($0, $1) => { resolve_async($1, UTF8ToString($0)); },  
+ 21605258: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21605324: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21605375: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21605417: () => { return current_async_call_id; },  
+ 21605451: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21605506: ($0, $1) => { resolve_async($1, $0); },  
+ 21605533: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21605599: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21605650: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21605692: () => { return current_async_call_id; },  
+ 21605726: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21605781: ($0, $1) => { resolve_async($1, $0); },  
+ 21605808: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21605874: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21605925: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21605967: () => { return current_async_call_id; },  
+ 21606001: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21606056: ($0, $1) => { resolve_async($1, $0); },  
+ 21606083: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21606149: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21606200: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21606242: () => { return current_async_call_id; },  
+ 21606276: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21606331: ($0, $1) => { resolve_async($1, $0); },  
+ 21606358: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21606424: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21606475: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21606517: () => { return current_async_call_id; },  
+ 21606551: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21606606: ($0, $1) => { resolve_async($1, $0); },  
+ 21606633: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21606699: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21606750: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21606792: () => { return current_async_call_id; },  
+ 21606826: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21606881: ($0, $1) => { resolve_async($1, $0); },  
+ 21606908: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21606974: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21607025: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21607067: () => { return current_async_call_id; },  
+ 21607101: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21607156: ($0, $1) => { resolve_async($1, $0); },  
+ 21607183: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21607249: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21607300: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21607342: () => { return current_async_call_id; },  
+ 21607376: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21607431: ($0, $1) => { resolve_async($1, $0); },  
+ 21607458: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21607524: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21607575: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21607617: () => { return current_async_call_id; },  
+ 21607651: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21607706: ($0, $1) => { resolve_async($1, $0); },  
+ 21607733: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21607799: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21607850: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21607892: () => { return current_async_call_id; },  
+ 21607926: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21607981: ($0, $1) => { resolve_async($1, $0); },  
+ 21608008: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21608074: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21608125: () => { clearTimeout(threadTimeouts.shift()); }
 };
 
 // end include: preamble.js
@@ -13713,6 +13839,10 @@ function assignWasmImports() {
     /** @export */
     invoke_di,
     /** @export */
+    invoke_did,
+    /** @export */
+    invoke_didd,
+    /** @export */
     invoke_dii,
     /** @export */
     invoke_diid,
@@ -13732,6 +13862,8 @@ function assignWasmImports() {
     invoke_ii,
     /** @export */
     invoke_iid,
+    /** @export */
+    invoke_iiddii,
     /** @export */
     invoke_iii,
     /** @export */
@@ -13904,217 +14036,6 @@ var _Z3_fixedpoint_query = Module['_Z3_fixedpoint_query'] = createExportWrapper(
 var _Z3_fixedpoint_query_relations = Module['_Z3_fixedpoint_query_relations'] = createExportWrapper('Z3_fixedpoint_query_relations', 4);
 var _Z3_fixedpoint_query_from_lvl = Module['_Z3_fixedpoint_query_from_lvl'] = createExportWrapper('Z3_fixedpoint_query_from_lvl', 4);
 var _Z3_polynomial_subresultants = Module['_Z3_polynomial_subresultants'] = createExportWrapper('Z3_polynomial_subresultants', 4);
-var _Z3_get_relation_arity = Module['_Z3_get_relation_arity'] = createExportWrapper('Z3_get_relation_arity', 2);
-var _Z3_get_relation_column = Module['_Z3_get_relation_column'] = createExportWrapper('Z3_get_relation_column', 3);
-var _Z3_mk_finite_domain_sort = Module['_Z3_mk_finite_domain_sort'] = createExportWrapper('Z3_mk_finite_domain_sort', 3);
-var _Z3_get_finite_domain_sort_size = Module['_Z3_get_finite_domain_sort_size'] = createExportWrapper('Z3_get_finite_domain_sort_size', 3);
-var _Z3_mk_fixedpoint = Module['_Z3_mk_fixedpoint'] = createExportWrapper('Z3_mk_fixedpoint', 1);
-var _Z3_fixedpoint_inc_ref = Module['_Z3_fixedpoint_inc_ref'] = createExportWrapper('Z3_fixedpoint_inc_ref', 2);
-var _Z3_fixedpoint_dec_ref = Module['_Z3_fixedpoint_dec_ref'] = createExportWrapper('Z3_fixedpoint_dec_ref', 2);
-var _Z3_fixedpoint_assert = Module['_Z3_fixedpoint_assert'] = createExportWrapper('Z3_fixedpoint_assert', 3);
-var _Z3_fixedpoint_add_rule = Module['_Z3_fixedpoint_add_rule'] = createExportWrapper('Z3_fixedpoint_add_rule', 4);
-var _Z3_fixedpoint_add_fact = Module['_Z3_fixedpoint_add_fact'] = createExportWrapper('Z3_fixedpoint_add_fact', 5);
-var _Z3_get_sort_kind = Module['_Z3_get_sort_kind'] = createExportWrapper('Z3_get_sort_kind', 2);
-var _Z3_fixedpoint_get_answer = Module['_Z3_fixedpoint_get_answer'] = createExportWrapper('Z3_fixedpoint_get_answer', 2);
-var _Z3_fixedpoint_get_reason_unknown = Module['_Z3_fixedpoint_get_reason_unknown'] = createExportWrapper('Z3_fixedpoint_get_reason_unknown', 2);
-var _Z3_fixedpoint_to_string = Module['_Z3_fixedpoint_to_string'] = createExportWrapper('Z3_fixedpoint_to_string', 4);
-var _Z3_fixedpoint_from_string = Module['_Z3_fixedpoint_from_string'] = createExportWrapper('Z3_fixedpoint_from_string', 3);
-var _Z3_fixedpoint_from_file = Module['_Z3_fixedpoint_from_file'] = createExportWrapper('Z3_fixedpoint_from_file', 3);
-var _Z3_fixedpoint_get_statistics = Module['_Z3_fixedpoint_get_statistics'] = createExportWrapper('Z3_fixedpoint_get_statistics', 2);
-var _Z3_fixedpoint_register_relation = Module['_Z3_fixedpoint_register_relation'] = createExportWrapper('Z3_fixedpoint_register_relation', 3);
-var _Z3_fixedpoint_set_predicate_representation = Module['_Z3_fixedpoint_set_predicate_representation'] = createExportWrapper('Z3_fixedpoint_set_predicate_representation', 5);
-var _Z3_fixedpoint_get_rules = Module['_Z3_fixedpoint_get_rules'] = createExportWrapper('Z3_fixedpoint_get_rules', 2);
-var _Z3_fixedpoint_get_assertions = Module['_Z3_fixedpoint_get_assertions'] = createExportWrapper('Z3_fixedpoint_get_assertions', 2);
-var _Z3_fixedpoint_update_rule = Module['_Z3_fixedpoint_update_rule'] = createExportWrapper('Z3_fixedpoint_update_rule', 4);
-var _Z3_fixedpoint_get_num_levels = Module['_Z3_fixedpoint_get_num_levels'] = createExportWrapper('Z3_fixedpoint_get_num_levels', 3);
-var _Z3_fixedpoint_get_cover_delta = Module['_Z3_fixedpoint_get_cover_delta'] = createExportWrapper('Z3_fixedpoint_get_cover_delta', 4);
-var _Z3_fixedpoint_add_cover = Module['_Z3_fixedpoint_add_cover'] = createExportWrapper('Z3_fixedpoint_add_cover', 5);
-var _Z3_fixedpoint_get_help = Module['_Z3_fixedpoint_get_help'] = createExportWrapper('Z3_fixedpoint_get_help', 2);
-var _Z3_fixedpoint_get_param_descrs = Module['_Z3_fixedpoint_get_param_descrs'] = createExportWrapper('Z3_fixedpoint_get_param_descrs', 2);
-var _Z3_fixedpoint_set_params = Module['_Z3_fixedpoint_set_params'] = createExportWrapper('Z3_fixedpoint_set_params', 3);
-var _Z3_fixedpoint_get_ground_sat_answer = Module['_Z3_fixedpoint_get_ground_sat_answer'] = createExportWrapper('Z3_fixedpoint_get_ground_sat_answer', 2);
-var _Z3_fixedpoint_get_rules_along_trace = Module['_Z3_fixedpoint_get_rules_along_trace'] = createExportWrapper('Z3_fixedpoint_get_rules_along_trace', 2);
-var _Z3_fixedpoint_get_rule_names_along_trace = Module['_Z3_fixedpoint_get_rule_names_along_trace'] = createExportWrapper('Z3_fixedpoint_get_rule_names_along_trace', 2);
-var _Z3_fixedpoint_add_invariant = Module['_Z3_fixedpoint_add_invariant'] = createExportWrapper('Z3_fixedpoint_add_invariant', 4);
-var _Z3_fixedpoint_get_reachable = Module['_Z3_fixedpoint_get_reachable'] = createExportWrapper('Z3_fixedpoint_get_reachable', 3);
-var _Z3_mk_finite_set_sort = Module['_Z3_mk_finite_set_sort'] = createExportWrapper('Z3_mk_finite_set_sort', 2);
-var _Z3_is_finite_set_sort = Module['_Z3_is_finite_set_sort'] = createExportWrapper('Z3_is_finite_set_sort', 2);
-var _Z3_get_finite_set_sort_basis = Module['_Z3_get_finite_set_sort_basis'] = createExportWrapper('Z3_get_finite_set_sort_basis', 2);
-var _Z3_mk_finite_set_empty = Module['_Z3_mk_finite_set_empty'] = createExportWrapper('Z3_mk_finite_set_empty', 2);
-var _Z3_mk_finite_set_singleton = Module['_Z3_mk_finite_set_singleton'] = createExportWrapper('Z3_mk_finite_set_singleton', 2);
-var _Z3_mk_finite_set_union = Module['_Z3_mk_finite_set_union'] = createExportWrapper('Z3_mk_finite_set_union', 3);
-var _Z3_mk_finite_set_intersect = Module['_Z3_mk_finite_set_intersect'] = createExportWrapper('Z3_mk_finite_set_intersect', 3);
-var _Z3_mk_finite_set_difference = Module['_Z3_mk_finite_set_difference'] = createExportWrapper('Z3_mk_finite_set_difference', 3);
-var _Z3_mk_finite_set_member = Module['_Z3_mk_finite_set_member'] = createExportWrapper('Z3_mk_finite_set_member', 3);
-var _Z3_mk_finite_set_size = Module['_Z3_mk_finite_set_size'] = createExportWrapper('Z3_mk_finite_set_size', 2);
-var _Z3_mk_finite_set_subset = Module['_Z3_mk_finite_set_subset'] = createExportWrapper('Z3_mk_finite_set_subset', 3);
-var _Z3_mk_finite_set_map = Module['_Z3_mk_finite_set_map'] = createExportWrapper('Z3_mk_finite_set_map', 3);
-var _Z3_mk_finite_set_filter = Module['_Z3_mk_finite_set_filter'] = createExportWrapper('Z3_mk_finite_set_filter', 3);
-var _Z3_mk_finite_set_range = Module['_Z3_mk_finite_set_range'] = createExportWrapper('Z3_mk_finite_set_range', 3);
-var _Z3_stats_to_string = Module['_Z3_stats_to_string'] = createExportWrapper('Z3_stats_to_string', 2);
-var _Z3_stats_inc_ref = Module['_Z3_stats_inc_ref'] = createExportWrapper('Z3_stats_inc_ref', 2);
-var _Z3_stats_dec_ref = Module['_Z3_stats_dec_ref'] = createExportWrapper('Z3_stats_dec_ref', 2);
-var _Z3_stats_size = Module['_Z3_stats_size'] = createExportWrapper('Z3_stats_size', 2);
-var _Z3_stats_get_key = Module['_Z3_stats_get_key'] = createExportWrapper('Z3_stats_get_key', 3);
-var _Z3_stats_is_uint = Module['_Z3_stats_is_uint'] = createExportWrapper('Z3_stats_is_uint', 3);
-var _Z3_stats_is_double = Module['_Z3_stats_is_double'] = createExportWrapper('Z3_stats_is_double', 3);
-var _Z3_stats_get_uint_value = Module['_Z3_stats_get_uint_value'] = createExportWrapper('Z3_stats_get_uint_value', 3);
-var _Z3_stats_get_double_value = Module['_Z3_stats_get_double_value'] = createExportWrapper('Z3_stats_get_double_value', 3);
-var _Z3_get_estimated_alloc_size = Module['_Z3_get_estimated_alloc_size'] = createExportWrapper('Z3_get_estimated_alloc_size', 0);
-var _Z3_mk_tactic = Module['_Z3_mk_tactic'] = createExportWrapper('Z3_mk_tactic', 2);
-var _Z3_tactic_inc_ref = Module['_Z3_tactic_inc_ref'] = createExportWrapper('Z3_tactic_inc_ref', 2);
-var _Z3_tactic_dec_ref = Module['_Z3_tactic_dec_ref'] = createExportWrapper('Z3_tactic_dec_ref', 2);
-var _Z3_mk_probe = Module['_Z3_mk_probe'] = createExportWrapper('Z3_mk_probe', 2);
-var _Z3_probe_inc_ref = Module['_Z3_probe_inc_ref'] = createExportWrapper('Z3_probe_inc_ref', 2);
-var _Z3_probe_dec_ref = Module['_Z3_probe_dec_ref'] = createExportWrapper('Z3_probe_dec_ref', 2);
-var _Z3_tactic_and_then = Module['_Z3_tactic_and_then'] = createExportWrapper('Z3_tactic_and_then', 3);
-var _Z3_tactic_or_else = Module['_Z3_tactic_or_else'] = createExportWrapper('Z3_tactic_or_else', 3);
-var _Z3_tactic_par_or = Module['_Z3_tactic_par_or'] = createExportWrapper('Z3_tactic_par_or', 3);
-var _Z3_tactic_par_and_then = Module['_Z3_tactic_par_and_then'] = createExportWrapper('Z3_tactic_par_and_then', 3);
-var _Z3_tactic_try_for = Module['_Z3_tactic_try_for'] = createExportWrapper('Z3_tactic_try_for', 3);
-var _Z3_tactic_when = Module['_Z3_tactic_when'] = createExportWrapper('Z3_tactic_when', 3);
-var _Z3_tactic_cond = Module['_Z3_tactic_cond'] = createExportWrapper('Z3_tactic_cond', 4);
-var _Z3_tactic_repeat = Module['_Z3_tactic_repeat'] = createExportWrapper('Z3_tactic_repeat', 3);
-var _Z3_tactic_skip = Module['_Z3_tactic_skip'] = createExportWrapper('Z3_tactic_skip', 1);
-var _Z3_tactic_fail = Module['_Z3_tactic_fail'] = createExportWrapper('Z3_tactic_fail', 1);
-var _Z3_tactic_fail_if = Module['_Z3_tactic_fail_if'] = createExportWrapper('Z3_tactic_fail_if', 2);
-var _Z3_tactic_fail_if_not_decided = Module['_Z3_tactic_fail_if_not_decided'] = createExportWrapper('Z3_tactic_fail_if_not_decided', 1);
-var _Z3_tactic_using_params = Module['_Z3_tactic_using_params'] = createExportWrapper('Z3_tactic_using_params', 3);
-var _Z3_probe_const = Module['_Z3_probe_const'] = createExportWrapper('Z3_probe_const', 2);
-var _Z3_probe_lt = Module['_Z3_probe_lt'] = createExportWrapper('Z3_probe_lt', 3);
-var _Z3_probe_gt = Module['_Z3_probe_gt'] = createExportWrapper('Z3_probe_gt', 3);
-var _Z3_probe_le = Module['_Z3_probe_le'] = createExportWrapper('Z3_probe_le', 3);
-var _Z3_probe_ge = Module['_Z3_probe_ge'] = createExportWrapper('Z3_probe_ge', 3);
-var _Z3_probe_eq = Module['_Z3_probe_eq'] = createExportWrapper('Z3_probe_eq', 3);
-var _Z3_probe_and = Module['_Z3_probe_and'] = createExportWrapper('Z3_probe_and', 3);
-var _Z3_probe_or = Module['_Z3_probe_or'] = createExportWrapper('Z3_probe_or', 3);
-var _Z3_probe_not = Module['_Z3_probe_not'] = createExportWrapper('Z3_probe_not', 2);
-var _Z3_get_num_tactics = Module['_Z3_get_num_tactics'] = createExportWrapper('Z3_get_num_tactics', 1);
-var _Z3_get_tactic_name = Module['_Z3_get_tactic_name'] = createExportWrapper('Z3_get_tactic_name', 2);
-var _Z3_get_num_probes = Module['_Z3_get_num_probes'] = createExportWrapper('Z3_get_num_probes', 1);
-var _Z3_get_probe_name = Module['_Z3_get_probe_name'] = createExportWrapper('Z3_get_probe_name', 2);
-var _Z3_tactic_get_help = Module['_Z3_tactic_get_help'] = createExportWrapper('Z3_tactic_get_help', 2);
-var _Z3_tactic_get_param_descrs = Module['_Z3_tactic_get_param_descrs'] = createExportWrapper('Z3_tactic_get_param_descrs', 2);
-var _Z3_tactic_get_descr = Module['_Z3_tactic_get_descr'] = createExportWrapper('Z3_tactic_get_descr', 2);
-var _Z3_probe_get_descr = Module['_Z3_probe_get_descr'] = createExportWrapper('Z3_probe_get_descr', 2);
-var _Z3_probe_apply = Module['_Z3_probe_apply'] = createExportWrapper('Z3_probe_apply', 3);
-var _Z3_apply_result_inc_ref = Module['_Z3_apply_result_inc_ref'] = createExportWrapper('Z3_apply_result_inc_ref', 2);
-var _Z3_apply_result_dec_ref = Module['_Z3_apply_result_dec_ref'] = createExportWrapper('Z3_apply_result_dec_ref', 2);
-var _Z3_apply_result_to_string = Module['_Z3_apply_result_to_string'] = createExportWrapper('Z3_apply_result_to_string', 2);
-var _Z3_apply_result_get_num_subgoals = Module['_Z3_apply_result_get_num_subgoals'] = createExportWrapper('Z3_apply_result_get_num_subgoals', 2);
-var _Z3_apply_result_get_subgoal = Module['_Z3_apply_result_get_subgoal'] = createExportWrapper('Z3_apply_result_get_subgoal', 3);
-var _Z3_mk_simplifier = Module['_Z3_mk_simplifier'] = createExportWrapper('Z3_mk_simplifier', 2);
-var _Z3_simplifier_inc_ref = Module['_Z3_simplifier_inc_ref'] = createExportWrapper('Z3_simplifier_inc_ref', 2);
-var _Z3_simplifier_dec_ref = Module['_Z3_simplifier_dec_ref'] = createExportWrapper('Z3_simplifier_dec_ref', 2);
-var _Z3_get_num_simplifiers = Module['_Z3_get_num_simplifiers'] = createExportWrapper('Z3_get_num_simplifiers', 1);
-var _Z3_get_simplifier_name = Module['_Z3_get_simplifier_name'] = createExportWrapper('Z3_get_simplifier_name', 2);
-var _Z3_simplifier_and_then = Module['_Z3_simplifier_and_then'] = createExportWrapper('Z3_simplifier_and_then', 3);
-var _Z3_simplifier_using_params = Module['_Z3_simplifier_using_params'] = createExportWrapper('Z3_simplifier_using_params', 3);
-var _Z3_simplifier_get_help = Module['_Z3_simplifier_get_help'] = createExportWrapper('Z3_simplifier_get_help', 2);
-var _Z3_simplifier_get_param_descrs = Module['_Z3_simplifier_get_param_descrs'] = createExportWrapper('Z3_simplifier_get_param_descrs', 2);
-var _Z3_simplifier_get_descr = Module['_Z3_simplifier_get_descr'] = createExportWrapper('Z3_simplifier_get_descr', 2);
-var _Z3_mk_model = Module['_Z3_mk_model'] = createExportWrapper('Z3_mk_model', 1);
-var _Z3_model_inc_ref = Module['_Z3_model_inc_ref'] = createExportWrapper('Z3_model_inc_ref', 2);
-var _Z3_model_dec_ref = Module['_Z3_model_dec_ref'] = createExportWrapper('Z3_model_dec_ref', 2);
-var _Z3_model_get_const_interp = Module['_Z3_model_get_const_interp'] = createExportWrapper('Z3_model_get_const_interp', 3);
-var _Z3_model_has_interp = Module['_Z3_model_has_interp'] = createExportWrapper('Z3_model_has_interp', 3);
-var _Z3_model_get_func_interp = Module['_Z3_model_get_func_interp'] = createExportWrapper('Z3_model_get_func_interp', 3);
-var _Z3_model_get_num_consts = Module['_Z3_model_get_num_consts'] = createExportWrapper('Z3_model_get_num_consts', 2);
-var _Z3_model_get_const_decl = Module['_Z3_model_get_const_decl'] = createExportWrapper('Z3_model_get_const_decl', 3);
-var _Z3_model_get_num_funcs = Module['_Z3_model_get_num_funcs'] = createExportWrapper('Z3_model_get_num_funcs', 2);
-var _Z3_model_get_func_decl = Module['_Z3_model_get_func_decl'] = createExportWrapper('Z3_model_get_func_decl', 3);
-var _Z3_model_eval = Module['_Z3_model_eval'] = createExportWrapper('Z3_model_eval', 5);
-var _Z3_model_get_num_sorts = Module['_Z3_model_get_num_sorts'] = createExportWrapper('Z3_model_get_num_sorts', 2);
-var _Z3_model_get_sort = Module['_Z3_model_get_sort'] = createExportWrapper('Z3_model_get_sort', 3);
-var _Z3_model_get_sort_universe = Module['_Z3_model_get_sort_universe'] = createExportWrapper('Z3_model_get_sort_universe', 3);
-var _Z3_model_translate = Module['_Z3_model_translate'] = createExportWrapper('Z3_model_translate', 3);
-var _Z3_is_as_array = Module['_Z3_is_as_array'] = createExportWrapper('Z3_is_as_array', 2);
-var _Z3_get_as_array_func_decl = Module['_Z3_get_as_array_func_decl'] = createExportWrapper('Z3_get_as_array_func_decl', 2);
-var _Z3_add_func_interp = Module['_Z3_add_func_interp'] = createExportWrapper('Z3_add_func_interp', 4);
-var _Z3_add_const_interp = Module['_Z3_add_const_interp'] = createExportWrapper('Z3_add_const_interp', 4);
-var _Z3_func_interp_inc_ref = Module['_Z3_func_interp_inc_ref'] = createExportWrapper('Z3_func_interp_inc_ref', 2);
-var _Z3_func_interp_dec_ref = Module['_Z3_func_interp_dec_ref'] = createExportWrapper('Z3_func_interp_dec_ref', 2);
-var _Z3_func_interp_get_num_entries = Module['_Z3_func_interp_get_num_entries'] = createExportWrapper('Z3_func_interp_get_num_entries', 2);
-var _Z3_func_interp_get_entry = Module['_Z3_func_interp_get_entry'] = createExportWrapper('Z3_func_interp_get_entry', 3);
-var _Z3_func_interp_get_else = Module['_Z3_func_interp_get_else'] = createExportWrapper('Z3_func_interp_get_else', 2);
-var _Z3_func_interp_set_else = Module['_Z3_func_interp_set_else'] = createExportWrapper('Z3_func_interp_set_else', 3);
-var _Z3_func_interp_get_arity = Module['_Z3_func_interp_get_arity'] = createExportWrapper('Z3_func_interp_get_arity', 2);
-var _Z3_func_interp_add_entry = Module['_Z3_func_interp_add_entry'] = createExportWrapper('Z3_func_interp_add_entry', 4);
-var _Z3_func_entry_inc_ref = Module['_Z3_func_entry_inc_ref'] = createExportWrapper('Z3_func_entry_inc_ref', 2);
-var _Z3_func_entry_dec_ref = Module['_Z3_func_entry_dec_ref'] = createExportWrapper('Z3_func_entry_dec_ref', 2);
-var _Z3_func_entry_get_value = Module['_Z3_func_entry_get_value'] = createExportWrapper('Z3_func_entry_get_value', 2);
-var _Z3_func_entry_get_num_args = Module['_Z3_func_entry_get_num_args'] = createExportWrapper('Z3_func_entry_get_num_args', 2);
-var _Z3_func_entry_get_arg = Module['_Z3_func_entry_get_arg'] = createExportWrapper('Z3_func_entry_get_arg', 3);
-var _Z3_model_to_string = Module['_Z3_model_to_string'] = createExportWrapper('Z3_model_to_string', 2);
-var _Z3_mk_tuple_sort = Module['_Z3_mk_tuple_sort'] = createExportWrapper('Z3_mk_tuple_sort', 7);
-var _Z3_mk_enumeration_sort = Module['_Z3_mk_enumeration_sort'] = createExportWrapper('Z3_mk_enumeration_sort', 6);
-var _Z3_mk_list_sort = Module['_Z3_mk_list_sort'] = createExportWrapper('Z3_mk_list_sort', 9);
-var _Z3_mk_constructor = Module['_Z3_mk_constructor'] = createExportWrapper('Z3_mk_constructor', 7);
-var _Z3_constructor_num_fields = Module['_Z3_constructor_num_fields'] = createExportWrapper('Z3_constructor_num_fields', 2);
-var _Z3_query_constructor = Module['_Z3_query_constructor'] = createExportWrapper('Z3_query_constructor', 6);
-var _Z3_del_constructor = Module['_Z3_del_constructor'] = createExportWrapper('Z3_del_constructor', 2);
-var _Z3_mk_datatype = Module['_Z3_mk_datatype'] = createExportWrapper('Z3_mk_datatype', 4);
-var _Z3_mk_polymorphic_datatype = Module['_Z3_mk_polymorphic_datatype'] = createExportWrapper('Z3_mk_polymorphic_datatype', 6);
-var _Z3_mk_constructor_list = Module['_Z3_mk_constructor_list'] = createExportWrapper('Z3_mk_constructor_list', 3);
-var _Z3_del_constructor_list = Module['_Z3_del_constructor_list'] = createExportWrapper('Z3_del_constructor_list', 2);
-var _Z3_mk_datatype_sort = Module['_Z3_mk_datatype_sort'] = createExportWrapper('Z3_mk_datatype_sort', 4);
-var _Z3_mk_datatypes = Module['_Z3_mk_datatypes'] = createExportWrapper('Z3_mk_datatypes', 5);
-var _Z3_is_recursive_datatype_sort = Module['_Z3_is_recursive_datatype_sort'] = createExportWrapper('Z3_is_recursive_datatype_sort', 2);
-var _Z3_get_datatype_sort_num_constructors = Module['_Z3_get_datatype_sort_num_constructors'] = createExportWrapper('Z3_get_datatype_sort_num_constructors', 2);
-var _Z3_get_datatype_sort_constructor = Module['_Z3_get_datatype_sort_constructor'] = createExportWrapper('Z3_get_datatype_sort_constructor', 3);
-var _Z3_get_datatype_sort_recognizer = Module['_Z3_get_datatype_sort_recognizer'] = createExportWrapper('Z3_get_datatype_sort_recognizer', 3);
-var _Z3_get_datatype_sort_constructor_accessor = Module['_Z3_get_datatype_sort_constructor_accessor'] = createExportWrapper('Z3_get_datatype_sort_constructor_accessor', 4);
-var _Z3_get_tuple_sort_mk_decl = Module['_Z3_get_tuple_sort_mk_decl'] = createExportWrapper('Z3_get_tuple_sort_mk_decl', 2);
-var _Z3_get_tuple_sort_num_fields = Module['_Z3_get_tuple_sort_num_fields'] = createExportWrapper('Z3_get_tuple_sort_num_fields', 2);
-var _Z3_get_tuple_sort_field_decl = Module['_Z3_get_tuple_sort_field_decl'] = createExportWrapper('Z3_get_tuple_sort_field_decl', 3);
-var _Z3_datatype_update_field = Module['_Z3_datatype_update_field'] = createExportWrapper('Z3_datatype_update_field', 4);
-var _Z3_mk_quantifier = Module['_Z3_mk_quantifier'] = createExportWrapper('Z3_mk_quantifier', 9);
-var _Z3_mk_quantifier_ex = Module['_Z3_mk_quantifier_ex'] = createExportWrapper('Z3_mk_quantifier_ex', 13);
-var _Z3_mk_forall = Module['_Z3_mk_forall'] = createExportWrapper('Z3_mk_forall', 8);
-var _Z3_mk_exists = Module['_Z3_mk_exists'] = createExportWrapper('Z3_mk_exists', 8);
-var _Z3_mk_lambda = Module['_Z3_mk_lambda'] = createExportWrapper('Z3_mk_lambda', 5);
-var _Z3_mk_lambda_const = Module['_Z3_mk_lambda_const'] = createExportWrapper('Z3_mk_lambda_const', 4);
-var _Z3_mk_quantifier_const_ex = Module['_Z3_mk_quantifier_const_ex'] = createExportWrapper('Z3_mk_quantifier_const_ex', 12);
-var _Z3_mk_quantifier_const = Module['_Z3_mk_quantifier_const'] = createExportWrapper('Z3_mk_quantifier_const', 8);
-var _Z3_mk_forall_const = Module['_Z3_mk_forall_const'] = createExportWrapper('Z3_mk_forall_const', 7);
-var _Z3_mk_exists_const = Module['_Z3_mk_exists_const'] = createExportWrapper('Z3_mk_exists_const', 7);
-var _Z3_mk_pattern = Module['_Z3_mk_pattern'] = createExportWrapper('Z3_mk_pattern', 3);
-var _Z3_mk_bound = Module['_Z3_mk_bound'] = createExportWrapper('Z3_mk_bound', 3);
-var _Z3_is_quantifier_forall = Module['_Z3_is_quantifier_forall'] = createExportWrapper('Z3_is_quantifier_forall', 2);
-var _Z3_is_quantifier_exists = Module['_Z3_is_quantifier_exists'] = createExportWrapper('Z3_is_quantifier_exists', 2);
-var _Z3_is_lambda = Module['_Z3_is_lambda'] = createExportWrapper('Z3_is_lambda', 2);
-var _Z3_get_quantifier_weight = Module['_Z3_get_quantifier_weight'] = createExportWrapper('Z3_get_quantifier_weight', 2);
-var _Z3_get_quantifier_skolem_id = Module['_Z3_get_quantifier_skolem_id'] = createExportWrapper('Z3_get_quantifier_skolem_id', 2);
-var _Z3_get_quantifier_id = Module['_Z3_get_quantifier_id'] = createExportWrapper('Z3_get_quantifier_id', 2);
-var _Z3_get_quantifier_num_patterns = Module['_Z3_get_quantifier_num_patterns'] = createExportWrapper('Z3_get_quantifier_num_patterns', 2);
-var _Z3_get_quantifier_pattern_ast = Module['_Z3_get_quantifier_pattern_ast'] = createExportWrapper('Z3_get_quantifier_pattern_ast', 3);
-var _Z3_get_quantifier_num_no_patterns = Module['_Z3_get_quantifier_num_no_patterns'] = createExportWrapper('Z3_get_quantifier_num_no_patterns', 2);
-var _Z3_get_quantifier_no_pattern_ast = Module['_Z3_get_quantifier_no_pattern_ast'] = createExportWrapper('Z3_get_quantifier_no_pattern_ast', 3);
-var _Z3_get_quantifier_bound_name = Module['_Z3_get_quantifier_bound_name'] = createExportWrapper('Z3_get_quantifier_bound_name', 3);
-var _Z3_get_quantifier_bound_sort = Module['_Z3_get_quantifier_bound_sort'] = createExportWrapper('Z3_get_quantifier_bound_sort', 3);
-var _Z3_get_quantifier_body = Module['_Z3_get_quantifier_body'] = createExportWrapper('Z3_get_quantifier_body', 2);
-var _Z3_get_quantifier_num_bound = Module['_Z3_get_quantifier_num_bound'] = createExportWrapper('Z3_get_quantifier_num_bound', 2);
-var _Z3_get_pattern_num_terms = Module['_Z3_get_pattern_num_terms'] = createExportWrapper('Z3_get_pattern_num_terms', 2);
-var _Z3_get_pattern = Module['_Z3_get_pattern'] = createExportWrapper('Z3_get_pattern', 3);
-var _Z3_pattern_to_ast = Module['_Z3_pattern_to_ast'] = createExportWrapper('Z3_pattern_to_ast', 2);
-var _Z3_pattern_to_string = Module['_Z3_pattern_to_string'] = createExportWrapper('Z3_pattern_to_string', 2);
-var _Z3_mk_context = Module['_Z3_mk_context'] = createExportWrapper('Z3_mk_context', 1);
-var _Z3_mk_context_rc = Module['_Z3_mk_context_rc'] = createExportWrapper('Z3_mk_context_rc', 1);
-var _Z3_del_context = Module['_Z3_del_context'] = createExportWrapper('Z3_del_context', 1);
-var _Z3_interrupt = Module['_Z3_interrupt'] = createExportWrapper('Z3_interrupt', 1);
-var _Z3_enable_concurrent_dec_ref = Module['_Z3_enable_concurrent_dec_ref'] = createExportWrapper('Z3_enable_concurrent_dec_ref', 1);
-var _Z3_toggle_warning_messages = Module['_Z3_toggle_warning_messages'] = createExportWrapper('Z3_toggle_warning_messages', 1);
-var _Z3_inc_ref = Module['_Z3_inc_ref'] = createExportWrapper('Z3_inc_ref', 2);
-var _Z3_dec_ref = Module['_Z3_dec_ref'] = createExportWrapper('Z3_dec_ref', 2);
-var _Z3_get_version = Module['_Z3_get_version'] = createExportWrapper('Z3_get_version', 4);
-var _Z3_get_full_version = Module['_Z3_get_full_version'] = createExportWrapper('Z3_get_full_version', 0);
-var _Z3_enable_trace = Module['_Z3_enable_trace'] = createExportWrapper('Z3_enable_trace', 1);
-var _Z3_disable_trace = Module['_Z3_disable_trace'] = createExportWrapper('Z3_disable_trace', 1);
-var _Z3_reset_memory = Module['_Z3_reset_memory'] = createExportWrapper('Z3_reset_memory', 0);
-var _Z3_finalize_memory = Module['_Z3_finalize_memory'] = createExportWrapper('Z3_finalize_memory', 0);
-var _Z3_get_error_code = Module['_Z3_get_error_code'] = createExportWrapper('Z3_get_error_code', 1);
-var _Z3_set_error = Module['_Z3_set_error'] = createExportWrapper('Z3_set_error', 2);
-var _Z3_set_ast_print_mode = Module['_Z3_set_ast_print_mode'] = createExportWrapper('Z3_set_ast_print_mode', 2);
 var _Z3_algebraic_is_value = Module['_Z3_algebraic_is_value'] = createExportWrapper('Z3_algebraic_is_value', 2);
 var _Z3_algebraic_is_pos = Module['_Z3_algebraic_is_pos'] = createExportWrapper('Z3_algebraic_is_pos', 2);
 var _Z3_algebraic_sign = Module['_Z3_algebraic_sign'] = createExportWrapper('Z3_algebraic_sign', 2);
@@ -14135,117 +14056,57 @@ var _Z3_algebraic_neq = Module['_Z3_algebraic_neq'] = createExportWrapper('Z3_al
 var _Z3_algebraic_get_poly = Module['_Z3_algebraic_get_poly'] = createExportWrapper('Z3_algebraic_get_poly', 2);
 var _Z3_is_algebraic_number = Module['_Z3_is_algebraic_number'] = createExportWrapper('Z3_is_algebraic_number', 2);
 var _Z3_algebraic_get_i = Module['_Z3_algebraic_get_i'] = createExportWrapper('Z3_algebraic_get_i', 2);
-var _Z3_mk_ast_vector = Module['_Z3_mk_ast_vector'] = createExportWrapper('Z3_mk_ast_vector', 1);
-var _Z3_ast_vector_inc_ref = Module['_Z3_ast_vector_inc_ref'] = createExportWrapper('Z3_ast_vector_inc_ref', 2);
-var _Z3_ast_vector_dec_ref = Module['_Z3_ast_vector_dec_ref'] = createExportWrapper('Z3_ast_vector_dec_ref', 2);
-var _Z3_ast_vector_size = Module['_Z3_ast_vector_size'] = createExportWrapper('Z3_ast_vector_size', 2);
-var _Z3_ast_vector_get = Module['_Z3_ast_vector_get'] = createExportWrapper('Z3_ast_vector_get', 3);
-var _Z3_ast_vector_set = Module['_Z3_ast_vector_set'] = createExportWrapper('Z3_ast_vector_set', 4);
-var _Z3_ast_vector_resize = Module['_Z3_ast_vector_resize'] = createExportWrapper('Z3_ast_vector_resize', 3);
-var _Z3_ast_vector_push = Module['_Z3_ast_vector_push'] = createExportWrapper('Z3_ast_vector_push', 3);
-var _Z3_ast_vector_translate = Module['_Z3_ast_vector_translate'] = createExportWrapper('Z3_ast_vector_translate', 3);
-var _Z3_ast_vector_to_string = Module['_Z3_ast_vector_to_string'] = createExportWrapper('Z3_ast_vector_to_string', 2);
-var _Z3_qe_model_project = Module['_Z3_qe_model_project'] = createExportWrapper('Z3_qe_model_project', 5);
-var _Z3_qe_model_project_skolem = Module['_Z3_qe_model_project_skolem'] = createExportWrapper('Z3_qe_model_project_skolem', 6);
-var _Z3_qe_model_project_with_witness = Module['_Z3_qe_model_project_with_witness'] = createExportWrapper('Z3_qe_model_project_with_witness', 6);
-var _Z3_model_extrapolate = Module['_Z3_model_extrapolate'] = createExportWrapper('Z3_model_extrapolate', 3);
-var _Z3_qe_lite = Module['_Z3_qe_lite'] = createExportWrapper('Z3_qe_lite', 3);
-var _Z3_mk_bv_sort = Module['_Z3_mk_bv_sort'] = createExportWrapper('Z3_mk_bv_sort', 2);
-var _Z3_mk_bvnot = Module['_Z3_mk_bvnot'] = createExportWrapper('Z3_mk_bvnot', 2);
-var _Z3_mk_bvredand = Module['_Z3_mk_bvredand'] = createExportWrapper('Z3_mk_bvredand', 2);
-var _Z3_mk_bvredor = Module['_Z3_mk_bvredor'] = createExportWrapper('Z3_mk_bvredor', 2);
-var _Z3_mk_bvand = Module['_Z3_mk_bvand'] = createExportWrapper('Z3_mk_bvand', 3);
-var _Z3_mk_bvor = Module['_Z3_mk_bvor'] = createExportWrapper('Z3_mk_bvor', 3);
-var _Z3_mk_bvxor = Module['_Z3_mk_bvxor'] = createExportWrapper('Z3_mk_bvxor', 3);
-var _Z3_mk_bvnand = Module['_Z3_mk_bvnand'] = createExportWrapper('Z3_mk_bvnand', 3);
-var _Z3_mk_bvnor = Module['_Z3_mk_bvnor'] = createExportWrapper('Z3_mk_bvnor', 3);
-var _Z3_mk_bvxnor = Module['_Z3_mk_bvxnor'] = createExportWrapper('Z3_mk_bvxnor', 3);
-var _Z3_mk_bvadd = Module['_Z3_mk_bvadd'] = createExportWrapper('Z3_mk_bvadd', 3);
-var _Z3_mk_bvmul = Module['_Z3_mk_bvmul'] = createExportWrapper('Z3_mk_bvmul', 3);
-var _Z3_mk_bvudiv = Module['_Z3_mk_bvudiv'] = createExportWrapper('Z3_mk_bvudiv', 3);
-var _Z3_mk_bvsdiv = Module['_Z3_mk_bvsdiv'] = createExportWrapper('Z3_mk_bvsdiv', 3);
-var _Z3_mk_bvurem = Module['_Z3_mk_bvurem'] = createExportWrapper('Z3_mk_bvurem', 3);
-var _Z3_mk_bvsrem = Module['_Z3_mk_bvsrem'] = createExportWrapper('Z3_mk_bvsrem', 3);
-var _Z3_mk_bvsmod = Module['_Z3_mk_bvsmod'] = createExportWrapper('Z3_mk_bvsmod', 3);
-var _Z3_mk_bvule = Module['_Z3_mk_bvule'] = createExportWrapper('Z3_mk_bvule', 3);
-var _Z3_mk_bvsle = Module['_Z3_mk_bvsle'] = createExportWrapper('Z3_mk_bvsle', 3);
-var _Z3_mk_bvuge = Module['_Z3_mk_bvuge'] = createExportWrapper('Z3_mk_bvuge', 3);
-var _Z3_mk_bvsge = Module['_Z3_mk_bvsge'] = createExportWrapper('Z3_mk_bvsge', 3);
-var _Z3_mk_bvult = Module['_Z3_mk_bvult'] = createExportWrapper('Z3_mk_bvult', 3);
-var _Z3_mk_bvslt = Module['_Z3_mk_bvslt'] = createExportWrapper('Z3_mk_bvslt', 3);
-var _Z3_mk_bvugt = Module['_Z3_mk_bvugt'] = createExportWrapper('Z3_mk_bvugt', 3);
-var _Z3_mk_bvsgt = Module['_Z3_mk_bvsgt'] = createExportWrapper('Z3_mk_bvsgt', 3);
-var _Z3_mk_concat = Module['_Z3_mk_concat'] = createExportWrapper('Z3_mk_concat', 3);
-var _Z3_mk_bvshl = Module['_Z3_mk_bvshl'] = createExportWrapper('Z3_mk_bvshl', 3);
-var _Z3_mk_bvlshr = Module['_Z3_mk_bvlshr'] = createExportWrapper('Z3_mk_bvlshr', 3);
-var _Z3_mk_bvashr = Module['_Z3_mk_bvashr'] = createExportWrapper('Z3_mk_bvashr', 3);
-var _Z3_mk_ext_rotate_left = Module['_Z3_mk_ext_rotate_left'] = createExportWrapper('Z3_mk_ext_rotate_left', 3);
-var _Z3_mk_ext_rotate_right = Module['_Z3_mk_ext_rotate_right'] = createExportWrapper('Z3_mk_ext_rotate_right', 3);
-var _Z3_mk_extract = Module['_Z3_mk_extract'] = createExportWrapper('Z3_mk_extract', 4);
-var _Z3_mk_sign_ext = Module['_Z3_mk_sign_ext'] = createExportWrapper('Z3_mk_sign_ext', 3);
-var _Z3_mk_zero_ext = Module['_Z3_mk_zero_ext'] = createExportWrapper('Z3_mk_zero_ext', 3);
-var _Z3_mk_repeat = Module['_Z3_mk_repeat'] = createExportWrapper('Z3_mk_repeat', 3);
-var _Z3_mk_bit2bool = Module['_Z3_mk_bit2bool'] = createExportWrapper('Z3_mk_bit2bool', 3);
-var _Z3_mk_rotate_left = Module['_Z3_mk_rotate_left'] = createExportWrapper('Z3_mk_rotate_left', 3);
-var _Z3_mk_rotate_right = Module['_Z3_mk_rotate_right'] = createExportWrapper('Z3_mk_rotate_right', 3);
-var _Z3_mk_int2bv = Module['_Z3_mk_int2bv'] = createExportWrapper('Z3_mk_int2bv', 3);
-var _Z3_mk_bv2int = Module['_Z3_mk_bv2int'] = createExportWrapper('Z3_mk_bv2int', 3);
-var _Z3_get_bv_sort_size = Module['_Z3_get_bv_sort_size'] = createExportWrapper('Z3_get_bv_sort_size', 2);
-var _Z3_mk_bvadd_no_overflow = Module['_Z3_mk_bvadd_no_overflow'] = createExportWrapper('Z3_mk_bvadd_no_overflow', 4);
-var _Z3_mk_bvadd_no_underflow = Module['_Z3_mk_bvadd_no_underflow'] = createExportWrapper('Z3_mk_bvadd_no_underflow', 3);
-var _Z3_mk_bvsub_no_overflow = Module['_Z3_mk_bvsub_no_overflow'] = createExportWrapper('Z3_mk_bvsub_no_overflow', 3);
-var _Z3_mk_bvneg = Module['_Z3_mk_bvneg'] = createExportWrapper('Z3_mk_bvneg', 2);
-var _Z3_mk_bvsub_no_underflow = Module['_Z3_mk_bvsub_no_underflow'] = createExportWrapper('Z3_mk_bvsub_no_underflow', 4);
-var _Z3_mk_bvmul_no_overflow = Module['_Z3_mk_bvmul_no_overflow'] = createExportWrapper('Z3_mk_bvmul_no_overflow', 4);
-var _Z3_mk_bvmul_no_underflow = Module['_Z3_mk_bvmul_no_underflow'] = createExportWrapper('Z3_mk_bvmul_no_underflow', 3);
-var _Z3_mk_bvneg_no_overflow = Module['_Z3_mk_bvneg_no_overflow'] = createExportWrapper('Z3_mk_bvneg_no_overflow', 2);
-var _Z3_mk_bvsdiv_no_overflow = Module['_Z3_mk_bvsdiv_no_overflow'] = createExportWrapper('Z3_mk_bvsdiv_no_overflow', 3);
-var _Z3_mk_bvsub = Module['_Z3_mk_bvsub'] = createExportWrapper('Z3_mk_bvsub', 3);
-var _Z3_mk_goal = Module['_Z3_mk_goal'] = createExportWrapper('Z3_mk_goal', 4);
-var _Z3_goal_inc_ref = Module['_Z3_goal_inc_ref'] = createExportWrapper('Z3_goal_inc_ref', 2);
-var _Z3_goal_dec_ref = Module['_Z3_goal_dec_ref'] = createExportWrapper('Z3_goal_dec_ref', 2);
-var _Z3_goal_precision = Module['_Z3_goal_precision'] = createExportWrapper('Z3_goal_precision', 2);
-var _Z3_goal_assert = Module['_Z3_goal_assert'] = createExportWrapper('Z3_goal_assert', 3);
-var _Z3_goal_inconsistent = Module['_Z3_goal_inconsistent'] = createExportWrapper('Z3_goal_inconsistent', 2);
-var _Z3_goal_depth = Module['_Z3_goal_depth'] = createExportWrapper('Z3_goal_depth', 2);
-var _Z3_goal_reset = Module['_Z3_goal_reset'] = createExportWrapper('Z3_goal_reset', 2);
-var _Z3_goal_size = Module['_Z3_goal_size'] = createExportWrapper('Z3_goal_size', 2);
-var _Z3_goal_formula = Module['_Z3_goal_formula'] = createExportWrapper('Z3_goal_formula', 3);
-var _Z3_goal_num_exprs = Module['_Z3_goal_num_exprs'] = createExportWrapper('Z3_goal_num_exprs', 2);
-var _Z3_goal_is_decided_sat = Module['_Z3_goal_is_decided_sat'] = createExportWrapper('Z3_goal_is_decided_sat', 2);
-var _Z3_goal_is_decided_unsat = Module['_Z3_goal_is_decided_unsat'] = createExportWrapper('Z3_goal_is_decided_unsat', 2);
-var _Z3_goal_convert_model = Module['_Z3_goal_convert_model'] = createExportWrapper('Z3_goal_convert_model', 3);
-var _Z3_goal_translate = Module['_Z3_goal_translate'] = createExportWrapper('Z3_goal_translate', 3);
-var _Z3_goal_to_string = Module['_Z3_goal_to_string'] = createExportWrapper('Z3_goal_to_string', 2);
-var _Z3_goal_to_dimacs_string = Module['_Z3_goal_to_dimacs_string'] = createExportWrapper('Z3_goal_to_dimacs_string', 3);
-var _Z3_mk_optimize = Module['_Z3_mk_optimize'] = createExportWrapper('Z3_mk_optimize', 1);
-var _Z3_optimize_inc_ref = Module['_Z3_optimize_inc_ref'] = createExportWrapper('Z3_optimize_inc_ref', 2);
-var _Z3_optimize_dec_ref = Module['_Z3_optimize_dec_ref'] = createExportWrapper('Z3_optimize_dec_ref', 2);
-var _Z3_optimize_assert = Module['_Z3_optimize_assert'] = createExportWrapper('Z3_optimize_assert', 3);
-var _Z3_optimize_assert_and_track = Module['_Z3_optimize_assert_and_track'] = createExportWrapper('Z3_optimize_assert_and_track', 4);
-var _Z3_optimize_assert_soft = Module['_Z3_optimize_assert_soft'] = createExportWrapper('Z3_optimize_assert_soft', 5);
-var _Z3_optimize_maximize = Module['_Z3_optimize_maximize'] = createExportWrapper('Z3_optimize_maximize', 3);
-var _Z3_optimize_minimize = Module['_Z3_optimize_minimize'] = createExportWrapper('Z3_optimize_minimize', 3);
-var _Z3_optimize_push = Module['_Z3_optimize_push'] = createExportWrapper('Z3_optimize_push', 2);
-var _Z3_optimize_pop = Module['_Z3_optimize_pop'] = createExportWrapper('Z3_optimize_pop', 2);
-var _Z3_optimize_get_unsat_core = Module['_Z3_optimize_get_unsat_core'] = createExportWrapper('Z3_optimize_get_unsat_core', 2);
-var _Z3_optimize_get_reason_unknown = Module['_Z3_optimize_get_reason_unknown'] = createExportWrapper('Z3_optimize_get_reason_unknown', 2);
-var _Z3_optimize_get_model = Module['_Z3_optimize_get_model'] = createExportWrapper('Z3_optimize_get_model', 2);
-var _Z3_optimize_set_params = Module['_Z3_optimize_set_params'] = createExportWrapper('Z3_optimize_set_params', 3);
-var _Z3_optimize_get_param_descrs = Module['_Z3_optimize_get_param_descrs'] = createExportWrapper('Z3_optimize_get_param_descrs', 2);
-var _Z3_optimize_get_lower = Module['_Z3_optimize_get_lower'] = createExportWrapper('Z3_optimize_get_lower', 3);
-var _Z3_optimize_get_upper = Module['_Z3_optimize_get_upper'] = createExportWrapper('Z3_optimize_get_upper', 3);
-var _Z3_optimize_get_lower_as_vector = Module['_Z3_optimize_get_lower_as_vector'] = createExportWrapper('Z3_optimize_get_lower_as_vector', 3);
-var _Z3_optimize_get_upper_as_vector = Module['_Z3_optimize_get_upper_as_vector'] = createExportWrapper('Z3_optimize_get_upper_as_vector', 3);
-var _Z3_optimize_to_string = Module['_Z3_optimize_to_string'] = createExportWrapper('Z3_optimize_to_string', 2);
-var _Z3_optimize_get_help = Module['_Z3_optimize_get_help'] = createExportWrapper('Z3_optimize_get_help', 2);
-var _Z3_optimize_get_statistics = Module['_Z3_optimize_get_statistics'] = createExportWrapper('Z3_optimize_get_statistics', 2);
-var _Z3_optimize_from_string = Module['_Z3_optimize_from_string'] = createExportWrapper('Z3_optimize_from_string', 3);
-var _Z3_optimize_from_file = Module['_Z3_optimize_from_file'] = createExportWrapper('Z3_optimize_from_file', 3);
-var _Z3_optimize_get_assertions = Module['_Z3_optimize_get_assertions'] = createExportWrapper('Z3_optimize_get_assertions', 2);
-var _Z3_optimize_get_objectives = Module['_Z3_optimize_get_objectives'] = createExportWrapper('Z3_optimize_get_objectives', 2);
-var _Z3_optimize_set_initial_value = Module['_Z3_optimize_set_initial_value'] = createExportWrapper('Z3_optimize_set_initial_value', 4);
-var _Z3_optimize_translate = Module['_Z3_optimize_translate'] = createExportWrapper('Z3_optimize_translate', 3);
+var _Z3_mk_int_sort = Module['_Z3_mk_int_sort'] = createExportWrapper('Z3_mk_int_sort', 1);
+var _Z3_mk_real_sort = Module['_Z3_mk_real_sort'] = createExportWrapper('Z3_mk_real_sort', 1);
+var _Z3_mk_real_int64 = Module['_Z3_mk_real_int64'] = createExportWrapper('Z3_mk_real_int64', 3);
+var _Z3_mk_real = Module['_Z3_mk_real'] = createExportWrapper('Z3_mk_real', 3);
+var _Z3_mk_add = Module['_Z3_mk_add'] = createExportWrapper('Z3_mk_add', 3);
+var _Z3_mk_mul = Module['_Z3_mk_mul'] = createExportWrapper('Z3_mk_mul', 3);
+var _Z3_mk_power = Module['_Z3_mk_power'] = createExportWrapper('Z3_mk_power', 3);
+var _Z3_mk_mod = Module['_Z3_mk_mod'] = createExportWrapper('Z3_mk_mod', 3);
+var _Z3_mk_rem = Module['_Z3_mk_rem'] = createExportWrapper('Z3_mk_rem', 3);
+var _Z3_mk_div = Module['_Z3_mk_div'] = createExportWrapper('Z3_mk_div', 3);
+var _Z3_mk_lt = Module['_Z3_mk_lt'] = createExportWrapper('Z3_mk_lt', 3);
+var _Z3_mk_gt = Module['_Z3_mk_gt'] = createExportWrapper('Z3_mk_gt', 3);
+var _Z3_mk_le = Module['_Z3_mk_le'] = createExportWrapper('Z3_mk_le', 3);
+var _Z3_mk_ge = Module['_Z3_mk_ge'] = createExportWrapper('Z3_mk_ge', 3);
+var _Z3_mk_divides = Module['_Z3_mk_divides'] = createExportWrapper('Z3_mk_divides', 3);
+var _Z3_mk_abs = Module['_Z3_mk_abs'] = createExportWrapper('Z3_mk_abs', 2);
+var _Z3_mk_int2real = Module['_Z3_mk_int2real'] = createExportWrapper('Z3_mk_int2real', 2);
+var _Z3_mk_real2int = Module['_Z3_mk_real2int'] = createExportWrapper('Z3_mk_real2int', 2);
+var _Z3_mk_is_int = Module['_Z3_mk_is_int'] = createExportWrapper('Z3_mk_is_int', 2);
+var _Z3_mk_sub = Module['_Z3_mk_sub'] = createExportWrapper('Z3_mk_sub', 3);
+var _Z3_mk_unary_minus = Module['_Z3_mk_unary_minus'] = createExportWrapper('Z3_mk_unary_minus', 2);
+var _Z3_get_algebraic_number_lower = Module['_Z3_get_algebraic_number_lower'] = createExportWrapper('Z3_get_algebraic_number_lower', 3);
+var _Z3_get_algebraic_number_upper = Module['_Z3_get_algebraic_number_upper'] = createExportWrapper('Z3_get_algebraic_number_upper', 3);
+var _Z3_get_numerator = Module['_Z3_get_numerator'] = createExportWrapper('Z3_get_numerator', 2);
+var _Z3_get_denominator = Module['_Z3_get_denominator'] = createExportWrapper('Z3_get_denominator', 2);
+var _Z3_mk_array_sort = Module['_Z3_mk_array_sort'] = createExportWrapper('Z3_mk_array_sort', 3);
+var _Z3_mk_array_sort_n = Module['_Z3_mk_array_sort_n'] = createExportWrapper('Z3_mk_array_sort_n', 4);
+var _Z3_mk_select = Module['_Z3_mk_select'] = createExportWrapper('Z3_mk_select', 3);
+var _Z3_mk_select_n = Module['_Z3_mk_select_n'] = createExportWrapper('Z3_mk_select_n', 4);
+var _Z3_mk_store = Module['_Z3_mk_store'] = createExportWrapper('Z3_mk_store', 4);
+var _Z3_mk_store_n = Module['_Z3_mk_store_n'] = createExportWrapper('Z3_mk_store_n', 5);
+var _Z3_mk_map = Module['_Z3_mk_map'] = createExportWrapper('Z3_mk_map', 4);
+var _Z3_mk_const_array = Module['_Z3_mk_const_array'] = createExportWrapper('Z3_mk_const_array', 3);
+var _Z3_mk_array_default = Module['_Z3_mk_array_default'] = createExportWrapper('Z3_mk_array_default', 2);
+var _Z3_mk_set_sort = Module['_Z3_mk_set_sort'] = createExportWrapper('Z3_mk_set_sort', 2);
+var _Z3_mk_empty_set = Module['_Z3_mk_empty_set'] = createExportWrapper('Z3_mk_empty_set', 2);
+var _Z3_mk_full_set = Module['_Z3_mk_full_set'] = createExportWrapper('Z3_mk_full_set', 2);
+var _Z3_mk_set_union = Module['_Z3_mk_set_union'] = createExportWrapper('Z3_mk_set_union', 3);
+var _Z3_mk_set_intersect = Module['_Z3_mk_set_intersect'] = createExportWrapper('Z3_mk_set_intersect', 3);
+var _Z3_mk_set_difference = Module['_Z3_mk_set_difference'] = createExportWrapper('Z3_mk_set_difference', 3);
+var _Z3_mk_set_complement = Module['_Z3_mk_set_complement'] = createExportWrapper('Z3_mk_set_complement', 2);
+var _Z3_mk_set_subset = Module['_Z3_mk_set_subset'] = createExportWrapper('Z3_mk_set_subset', 3);
+var _Z3_mk_array_ext = Module['_Z3_mk_array_ext'] = createExportWrapper('Z3_mk_array_ext', 3);
+var _Z3_mk_as_array = Module['_Z3_mk_as_array'] = createExportWrapper('Z3_mk_as_array', 2);
+var _Z3_mk_set_member = Module['_Z3_mk_set_member'] = createExportWrapper('Z3_mk_set_member', 3);
+var _Z3_mk_set_add = Module['_Z3_mk_set_add'] = createExportWrapper('Z3_mk_set_add', 3);
+var _Z3_mk_set_del = Module['_Z3_mk_set_del'] = createExportWrapper('Z3_mk_set_del', 3);
+var _Z3_get_array_arity = Module['_Z3_get_array_arity'] = createExportWrapper('Z3_get_array_arity', 2);
+var _Z3_get_array_sort_domain = Module['_Z3_get_array_sort_domain'] = createExportWrapper('Z3_get_array_sort_domain', 2);
+var _Z3_get_array_sort_domain_n = Module['_Z3_get_array_sort_domain_n'] = createExportWrapper('Z3_get_array_sort_domain_n', 3);
+var _Z3_get_array_sort_range = Module['_Z3_get_array_sort_range'] = createExportWrapper('Z3_get_array_sort_range', 2);
 var _Z3_mk_int_symbol = Module['_Z3_mk_int_symbol'] = createExportWrapper('Z3_mk_int_symbol', 2);
 var _Z3_mk_string_symbol = Module['_Z3_mk_string_symbol'] = createExportWrapper('Z3_mk_string_symbol', 2);
 var _Z3_is_eq_sort = Module['_Z3_is_eq_sort'] = createExportWrapper('Z3_is_eq_sort', 3);
@@ -14308,6 +14169,7 @@ var _Z3_get_arity = Module['_Z3_get_arity'] = createExportWrapper('Z3_get_arity'
 var _Z3_get_domain_size = Module['_Z3_get_domain_size'] = createExportWrapper('Z3_get_domain_size', 2);
 var _Z3_get_domain = Module['_Z3_get_domain'] = createExportWrapper('Z3_get_domain', 3);
 var _Z3_get_range = Module['_Z3_get_range'] = createExportWrapper('Z3_get_range', 2);
+var _Z3_get_sort_kind = Module['_Z3_get_sort_kind'] = createExportWrapper('Z3_get_sort_kind', 2);
 var _Z3_get_bool_value = Module['_Z3_get_bool_value'] = createExportWrapper('Z3_get_bool_value', 2);
 var _Z3_simplify_get_help = Module['_Z3_simplify_get_help'] = createExportWrapper('Z3_simplify_get_help', 1);
 var _Z3_simplify_get_param_descrs = Module['_Z3_simplify_get_param_descrs'] = createExportWrapper('Z3_simplify_get_param_descrs', 1);
@@ -14322,60 +14184,177 @@ var _Z3_benchmark_to_smtlib_string = Module['_Z3_benchmark_to_smtlib_string'] = 
 var _Z3_get_decl_kind = Module['_Z3_get_decl_kind'] = createExportWrapper('Z3_get_decl_kind', 2);
 var _Z3_get_index_value = Module['_Z3_get_index_value'] = createExportWrapper('Z3_get_index_value', 2);
 var _Z3_translate = Module['_Z3_translate'] = createExportWrapper('Z3_translate', 3);
-var _Z3_mk_simple_solver = Module['_Z3_mk_simple_solver'] = createExportWrapper('Z3_mk_simple_solver', 1);
-var _Z3_mk_solver = Module['_Z3_mk_solver'] = createExportWrapper('Z3_mk_solver', 1);
-var _Z3_mk_solver_for_logic = Module['_Z3_mk_solver_for_logic'] = createExportWrapper('Z3_mk_solver_for_logic', 2);
-var _Z3_mk_solver_from_tactic = Module['_Z3_mk_solver_from_tactic'] = createExportWrapper('Z3_mk_solver_from_tactic', 2);
-var _Z3_solver_add_simplifier = Module['_Z3_solver_add_simplifier'] = createExportWrapper('Z3_solver_add_simplifier', 3);
-var _Z3_solver_translate = Module['_Z3_solver_translate'] = createExportWrapper('Z3_solver_translate', 3);
-var _Z3_solver_import_model_converter = Module['_Z3_solver_import_model_converter'] = createExportWrapper('Z3_solver_import_model_converter', 3);
-var _Z3_solver_from_string = Module['_Z3_solver_from_string'] = createExportWrapper('Z3_solver_from_string', 3);
-var _Z3_solver_from_file = Module['_Z3_solver_from_file'] = createExportWrapper('Z3_solver_from_file', 3);
-var _Z3_solver_get_help = Module['_Z3_solver_get_help'] = createExportWrapper('Z3_solver_get_help', 2);
-var _Z3_solver_get_param_descrs = Module['_Z3_solver_get_param_descrs'] = createExportWrapper('Z3_solver_get_param_descrs', 2);
-var _Z3_solver_set_params = Module['_Z3_solver_set_params'] = createExportWrapper('Z3_solver_set_params', 3);
-var _Z3_solver_inc_ref = Module['_Z3_solver_inc_ref'] = createExportWrapper('Z3_solver_inc_ref', 2);
-var _Z3_solver_dec_ref = Module['_Z3_solver_dec_ref'] = createExportWrapper('Z3_solver_dec_ref', 2);
-var _Z3_solver_push = Module['_Z3_solver_push'] = createExportWrapper('Z3_solver_push', 2);
-var _Z3_solver_interrupt = Module['_Z3_solver_interrupt'] = createExportWrapper('Z3_solver_interrupt', 2);
-var _Z3_solver_pop = Module['_Z3_solver_pop'] = createExportWrapper('Z3_solver_pop', 3);
-var _Z3_solver_reset = Module['_Z3_solver_reset'] = createExportWrapper('Z3_solver_reset', 2);
-var _Z3_solver_get_num_scopes = Module['_Z3_solver_get_num_scopes'] = createExportWrapper('Z3_solver_get_num_scopes', 2);
-var _Z3_solver_assert = Module['_Z3_solver_assert'] = createExportWrapper('Z3_solver_assert', 3);
-var _Z3_solver_assert_and_track = Module['_Z3_solver_assert_and_track'] = createExportWrapper('Z3_solver_assert_and_track', 4);
-var _Z3_solver_get_assertions = Module['_Z3_solver_get_assertions'] = createExportWrapper('Z3_solver_get_assertions', 2);
-var _Z3_solver_get_units = Module['_Z3_solver_get_units'] = createExportWrapper('Z3_solver_get_units', 2);
-var _Z3_solver_get_non_units = Module['_Z3_solver_get_non_units'] = createExportWrapper('Z3_solver_get_non_units', 2);
-var _Z3_solver_get_levels = Module['_Z3_solver_get_levels'] = createExportWrapper('Z3_solver_get_levels', 5);
-var _Z3_solver_get_trail = Module['_Z3_solver_get_trail'] = createExportWrapper('Z3_solver_get_trail', 2);
-var _pthread_self = () => (_pthread_self = wasmExports['pthread_self'])();
-var _Z3_solver_get_model = Module['_Z3_solver_get_model'] = createExportWrapper('Z3_solver_get_model', 2);
-var _Z3_solver_get_proof = Module['_Z3_solver_get_proof'] = createExportWrapper('Z3_solver_get_proof', 2);
-var _Z3_solver_get_unsat_core = Module['_Z3_solver_get_unsat_core'] = createExportWrapper('Z3_solver_get_unsat_core', 2);
-var _Z3_solver_get_reason_unknown = Module['_Z3_solver_get_reason_unknown'] = createExportWrapper('Z3_solver_get_reason_unknown', 2);
-var _Z3_solver_get_statistics = Module['_Z3_solver_get_statistics'] = createExportWrapper('Z3_solver_get_statistics', 2);
-var _Z3_solver_to_string = Module['_Z3_solver_to_string'] = createExportWrapper('Z3_solver_to_string', 2);
-var _Z3_solver_to_dimacs_string = Module['_Z3_solver_to_dimacs_string'] = createExportWrapper('Z3_solver_to_dimacs_string', 3);
-var _Z3_get_implied_equalities = Module['_Z3_get_implied_equalities'] = createExportWrapper('Z3_get_implied_equalities', 5);
-var _Z3_solver_congruence_root = Module['_Z3_solver_congruence_root'] = createExportWrapper('Z3_solver_congruence_root', 3);
-var _Z3_solver_congruence_next = Module['_Z3_solver_congruence_next'] = createExportWrapper('Z3_solver_congruence_next', 3);
-var _Z3_solver_congruence_explain = Module['_Z3_solver_congruence_explain'] = createExportWrapper('Z3_solver_congruence_explain', 4);
-var _Z3_solver_solve_for = Module['_Z3_solver_solve_for'] = createExportWrapper('Z3_solver_solve_for', 5);
-var _Z3_solver_register_on_clause = Module['_Z3_solver_register_on_clause'] = createExportWrapper('Z3_solver_register_on_clause', 4);
-var _Z3_solver_propagate_init = Module['_Z3_solver_propagate_init'] = createExportWrapper('Z3_solver_propagate_init', 6);
-var _Z3_solver_propagate_fixed = Module['_Z3_solver_propagate_fixed'] = createExportWrapper('Z3_solver_propagate_fixed', 3);
-var _Z3_solver_propagate_final = Module['_Z3_solver_propagate_final'] = createExportWrapper('Z3_solver_propagate_final', 3);
-var _Z3_solver_propagate_eq = Module['_Z3_solver_propagate_eq'] = createExportWrapper('Z3_solver_propagate_eq', 3);
-var _Z3_solver_propagate_diseq = Module['_Z3_solver_propagate_diseq'] = createExportWrapper('Z3_solver_propagate_diseq', 3);
-var _Z3_solver_propagate_register = Module['_Z3_solver_propagate_register'] = createExportWrapper('Z3_solver_propagate_register', 3);
-var _Z3_solver_propagate_register_cb = Module['_Z3_solver_propagate_register_cb'] = createExportWrapper('Z3_solver_propagate_register_cb', 3);
-var _Z3_solver_propagate_consequence = Module['_Z3_solver_propagate_consequence'] = createExportWrapper('Z3_solver_propagate_consequence', 8);
-var _Z3_solver_propagate_created = Module['_Z3_solver_propagate_created'] = createExportWrapper('Z3_solver_propagate_created', 3);
-var _Z3_solver_propagate_decide = Module['_Z3_solver_propagate_decide'] = createExportWrapper('Z3_solver_propagate_decide', 3);
-var _Z3_solver_propagate_on_binding = Module['_Z3_solver_propagate_on_binding'] = createExportWrapper('Z3_solver_propagate_on_binding', 3);
-var _Z3_solver_next_split = Module['_Z3_solver_next_split'] = createExportWrapper('Z3_solver_next_split', 5);
-var _Z3_solver_propagate_declare = Module['_Z3_solver_propagate_declare'] = createExportWrapper('Z3_solver_propagate_declare', 5);
-var _Z3_solver_set_initial_value = Module['_Z3_solver_set_initial_value'] = createExportWrapper('Z3_solver_set_initial_value', 4);
+var _Z3_mk_ast_map = Module['_Z3_mk_ast_map'] = createExportWrapper('Z3_mk_ast_map', 1);
+var _Z3_ast_map_inc_ref = Module['_Z3_ast_map_inc_ref'] = createExportWrapper('Z3_ast_map_inc_ref', 2);
+var _Z3_ast_map_dec_ref = Module['_Z3_ast_map_dec_ref'] = createExportWrapper('Z3_ast_map_dec_ref', 2);
+var _Z3_ast_map_contains = Module['_Z3_ast_map_contains'] = createExportWrapper('Z3_ast_map_contains', 3);
+var _Z3_ast_map_find = Module['_Z3_ast_map_find'] = createExportWrapper('Z3_ast_map_find', 3);
+var _Z3_ast_map_insert = Module['_Z3_ast_map_insert'] = createExportWrapper('Z3_ast_map_insert', 4);
+var _Z3_ast_map_reset = Module['_Z3_ast_map_reset'] = createExportWrapper('Z3_ast_map_reset', 2);
+var _Z3_ast_map_erase = Module['_Z3_ast_map_erase'] = createExportWrapper('Z3_ast_map_erase', 3);
+var _Z3_ast_map_size = Module['_Z3_ast_map_size'] = createExportWrapper('Z3_ast_map_size', 2);
+var _Z3_ast_map_keys = Module['_Z3_ast_map_keys'] = createExportWrapper('Z3_ast_map_keys', 2);
+var _Z3_ast_map_to_string = Module['_Z3_ast_map_to_string'] = createExportWrapper('Z3_ast_map_to_string', 2);
+var _Z3_mk_ast_vector = Module['_Z3_mk_ast_vector'] = createExportWrapper('Z3_mk_ast_vector', 1);
+var _Z3_ast_vector_inc_ref = Module['_Z3_ast_vector_inc_ref'] = createExportWrapper('Z3_ast_vector_inc_ref', 2);
+var _Z3_ast_vector_dec_ref = Module['_Z3_ast_vector_dec_ref'] = createExportWrapper('Z3_ast_vector_dec_ref', 2);
+var _Z3_ast_vector_size = Module['_Z3_ast_vector_size'] = createExportWrapper('Z3_ast_vector_size', 2);
+var _Z3_ast_vector_get = Module['_Z3_ast_vector_get'] = createExportWrapper('Z3_ast_vector_get', 3);
+var _Z3_ast_vector_set = Module['_Z3_ast_vector_set'] = createExportWrapper('Z3_ast_vector_set', 4);
+var _Z3_ast_vector_resize = Module['_Z3_ast_vector_resize'] = createExportWrapper('Z3_ast_vector_resize', 3);
+var _Z3_ast_vector_push = Module['_Z3_ast_vector_push'] = createExportWrapper('Z3_ast_vector_push', 3);
+var _Z3_ast_vector_translate = Module['_Z3_ast_vector_translate'] = createExportWrapper('Z3_ast_vector_translate', 3);
+var _Z3_ast_vector_to_string = Module['_Z3_ast_vector_to_string'] = createExportWrapper('Z3_ast_vector_to_string', 2);
+var _Z3_mk_bv_sort = Module['_Z3_mk_bv_sort'] = createExportWrapper('Z3_mk_bv_sort', 2);
+var _Z3_mk_bvnot = Module['_Z3_mk_bvnot'] = createExportWrapper('Z3_mk_bvnot', 2);
+var _Z3_mk_bvredand = Module['_Z3_mk_bvredand'] = createExportWrapper('Z3_mk_bvredand', 2);
+var _Z3_mk_bvredor = Module['_Z3_mk_bvredor'] = createExportWrapper('Z3_mk_bvredor', 2);
+var _Z3_mk_bvand = Module['_Z3_mk_bvand'] = createExportWrapper('Z3_mk_bvand', 3);
+var _Z3_mk_bvor = Module['_Z3_mk_bvor'] = createExportWrapper('Z3_mk_bvor', 3);
+var _Z3_mk_bvxor = Module['_Z3_mk_bvxor'] = createExportWrapper('Z3_mk_bvxor', 3);
+var _Z3_mk_bvnand = Module['_Z3_mk_bvnand'] = createExportWrapper('Z3_mk_bvnand', 3);
+var _Z3_mk_bvnor = Module['_Z3_mk_bvnor'] = createExportWrapper('Z3_mk_bvnor', 3);
+var _Z3_mk_bvxnor = Module['_Z3_mk_bvxnor'] = createExportWrapper('Z3_mk_bvxnor', 3);
+var _Z3_mk_bvadd = Module['_Z3_mk_bvadd'] = createExportWrapper('Z3_mk_bvadd', 3);
+var _Z3_mk_bvmul = Module['_Z3_mk_bvmul'] = createExportWrapper('Z3_mk_bvmul', 3);
+var _Z3_mk_bvudiv = Module['_Z3_mk_bvudiv'] = createExportWrapper('Z3_mk_bvudiv', 3);
+var _Z3_mk_bvsdiv = Module['_Z3_mk_bvsdiv'] = createExportWrapper('Z3_mk_bvsdiv', 3);
+var _Z3_mk_bvurem = Module['_Z3_mk_bvurem'] = createExportWrapper('Z3_mk_bvurem', 3);
+var _Z3_mk_bvsrem = Module['_Z3_mk_bvsrem'] = createExportWrapper('Z3_mk_bvsrem', 3);
+var _Z3_mk_bvsmod = Module['_Z3_mk_bvsmod'] = createExportWrapper('Z3_mk_bvsmod', 3);
+var _Z3_mk_bvule = Module['_Z3_mk_bvule'] = createExportWrapper('Z3_mk_bvule', 3);
+var _Z3_mk_bvsle = Module['_Z3_mk_bvsle'] = createExportWrapper('Z3_mk_bvsle', 3);
+var _Z3_mk_bvuge = Module['_Z3_mk_bvuge'] = createExportWrapper('Z3_mk_bvuge', 3);
+var _Z3_mk_bvsge = Module['_Z3_mk_bvsge'] = createExportWrapper('Z3_mk_bvsge', 3);
+var _Z3_mk_bvult = Module['_Z3_mk_bvult'] = createExportWrapper('Z3_mk_bvult', 3);
+var _Z3_mk_bvslt = Module['_Z3_mk_bvslt'] = createExportWrapper('Z3_mk_bvslt', 3);
+var _Z3_mk_bvugt = Module['_Z3_mk_bvugt'] = createExportWrapper('Z3_mk_bvugt', 3);
+var _Z3_mk_bvsgt = Module['_Z3_mk_bvsgt'] = createExportWrapper('Z3_mk_bvsgt', 3);
+var _Z3_mk_concat = Module['_Z3_mk_concat'] = createExportWrapper('Z3_mk_concat', 3);
+var _Z3_mk_bvshl = Module['_Z3_mk_bvshl'] = createExportWrapper('Z3_mk_bvshl', 3);
+var _Z3_mk_bvlshr = Module['_Z3_mk_bvlshr'] = createExportWrapper('Z3_mk_bvlshr', 3);
+var _Z3_mk_bvashr = Module['_Z3_mk_bvashr'] = createExportWrapper('Z3_mk_bvashr', 3);
+var _Z3_mk_ext_rotate_left = Module['_Z3_mk_ext_rotate_left'] = createExportWrapper('Z3_mk_ext_rotate_left', 3);
+var _Z3_mk_ext_rotate_right = Module['_Z3_mk_ext_rotate_right'] = createExportWrapper('Z3_mk_ext_rotate_right', 3);
+var _Z3_mk_extract = Module['_Z3_mk_extract'] = createExportWrapper('Z3_mk_extract', 4);
+var _Z3_mk_sign_ext = Module['_Z3_mk_sign_ext'] = createExportWrapper('Z3_mk_sign_ext', 3);
+var _Z3_mk_zero_ext = Module['_Z3_mk_zero_ext'] = createExportWrapper('Z3_mk_zero_ext', 3);
+var _Z3_mk_repeat = Module['_Z3_mk_repeat'] = createExportWrapper('Z3_mk_repeat', 3);
+var _Z3_mk_bit2bool = Module['_Z3_mk_bit2bool'] = createExportWrapper('Z3_mk_bit2bool', 3);
+var _Z3_mk_rotate_left = Module['_Z3_mk_rotate_left'] = createExportWrapper('Z3_mk_rotate_left', 3);
+var _Z3_mk_rotate_right = Module['_Z3_mk_rotate_right'] = createExportWrapper('Z3_mk_rotate_right', 3);
+var _Z3_mk_int2bv = Module['_Z3_mk_int2bv'] = createExportWrapper('Z3_mk_int2bv', 3);
+var _Z3_mk_bv2int = Module['_Z3_mk_bv2int'] = createExportWrapper('Z3_mk_bv2int', 3);
+var _Z3_get_bv_sort_size = Module['_Z3_get_bv_sort_size'] = createExportWrapper('Z3_get_bv_sort_size', 2);
+var _Z3_mk_bvadd_no_overflow = Module['_Z3_mk_bvadd_no_overflow'] = createExportWrapper('Z3_mk_bvadd_no_overflow', 4);
+var _Z3_mk_bvadd_no_underflow = Module['_Z3_mk_bvadd_no_underflow'] = createExportWrapper('Z3_mk_bvadd_no_underflow', 3);
+var _Z3_mk_bvsub_no_overflow = Module['_Z3_mk_bvsub_no_overflow'] = createExportWrapper('Z3_mk_bvsub_no_overflow', 3);
+var _Z3_mk_bvneg = Module['_Z3_mk_bvneg'] = createExportWrapper('Z3_mk_bvneg', 2);
+var _Z3_mk_bvsub_no_underflow = Module['_Z3_mk_bvsub_no_underflow'] = createExportWrapper('Z3_mk_bvsub_no_underflow', 4);
+var _Z3_mk_bvmul_no_overflow = Module['_Z3_mk_bvmul_no_overflow'] = createExportWrapper('Z3_mk_bvmul_no_overflow', 4);
+var _Z3_mk_bvmul_no_underflow = Module['_Z3_mk_bvmul_no_underflow'] = createExportWrapper('Z3_mk_bvmul_no_underflow', 3);
+var _Z3_mk_bvneg_no_overflow = Module['_Z3_mk_bvneg_no_overflow'] = createExportWrapper('Z3_mk_bvneg_no_overflow', 2);
+var _Z3_mk_bvsdiv_no_overflow = Module['_Z3_mk_bvsdiv_no_overflow'] = createExportWrapper('Z3_mk_bvsdiv_no_overflow', 3);
+var _Z3_mk_bvsub = Module['_Z3_mk_bvsub'] = createExportWrapper('Z3_mk_bvsub', 3);
+var _Z3_global_param_set = Module['_Z3_global_param_set'] = createExportWrapper('Z3_global_param_set', 2);
+var _Z3_global_param_reset_all = Module['_Z3_global_param_reset_all'] = createExportWrapper('Z3_global_param_reset_all', 0);
+var _Z3_global_param_get = Module['_Z3_global_param_get'] = createExportWrapper('Z3_global_param_get', 2);
+var _Z3_get_global_param_descrs = Module['_Z3_get_global_param_descrs'] = createExportWrapper('Z3_get_global_param_descrs', 1);
+var _Z3_mk_config = Module['_Z3_mk_config'] = createExportWrapper('Z3_mk_config', 0);
+var _Z3_del_config = Module['_Z3_del_config'] = createExportWrapper('Z3_del_config', 1);
+var _Z3_set_param_value = Module['_Z3_set_param_value'] = createExportWrapper('Z3_set_param_value', 3);
+var _Z3_update_param_value = Module['_Z3_update_param_value'] = createExportWrapper('Z3_update_param_value', 3);
+var _Z3_mk_context = Module['_Z3_mk_context'] = createExportWrapper('Z3_mk_context', 1);
+var _Z3_mk_context_rc = Module['_Z3_mk_context_rc'] = createExportWrapper('Z3_mk_context_rc', 1);
+var _Z3_del_context = Module['_Z3_del_context'] = createExportWrapper('Z3_del_context', 1);
+var _Z3_interrupt = Module['_Z3_interrupt'] = createExportWrapper('Z3_interrupt', 1);
+var _Z3_enable_concurrent_dec_ref = Module['_Z3_enable_concurrent_dec_ref'] = createExportWrapper('Z3_enable_concurrent_dec_ref', 1);
+var _Z3_toggle_warning_messages = Module['_Z3_toggle_warning_messages'] = createExportWrapper('Z3_toggle_warning_messages', 1);
+var _Z3_inc_ref = Module['_Z3_inc_ref'] = createExportWrapper('Z3_inc_ref', 2);
+var _Z3_dec_ref = Module['_Z3_dec_ref'] = createExportWrapper('Z3_dec_ref', 2);
+var _Z3_get_version = Module['_Z3_get_version'] = createExportWrapper('Z3_get_version', 4);
+var _Z3_get_full_version = Module['_Z3_get_full_version'] = createExportWrapper('Z3_get_full_version', 0);
+var _Z3_enable_trace = Module['_Z3_enable_trace'] = createExportWrapper('Z3_enable_trace', 1);
+var _Z3_disable_trace = Module['_Z3_disable_trace'] = createExportWrapper('Z3_disable_trace', 1);
+var _Z3_reset_memory = Module['_Z3_reset_memory'] = createExportWrapper('Z3_reset_memory', 0);
+var _Z3_finalize_memory = Module['_Z3_finalize_memory'] = createExportWrapper('Z3_finalize_memory', 0);
+var _Z3_get_error_code = Module['_Z3_get_error_code'] = createExportWrapper('Z3_get_error_code', 1);
+var _Z3_set_error = Module['_Z3_set_error'] = createExportWrapper('Z3_set_error', 2);
+var _Z3_set_ast_print_mode = Module['_Z3_set_ast_print_mode'] = createExportWrapper('Z3_set_ast_print_mode', 2);
+var _Z3_get_relation_arity = Module['_Z3_get_relation_arity'] = createExportWrapper('Z3_get_relation_arity', 2);
+var _Z3_get_relation_column = Module['_Z3_get_relation_column'] = createExportWrapper('Z3_get_relation_column', 3);
+var _Z3_mk_finite_domain_sort = Module['_Z3_mk_finite_domain_sort'] = createExportWrapper('Z3_mk_finite_domain_sort', 3);
+var _Z3_get_finite_domain_sort_size = Module['_Z3_get_finite_domain_sort_size'] = createExportWrapper('Z3_get_finite_domain_sort_size', 3);
+var _Z3_mk_fixedpoint = Module['_Z3_mk_fixedpoint'] = createExportWrapper('Z3_mk_fixedpoint', 1);
+var _Z3_fixedpoint_inc_ref = Module['_Z3_fixedpoint_inc_ref'] = createExportWrapper('Z3_fixedpoint_inc_ref', 2);
+var _Z3_fixedpoint_dec_ref = Module['_Z3_fixedpoint_dec_ref'] = createExportWrapper('Z3_fixedpoint_dec_ref', 2);
+var _Z3_fixedpoint_assert = Module['_Z3_fixedpoint_assert'] = createExportWrapper('Z3_fixedpoint_assert', 3);
+var _Z3_fixedpoint_add_rule = Module['_Z3_fixedpoint_add_rule'] = createExportWrapper('Z3_fixedpoint_add_rule', 4);
+var _Z3_fixedpoint_add_fact = Module['_Z3_fixedpoint_add_fact'] = createExportWrapper('Z3_fixedpoint_add_fact', 5);
+var _Z3_fixedpoint_get_answer = Module['_Z3_fixedpoint_get_answer'] = createExportWrapper('Z3_fixedpoint_get_answer', 2);
+var _Z3_fixedpoint_get_reason_unknown = Module['_Z3_fixedpoint_get_reason_unknown'] = createExportWrapper('Z3_fixedpoint_get_reason_unknown', 2);
+var _Z3_fixedpoint_to_string = Module['_Z3_fixedpoint_to_string'] = createExportWrapper('Z3_fixedpoint_to_string', 4);
+var _Z3_fixedpoint_from_string = Module['_Z3_fixedpoint_from_string'] = createExportWrapper('Z3_fixedpoint_from_string', 3);
+var _Z3_fixedpoint_from_file = Module['_Z3_fixedpoint_from_file'] = createExportWrapper('Z3_fixedpoint_from_file', 3);
+var _Z3_fixedpoint_get_statistics = Module['_Z3_fixedpoint_get_statistics'] = createExportWrapper('Z3_fixedpoint_get_statistics', 2);
+var _Z3_fixedpoint_register_relation = Module['_Z3_fixedpoint_register_relation'] = createExportWrapper('Z3_fixedpoint_register_relation', 3);
+var _Z3_fixedpoint_set_predicate_representation = Module['_Z3_fixedpoint_set_predicate_representation'] = createExportWrapper('Z3_fixedpoint_set_predicate_representation', 5);
+var _Z3_fixedpoint_get_rules = Module['_Z3_fixedpoint_get_rules'] = createExportWrapper('Z3_fixedpoint_get_rules', 2);
+var _Z3_fixedpoint_get_assertions = Module['_Z3_fixedpoint_get_assertions'] = createExportWrapper('Z3_fixedpoint_get_assertions', 2);
+var _Z3_fixedpoint_update_rule = Module['_Z3_fixedpoint_update_rule'] = createExportWrapper('Z3_fixedpoint_update_rule', 4);
+var _Z3_fixedpoint_get_num_levels = Module['_Z3_fixedpoint_get_num_levels'] = createExportWrapper('Z3_fixedpoint_get_num_levels', 3);
+var _Z3_fixedpoint_get_cover_delta = Module['_Z3_fixedpoint_get_cover_delta'] = createExportWrapper('Z3_fixedpoint_get_cover_delta', 4);
+var _Z3_fixedpoint_add_cover = Module['_Z3_fixedpoint_add_cover'] = createExportWrapper('Z3_fixedpoint_add_cover', 5);
+var _Z3_fixedpoint_get_help = Module['_Z3_fixedpoint_get_help'] = createExportWrapper('Z3_fixedpoint_get_help', 2);
+var _Z3_fixedpoint_get_param_descrs = Module['_Z3_fixedpoint_get_param_descrs'] = createExportWrapper('Z3_fixedpoint_get_param_descrs', 2);
+var _Z3_fixedpoint_set_params = Module['_Z3_fixedpoint_set_params'] = createExportWrapper('Z3_fixedpoint_set_params', 3);
+var _Z3_fixedpoint_get_ground_sat_answer = Module['_Z3_fixedpoint_get_ground_sat_answer'] = createExportWrapper('Z3_fixedpoint_get_ground_sat_answer', 2);
+var _Z3_fixedpoint_get_rules_along_trace = Module['_Z3_fixedpoint_get_rules_along_trace'] = createExportWrapper('Z3_fixedpoint_get_rules_along_trace', 2);
+var _Z3_fixedpoint_get_rule_names_along_trace = Module['_Z3_fixedpoint_get_rule_names_along_trace'] = createExportWrapper('Z3_fixedpoint_get_rule_names_along_trace', 2);
+var _Z3_fixedpoint_add_invariant = Module['_Z3_fixedpoint_add_invariant'] = createExportWrapper('Z3_fixedpoint_add_invariant', 4);
+var _Z3_fixedpoint_get_reachable = Module['_Z3_fixedpoint_get_reachable'] = createExportWrapper('Z3_fixedpoint_get_reachable', 3);
+var _Z3_mk_tuple_sort = Module['_Z3_mk_tuple_sort'] = createExportWrapper('Z3_mk_tuple_sort', 7);
+var _Z3_mk_enumeration_sort = Module['_Z3_mk_enumeration_sort'] = createExportWrapper('Z3_mk_enumeration_sort', 6);
+var _Z3_mk_list_sort = Module['_Z3_mk_list_sort'] = createExportWrapper('Z3_mk_list_sort', 9);
+var _Z3_mk_constructor = Module['_Z3_mk_constructor'] = createExportWrapper('Z3_mk_constructor', 7);
+var _Z3_constructor_num_fields = Module['_Z3_constructor_num_fields'] = createExportWrapper('Z3_constructor_num_fields', 2);
+var _Z3_query_constructor = Module['_Z3_query_constructor'] = createExportWrapper('Z3_query_constructor', 6);
+var _Z3_del_constructor = Module['_Z3_del_constructor'] = createExportWrapper('Z3_del_constructor', 2);
+var _Z3_mk_datatype = Module['_Z3_mk_datatype'] = createExportWrapper('Z3_mk_datatype', 4);
+var _Z3_mk_polymorphic_datatype = Module['_Z3_mk_polymorphic_datatype'] = createExportWrapper('Z3_mk_polymorphic_datatype', 6);
+var _Z3_mk_constructor_list = Module['_Z3_mk_constructor_list'] = createExportWrapper('Z3_mk_constructor_list', 3);
+var _Z3_del_constructor_list = Module['_Z3_del_constructor_list'] = createExportWrapper('Z3_del_constructor_list', 2);
+var _Z3_mk_datatype_sort = Module['_Z3_mk_datatype_sort'] = createExportWrapper('Z3_mk_datatype_sort', 4);
+var _Z3_mk_datatypes = Module['_Z3_mk_datatypes'] = createExportWrapper('Z3_mk_datatypes', 5);
+var _Z3_is_recursive_datatype_sort = Module['_Z3_is_recursive_datatype_sort'] = createExportWrapper('Z3_is_recursive_datatype_sort', 2);
+var _Z3_get_datatype_sort_num_constructors = Module['_Z3_get_datatype_sort_num_constructors'] = createExportWrapper('Z3_get_datatype_sort_num_constructors', 2);
+var _Z3_get_datatype_sort_constructor = Module['_Z3_get_datatype_sort_constructor'] = createExportWrapper('Z3_get_datatype_sort_constructor', 3);
+var _Z3_get_datatype_sort_recognizer = Module['_Z3_get_datatype_sort_recognizer'] = createExportWrapper('Z3_get_datatype_sort_recognizer', 3);
+var _Z3_get_datatype_sort_constructor_accessor = Module['_Z3_get_datatype_sort_constructor_accessor'] = createExportWrapper('Z3_get_datatype_sort_constructor_accessor', 4);
+var _Z3_get_tuple_sort_mk_decl = Module['_Z3_get_tuple_sort_mk_decl'] = createExportWrapper('Z3_get_tuple_sort_mk_decl', 2);
+var _Z3_get_tuple_sort_num_fields = Module['_Z3_get_tuple_sort_num_fields'] = createExportWrapper('Z3_get_tuple_sort_num_fields', 2);
+var _Z3_get_tuple_sort_field_decl = Module['_Z3_get_tuple_sort_field_decl'] = createExportWrapper('Z3_get_tuple_sort_field_decl', 3);
+var _Z3_datatype_update_field = Module['_Z3_datatype_update_field'] = createExportWrapper('Z3_datatype_update_field', 4);
+var _Z3_mk_finite_field_sort = Module['_Z3_mk_finite_field_sort'] = createExportWrapper('Z3_mk_finite_field_sort', 2);
+var _Z3_get_finite_field_sort_size = Module['_Z3_get_finite_field_sort_size'] = createExportWrapper('Z3_get_finite_field_sort_size', 2);
+var _Z3_mk_ff_add = Module['_Z3_mk_ff_add'] = createExportWrapper('Z3_mk_ff_add', 3);
+var _Z3_mk_ff_mul = Module['_Z3_mk_ff_mul'] = createExportWrapper('Z3_mk_ff_mul', 3);
+var _Z3_mk_ff_bitsum = Module['_Z3_mk_ff_bitsum'] = createExportWrapper('Z3_mk_ff_bitsum', 3);
+var _Z3_mk_ff_neg = Module['_Z3_mk_ff_neg'] = createExportWrapper('Z3_mk_ff_neg', 2);
+var _Z3_mk_finite_set_sort = Module['_Z3_mk_finite_set_sort'] = createExportWrapper('Z3_mk_finite_set_sort', 2);
+var _Z3_is_finite_set_sort = Module['_Z3_is_finite_set_sort'] = createExportWrapper('Z3_is_finite_set_sort', 2);
+var _Z3_get_finite_set_sort_basis = Module['_Z3_get_finite_set_sort_basis'] = createExportWrapper('Z3_get_finite_set_sort_basis', 2);
+var _Z3_mk_finite_set_empty = Module['_Z3_mk_finite_set_empty'] = createExportWrapper('Z3_mk_finite_set_empty', 2);
+var _Z3_mk_finite_set_singleton = Module['_Z3_mk_finite_set_singleton'] = createExportWrapper('Z3_mk_finite_set_singleton', 2);
+var _Z3_mk_finite_set_union = Module['_Z3_mk_finite_set_union'] = createExportWrapper('Z3_mk_finite_set_union', 3);
+var _Z3_mk_finite_set_intersect = Module['_Z3_mk_finite_set_intersect'] = createExportWrapper('Z3_mk_finite_set_intersect', 3);
+var _Z3_mk_finite_set_difference = Module['_Z3_mk_finite_set_difference'] = createExportWrapper('Z3_mk_finite_set_difference', 3);
+var _Z3_mk_finite_set_member = Module['_Z3_mk_finite_set_member'] = createExportWrapper('Z3_mk_finite_set_member', 3);
+var _Z3_mk_finite_set_size = Module['_Z3_mk_finite_set_size'] = createExportWrapper('Z3_mk_finite_set_size', 2);
+var _Z3_mk_finite_set_subset = Module['_Z3_mk_finite_set_subset'] = createExportWrapper('Z3_mk_finite_set_subset', 3);
+var _Z3_mk_finite_set_map = Module['_Z3_mk_finite_set_map'] = createExportWrapper('Z3_mk_finite_set_map', 3);
+var _Z3_mk_finite_set_filter = Module['_Z3_mk_finite_set_filter'] = createExportWrapper('Z3_mk_finite_set_filter', 3);
+var _Z3_mk_finite_set_range = Module['_Z3_mk_finite_set_range'] = createExportWrapper('Z3_mk_finite_set_range', 3);
 var _Z3_mk_fpa_rounding_mode_sort = Module['_Z3_mk_fpa_rounding_mode_sort'] = createExportWrapper('Z3_mk_fpa_rounding_mode_sort', 1);
 var _Z3_mk_fpa_round_nearest_ties_to_even = Module['_Z3_mk_fpa_round_nearest_ties_to_even'] = createExportWrapper('Z3_mk_fpa_round_nearest_ties_to_even', 1);
 var _Z3_mk_fpa_rne = Module['_Z3_mk_fpa_rne'] = createExportWrapper('Z3_mk_fpa_rne', 1);
@@ -14457,22 +14436,104 @@ var _Z3_fpa_is_numeral_normal = Module['_Z3_fpa_is_numeral_normal'] = createExpo
 var _Z3_fpa_is_numeral_subnormal = Module['_Z3_fpa_is_numeral_subnormal'] = createExportWrapper('Z3_fpa_is_numeral_subnormal', 2);
 var _Z3_fpa_is_numeral_positive = Module['_Z3_fpa_is_numeral_positive'] = createExportWrapper('Z3_fpa_is_numeral_positive', 2);
 var _Z3_fpa_is_numeral_negative = Module['_Z3_fpa_is_numeral_negative'] = createExportWrapper('Z3_fpa_is_numeral_negative', 2);
-var _Z3_mk_ast_map = Module['_Z3_mk_ast_map'] = createExportWrapper('Z3_mk_ast_map', 1);
-var _Z3_ast_map_inc_ref = Module['_Z3_ast_map_inc_ref'] = createExportWrapper('Z3_ast_map_inc_ref', 2);
-var _Z3_ast_map_dec_ref = Module['_Z3_ast_map_dec_ref'] = createExportWrapper('Z3_ast_map_dec_ref', 2);
-var _Z3_ast_map_contains = Module['_Z3_ast_map_contains'] = createExportWrapper('Z3_ast_map_contains', 3);
-var _Z3_ast_map_find = Module['_Z3_ast_map_find'] = createExportWrapper('Z3_ast_map_find', 3);
-var _Z3_ast_map_insert = Module['_Z3_ast_map_insert'] = createExportWrapper('Z3_ast_map_insert', 4);
-var _Z3_ast_map_reset = Module['_Z3_ast_map_reset'] = createExportWrapper('Z3_ast_map_reset', 2);
-var _Z3_ast_map_erase = Module['_Z3_ast_map_erase'] = createExportWrapper('Z3_ast_map_erase', 3);
-var _Z3_ast_map_size = Module['_Z3_ast_map_size'] = createExportWrapper('Z3_ast_map_size', 2);
-var _Z3_ast_map_keys = Module['_Z3_ast_map_keys'] = createExportWrapper('Z3_ast_map_keys', 2);
-var _Z3_ast_map_to_string = Module['_Z3_ast_map_to_string'] = createExportWrapper('Z3_ast_map_to_string', 2);
-var _Z3_mk_linear_order = Module['_Z3_mk_linear_order'] = createExportWrapper('Z3_mk_linear_order', 3);
-var _Z3_mk_partial_order = Module['_Z3_mk_partial_order'] = createExportWrapper('Z3_mk_partial_order', 3);
-var _Z3_mk_piecewise_linear_order = Module['_Z3_mk_piecewise_linear_order'] = createExportWrapper('Z3_mk_piecewise_linear_order', 3);
-var _Z3_mk_tree_order = Module['_Z3_mk_tree_order'] = createExportWrapper('Z3_mk_tree_order', 3);
-var _Z3_mk_transitive_closure = Module['_Z3_mk_transitive_closure'] = createExportWrapper('Z3_mk_transitive_closure', 2);
+var _Z3_mk_goal = Module['_Z3_mk_goal'] = createExportWrapper('Z3_mk_goal', 4);
+var _Z3_goal_inc_ref = Module['_Z3_goal_inc_ref'] = createExportWrapper('Z3_goal_inc_ref', 2);
+var _Z3_goal_dec_ref = Module['_Z3_goal_dec_ref'] = createExportWrapper('Z3_goal_dec_ref', 2);
+var _Z3_goal_precision = Module['_Z3_goal_precision'] = createExportWrapper('Z3_goal_precision', 2);
+var _Z3_goal_assert = Module['_Z3_goal_assert'] = createExportWrapper('Z3_goal_assert', 3);
+var _Z3_goal_inconsistent = Module['_Z3_goal_inconsistent'] = createExportWrapper('Z3_goal_inconsistent', 2);
+var _Z3_goal_depth = Module['_Z3_goal_depth'] = createExportWrapper('Z3_goal_depth', 2);
+var _Z3_goal_reset = Module['_Z3_goal_reset'] = createExportWrapper('Z3_goal_reset', 2);
+var _Z3_goal_size = Module['_Z3_goal_size'] = createExportWrapper('Z3_goal_size', 2);
+var _Z3_goal_formula = Module['_Z3_goal_formula'] = createExportWrapper('Z3_goal_formula', 3);
+var _Z3_goal_num_exprs = Module['_Z3_goal_num_exprs'] = createExportWrapper('Z3_goal_num_exprs', 2);
+var _Z3_goal_is_decided_sat = Module['_Z3_goal_is_decided_sat'] = createExportWrapper('Z3_goal_is_decided_sat', 2);
+var _Z3_goal_is_decided_unsat = Module['_Z3_goal_is_decided_unsat'] = createExportWrapper('Z3_goal_is_decided_unsat', 2);
+var _Z3_goal_convert_model = Module['_Z3_goal_convert_model'] = createExportWrapper('Z3_goal_convert_model', 3);
+var _Z3_goal_translate = Module['_Z3_goal_translate'] = createExportWrapper('Z3_goal_translate', 3);
+var _Z3_goal_to_string = Module['_Z3_goal_to_string'] = createExportWrapper('Z3_goal_to_string', 2);
+var _Z3_goal_to_dimacs_string = Module['_Z3_goal_to_dimacs_string'] = createExportWrapper('Z3_goal_to_dimacs_string', 3);
+var _Z3_open_log = Module['_Z3_open_log'] = createExportWrapper('Z3_open_log', 1);
+var _Z3_append_log = Module['_Z3_append_log'] = createExportWrapper('Z3_append_log', 1);
+var _Z3_close_log = Module['_Z3_close_log'] = createExportWrapper('Z3_close_log', 0);
+var _Z3_mk_model = Module['_Z3_mk_model'] = createExportWrapper('Z3_mk_model', 1);
+var _Z3_model_inc_ref = Module['_Z3_model_inc_ref'] = createExportWrapper('Z3_model_inc_ref', 2);
+var _Z3_model_dec_ref = Module['_Z3_model_dec_ref'] = createExportWrapper('Z3_model_dec_ref', 2);
+var _Z3_model_get_const_interp = Module['_Z3_model_get_const_interp'] = createExportWrapper('Z3_model_get_const_interp', 3);
+var _Z3_model_has_interp = Module['_Z3_model_has_interp'] = createExportWrapper('Z3_model_has_interp', 3);
+var _Z3_model_get_func_interp = Module['_Z3_model_get_func_interp'] = createExportWrapper('Z3_model_get_func_interp', 3);
+var _Z3_model_get_num_consts = Module['_Z3_model_get_num_consts'] = createExportWrapper('Z3_model_get_num_consts', 2);
+var _Z3_model_get_const_decl = Module['_Z3_model_get_const_decl'] = createExportWrapper('Z3_model_get_const_decl', 3);
+var _Z3_model_get_num_funcs = Module['_Z3_model_get_num_funcs'] = createExportWrapper('Z3_model_get_num_funcs', 2);
+var _Z3_model_get_func_decl = Module['_Z3_model_get_func_decl'] = createExportWrapper('Z3_model_get_func_decl', 3);
+var _Z3_model_eval = Module['_Z3_model_eval'] = createExportWrapper('Z3_model_eval', 5);
+var _Z3_model_get_num_sorts = Module['_Z3_model_get_num_sorts'] = createExportWrapper('Z3_model_get_num_sorts', 2);
+var _Z3_model_get_sort = Module['_Z3_model_get_sort'] = createExportWrapper('Z3_model_get_sort', 3);
+var _Z3_model_get_sort_universe = Module['_Z3_model_get_sort_universe'] = createExportWrapper('Z3_model_get_sort_universe', 3);
+var _Z3_model_translate = Module['_Z3_model_translate'] = createExportWrapper('Z3_model_translate', 3);
+var _Z3_is_as_array = Module['_Z3_is_as_array'] = createExportWrapper('Z3_is_as_array', 2);
+var _Z3_get_as_array_func_decl = Module['_Z3_get_as_array_func_decl'] = createExportWrapper('Z3_get_as_array_func_decl', 2);
+var _Z3_add_func_interp = Module['_Z3_add_func_interp'] = createExportWrapper('Z3_add_func_interp', 4);
+var _Z3_add_const_interp = Module['_Z3_add_const_interp'] = createExportWrapper('Z3_add_const_interp', 4);
+var _Z3_func_interp_inc_ref = Module['_Z3_func_interp_inc_ref'] = createExportWrapper('Z3_func_interp_inc_ref', 2);
+var _Z3_func_interp_dec_ref = Module['_Z3_func_interp_dec_ref'] = createExportWrapper('Z3_func_interp_dec_ref', 2);
+var _Z3_func_interp_get_num_entries = Module['_Z3_func_interp_get_num_entries'] = createExportWrapper('Z3_func_interp_get_num_entries', 2);
+var _Z3_func_interp_get_entry = Module['_Z3_func_interp_get_entry'] = createExportWrapper('Z3_func_interp_get_entry', 3);
+var _Z3_func_interp_get_else = Module['_Z3_func_interp_get_else'] = createExportWrapper('Z3_func_interp_get_else', 2);
+var _Z3_func_interp_set_else = Module['_Z3_func_interp_set_else'] = createExportWrapper('Z3_func_interp_set_else', 3);
+var _Z3_func_interp_get_arity = Module['_Z3_func_interp_get_arity'] = createExportWrapper('Z3_func_interp_get_arity', 2);
+var _Z3_func_interp_add_entry = Module['_Z3_func_interp_add_entry'] = createExportWrapper('Z3_func_interp_add_entry', 4);
+var _Z3_func_entry_inc_ref = Module['_Z3_func_entry_inc_ref'] = createExportWrapper('Z3_func_entry_inc_ref', 2);
+var _Z3_func_entry_dec_ref = Module['_Z3_func_entry_dec_ref'] = createExportWrapper('Z3_func_entry_dec_ref', 2);
+var _Z3_func_entry_get_value = Module['_Z3_func_entry_get_value'] = createExportWrapper('Z3_func_entry_get_value', 2);
+var _Z3_func_entry_get_num_args = Module['_Z3_func_entry_get_num_args'] = createExportWrapper('Z3_func_entry_get_num_args', 2);
+var _Z3_func_entry_get_arg = Module['_Z3_func_entry_get_arg'] = createExportWrapper('Z3_func_entry_get_arg', 3);
+var _Z3_model_to_string = Module['_Z3_model_to_string'] = createExportWrapper('Z3_model_to_string', 2);
+var _Z3_mk_numeral = Module['_Z3_mk_numeral'] = createExportWrapper('Z3_mk_numeral', 3);
+var _Z3_mk_int = Module['_Z3_mk_int'] = createExportWrapper('Z3_mk_int', 3);
+var _Z3_mk_unsigned_int = Module['_Z3_mk_unsigned_int'] = createExportWrapper('Z3_mk_unsigned_int', 3);
+var _Z3_mk_int64 = Module['_Z3_mk_int64'] = createExportWrapper('Z3_mk_int64', 3);
+var _Z3_mk_unsigned_int64 = Module['_Z3_mk_unsigned_int64'] = createExportWrapper('Z3_mk_unsigned_int64', 3);
+var _Z3_is_numeral_ast = Module['_Z3_is_numeral_ast'] = createExportWrapper('Z3_is_numeral_ast', 2);
+var _Z3_get_numeral_binary_string = Module['_Z3_get_numeral_binary_string'] = createExportWrapper('Z3_get_numeral_binary_string', 2);
+var _Z3_get_numeral_string = Module['_Z3_get_numeral_string'] = createExportWrapper('Z3_get_numeral_string', 2);
+var _Z3_get_numeral_double = Module['_Z3_get_numeral_double'] = createExportWrapper('Z3_get_numeral_double', 2);
+var _Z3_get_numeral_decimal_string = Module['_Z3_get_numeral_decimal_string'] = createExportWrapper('Z3_get_numeral_decimal_string', 3);
+var _Z3_get_numeral_small = Module['_Z3_get_numeral_small'] = createExportWrapper('Z3_get_numeral_small', 4);
+var _Z3_get_numeral_int = Module['_Z3_get_numeral_int'] = createExportWrapper('Z3_get_numeral_int', 3);
+var _Z3_get_numeral_int64 = Module['_Z3_get_numeral_int64'] = createExportWrapper('Z3_get_numeral_int64', 3);
+var _Z3_get_numeral_uint = Module['_Z3_get_numeral_uint'] = createExportWrapper('Z3_get_numeral_uint', 3);
+var _Z3_get_numeral_uint64 = Module['_Z3_get_numeral_uint64'] = createExportWrapper('Z3_get_numeral_uint64', 3);
+var _Z3_get_numeral_rational_int64 = Module['_Z3_get_numeral_rational_int64'] = createExportWrapper('Z3_get_numeral_rational_int64', 4);
+var _Z3_mk_bv_numeral = Module['_Z3_mk_bv_numeral'] = createExportWrapper('Z3_mk_bv_numeral', 3);
+var _Z3_mk_optimize = Module['_Z3_mk_optimize'] = createExportWrapper('Z3_mk_optimize', 1);
+var _Z3_optimize_inc_ref = Module['_Z3_optimize_inc_ref'] = createExportWrapper('Z3_optimize_inc_ref', 2);
+var _Z3_optimize_dec_ref = Module['_Z3_optimize_dec_ref'] = createExportWrapper('Z3_optimize_dec_ref', 2);
+var _Z3_optimize_assert = Module['_Z3_optimize_assert'] = createExportWrapper('Z3_optimize_assert', 3);
+var _Z3_optimize_assert_and_track = Module['_Z3_optimize_assert_and_track'] = createExportWrapper('Z3_optimize_assert_and_track', 4);
+var _Z3_optimize_assert_soft = Module['_Z3_optimize_assert_soft'] = createExportWrapper('Z3_optimize_assert_soft', 5);
+var _Z3_optimize_maximize = Module['_Z3_optimize_maximize'] = createExportWrapper('Z3_optimize_maximize', 3);
+var _Z3_optimize_minimize = Module['_Z3_optimize_minimize'] = createExportWrapper('Z3_optimize_minimize', 3);
+var _Z3_optimize_push = Module['_Z3_optimize_push'] = createExportWrapper('Z3_optimize_push', 2);
+var _Z3_optimize_pop = Module['_Z3_optimize_pop'] = createExportWrapper('Z3_optimize_pop', 2);
+var _Z3_optimize_get_unsat_core = Module['_Z3_optimize_get_unsat_core'] = createExportWrapper('Z3_optimize_get_unsat_core', 2);
+var _Z3_optimize_get_reason_unknown = Module['_Z3_optimize_get_reason_unknown'] = createExportWrapper('Z3_optimize_get_reason_unknown', 2);
+var _Z3_optimize_get_model = Module['_Z3_optimize_get_model'] = createExportWrapper('Z3_optimize_get_model', 2);
+var _Z3_optimize_set_params = Module['_Z3_optimize_set_params'] = createExportWrapper('Z3_optimize_set_params', 3);
+var _Z3_optimize_get_param_descrs = Module['_Z3_optimize_get_param_descrs'] = createExportWrapper('Z3_optimize_get_param_descrs', 2);
+var _Z3_optimize_get_lower = Module['_Z3_optimize_get_lower'] = createExportWrapper('Z3_optimize_get_lower', 3);
+var _Z3_optimize_get_upper = Module['_Z3_optimize_get_upper'] = createExportWrapper('Z3_optimize_get_upper', 3);
+var _Z3_optimize_get_lower_as_vector = Module['_Z3_optimize_get_lower_as_vector'] = createExportWrapper('Z3_optimize_get_lower_as_vector', 3);
+var _Z3_optimize_get_upper_as_vector = Module['_Z3_optimize_get_upper_as_vector'] = createExportWrapper('Z3_optimize_get_upper_as_vector', 3);
+var _Z3_optimize_to_string = Module['_Z3_optimize_to_string'] = createExportWrapper('Z3_optimize_to_string', 2);
+var _Z3_optimize_get_help = Module['_Z3_optimize_get_help'] = createExportWrapper('Z3_optimize_get_help', 2);
+var _Z3_optimize_get_statistics = Module['_Z3_optimize_get_statistics'] = createExportWrapper('Z3_optimize_get_statistics', 2);
+var _Z3_optimize_from_string = Module['_Z3_optimize_from_string'] = createExportWrapper('Z3_optimize_from_string', 3);
+var _Z3_optimize_from_file = Module['_Z3_optimize_from_file'] = createExportWrapper('Z3_optimize_from_file', 3);
+var _Z3_optimize_get_assertions = Module['_Z3_optimize_get_assertions'] = createExportWrapper('Z3_optimize_get_assertions', 2);
+var _Z3_optimize_get_objectives = Module['_Z3_optimize_get_objectives'] = createExportWrapper('Z3_optimize_get_objectives', 2);
+var _Z3_optimize_set_initial_value = Module['_Z3_optimize_set_initial_value'] = createExportWrapper('Z3_optimize_set_initial_value', 4);
+var _Z3_optimize_translate = Module['_Z3_optimize_translate'] = createExportWrapper('Z3_optimize_translate', 3);
 var _Z3_mk_params = Module['_Z3_mk_params'] = createExportWrapper('Z3_mk_params', 1);
 var _Z3_params_inc_ref = Module['_Z3_params_inc_ref'] = createExportWrapper('Z3_params_inc_ref', 2);
 var _Z3_params_dec_ref = Module['_Z3_params_dec_ref'] = createExportWrapper('Z3_params_dec_ref', 2);
@@ -14489,35 +14550,54 @@ var _Z3_param_descrs_size = Module['_Z3_param_descrs_size'] = createExportWrappe
 var _Z3_param_descrs_get_name = Module['_Z3_param_descrs_get_name'] = createExportWrapper('Z3_param_descrs_get_name', 3);
 var _Z3_param_descrs_get_documentation = Module['_Z3_param_descrs_get_documentation'] = createExportWrapper('Z3_param_descrs_get_documentation', 3);
 var _Z3_param_descrs_to_string = Module['_Z3_param_descrs_to_string'] = createExportWrapper('Z3_param_descrs_to_string', 2);
-var _Z3_open_log = Module['_Z3_open_log'] = createExportWrapper('Z3_open_log', 1);
-var _Z3_append_log = Module['_Z3_append_log'] = createExportWrapper('Z3_append_log', 1);
-var _Z3_close_log = Module['_Z3_close_log'] = createExportWrapper('Z3_close_log', 0);
-var _Z3_mk_array_sort = Module['_Z3_mk_array_sort'] = createExportWrapper('Z3_mk_array_sort', 3);
-var _Z3_mk_array_sort_n = Module['_Z3_mk_array_sort_n'] = createExportWrapper('Z3_mk_array_sort_n', 4);
-var _Z3_mk_select = Module['_Z3_mk_select'] = createExportWrapper('Z3_mk_select', 3);
-var _Z3_mk_select_n = Module['_Z3_mk_select_n'] = createExportWrapper('Z3_mk_select_n', 4);
-var _Z3_mk_store = Module['_Z3_mk_store'] = createExportWrapper('Z3_mk_store', 4);
-var _Z3_mk_store_n = Module['_Z3_mk_store_n'] = createExportWrapper('Z3_mk_store_n', 5);
-var _Z3_mk_map = Module['_Z3_mk_map'] = createExportWrapper('Z3_mk_map', 4);
-var _Z3_mk_const_array = Module['_Z3_mk_const_array'] = createExportWrapper('Z3_mk_const_array', 3);
-var _Z3_mk_array_default = Module['_Z3_mk_array_default'] = createExportWrapper('Z3_mk_array_default', 2);
-var _Z3_mk_set_sort = Module['_Z3_mk_set_sort'] = createExportWrapper('Z3_mk_set_sort', 2);
-var _Z3_mk_empty_set = Module['_Z3_mk_empty_set'] = createExportWrapper('Z3_mk_empty_set', 2);
-var _Z3_mk_full_set = Module['_Z3_mk_full_set'] = createExportWrapper('Z3_mk_full_set', 2);
-var _Z3_mk_set_union = Module['_Z3_mk_set_union'] = createExportWrapper('Z3_mk_set_union', 3);
-var _Z3_mk_set_intersect = Module['_Z3_mk_set_intersect'] = createExportWrapper('Z3_mk_set_intersect', 3);
-var _Z3_mk_set_difference = Module['_Z3_mk_set_difference'] = createExportWrapper('Z3_mk_set_difference', 3);
-var _Z3_mk_set_complement = Module['_Z3_mk_set_complement'] = createExportWrapper('Z3_mk_set_complement', 2);
-var _Z3_mk_set_subset = Module['_Z3_mk_set_subset'] = createExportWrapper('Z3_mk_set_subset', 3);
-var _Z3_mk_array_ext = Module['_Z3_mk_array_ext'] = createExportWrapper('Z3_mk_array_ext', 3);
-var _Z3_mk_as_array = Module['_Z3_mk_as_array'] = createExportWrapper('Z3_mk_as_array', 2);
-var _Z3_mk_set_member = Module['_Z3_mk_set_member'] = createExportWrapper('Z3_mk_set_member', 3);
-var _Z3_mk_set_add = Module['_Z3_mk_set_add'] = createExportWrapper('Z3_mk_set_add', 3);
-var _Z3_mk_set_del = Module['_Z3_mk_set_del'] = createExportWrapper('Z3_mk_set_del', 3);
-var _Z3_get_array_arity = Module['_Z3_get_array_arity'] = createExportWrapper('Z3_get_array_arity', 2);
-var _Z3_get_array_sort_domain = Module['_Z3_get_array_sort_domain'] = createExportWrapper('Z3_get_array_sort_domain', 2);
-var _Z3_get_array_sort_domain_n = Module['_Z3_get_array_sort_domain_n'] = createExportWrapper('Z3_get_array_sort_domain_n', 3);
-var _Z3_get_array_sort_range = Module['_Z3_get_array_sort_range'] = createExportWrapper('Z3_get_array_sort_range', 2);
+var _Z3_mk_parser_context = Module['_Z3_mk_parser_context'] = createExportWrapper('Z3_mk_parser_context', 1);
+var _Z3_parser_context_inc_ref = Module['_Z3_parser_context_inc_ref'] = createExportWrapper('Z3_parser_context_inc_ref', 2);
+var _Z3_parser_context_dec_ref = Module['_Z3_parser_context_dec_ref'] = createExportWrapper('Z3_parser_context_dec_ref', 2);
+var _Z3_parser_context_add_sort = Module['_Z3_parser_context_add_sort'] = createExportWrapper('Z3_parser_context_add_sort', 3);
+var _Z3_parser_context_add_decl = Module['_Z3_parser_context_add_decl'] = createExportWrapper('Z3_parser_context_add_decl', 3);
+var _Z3_parser_context_from_string = Module['_Z3_parser_context_from_string'] = createExportWrapper('Z3_parser_context_from_string', 3);
+var _Z3_parse_smtlib2_string = Module['_Z3_parse_smtlib2_string'] = createExportWrapper('Z3_parse_smtlib2_string', 8);
+var _Z3_parse_smtlib2_file = Module['_Z3_parse_smtlib2_file'] = createExportWrapper('Z3_parse_smtlib2_file', 8);
+var _Z3_mk_atmost = Module['_Z3_mk_atmost'] = createExportWrapper('Z3_mk_atmost', 4);
+var _Z3_mk_atleast = Module['_Z3_mk_atleast'] = createExportWrapper('Z3_mk_atleast', 4);
+var _Z3_mk_pble = Module['_Z3_mk_pble'] = createExportWrapper('Z3_mk_pble', 5);
+var _Z3_mk_pbge = Module['_Z3_mk_pbge'] = createExportWrapper('Z3_mk_pbge', 5);
+var _Z3_mk_pbeq = Module['_Z3_mk_pbeq'] = createExportWrapper('Z3_mk_pbeq', 5);
+var _Z3_qe_model_project = Module['_Z3_qe_model_project'] = createExportWrapper('Z3_qe_model_project', 5);
+var _Z3_qe_model_project_skolem = Module['_Z3_qe_model_project_skolem'] = createExportWrapper('Z3_qe_model_project_skolem', 6);
+var _Z3_qe_model_project_with_witness = Module['_Z3_qe_model_project_with_witness'] = createExportWrapper('Z3_qe_model_project_with_witness', 6);
+var _Z3_model_extrapolate = Module['_Z3_model_extrapolate'] = createExportWrapper('Z3_model_extrapolate', 3);
+var _Z3_qe_lite = Module['_Z3_qe_lite'] = createExportWrapper('Z3_qe_lite', 3);
+var _Z3_mk_quantifier = Module['_Z3_mk_quantifier'] = createExportWrapper('Z3_mk_quantifier', 9);
+var _Z3_mk_quantifier_ex = Module['_Z3_mk_quantifier_ex'] = createExportWrapper('Z3_mk_quantifier_ex', 13);
+var _Z3_mk_forall = Module['_Z3_mk_forall'] = createExportWrapper('Z3_mk_forall', 8);
+var _Z3_mk_exists = Module['_Z3_mk_exists'] = createExportWrapper('Z3_mk_exists', 8);
+var _Z3_mk_lambda = Module['_Z3_mk_lambda'] = createExportWrapper('Z3_mk_lambda', 5);
+var _Z3_mk_lambda_const = Module['_Z3_mk_lambda_const'] = createExportWrapper('Z3_mk_lambda_const', 4);
+var _Z3_mk_quantifier_const_ex = Module['_Z3_mk_quantifier_const_ex'] = createExportWrapper('Z3_mk_quantifier_const_ex', 12);
+var _Z3_mk_quantifier_const = Module['_Z3_mk_quantifier_const'] = createExportWrapper('Z3_mk_quantifier_const', 8);
+var _Z3_mk_forall_const = Module['_Z3_mk_forall_const'] = createExportWrapper('Z3_mk_forall_const', 7);
+var _Z3_mk_exists_const = Module['_Z3_mk_exists_const'] = createExportWrapper('Z3_mk_exists_const', 7);
+var _Z3_mk_pattern = Module['_Z3_mk_pattern'] = createExportWrapper('Z3_mk_pattern', 3);
+var _Z3_mk_bound = Module['_Z3_mk_bound'] = createExportWrapper('Z3_mk_bound', 3);
+var _Z3_is_quantifier_forall = Module['_Z3_is_quantifier_forall'] = createExportWrapper('Z3_is_quantifier_forall', 2);
+var _Z3_is_quantifier_exists = Module['_Z3_is_quantifier_exists'] = createExportWrapper('Z3_is_quantifier_exists', 2);
+var _Z3_is_lambda = Module['_Z3_is_lambda'] = createExportWrapper('Z3_is_lambda', 2);
+var _Z3_get_quantifier_weight = Module['_Z3_get_quantifier_weight'] = createExportWrapper('Z3_get_quantifier_weight', 2);
+var _Z3_get_quantifier_skolem_id = Module['_Z3_get_quantifier_skolem_id'] = createExportWrapper('Z3_get_quantifier_skolem_id', 2);
+var _Z3_get_quantifier_id = Module['_Z3_get_quantifier_id'] = createExportWrapper('Z3_get_quantifier_id', 2);
+var _Z3_get_quantifier_num_patterns = Module['_Z3_get_quantifier_num_patterns'] = createExportWrapper('Z3_get_quantifier_num_patterns', 2);
+var _Z3_get_quantifier_pattern_ast = Module['_Z3_get_quantifier_pattern_ast'] = createExportWrapper('Z3_get_quantifier_pattern_ast', 3);
+var _Z3_get_quantifier_num_no_patterns = Module['_Z3_get_quantifier_num_no_patterns'] = createExportWrapper('Z3_get_quantifier_num_no_patterns', 2);
+var _Z3_get_quantifier_no_pattern_ast = Module['_Z3_get_quantifier_no_pattern_ast'] = createExportWrapper('Z3_get_quantifier_no_pattern_ast', 3);
+var _Z3_get_quantifier_bound_name = Module['_Z3_get_quantifier_bound_name'] = createExportWrapper('Z3_get_quantifier_bound_name', 3);
+var _Z3_get_quantifier_bound_sort = Module['_Z3_get_quantifier_bound_sort'] = createExportWrapper('Z3_get_quantifier_bound_sort', 3);
+var _Z3_get_quantifier_body = Module['_Z3_get_quantifier_body'] = createExportWrapper('Z3_get_quantifier_body', 2);
+var _Z3_get_quantifier_num_bound = Module['_Z3_get_quantifier_num_bound'] = createExportWrapper('Z3_get_quantifier_num_bound', 2);
+var _Z3_get_pattern_num_terms = Module['_Z3_get_pattern_num_terms'] = createExportWrapper('Z3_get_pattern_num_terms', 2);
+var _Z3_get_pattern = Module['_Z3_get_pattern'] = createExportWrapper('Z3_get_pattern', 3);
+var _Z3_pattern_to_ast = Module['_Z3_pattern_to_ast'] = createExportWrapper('Z3_pattern_to_ast', 2);
+var _Z3_pattern_to_string = Module['_Z3_pattern_to_string'] = createExportWrapper('Z3_pattern_to_string', 2);
 var _Z3_rcf_del = Module['_Z3_rcf_del'] = createExportWrapper('Z3_rcf_del', 2);
 var _Z3_rcf_mk_rational = Module['_Z3_rcf_mk_rational'] = createExportWrapper('Z3_rcf_mk_rational', 2);
 var _Z3_rcf_mk_small_int = Module['_Z3_rcf_mk_small_int'] = createExportWrapper('Z3_rcf_mk_small_int', 2);
@@ -14555,69 +14635,6 @@ var _Z3_rcf_num_sign_conditions = Module['_Z3_rcf_num_sign_conditions'] = create
 var _Z3_rcf_sign_condition_sign = Module['_Z3_rcf_sign_condition_sign'] = createExportWrapper('Z3_rcf_sign_condition_sign', 3);
 var _Z3_rcf_num_sign_condition_coefficients = Module['_Z3_rcf_num_sign_condition_coefficients'] = createExportWrapper('Z3_rcf_num_sign_condition_coefficients', 3);
 var _Z3_rcf_sign_condition_coefficient = Module['_Z3_rcf_sign_condition_coefficient'] = createExportWrapper('Z3_rcf_sign_condition_coefficient', 4);
-var _Z3_mk_int_sort = Module['_Z3_mk_int_sort'] = createExportWrapper('Z3_mk_int_sort', 1);
-var _Z3_mk_real_sort = Module['_Z3_mk_real_sort'] = createExportWrapper('Z3_mk_real_sort', 1);
-var _Z3_mk_real_int64 = Module['_Z3_mk_real_int64'] = createExportWrapper('Z3_mk_real_int64', 3);
-var _Z3_mk_real = Module['_Z3_mk_real'] = createExportWrapper('Z3_mk_real', 3);
-var _Z3_mk_add = Module['_Z3_mk_add'] = createExportWrapper('Z3_mk_add', 3);
-var _Z3_mk_mul = Module['_Z3_mk_mul'] = createExportWrapper('Z3_mk_mul', 3);
-var _Z3_mk_power = Module['_Z3_mk_power'] = createExportWrapper('Z3_mk_power', 3);
-var _Z3_mk_mod = Module['_Z3_mk_mod'] = createExportWrapper('Z3_mk_mod', 3);
-var _Z3_mk_rem = Module['_Z3_mk_rem'] = createExportWrapper('Z3_mk_rem', 3);
-var _Z3_mk_div = Module['_Z3_mk_div'] = createExportWrapper('Z3_mk_div', 3);
-var _Z3_mk_lt = Module['_Z3_mk_lt'] = createExportWrapper('Z3_mk_lt', 3);
-var _Z3_mk_gt = Module['_Z3_mk_gt'] = createExportWrapper('Z3_mk_gt', 3);
-var _Z3_mk_le = Module['_Z3_mk_le'] = createExportWrapper('Z3_mk_le', 3);
-var _Z3_mk_ge = Module['_Z3_mk_ge'] = createExportWrapper('Z3_mk_ge', 3);
-var _Z3_mk_divides = Module['_Z3_mk_divides'] = createExportWrapper('Z3_mk_divides', 3);
-var _Z3_mk_abs = Module['_Z3_mk_abs'] = createExportWrapper('Z3_mk_abs', 2);
-var _Z3_mk_int2real = Module['_Z3_mk_int2real'] = createExportWrapper('Z3_mk_int2real', 2);
-var _Z3_mk_real2int = Module['_Z3_mk_real2int'] = createExportWrapper('Z3_mk_real2int', 2);
-var _Z3_mk_is_int = Module['_Z3_mk_is_int'] = createExportWrapper('Z3_mk_is_int', 2);
-var _Z3_mk_sub = Module['_Z3_mk_sub'] = createExportWrapper('Z3_mk_sub', 3);
-var _Z3_mk_unary_minus = Module['_Z3_mk_unary_minus'] = createExportWrapper('Z3_mk_unary_minus', 2);
-var _Z3_get_algebraic_number_lower = Module['_Z3_get_algebraic_number_lower'] = createExportWrapper('Z3_get_algebraic_number_lower', 3);
-var _Z3_get_algebraic_number_upper = Module['_Z3_get_algebraic_number_upper'] = createExportWrapper('Z3_get_algebraic_number_upper', 3);
-var _Z3_get_numerator = Module['_Z3_get_numerator'] = createExportWrapper('Z3_get_numerator', 2);
-var _Z3_get_denominator = Module['_Z3_get_denominator'] = createExportWrapper('Z3_get_denominator', 2);
-var _Z3_mk_atmost = Module['_Z3_mk_atmost'] = createExportWrapper('Z3_mk_atmost', 4);
-var _Z3_mk_atleast = Module['_Z3_mk_atleast'] = createExportWrapper('Z3_mk_atleast', 4);
-var _Z3_mk_pble = Module['_Z3_mk_pble'] = createExportWrapper('Z3_mk_pble', 5);
-var _Z3_mk_pbge = Module['_Z3_mk_pbge'] = createExportWrapper('Z3_mk_pbge', 5);
-var _Z3_mk_pbeq = Module['_Z3_mk_pbeq'] = createExportWrapper('Z3_mk_pbeq', 5);
-var _Z3_mk_parser_context = Module['_Z3_mk_parser_context'] = createExportWrapper('Z3_mk_parser_context', 1);
-var _Z3_parser_context_inc_ref = Module['_Z3_parser_context_inc_ref'] = createExportWrapper('Z3_parser_context_inc_ref', 2);
-var _Z3_parser_context_dec_ref = Module['_Z3_parser_context_dec_ref'] = createExportWrapper('Z3_parser_context_dec_ref', 2);
-var _Z3_parser_context_add_sort = Module['_Z3_parser_context_add_sort'] = createExportWrapper('Z3_parser_context_add_sort', 3);
-var _Z3_parser_context_add_decl = Module['_Z3_parser_context_add_decl'] = createExportWrapper('Z3_parser_context_add_decl', 3);
-var _Z3_parser_context_from_string = Module['_Z3_parser_context_from_string'] = createExportWrapper('Z3_parser_context_from_string', 3);
-var _Z3_parse_smtlib2_string = Module['_Z3_parse_smtlib2_string'] = createExportWrapper('Z3_parse_smtlib2_string', 8);
-var _Z3_parse_smtlib2_file = Module['_Z3_parse_smtlib2_file'] = createExportWrapper('Z3_parse_smtlib2_file', 8);
-var _Z3_global_param_set = Module['_Z3_global_param_set'] = createExportWrapper('Z3_global_param_set', 2);
-var _Z3_global_param_reset_all = Module['_Z3_global_param_reset_all'] = createExportWrapper('Z3_global_param_reset_all', 0);
-var _Z3_global_param_get = Module['_Z3_global_param_get'] = createExportWrapper('Z3_global_param_get', 2);
-var _Z3_get_global_param_descrs = Module['_Z3_get_global_param_descrs'] = createExportWrapper('Z3_get_global_param_descrs', 1);
-var _Z3_mk_config = Module['_Z3_mk_config'] = createExportWrapper('Z3_mk_config', 0);
-var _Z3_del_config = Module['_Z3_del_config'] = createExportWrapper('Z3_del_config', 1);
-var _Z3_set_param_value = Module['_Z3_set_param_value'] = createExportWrapper('Z3_set_param_value', 3);
-var _Z3_update_param_value = Module['_Z3_update_param_value'] = createExportWrapper('Z3_update_param_value', 3);
-var _Z3_mk_numeral = Module['_Z3_mk_numeral'] = createExportWrapper('Z3_mk_numeral', 3);
-var _Z3_mk_int = Module['_Z3_mk_int'] = createExportWrapper('Z3_mk_int', 3);
-var _Z3_mk_unsigned_int = Module['_Z3_mk_unsigned_int'] = createExportWrapper('Z3_mk_unsigned_int', 3);
-var _Z3_mk_int64 = Module['_Z3_mk_int64'] = createExportWrapper('Z3_mk_int64', 3);
-var _Z3_mk_unsigned_int64 = Module['_Z3_mk_unsigned_int64'] = createExportWrapper('Z3_mk_unsigned_int64', 3);
-var _Z3_is_numeral_ast = Module['_Z3_is_numeral_ast'] = createExportWrapper('Z3_is_numeral_ast', 2);
-var _Z3_get_numeral_binary_string = Module['_Z3_get_numeral_binary_string'] = createExportWrapper('Z3_get_numeral_binary_string', 2);
-var _Z3_get_numeral_string = Module['_Z3_get_numeral_string'] = createExportWrapper('Z3_get_numeral_string', 2);
-var _Z3_get_numeral_double = Module['_Z3_get_numeral_double'] = createExportWrapper('Z3_get_numeral_double', 2);
-var _Z3_get_numeral_decimal_string = Module['_Z3_get_numeral_decimal_string'] = createExportWrapper('Z3_get_numeral_decimal_string', 3);
-var _Z3_get_numeral_small = Module['_Z3_get_numeral_small'] = createExportWrapper('Z3_get_numeral_small', 4);
-var _Z3_get_numeral_int = Module['_Z3_get_numeral_int'] = createExportWrapper('Z3_get_numeral_int', 3);
-var _Z3_get_numeral_int64 = Module['_Z3_get_numeral_int64'] = createExportWrapper('Z3_get_numeral_int64', 3);
-var _Z3_get_numeral_uint = Module['_Z3_get_numeral_uint'] = createExportWrapper('Z3_get_numeral_uint', 3);
-var _Z3_get_numeral_uint64 = Module['_Z3_get_numeral_uint64'] = createExportWrapper('Z3_get_numeral_uint64', 3);
-var _Z3_get_numeral_rational_int64 = Module['_Z3_get_numeral_rational_int64'] = createExportWrapper('Z3_get_numeral_rational_int64', 4);
-var _Z3_mk_bv_numeral = Module['_Z3_mk_bv_numeral'] = createExportWrapper('Z3_mk_bv_numeral', 3);
 var _Z3_mk_seq_sort = Module['_Z3_mk_seq_sort'] = createExportWrapper('Z3_mk_seq_sort', 2);
 var _Z3_mk_re_sort = Module['_Z3_mk_re_sort'] = createExportWrapper('Z3_mk_re_sort', 2);
 var _Z3_mk_string = Module['_Z3_mk_string'] = createExportWrapper('Z3_mk_string', 2);
@@ -14655,6 +14672,7 @@ var _Z3_mk_seq_replace_re_all = Module['_Z3_mk_seq_replace_re_all'] = createExpo
 var _Z3_mk_seq_at = Module['_Z3_mk_seq_at'] = createExportWrapper('Z3_mk_seq_at', 3);
 var _Z3_mk_seq_nth = Module['_Z3_mk_seq_nth'] = createExportWrapper('Z3_mk_seq_nth', 3);
 var _Z3_mk_seq_length = Module['_Z3_mk_seq_length'] = createExportWrapper('Z3_mk_seq_length', 2);
+var _Z3_mk_seq_power = Module['_Z3_mk_seq_power'] = createExportWrapper('Z3_mk_seq_power', 3);
 var _Z3_mk_seq_index = Module['_Z3_mk_seq_index'] = createExportWrapper('Z3_mk_seq_index', 4);
 var _Z3_mk_seq_last_index = Module['_Z3_mk_seq_last_index'] = createExportWrapper('Z3_mk_seq_last_index', 3);
 var _Z3_mk_seq_to_re = Module['_Z3_mk_seq_to_re'] = createExportWrapper('Z3_mk_seq_to_re', 2);
@@ -14686,6 +14704,127 @@ var _Z3_mk_seq_map = Module['_Z3_mk_seq_map'] = createExportWrapper('Z3_mk_seq_m
 var _Z3_mk_seq_mapi = Module['_Z3_mk_seq_mapi'] = createExportWrapper('Z3_mk_seq_mapi', 4);
 var _Z3_mk_seq_foldl = Module['_Z3_mk_seq_foldl'] = createExportWrapper('Z3_mk_seq_foldl', 4);
 var _Z3_mk_seq_foldli = Module['_Z3_mk_seq_foldli'] = createExportWrapper('Z3_mk_seq_foldli', 5);
+var _Z3_mk_simple_solver = Module['_Z3_mk_simple_solver'] = createExportWrapper('Z3_mk_simple_solver', 1);
+var _Z3_mk_solver = Module['_Z3_mk_solver'] = createExportWrapper('Z3_mk_solver', 1);
+var _Z3_mk_solver_for_logic = Module['_Z3_mk_solver_for_logic'] = createExportWrapper('Z3_mk_solver_for_logic', 2);
+var _Z3_mk_solver_from_tactic = Module['_Z3_mk_solver_from_tactic'] = createExportWrapper('Z3_mk_solver_from_tactic', 2);
+var _Z3_solver_add_simplifier = Module['_Z3_solver_add_simplifier'] = createExportWrapper('Z3_solver_add_simplifier', 3);
+var _Z3_solver_translate = Module['_Z3_solver_translate'] = createExportWrapper('Z3_solver_translate', 3);
+var _Z3_solver_import_model_converter = Module['_Z3_solver_import_model_converter'] = createExportWrapper('Z3_solver_import_model_converter', 3);
+var _Z3_solver_from_string = Module['_Z3_solver_from_string'] = createExportWrapper('Z3_solver_from_string', 3);
+var _Z3_solver_from_file = Module['_Z3_solver_from_file'] = createExportWrapper('Z3_solver_from_file', 3);
+var _Z3_solver_get_help = Module['_Z3_solver_get_help'] = createExportWrapper('Z3_solver_get_help', 2);
+var _Z3_solver_get_param_descrs = Module['_Z3_solver_get_param_descrs'] = createExportWrapper('Z3_solver_get_param_descrs', 2);
+var _Z3_solver_set_params = Module['_Z3_solver_set_params'] = createExportWrapper('Z3_solver_set_params', 3);
+var _Z3_solver_inc_ref = Module['_Z3_solver_inc_ref'] = createExportWrapper('Z3_solver_inc_ref', 2);
+var _Z3_solver_dec_ref = Module['_Z3_solver_dec_ref'] = createExportWrapper('Z3_solver_dec_ref', 2);
+var _Z3_solver_push = Module['_Z3_solver_push'] = createExportWrapper('Z3_solver_push', 2);
+var _Z3_solver_interrupt = Module['_Z3_solver_interrupt'] = createExportWrapper('Z3_solver_interrupt', 2);
+var _Z3_solver_pop = Module['_Z3_solver_pop'] = createExportWrapper('Z3_solver_pop', 3);
+var _Z3_solver_reset = Module['_Z3_solver_reset'] = createExportWrapper('Z3_solver_reset', 2);
+var _Z3_solver_get_num_scopes = Module['_Z3_solver_get_num_scopes'] = createExportWrapper('Z3_solver_get_num_scopes', 2);
+var _Z3_solver_assert = Module['_Z3_solver_assert'] = createExportWrapper('Z3_solver_assert', 3);
+var _Z3_solver_assert_and_track = Module['_Z3_solver_assert_and_track'] = createExportWrapper('Z3_solver_assert_and_track', 4);
+var _Z3_solver_get_assertions = Module['_Z3_solver_get_assertions'] = createExportWrapper('Z3_solver_get_assertions', 2);
+var _Z3_solver_get_units = Module['_Z3_solver_get_units'] = createExportWrapper('Z3_solver_get_units', 2);
+var _Z3_solver_get_non_units = Module['_Z3_solver_get_non_units'] = createExportWrapper('Z3_solver_get_non_units', 2);
+var _Z3_solver_get_levels = Module['_Z3_solver_get_levels'] = createExportWrapper('Z3_solver_get_levels', 5);
+var _Z3_solver_get_trail = Module['_Z3_solver_get_trail'] = createExportWrapper('Z3_solver_get_trail', 2);
+var _pthread_self = () => (_pthread_self = wasmExports['pthread_self'])();
+var _Z3_solver_get_model = Module['_Z3_solver_get_model'] = createExportWrapper('Z3_solver_get_model', 2);
+var _Z3_solver_get_proof = Module['_Z3_solver_get_proof'] = createExportWrapper('Z3_solver_get_proof', 2);
+var _Z3_solver_get_unsat_core = Module['_Z3_solver_get_unsat_core'] = createExportWrapper('Z3_solver_get_unsat_core', 2);
+var _Z3_solver_get_reason_unknown = Module['_Z3_solver_get_reason_unknown'] = createExportWrapper('Z3_solver_get_reason_unknown', 2);
+var _Z3_solver_get_statistics = Module['_Z3_solver_get_statistics'] = createExportWrapper('Z3_solver_get_statistics', 2);
+var _Z3_solver_to_string = Module['_Z3_solver_to_string'] = createExportWrapper('Z3_solver_to_string', 2);
+var _Z3_solver_to_dimacs_string = Module['_Z3_solver_to_dimacs_string'] = createExportWrapper('Z3_solver_to_dimacs_string', 3);
+var _Z3_get_implied_equalities = Module['_Z3_get_implied_equalities'] = createExportWrapper('Z3_get_implied_equalities', 5);
+var _Z3_solver_congruence_root = Module['_Z3_solver_congruence_root'] = createExportWrapper('Z3_solver_congruence_root', 3);
+var _Z3_solver_congruence_next = Module['_Z3_solver_congruence_next'] = createExportWrapper('Z3_solver_congruence_next', 3);
+var _Z3_solver_congruence_explain = Module['_Z3_solver_congruence_explain'] = createExportWrapper('Z3_solver_congruence_explain', 4);
+var _Z3_solver_solve_for = Module['_Z3_solver_solve_for'] = createExportWrapper('Z3_solver_solve_for', 5);
+var _Z3_solver_register_on_clause = Module['_Z3_solver_register_on_clause'] = createExportWrapper('Z3_solver_register_on_clause', 4);
+var _Z3_solver_propagate_init = Module['_Z3_solver_propagate_init'] = createExportWrapper('Z3_solver_propagate_init', 6);
+var _Z3_solver_propagate_fixed = Module['_Z3_solver_propagate_fixed'] = createExportWrapper('Z3_solver_propagate_fixed', 3);
+var _Z3_solver_propagate_final = Module['_Z3_solver_propagate_final'] = createExportWrapper('Z3_solver_propagate_final', 3);
+var _Z3_solver_propagate_eq = Module['_Z3_solver_propagate_eq'] = createExportWrapper('Z3_solver_propagate_eq', 3);
+var _Z3_solver_propagate_diseq = Module['_Z3_solver_propagate_diseq'] = createExportWrapper('Z3_solver_propagate_diseq', 3);
+var _Z3_solver_propagate_register = Module['_Z3_solver_propagate_register'] = createExportWrapper('Z3_solver_propagate_register', 3);
+var _Z3_solver_propagate_register_cb = Module['_Z3_solver_propagate_register_cb'] = createExportWrapper('Z3_solver_propagate_register_cb', 3);
+var _Z3_solver_propagate_consequence = Module['_Z3_solver_propagate_consequence'] = createExportWrapper('Z3_solver_propagate_consequence', 8);
+var _Z3_solver_propagate_created = Module['_Z3_solver_propagate_created'] = createExportWrapper('Z3_solver_propagate_created', 3);
+var _Z3_solver_propagate_decide = Module['_Z3_solver_propagate_decide'] = createExportWrapper('Z3_solver_propagate_decide', 3);
+var _Z3_solver_propagate_on_binding = Module['_Z3_solver_propagate_on_binding'] = createExportWrapper('Z3_solver_propagate_on_binding', 3);
+var _Z3_solver_next_split = Module['_Z3_solver_next_split'] = createExportWrapper('Z3_solver_next_split', 5);
+var _Z3_solver_propagate_declare = Module['_Z3_solver_propagate_declare'] = createExportWrapper('Z3_solver_propagate_declare', 5);
+var _Z3_solver_set_initial_value = Module['_Z3_solver_set_initial_value'] = createExportWrapper('Z3_solver_set_initial_value', 4);
+var _Z3_mk_linear_order = Module['_Z3_mk_linear_order'] = createExportWrapper('Z3_mk_linear_order', 3);
+var _Z3_mk_partial_order = Module['_Z3_mk_partial_order'] = createExportWrapper('Z3_mk_partial_order', 3);
+var _Z3_mk_piecewise_linear_order = Module['_Z3_mk_piecewise_linear_order'] = createExportWrapper('Z3_mk_piecewise_linear_order', 3);
+var _Z3_mk_tree_order = Module['_Z3_mk_tree_order'] = createExportWrapper('Z3_mk_tree_order', 3);
+var _Z3_mk_transitive_closure = Module['_Z3_mk_transitive_closure'] = createExportWrapper('Z3_mk_transitive_closure', 2);
+var _Z3_stats_to_string = Module['_Z3_stats_to_string'] = createExportWrapper('Z3_stats_to_string', 2);
+var _Z3_stats_inc_ref = Module['_Z3_stats_inc_ref'] = createExportWrapper('Z3_stats_inc_ref', 2);
+var _Z3_stats_dec_ref = Module['_Z3_stats_dec_ref'] = createExportWrapper('Z3_stats_dec_ref', 2);
+var _Z3_stats_size = Module['_Z3_stats_size'] = createExportWrapper('Z3_stats_size', 2);
+var _Z3_stats_get_key = Module['_Z3_stats_get_key'] = createExportWrapper('Z3_stats_get_key', 3);
+var _Z3_stats_is_uint = Module['_Z3_stats_is_uint'] = createExportWrapper('Z3_stats_is_uint', 3);
+var _Z3_stats_is_double = Module['_Z3_stats_is_double'] = createExportWrapper('Z3_stats_is_double', 3);
+var _Z3_stats_get_uint_value = Module['_Z3_stats_get_uint_value'] = createExportWrapper('Z3_stats_get_uint_value', 3);
+var _Z3_stats_get_double_value = Module['_Z3_stats_get_double_value'] = createExportWrapper('Z3_stats_get_double_value', 3);
+var _Z3_get_estimated_alloc_size = Module['_Z3_get_estimated_alloc_size'] = createExportWrapper('Z3_get_estimated_alloc_size', 0);
+var _Z3_mk_tactic = Module['_Z3_mk_tactic'] = createExportWrapper('Z3_mk_tactic', 2);
+var _Z3_tactic_inc_ref = Module['_Z3_tactic_inc_ref'] = createExportWrapper('Z3_tactic_inc_ref', 2);
+var _Z3_tactic_dec_ref = Module['_Z3_tactic_dec_ref'] = createExportWrapper('Z3_tactic_dec_ref', 2);
+var _Z3_mk_probe = Module['_Z3_mk_probe'] = createExportWrapper('Z3_mk_probe', 2);
+var _Z3_probe_inc_ref = Module['_Z3_probe_inc_ref'] = createExportWrapper('Z3_probe_inc_ref', 2);
+var _Z3_probe_dec_ref = Module['_Z3_probe_dec_ref'] = createExportWrapper('Z3_probe_dec_ref', 2);
+var _Z3_tactic_and_then = Module['_Z3_tactic_and_then'] = createExportWrapper('Z3_tactic_and_then', 3);
+var _Z3_tactic_or_else = Module['_Z3_tactic_or_else'] = createExportWrapper('Z3_tactic_or_else', 3);
+var _Z3_tactic_par_or = Module['_Z3_tactic_par_or'] = createExportWrapper('Z3_tactic_par_or', 3);
+var _Z3_tactic_par_and_then = Module['_Z3_tactic_par_and_then'] = createExportWrapper('Z3_tactic_par_and_then', 3);
+var _Z3_tactic_try_for = Module['_Z3_tactic_try_for'] = createExportWrapper('Z3_tactic_try_for', 3);
+var _Z3_tactic_when = Module['_Z3_tactic_when'] = createExportWrapper('Z3_tactic_when', 3);
+var _Z3_tactic_cond = Module['_Z3_tactic_cond'] = createExportWrapper('Z3_tactic_cond', 4);
+var _Z3_tactic_repeat = Module['_Z3_tactic_repeat'] = createExportWrapper('Z3_tactic_repeat', 3);
+var _Z3_tactic_skip = Module['_Z3_tactic_skip'] = createExportWrapper('Z3_tactic_skip', 1);
+var _Z3_tactic_fail = Module['_Z3_tactic_fail'] = createExportWrapper('Z3_tactic_fail', 1);
+var _Z3_tactic_fail_if = Module['_Z3_tactic_fail_if'] = createExportWrapper('Z3_tactic_fail_if', 2);
+var _Z3_tactic_fail_if_not_decided = Module['_Z3_tactic_fail_if_not_decided'] = createExportWrapper('Z3_tactic_fail_if_not_decided', 1);
+var _Z3_tactic_using_params = Module['_Z3_tactic_using_params'] = createExportWrapper('Z3_tactic_using_params', 3);
+var _Z3_probe_const = Module['_Z3_probe_const'] = createExportWrapper('Z3_probe_const', 2);
+var _Z3_probe_lt = Module['_Z3_probe_lt'] = createExportWrapper('Z3_probe_lt', 3);
+var _Z3_probe_gt = Module['_Z3_probe_gt'] = createExportWrapper('Z3_probe_gt', 3);
+var _Z3_probe_le = Module['_Z3_probe_le'] = createExportWrapper('Z3_probe_le', 3);
+var _Z3_probe_ge = Module['_Z3_probe_ge'] = createExportWrapper('Z3_probe_ge', 3);
+var _Z3_probe_eq = Module['_Z3_probe_eq'] = createExportWrapper('Z3_probe_eq', 3);
+var _Z3_probe_and = Module['_Z3_probe_and'] = createExportWrapper('Z3_probe_and', 3);
+var _Z3_probe_or = Module['_Z3_probe_or'] = createExportWrapper('Z3_probe_or', 3);
+var _Z3_probe_not = Module['_Z3_probe_not'] = createExportWrapper('Z3_probe_not', 2);
+var _Z3_get_num_tactics = Module['_Z3_get_num_tactics'] = createExportWrapper('Z3_get_num_tactics', 1);
+var _Z3_get_tactic_name = Module['_Z3_get_tactic_name'] = createExportWrapper('Z3_get_tactic_name', 2);
+var _Z3_get_num_probes = Module['_Z3_get_num_probes'] = createExportWrapper('Z3_get_num_probes', 1);
+var _Z3_get_probe_name = Module['_Z3_get_probe_name'] = createExportWrapper('Z3_get_probe_name', 2);
+var _Z3_tactic_get_help = Module['_Z3_tactic_get_help'] = createExportWrapper('Z3_tactic_get_help', 2);
+var _Z3_tactic_get_param_descrs = Module['_Z3_tactic_get_param_descrs'] = createExportWrapper('Z3_tactic_get_param_descrs', 2);
+var _Z3_tactic_get_descr = Module['_Z3_tactic_get_descr'] = createExportWrapper('Z3_tactic_get_descr', 2);
+var _Z3_probe_get_descr = Module['_Z3_probe_get_descr'] = createExportWrapper('Z3_probe_get_descr', 2);
+var _Z3_probe_apply = Module['_Z3_probe_apply'] = createExportWrapper('Z3_probe_apply', 3);
+var _Z3_apply_result_inc_ref = Module['_Z3_apply_result_inc_ref'] = createExportWrapper('Z3_apply_result_inc_ref', 2);
+var _Z3_apply_result_dec_ref = Module['_Z3_apply_result_dec_ref'] = createExportWrapper('Z3_apply_result_dec_ref', 2);
+var _Z3_apply_result_to_string = Module['_Z3_apply_result_to_string'] = createExportWrapper('Z3_apply_result_to_string', 2);
+var _Z3_apply_result_get_num_subgoals = Module['_Z3_apply_result_get_num_subgoals'] = createExportWrapper('Z3_apply_result_get_num_subgoals', 2);
+var _Z3_apply_result_get_subgoal = Module['_Z3_apply_result_get_subgoal'] = createExportWrapper('Z3_apply_result_get_subgoal', 3);
+var _Z3_mk_simplifier = Module['_Z3_mk_simplifier'] = createExportWrapper('Z3_mk_simplifier', 2);
+var _Z3_simplifier_inc_ref = Module['_Z3_simplifier_inc_ref'] = createExportWrapper('Z3_simplifier_inc_ref', 2);
+var _Z3_simplifier_dec_ref = Module['_Z3_simplifier_dec_ref'] = createExportWrapper('Z3_simplifier_dec_ref', 2);
+var _Z3_get_num_simplifiers = Module['_Z3_get_num_simplifiers'] = createExportWrapper('Z3_get_num_simplifiers', 1);
+var _Z3_get_simplifier_name = Module['_Z3_get_simplifier_name'] = createExportWrapper('Z3_get_simplifier_name', 2);
+var _Z3_simplifier_and_then = Module['_Z3_simplifier_and_then'] = createExportWrapper('Z3_simplifier_and_then', 3);
+var _Z3_simplifier_using_params = Module['_Z3_simplifier_using_params'] = createExportWrapper('Z3_simplifier_using_params', 3);
+var _Z3_simplifier_get_help = Module['_Z3_simplifier_get_help'] = createExportWrapper('Z3_simplifier_get_help', 2);
+var _Z3_simplifier_get_param_descrs = Module['_Z3_simplifier_get_param_descrs'] = createExportWrapper('Z3_simplifier_get_param_descrs', 2);
+var _Z3_simplifier_get_descr = Module['_Z3_simplifier_get_descr'] = createExportWrapper('Z3_simplifier_get_descr', 2);
 var _fflush = createExportWrapper('fflush', 1);
 var __emscripten_tls_init = createExportWrapper('_emscripten_tls_init', 0);
 var __emscripten_thread_init = createExportWrapper('_emscripten_thread_init', 6);
@@ -14823,6 +14962,28 @@ function invoke_v(index) {
   }
 }
 
+function invoke_viiii(index,a1,a2,a3,a4) {
+  var sp = stackSave();
+  try {
+    getWasmTableEntry(index)(a1,a2,a3,a4);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_vijj(index,a1,a2,a3) {
+  var sp = stackSave();
+  try {
+    getWasmTableEntry(index)(a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
 function invoke_viij(index,a1,a2,a3) {
   var sp = stackSave();
   try {
@@ -14834,10 +14995,10 @@ function invoke_viij(index,a1,a2,a3) {
   }
 }
 
-function invoke_iiij(index,a1,a2,a3) {
+function invoke_iiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3);
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -14845,14 +15006,15 @@ function invoke_iiij(index,a1,a2,a3) {
   }
 }
 
-function invoke_viiii(index,a1,a2,a3,a4) {
+function invoke_jii(index,a1,a2) {
   var sp = stackSave();
   try {
-    getWasmTableEntry(index)(a1,a2,a3,a4);
+    return getWasmTableEntry(index)(a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
     _setThrew(1, 0);
+    return 0n;
   }
 }
 
@@ -14878,55 +15040,10 @@ function invoke_iiiiiii(index,a1,a2,a3,a4,a5,a6) {
   }
 }
 
-function invoke_vid(index,a1,a2) {
+function invoke_viiiiiii(index,a1,a2,a3,a4,a5,a6,a7) {
   var sp = stackSave();
   try {
-    getWasmTableEntry(index)(a1,a2);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_id(index,a1) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_dii(index,a1,a2) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_j(index) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)();
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-    return 0n;
-  }
-}
-
-function invoke_iid(index,a1,a2) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2);
+    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -14956,10 +15073,10 @@ function invoke_iiiiiiii(index,a1,a2,a3,a4,a5,a6,a7) {
   }
 }
 
-function invoke_iiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8) {
+function invoke_viiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8);
+    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -14967,10 +15084,10 @@ function invoke_iiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8) {
   }
 }
 
-function invoke_iiiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13) {
+function invoke_dii(index,a1,a2) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13);
+    return getWasmTableEntry(index)(a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -14989,59 +15106,14 @@ function invoke_viiiid(index,a1,a2,a3,a4,a5) {
   }
 }
 
-function invoke_viid(index,a1,a2,a3) {
+function invoke_iiij(index,a1,a2,a3) {
   var sp = stackSave();
   try {
-    getWasmTableEntry(index)(a1,a2,a3);
+    return getWasmTableEntry(index)(a1,a2,a3);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
     _setThrew(1, 0);
-  }
-}
-
-function invoke_viiiiiii(index,a1,a2,a3,a4,a5,a6,a7) {
-  var sp = stackSave();
-  try {
-    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_viiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8) {
-  var sp = stackSave();
-  try {
-    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_vijj(index,a1,a2,a3) {
-  var sp = stackSave();
-  try {
-    getWasmTableEntry(index)(a1,a2,a3);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_jii(index,a1,a2) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-    return 0n;
   }
 }
 
@@ -15056,10 +15128,10 @@ function invoke_viji(index,a1,a2,a3) {
   }
 }
 
-function invoke_diid(index,a1,a2,a3) {
+function invoke_iij(index,a1,a2) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3);
+    return getWasmTableEntry(index)(a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15067,10 +15139,55 @@ function invoke_diid(index,a1,a2,a3) {
   }
 }
 
-function invoke_iiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11) {
+function invoke_viid(index,a1,a2,a3) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11);
+    getWasmTableEntry(index)(a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_vid(index,a1,a2) {
+  var sp = stackSave();
+  try {
+    getWasmTableEntry(index)(a1,a2);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_id(index,a1) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_j(index) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)();
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+    return 0n;
+  }
+}
+
+function invoke_iid(index,a1,a2) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15122,10 +15239,10 @@ function invoke_iiji(index,a1,a2,a3) {
   }
 }
 
-function invoke_viiiiiji(index,a1,a2,a3,a4,a5,a6,a7) {
+function invoke_iiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11) {
   var sp = stackSave();
   try {
-    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7);
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15133,10 +15250,10 @@ function invoke_viiiiiji(index,a1,a2,a3,a4,a5,a6,a7) {
   }
 }
 
-function invoke_iij(index,a1,a2) {
+function invoke_iiiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2);
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15148,6 +15265,29 @@ function invoke_viiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9) {
   var sp = stackSave();
   try {
     getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_jiij(index,a1,a2,a3) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+    return 0n;
+  }
+}
+
+function invoke_viiiiiji(index,a1,a2,a3,a4,a5,a6,a7) {
+  var sp = stackSave();
+  try {
+    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15200,22 +15340,10 @@ function invoke_ji(index,a1) {
   }
 }
 
-function invoke_jiij(index,a1,a2,a3) {
+function invoke_viiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-    return 0n;
-  }
-}
-
-function invoke_diiid(index,a1,a2,a3,a4) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4);
+    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15223,10 +15351,10 @@ function invoke_diiid(index,a1,a2,a3,a4) {
   }
 }
 
-function invoke_iiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9) {
+function invoke_viiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9);
+    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15234,40 +15362,7 @@ function invoke_iiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9) {
   }
 }
 
-function invoke_iiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_iiid(index,a1,a2,a3) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2,a3);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_di(index,a1) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_iiiif(index,a1,a2,a3,a4) {
+function invoke_iijii(index,a1,a2,a3,a4) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1,a2,a3,a4);
@@ -15289,32 +15384,21 @@ function invoke_viiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) {
   }
 }
 
-function invoke_viiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12) {
-  var sp = stackSave();
-  try {
-    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
-function invoke_iiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12) {
-  var sp = stackSave();
-  try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12);
-  } catch(e) {
-    stackRestore(sp);
-    if (!(e instanceof EmscriptenEH)) throw e;
-    _setThrew(1, 0);
-  }
-}
-
 function invoke_viiji(index,a1,a2,a3,a4) {
   var sp = stackSave();
   try {
     getWasmTableEntry(index)(a1,a2,a3,a4);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15344,7 +15428,7 @@ function invoke_fii(index,a1,a2) {
   }
 }
 
-function invoke_iijii(index,a1,a2,a3,a4) {
+function invoke_diiid(index,a1,a2,a3,a4) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1,a2,a3,a4);
@@ -15355,7 +15439,18 @@ function invoke_iijii(index,a1,a2,a3,a4) {
   }
 }
 
-function invoke_diii(index,a1,a2,a3) {
+function invoke_iiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_diid(index,a1,a2,a3) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1,a2,a3);
@@ -15366,7 +15461,7 @@ function invoke_diii(index,a1,a2,a3) {
   }
 }
 
-function invoke_iiiiid(index,a1,a2,a3,a4,a5) {
+function invoke_iiddii(index,a1,a2,a3,a4,a5) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1,a2,a3,a4,a5);
@@ -15377,22 +15472,65 @@ function invoke_iiiiid(index,a1,a2,a3,a4,a5) {
   }
 }
 
-function invoke_jiiii(index,a1,a2,a3,a4) {
+function invoke_iiid(index,a1,a2,a3) {
   var sp = stackSave();
   try {
-    return getWasmTableEntry(index)(a1,a2,a3,a4);
+    return getWasmTableEntry(index)(a1,a2,a3);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
     _setThrew(1, 0);
-    return 0n;
   }
 }
 
-function invoke_viiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13) {
+function invoke_di(index,a1) {
   var sp = stackSave();
   try {
-    getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13);
+    return getWasmTableEntry(index)(a1);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiiiiiiiiiiii(index,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_did(index,a1,a2) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_didd(index,a1,a2,a3) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiiif(index,a1,a2,a3,a4) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;
@@ -15433,7 +15571,41 @@ function invoke_iiiiij(index,a1,a2,a3,a4,a5) {
   }
 }
 
+function invoke_iiiiid(index,a1,a2,a3,a4,a5) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_jiiii(index,a1,a2,a3,a4) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+    return 0n;
+  }
+}
+
 function invoke_fiii(index,a1,a2,a3) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_diii(index,a1,a2,a3) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1,a2,a3);
