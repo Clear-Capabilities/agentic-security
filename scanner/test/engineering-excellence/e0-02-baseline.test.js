@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { makeRoot, cleanup, REPO } from './helpers.js';
 import { assertValidForRelease, configSnapshot, digestOfFiles, measurementIdentity } from '../../../scripts/engineering-excellence/lib/measurement-identity.mjs';
 import { GATES, buildBaseline, renderMarkdown, runGate } from '../../../scripts/engineering-excellence/baseline.mjs';
+import { withCleanWorktree } from '../../../scripts/engineering-excellence/lib/clean-worktree.mjs';
 
 async function cleanRepo() {
   const { root, git } = await makeRoot();
@@ -172,3 +173,47 @@ test('the committed baseline names a real commit and states its release trust', 
     }
   }
 });
+
+test('a measurement worktree is a clean checkout of one commit, the working tree is left alone, and the worktree is removed afterwards', async () => {
+  const { root } = await cleanRepo();
+  try {
+    fs.mkdirSync(path.join(root, 'scanner', 'node_modules'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src.txt'), 'uncommitted edit\n');
+    fs.writeFileSync(path.join(root, 'scratch.txt'), 'untracked\n');
+    let seen;
+    await withCleanWorktree(root, ({ dir, commit, linked }) => {
+      seen = { dir, commit, linked };
+      assert.equal(fs.readFileSync(path.join(dir, 'src.txt'), 'utf8'), 'x\n', 'the committed content, not the edit');
+      assert.equal(fs.existsSync(path.join(dir, 'scratch.txt')), false);
+      assert.ok(fs.lstatSync(path.join(dir, 'scanner', 'node_modules')).isSymbolicLink(), 'generated, gitignored pieces are linked');
+      const id = measurementIdentity(dir, { env: {} });
+      assert.equal(id.sourceTreeClean, true);
+      assert.equal(id.sourceCommit, commit);
+    }, { parent: os_tmp() });
+    assert.deepEqual(seen.linked, ['scanner/node_modules']);
+    assert.equal(fs.existsSync(seen.dir), false, 'removed afterwards');
+    assert.equal(fs.readFileSync(path.join(root, 'src.txt'), 'utf8'), 'uncommitted edit\n', 'the working tree was not touched');
+    assert.equal(fs.existsSync(path.join(root, 'scratch.txt')), true);
+    // the worktree is removed even when the measurement throws
+    let dirSeen;
+    await assert.rejects(withCleanWorktree(root, ({ dir }) => { dirSeen = dir; throw new Error('boom'); }, { parent: os_tmp() }), /boom/);
+    assert.equal(fs.existsSync(dirSeen), false);
+  } finally { cleanup(root); }
+});
+
+test('a gate run can be taken in a different tree from the one it is recorded against', async () => {
+  const { root } = await cleanRepo();
+  try {
+    fs.mkdirSync(path.join(root, 'scanner'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'dirty.txt'), 'the working tree is dirty\n');
+    const gate = { id: 'where', label: 'where', kind: 'regression', argv: [process.execPath, '-e', 'console.log(process.cwd())'], cwd: 'scanner', timeoutMs: 30000 };
+    let measured;
+    await withCleanWorktree(root, async ({ dir }) => { fs.mkdirSync(path.join(dir, 'scanner'), { recursive: true }); measured = await runGate(root, gate, { measureRoot: dir }); }, { parent: os_tmp() });
+    assert.equal(measured.status, 'passed');
+    assert.equal(measured.measurementValid, true, 'valid because it was measured in the clean worktree, not the dirty working tree');
+    assert.match(measured.summaryTail, /-measure-/);
+    assert.equal(measurementIdentity(root, { env: {} }).measurementValid, false, 'the working tree itself is dirty');
+  } finally { cleanup(root); }
+});
+
+function os_tmp() { return fs.realpathSync(path.join(path.sep, 'tmp')); }

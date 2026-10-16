@@ -868,9 +868,10 @@
       "id": "insufficient-population-verdict",
       "name": "insufficient_population verdict state (PRD 3.1, E1-03)",
       "terms": [
-        "insufficient_population"
+        "insufficient_population",
+        "insufficient-population"
       ],
-      "note": "the interval module reports `unmeasured` for small groups; the full eight-state taxonomy is not used"
+      "note": "the hyphenated form is used by the evaluation gates (scanner/src/posture/evaluation/gates.js, four statuses: pass, fail, insufficient-population, unmeasured). The PRD's eight-state taxonomy is not used everywhere; mapping it is E1-03."
     },
     {
       "id": "build-digest-binding",

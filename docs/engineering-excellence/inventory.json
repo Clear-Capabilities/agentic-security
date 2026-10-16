@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "facts": {
-    "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+    "commit": "c0a5ae7a677e9a27274e5e619c47c0e6a8ec061f",
     "branch": "feature/engineering-excellence",
     "worktreeDirty": true,
     "version": "0.172.0",
@@ -42,7 +42,7 @@
       "util": 4
     },
     "sourceFileCount": 789,
-    "testFileCount": 869,
+    "testFileCount": 875,
     "testFilesByDir": {
       "(top level)": 553,
       "artifact": 10,
@@ -52,6 +52,7 @@
       "dataflow": 1,
       "deployment": 9,
       "documentation": 5,
+      "engineering-excellence": 6,
       "evaluation": 12,
       "fleet": 3,
       "haskell": 18,
@@ -282,7 +283,7 @@
       "self-scan",
       "ttff"
     ],
-    "docsFiles": 296,
+    "docsFiles": 303,
     "claudeMdFiles": [
       "CLAUDE.md",
       "frontend/CLAUDE.md",
@@ -302,7 +303,7 @@
       "scanner/src/sca/CLAUDE.md",
       "scanner/src/server/CLAUDE.md"
     ],
-    "generatedAt": "2026-10-16T12:37:19.835Z"
+    "generatedAt": "2026-10-16T12:49:23.436Z"
   },
   "capabilities": [
     {
@@ -2458,11 +2459,21 @@
       "id": "insufficient-population-verdict",
       "name": "insufficient_population verdict state (PRD 3.1, E1-03)",
       "terms": [
-        "insufficient_population"
+        "insufficient_population",
+        "insufficient-population"
       ],
-      "note": "the interval module reports `unmeasured` for small groups; the full eight-state taxonomy is not used",
-      "status": "ABSENT",
-      "hits": []
+      "note": "the hyphenated form is used by the evaluation gates (scanner/src/posture/evaluation/gates.js, four statuses: pass, fail, insufficient-population, unmeasured). The PRD's eight-state taxonomy is not used everywhere; mapping it is E1-03.",
+      "status": "FOUND-ELSEWHERE",
+      "hits": [
+        {
+          "term": "insufficient-population",
+          "files": [
+            "bench/independent/README.md",
+            "scanner/src/posture/CLAUDE.md",
+            "scanner/src/posture/accuracy-scorecard.js"
+          ]
+        }
+      ]
     },
     {
       "id": "build-digest-binding",

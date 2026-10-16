@@ -224,7 +224,7 @@ export function renderMarkdown(inv) {
     L.push(`| ${c.name} (\`${c.id}\`; ${c.epics.join(', ')}) | ${c.maturity} | ${c.source.map((s) => `\`${s}\``).join('<br>')} | ${c.tests.length ? c.tests.map((s) => `\`${s}\``).join('<br>') : 'none mapped'} | ${c.reasons.join(' ').replace(/\|/g, '/')} |`);
   }
   L.push('', '## PRD items searched for and not found', '', 'Each row names the search terms; the generator re-runs them (`git grep` over scanner/src, scripts and bench, excluding this program\'s own tooling) so the claim is reproducible.', '', '| Item | Status | Terms | Note |', '|---|---|---|---|');
-  for (const a of inv.absent) L.push(`| ${a.name} | ${a.status} | ${a.terms.map((t) => `\`${t}\``).join(', ')} | ${a.status === 'FOUND-ELSEWHERE' ? `terms found in ${a.hits.map((h) => h.files[0]).join(', ')}; reclassify` : a.note} |`);
+  for (const a of inv.absent) L.push(`| ${a.name} | ${a.status} | ${a.terms.map((t) => `\`${t}\``).join(', ')} | ${a.status === 'FOUND-ELSEWHERE' ? `found in ${[...new Set(a.hits.flatMap((h) => h.files))].slice(0, 3).join(', ')}. ${a.note}` : a.note} |`);
   L.push('', '## Documentation claims checked against the checkout', '', '| Document | Claim | Expected | Actual | Result |', '|---|---|---|---|---|');
   for (const c of inv.claims) L.push(`| \`${c.doc}\` | ${c.claim} | ${c.expected} | ${c.actual} | ${c.ok ? 'matches' : '**MISMATCH**'} |`);
   L.push('', '## Source files by directory', '', '| Directory | Files |', '|---|---|');

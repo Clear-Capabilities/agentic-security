@@ -17,6 +17,9 @@ import { REPO_ROOT } from './model.mjs';
 export const BOOKKEEPING_PATHS = Object.freeze([
   /^scripts\/engineering-excellence\/(status\.json|events\.jsonl|data\/(inventory\.verification|baseline\.results)\.json)$/,
   /^docs\/engineering-excellence\//,
+  // generated dependency trees (an `npm install` creates them and they are gitignored as directories; a symlink to one is not matched by
+  // that rule, so a measurement worktree that links them would otherwise read as dirty)
+  /^scanner\/(node_modules|vendor)(\/|$)/,
 ]);
 
 const SECRETISH = /(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|ENDPOINT|HOST|URL|PROXY)/i;

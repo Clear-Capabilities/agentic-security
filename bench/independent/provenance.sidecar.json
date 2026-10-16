@@ -1,0 +1,2299 @@
+{
+  "schemaVersion": 1,
+  "licenses": {
+    "9001/copyparty": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:17.990Z"
+    },
+    "Automattic/mongoose": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:18.633Z"
+    },
+    "BKDDFS/shamefile": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:19.064Z"
+    },
+    "BetterErrors/better_errors": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:19.561Z"
+    },
+    "Budibase/budibase": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:20.089Z"
+    },
+    "ChromeDevTools/chrome-devtools-mcp": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:20.683Z"
+    },
+    "Enderfga/claw-orchestrator": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:21.109Z"
+    },
+    "FasterXML/jackson-databind": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:21.608Z"
+    },
+    "FlowiseAI/Flowise": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:22.114Z"
+    },
+    "Gitlawb/openclaude": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:22.865Z"
+    },
+    "HackingRepo/dssrf-js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:23.296Z"
+    },
+    "JSONbored/gittensory": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:23.976Z"
+    },
+    "JanDeDobbeleer/oh-my-posh": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:24.539Z"
+    },
+    "Jovancoding/Network-AI": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:25.057Z"
+    },
+    "JuneAndGreen/sm-crypto": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:25.495Z"
+    },
+    "Katello/katello": {
+      "spdx": "GPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:26.011Z"
+    },
+    "Linuxfabrik/lib": {
+      "spdx": "Unlicense",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:26.506Z"
+    },
+    "MagicMirrorOrg/MagicMirror": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:27.008Z"
+    },
+    "ManageIQ/awesome_spawn": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:27.617Z"
+    },
+    "ManageIQ/kubeclient": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:28.124Z"
+    },
+    "MobSF/Mobile-Security-Framework-MobSF": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:28.631Z"
+    },
+    "NaturalIntelligence/fast-xml-parser": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:29.164Z"
+    },
+    "Netflix/lemur": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:29.669Z"
+    },
+    "OP-Engineering/link-preview-js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:30.171Z"
+    },
+    "OliveTin/OliveTin": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:30.679Z"
+    },
+    "OpenC3/cosmos": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:31.181Z"
+    },
+    "OpenIdentityPlatform/OpenAM": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:31.686Z"
+    },
+    "OpenIdentityPlatform/OpenDJ": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:32.175Z"
+    },
+    "OpenListTeam/OpenList": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:32.734Z"
+    },
+    "OpenZeppelin/contracts-wizard": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:33.254Z"
+    },
+    "PHPOffice/PhpSpreadsheet": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:33.735Z"
+    },
+    "QuantumNous/new-api": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:34.224Z"
+    },
+    "SAML-Toolkits/ruby-saml": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:34.752Z"
+    },
+    "Shopify/ejson2env": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:35.334Z"
+    },
+    "Shopify/job-iteration": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:35.890Z"
+    },
+    "Shopify/measured": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:36.515Z"
+    },
+    "Shopify/pitchfork": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:37.125Z"
+    },
+    "SignalK/signalk-server": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:37.634Z"
+    },
+    "SteeltoeOSS/Steeltoe": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:38.248Z"
+    },
+    "TheeCryptoChad/merge-guard": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:38.689Z"
+    },
+    "TrestleAdmin/trestle-auth": {
+      "spdx": "LGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:39.182Z"
+    },
+    "TryGhost/Ghost": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:39.671Z"
+    },
+    "Unleash/unleash": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:40.160Z"
+    },
+    "VetCoders/mcp-server-semgrep": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:40.667Z"
+    },
+    "ViewComponent/view_component": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:41.247Z"
+    },
+    "WeblateOrg/weblate": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:41.976Z"
+    },
+    "WhiskeySockets/Baileys": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:42.573Z"
+    },
+    "WordPress/WordPress-Coding-Standards": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:43.153Z"
+    },
+    "YOURLS/YOURLS": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:43.810Z"
+    },
+    "acacode/swagger-typescript-api": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:44.462Z"
+    },
+    "activeadmin/activeadmin": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:45.109Z"
+    },
+    "adonisjs/bodyparser": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:45.610Z"
+    },
+    "agentfront/frontmcp": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:46.107Z"
+    },
+    "ahorner/text-helpers": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:46.611Z"
+    },
+    "aio-libs/aiohttp": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:47.138Z"
+    },
+    "alexandre-daubois/ember": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:47.607Z"
+    },
+    "alextselegidis/easyappointments": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:48.063Z"
+    },
+    "alphagov/tech-docs-gem": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:48.718Z"
+    },
+    "andialbrecht/sqlparse": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:49.160Z"
+    },
+    "andrea9293/mcp-documentation-server": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:49.608Z"
+    },
+    "angular/angular": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:50.143Z"
+    },
+    "angular/domino": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:50.783Z"
+    },
+    "ankane/blazer": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:51.235Z"
+    },
+    "ankane/clockwork_web": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:51.668Z"
+    },
+    "ankane/pgsync": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:52.168Z"
+    },
+    "apache/camel": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:52.689Z"
+    },
+    "apache/echarts": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:53.276Z"
+    },
+    "apache/thrift": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:53.813Z"
+    },
+    "api-platform/core": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:54.332Z"
+    },
+    "apolloconfig/apollo": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:54.828Z"
+    },
+    "apostrophecms/apostrophe": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:55.336Z"
+    },
+    "appium/appium-mcp": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:55.865Z"
+    },
+    "appium/java-client": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:56.440Z"
+    },
+    "aquasecurity/trivy": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:56.976Z"
+    },
+    "arnog/mathlive": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:57.457Z"
+    },
+    "asymmetric-effort/NogginLessDom": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:58.002Z"
+    },
+    "asymmetric-effort/specifyjs": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:58.526Z"
+    },
+    "authorizerdev/authorizer": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:59.039Z"
+    },
+    "autolab/Autolab": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:49:59.546Z"
+    },
+    "avo-hq/avo": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:00.038Z"
+    },
+    "aws-amplify/amplify-codegen-ui": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:00.762Z"
+    },
+    "aws/agentcore-cli": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:01.498Z"
+    },
+    "aws/aws-cdk": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:02.110Z"
+    },
+    "aws/aws-sdk-ruby": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:02.669Z"
+    },
+    "axios/axios": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:03.159Z"
+    },
+    "axllent/mailpit": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:03.614Z"
+    },
+    "azukaar/Cosmos-Server": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:04.101Z"
+    },
+    "bablilayoub/openhole": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:04.587Z"
+    },
+    "bank-vaults/vault-secrets-webhook": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:05.190Z"
+    },
+    "baptisteArno/typebot.io": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:05.629Z"
+    },
+    "basecamp/activerecord-tenanted": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:06.134Z"
+    },
+    "basecamp/google_sign_in": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:06.661Z"
+    },
+    "basecamp/trix": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:07.301Z"
+    },
+    "bcrypt-ruby/bcrypt-ruby": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:08.118Z"
+    },
+    "beaugunderson/ip-address": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:08.583Z"
+    },
+    "better-auth/better-auth": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:09.630Z"
+    },
+    "binarylogic/authlogic": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:10.160Z"
+    },
+    "boazsegev/iodine": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:10.664Z"
+    },
+    "brightio/penelope": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:11.123Z"
+    },
+    "brix/crypto-js": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:11.672Z"
+    },
+    "carrierwaveuploader/carrierwave": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:12.219Z"
+    },
+    "cgriego/active_attr": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:12.691Z"
+    },
+    "chaintope/bitcoinrb": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:13.216Z"
+    },
+    "chofstede/ansible_jailexec": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:13.674Z"
+    },
+    "cloudreve/cloudreve": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:14.189Z"
+    },
+    "codeigniter4/CodeIgniter4": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:14.686Z"
+    },
+    "coder/coder": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:15.262Z"
+    },
+    "contentful/contentful-mcp-server": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:15.804Z"
+    },
+    "craftcms/cms": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:16.439Z"
+    },
+    "cthackers/adm-zip": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:16.901Z"
+    },
+    "cure53/DOMPurify": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:17.362Z"
+    },
+    "czlonkowski/n8n-mcp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:17.841Z"
+    },
+    "ddnexus/pagy": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:18.314Z"
+    },
+    "decidim-ice/decidim-module-decidim_awesome": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:18.911Z"
+    },
+    "decidim/decidim": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:19.412Z"
+    },
+    "deepstreamIO/deepstream.io": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:20.013Z"
+    },
+    "delvedor/find-my-way": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:20.489Z"
+    },
+    "dep0we/atomic-agents-stack": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:20.927Z"
+    },
+    "devbridge/jQuery-Autocomplete": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:21.570Z"
+    },
+    "devise-two-factor/devise-two-factor": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:22.172Z"
+    },
+    "directus/directus": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:22.711Z"
+    },
+    "discourse/message_bus": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:23.224Z"
+    },
+    "discourse/rails_multisite": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:23.715Z"
+    },
+    "django-cms/django-cms": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:24.201Z"
+    },
+    "dmendel/bindata": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:24.679Z"
+    },
+    "dompdf/dompdf": {
+      "spdx": "LGPL-2.1",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:25.248Z"
+    },
+    "dtwang/line-desktop-mcp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:25.713Z"
+    },
+    "dynatrace-oss/dynatrace-mcp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:26.318Z"
+    },
+    "eLyiN/gemini-bridge": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:26.759Z"
+    },
+    "earendil-works/pi": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:27.297Z"
+    },
+    "eclipse-theia/theia": {
+      "spdx": "EPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:27.908Z"
+    },
+    "elastic/logstash": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:28.495Z"
+    },
+    "elct9620/kobako": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:29.015Z"
+    },
+    "electerm/electerm": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:29.522Z"
+    },
+    "electron-userland/electron-builder": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:30.097Z"
+    },
+    "electron/electron": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:30.658Z"
+    },
+    "emberjs/ember.js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:31.163Z"
+    },
+    "etaminstudio/prosemirror_to_html": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:31.832Z"
+    },
+    "ether/etherpad": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:32.316Z"
+    },
+    "excon/excon": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:32.853Z"
+    },
+    "facelessuser/pymdown-extensions": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:33.359Z"
+    },
+    "fastify/fast-uri": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:34.059Z"
+    },
+    "fastify/fastify-static": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:34.803Z"
+    },
+    "fatedier/frp": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:35.318Z"
+    },
+    "fatfreecrm/fat_free_crm": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:35.816Z"
+    },
+    "faye/websocket-driver-ruby": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:36.309Z"
+    },
+    "feathersjs/feathers": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:36.833Z"
+    },
+    "felippe-regazio/ssrfcheck": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:37.324Z"
+    },
+    "fetlife/rollout-ui": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:37.857Z"
+    },
+    "fission/fission": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:38.369Z"
+    },
+    "flavorjones/loofah": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:38.858Z"
+    },
+    "floraison/fugit": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:39.334Z"
+    },
+    "fluent-plugins-nursery/fluent-plugin-opentelemetry": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:39.840Z"
+    },
+    "fluent/fluent-plugin-s3": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:40.422Z"
+    },
+    "fluent/fluentd": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:40.968Z"
+    },
+    "flytohub/flyto-core": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:41.506Z"
+    },
+    "frangoteam/FUXA": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:42.050Z"
+    },
+    "free5gc/ausf": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:42.643Z"
+    },
+    "froxlor/froxlor": {
+      "spdx": "LGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:43.168Z"
+    },
+    "gazay/gon": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:43.616Z"
+    },
+    "gchq/CyberChef": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:44.086Z"
+    },
+    "geminabox/geminabox": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:44.607Z"
+    },
+    "geotools/geotools": {
+      "spdx": "LGPL-2.1",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:45.114Z"
+    },
+    "getgrav/grav": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:45.803Z"
+    },
+    "getkin/kin-openapi": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:46.305Z"
+    },
+    "gina-io/swig": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:46.852Z"
+    },
+    "github/github-mcp-server": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:47.417Z"
+    },
+    "github/trilogy": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:48.253Z"
+    },
+    "github/view_component": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:48.976Z"
+    },
+    "gitlabhq/grit": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:49.566Z"
+    },
+    "gitpython-developers/GitPython": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:51.448Z"
+    },
+    "gjtorikian/commonmarker": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:51.908Z"
+    },
+    "gollum/gollum": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:52.411Z"
+    },
+    "gopacket/gopacket": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:52.892Z"
+    },
+    "goshs-labs/goshs": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:53.359Z"
+    },
+    "gotd/td": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:53.875Z"
+    },
+    "graphiti-api/graphiti": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:54.418Z"
+    },
+    "grokability/snipe-it": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:54.997Z"
+    },
+    "gtsteffaniak/filebrowser": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:55.475Z"
+    },
+    "guard/guard-livereload": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:56.001Z"
+    },
+    "guzzle/guzzle": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:56.538Z"
+    },
+    "guzzle/psr7": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:57.089Z"
+    },
+    "hapijs/content": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:57.599Z"
+    },
+    "hapijs/joi": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:58.120Z"
+    },
+    "hapijs/wreck": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:58.747Z"
+    },
+    "harttle/liquidjs": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:59.232Z"
+    },
+    "hashicorp/vagrant": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:50:59.790Z"
+    },
+    "heartcombo/devise": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:00.310Z"
+    },
+    "honojs/hono": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:00.834Z"
+    },
+    "honojs/node-server": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:01.384Z"
+    },
+    "http4k/http4k": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:01.894Z"
+    },
+    "hydra-ecosystem/hydra": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:02.448Z"
+    },
+    "hyperledger/fabric-ca": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:03.019Z"
+    },
+    "i18next/i18next-fs-backend": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:03.521Z"
+    },
+    "i18next/i18next-http-middleware": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:04.030Z"
+    },
+    "icalendar/icalendar": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:04.531Z"
+    },
+    "igrigorik/em-http-request": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:04.978Z"
+    },
+    "increments/qiita-markdown": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:05.604Z"
+    },
+    "isaacs/node-tar": {
+      "spdx": "BlueOak-1.0.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:06.161Z"
+    },
+    "jamesmartin/inline_svg": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:06.620Z"
+    },
+    "janko/image_processing": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:07.063Z"
+    },
+    "jetty/jetty.project": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:07.652Z"
+    },
+    "jgarber/redcloth": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:08.122Z"
+    },
+    "jhy/jsoup": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:08.613Z"
+    },
+    "jmespath/jmespath.rb": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:09.113Z"
+    },
+    "jnunemaker/httparty": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:09.628Z"
+    },
+    "joaonuno/flat-to-nested-js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:10.110Z"
+    },
+    "joniles/mpxj": {
+      "spdx": "LGPL-2.1",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:10.559Z"
+    },
+    "jquery/jquery": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:11.071Z"
+    },
+    "jquery/jquery-ui": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:11.607Z"
+    },
+    "js-cookie/js-cookie": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:12.138Z"
+    },
+    "juliangruber/brace-expansion": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:12.616Z"
+    },
+    "jwt/ruby-jwe": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:13.167Z"
+    },
+    "jwt/ruby-jwt": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:13.701Z"
+    },
+    "karakeep-app/karakeep": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:14.153Z"
+    },
+    "kaspernj/form-data-objectizer": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:14.674Z"
+    },
+    "kepano/defuddle": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:15.142Z"
+    },
+    "kestra-io/kestra": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:15.681Z"
+    },
+    "keycloak/keycloak": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:16.223Z"
+    },
+    "keystonejs/keystone": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:16.794Z"
+    },
+    "koajs/router": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:17.287Z"
+    },
+    "koel/koel": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:17.779Z"
+    },
+    "koxudaxi/datamodel-code-generator": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:18.631Z"
+    },
+    "kube-logging/logging-operator": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:19.220Z"
+    },
+    "kyndryl-open-source/hashi-vault-js": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:19.735Z"
+    },
+    "langchain-ai/langgraph": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:20.281Z"
+    },
+    "langchain-ai/langgraphjs": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:20.867Z"
+    },
+    "libp2p/js-libp2p": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:21.351Z"
+    },
+    "ljharb/qs": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:21.856Z"
+    },
+    "ljharb/shell-quote": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:22.341Z"
+    },
+    "lmfit/asteval": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:22.848Z"
+    },
+    "locize/gettext-converter": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:23.383Z"
+    },
+    "lodash/lodash": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:23.959Z"
+    },
+    "logicminds/rubyipmi": {
+      "spdx": "LGPL-2.1",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:24.482Z"
+    },
+    "logto-io/logto": {
+      "spdx": "MPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:25.024Z"
+    },
+    "lostisland/faraday": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:25.541Z"
+    },
+    "lsegal/yard": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:26.002Z"
+    },
+    "mantisbt/mantisbt": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:26.483Z"
+    },
+    "markdown-it/linkify-it": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:26.987Z"
+    },
+    "markevans/dragonfly": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:27.471Z"
+    },
+    "matrix-nio/matrix-nio": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:27.980Z"
+    },
+    "mattiasw/ExifReader": {
+      "spdx": "MPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:28.467Z"
+    },
+    "medplum/medplum": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:29.041Z"
+    },
+    "mermaid-js/mermaid": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:29.541Z"
+    },
+    "microsoft/kiota": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:30.175Z"
+    },
+    "microsoft/kiota-typescript": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:30.814Z"
+    },
+    "microsoft/prompty": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:31.736Z"
+    },
+    "milamer/parse-nested-form-data": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:32.279Z"
+    },
+    "mineadmin/MineAdmin": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:32.799Z"
+    },
+    "mkreyman/mcp-memory-keeper": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:33.305Z"
+    },
+    "mlflow/mlflow": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:33.869Z"
+    },
+    "modelcontextprotocol/ruby-sdk": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:34.430Z"
+    },
+    "mperham/sidekiq": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:35.229Z"
+    },
+    "mrodrig/json-2-csv": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:35.664Z"
+    },
+    "msgpack/msgpack-ruby": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:36.174Z"
+    },
+    "muxinc/next-video": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:36.858Z"
+    },
+    "n8n-io/n8n": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:37.370Z"
+    },
+    "netty/netty": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:37.906Z"
+    },
+    "newcontext-oss/kitchen-terraform": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:38.436Z"
+    },
+    "nextauthjs/next-auth": {
+      "spdx": "ISC",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:38.892Z"
+    },
+    "nicolargo/glances": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:39.395Z"
+    },
+    "nltk/nltk": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:39.932Z"
+    },
+    "nocobase/nocobase": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:40.428Z"
+    },
+    "nodeca/js-yaml": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:40.928Z"
+    },
+    "nodejs/undici": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:41.473Z"
+    },
+    "nodemailer/smtp-server": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:41.957Z"
+    },
+    "nuxt/nuxt": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:42.459Z"
+    },
+    "nyariv/SandboxJS": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:42.917Z"
+    },
+    "oauth-xx/oauth-ruby": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:43.675Z"
+    },
+    "omniauth/omniauth": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:44.263Z"
+    },
+    "onionshare/onionshare": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:44.755Z"
+    },
+    "ooples/token-optimizer-mcp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:45.220Z"
+    },
+    "open-circle/valibot": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:45.774Z"
+    },
+    "open-telemetry/opentelemetry-go": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:46.317Z"
+    },
+    "open-telemetry/opentelemetry-java-instrumentation": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:46.845Z"
+    },
+    "open-telemetry/opentelemetry-js": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:47.432Z"
+    },
+    "open-webui/open-webui": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:47.939Z"
+    },
+    "openclaw/openclaw": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:48.451Z"
+    },
+    "openremote/openremote": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:49.342Z"
+    },
+    "opensearch-project/opensearch-ruby": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:50.022Z"
+    },
+    "opscode/chef": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:50.872Z"
+    },
+    "oscal-compass/compliance-trestle": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:51.460Z"
+    },
+    "outerbase/studio": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:52.024Z"
+    },
+    "owen2345/camaleon-cms": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:52.544Z"
+    },
+    "papra-hq/papra": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:53.067Z"
+    },
+    "patriksimek/vm2": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:53.489Z"
+    },
+    "petergoldstein/dalli": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:53.948Z"
+    },
+    "pgjdbc/pgjdbc": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:54.488Z"
+    },
+    "pheditor/pheditor": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:55.028Z"
+    },
+    "phlex-ruby/phlex": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:55.750Z"
+    },
+    "phun-ky/defaults-deep": {
+      "spdx": "ISC",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:56.255Z"
+    },
+    "phusion/passenger": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:56.781Z"
+    },
+    "pimcore/pimcore": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:57.309Z"
+    },
+    "pion/dtls": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:57.837Z"
+    },
+    "pion/stun": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:58.383Z"
+    },
+    "pnpm/pnpm": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:58.893Z"
+    },
+    "pocket-id/pocket-id": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:59.439Z"
+    },
+    "postcss/postcss": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:51:59.975Z"
+    },
+    "prebid/prebid-server": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:00.497Z"
+    },
+    "prodigasistemas/curupira": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:01.047Z"
+    },
+    "protobufjs/protobuf.js": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:01.644Z"
+    },
+    "pterodactyl/wings": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:02.292Z"
+    },
+    "publify/publify": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:02.869Z"
+    },
+    "puma/puma": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:03.369Z"
+    },
+    "puppetlabs/puppet": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:03.924Z"
+    },
+    "py-pdf/pypdf": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:04.402Z"
+    },
+    "python-hyper/h2": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:04.949Z"
+    },
+    "quarkusio/quarkus": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:05.467Z"
+    },
+    "quasarframework/quasar": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:05.972Z"
+    },
+    "quic-go/webtransport-go": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:06.644Z"
+    },
+    "rack/rack": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:07.190Z"
+    },
+    "rack/rack-contrib": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:07.680Z"
+    },
+    "rack/rack-session": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:08.157Z"
+    },
+    "rails/activerecord-session_store": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:08.656Z"
+    },
+    "rails/globalid": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:09.193Z"
+    },
+    "rails/kredis": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:09.703Z"
+    },
+    "rails/rails": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:10.336Z"
+    },
+    "rails/rails-html-sanitizer": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:10.976Z"
+    },
+    "rails/thor": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:11.493Z"
+    },
+    "raszi/node-tmp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:11.939Z"
+    },
+    "rclone/rclone": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:12.429Z"
+    },
+    "redaxo/core": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:12.959Z"
+    },
+    "redf0x1/camofox-mcp": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:13.398Z"
+    },
+    "remix-run/react-router": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:13.897Z"
+    },
+    "remorses/genql": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:14.340Z"
+    },
+    "rf-/keynote": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:15.106Z"
+    },
+    "rgrove/sanitize": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:15.601Z"
+    },
+    "rsantamaria/papercrop": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:16.061Z"
+    },
+    "rtomayko/rack-cache": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:16.630Z"
+    },
+    "ruby-concurrency/concurrent-ruby": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:17.125Z"
+    },
+    "ruby-git/ruby-git": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:17.634Z"
+    },
+    "ruby-ldap/ruby-net-ldap": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:18.151Z"
+    },
+    "ruby-oauth/oauth": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:18.697Z"
+    },
+    "ruby-oauth/oauth2": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:19.278Z"
+    },
+    "ruby/fileutils": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:20.164Z"
+    },
+    "ruby/rdoc": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:20.787Z"
+    },
+    "ruby/resolv": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:21.375Z"
+    },
+    "ruby/rexml": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:21.942Z"
+    },
+    "ruby/tmpdir": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:22.493Z"
+    },
+    "ruby/webrick": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:23.090Z"
+    },
+    "rubygems/rubygems": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:23.934Z"
+    },
+    "runatlantis/atlantis": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:24.488Z"
+    },
+    "samanhappy/mcphub": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:24.947Z"
+    },
+    "savonrb/savon": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:25.471Z"
+    },
+    "scambra/devise_invitable": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:25.925Z"
+    },
+    "seaweedfs/seaweedfs": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:26.459Z"
+    },
+    "sebhildebrandt/systeminformation": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:26.938Z"
+    },
+    "sequelize/sequelize": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:27.451Z"
+    },
+    "sferik/rails_admin": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:28.169Z"
+    },
+    "sgbett/bsv-ruby-sdk": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:28.626Z"
+    },
+    "shakacode/shakapacker": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:29.193Z"
+    },
+    "shardlab/discordrb": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:29.676Z"
+    },
+    "shepherdwind/velocity.js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:30.124Z"
+    },
+    "showdownjs/showdown": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:30.652Z"
+    },
+    "sidekiq/sidekiq": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:31.155Z"
+    },
+    "sigstore/sigstore-go": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:31.722Z"
+    },
+    "sigstore/sigstore-js": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:32.274Z"
+    },
+    "silverstripe/silverstripe-cms": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:32.784Z"
+    },
+    "simi/omniauth-facebook": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:33.248Z"
+    },
+    "sinatra/sinatra": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:33.804Z"
+    },
+    "sipsorcery-org/sipsorcery": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:34.324Z"
+    },
+    "sisimai/rb-sisimai": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:34.892Z"
+    },
+    "smarty-php/smarty": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:35.386Z"
+    },
+    "socketio/socket.io": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:35.891Z"
+    },
+    "socketry/protocol-http1": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:36.386Z"
+    },
+    "solidusio/solidus": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:36.870Z"
+    },
+    "solidusio/solidus_auth_devise": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:37.408Z"
+    },
+    "sorlen008/DesktopCommanderMCP": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:37.897Z"
+    },
+    "sparklemotion/mechanize": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:38.425Z"
+    },
+    "sparklemotion/nekohtml": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:38.972Z"
+    },
+    "sparklemotion/nokogiri": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:39.497Z"
+    },
+    "sparklemotion/sqlite3-ruby": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:40.020Z"
+    },
+    "spree/spree_auth_devise": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:40.570Z"
+    },
+    "sshnet/SSH.NET": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:41.053Z"
+    },
+    "statamic/cms": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:41.603Z"
+    },
+    "steipete/summarize": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:42.092Z"
+    },
+    "steveukx/git-js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:42.545Z"
+    },
+    "strapi/strapi": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:43.095Z"
+    },
+    "sunnyadn/js-toml": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:43.539Z"
+    },
+    "sup-heliotrope/sup": {
+      "spdx": "GPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:44.035Z"
+    },
+    "sveltejs/devalue": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:44.552Z"
+    },
+    "sveltejs/kit": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:45.098Z"
+    },
+    "sveltejs/svelte": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:45.575Z"
+    },
+    "sveltia/sveltia-cms": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:46.088Z"
+    },
+    "termux/proot-distro": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:46.611Z"
+    },
+    "th30d4y/OpenLearnX": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:47.172Z"
+    },
+    "thedotmack/claude-mem": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:47.594Z"
+    },
+    "theforeman/foreman_ansible": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:48.090Z"
+    },
+    "theforeman/foreman_kubevirt": {
+      "spdx": "GPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:48.660Z"
+    },
+    "thephpleague/commonmark": {
+      "spdx": "BSD-3-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:49.185Z"
+    },
+    "thomaspoignant/scim-patch": {
+      "spdx": "Unlicense",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:49.643Z"
+    },
+    "thorsten/phpMyFAQ": {
+      "spdx": "MPL-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:50.112Z"
+    },
+    "thumbor/thumbor": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:50.634Z"
+    },
+    "tinacms/tinacms": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:51.157Z"
+    },
+    "tinfoil-factory/netfoil": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:51.723Z"
+    },
+    "tmlmobilidade/go": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:52.234Z"
+    },
+    "traefik/traefik": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:52.783Z"
+    },
+    "triggerdotdev/trigger.dev": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:53.333Z"
+    },
+    "uniget-org/cli": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:53.991Z"
+    },
+    "unjs/ufo": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:54.582Z"
+    },
+    "unpoly/unpoly-rails": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:55.117Z"
+    },
+    "uuidjs/uuid": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:55.616Z"
+    },
+    "vercel/next.js": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:56.200Z"
+    },
+    "vitejs/launch-editor": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:56.701Z"
+    },
+    "vllm-project/vllm": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:57.209Z"
+    },
+    "vmg/redcarpet": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:57.685Z"
+    },
+    "voodoocreation/ts-deepmerge": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:58.158Z"
+    },
+    "vouch/vouch-proxy": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:58.654Z"
+    },
+    "vuejs/vue-cli": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:59.149Z"
+    },
+    "wconrad/ftpd": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:52:59.629Z"
+    },
+    "webpack/webpack-dev-server": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:00.143Z"
+    },
+    "websockets/ws": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:00.647Z"
+    },
+    "whyour/qinglong": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:01.133Z"
+    },
+    "wintercms/winter": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:01.680Z"
+    },
+    "withastro/astro": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:02.193Z"
+    },
+    "wonderwhy-er/DesktopCommanderMCP": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:02.661Z"
+    },
+    "workos/authkit-session": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:03.340Z"
+    },
+    "wurmlab/sequenceserver": {
+      "spdx": "AGPL-3.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:03.879Z"
+    },
+    "xdan/jodit": {
+      "spdx": "MIT",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:04.310Z"
+    },
+    "xorbitsai/inference": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:04.806Z"
+    },
+    "xwiki/xwiki-platform": {
+      "spdx": "LGPL-2.1",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:05.297Z"
+    },
+    "yawkat/lz4-java": {
+      "spdx": "Apache-2.0",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:05.782Z"
+    },
+    "yeoman/environment": {
+      "spdx": "BSD-2-Clause",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:06.293Z"
+    },
+    "ytti/oxidized-web": {
+      "spdx": "NOASSERTION",
+      "source": "github-api",
+      "lookedUpAt": "2026-10-16T12:53:06.740Z"
+    }
+  },
+  "splits": {},
+  "acquisition": {},
+  "upstreamVerified": {
+    "GHSA-225x-3jhx-wh4q": {
+      "at": "2026-10-16T12:48:35.989Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-7mpf-4465-7fc2": {
+      "at": "2026-10-16T12:48:37.126Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-f5wm-88jv-g5hx": {
+      "at": "2026-10-16T12:48:38.295Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-qh8c-7588-qfrv": {
+      "at": "2026-10-16T12:48:39.632Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-228g-948r-83gx": {
+      "at": "2026-10-16T12:48:40.620Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-73w7-6w9g-gc8w": {
+      "at": "2026-10-16T12:48:41.690Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-f5ww-cq3m-q3g7": {
+      "at": "2026-10-16T12:48:43.518Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-q27f-v3r6-9v77": {
+      "at": "2026-10-16T12:48:44.755Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-22g5-r2x5-97cx": {
+      "at": "2026-10-16T12:48:45.856Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-77vg-94rm-hx3p": {
+      "at": "2026-10-16T12:48:46.911Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-g8f2-4f4f-5jqw": {
+      "at": "2026-10-16T12:48:47.961Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-qjx8-664m-686j": {
+      "at": "2026-10-16T12:48:49.074Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-22jq-vg5j-6vgg": {
+      "at": "2026-10-16T12:48:49.992Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-6f72-9gxx-98mj": {
+      "at": "2026-10-16T12:48:51.263Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-fgmj-fm8m-jvvx": {
+      "at": "2026-10-16T12:48:52.747Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-q8ff-7ffm-m3r9": {
+      "at": "2026-10-16T12:48:54.464Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-22p9-r2f5-22mf": {
+      "at": "2026-10-16T12:48:55.721Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-6x26-6r6f-m537": {
+      "at": "2026-10-16T12:48:56.870Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-cxgv-hp74-jj7r": {
+      "at": "2026-10-16T12:48:58.002Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-p538-c434-8v24": {
+      "at": "2026-10-16T12:48:59.361Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-26gq-p25f-99cp": {
+      "at": "2026-10-16T12:49:00.523Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-87fv-vqqr-m4jr": {
+      "at": "2026-10-16T12:49:01.588Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-h4mf-4v27-hggj": {
+      "at": "2026-10-16T12:49:02.636Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-rjrw-mjq6-hpmm": {
+      "at": "2026-10-16T12:49:03.839Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-28f5-38xr-jh2w": {
+      "at": "2026-10-16T12:49:04.929Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-794g-x443-36f7": {
+      "at": "2026-10-16T12:49:06.096Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-gx8x-g87m-h5q6": {
+      "at": "2026-10-16T12:49:07.096Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-p279-2cqp-84jg": {
+      "at": "2026-10-16T12:49:08.342Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-28gm-jrmw-xx93": {
+      "at": "2026-10-16T12:49:09.309Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-4jwf-m4wg-8p66": {
+      "at": "2026-10-16T12:49:10.734Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-hq9q-27g5-qwpj": {
+      "at": "2026-10-16T12:49:12.145Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-pfvm-w89x-94jw": {
+      "at": "2026-10-16T12:49:13.366Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-p28p-j94q-pg32": {
+      "at": "2026-10-16T12:49:14.959Z",
+      "parent": "ok",
+      "fix": "ok"
+    },
+    "GHSA-vxxm-wwqh-mh47": {
+      "at": "2026-10-16T12:49:16.179Z",
+      "parent": "ok",
+      "fix": "ok"
+    }
+  }
+}

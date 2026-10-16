@@ -202,6 +202,10 @@ export function changedLineRangesPost(preFile, postFile) {
  * pure function of the entry id, so the split is stable across runs, machines
  * and population growth — no stored state to drift, and a newly mined entry
  * lands on a fixed side rather than reshuffling everything.
+ *
+ * DEMOTED TO DEVELOPMENT USE (Engineering Excellence E1-02). Membership is by ENTRY id, so advisories of one repository fall on both
+ * sides: 91 of 424 repositories straddle it. Anything tuned on the development side leaks into this slice. Held-out claims must use
+ * the grouped, frozen assignment in splits.json (`splits.mjs`); this function is retained so past development numbers stay reproducible.
  */
 export function isHeldOut(id, fraction = 0.2) {
   let h = 2166136261 >>> 0;                    // FNV-1a

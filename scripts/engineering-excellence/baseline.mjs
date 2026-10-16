@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Factual baseline (E0-02): the identity of this checkout and the results of the existing gates, as measured now.
 //   node baseline.mjs                    identity and corpus identifiers only (fast, no gates)
-//   node baseline.mjs --run-gates [--only id,id] [--timeout-ms N]   also run the existing offline gates, bounded, with logs
+//   node baseline.mjs --run-gates [--only id,id] [--timeout-ms N] [--in-place]   also run the existing offline gates, bounded, with logs, in a clean detached worktree of HEAD (or in place)
 //   node baseline.mjs --render           write docs/engineering-excellence/baseline.json and BASELINE.md from the recorded results
 // Nothing is invented: a gate that was not run is `not_run`, one that cannot run is `blocked` with the reason, and the independent
 // population is `unmeasured` until a fresh run on this engine exists. Historical figures are labelled historical and carry their engine
@@ -13,6 +13,7 @@ import { atomicWriteFile, atomicWriteJson, nowIso } from '../loop-engineering/li
 import { runBounded } from '../loop-engineering/lib/proc.mjs';
 import { REPO_ROOT } from './lib/model.mjs';
 import { digestOfFiles, digestOfTree, measurementIdentity } from './lib/measurement-identity.mjs';
+import { withCleanWorktree } from './lib/clean-worktree.mjs';
 
 const DATA = (root) => join(root, 'scripts', 'engineering-excellence', 'data');
 const RESULTS = (root) => join(DATA(root), 'baseline.results.json');
@@ -34,12 +35,12 @@ function loadResults(root) { return readJson(RESULTS(root), { schemaVersion: 1, 
 
 function tail(text, n = 14) { return String(text || '').split('\n').filter((l) => l.trim()).slice(-n).join('\n'); }
 
-export async function runGate(root, gate, { timeoutMs } = {}) {
+export async function runGate(root, gate, { timeoutMs, measureRoot = root } = {}) {
   const logAbs = join(root, 'scripts', 'engineering-excellence', 'logs', 'E0-02', `${gate.id}.log`);
   mkdirSync(dirname(logAbs), { recursive: true });
   rmSync(logAbs, { force: true }); // a re-run replaces its log: the log and the recorded hash describe one run
-  const id = measurementIdentity(root, { corpus: null });
-  const res = await runBounded({ argv: gate.argv, cwd: join(root, gate.cwd), wallMs: timeoutMs || gate.timeoutMs, logPath: logAbs, redactLog: true, label: `baseline:${gate.id}`, runId: 'ee-baseline' });
+  const id = measurementIdentity(measureRoot, { corpus: null });
+  const res = await runBounded({ argv: gate.argv, cwd: join(measureRoot, gate.cwd), wallMs: timeoutMs || gate.timeoutMs, logPath: logAbs, redactLog: true, label: `baseline:${gate.id}`, runId: 'ee-baseline' });
   let status = 'failed';
   if (res.outcome === 'spawn-failed') status = 'blocked';
   else if (res.outcome === 'timeout-wall' || res.outcome === 'timeout-idle') status = 'blocked';
@@ -54,15 +55,24 @@ export async function runGate(root, gate, { timeoutMs } = {}) {
   };
 }
 
-export async function runGates(root, { only = null, timeoutMs, onResult = () => {} } = {}) {
+/**
+ * Run the gates. By default they run in a detached worktree of `ref` (default HEAD), so editing the working tree while they run cannot
+ * invalidate the measurement and the measured tree is clean by construction. `inPlace` runs them in `root` itself.
+ */
+export async function runGates(root, { only = null, timeoutMs, onResult = () => {}, inPlace = false, ref = 'HEAD' } = {}) {
   const store = loadResults(root);
-  for (const gate of GATES) {
-    if (only && !only.includes(gate.id)) continue;
-    const r = await runGate(root, gate, { timeoutMs });
-    store.gates[gate.id] = r;
-    onResult(r);
-    atomicWriteJson(RESULTS(root), store); // checkpoint per gate: an interrupted run resumes with --only
-  }
+  const body = async (measureRoot, extra) => {
+    for (const gate of GATES) {
+      if (only && !only.includes(gate.id)) continue;
+      const r = await runGate(root, gate, { timeoutMs, measureRoot });
+      if (extra) r.measuredIn = { detachedWorktreeOf: extra.commit, linkedFromSourceCheckout: extra.linked };
+      store.gates[gate.id] = r;
+      onResult(r);
+      atomicWriteJson(RESULTS(root), store); // checkpoint per gate: an interrupted run resumes with --only
+    }
+  };
+  if (inPlace) await body(root, null);
+  else await withCleanWorktree(root, ({ dir, commit, linked }) => body(dir, { commit, linked }), { ref });
   return store;
 }
 
@@ -152,7 +162,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   (async () => {
     if (a.includes('--run-gates')) {
       const only = arg(a, '--only');
-      const store = await runGates(root, { only: only ? only.split(',') : null, timeoutMs: Number(arg(a, '--timeout-ms')) || undefined, onResult: (r) => console.log(`${r.id}: ${r.status} (exit ${r.exitCode}, ${(r.durationMs / 1000).toFixed(1)} s)`) });
+      const store = await runGates(root, { only: only ? only.split(',') : null, inPlace: a.includes('--in-place'), timeoutMs: Number(arg(a, '--timeout-ms')) || undefined, onResult: (r) => console.log(`${r.id}: ${r.status} (exit ${r.exitCode}, ${(r.durationMs / 1000).toFixed(1)} s)`) });
       return Object.values(store.gates).some((g) => g.status === 'blocked') ? 1 : 0;
     }
     if (a.includes('--render')) { const b = render(root); console.log(`baseline: identity ${b.identity.releaseTrust}; gates ${b.gates.map((g) => `${g.id}=${g.status}`).join(', ')}; independent accuracy ${b.independentAccuracy.status}`); return 0; }
