@@ -143,6 +143,8 @@ export async function runQueue(jobs, ctx) {
     maxCalls: Math.min(HARD_LIMITS.maxCalls, Math.max(1, ctx.limits.maxCalls || 100)),
     maxWallMs: Math.min(HARD_LIMITS.maxWallSeconds, Math.max(1, ctx.limits.maxWallSeconds || 900)) * 1000,
     maxTokensPerJob: ctx.limits.maxTokensPerJob || 40000,
+    maxTokensPerRepo: Number.isFinite(ctx.limits.maxTokensPerRepo) ? ctx.limits.maxTokensPerRepo : null,
+    anonymizePrompts: ctx.limits.anonymizePrompts === true,
     maxRetries: Math.min(HARD_LIMITS.maxRetries, Math.max(0, ctx.limits.maxRetries ?? 3)),
     jobTimeoutMs: ctx.limits.jobTimeoutMs || 120000,
     maxCostUsd: Number.isFinite(ctx.limits.maxCostUsd) ? ctx.limits.maxCostUsd : null,
@@ -156,6 +158,7 @@ export async function runQueue(jobs, ctx) {
   const results = new Map();
   let calls = 0;
   let estCost = 0;
+  let tokensUsed = 0;
   let cooldownUntil = 0;
   let budgetStop = null;
   let persistChain = Promise.resolve();
@@ -205,6 +208,7 @@ export async function runQueue(jobs, ctx) {
     if (ctx.signal && ctx.signal.aborted) return 'cancelled';
     if (now() - started >= L.maxWallMs) return 'budget-exhausted:wall-time';
     if (calls >= L.maxCalls) return 'budget-exhausted:max-calls';
+    if (L.maxTokensPerRepo !== null && tokensUsed >= L.maxTokensPerRepo) return 'budget-exhausted:max-tokens-per-repo';
     if (L.maxCostUsd !== null && L.costPerCallUsd !== null && estCost + L.costPerCallUsd > L.maxCostUsd) return 'budget-exhausted:max-cost';
     return null;
   };
@@ -228,8 +232,9 @@ export async function runQueue(jobs, ctx) {
       state.jobs[job.key] = { state: 'running', reason: null, attempts, label: job.label };
       const out = await runReviewOnce({
         pack: loadedJob.pack, entrypoints: loadedJob.entrypoints, manifests: loadedJob.manifests, packageIndexes: job.packageIndexes, packageTexts: loadedJob.packageTexts,
-        fileContents: ctx.fileContents, scanRoot: ctx.root, invoker: ctx.invoker, model: ctx.model, limits: { maxTokensPerJob: L.maxTokensPerJob, jobTimeoutMs: L.jobTimeoutMs },
+        fileContents: ctx.fileContents, scanRoot: ctx.root, invoker: ctx.invoker, model: ctx.model, limits: { maxTokensPerJob: L.maxTokensPerJob, jobTimeoutMs: L.jobTimeoutMs, anonymizePrompts: L.anonymizePrompts },
       });
+      if (out.usage) tokensUsed += (out.usage.inputTokensEstimated || 0) + (out.usage.outputTokensEstimated || 0);
       if (out.state === 'skipped_by_policy') calls--; // nothing was sent
       if (out.state === 'failed' && out.retryable && attempts <= L.maxRetries) {
         // exponential backoff with jitter; the shared cooldown slows every worker, which is what a 429 storm needs
