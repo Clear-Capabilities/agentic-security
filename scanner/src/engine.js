@@ -8919,7 +8919,7 @@ function _deterministicFileTimings(timings) {
 }
 
   const _fileTimings = [];
-  let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
+  let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0, _filesOversizeSkipped = 0;
   const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
@@ -9036,7 +9036,7 @@ function _deterministicFileTimings(timings) {
   for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
     const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
-    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;if(c&&c.length>500000)_filesOversizeSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}
       let _delta; const _errsBefore = _detectorErrors.length;
       if (_cascadePool) {
         const _res = await _cascadePool.runFile(p, c, scanRoot, _detectorErrors, { timeoutMs: _perFileTimeoutMs });
@@ -10805,7 +10805,7 @@ function _deterministicFileTimings(timings) {
   // seen when only N-of-those-candidates were actually analyzed.
   // checkpoint.total intentionally keeps files.length — that field means the
   // full candidate set for resume bookkeeping, a different, correct meaning.
-  _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),...(_cacheEnabled?{kind:'analysis-cache',secretSkips:_cacheSecretSkips}:{}),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
+  _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesOversizeSkipped:_filesOversizeSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),...(_cacheEnabled?{kind:'analysis-cache',secretSkips:_cacheSecretSkips}:{}),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}

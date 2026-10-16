@@ -183,15 +183,98 @@
       "endedAt": "2026-10-16T16:46:57.084Z"
     },
     "10": {
-      "state": "running",
+      "state": "done",
       "offset": 200,
       "limit": 20,
       "startedAt": "2026-10-16T16:46:57.103Z",
-      "attempts": 1
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 96872
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 875343
+      },
+      "endedAt": "2026-10-16T17:03:09.324Z"
+    },
+    "11": {
+      "state": "done",
+      "offset": 220,
+      "limit": 20,
+      "startedAt": "2026-10-16T17:03:23.524Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 108799
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 225625
+      },
+      "endedAt": "2026-10-16T17:08:57.956Z"
+    },
+    "12": {
+      "state": "done",
+      "offset": 240,
+      "limit": 20,
+      "startedAt": "2026-10-16T17:08:57.973Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 107558
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 394879
+      },
+      "endedAt": "2026-10-16T17:17:20.415Z"
+    },
+    "13": {
+      "state": "done",
+      "offset": 260,
+      "limit": 20,
+      "startedAt": "2026-10-16T17:17:20.423Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 144441
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 474695
+      },
+      "endedAt": "2026-10-16T17:27:39.566Z"
+    },
+    "14": {
+      "state": "done",
+      "offset": 280,
+      "limit": 3,
+      "startedAt": "2026-10-16T17:27:39.576Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 8791
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 32815
+      },
+      "endedAt": "2026-10-16T17:28:21.188Z"
     }
   },
   "measuredIn": {
-    "detachedWorktreeOf": "c824a92e943e71db3997eeb3c7a86bb73094fc40",
+    "detachedWorktreeOf": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
     "linkedFromSourceCheckout": [
       "scanner/node_modules",
       "scanner/vendor",
@@ -200,14 +283,14 @@
   },
   "identity": {
     "schemaVersion": 1,
-    "sourceCommit": "c824a92e943e71db3997eeb3c7a86bb73094fc40",
+    "sourceCommit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
     "sourceBranch": "HEAD",
     "sourceTreeClean": true,
     "dirtyPaths": [],
     "bookkeepingPathsIgnored": 2,
-    "bundleSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
-    "bundleSidecarSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
-    "lockfileSha256": "49ccabbac95e1032e5e3f09d169efc63525fa067dd5e56b554fbbeda6f834cb4",
+    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "bundleSidecarSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "lockfileSha256": "ba0c0043c2154e32576a6d52c8f8cfbfc3dc72151b5002fedb4d60e39ca7671d",
     "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
     "config": {
       "knobs": {},
@@ -229,11 +312,11 @@
       "cpus": 8,
       "memoryGb": 16
     },
-    "startedAt": "2026-10-16T16:07:59.950Z",
+    "startedAt": "2026-10-16T17:03:22.784Z",
     "measurementValid": true,
     "releaseTrust": "trusted",
     "invalidReasons": []
   },
-  "pausedAt": "2026-10-16T16:07:41.617Z",
-  "pausedBecause": "the 40 minute budget of this invocation was used; re-run with --run a72968195aa1 to continue"
+  "pausedAt": "2026-10-16T17:03:09.336Z",
+  "pausedBecause": "the 48 minute budget of this invocation was used; re-run with --run a72968195aa1 to continue"
 }

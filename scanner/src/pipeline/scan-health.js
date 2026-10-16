@@ -55,6 +55,13 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
   if (filesTimedOut > 0) {
     conditions.push(`${filesTimedOut} file(s) exceeded the per-file analysis timeout`);
   }
+  // A file the engine does not read at all (over the size limit, or too dense to be source: minified or generated) is a file whose problems nobody looked for.
+  // It used to be counted in `files.skipped` and nowhere else, so a scan that read none of a repository's largest files still said `complete`. An empty file is
+  // also counted as skipped, but there is nothing in it to miss, so it is not a condition.
+  const unanalysed = (Number(scanMeta?.filesOversizeSkipped) || 0) + (Number(scanMeta?.filesDenseSkipped) || 0);
+  if (unanalysed > 0) {
+    conditions.push(`${unanalysed} file(s) were not analysed because they are over the size limit or too dense to be source (minified or generated)`);
+  }
   if (engineErrors?.cppDataflowParseErrors > 0) {
     conditions.push(`${engineErrors.cppDataflowParseErrors} C/C++ dataflow parse error(s)`);
   }
@@ -115,6 +122,8 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
       expected: scanMeta?.checkpoint?.total ?? null,
       scanned: scanMeta?.filesScanned ?? null,
       skipped: (Number(scanMeta?.filesSkipped) || 0) + (Number(scanMeta?.filesDenseSkipped) || 0),
+      // skipped files that had something in them to miss: over the size limit, or too dense to be source. Empty files are in `skipped` and not here.
+      unanalysed,
       timedOut: filesTimedOut,
     },
     analyzers: analyzerCoverage || null,

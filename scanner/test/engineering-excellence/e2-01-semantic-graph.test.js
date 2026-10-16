@@ -124,7 +124,7 @@ test('overhead is small: the serialized graph is a few times the source, and bui
 
 test('additive by construction: nothing on the scan path imports the graph, so findings and chain[] cannot change', () => {
   const offenders = [];
-  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(js|mjs)$/.test(e.name) && !p.endsWith('ir/semantic-graph.js') && fs.readFileSync(p, 'utf8').includes('semantic-graph')) offenders.push(path.relative(REPO, p)); } };
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(js|mjs)$/.test(e.name) && !p.endsWith('ir/semantic-graph.js') && /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"][^'"]*semantic-graph(?:\.js)?['"]/.test(fs.readFileSync(p, 'utf8'))) offenders.push(path.relative(REPO, p)); } };
   walk(path.join(REPO, 'scanner/src')); walk(path.join(REPO, 'scanner/bin'));
   assert.deepEqual(offenders, []);
 });

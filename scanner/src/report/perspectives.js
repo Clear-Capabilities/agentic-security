@@ -11,6 +11,7 @@
 // The package is DATA from a repository we do not control: every string is escaped before it reaches HTML, the page loads nothing from anywhere and runs no script, and a
 // content security policy says so.
 import { createHash } from 'node:crypto';
+import { releaseVerdict } from '../posture/assurance/release-verdict.js';
 
 const esc = (v) => String(v ?? '').replace(/[&<>"'`]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c]));
 const sevRank = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
@@ -66,7 +67,9 @@ export function buildViews(pkg, { previous = null, ranking = null, verification 
   for (const f of findings) if (f.proofTier !== 'execution-proven') unknowns.push({ about: `exploitability of ${f.id}`, reason: `proof tier is ${f.proofTier}: it has not been shown to be exploitable`, evidence: [f.evidenceHash] });
 
   const developer = findings.map((f) => ({ id: f.id, evidenceHash: f.evidenceHash, status: f.status, confidence: f.confidence, severity: f.severity, where: f.where, why: f.why, how: f.how, title: f.title, cwe: f.cwe, fix: f.fix }));
+  const verdict = releaseVerdict(pkg);
   const ciso = {
+    verdict: { verdict: verdict.verdict, statement: verdict.statement, blockers: verdict.blockers.map((b) => b.message), unknowns: verdict.unknowns.map((u) => u.message) },
     verified: verification ? verification.ok === true : null,
     scan: completeness,
     proven: { executionProven: tier('execution-proven'), taintProven: tier('taint-proven'), unproven: findings.length - tier('execution-proven') - tier('taint-proven'), total: findings.length },
@@ -94,7 +97,7 @@ export function buildViews(pkg, { previous = null, ranking = null, verification 
 export function renderText(views, view = 'all') {
   const L = [];
   const dev = () => { L.push('DEVELOPER VIEW'); for (const f of views.developer) { L.push(`  [${f.severity}] ${f.title}  ${f.where.file ?? '?'}:${f.where.line ?? '?'}  id=${f.id}  status=${f.status}  confidence=${f.confidence}  evidence=${f.evidenceHash.slice(0, 19)}`); if (f.why) L.push(`      why: ${String(f.why).slice(0, 300)}`); if (f.how) L.push(`      fix: ${String(f.how).slice(0, 300)}`); if (f.fix) L.push(`      fix check: ${f.fix.verifiedFull ? 'verified' : 'not fully verified'}${f.fix.degradedLegs.length ? ` (not passed: ${f.fix.degradedLegs.join(', ')})` : ''}`); } if (!views.developer.length) L.push('  no findings'); };
-  const ciso = () => { const c = views.ciso; L.push('CISO VIEW'); L.push(`  scan: ${c.scan.verdict} (${c.scan.scanStatus})${c.scan.conditions.length ? ' - ' + c.scan.conditions.join('; ') : ''}`); L.push(`  proven: ${c.proven.executionProven} executed, ${c.proven.taintProven} taint path, ${c.proven.unproven} unproven, of ${c.proven.total}`); L.push(`  fixes: ${c.fixes.verified} verified, ${c.fixes.unverified} unverified, ${c.fixes.open} open`); if (c.changeSinceLast) L.push(`  since last release: ${c.changeSinceLast.new.length} new, ${c.changeSinceLast.resolved.length} resolved, ${c.changeSinceLast.statusChanged.length} changed status`); else L.push('  since last release: no previous release was supplied'); if (c.risk) L.push(`  risk: ${JSON.stringify(c.risk.byPriority)}; ${c.risk.incompleteCoverage} with incomplete coverage`); L.push(`  verification: ${c.verified === null ? 'not performed here' : c.verified ? 'signature and contents verified' : 'FAILED'}`); };
+  const ciso = () => { const c = views.ciso; L.push('CISO VIEW'); L.push(`  release verdict: ${c.verdict.verdict}. ${c.verdict.statement}`); for (const b of c.verdict.blockers) L.push(`    blocks: ${b}`); for (const u of c.verdict.unknowns) L.push(`    unknown: ${u}`); L.push(`  scan: ${c.scan.verdict} (${c.scan.scanStatus})${c.scan.conditions.length ? ' - ' + c.scan.conditions.join('; ') : ''}`); L.push(`  proven: ${c.proven.executionProven} executed, ${c.proven.taintProven} taint path, ${c.proven.unproven} unproven, of ${c.proven.total}`); L.push(`  fixes: ${c.fixes.verified} verified, ${c.fixes.unverified} unverified, ${c.fixes.open} open`); if (c.changeSinceLast) L.push(`  since last release: ${c.changeSinceLast.new.length} new, ${c.changeSinceLast.resolved.length} resolved, ${c.changeSinceLast.statusChanged.length} changed status`); else L.push('  since last release: no previous release was supplied'); if (c.risk) L.push(`  risk: ${JSON.stringify(c.risk.byPriority)}; ${c.risk.incompleteCoverage} with incomplete coverage`); L.push(`  verification: ${c.verified === null ? 'not performed here' : c.verified ? 'signature and contents verified' : 'FAILED'}`); };
   const aud = () => { const a = views.auditor; L.push('AUDITOR VIEW'); L.push(`  snapshot: ${a.package.snapshot ? `${a.package.snapshot.commit ?? 'no commit'} (${a.package.snapshot.immutable ? 'immutable' : 'NOT immutable'})` : 'none'}`); L.push(`  issuer: ${a.issuer ? `${a.issuer.trustBasis}, independently certified: ${a.issuer.independentlyCertified}` : 'none'}`); L.push(`  verification: ${a.verification.ok === null ? 'not performed here' : a.verification.ok ? 'ok' : 'FAILED: ' + a.verification.errors.join('; ')}`); for (const x of a.assertions) L.push(`  assertion ${x.id} [${x.status}]: ${x.text}  evidence=${x.evidence.map((d) => d.slice(0, 19)).join(',') || 'none'}`); for (const u of a.unknowns) L.push(`  unknown: ${u.about} - ${u.reason}`); L.push(`  does not prove: ${a.doesNotProve}`); };
   if (view === 'developer' || view === 'all') dev();
   if (view === 'ciso' || view === 'all') ciso();
@@ -126,6 +129,8 @@ code{font-family:ui-monospace,monospace;font-size:.9em}.muted{color:var(--muted)
 ${views.developer.map((f) => row(f, [`<code>${esc(f.id)}</code> ${esc(f.title)}<br><span class="muted">${esc(f.severity)}${f.cwe ? ' ' + esc(f.cwe) : ''}</span>`, `<code>${esc(f.where.file ?? '?')}:${esc(f.where.line ?? '?')}</code>`, esc(f.why ?? ''), esc(f.how ?? ''), esc(f.status), esc(f.confidence)])).join('\n') || '<tr><td colspan="6">No findings.</td></tr>'}
 </tbody></table></details>
 <details open><summary>CISO: what is proven, what changed, risk and coverage</summary>
+<p><strong>Release verdict: ${esc(c.verdict.verdict)}.</strong> ${esc(c.verdict.statement)}</p>
+<ul>${c.verdict.blockers.map((b) => `<li class="bad">Blocks: ${esc(b)}</li>`).join('')}${c.verdict.unknowns.map((u) => `<li>Unknown: ${esc(u)}</li>`).join('')}</ul>
 <p>Scan: <strong>${esc(c.scan.verdict)}</strong> (${esc(c.scan.scanStatus)}). ${c.scan.conditions.map((x) => esc(x)).join('; ')}</p>
 <p>Proven: ${esc(c.proven.executionProven)} by execution, ${esc(c.proven.taintProven)} by a taint path, ${esc(c.proven.unproven)} unproven, of ${esc(c.proven.total)}. Fixes: ${esc(c.fixes.verified)} verified, ${esc(c.fixes.unverified)} unverified, ${esc(c.fixes.open)} open.</p>
 <p>${c.changeSinceLast ? `Since the previous release: ${esc(c.changeSinceLast.new.length)} new, ${esc(c.changeSinceLast.resolved.length)} resolved, ${esc(c.changeSinceLast.statusChanged.length)} changed status.` : 'No previous release was supplied, so no change is reported.'}</p>

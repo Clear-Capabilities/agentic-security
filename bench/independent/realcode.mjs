@@ -27,7 +27,8 @@ import { atomicWriteJson } from '../../scripts/loop-engineering/lib/util.mjs';
 import { MIN_ENTRIES_FOR_RATE } from './scorer.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const RUNS = join(HERE, 'runs');
+// AGENTIC_SECURITY_REALCODE_RUNS_DIR points the gate at another directory of runs (a test uses it to show that a worsened run fails)
+export const RUNS = process.env.AGENTIC_SECURITY_REALCODE_RUNS_DIR || join(HERE, 'runs');
 export const BASELINE_POINTER = join(RUNS, 'BASELINE.json');
 export const MAX_UNHEALTHY_SHARE = 0.1;
 

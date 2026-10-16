@@ -10,16 +10,16 @@ that produced them.
 | Field | Value |
 | --- | --- |
 | Engine version | 0.172.1 |
-| Bundle SHA-256 | `edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc` |
-| Commit | `ee16dbb90f48968114b7424ff0f7e961072e79a1` |
+| Bundle SHA-256 | `e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1` |
+| Commit | `4248af31a7e72b043788b1b19f3797ecd36b3076` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
-| Independent accuracy of THIS engine | unmeasured (no adjudicated real-code population has been run; see the historical record below, if present) |
+| Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
 | Node | v24.20.0 |
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-16T12:15:05.393Z |
+| Generated (UTC) | 2026-10-16T19:51:05.051Z |
 
 ## What these numbers are, and what they are not
 
@@ -208,14 +208,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 56 |
+| `scripts` | 94 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 665 |
+| `scanner/src` | 677 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -232,7 +232,7 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 422/514 (82.1%) |
+| 255/559 (45.6%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
@@ -322,6 +322,41 @@ Tools present where this was measured: ghc=true, cabal=true, stack=absent, nix=a
 - Findings of a different family inside a case are reported separately (family-scoped scoring); the strict precision, which counts them, is stored next to every layer.
 - Parameters of an exported Haskell function are treated as caller-controlled text or customer records: a flow from such a parameter is reported with that source label, which is a weaker claim than a request or stdin read.
 - The "supported" status is defined on the frozen holdout (section 9.2 of the PRD). Shapes that no other split contains (the unseen-v3 split: 3 vulnerable and 3 safe single-flaw code forms per family, author-labelled, written without reading the engine rules, measured once and never tuned against) are reported beside it, with intervals over shapes (two near-identical cases per shape). Where they fall below the same targets the row says so. The earlier unseen-v1 and unseen-v2 sets were used to change the engine and are development sets (shape-dev, shape-dev-2), not generalisation measures.
+
+## Independent run a72968195aa1: historical record (engine 0.172.0)
+
+This is the independent population, upstream code labelled by public advisories, run on the engine below at a named commit. It is a different
+instrument from the curated regression net above and the two figures are never combined. Only the **localized** definition (a matching finding landed on code the
+fix changed) is a claim; it is reported with numerator and denominator.
+
+| Field | Value |
+| --- | --- |
+| Engine | 0.172.0 (NOT the engine this scorecard describes) |
+| Measured at commit | `2c0f0d13c6085580f920452a9866db5aae1dcc29` |
+| Bundle SHA-256 | `e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1` (sidecar matches) |
+| Measurement | valid: clean tree, bundle matches its digest |
+| Configuration | deep=true, model=none; model endpoint none |
+| Population | manifest `113b30ac8e03bdb3`; splits protocol `sha256:612425af9f0dd8ac`; dev + validation only, at most 40 entries per language; sealed split touched: no |
+| Date (UTC) | 2026-10-16T17:28:34.519Z |
+| Entries in scope | 283: scored 278, unscored 5 (timeout 5), unaccounted 0; denominators reconcile |
+
+**Headline (localized):** precision 31.6% (6/19), recall 2.2% (6/278), F1 0.040 (95% interval 1.3% to 7.5%, resampling whole repositories).
+
+| Language | Scored | Recall | Precision | Recall 95% interval | Status |
+| --- | --- | --- | --- | --- | --- |
+| csharp | 14 | counts only (0 true positive, 14 missed) | | | insufficient_population (below 30) |
+| go | 40 | 2.5% (1/40) | 33.3% (1/3) | 0.4% to 12.9% | reportable |
+| java | 22 | counts only (0 true positive, 22 missed) | | | insufficient_population (below 30) |
+| javascript | 40 | 2.5% (1/40) | 25.0% (1/4) | 0.4% to 12.9% | reportable |
+| kotlin | 2 | counts only (1 true positive, 1 missed) | | | insufficient_population (below 30) |
+| php | 40 | 0.0% (0/40) | n/a (0/0) | 0.0% to 8.8% | reportable |
+| python | 40 | 2.5% (1/40) | 25.0% (1/4) | 0.4% to 12.9% | reportable |
+| ruby | 40 | 5.0% (2/40) | 40.0% (2/5) | 1.4% to 16.5% | reportable |
+| typescript | 40 | 0.0% (0/40) | n/a (0/0) | 0.0% to 8.8% | reportable |
+
+Languages with no rate in this run: java, csharp, kotlin. They are unmeasured here, not good or bad.
+
+This run does not use the sealed split, so it is a baseline on development and validation data, not a held-out result, and it makes no claim about the 80% per-language target.
 
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
@@ -414,21 +449,21 @@ adjudicated sealed population that meets the registered minimums. `insufficient-
   `npm run bench:cve-replay:check` fails the build on any drift from it.
   The rates above are computed from this run, not from this file.
 - **Third-party repository run** (*committed artifact*, `bench/proof-corpus/results/summary.json`,
-  bundle `0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4`): 3/10 targets completed.
+  bundle `0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4`): 3 of 10 targets completed, 7 not attempted (no pinned commit, so nothing was cloned), 0 failed after starting.
   Reported for scale and parse coverage only — these repositories have no
   vulnerability ground truth, so no accuracy rate is derived from them.
 
 | Repository | Commit | Status | Files parsed / in scope | Results emitted | Deterministic re-run |
 | --- | --- | --- | --- | --- | --- |
-| discourse | `` | error | 0/0 (n/a) | n/a | not checked |
+| discourse | `` | not attempted | 0/0 (n/a) | n/a | not checked |
 | ghost | `7da28a03b9c7` | ok | 4262/4271 (99.8%) | 1124 | identical |
 | godot | `159701651ad4` | ok | 3391/3399 (99.8%) | 144 | identical |
-| grafana | `` | error | 0/0 (n/a) | n/a | not checked |
-| jellyfin | `` | error | 0/0 (n/a) | n/a | not checked |
-| jenkins | `` | error | 0/0 (n/a) | n/a | not checked |
-| mattermost | `` | error | 0/0 (n/a) | n/a | not checked |
-| nextcloud | `` | error | 0/0 (n/a) | n/a | not checked |
-| sentry | `` | error | 0/0 (n/a) | n/a | not checked |
+| grafana | `` | not attempted | 0/0 (n/a) | n/a | not checked |
+| jellyfin | `` | not attempted | 0/0 (n/a) | n/a | not checked |
+| jenkins | `` | not attempted | 0/0 (n/a) | n/a | not checked |
+| mattermost | `` | not attempted | 0/0 (n/a) | n/a | not checked |
+| nextcloud | `` | not attempted | 0/0 (n/a) | n/a | not checked |
+| sentry | `` | not attempted | 0/0 (n/a) | n/a | not checked |
 | superset | `e1ffa53d9b49` | ok | 4080/4086 (99.9%) | 860 | identical |
 
 ## Reproducing any figure here

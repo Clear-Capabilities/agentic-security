@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.172.1",
-    "bundleSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
-    "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "commit": "4248af31a7e72b043788b1b19f3797ecd36b3076",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-16T12:15:05.393Z",
+    "generatedAt": "2026-10-16T19:51:05.051Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 665,
+        "total": 677,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/provenance-graph.js": 1,
@@ -617,10 +617,12 @@
           "context-intelligence/cli.js": 1,
           "context-intelligence/config.js": 1,
           "context-intelligence/controls.js": 2,
+          "context-intelligence/counterexample.js": 1,
           "context-intelligence/entrypoints.js": 1,
           "context-intelligence/evaluation/index.js": 3,
           "context-intelligence/evaluation/runner.js": 1,
           "context-intelligence/files.js": 1,
+          "context-intelligence/findings.js": 1,
           "context-intelligence/store.js": 1,
           "dataflow/cross-service-taint.js": 5,
           "dataflow/exploit-prover.js": 1,
@@ -631,11 +633,15 @@
           "dataflow/privacy-governance.js": 1,
           "dataflow/privacy-sink-policy.js": 1,
           "dataflow/privacy-taxonomy.js": 1,
+          "dataflow/service-edges.js": 1,
           "discovery/memory.js": 1,
           "egress/audit.js": 1,
           "egress/policy.js": 1,
-          "fix/apply-fix-service.js": 3,
+          "fix/apply-fix-service.js": 4,
           "fix/approver-registry.js": 1,
+          "fix/test-commands.js": 1,
+          "fix/verification-adapters.js": 1,
+          "fix/verify-patch.js": 1,
           "history-scan.js": 1,
           "integrations/index.js": 10,
           "integrations/tickets.js": 9,
@@ -702,6 +708,7 @@
           "mcp/server.js": 1,
           "mcp/tools.js": 7,
           "pipeline/cascade-worker-pool.js": 2,
+          "pipeline/supervised-analyzers.js": 1,
           "poc-video.js": 1,
           "posture/adversarial-self-test.js": 1,
           "posture/adversary-agent.js": 5,
@@ -711,7 +718,9 @@
           "posture/assurance/baseline.js": 2,
           "posture/assurance/bounded-io.js": 1,
           "posture/assurance/config.js": 1,
+          "posture/assurance/evidence-registry.js": 1,
           "posture/assurance/rollback.js": 2,
+          "posture/assurance/waiver.js": 1,
           "posture/attack-playbooks.js": 2,
           "posture/auditor-walkthrough.js": 3,
           "posture/auth-posture-import.js": 3,
@@ -799,6 +808,8 @@
           "posture/proof-fabric/runner.js": 3,
           "posture/proof-fabric/store.js": 1,
           "posture/provenance/cache.js": 1,
+          "posture/provenance/coverage.js": 1,
+          "posture/provenance/git-evidence.js": 1,
           "posture/provenance/lifecycle.js": 1,
           "posture/provenance/providers/config.js": 1,
           "posture/provenance/repo-lineage.js": 1,
@@ -815,6 +826,7 @@
           "posture/rule-synthesis.js": 3,
           "posture/ruleset-version.js": 3,
           "posture/runtime-correlation.js": 1,
+          "posture/runtime-trace-ingest.js": 2,
           "posture/sbom-diff.js": 2,
           "posture/sca-policy.js": 3,
           "posture/sca-upgrade.js": 4,
@@ -838,7 +850,7 @@
           "posture/verifier-target.js": 3,
           "posture/verifier.js": 2,
           "posture/version.js": 3,
-          "posture/waf-ingest.js": 5,
+          "posture/waf-ingest.js": 3,
           "posture/watch-mode.js": 1,
           "posture/workflow-installer.js": 2,
           "pr-comment.js": 1,
@@ -885,7 +897,7 @@
         }
       },
       "scripts": {
-        "total": 56,
+        "total": 94,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -895,6 +907,13 @@
           "capability-ledger/check.mjs": 1,
           "check-assurance-docs.mjs": 3,
           "detector-fuzz-runner.mjs": 3,
+          "engineering-excellence/analysis-cache-measure.mjs": 2,
+          "engineering-excellence/completion-analysis.mjs": 2,
+          "engineering-excellence/dci-audit.mjs": 27,
+          "engineering-excellence/evidence-inventory.mjs": 2,
+          "engineering-excellence/lib/evidence-samples.mjs": 2,
+          "engineering-excellence/parse-reuse-measure.mjs": 1,
+          "engineering-excellence/runtime-audit.mjs": 2,
           "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
           "loop-engineering/lib/claude.mjs": 1,
@@ -921,8 +940,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 422,
-    "d": 514
+    "n": 255,
+    "d": 559
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -1898,12 +1917,14 @@
       "bundleSha": "0ba4abbe57dd8124d15c252d22a56d7efc80e9f59690e1c49a95a4b55e0a68a4",
       "targetCount": 10,
       "ok": 3,
-      "failed": 7,
+      "failed": 0,
+      "notAttempted": 7,
       "targets": [
         {
           "id": "discourse",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1914,6 +1935,7 @@
           "id": "ghost",
           "commit": "7da28a03b9c72fa2cc656f5f926230bae09fd684",
           "status": "ok",
+          "outcome": "completed",
           "filesInScope": 4271,
           "filesParsed": 4262,
           "determinismChecked": true,
@@ -1924,6 +1946,7 @@
           "id": "godot",
           "commit": "159701651ad44335691dcbd632d8074307074c7b",
           "status": "ok",
+          "outcome": "completed",
           "filesInScope": 3399,
           "filesParsed": 3391,
           "determinismChecked": true,
@@ -1934,6 +1957,7 @@
           "id": "grafana",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1944,6 +1968,7 @@
           "id": "jellyfin",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1954,6 +1979,7 @@
           "id": "jenkins",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1964,6 +1990,7 @@
           "id": "mattermost",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1974,6 +2001,7 @@
           "id": "nextcloud",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1984,6 +2012,7 @@
           "id": "sentry",
           "commit": null,
           "status": "error",
+          "outcome": "not_attempted",
           "filesInScope": null,
           "filesParsed": null,
           "determinismChecked": null,
@@ -1994,6 +2023,7 @@
           "id": "superset",
           "commit": "e1ffa53d9b4926f2ac7fe8c83c5f890fd621f3c8",
           "status": "ok",
+          "outcome": "completed",
           "filesInScope": 4086,
           "filesParsed": 4080,
           "determinismChecked": true,
@@ -2074,12 +2104,377 @@
   },
   "measurement": {
     "engineVersion": "0.172.1",
-    "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
-    "bundleSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
+    "commit": "4248af31a7e72b043788b1b19f3797ecd36b3076",
+    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
-    "currentEngineIndependentReason": "no adjudicated real-code population has been run against this engine; the independent record in this document, if any, describes an older engine",
+    "currentEngineIndependentReason": "the latest independent run (a72968195aa1) measured engine 0.172.0, not the engine above; it is a historical record",
+    "independentRun": {
+      "runId": "a72968195aa1",
+      "engineVersion": "0.172.0",
+      "measuredAt": "2026-10-16T17:28:34.519Z",
+      "comparableToCurrentEngine": false,
+      "historical": true,
+      "identity": {
+        "sourceCommit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
+        "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+        "bundleSidecarSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+        "measurementValid": true,
+        "invalidReasons": [],
+        "lockfileSha256": "ba0c0043c2154e32576a6d52c8f8cfbfc3dc72151b5002fedb4d60e39ca7671d",
+        "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
+        "modelEndpointMode": "none",
+        "toolchain": {
+          "node": "v24.20.0",
+          "os": "darwin 27.0.0 arm64"
+        }
+      },
+      "population": {
+        "role": "independent population, development and validation splits only",
+        "manifestSha256": "113b30ac8e03bdb35b6577f52ad8a3f3b394e329c03afaa235e75897cde9d599",
+        "splitsProtocolHash": "sha256:612425af9f0dd8ac0fd6a0f0c0dfb0d5fa055611de6faa11b57ac5ae3ffe4d65",
+        "splitNames": [
+          "dev",
+          "validation"
+        ],
+        "perLanguageCap": 40,
+        "sealedSplitTouched": false
+      },
+      "configuration": {
+        "deep": true,
+        "llm": "none",
+        "note": "the CLI default outside CI; no model endpoint, so deterministic and offline apart from the fetch"
+      },
+      "denominators": {
+        "inScope": 283,
+        "scored": 278,
+        "unscored": 5,
+        "unscoredByClass": {
+          "timeout": 5
+        },
+        "unaccounted": 0,
+        "reconciles": true
+      },
+      "headline": {
+        "quotable": true,
+        "reason": null,
+        "precision": {
+          "n": 6,
+          "d": 19,
+          "value": 0.3157894736842105
+        },
+        "recall": {
+          "n": 6,
+          "d": 278,
+          "value": 0.02158273381294964
+        },
+        "f1": 0.04040404040404041,
+        "f1Interval": {
+          "method": "grouped-bootstrap-95",
+          "level": 0.95,
+          "replicates": 2000,
+          "groups": 155,
+          "units": 278,
+          "point": 0.04040404040404041,
+          "status": "measured",
+          "low": 0.012778535235343197,
+          "high": 0.07490870786516853,
+          "undefinedDraws": 0,
+          "seed": 2259309968
+        }
+      },
+      "byLanguage": [
+        {
+          "language": "csharp",
+          "entries": 14,
+          "status": "insufficient_population",
+          "counts": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 14,
+            "tn": 14
+          }
+        },
+        {
+          "language": "go",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 1,
+            "d": 40,
+            "value": 0.025
+          },
+          "precision": {
+            "n": 1,
+            "d": 3,
+            "value": 0.3333333333333333
+          },
+          "f1": 0.046511627906976744,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.025,
+            "low": 0.004426831453704344,
+            "high": 0.12881369088183614,
+            "successes": 1,
+            "n": 40
+          },
+          "precisionInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.3333333333333333,
+            "low": 0.06149194402093078,
+            "high": 0.7923404011921757,
+            "successes": 1,
+            "n": 3
+          },
+          "counts": {
+            "tp": 1,
+            "fp": 2,
+            "fn": 39,
+            "tn": 38
+          }
+        },
+        {
+          "language": "java",
+          "entries": 22,
+          "status": "insufficient_population",
+          "counts": {
+            "tp": 0,
+            "fp": 2,
+            "fn": 22,
+            "tn": 20
+          }
+        },
+        {
+          "language": "javascript",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 1,
+            "d": 40,
+            "value": 0.025
+          },
+          "precision": {
+            "n": 1,
+            "d": 4,
+            "value": 0.25
+          },
+          "f1": 0.045454545454545456,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.025,
+            "low": 0.004426831453704344,
+            "high": 0.12881369088183614,
+            "successes": 1,
+            "n": 40
+          },
+          "precisionInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.25,
+            "low": 0.04558726029536886,
+            "high": 0.6993581599030918,
+            "successes": 1,
+            "n": 4
+          },
+          "counts": {
+            "tp": 1,
+            "fp": 3,
+            "fn": 39,
+            "tn": 37
+          }
+        },
+        {
+          "language": "kotlin",
+          "entries": 2,
+          "status": "insufficient_population",
+          "counts": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 1,
+            "tn": 2
+          }
+        },
+        {
+          "language": "php",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 0,
+            "d": 40,
+            "value": 0
+          },
+          "precision": {
+            "n": 0,
+            "d": 0,
+            "value": null
+          },
+          "f1": 0,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0,
+            "low": 0,
+            "high": 0.08762160245846368,
+            "successes": 0,
+            "n": 40
+          },
+          "precisionInterval": {
+            "status": "unmeasured",
+            "reason": "nothing was reported"
+          },
+          "counts": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 40,
+            "tn": 40
+          }
+        },
+        {
+          "language": "python",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 1,
+            "d": 40,
+            "value": 0.025
+          },
+          "precision": {
+            "n": 1,
+            "d": 4,
+            "value": 0.25
+          },
+          "f1": 0.045454545454545456,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.025,
+            "low": 0.004426831453704344,
+            "high": 0.12881369088183614,
+            "successes": 1,
+            "n": 40
+          },
+          "precisionInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.25,
+            "low": 0.04558726029536886,
+            "high": 0.6993581599030918,
+            "successes": 1,
+            "n": 4
+          },
+          "counts": {
+            "tp": 1,
+            "fp": 3,
+            "fn": 39,
+            "tn": 37
+          }
+        },
+        {
+          "language": "ruby",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 2,
+            "d": 40,
+            "value": 0.05
+          },
+          "precision": {
+            "n": 2,
+            "d": 5,
+            "value": 0.4
+          },
+          "f1": 0.08888888888888889,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.05,
+            "low": 0.01382066726155863,
+            "high": 0.16503877495105868,
+            "successes": 2,
+            "n": 40
+          },
+          "precisionInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0.4,
+            "low": 0.11762077314099711,
+            "high": 0.7692757205908813,
+            "successes": 2,
+            "n": 5
+          },
+          "counts": {
+            "tp": 2,
+            "fp": 3,
+            "fn": 38,
+            "tn": 37
+          }
+        },
+        {
+          "language": "typescript",
+          "entries": 40,
+          "status": "reportable",
+          "recall": {
+            "n": 0,
+            "d": 40,
+            "value": 0
+          },
+          "precision": {
+            "n": 0,
+            "d": 0,
+            "value": null
+          },
+          "f1": 0,
+          "recallInterval": {
+            "method": "wilson-95",
+            "level": 0.95,
+            "status": "measured",
+            "point": 0,
+            "low": 0,
+            "high": 0.08762160245846368,
+            "successes": 0,
+            "n": 40
+          },
+          "precisionInterval": {
+            "status": "unmeasured",
+            "reason": "nothing was reported"
+          },
+          "counts": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 40,
+            "tn": 40
+          }
+        }
+      ],
+      "unmeasuredLanguages": [
+        "java",
+        "csharp",
+        "kotlin"
+      ],
+      "minEntriesForRate": 30,
+      "fixedVersionPressure": {
+        "meaning": "findings of ANY family on the fixed version, not only the labelled CWE: the alert burden a user would see",
+        "entriesMeasured": 278,
+        "total": 34326,
+        "mean": 123.4748201438849,
+        "median": 38,
+        "p95": 656,
+        "entriesWithAnyFinding": 270
+      }
+    },
     "historicalIndependentRecord": {
       "engineVersion": "0.141.0",
       "measuredAt": "2026-08-23",

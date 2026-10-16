@@ -1,0 +1,8 @@
+{
+  "runId": "a72968195aa1",
+  "floorsFile": "floors-a72968195aa1.json",
+  "approvedAt": "2026-10-16T17:28:48.148Z",
+  "reason": "First measured independent baseline of the engine at commit 2c0f0d13: 278 of 283 entries scored, 5 timed out; localized F1 0.040 (95% interval 0.013 to 0.075). Floors record this starting point, not a target.",
+  "supersedes": null,
+  "history": []
+}
