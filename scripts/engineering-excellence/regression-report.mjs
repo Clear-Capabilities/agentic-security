@@ -40,7 +40,8 @@ export function build() {
 
   L.push('## 3. Known-miss clusters (where the independent misses are)', '', `${forensics.reconciliation.localizedFalseNegatives} localized misses, each classified once (reconciles: ${forensics.reconciliation.reconciles}).`, '', '| Category | Misses | Share |', '|---|---|---|');
   for (const [k, v] of Object.entries(forensics.byCategory).sort((a, b) => b[1] - a[1])) if (v) L.push(`| ${k} | ${v} | ${pct(v / forensics.reconciliation.localizedFalseNegatives)} |`);
-  L.push('', 'Before: no classification existed. No engine change has been made to move these numbers.', '');
+  const u01 = json('docs/engineering-excellence/data/u01-targeted-remeasurement.json'); const t = u01.effectOnBaselineTotals;
+  L.push('', `Before: no classification existed. The pinned baseline is unchanged. One targeted engine change has been made since (a Ruby path resolver rule, GHSA-pmwx-rm49-xv39): in a re-run of the ${u01.rows.length} entries it can reach, localized true positives went from ${t.localizedTruePositives.before} to ${t.localizedTruePositives.after} and localized false positives stayed at ${t.localizedFalsePositives.after} (\`data/u01-targeted-remeasurement.json\`). That is a targeted re-measurement, not a new baseline run, and it recovers 1 of the ${forensics.reconciliation.localizedFalseNegatives} misses above.`, '');
 
   const fb = fix.denominators || {}; const fbText = fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/FIX_BENCHMARK.md'), 'utf8');
   const row = (name) => (fbText.match(new RegExp(`\\| ${name} \\| (\\d+) \\| (\\d+) \\| ([\\d.]+%) \\|`)) || []).slice(1);

@@ -77,7 +77,7 @@ large: P95 25850 ms, peak RSS 1232 MB, NOT GREEN (3 of 3 runs finished with a sc
 
 Read these before relying on anything above. They are the open items the programme itself recorded; none was waived.
 
-- **Independent accuracy is low and was measured once.** A localized F1 near 0.04 on 278 scored entries. 272 misses are classified (151 had no detector rule fire at all), but no engine change has yet raised the number, and the sealed holdout was not used.
+- **Independent accuracy is low and was measured once.** A localized F1 near 0.04 on 278 scored entries. 272 misses are classified (151 had no detector rule fire at all). One targeted change since (a Ruby path-resolver rule) recovered one of them, measured by re-running the three entries it can reach (true positives 6 to 7, false positives unchanged); the pinned baseline was not re-run, and the sealed holdout was not used.
 - **The DCI case corpus is not independent.** It is synthetic, labelled by its author, with two web stacks of which Flask is mostly unresolved (no ownership or role extraction for Python). It reports two false positives and a router-mount gap.
 - **Deep taint analysis is not incremental.** The analysis cache covers the per-file detector stage only; a changed-file scan is about 1.7 times faster than a cold one, below the 2 times aspiration, and the repository's own source (829 files) stops its deep analysis early, so that class never reports a complete scan.
 - **Pattern detectors flag constant operands.** A query or command built by concatenating a constant is reported at reduced confidence in JavaScript, Python and Go; the flow-based layer is correctly silent. Pinned by a test, not fixed.

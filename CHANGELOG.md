@@ -9,6 +9,21 @@
 > make the history less accurate, not more.
 
 
+## 0.173.0 - Engineering excellence: measured accuracy, release assurance, bounded scans
+
+A programme of 67 verified tasks. The headline is a measurement, not a gain: the engine was scored for the first time on code it was not built from (278 of 283 entries, development and validation splits), and it finds little.
+
+- **Independent accuracy, measured once.** Localized precision 6/19, recall 6/278, F1 0.040 (95% interval 0.013 to 0.075). Every one of the 272 misses is classified (151 had no detector rule fire, 81 lacked a recognised source or sink). Floors are pinned per language from the Wilson lower bound; the release check fails a run that falls below them. The curated regression net is labelled as not accuracy, and the older engine's archived result is kept apart.
+- **One recovered miss.** The Ruby path-join rule now counts a `File.join` that a path-named method returns, when its last component is that method's own parameter (basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39). Re-running the three entries it can reach: localized true positives 6 to 7, false positives unchanged. It differs on 5 findings across 31,251 Ruby files, 2 of them in entries it does not concern. A targeted re-measurement, not a new baseline.
+- **Release assurance (new, not part of the default scan).** A signed release package (Ed25519, domain-separated canonical JSON), an independent built-ins-only offline verifier (`scripts/verify-release-package.mjs`), and a deterministic verdict (`not_deployable`, `needs_review`, `deployable`) that never says "safe" and names every blocker in words. `agentic-security release-view <package.json>` renders developer, CISO and auditor views from the same findings. Compliance output has a six-state truth model (`compliance --truth`) with explicit denominators. See [the guide](docs/guides/release-assurance.md).
+- **Behaviour change: scan health.** A scan that skipped a file for size or density is now `partial`, where it used to say `complete`. Strict assurance fails such scans. Repositories with minified bundles or very large data files will see it.
+- **Fix verification.** One evidence record per fix with named legs; a patch that makes the detector quiet by refusing every request passes the re-analysis and the attack replay and is refused on behaviour. Benchmark: 1 of 15 unsafe fixes still accepted (a declared gap), 3 of 8 safe fixes refused.
+- **Context analysis (DCI).** Invariants, cross-route consistency, executed counterexamples in a confined fixture runner, and findings through the shared adjudication path. Scored on 21 hand-written authorization cases across Express and Flask (9 TP, 2 FP, 0 FN, 20 TN, 8 unresolved); labelled by the author, so not accuracy on real software.
+- **Bounded, supervised scans.** Analyzers run out of process with limits; an analyzer that times out or fails is reported and no longer reads as zero findings. An opt-in cross-scan analysis cache (about 1.7 times faster for one changed file; below the 2 times aspiration, deep analysis is not cached). Containment of hostile repository text is measured under an observer with a negative control.
+- **Runtime and provenance.** Build identity ties a runtime record to a snapshot; a record from another build corroborates nothing; runtime collection stays off until a policy file enables it. Finding provenance reports its coverage by cause (the 95 percent target is not met for whole-project detectors).
+- **Fixed on the way.** A scan-output truncation above 64 KB in the evaluation harness lost 62 re-scans; `status.mjs --json` truncated when piped; miss forensics blamed six misses on suppression by coincidence of location.
+- **Not proven.** See [what is not proven](docs/engineering-excellence/README.md#what-is-not-proven) and `docs/engineering-excellence/FINAL_REPORT.md`, which records the release decision and the open items.
+
 ## 0.172.1 - Deterministic Context Intelligence: adversarial review fixes
 
 An adversarial review of the first release found nine problems, each demonstrated against the shipped code and each now pinned by a regression test (`scanner/test/context-intelligence/premortem.test.js`).

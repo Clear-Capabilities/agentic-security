@@ -47,7 +47,7 @@ Archived result of an **older engine**, shown for the record only. The engine, t
 | parse_ir_gap | 5 | 1.8% |
 | tool_or_setup_incomplete | 1 | 0.4% |
 
-Before: no classification existed. No engine change has been made to move these numbers.
+Before: no classification existed. The pinned baseline is unchanged. One targeted engine change has been made since (a Ruby path resolver rule, GHSA-pmwx-rm49-xv39): in a re-run of the 3 entries it can reach, localized true positives went from 6 to 7 and localized false positives stayed at 13 (`data/u01-targeted-remeasurement.json`). That is a targeted re-measurement, not a new baseline run, and it recovers 1 of the 272 misses above.
 
 ## 4. Fix verification safety
 

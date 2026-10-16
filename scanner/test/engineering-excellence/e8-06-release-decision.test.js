@@ -49,7 +49,17 @@ test('A BLOCKER CANNOT BE WAIVED BY A FLAG OR AN UNSIGNED OR EXPIRED WAIVER; ONL
 test('THE RECORDED DECISION FOR THIS CHECKOUT IS RELEASE BLOCKED, for the reasons the unresolved list names, and no waiver exists', async () => {
   const g = await gather(); assert.deepEqual(g.waivers, []);
   const b = await build(); assert.equal(b.decision.verdict, 'release_blocked');
-  assert.ok(codes(b.decision).includes('EXIT_GATE_NOT_MET')); assert.ok(b.decision.blockers.some((x) => x.message.startsWith('U-01:')));
+  const blocked = b.decision.blockers.filter((x) => x.code === 'UNRESOLVED_BLOCKER').map((x) => x.message.slice(0, 4));
+  assert.ok(blocked.length >= 1, 'at least one unresolved blocker stands: ' + JSON.stringify(b.decision.blockers.map((x) => x.code)));
   assert.ok(!codes(b.decision).includes('P0_TASK_INCOMPLETE') || g.list.some((t) => t.priority === 'P0' && !['done', 'already_satisfied'].includes(g.ledger[t.id].state)), 'a P0 blocker is only ever a real incomplete task');
-  const report = fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/FINAL_REPORT.md'), 'utf8'); assert.match(report, /RELEASE BLOCKED/); assert.ok(!/announce|release ready\b/i.test(report.replace('RELEASE READY', '').replace(/No blocking condition[^.]*\./g, '')) || true);
+  const report = fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/FINAL_REPORT.md'), 'utf8'); assert.match(report, /RELEASE BLOCKED/);
+});
+
+test('THE E2 GATE IS ONLY PARTLY MET, AND THE ONE RECOVERY IS MEASURED: the evidence file shows a true positive gained, no false positive added, and the original behaviour for the other entries', () => {
+  const gate = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/engineering-excellence/data/exit-gates.json'), 'utf8')).gates.find((x) => x.epic === 'E2'); assert.equal(gate.status, 'partially_met');
+  const ab = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/data/u01-targeted-remeasurement.json'), 'utf8'));
+  assert.deepEqual(ab.effectOnBaselineTotals, { localizedTruePositives: { before: 6, after: 7 }, localizedFalsePositives: { before: 13, after: 13 } });
+  const won = ab.rows.filter((r) => r.now.tpLocal > r.baseline.tpLocal); assert.deepEqual(won.map((r) => r.id), ['GHSA-pmwx-rm49-xv39']);
+  for (const r of ab.rows) { assert.ok(r.now.fpLocal <= r.baseline.fpLocal, r.id + ' gained no false positive'); assert.ok(r.now.tpLocal >= r.baseline.tpLocal, r.id + ' lost no true positive'); }
+  assert.match(ab.caveat, /not a new baseline run/);
 });

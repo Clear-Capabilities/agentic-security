@@ -208,6 +208,28 @@ function _splitArgs(s) {
   return out;
 }
 
+const RB_PATH_METHOD = /(?:^|_)(?:path|file|filename|filepath|dir|folder)s?(?:_for|_of)?\??$|^path_for$/;
+const RB_TAIL_CLOSERS = /^(?:end|else|elsif|rescue|ensure|when|in)\b/;
+/** Is the File.join call at [start, end) the returned value of a method whose name says it resolves a path? */
+function _returnedFromPathResolver(code, start, end) {
+  let name = null; let params = '';
+  for (const dm of code.slice(0, start).matchAll(/^[ \t]*def[ \t]+(?:self\.)?([A-Za-z_][\w]*[?!]?)[ \t]*(?:\(([^)\n]*)\)|([^\n]*))/gm)) { name = dm[1]; params = dm[2] ?? dm[3] ?? ''; }
+  if (!name || !RB_PATH_METHOD.test(name)) return false;
+  // the value the caller controls must come in through the method's own parameters: the last component is a parameter (or the first name bound from one)
+  const paramNames = new Set(params.split(',').map((x) => x.trim().replace(/^[*&]+/, '').replace(/[:=].*$/, '').trim()).filter((x) => /^[A-Za-z_]\w*$/.test(x)));
+  const lastArg = _splitArgs(code.slice(start, end).replace(/^[^(]*\(/, '').replace(/\)$/, '')).pop() || '';
+  const lastName = (lastArg.trim().match(/^[A-Za-z_]\w*/) || [''])[0];
+  if (!paramNames.has(lastName)) return false;
+  const lineStart = code.lastIndexOf('\n', start - 1) + 1;
+  const head = code.slice(lineStart, start);
+  if (!/^[ \t]*(?:return[ \t]+)?$/.test(head)) return false;            // the join begins its own statement
+  const lineEnd = code.indexOf('\n', end) < 0 ? code.length : code.indexOf('\n', end);
+  if (code.slice(end, lineEnd).trim() !== '') return false;               // nothing chained onto it
+  if (/return[ \t]+$/.test(head)) return true;
+  const next = code.slice(lineEnd).split('\n').map((l) => l.trim()).find((l) => l !== '');
+  return next === undefined || RB_TAIL_CLOSERS.test(next);                // last expression of its branch or method
+}
+
 /** File.join(...) whose last component is variable and which reaches the filesystem. */
 export function scanRubyPathJoin(fp, raw) {
   if (!/\.rb$/i.test(fp)) return [];
@@ -250,6 +272,10 @@ export function scanRubyPathJoin(fp, raw) {
         reaches = RB_FS_OP.test(after) && use.test(after);
       }
     }
+    // A path RESOLVER hands its result to a caller (`def path_for(key); File.join(root, tenant, key); end`, the Active Storage disk service shape of
+    // basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39). Nothing in the file touches the filesystem with it, because the caller does. It counts as reaching the
+    // filesystem only when BOTH hold: the enclosing method is named for a path, and the join is the value that method returns.
+    if (!reaches && !/(?:^|\/)(?:spec|test|tests)\/|_(?:spec|test)\.rb$/.test(fp) && _returnedFromPathResolver(code, m.index, i)) reaches = true;
     if (!reaches) continue;
 
     // Containment guard anywhere in the enclosing window — that IS the fix.

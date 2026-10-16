@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.172.1",
-    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
-    "commit": "4248af31a7e72b043788b1b19f3797ecd36b3076",
+    "engineVersion": "0.173.0",
+    "bundleSha256": "ca639d20ffcd8d98b45d2929cd6e01e54b309e67c1cf5a061d3b60540242f4f4",
+    "commit": "3e4a6d4b4f0587559a1ba96cc2527f9cf454383f",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-16T19:51:05.051Z",
+    "generatedAt": "2026-10-16T23:45:01.219Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -897,7 +897,7 @@
         }
       },
       "scripts": {
-        "total": 94,
+        "total": 108,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -910,9 +910,15 @@
           "engineering-excellence/analysis-cache-measure.mjs": 2,
           "engineering-excellence/completion-analysis.mjs": 2,
           "engineering-excellence/dci-audit.mjs": 27,
+          "engineering-excellence/doc-captures.mjs": 2,
+          "engineering-excellence/e2e-demo.mjs": 2,
           "engineering-excellence/evidence-inventory.mjs": 2,
+          "engineering-excellence/final-report.mjs": 4,
           "engineering-excellence/lib/evidence-samples.mjs": 2,
           "engineering-excellence/parse-reuse-measure.mjs": 1,
+          "engineering-excellence/perf-budget.mjs": 2,
+          "engineering-excellence/perf-child.mjs": 2,
+          "engineering-excellence/regression-report.mjs": 2,
           "engineering-excellence/runtime-audit.mjs": 2,
           "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
@@ -940,8 +946,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 255,
-    "d": 559
+    "n": 412,
+    "d": 568
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2103,9 +2109,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.172.1",
-    "commit": "4248af31a7e72b043788b1b19f3797ecd36b3076",
-    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "engineVersion": "0.173.0",
+    "commit": "3e4a6d4b4f0587559a1ba96cc2527f9cf454383f",
+    "bundleSha256": "ca639d20ffcd8d98b45d2929cd6e01e54b309e67c1cf5a061d3b60540242f4f4",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",
