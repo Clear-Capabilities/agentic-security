@@ -32,7 +32,7 @@ export function loadSidecar(root = REPO_ROOT) {
 }
 
 /** The nine facts for one independent entry, from the manifest plus the sidecar. A fact that is absent is `null`, never invented. */
-export function factsOfIndependentEntry(entry, sidecar) {
+export function factsOfIndependentEntry(entry, sidecar, splits = null) {
   const present = (v) => (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) ? null : v);
   const repo = present(entry.repo);
   return {
@@ -45,8 +45,14 @@ export function factsOfIndependentEntry(entry, sidecar) {
     license: repo && sidecar.licenses[repo] ? sidecar.licenses[repo] : null,
     labelConfidence: entry.labelSource === 'github-security-advisory' ? 'third_party_advisory' : null,
     acquisitionChecksum: sidecar.acquisition[entry.id] || null,
-    split: sidecar.splits[entry.id] || null,
+    split: splits?.assignment?.[entry.id] || sidecar.splits[entry.id] || null,
   };
+}
+
+function licenseSummary(sidecar, repos) {
+  const by = {}; let unasserted = 0; let unknown = 0;
+  for (const r of repos) { const l = sidecar.licenses[r]; if (!l) { unknown++; continue; } by[l.spdx] = (by[l.spdx] || 0) + 1; if (l.spdx === 'NOASSERTION') unasserted++; }
+  return { repositories: repos.size, looked: repos.size - unknown, noLicenseAsserted: unasserted, notLookedUp: unknown, topLicenses: Object.entries(by).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 8) };
 }
 
 function upstreamSummary(sidecar, entries) {
@@ -62,6 +68,7 @@ export function auditIndependent(root = REPO_ROOT) {
   const manifest = readJson(join(root, 'bench', 'independent', 'manifest.json'), null);
   if (!manifest) return { role: 'independent', status: 'unavailable', reason: 'bench/independent/manifest.json is missing', entries: 0 };
   const sidecar = loadSidecar(root);
+  const splits = readJson(join(root, 'bench', 'independent', 'splits.json'), null);
   const entries = manifest.entries || [];
   const coverage = Object.fromEntries(REQUIRED_FACTS.map((f) => [f, 0]));
   const byLanguage = {}; const repos = new Set(); const missingByFact = Object.fromEntries(REQUIRED_FACTS.map((f) => [f, []]));
@@ -69,7 +76,7 @@ export function auditIndependent(root = REPO_ROOT) {
   const seen = new Set(); const duplicates = [];
   for (const e of entries) {
     if (seen.has(e.id)) duplicates.push(e.id); seen.add(e.id);
-    const f = factsOfIndependentEntry(e, sidecar);
+    const f = factsOfIndependentEntry(e, sidecar, splits);
     let all = true;
     for (const k of REQUIRED_FACTS) { if (f[k] !== null) coverage[k]++; else { all = false; if (missingByFact[k].length < 5) missingByFact[k].push(e.id); } }
     if (all) complete++;
@@ -82,6 +89,8 @@ export function auditIndependent(root = REPO_ROOT) {
     entries: entries.length, repositories: repos.size, byLanguage: Object.fromEntries(Object.entries(byLanguage).sort()),
     factCoverage: coverage, missingExamples: missingByFact, completeEntries: complete,
     upstreamSample: upstreamSummary(sidecar, entries),
+    licenseSummary: licenseSummary(sidecar, repos),
+    splitProtocolHash: splits?.protocolHash || null,
     reconstructableFromUpstream: reconstructable, unavailable: unavailable.slice(0, 20), unavailableCount: unavailable.length, duplicateIds: duplicates,
     note: 'Reconstructable means the manifest names a repository, both commits and an advisory; it was not re-fetched here. A missing licence, split or acquisition checksum is reported as missing, not defaulted.',
   };
@@ -129,7 +138,7 @@ export function renderMarkdown(a) {
   L.push('## Independent population: the nine required facts', '', `Manifest \`${i.manifest}\` (${i.schema}), digest \`${i.manifestSha256.slice(0, 16)}\`. Languages: ${Object.entries(i.byLanguage).map(([k, v]) => `${k} ${v}`).join(', ')}.`, '');
   L.push('| Fact | Entries carrying it | Of | Missing, examples |', '|---|---|---|---|');
   for (const f of a.requiredFacts) L.push(`| ${f} | ${i.factCoverage[f]} | ${i.entries} | ${i.factCoverage[f] === i.entries ? '' : i.missingExamples[f].join(', ')} |`);
-  L.push('', `Entries with all nine facts: **${i.completeEntries}** of ${i.entries}. Reconstructable from upstream (repository, both commits, advisory named): **${i.reconstructableFromUpstream}**; unavailable: ${i.unavailableCount}. Duplicate ids: ${i.duplicateIds.length}.`, '', `Upstream spot-check (opt-in, \`gh api\`, a deterministic sample per language): ${i.upstreamSample.sampled ? `${i.upstreamSample.sampled} entries sampled, ${i.upstreamSample.confirmed} confirmed (both commits exist), ${i.upstreamSample.missingUpstream} missing upstream, ${i.upstreamSample.notChecked} not checked because of an error` : 'not run'}.`, '', i.note, '');
+  L.push('', `Entries with all nine facts: **${i.completeEntries}** of ${i.entries}. Reconstructable from upstream (repository, both commits, advisory named): **${i.reconstructableFromUpstream}**; unavailable: ${i.unavailableCount}. Duplicate ids: ${i.duplicateIds.length}.`, '', `Licences (read from the upstream host, cached in \`bench/independent/provenance.sidecar.json\`): ${i.licenseSummary.looked} of ${i.licenseSummary.repositories} repositories looked up; ${i.licenseSummary.noLicenseAsserted} assert no licence (their code is used as read-only scan input and never redistributed); most common: ${i.licenseSummary.topLicenses.map(([k, v]) => `${k} ${v}`).join(', ')}. Split protocol: \`${i.splitProtocolHash ? i.splitProtocolHash.slice(0, 24) : 'none'}\`.`, '', `Upstream spot-check (opt-in, \`gh api\`, a deterministic sample per language): ${i.upstreamSample.sampled ? `${i.upstreamSample.sampled} entries sampled, ${i.upstreamSample.confirmed} confirmed (both commits exist), ${i.upstreamSample.missingUpstream} missing upstream, ${i.upstreamSample.notChecked} not checked because of an error` : 'not run'}.`, '', i.note, '');
   L.push('## Regression net', '', `${c.entries} entries; by declared source: ${Object.entries(c.bySourceTier).map(([k, v]) => `${k} ${v}`).join(', ')}. ${c.note}`, '');
   L.push('## Regenerated suites', '', '| Source | Pinned | URL |', '|---|---|---|', ...s.sources.map((x) => `| ${x.name} | ${x.pinned ? 'url and sha256' : 'NOT pinned'} | ${x.url || ''} |`), '', s.note, '');
   return L.join('\n');

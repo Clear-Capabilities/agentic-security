@@ -139,6 +139,31 @@ export function verifySplits(manifestText, splits) {
   return problems;
 }
 
+// ---- selections ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * A deterministic, stratified selection of entries for a run: the named splits only, at most `perLanguage` per language, ordered within a
+ * language by a salted hash of the id (not by id, which would favour whichever repository sorts first). The sealed split is never
+ * included here; it can only be read through `selectEntries` with a declared final run.
+ */
+export function stratifiedSample(entries, splits, { splitNames = ['dev', 'validation'], perLanguage = 30, salt = 'selection/v1' } = {}) {
+  if (!splits) throw new Error('splits.json is required');
+  for (const n of splitNames) if (!SPLIT_NAMES.includes(n) || n === 'sealed') throw new Error(`a selection may name dev or validation, not ${n}`);
+  const pool = entries.filter((e) => splitNames.includes(splits.assignment[e.id]));
+  const byLang = {};
+  for (const e of pool) (byLang[e.language] ||= []).push(e);
+  const picked = [];
+  for (const [lang, list] of Object.entries(byLang).sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const ranked = list.map((e) => ({ e, k: sha256(`${salt}|${e.id}`) })).sort((a, b) => (a.k < b.k ? -1 : 1));
+    picked.push(...ranked.slice(0, perLanguage).map((x) => x.e));
+    void lang;
+  }
+  picked.sort((a, b) => (a.id < b.id ? -1 : 1));
+  const counts = {};
+  for (const e of picked) counts[e.language] = (counts[e.language] || 0) + 1;
+  return { ids: picked.map((e) => e.id), splitNames, perLanguage, salt, counts, poolSize: pool.length };
+}
+
 // ---- sealed access ledger ----------------------------------------------------------------------------------------------------
 
 /** Every scoring pass over the sealed split is appended here. The ledger is local evidence; the release check compares it with the claims made. */

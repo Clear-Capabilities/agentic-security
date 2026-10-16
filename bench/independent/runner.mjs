@@ -30,6 +30,8 @@ import { entryDir, entryComplete } from './fetch.mjs';
 
 import { snapshotTree, assertTreeUnchanged, disableStateWrites } from '../_lib/tree-integrity.mjs';
 import { withEntryTimeout, entryTimeoutMs } from '../_lib/watchdog.mjs';
+import { loadSplits } from './splits.mjs';
+import { scorePopulation, headline } from './scorer.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const MANIFEST = path.join(HERE, 'manifest.json');
@@ -359,10 +361,92 @@ async function scanDir(dir) {
   return (await withEntryTimeout(scanDirRaw(dir), dir, ENTRY_TIMEOUT_MS)).findings;
 }
 
+/** An entry is scoreable only if its label names a CWE in the CWE-<digits> form. */
+export function labelUsable(e) {
+  return typeof e?.cwe === 'string' && /^CWE-\d+$/.test(e.cwe);
+}
+
+/**
+ * The per-entry scoring row for one advisory entry, from the findings of its vulnerable (`pre`) and fixed (`post`) trees.
+ * `ranges.local(rel)` / `ranges.postSide(rel)` return the changed-line ranges of one advisory file on the vulnerable / fixed side, so the
+ * logic is testable without a materialised tree (`rangesFromTrees` is the real implementation). Every score field is a COUNT (0 or 1).
+ */
+export function rowFor(e, preFindings, postFindings, ranges) {
+  // ── file-scoped (the historical rule; retained as a diagnostic) ────────
+  const hitPre = matchesCwe(preFindings, e.cwe, e.files);
+  const hitPost = matchesCwe(postFindings, e.cwe, e.files);
+  // Same verdict with the advisory-file restriction OFF. See `wide` below.
+  const hitPreWide = matchesCwe(preFindings, e.cwe, null);
+  const hitPostWide = matchesCwe(postFindings, e.cwe, null);
+
+  // ── T0.1 localized (THE CLAIM) ────────────────────────────────────────
+  // Credit only when a matching finding sits on code the fix actually
+  // changed. Hierarchy matching (T0.5) is enabled here and only here: it
+  // may only ever accompany this tightening, never precede it.
+  const rangesByFile = new Map();
+  for (const rel of (e.files || [])) {
+    rangesByFile.set(rel, ranges.local(rel));
+  }
+  const relOf = (f) => (e.files || []).find(rel => rel.endsWith(String(f.file || '')) || String(f.file || '').endsWith(rel)) || f.file;
+  const localizedMatches = findMatchingFindings(preFindings, e.cwe, e.files, { hierarchy: true })
+    .filter(f => isLocalized(f.line, rangesByFile.get(relOf(f))));
+  const hitPreLocal = localizedMatches.length > 0;
+  // T0.2 — did the SAME finding go away once the bug was fixed? A finding
+  // that survives its own fix has reported the presence of an API, not the
+  // presence of a vulnerability.
+  // Scoped to the lines the fix PRODUCED, not the whole file — see
+  // changedLineRangesPost. `postMatchesAnywhere` is retained alongside so the
+  // stricter and looser readings stay distinguishable in the report.
+  const postRangesByFile = new Map();
+  for (const rel of (e.files || [])) {
+    postRangesByFile.set(rel, ranges.postSide(rel));
+  }
+  const postMatchesAnywhere = findMatchingFindings(postFindings, e.cwe, e.files, { hierarchy: true });
+  const postMatches = postMatchesAnywhere
+    .filter(f => isLocalized(f.line, postRangesByFile.get(relOf(f))));
+  const survivedFix = hitPreLocal && postMatches.length > 0;
+  const survivedFixWide = hitPreLocal && postMatchesAnywhere.length > 0;
+  // T0.4 — which analysis layer actually produced the credited finding.
+  const matchedParser = hitPreLocal ? (localizedMatches[0].parser || 'unknown') : null;
+
+  return {
+    id: e.id, cwe: e.cwe, language: e.language, repo: e.repo,
+    heldOut: isHeldOut(e.id),
+    tp: hitPre ? 1 : 0, fn: hitPre ? 0 : 1,
+    fp: hitPost ? 1 : 0, tn: hitPost ? 0 : 1,
+    tpWide: hitPreWide ? 1 : 0, fnWide: hitPreWide ? 0 : 1,
+    fpWide: hitPostWide ? 1 : 0, tnWide: hitPostWide ? 0 : 1,
+    tpLocal: hitPreLocal ? 1 : 0, fnLocal: hitPreLocal ? 0 : 1,
+    fpLocal: (hitPost && !hitPreLocal) ? 1 : 0, tnLocal: (hitPost && !hitPreLocal) ? 0 : 1,
+    survivedFix: survivedFix ? 1 : 0,
+    survivedFixWide: survivedFixWide ? 1 : 0,
+    matchedParser,
+    matchedLine: hitPreLocal ? (localizedMatches[0].line ?? null) : null,
+    preFindings: preFindings.length, postFindings: postFindings.length,
+  };
+}
+
+/** Ranges read from a materialised `<dir>/pre` and `<dir>/post`. */
+export function rangesFromTrees(dir) {
+  return {
+    local: (rel) => changedLineRanges(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)),
+    postSide: (rel) => changedLineRangesPost(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)),
+  };
+}
+
 async function main() {
   // STATE_SEAM_COMPLETION_PRD M3 — see scanDir for the per-entry assertion.
   await disableStateWrites();
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
+  // --selection=<file>: score only the ids a selection file names (a split or a stratified sample chosen by a driver that wrote it down).
+  // The manifest the rest of this run sees IS the selection, so every denominator below is the selection's.
+  const selectionArg = (process.argv.find(a => a.startsWith('--selection=')) || '').split('=')[1];
+  if (selectionArg) {
+    const want = new Set(JSON.parse(fs.readFileSync(selectionArg, 'utf8')).ids);
+    manifest.entries = manifest.entries.filter(e => want.has(e.id));
+    if (manifest.entries.length !== want.size) throw new Error(`selection names ${want.size} ids, ${manifest.entries.length} are in the manifest`);
+  }
+  const outDirArg = (process.argv.find(a => a.startsWith('--out-dir=')) || '').split('=')[1];
   const asJson = process.argv.includes('--json');
   // T0.3 — the deep engine is a CONFIGURATION of this measurement, not a
   // separate script. Before this flag existed, runner.mjs called runScan()
@@ -427,6 +511,12 @@ async function main() {
   const chunked = offset > 0 || limitArg > 0;
 
   for (const e of selected) {
+    // A label without a usable CWE cannot be scored either way: scoring it would turn a data defect into a miss.
+    if (!labelUsable(e)) {
+      progress(e.id, 'unscored: label has no usable CWE');
+      unscored.push({ id: e.id, reason: `label has no usable CWE (${JSON.stringify(e.cwe ?? null)})` });
+      continue;
+    }
     if (!entryComplete(e)) {
       progress(e.id, 'skipped: not fetched');
       unscored.push({ id: e.id, reason: 'not fetched — run `npm run bench:independent:fetch`' });
@@ -457,58 +547,11 @@ async function main() {
       continue;
     }
 
-    // ── file-scoped (the historical rule; retained as a diagnostic) ────────
-    const hitPre = matchesCwe(preFindings, e.cwe, e.files);
-    const hitPost = matchesCwe(postFindings, e.cwe, e.files);
-    // Same verdict with the advisory-file restriction OFF. See `wide` below.
-    const hitPreWide = matchesCwe(preFindings, e.cwe, null);
-    const hitPostWide = matchesCwe(postFindings, e.cwe, null);
-
-    // ── T0.1 localized (THE CLAIM) ────────────────────────────────────────
-    // Credit only when a matching finding sits on code the fix actually
-    // changed. Hierarchy matching (T0.5) is enabled here and only here: it
-    // may only ever accompany this tightening, never precede it.
-    const rangesByFile = new Map();
-    for (const rel of (e.files || [])) {
-      rangesByFile.set(rel, changedLineRanges(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)));
-    }
-    const relOf = (f) => (e.files || []).find(rel => rel.endsWith(String(f.file || '')) || String(f.file || '').endsWith(rel)) || f.file;
-    const localizedMatches = findMatchingFindings(preFindings, e.cwe, e.files, { hierarchy: true })
-      .filter(f => isLocalized(f.line, rangesByFile.get(relOf(f))));
-    const hitPreLocal = localizedMatches.length > 0;
-    // T0.2 — did the SAME finding go away once the bug was fixed? A finding
-    // that survives its own fix has reported the presence of an API, not the
-    // presence of a vulnerability.
-    // Scoped to the lines the fix PRODUCED, not the whole file — see
-    // changedLineRangesPost. `postMatchesAnywhere` is retained alongside so the
-    // stricter and looser readings stay distinguishable in the report.
-    const postRangesByFile = new Map();
-    for (const rel of (e.files || [])) {
-      postRangesByFile.set(rel, changedLineRangesPost(path.join(dir, 'pre', rel), path.join(dir, 'post', rel)));
-    }
-    const postMatchesAnywhere = findMatchingFindings(postFindings, e.cwe, e.files, { hierarchy: true });
-    const postMatches = postMatchesAnywhere
-      .filter(f => isLocalized(f.line, postRangesByFile.get(relOf(f))));
-    const survivedFix = hitPreLocal && postMatches.length > 0;
-    const survivedFixWide = hitPreLocal && postMatchesAnywhere.length > 0;
-    // T0.4 — which analysis layer actually produced the credited finding.
-    const matchedParser = hitPreLocal ? (localizedMatches[0].parser || 'unknown') : null;
-
-    perEntry.push({
-      id: e.id, cwe: e.cwe, language: e.language, repo: e.repo,
-      heldOut: isHeldOut(e.id),
-      tp: hitPre ? 1 : 0, fn: hitPre ? 0 : 1,
-      fp: hitPost ? 1 : 0, tn: hitPost ? 0 : 1,
-      tpWide: hitPreWide ? 1 : 0, fnWide: hitPreWide ? 0 : 1,
-      fpWide: hitPostWide ? 1 : 0, tnWide: hitPostWide ? 0 : 1,
-      tpLocal: hitPreLocal ? 1 : 0, fnLocal: hitPreLocal ? 0 : 1,
-      fpLocal: (hitPost && !hitPreLocal) ? 1 : 0, tnLocal: (hitPost && !hitPreLocal) ? 0 : 1,
-      survivedFix: survivedFix ? 1 : 0,
-      survivedFixWide: survivedFixWide ? 1 : 0,
-      matchedParser,
-      matchedLine: hitPreLocal ? (localizedMatches[0].line ?? null) : null,
-      preFindings: preFindings.length, postFindings: postFindings.length,
-    });
+    const row = rowFor(e, preFindings, postFindings, rangesFromTrees(dir));
+    perEntry.push(row);
+    const { matchedParser } = row;
+    const hitPreLocal = row.tpLocal === 1;
+    const hitPre = row.tp === 1;
     progress(e.id, hitPreLocal ? `localized TP (${matchedParser})` : (hitPre ? 'file-scoped only' : 'miss'));
   }
 
@@ -631,7 +674,7 @@ async function main() {
   // merge would then refuse (it checks) or, worse, a half-replaced set would
   // look complete.
   const RESULT_FILE = chunked
-    ? path.join(HERE, `RESULT-chunk-${deep ? 'deep' : 'pattern'}-${String(offset).padStart(5, '0')}.json`)
+    ? path.join(outDirArg || HERE, `RESULT-chunk-${deep ? 'deep' : 'pattern'}-${String(offset).padStart(5, '0')}.json`)
     : path.join(HERE, deep ? 'RESULT-deep.json' : 'RESULT.json');
   let engineVersion = null;
   try { engineVersion = JSON.parse(fs.readFileSync(path.join(REPO, 'scanner', 'package.json'), 'utf8')).version; } catch { /* leave null */ }
@@ -666,7 +709,7 @@ async function main() {
     byLanguageLayer,
     taintShare,
     heldOut: {
-      meaning: 'never tune against these; scored separately (T0.7)',
+      meaning: 'LEGACY per-id slice, DEMOTED to development use (it splits repositories across both sides; see splits.json legacyHoldout). Never quoted as held-out.',
       entries: heldOutRows.length,
       localized: localizedOf(heldOutRows),
     },
@@ -680,6 +723,12 @@ async function main() {
     byLanguage: group('language'),
     byCwe: group('cwe'),
   };
+  // Complete denominator accounting, three definitions kept apart, per language / CWE / split, with intervals and the
+  // insufficient_population rule (scorer.mjs). `scoring.definitions.localized` is the only block that may be quoted.
+  const splits = loadSplits();
+  report.splits = splits ? { protocolHash: splits.protocolHash, counts: splits.counts } : null;
+  report.scoring = scorePopulation({ rows: perEntry, unscored, manifestEntries: selected, splits, protocolHash: splits ? splits.protocolHash : undefined });
+  report.headline = headline(report.scoring);
 
   // A chunk always writes its own file, whether or not stdout was asked for:
   // the whole point of chunking is that a later chunk wedging must not cost the

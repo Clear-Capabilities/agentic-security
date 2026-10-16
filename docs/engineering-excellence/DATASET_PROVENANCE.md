@@ -22,12 +22,16 @@ Manifest `bench/independent/manifest.json` (agentic-security/independent-populat
 | advisory | 1004 | 1004 |  |
 | language | 1004 | 1004 |  |
 | scope | 1004 | 1004 |  |
-| license | 0 | 1004 | GHSA-225x-3jhx-wh4q, GHSA-228g-948r-83gx, GHSA-22g5-r2x5-97cx, GHSA-22jq-vg5j-6vgg, GHSA-22p9-r2f5-22mf |
+| license | 1004 | 1004 |  |
 | labelConfidence | 1004 | 1004 |  |
 | acquisitionChecksum | 0 | 1004 | GHSA-225x-3jhx-wh4q, GHSA-228g-948r-83gx, GHSA-22g5-r2x5-97cx, GHSA-22jq-vg5j-6vgg, GHSA-22p9-r2f5-22mf |
-| split | 0 | 1004 | GHSA-225x-3jhx-wh4q, GHSA-228g-948r-83gx, GHSA-22g5-r2x5-97cx, GHSA-22jq-vg5j-6vgg, GHSA-22p9-r2f5-22mf |
+| split | 1004 | 1004 |  |
 
 Entries with all nine facts: **0** of 1004. Reconstructable from upstream (repository, both commits, advisory named): **1004**; unavailable: 0. Duplicate ids: 0.
+
+Licences (read from the upstream host, cached in `bench/independent/provenance.sidecar.json`): 424 of 424 repositories looked up; 82 assert no licence (their code is used as read-only scan input and never redistributed); most common: MIT 213, NOASSERTION 82, Apache-2.0 69, AGPL-3.0 16, BSD-3-Clause 11, GPL-3.0 8, BSD-2-Clause 7, LGPL-2.1 5. Split protocol: `sha256:612425af9f0dd8ac0`.
+
+Upstream spot-check (opt-in, `gh api`, a deterministic sample per language): 34 entries sampled, 34 confirmed (both commits exist), 0 missing upstream, 0 not checked because of an error.
 
 Reconstructable means the manifest names a repository, both commits and an advisory; it was not re-fetched here. A missing licence, split or acquisition checksum is reported as missing, not defaulted.
 

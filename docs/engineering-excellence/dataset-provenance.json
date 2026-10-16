@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-16T12:48:18.734Z",
+  "generatedAt": "2026-10-16T12:54:13.028Z",
   "requiredFacts": [
     "sourceProject",
     "commitBefore",
@@ -40,10 +40,10 @@
         "advisory": 1004,
         "language": 1004,
         "scope": 1004,
-        "license": 0,
+        "license": 1004,
         "labelConfidence": 1004,
         "acquisitionChecksum": 0,
-        "split": 0
+        "split": 1004
       },
       "missingExamples": {
         "sourceProject": [],
@@ -52,13 +52,7 @@
         "advisory": [],
         "language": [],
         "scope": [],
-        "license": [
-          "GHSA-225x-3jhx-wh4q",
-          "GHSA-228g-948r-83gx",
-          "GHSA-22g5-r2x5-97cx",
-          "GHSA-22jq-vg5j-6vgg",
-          "GHSA-22p9-r2f5-22mf"
-        ],
+        "license": [],
         "labelConfidence": [],
         "acquisitionChecksum": [
           "GHSA-225x-3jhx-wh4q",
@@ -67,15 +61,56 @@
           "GHSA-22jq-vg5j-6vgg",
           "GHSA-22p9-r2f5-22mf"
         ],
-        "split": [
-          "GHSA-225x-3jhx-wh4q",
-          "GHSA-228g-948r-83gx",
-          "GHSA-22g5-r2x5-97cx",
-          "GHSA-22jq-vg5j-6vgg",
-          "GHSA-22p9-r2f5-22mf"
-        ]
+        "split": []
       },
       "completeEntries": 0,
+      "upstreamSample": {
+        "sampled": 34,
+        "confirmed": 34,
+        "missingUpstream": 0,
+        "notChecked": 0
+      },
+      "licenseSummary": {
+        "repositories": 424,
+        "looked": 424,
+        "noLicenseAsserted": 82,
+        "notLookedUp": 0,
+        "topLicenses": [
+          [
+            "MIT",
+            213
+          ],
+          [
+            "NOASSERTION",
+            82
+          ],
+          [
+            "Apache-2.0",
+            69
+          ],
+          [
+            "AGPL-3.0",
+            16
+          ],
+          [
+            "BSD-3-Clause",
+            11
+          ],
+          [
+            "GPL-3.0",
+            8
+          ],
+          [
+            "BSD-2-Clause",
+            7
+          ],
+          [
+            "LGPL-2.1",
+            5
+          ]
+        ]
+      },
+      "splitProtocolHash": "sha256:612425af9f0dd8ac0fd6a0f0c0dfb0d5fa055611de6faa11b57ac5ae3ffe4d65",
       "reconstructableFromUpstream": 1004,
       "unavailable": [],
       "unavailableCount": 0,
