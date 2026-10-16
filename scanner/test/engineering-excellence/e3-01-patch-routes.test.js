@@ -145,32 +145,26 @@ test('[D2] the apply route now requests the stored PoC like verify_fix; an incon
   } finally { cleanup(s.root); }
 });
 
-test('[D3] the project tests run on the tree as it is BEFORE the patch, yet the verdict is reported as fully verified', async () => {
-  assert.equal(divergence('D3').status, 'open');
+test('[D3] closed by E3-05: the routes run the tests on a copy with the patch applied; verifyFix alone still defaults to the on-disk tree and says so', async () => {
+  assert.equal(divergence('D3').status, 'closed');
   const s = await session({ withTests: true });
   try {
-    // the tests pass on the vulnerable code and FAIL on the deny-all handler
-    const v = await verifyFix({ scanRoot: s.root, originalFindingStableId: s.finding.stableId, files: { 'app.js': DENY } });
-    assert.equal(v.tests.passed, true, 'the test leg passed for a patch that breaks the very behaviour the tests check');
-    assert.equal(v.testedPrePatch, true);
-    assert.match(v.summary, /NOT the candidate patch/, 'the summary admits it');
-    assert.equal(v.verifiedFull, true, 'but the verdict is still full');
-    assert.deepEqual(v.degradedLegs, [], 'and no leg is marked degraded');
-    fs.writeFileSync(path.join(s.root, 'app.js'), DENY);
-    const after = await verifyFix({ scanRoot: s.root, originalFindingStableId: s.finding.stableId, files: { 'app.js': DENY } });
-    assert.equal(after.tests.passed, false, 'run against the patched tree, the same tests fail');
+    const bare = await verifyFix({ scanRoot: s.root, originalFindingStableId: s.finding.stableId, files: { 'app.js': DENY } });
+    assert.equal(bare.testedPrePatch, true, 'called without a patched-tree runner, verifyFix tests the tree as it is');
+    assert.match(bare.summary, /NOT the candidate patch/);
+    const route = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': DENY }, dryRun: true });
+    assert.equal(route.ok, false, 'through the route the broken handler fails its own tests (and the footprint check)');
   } finally { cleanup(s.root); }
 });
 
-test('[D10] a patch that removes the vulnerable behaviour is accepted as verified: a deny-all handler, and an empty file', async () => {
-  assert.equal(divergence('D10').status, 'open');
+test('[D10] closed by E3-05: a patch that removes the vulnerable behaviour is rejected: a deny-all handler, and an empty file', async () => {
+  assert.equal(divergence('D10').status, 'closed');
   const s = await session();
   try {
     const deny = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': DENY }, dryRun: true });
-    assert.equal(deny.ok, true); assert.equal(deny.verified, true, 'the original finding is gone, so the patch passes');
-    assert.equal(deny.verify.rescan.ok, true);
+    assert.equal(deny.ok, false); assert.match(deny.reason, /removes functionality instead of fixing it/);
     const empty = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': '' }, dryRun: true });
-    assert.equal(empty.ok, true); assert.equal(empty.verified, true);
+    assert.equal(empty.ok, false);
   } finally { cleanup(s.root); }
 });
 

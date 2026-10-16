@@ -66,16 +66,20 @@ test('the bad patch is judged the same everywhere too, and a different patch giv
   } finally { cleanup(s.root); }
 });
 
-test('tests run before the patch exists are surfaced as degraded on every route, not as a full verification', async () => {
+test('tests run on the PATCHED tree on every route: a good patch is fully verified, a feature-removing patch is rejected with the same reason', async () => {
   const s = await session({ withTests: true });
   try {
+    for (const files of [{ 'app.js': GOOD }]) {
+      const svc = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files, dryRun: true });
+      const v = await s.call('verify_fix', { stable_id: s.finding.stableId, files });
+      const ap = await s.call('apply_fix', { finding_id: s.finding.id, confirm: true, dry_run: true, patch: files });
+      for (const r of [svc, v, ap]) { assert.equal(r.verifiedFull, true, JSON.stringify(r.degradedLegs)); assert.equal(r.fixVerification.behaviorTests.status, 'passed'); }
+    }
     const svc = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': DENY }, dryRun: true });
     const v = await s.call('verify_fix', { stable_id: s.finding.stableId, files: { 'app.js': DENY } });
     const ap = await s.call('apply_fix', { finding_id: s.finding.id, confirm: true, dry_run: true, patch: { 'app.js': DENY } });
-    for (const r of [svc, v, ap]) {
-      assert.equal(r.verifiedFull, false);
-      assert.ok(r.degradedLegs.some((d) => /behaviorTests: not_run \(.*BEFORE the patch/.test(d)), JSON.stringify(r.degradedLegs));
-    }
+    assert.equal(svc.ok, false); assert.equal(v.ok, false); assert.notEqual(ap.applied, true);
+    assert.equal(fs.readFileSync(path.join(s.root, 'app.js'), 'utf8'), VULN, 'nothing was written');
   } finally { cleanup(s.root); }
 });
 

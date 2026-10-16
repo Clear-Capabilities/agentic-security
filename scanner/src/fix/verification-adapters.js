@@ -47,16 +47,20 @@ export function recordFromVerifyFix(v, ctx) {
   let behaviorTests;
   if (!v.tests) behaviorTests = leg('not_run', { reason: 'the route returned no test result' });
   else if (v.tests.skipped) behaviorTests = leg('not_run', { reason: `tests were skipped (${v.tests.reason || 'no reason recorded'})` });
+  else if (v.tests.preExistingFailure || v.tests.reason === 'suite-already-failing-before-the-patch') behaviorTests = leg('blocked', { reason: 'the project test suite was already failing before the patch, so it cannot show the patch preserved behaviour' });
   else if (v.testedPrePatch) behaviorTests = leg('not_run', { evidenceIds: [], reason: 'the tests ran on the tree BEFORE the patch was written, so they say nothing about the patch' });
   else behaviorTests = v.tests.passed ? leg('passed', { evidenceIds: [add('test-result', v.tests)] }) : leg('failed', { evidenceIds: [add('test-result', v.tests)], reason: 'the project tests failed on the patched tree' });
 
   const poc = v.poc?.status;
   const pocId = v.poc && poc !== 'not-requested' ? add('exploit-replay', v.poc) : null;
-  const exploitProofAfter = !v.poc || poc === 'not-requested' ? leg('not_run', { reason: 'no exploit replay was requested by this route' })
+  const replay = ctx.replay || null;
+  const replayId = replay ? add('exploit-replay', replay, 'pre/post replay of the same reproducer') : null;
+  const replayLeg = (status, ok, bad) => status === 'passed' ? leg('passed', { evidenceIds: [replayId] }) : status === 'failed' ? leg('failed', { evidenceIds: [replayId], reason: bad }) : leg('not_run', { reason: replay.reason || ok });
+  const exploitProofAfter = replay ? replayLeg(replay.afterStatus, 'the replay did not run', replay.reason) : !v.poc || poc === 'not-requested' ? leg('not_run', { reason: 'no exploit replay was requested by this route' })
     : poc === 'no-longer-proven' ? leg('passed', { evidenceIds: [pocId] })
     : poc === 'still-exploitable' ? leg('failed', { evidenceIds: [pocId], reason: 'the exploit still works against the patched code' })
     : leg('not_run', { evidenceIds: [], reason: `the exploit replay was inconclusive (${v.poc.reason || 'no reason recorded'})` });
-  const exploitProofBefore = !v.poc || poc === 'not-requested' ? leg('not_run', { reason: 'no exploit replay was requested by this route' })
+  const exploitProofBefore = replay ? replayLeg(replay.beforeStatus, 'the replay did not run', replay.reason) : !v.poc || poc === 'not-requested' ? leg('not_run', { reason: 'no exploit replay was requested by this route' })
     : poc === 'inconclusive' ? leg('not_run', { reason: 'the exploit could not be reproduced on the original code' })
     : leg('passed', { evidenceIds: [pocId] });
 
@@ -65,19 +69,25 @@ export function recordFromVerifyFix(v, ctx) {
 
   if (v.honesty && v.honesty.ok === false) failures.push({ leg: 'securityAfter', reason: 'the honesty gate refused the claimed fix quality' });
 
+  const fp = ctx.footprint || null;
+  const footprintLeg = !fp ? leg('not_run', { reason: 'this route does not check that intended functionality survived' })
+    : fp.status === 'passed' ? leg('passed', { evidenceIds: [add('footprint', fp, 'sensitive operation kinds before and after the patch')] })
+    : fp.status === 'failed' ? leg('failed', { evidenceIds: [add('footprint', fp, 'sensitive operation kinds before and after the patch')], reason: fp.reason })
+    : leg('not_run', { reason: fp.reason });
   const files = ctx.files || {};
   return buildFixVerificationRecord({
     findingId: ctx.finding?.id ?? 'unknown', findingStableId: ctx.finding?.stableId, mode: ctx.mode || 'verify', route: ctx.route || 'verify-fix',
     preCommit: ctx.preCommit ?? null, preTreeHash: ctx.preFiles ? treeHashOf(Object.keys(files), ctx.preFiles) : null, postPatchHash: patchHashOf(files), patchHash: patchHashOf(files),
     affectedFiles: Object.keys(files),
     securityBefore, securityAfter, exploitProofBefore, exploitProofAfter, newFindingDelta, behaviorTests, lint,
-    behaviorPreservation: leg('not_run', { reason: 'this route does not check that intended functionality survived' }),
+    behaviorPreservation: footprintLeg,
     regressionTests: leg('not_run', { reason: 'this route runs a single test leg' }),
     typecheck: leg('not_run', { reason: 'this route does not run a type checker' }),
     dependencyChecks: leg('not_applicable', { reason: 'a source patch changes no dependency' }),
     requiredLegs: ctx.requiredLegs || ['securityAfter', 'newFindingDelta', 'behaviorTests'],
     failures, evidence, tools: ctx.tools || { engineVersion: null, verifier: 'verifyFix' },
-    residualRisk: ctx.residualRisk, confidence: ctx.confidence,
+    residualRisk: ctx.residualRisk,
+    confidence: ctx.confidence || (replay?.executionProven ? { level: 'proven', policy: 'exploit-replay-v1', evidenceIds: [replayId] } : undefined),
     ...(ctx.timestamps ? { timestamps: ctx.timestamps } : {}),
   });
 }

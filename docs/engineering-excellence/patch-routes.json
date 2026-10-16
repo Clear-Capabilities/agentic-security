@@ -339,9 +339,10 @@
     },
     {
       "id": "D3",
-      "status": "open",
+      "status": "closed",
       "closedBy": "E3-05",
-      "summary": "verifyFix runs the project tests on the current tree, before the patch is written. It sets testedPrePatch and says so in its summary, yet reports verifiedFull true with no degraded leg, so a passing test leg says nothing about the patch (autopilot writes first, so its test leg does test the patch). E3-03 surfaces this: the record marks behaviorTests not_run on every route, so verifiedFull is false; running the tests on the patched tree is E3-05."
+      "summary": "verifyFix runs the project tests on the current tree, before the patch is written. It sets testedPrePatch and says so in its summary, yet reports verifiedFull true with no degraded leg, so a passing test leg says nothing about the patch (autopilot writes first, so its test leg does test the patch). E3-03 surfaces this: the record marks behaviorTests not_run on every route, so verifiedFull is false; running the tests on the patched tree is E3-05.",
+      "closedIn": "E3-05"
     },
     {
       "id": "D4",
@@ -382,9 +383,10 @@
     },
     {
       "id": "D10",
-      "status": "open",
+      "status": "closed",
       "closedBy": "E3-05",
-      "summary": "A patch that deletes the vulnerable behaviour is accepted as verified: observed on a command-injection route replaced by a handler that always returns 403 (ok and verified true), and on a patch that empties the file."
+      "summary": "A patch that deletes the vulnerable behaviour is accepted as verified: observed on a command-injection route replaced by a handler that always returns 403 (ok and verified true), and on a patch that empties the file.",
+      "closedIn": "E3-05"
     }
   ]
 }
