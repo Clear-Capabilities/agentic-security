@@ -39,6 +39,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { verifyLastScan } from '../posture/integrity.js';
+import { verifyPatch, additiveFields } from './verify-patch.js';
 import { stateDir } from '../posture/state-dir.js';
 import { applyFix as applyFixHistory, revertEntryById as revertFixEntry } from '../posture/fix-history.js';
 import { classifyFixMaterialRisk } from '../posture/material-change.js';
@@ -323,6 +324,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
   }
 
   let verify = null;
+  let fixVerification = null;
   let pn = null;
   let repairRecords = [];
   const pnView = (r) => ({ status: r.status, verifiedFix: r.verifiedFix, incompleteStep: r.incompleteStep, failureCode: r.failureCode, reason: r.reason, steps: r.steps, patchDigest: r.patchDigest, summary: r.summary, verificationRecord: r.verificationRecord });
@@ -332,14 +334,14 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     }
     let verdict;
     try {
-      const verifyFixCore = await getVerifyFixCore();
-      verdict = await verifyFixCore({
-        scanRoot,
-        originalFindingStableId: finding.stableId,
+      const central = await verifyPatch({
+        scanRoot, finding, route: 'apply-fix-service', mode: dryRun ? 'preview' : 'apply',
         files: Object.fromEntries(Object.entries(confined).map(([rel, v]) => [rel, v.content])),
-        fixMeta,
-        ...(patchNegative ? { patchNegative, assuranceConfig } : {}),
+        fixMeta, verify: await getVerifyFixCore(),
+        ...(patchNegative ? { extra: { patchNegative, assuranceConfig } } : {}),
       });
+      verdict = central.verdict;
+      fixVerification = central.fixVerification;
     } catch (e) {
       return { ok: false, applied: false, reason: `verification failed: ${e.message}` };
     }
@@ -357,12 +359,13 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
         reason: `rejected by verifier: ${verdict.summary || verdict.rescan?.reason || 'did not verify'}`,
         verify: { rescan: verdict.rescan, lint: verdict.lint ? { runner: verdict.lint.runner, ok: verdict.lint.ok } : null, honesty: verdict.honesty || null },
         ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
+        ...(fixVerification ? additiveFields(fixVerification) : {}),
       };
     }
   }
 
   if (dryRun) {
-    return { ok: true, applied: false, dryRun: true, verified: !skipVerification, files: Object.keys(confined), verify, materialClassification, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}) };
+    return { ok: true, applied: false, dryRun: true, verified: !skipVerification, files: Object.keys(confined), verify, materialClassification, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}), ...(fixVerification ? additiveFields(fixVerification) : {}) };
   }
 
   // FR-304: re-check every file against its pre-verification baseline hash,
@@ -430,5 +433,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     verify: verify ? { summary: verify.summary, verifiedFull: verify.verifiedFull, degradedLegs: verify.degradedLegs || [] } : null,
     materialClassification,
     ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
+    // the canonical record is the authority for verifiedFull and degradedLegs: it also knows when the tests ran before the patch existed
+    ...(fixVerification ? additiveFields(fixVerification) : {}),
   };
 }

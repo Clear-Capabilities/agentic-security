@@ -83,9 +83,10 @@ test('R3 applyVerifiedFix: a good patch is verified, and the result carries the 
   try {
     const r = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': GOOD }, dryRun: true });
     assert.equal(r.ok, true); assert.equal(r.verified, true);
-    assert.deepEqual(Object.keys(r).sort(), ['applied', 'dryRun', 'files', 'materialClassification', 'ok', 'verified', 'verify']);
+    for (const k of ['applied', 'dryRun', 'files', 'materialClassification', 'ok', 'verified', 'verify']) assert.ok(k in r, k);
+    for (const k of ['fixVerification', 'fixCompleteness', 'verifiedFull', 'degradedLegs']) assert.ok(k in r, `additive ${k}`);
     assert.equal(r.verify.rescan.ok, true);
-    assert.ok(r.verify.degradedLegs.some((l) => /tests: skipped/.test(l)), 'no test command was detected, and the result says so');
+    assert.ok(r.degradedLegs.some((l) => /^behaviorTests: not_run/.test(l)), 'no test command was detected, and the result says so');
     const real = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': GOOD } });
     assert.equal(real.applied, true);
     assert.equal(typeof real.verifiedFull, 'boolean');
@@ -120,27 +121,27 @@ test('R3 refuses a write when the file changed after the scan that produced the 
   } finally { cleanup(s.root); }
 });
 
-test('[D1] the same verification is reported in different shapes: apply_fix with a caller patch and verify_fix do not return verifiedFull', async () => {
-  assert.equal(divergence('D1').status, 'open');
+test('[D1] closed by E3-03: every route returns verifiedFull, degradedLegs and the canonical record', async () => {
+  assert.equal(divergence('D1').status, 'closed');
   const s = await session();
   try {
     const v = await s.call('verify_fix', { stable_id: s.finding.stableId, files: { 'app.js': GOOD } });
     assert.equal(v.ok, true);
-    assert.equal('verifiedFull' in v, false, 'verify_fix computes verifiedFull but does not return it');
-    assert.ok(v.verificationRecord, 'it returns a hypothesis-level verification record instead');
+    for (const k of ['verifiedFull', 'degradedLegs', 'fixCompleteness', 'fixVerification', 'verificationRecord']) assert.ok(k in v, k);
     const dry = await s.call('apply_fix', { finding_id: s.finding.id, confirm: true, dry_run: true, patch: { 'app.js': GOOD } });
     assert.equal(dry.verified, true);
-    assert.equal('verifiedFull' in dry, false, 'the caller-patch branch returns verified only');
-    assert.equal('degradedLegs' in dry, false);
+    for (const k of ['verifiedFull', 'degradedLegs', 'fixVerification']) assert.ok(k in dry, k);
   } finally { cleanup(s.root); }
 });
 
-test('[D2] the PoC leg is requested by verify_fix and not by the apply route', async () => {
+test('[D2] the apply route now requests the stored PoC like verify_fix; an inconclusive replay is not_run, never passed', async () => {
   assert.equal(divergence('D2').status, 'open');
   const s = await session();
   try {
     const r = await applyVerifiedFix({ scanRoot: s.root, finding: s.ref, files: { 'app.js': GOOD }, dryRun: true });
-    assert.equal(r.verify.poc.status, 'not-requested');
+    assert.notEqual(r.verify.poc.status, 'not-requested', 'the stored PoC is now replayed on this route');
+    assert.equal(r.fixVerification.exploitProofAfter.status, r.verify.poc.status === 'no-longer-proven' ? 'passed' : 'not_run');
+    assert.notEqual(r.fixVerification.exploitProofAfter.status, 'failed');
   } finally { cleanup(s.root); }
 });
 
@@ -183,7 +184,7 @@ test('R10b apply_fix with a caller patch needs confirm:true; with it the patch i
     const done = await s.call('apply_fix', { finding_id: s.finding.id, confirm: true, patch: { 'app.js': GOOD } });
     assert.equal(done.applied, true);
     assert.equal(done.verified, true);
-    assert.equal('verifiedFull' in done, false, '[D1] the applied result has no verifiedFull');
+    assert.equal(typeof done.verifiedFull, 'boolean', 'the applied result carries verifiedFull since E3-03');
     assert.equal(fs.readFileSync(path.join(s.root, 'app.js'), 'utf8'), GOOD);
     assert.ok(fs.existsSync(path.join(s.root, '.agentic-security', 'fix-history')), 'the write is in the fix history, so undo can revert it');
   } finally { cleanup(s.root); }

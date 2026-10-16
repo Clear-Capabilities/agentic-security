@@ -326,27 +326,29 @@
   "divergences": [
     {
       "id": "D1",
-      "status": "open",
+      "status": "closed",
       "closedBy": "E3-03",
-      "summary": "Seven different result shapes for 'verified' (verifiedFull+degradedLegs, verified only, completeness, tier+gates, outcome, applied+restored). apply_fix with a caller patch returns no verifiedFull although the tool text promises it; verify_fix computes verifiedFull but does not return it."
+      "summary": "Seven different result shapes for 'verified' (verifiedFull+degradedLegs, verified only, completeness, tier+gates, outcome, applied+restored). apply_fix with a caller patch returns no verifiedFull although the tool text promises it; verify_fix computes verifiedFull but does not return it.",
+      "closedIn": "E3-03"
     },
     {
       "id": "D2",
       "status": "open",
-      "closedBy": "E3-03",
-      "summary": "The PoC leg is requested only by verify_fix; applyVerifiedFix and the caller-patch branch report it not-requested, while autopilot and --require-proof use exploit replay as a hard gate."
+      "closedBy": "E3-04",
+      "summary": "The PoC leg is requested only by verify_fix; applyVerifiedFix and the caller-patch branch report it not-requested, while autopilot and --require-proof use exploit replay as a hard gate. E3-03 made the stored-PoC rule one rule (signed scans only); a finding with no stored PoC still has no replay leg on any route (E3-04)."
     },
     {
       "id": "D3",
       "status": "open",
-      "closedBy": "E3-03",
-      "summary": "verifyFix runs the project tests on the current tree, before the patch is written. It sets testedPrePatch and says so in its summary, yet reports verifiedFull true with no degraded leg, so a passing test leg says nothing about the patch (autopilot writes first, so its test leg does test the patch)."
+      "closedBy": "E3-05",
+      "summary": "verifyFix runs the project tests on the current tree, before the patch is written. It sets testedPrePatch and says so in its summary, yet reports verifiedFull true with no degraded leg, so a passing test leg says nothing about the patch (autopilot writes first, so its test leg does test the patch). E3-03 surfaces this: the record marks behaviorTests not_run on every route, so verifiedFull is false; running the tests on the patched tree is E3-05."
     },
     {
       "id": "D4",
-      "status": "open",
+      "status": "closed",
       "closedBy": "E3-03",
-      "summary": "AGENTIC_SECURITY_FIX_RUN_TESTS=1 swaps the verifier in the caller-patch branch for verifyFixWithTests and drops fixMeta, the honesty gate and the PoC leg; there are two test-runner implementations."
+      "summary": "AGENTIC_SECURITY_FIX_RUN_TESTS=1 swaps the verifier in the caller-patch branch for verifyFixWithTests and drops fixMeta, the honesty gate and the PoC leg; there are two test-runner implementations.",
+      "closedIn": "E3-03"
     },
     {
       "id": "D5",

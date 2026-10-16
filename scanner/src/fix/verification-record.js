@@ -63,7 +63,7 @@ const ALLOWED = ['schema', 'schemaVersion', 'id', 'findingId', 'findingStableId'
 const REQUIRED = ['schema', 'schemaVersion', 'id', 'findingId', 'mode', 'route', 'patchHash', 'affectedFiles', ...LEG_NAMES, 'requiredLegs', 'coverage', 'degradedLegs', 'verifiedFull', 'fixCompleteness', 'residualRisk', 'confidence', 'tools', 'failures', 'evidence'];
 
 /** Fields that determine identity. Timestamps, tool paths and evidence locations are deliberately absent. */
-export const FIX_RECORD_ID_FIELDS = Object.freeze(['findingId', 'findingStableId', 'mode', 'route', 'preCommit', 'preTreeHash', 'postPatchHash', 'patchHash', 'affectedFiles', ...LEG_NAMES, 'requiredLegs', 'verifiedFull', 'fixCompleteness']);
+export const FIX_RECORD_ID_FIELDS = Object.freeze(['findingId', 'findingStableId', 'preCommit', 'preTreeHash', 'postPatchHash', 'patchHash', 'affectedFiles', ...LEG_NAMES, 'requiredLegs', 'verifiedFull', 'fixCompleteness']);
 
 export const fixRecordId = (record) => semanticId('fvrec', record, FIX_RECORD_ID_FIELDS);
 

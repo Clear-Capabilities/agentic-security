@@ -28,6 +28,7 @@ import { redactString, redactFinding } from './redact.js';
 import { _remediationOf, normalizeFindings } from '../report/index.js';
 // X-206: the one projection of the verification record, shared with the JSON report, the text report and the autopilot response.
 import { verificationFields } from '../posture/verification/projection.js';
+import { verifyPatch, additiveFields } from '../fix/verify-patch.js';
 import { boundaryFields } from '../lineage/deployment/projection.js';
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
@@ -879,25 +880,14 @@ export const apply_fix = {
       }
       // Inline re-verify — the load-bearing gate. Must pass to write.
       let verdict;
+      let fixVerification = null;
       try {
         const _files = Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content]));
-        if (process.env.AGENTIC_SECURITY_FIX_RUN_TESTS === '1') {
-          // Addition #7 — connect the closed-loop verifier: add the project test
-          // suite as a fourth verification leg (scan + lint + tests). Opt-in
-          // because many repos have no runner and we must not fail-closed by
-          // default. Normalized to the scan+lint verdict shape used below.
-          const { verifyFixWithTests } = await import('../posture/fix-verify-loop.js');
-          const t = await verifyFixWithTests({ scanRoot: ctx.sessionRoot, originalFindingStableId: f.stableId, files: _files });
-          verdict = { ok: t.ok, summary: t.summary, rescan: t.legs?.scan?.detail, lint: t.legs?.lint?.detail, tests: t.legs?.tests, testVerdict: t.verdict, verificationRecord: t.verificationRecord ?? null };
-        } else {
-          const verifyFixCore = await getVerifyFixCore();
-          verdict = await verifyFixCore({
-            scanRoot: ctx.sessionRoot,
-            originalFindingStableId: f.stableId,
-            files: _files,
-            fixMeta,
-          });
-        }
+        // One verifier for every route (E3-03). AGENTIC_SECURITY_FIX_RUN_TESTS used to swap in a second test runner here; verifyFix
+        // already carries the test leg, so the flag is now inert.
+        const central = await verifyPatch({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
+        verdict = central.verdict;
+        fixVerification = central.fixVerification;
       } catch (e) {
         return { _meta: META, applied: false, reason: `patch verification failed: ${e.message}` };
       }
@@ -909,6 +899,7 @@ export const apply_fix = {
           // X-201: the same version-1 verification record every surface emits (additive; null when none could be formed).
           verificationRecord: verdict.verificationRecord ?? null,
           ...verificationFields(verdict.verificationRecord),
+          ...(fixVerification ? additiveFields(fixVerification) : {}),
         };
       }
       // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
@@ -929,7 +920,7 @@ export const apply_fix = {
       }
       const materialClassification = classifyFixMaterialRisk(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord), materialClassification };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord), materialClassification, ...(fixVerification ? additiveFields(fixVerification) : {}) };
       }
       const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
       if (approvalRefusal) return approvalRefusal;
@@ -960,7 +951,7 @@ export const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = fixAcceptanceRate(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord) }, acceptance, materialClassification };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...verificationFields(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? additiveFields(fixVerification) : {}) };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -1118,21 +1109,8 @@ export const verify_fix = {
       // Best-effort: a missing/unsigned/tampered scan just means no PoC is
       // available to re-check, not a verify_fix failure — the rescan/lint/
       // tests legs below are independent of this and still apply.
-      let poc = null;
-      try {
-        const { scan: lastScan } = _readLastScanVerified(ctx.sessionRoot, { allowUnsigned: true });
-        const orig = lastScan && (lastScan.findings || []).find(f => f.stableId === stable_id);
-        if (orig && orig.poc && orig.poc.code) poc = { ...orig.poc, finding: orig };
-      } catch { /* best-effort lookup; poc stays null */ }
-
-      const verifyFixCore = await getVerifyFixCore();
-      const r = await verifyFixCore({
-        scanRoot: ctx.sessionRoot,
-        originalFindingStableId: stable_id,
-        files: confined,
-        poc,
-        fixMeta,
-      });
+      const central = await verifyPatch({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
+      const r = central.verdict;
       return {
         _meta: META,
         ok: r.ok,
@@ -1154,6 +1132,7 @@ export const verify_fix = {
         // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
         verificationRecord: r.verificationRecord ?? null,
         ...verificationFields(r.verificationRecord),
+        ...additiveFields(central.fixVerification),
       };
     } catch (e) {
       return { _meta: META, ok: false, reason: `verify_fix failed: ${e.message}` };

@@ -139,12 +139,12 @@ test('proven confidence needs a named policy, evidence that is in the record, an
   assert.equal(ok(full({ confidence: { level: 'inferred', policy: null, evidenceIds: [] } })).ok, true);
 });
 
-test('the id follows the content and not the clock: timestamps and evidence order do not change it, any semantic field does', () => {
+test('the id follows the content and not the clock or the route: timestamps, evidence order and route do not change it, any semantic field does', () => {
   const a = full();
   const b = full({ timestamps: { startedAt: '2030-01-01T00:00:00Z', completedAt: '2030-01-01T00:09:00Z' }, evidence: [E3, E1, E2], tools: { engineVersion: '9.9.9', verifier: 'other' } });
   assert.equal(a.id, b.id);
   assert.notEqual(a.id, full({ patchHash: H('4') }).id);
-  assert.notEqual(a.id, full({ route: 'mcp-apply-fix' }).id);
+  assert.equal(a.id, full({ route: 'mcp-apply-fix', mode: 'preview' }).id, 'who asked is recorded but is not identity');
   assert.notEqual(a.id, full({ behaviorTests: leg('not_run', { reason: 'x' }) }).id);
   const tampered = { ...structuredClone(a), patchHash: H('9') };
   assert.ok(codes(tampered).includes('ID_MISMATCH:id'));
