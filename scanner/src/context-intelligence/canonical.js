@@ -14,6 +14,31 @@ export function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
 
+/**
+ * Code-unit order, independent of the host locale. `localeCompare` orders by the process locale, so the same checkout
+ * could be sorted differently on two machines; every ordering that reaches a hashed value goes through this instead.
+ */
+export function cmpCodeUnit(a, b) {
+  const x = String(a); const y = String(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+// Control characters (C0, DEL, C1), the bidirectional override/isolate marks and the line/paragraph separators. A
+// repository controls the text of its own route strings and file names, so anything printed to a terminal or placed
+// in a prompt outside the untrusted fence must not be able to carry an escape sequence or reorder what a reader sees.
+const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
+/** Make text safe to print: unsafe characters become '?'. Newline and tab are kept; use `safeLabel` for one-line values. */
+export function cleanForTerminal(text) {
+  return String(text).replace(UNSAFE_DISPLAY, '?');
+}
+
+/** A one-line, bounded, printable form of a name taken from source (a route path, a file name). */
+export function safeLabel(text, max = 120) {
+  const t = String(text).replace(/[\n\r\t]+/g, ' ').replace(UNSAFE_DISPLAY, '?').replace(/ {2,}/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 3)}...` : t;
+}
+
 /** CRLF/CR -> LF so a Windows checkout and a Unix one produce the same spans and hashes. */
 export function normalizeText(text) {
   return String(text).replace(/\r\n?/g, '\n');

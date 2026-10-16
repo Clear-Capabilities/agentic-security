@@ -16,6 +16,7 @@ import { readStoreJson, writeStoreJson, readManifest, readPackageText, verifySto
 import { diffManifestSets, cacheReport } from './diff.js';
 import { readGitSnapshot, readSnapshot } from './files.js';
 import { QUESTION_PACKS, packById } from './prompts/packs.js';
+import { cleanForTerminal } from './canonical.js';
 import { describeModel, resolveInvoker, buildReviewPrompt, redactPackageText, checkEgressForFiles } from './review.js';
 import { planJobs, runQueue, exportBatch, importBatch, HARD_LIMITS } from './queue.js';
 import { reviewsToCandidates, adjudicate } from './candidates.js';
@@ -26,21 +27,24 @@ const flag = (a, k) => (a.flags[k] === undefined ? undefined : a.flags[k]);
 const truthy = (v) => v === true || (typeof v === 'string' && v !== 'false' && v !== '0');
 const num = (v) => (v === undefined || v === true ? undefined : Number(v));
 
+/** Everything this command prints goes through here: repository-supplied names must not carry escape sequences to a terminal. */
+function say(text) { console.log(cleanForTerminal(text)); }
+
 function out(format, text, obj) {
-  if (format === 'json') console.log(JSON.stringify(obj, null, 2));
-  else if (format === 'jsonl') console.log(JSON.stringify(obj));
-  else console.log(text);
+  if (format === 'json') say(JSON.stringify(obj, null, 2));
+  else if (format === 'jsonl') say(JSON.stringify(obj));
+  else say(text);
 }
 
 function usage() {
-  console.log([
+  say([
     'Usage: agentic-security context <subcommand> [--root <dir>] [--format text|json|jsonl]',
     '',
     '  build     Resolve entry points and write one inspectable context bundle each (no model, no network)',
     '            [--entrypoints http,webhook,queue,cron,upload,cli] [--profile compact|standard|extended] [--max-tokens N] [--route <label|id>] [--no-write]',
     '  inspect   Show one bundle: --route <label|id> | --hash <contextHash>  [--show-context] [--package N]',
     '  diff      Routes added/removed/changed between two refs: --from <ref> [--to <ref>]  (omit --to for the working tree)',
-    '  review    Focused one-call reviews over frozen bundles: --question <pack[,pack]> [--route x] [--local-only] [--concurrency N]',
+    '  review    Focused one-call reviews over frozen bundles: --question <pack[,pack]> [--route x] [--local-only] [--allow-remote] [--concurrency N]',
     '            [--max-calls N] [--max-wall-seconds N] [--max-cost-usd N --cost-per-call-usd N] [--retry-failed] [--refute] [--strict]',
     '            [--dry-run] [--export-batch] [--import-batch <results.jsonl> --batch-id <id>]',
     '  status    Coverage so far: entry points, bundles, review jobs',
@@ -62,7 +66,7 @@ async function doBuild(root, args, { write = true } = {}) {
   if (flag(args, 'max-tokens')) config.context.maxTokens = num(flag(args, 'max-tokens'));
   const events = [];
   const jsonl = flag(args, 'format') === 'jsonl';
-  const built = await buildContext(root, { config, route: entrypointFilter(flag(args, 'route')), onEvent: (e) => { events.push(e); if (jsonl) console.log(JSON.stringify(e)); } });
+  const built = await buildContext(root, { config, route: entrypointFilter(flag(args, 'route')), onEvent: (e) => { events.push(e); if (jsonl) say(JSON.stringify(e)); } });
   if (!built.ok) return { ok: false, built, config, problems };
   let persisted = null;
   if (write) persisted = persistBuild(root, built, config);
@@ -155,7 +159,7 @@ async function cmdInspect(root, args, format) {
     `  boundaries (calls into libraries, not first-party code): ${m.boundaries.length}`,
   ];
   if (text) lines.push('', text.ok ? text.text : `(context text unavailable: ${text.code})`);
-  console.log(lines.join('\n'));
+  say(lines.join('\n'));
   return 0;
 }
 
@@ -255,7 +259,7 @@ async function cmdExport(root, args, format) {
   if (!h || h === true) { out(format, 'context export: --hash <contextHash> is required', { ok: false }); return 1; }
   const r = exportBundle(root, String(h));
   if (!r.ok) { out(format, `context export: refused (${r.problems.join(', ')})`, { ok: false, problems: r.problems }); return 1; }
-  console.log(JSON.stringify(r.export, null, 2));
+  say(JSON.stringify(r.export, null, 2));
   return 0;
 }
 
@@ -303,7 +307,7 @@ async function cmdReview(root, args, format) {
   const r = await doBuild(root, args, { write: true });
   if (!r.ok) { out(format, `context review: build failed (${r.built.reason})`, { ok: false, reason: r.built.reason }); return r.built.reason === 'too-many-files' ? 2 : 1; }
   const { built } = r;
-  const model = describeModel();
+  const model = describeModel({ allowRemote: truthy(flag(args, 'allow-remote')) || r.config.review.allowRemote === true });
   const { jobs, droppedByJobLimit } = planJobs({ bundles: built.bundles, packs, model, maxJobs: Math.min(HARD_LIMITS.maxJobs, num(flag(args, 'max-jobs')) || HARD_LIMITS.maxJobs) });
   const loadJob = loadJobFrom(built, packs);
   const ctxBase = { root: built.root, fileContents: built.fileContents, model };
@@ -341,7 +345,7 @@ async function cmdReview(root, args, format) {
   try {
     result = await runQueue(jobs, {
       ...ctxBase, invoker, loadJob, signal: ac.signal, retryFailed: truthy(flag(args, 'retry-failed')),
-      onEvent: jsonl ? (e) => console.log(JSON.stringify(e)) : undefined,
+      onEvent: jsonl ? (e) => say(JSON.stringify(e)) : undefined,
       limits: {
         concurrency: num(flag(args, 'concurrency')) || config.review.concurrency,
         maxCalls: num(flag(args, 'max-calls')) || config.review.maxCalls,

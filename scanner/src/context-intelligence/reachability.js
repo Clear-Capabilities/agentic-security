@@ -12,6 +12,7 @@
 //   * lose a control. Middleware and every callee are walked, and each visited symbol's controls are collected by the
 //     same classifier the packer uses to refuse pruning.
 import { analyzeSymbolText, blankComments } from './controls.js';
+import { cmpCodeUnit } from './canonical.js';
 import { MATERIAL_REASONS } from './graph-schema.js';
 
 export const DEFAULT_LIMITS = Object.freeze({ maxSymbols: 60, maxDepth: 12 });
@@ -70,7 +71,7 @@ export function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
   }
 
   // middleware runs before the handler: it is enqueued first and ordered at line -1
-  for (const mw of [...entrypoint.middleware].sort((a, b) => (a.line - b.line) || String(a.name).localeCompare(String(b.name)))) {
+  for (const mw of [...entrypoint.middleware].sort((a, b) => (a.line - b.line) || cmpCodeUnit(a.name, b.name))) {
     if (mw.symbolId && byId.has(mw.symbolId)) enqueue(mw.symbolId, 0, mw.inherited ? 'inherited-middleware' : 'middleware', -1, [mw.symbolId], mw.resolution === 'resolved' ? 'exact' : 'name-match');
   }
   if (root.symbolId) {
@@ -163,11 +164,14 @@ export function evaluateProtection({ facts, unknowns, omittedWithControls = fals
   for (const dim of PROTECTION_DIMENSIONS) {
     const kinds = dim === 'ownership' ? ['ownership', 'tenant-scope'] : [dim];
     const ctl = facts.filter(f => f.category === 'control' && kinds.includes(f.kind));
-    const before = ctl.filter(f => firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens));
+    // A control whose answer is visibly thrown away (a predicate called as a bare statement) guards nothing.
+    const effective = (f) => f.rejectionSeen !== false;
+    const before = ctl.filter(f => effective(f) && (firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens)));
     const after = ctl.filter(f => firstSens !== null && f.effLine > firstSens);
     let state; let why;
     if (before.length) { state = 'present'; why = 'a control precedes the first sensitive operation'; }
     else if (after.length) { state = 'evaluated_and_ineffective'; why = 'every control of this kind runs after the first sensitive operation'; }
+    else if (ctl.length && ctl.every(f => !effective(f))) { state = 'evaluated_and_ineffective'; why = 'a check is called but nothing in view acts on its answer'; }
     else if (ctl.length) { state = 'evaluated_and_ineffective'; why = 'a control is present but is not ordered before the sensitive operation'; }
     else if (omittedWithControls) { state = 'omitted_due_to_budget'; why = 'a symbol holding a control was left out for size'; }
     else if (unknowns.some(u => u.material) || capped) { state = 'not_resolved'; why = 'an unresolved call or a traversal limit could hide a control'; }
@@ -175,6 +179,8 @@ export function evaluateProtection({ facts, unknowns, omittedWithControls = fals
     else { state = 'not_present'; why = 'the resolved context is complete and contains no control of this kind'; }
     dims[dim] = {
       state, why, firstSensitiveLine: firstSens,
+      // How the control was established: 'observed' = the text shows it, 'inferred' = only a name suggests it. Only meaningful for `present`.
+      strength: state === 'present' ? (before.some(f => f.evidence === 'observed') ? 'observed' : 'inferred') : null,
       evidence: ctl.slice(0, 6).map(f => ({ file: f.file, line: f.line, kind: f.kind, evidence: f.evidence, basis: f.basis, order: firstSens === null ? 'no-sensitive-op' : f.effLine < firstSens ? 'before-sensitive' : f.effLine > firstSens ? 'after-sensitive' : 'same-step', rejectionSeen: f.rejectionSeen })),
     };
   }

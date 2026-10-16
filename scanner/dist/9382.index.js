@@ -155,14 +155,41 @@ function loadHieMetadata(rootReal, hieDir, { fileContents }) {
   return { status: 'ok', tool: doc.tool, compiler: doc.compiler, declarations, references, exportHash: (0,canonical/* hashOf */.qQ)({ declarations, references }) };
 }
 
+function uncorroboratedReferences(graph, references, fileContents) {
+  const byName = new Map();
+  for (const sym of graph.symbols) {
+    if (sym.kind !== 'function' || sym.id.includes('::<anon>@')) continue;
+    if (!byName.has(sym.name)) byName.set(sym.name, []);
+    byName.get(sym.name).push(sym);
+  }
+  const bad = [];
+  for (const r of references) {
+    const owners = byName.get(r.from) || [];
+    if (owners.length !== 1) continue; // an ambiguous or unknown name is already counted as unmatched and adds nothing
+    const sym = owners[0];
+    const text = fileContents[sym.file];
+    const callee = String(r.to).split(/[.:]/).pop();
+    const lineText = typeof text === 'string' ? text.split('\n')[r.line - 1] : undefined;
+    const inside = r.line >= sym.startLine && r.line <= sym.endLine;
+    if (!inside || lineText === undefined || !callee || !lineText.includes(callee)) bad.push(`${r.from}->${r.to}@${r.line}`);
+  }
+  return bad;
+}
+
 /**
  * Merge an imported export into the static graph. Returns { graph, semantic } where `semantic` carries the provenance
  * and the static-versus-compiler difference report.
  */
 function mergeHieIntoGraph(graph, meta, fileContents) {
-  void fileContents;
   if (meta.status !== 'ok') {
     return { graph, semantic: { source: ['static-ir'], status: meta.status, reason: meta.reason || null, detail: meta.detail || null, diff: null } };
+  }
+  // The export is untrusted even when its file hashes match: it is checked into the repository it describes. A reference
+  // is accepted only if the line it names, inside the declaration it names, actually mentions the callee. One that does
+  // not degrades the whole import, so a crafted export cannot add edges that the source does not contain.
+  const uncorroborated = uncorroboratedReferences(graph, meta.references, fileContents || {});
+  if (uncorroborated.length) {
+    return { graph, semantic: { source: ['static-ir'], status: 'degraded', reason: 'reference-not-in-source', detail: uncorroborated.slice(0, 5).join(', '), diff: null } };
   }
   const idsByName = new Map();
   for (const s of graph.symbols) {
@@ -414,10 +441,13 @@ async function adjudicate(candidates, opts = {}) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   IW: () => (/* binding */ safeLabel),
 /* harmony export */   Qz: () => (/* binding */ safeRelPath),
+/* harmony export */   bt: () => (/* binding */ cleanForTerminal),
 /* harmony export */   dj: () => (/* binding */ canonicalJson),
 /* harmony export */   fQ: () => (/* binding */ normalizeText),
 /* harmony export */   iq: () => (/* binding */ sliceLines),
+/* harmony export */   kH: () => (/* binding */ cmpCodeUnit),
 /* harmony export */   qQ: () => (/* binding */ hashOf),
 /* harmony export */   sc: () => (/* binding */ sha256),
 /* harmony export */   v6: () => (/* binding */ readRepoFile),
@@ -441,6 +471,31 @@ const HASH_ALGORITHM = 'sha256/canon-1';
 
 function sha256(text) {
   return node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * Code-unit order, independent of the host locale. `localeCompare` orders by the process locale, so the same checkout
+ * could be sorted differently on two machines; every ordering that reaches a hashed value goes through this instead.
+ */
+function cmpCodeUnit(a, b) {
+  const x = String(a); const y = String(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+// Control characters (C0, DEL, C1), the bidirectional override/isolate marks and the line/paragraph separators. A
+// repository controls the text of its own route strings and file names, so anything printed to a terminal or placed
+// in a prompt outside the untrusted fence must not be able to carry an escape sequence or reorder what a reader sees.
+const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
+/** Make text safe to print: unsafe characters become '?'. Newline and tab are kept; use `safeLabel` for one-line values. */
+function cleanForTerminal(text) {
+  return String(text).replace(UNSAFE_DISPLAY, '?');
+}
+
+/** A one-line, bounded, printable form of a name taken from source (a route path, a file name). */
+function safeLabel(text, max = 120) {
+  const t = String(text).replace(/[\n\r\t]+/g, ' ').replace(UNSAFE_DISPLAY, '?').replace(/ {2,}/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 3)}...` : t;
 }
 
 /** CRLF/CR -> LF so a Windows checkout and a Unix one produce the same spans and hashes. */
@@ -762,25 +817,29 @@ var state_dir = __webpack_require__(31174);
 
 
 
+
 const flag = (a, k) => (a.flags[k] === undefined ? undefined : a.flags[k]);
 const truthy = (v) => v === true || (typeof v === 'string' && v !== 'false' && v !== '0');
 const num = (v) => (v === undefined || v === true ? undefined : Number(v));
 
+/** Everything this command prints goes through here: repository-supplied names must not carry escape sequences to a terminal. */
+function say(text) { console.log((0,canonical/* cleanForTerminal */.bt)(text)); }
+
 function out(format, text, obj) {
-  if (format === 'json') console.log(JSON.stringify(obj, null, 2));
-  else if (format === 'jsonl') console.log(JSON.stringify(obj));
-  else console.log(text);
+  if (format === 'json') say(JSON.stringify(obj, null, 2));
+  else if (format === 'jsonl') say(JSON.stringify(obj));
+  else say(text);
 }
 
 function usage() {
-  console.log([
+  say([
     'Usage: agentic-security context <subcommand> [--root <dir>] [--format text|json|jsonl]',
     '',
     '  build     Resolve entry points and write one inspectable context bundle each (no model, no network)',
     '            [--entrypoints http,webhook,queue,cron,upload,cli] [--profile compact|standard|extended] [--max-tokens N] [--route <label|id>] [--no-write]',
     '  inspect   Show one bundle: --route <label|id> | --hash <contextHash>  [--show-context] [--package N]',
     '  diff      Routes added/removed/changed between two refs: --from <ref> [--to <ref>]  (omit --to for the working tree)',
-    '  review    Focused one-call reviews over frozen bundles: --question <pack[,pack]> [--route x] [--local-only] [--concurrency N]',
+    '  review    Focused one-call reviews over frozen bundles: --question <pack[,pack]> [--route x] [--local-only] [--allow-remote] [--concurrency N]',
     '            [--max-calls N] [--max-wall-seconds N] [--max-cost-usd N --cost-per-call-usd N] [--retry-failed] [--refute] [--strict]',
     '            [--dry-run] [--export-batch] [--import-batch <results.jsonl> --batch-id <id>]',
     '  status    Coverage so far: entry points, bundles, review jobs',
@@ -802,7 +861,7 @@ async function doBuild(root, args, { write = true } = {}) {
   if (flag(args, 'max-tokens')) config.context.maxTokens = num(flag(args, 'max-tokens'));
   const events = [];
   const jsonl = flag(args, 'format') === 'jsonl';
-  const built = await (0,build/* buildContext */.g)(root, { config, route: entrypointFilter(flag(args, 'route')), onEvent: (e) => { events.push(e); if (jsonl) console.log(JSON.stringify(e)); } });
+  const built = await (0,build/* buildContext */.g)(root, { config, route: entrypointFilter(flag(args, 'route')), onEvent: (e) => { events.push(e); if (jsonl) say(JSON.stringify(e)); } });
   if (!built.ok) return { ok: false, built, config, problems };
   let persisted = null;
   if (write) persisted = persistBuild(root, built, config);
@@ -895,7 +954,7 @@ async function cmdInspect(root, args, format) {
     `  boundaries (calls into libraries, not first-party code): ${m.boundaries.length}`,
   ];
   if (text) lines.push('', text.ok ? text.text : `(context text unavailable: ${text.code})`);
-  console.log(lines.join('\n'));
+  say(lines.join('\n'));
   return 0;
 }
 
@@ -995,7 +1054,7 @@ async function cmdExport(root, args, format) {
   if (!h || h === true) { out(format, 'context export: --hash <contextHash> is required', { ok: false }); return 1; }
   const r = (0,store/* exportBundle */.Nl)(root, String(h));
   if (!r.ok) { out(format, `context export: refused (${r.problems.join(', ')})`, { ok: false, problems: r.problems }); return 1; }
-  console.log(JSON.stringify(r.export, null, 2));
+  say(JSON.stringify(r.export, null, 2));
   return 0;
 }
 
@@ -1043,7 +1102,7 @@ async function cmdReview(root, args, format) {
   const r = await doBuild(root, args, { write: true });
   if (!r.ok) { out(format, `context review: build failed (${r.built.reason})`, { ok: false, reason: r.built.reason }); return r.built.reason === 'too-many-files' ? 2 : 1; }
   const { built } = r;
-  const model = (0,review/* describeModel */.Vy)();
+  const model = (0,review/* describeModel */.Vy)({ allowRemote: truthy(flag(args, 'allow-remote')) || r.config.review.allowRemote === true });
   const { jobs, droppedByJobLimit } = (0,queue/* planJobs */.KR)({ bundles: built.bundles, packs, model, maxJobs: Math.min(queue/* HARD_LIMITS */.BS.maxJobs, num(flag(args, 'max-jobs')) || queue/* HARD_LIMITS */.BS.maxJobs) });
   const loadJob = loadJobFrom(built, packs);
   const ctxBase = { root: built.root, fileContents: built.fileContents, model };
@@ -1081,7 +1140,7 @@ async function cmdReview(root, args, format) {
   try {
     result = await (0,queue/* runQueue */.rj)(jobs, {
       ...ctxBase, invoker, loadJob, signal: ac.signal, retryFailed: truthy(flag(args, 'retry-failed')),
-      onEvent: jsonl ? (e) => console.log(JSON.stringify(e)) : undefined,
+      onEvent: jsonl ? (e) => say(JSON.stringify(e)) : undefined,
       limits: {
         concurrency: num(flag(args, 'concurrency')) || config.review.concurrency,
         maxCalls: num(flag(args, 'max-calls')) || config.review.maxCalls,
@@ -1199,7 +1258,7 @@ const DEFAULT_CONFIG = Object.freeze({
   maxFiles: 3000,
   semanticMetadata: { mode: 'off', haskellHieDir: null },
   context: { profile: 'standard', maxTokens: null, pruneLowValue: true, maxSymbols: 60, maxDepth: 12 },
-  review: { enabled: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
+  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
   replay: { contentAddressed: true, retention: 'inherit' },
 });
 
@@ -1240,6 +1299,7 @@ function normalizeConfig(raw) {
     },
     review: {
       enabled: rv.enabled === true,
+      allowRemote: rv.allowRemote === true,
       questionPacks: Array.isArray(rv.questionPacks) && rv.questionPacks.length ? rv.questionPacks.filter(x => typeof x === 'string') : d.review.questionPacks,
       concurrency: clamp(rv.concurrency, 1, 16, d.review.concurrency),
       maxCalls: clamp(rv.maxCalls, 1, 5000, d.review.maxCalls),
@@ -1278,7 +1338,7 @@ function loadConfig(root) {
 /* harmony export */   kl: () => (/* binding */ analyzeSymbolText),
 /* harmony export */   qr: () => (/* binding */ dependencyParams)
 /* harmony export */ });
-/* unused harmony exports CONTROL_KINDS, isSecuritySignificant */
+/* unused harmony exports CONTROL_KINDS, ownerBinding, isSecuritySignificant */
 //
 // Security-relevant facts inside ONE symbol's source: authentication / authorization / ownership / tenant controls,
 // and the sensitive operations they have to precede.
@@ -1328,7 +1388,46 @@ function signatureText(lines, declLine, maxLines = 12) {
   for (let i = declLine - 1; i < Math.min(lines.length, declLine - 1 + maxLines); i++) { t += ' ' + lines[i]; if (/\)\s*(?:->[^:]*)?:\s*(?:#.*)?$/.test(lines[i])) break; }
   return t;
 }
-const OWNER_FIELD = /(?:owner|tenant|org(?:anization)?|account|created_?by|author|user_?id|userId|team|workspace)/i;
+// An owner/tenant FIELD NAME, not any word that merely contains one: `ownerId`, `owner_id`, `tenant`, `getOwnerId`
+// qualify; `owner_name` and `cols` do not (the trailing boundary rejects them).
+const OWNER_KEY = '\\w*?(?:[Oo]wner|[Tt]enant|[Oo]rg(?:ani[sz]ation)?|[Aa]ccount|[Cc]reated_?[Bb]y|[Aa]uthor|[Tt]eam|[Ww]orkspace)(?:_?(?:[Ii]d|ID))?\\b|[Uu]ser_?(?:[Ii]d|ID)\\b';
+const OWNER_KEY_RE = new RegExp(`(?<![\\w])(?:${OWNER_KEY})`);
+const TENANT_WORD = /tenant|org|workspace|team|account/i;
+// a SQL string comparing an owner column with a bound parameter: `owner_id = ?`, `owner_id = $1`, `tenant_id = :t`
+const SQL_OWNER_PLACEHOLDER = new RegExp(`(?<![\\w])(?:${OWNER_KEY})\\s*(?:=|\\bIN\\b|\\bin\\b)\\s*\\(?\\s*(?:\\?|\\$\\d+|:\\w+|%s|@\\w+)`);
+// an owner column compared with the principal written straight into the string: `owner_id = ${req.user.id}`
+const SQL_OWNER_INTERPOLATED = new RegExp(`(?<![\\w])(?:${OWNER_KEY})\\s*=\\s*(?:'?\\s*\\+\\s*|\\$\\{\\s*)(?:${QUALIFIED_PRINCIPAL.source}|${BARE_PRINCIPAL.source})`);
+const PRINCIPAL_GLOBAL = new RegExp(QUALIFIED_PRINCIPAL.source, 'g');
+const STRING_LITERAL = /(["'`])(?:\\.|(?!\1).)*\1/g;
+
+/**
+ * Is an owner/tenant FIELD actually tied to the principal in this text? The field and the principal must sit in the
+ * same clause (split on , ; && || braces), so `{ audit: req.user.id, cols: 'owner_name' }` is a decoy and
+ * `{ ownerId: req.user.id }` is a filter. A SQL string with an owner column against a bound placeholder counts when the
+ * principal is passed in the same call. Returns null or { level: 'qualified'|'bare', tenant }.
+ */
+function ownerBinding(text, extra = null) {
+  let best = null;
+  const take = (level, tenant) => { if (!best || (level === 'qualified' && best.level !== 'qualified')) best = { level, tenant }; };
+  const code = text.replace(STRING_LITERAL, (m) => (SQL_OWNER_PLACEHOLDER.test(m) || SQL_OWNER_INTERPOLATED.test(m) ? m : '""'));
+  for (const clause of code.split(/[,;{}]|&&|\|\|/)) {
+    // the principal's own name (`req.user`, `current_user`) is not an owner field, so it is removed before looking for one
+    const forKey = clause.replace(STRING_LITERAL, ' ').replace(PRINCIPAL_GLOBAL, ' ');
+    if (!OWNER_KEY_RE.test(forKey)) continue;
+    const pr = principalIn(clause, extra);
+    if (pr) take(pr, TENANT_WORD.test(clause));
+  }
+  for (const m of text.match(STRING_LITERAL) || []) {
+    const placeholder = SQL_OWNER_PLACEHOLDER.test(m);
+    if (placeholder) {
+      const pr = principalIn(text, extra);
+      if (pr) take(pr, TENANT_WORD.test(m));
+    }
+    if (SQL_OWNER_INTERPOLATED.test(m)) take('qualified', TENANT_WORD.test(m));
+  }
+  return best;
+}
+
 const COMPARE = /(?:===|!==|==|!=|\.equals\(|\bis not\b|\bis\b|\bnot in\b|\bin\b|\.includes\(|\.has\()/;
 const REJECT = /(?:\breturn\b|\bthrow\b|\braise\b|\babort\b|\bexit\b|\b40[0-9]\b|\bforbidden\b|\bunauthori[sz]ed\b|\bHttpError\b|\breject\b|\bnot_?allowed\b|\bdeny\b|\bdenied\b|throwError|\bfinish\b|\bhalt\b|\bPermissionDenied\b|\bAccessDenied\b|status\()/i;
 
@@ -1338,6 +1437,13 @@ const SENSITIVE_NAME = /(?:^|[.:])(?:query|queryOne|queryRow|exec|execute|execut
 const DB_RECEIVER = /(?:^|\b)(?:db|database|conn|connection|pool|client|cursor|session|repo|repository|dao|model|models|collection|table|prisma|knex|sequelize|orm|store|objects|manager|em|entityManager|mongo|redis|cache|conn|stmt|statement|fs|child_process|cp|axios|http|https|requests|httpx|got|superagent|Database|Persist|Yesod|System)\b/;
 const SQL_TEXT = /\b(?:select\s[\s\S]{1,120}\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
 const HS_SENSITIVE = /(?:^|\.)(?:runDB|selectList|selectFirst|getBy|getJust|insert_?|insertEntity|update|updateWhere|delete|deleteWhere|replace|upsert|query|query_|execute|execute_|readFile|writeFile|callProcess|readProcess)$|^(?:Database\.|System\.Process\.|System\.Directory\.)/;
+
+// Names that answer a question rather than enforce a rule.
+const PREDICATE_NAME = /^(?:is|has|can|cannot|allow|owned|belongs)/i;
+function bareCallStatement(trimmedLine, name) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^(?:await\\s+)?${esc}\\s*\\(`).test(trimmedLine) && /\)\s*;?\s*(?:\/\/.*|\/\*.*)?$/.test(trimmedLine);
+}
 
 const WRITE_VERB = /(?:insert|update|upsert|delete|remove|destroy|save|create|write|append|unlink|rm|exec|spawn|system|popen|post|put|patch|replace)/i;
 
@@ -1413,8 +1519,12 @@ function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
     }
     for (const name of calls) {
       if (AUTH_NAME.test(name) && !/^(?:if|for|while|switch|catch|function)$/.test(name)) {
-        const rej = REJECT.test(lines.slice(ln - 1, ln + 3).join(' ')) || /^(?:require|ensure|enforce|assert|authori[sz]e|authenticate|protect)/i.test(name.split(/[.:]/).pop());
-        push({ line: ln, category: 'control', kind: kindOfAuthName(name), subkind: null, evidence: 'inferred', basis: 'call-name', rejectionSeen: rej, text: clip(raw) });
+        const lastSeg = name.split(/[.:]/).pop();
+        // A predicate (isOwner, hasRole, can) only returns an answer. Called as a bare statement its answer is thrown away,
+        // so it guards nothing, whatever the lines around it say.
+        const discarded = !haskell && PREDICATE_NAME.test(lastSeg) && bareCallStatement(t, name);
+        const rej = !discarded && (REJECT.test(lines.slice(ln - 1, ln + 3).join(' ')) || /^(?:require|ensure|enforce|assert|authori[sz]e|authenticate|protect)/i.test(lastSeg));
+        push({ line: ln, category: 'control', kind: kindOfAuthName(name), subkind: null, evidence: 'inferred', basis: discarded ? 'call-name-result-discarded' : 'call-name', rejectionSeen: rej, text: clip(raw) });
       }
       const last = name.split(/[.:]/).pop();
       const recv = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : '';
@@ -1430,9 +1540,9 @@ function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
         push({ line: ln, category: 'sensitive', kind: sub, subkind: verb, evidence: 'observed', basis: 'call-name', rejectionSeen: null, text: clip(raw) });
         // a data operation whose own statement mentions the principal and an owner/tenant field is scoped by it
         const stmt = statementAt(lines, ln);
-        const pr = sub.startsWith('data-') && OWNER_FIELD.test(stmt) ? principalIn(stmt, extraPrincipal) : null;
+        const pr = sub.startsWith('data-') ? ownerBinding(stmt, extraPrincipal) : null;
         if (pr) {
-          push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(stmt) ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr === 'qualified' ? 'observed' : 'inferred', basis: pr === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
+          push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
         }
       }
     }
@@ -1440,17 +1550,17 @@ function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
       const verb = /\b(?:insert|update|delete)\b/i.test(raw) ? 'write' : 'read';
       push({ line: ln, category: 'sensitive', kind: `data-${verb}`, subkind: verb, evidence: 'observed', basis: 'sql-text', rejectionSeen: null, text: clip(raw) });
       const stmt = statementAt(lines, ln);
-      const pr = OWNER_FIELD.test(stmt) ? principalIn(stmt, extraPrincipal) : null;
+      const pr = ownerBinding(stmt, extraPrincipal);
       if (pr) {
-        push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(stmt) ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr === 'qualified' ? 'observed' : 'inferred', basis: pr === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
+        push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
       }
     }
 
     // a resource field compared with the principal: the ownership check itself
-    const cmpPr = COMPARE.test(raw) && OWNER_FIELD.test(raw) && /\b(?:if|unless|assert|when|guard|require|expect|where|elif|&&|\|\|)\b|\?/.test(raw) ? principalIn(raw, extraPrincipal) : null;
+    const cmpPr = COMPARE.test(raw) && /\b(?:if|unless|assert|when|guard|require|expect|where|elif|&&|\|\|)\b|\?/.test(raw) ? ownerBinding(raw, extraPrincipal) : null;
     if (cmpPr) {
       const rej = REJECT.test(lines.slice(ln - 1, ln + 3).join(' '));
-      push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(raw) ? 'tenant-scope' : 'ownership', subkind: null, evidence: cmpPr === 'qualified' ? 'observed' : 'inferred', basis: cmpPr === 'qualified' ? 'comparison' : 'comparison-bare-identifier', rejectionSeen: rej, text: clip(raw) });
+      push({ line: ln, category: 'control', kind: cmpPr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: cmpPr.level === 'qualified' ? 'observed' : 'inferred', basis: cmpPr.level === 'qualified' ? 'comparison' : 'comparison-bare-identifier', rejectionSeen: rej, text: clip(raw) });
     }
   }
   // A function whose NAME says it is a guard and whose BODY shows a rejection path is a guard function. This is
@@ -1805,7 +1915,7 @@ async function collectEntrypoints({ fileContents, graph, config = {} }) {
     const n = (ord.get(stem) || 0) + 1;
     ord.set(stem, n);
     r.id = `ep:${stem.slice(0, 20)}${n > 1 ? `-${n}` : ''}`;
-    r.label = `${r.method ? r.method + ' ' : ''}${r.pathTemplate}`.trim() || r.kind;
+    r.label = (0,_canonical_js__WEBPACK_IMPORTED_MODULE_0__/* .safeLabel */ .IW)(`${r.method ? r.method + ' ' : ''}${r.pathTemplate}`) || r.kind;
     void hname;
     let disposition;
     const excluded = exclude.some(re => re.test(r.registrationSite.file) || re.test(r.pathTemplate));
@@ -3134,7 +3244,8 @@ function importBatch(root, batchId, resultsText, ctx) {
 /* harmony export */ });
 /* unused harmony exports DEFAULT_LIMITS, PROTECTION_DIMENSIONS */
 /* harmony import */ var _controls_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(17202);
-/* harmony import */ var _graph_schema_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(44287);
+/* harmony import */ var _canonical_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(44652);
+/* harmony import */ var _graph_schema_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(44287);
 //
 // Deterministic, bounded reachability from an entry point's handler.
 //
@@ -3148,6 +3259,7 @@ function importBatch(root, batchId, resultsText, ctx) {
 //   * hide a limit. Hitting the symbol or depth cap marks the walk `capped` and lists what was left unvisited.
 //   * lose a control. Middleware and every callee are walked, and each visited symbol's controls are collected by the
 //     same classifier the packer uses to refuse pruning.
+
 
 
 
@@ -3207,7 +3319,7 @@ function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
   }
 
   // middleware runs before the handler: it is enqueued first and ordered at line -1
-  for (const mw of [...entrypoint.middleware].sort((a, b) => (a.line - b.line) || String(a.name).localeCompare(String(b.name)))) {
+  for (const mw of [...entrypoint.middleware].sort((a, b) => (a.line - b.line) || (0,_canonical_js__WEBPACK_IMPORTED_MODULE_1__/* .cmpCodeUnit */ .kH)(a.name, b.name))) {
     if (mw.symbolId && byId.has(mw.symbolId)) enqueue(mw.symbolId, 0, mw.inherited ? 'inherited-middleware' : 'middleware', -1, [mw.symbolId], mw.resolution === 'resolved' ? 'exact' : 'name-match');
   }
   if (root.symbolId) {
@@ -3239,7 +3351,7 @@ function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
       if (e.to) {
         if (cur.depth + 1 > lim.maxDepth) { capped = true; continue; }
         enqueue(e.to, cur.depth + 1, 'callee', via, [...cur.path, e.to], 'exact');
-      } else if (_graph_schema_js__WEBPACK_IMPORTED_MODULE_1__/* .MATERIAL_REASONS */ .U2.has(e.unresolvedReason)) {
+      } else if (_graph_schema_js__WEBPACK_IMPORTED_MODULE_2__/* .MATERIAL_REASONS */ .U2.has(e.unresolvedReason)) {
         unknowns.push({ type: e.kind, site: `${sym.file}:${e.line}`, from: cur.symbolId, calleeName: e.calleeName, reason: e.unresolvedReason, material: true, candidates: e.candidates });
         // Candidates are shown to the model as CANDIDATES (low confidence); the unknown stays material regardless.
         if (e.candidates.length && e.candidates.length <= 3 && cur.depth + 1 <= lim.maxDepth) {
@@ -3300,11 +3412,14 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
   for (const dim of PROTECTION_DIMENSIONS) {
     const kinds = dim === 'ownership' ? ['ownership', 'tenant-scope'] : [dim];
     const ctl = facts.filter(f => f.category === 'control' && kinds.includes(f.kind));
-    const before = ctl.filter(f => firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens));
+    // A control whose answer is visibly thrown away (a predicate called as a bare statement) guards nothing.
+    const effective = (f) => f.rejectionSeen !== false;
+    const before = ctl.filter(f => effective(f) && (firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens)));
     const after = ctl.filter(f => firstSens !== null && f.effLine > firstSens);
     let state; let why;
     if (before.length) { state = 'present'; why = 'a control precedes the first sensitive operation'; }
     else if (after.length) { state = 'evaluated_and_ineffective'; why = 'every control of this kind runs after the first sensitive operation'; }
+    else if (ctl.length && ctl.every(f => !effective(f))) { state = 'evaluated_and_ineffective'; why = 'a check is called but nothing in view acts on its answer'; }
     else if (ctl.length) { state = 'evaluated_and_ineffective'; why = 'a control is present but is not ordered before the sensitive operation'; }
     else if (omittedWithControls) { state = 'omitted_due_to_budget'; why = 'a symbol holding a control was left out for size'; }
     else if (unknowns.some(u => u.material) || capped) { state = 'not_resolved'; why = 'an unresolved call or a traversal limit could hide a control'; }
@@ -3312,6 +3427,8 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
     else { state = 'not_present'; why = 'the resolved context is complete and contains no control of this kind'; }
     dims[dim] = {
       state, why, firstSensitiveLine: firstSens,
+      // How the control was established: 'observed' = the text shows it, 'inferred' = only a name suggests it. Only meaningful for `present`.
+      strength: state === 'present' ? (before.some(f => f.evidence === 'observed') ? 'observed' : 'inferred') : null,
       evidence: ctl.slice(0, 6).map(f => ({ file: f.file, line: f.line, kind: f.kind, evidence: f.evidence, basis: f.basis, order: firstSens === null ? 'no-sensitive-op' : f.effLine < firstSens ? 'before-sensitive' : f.effLine > firstSens ? 'after-sensitive' : 'same-step', rejectionSeen: f.rejectionSeen })),
     };
   }
@@ -3333,7 +3450,7 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
 /* harmony export */   sj: () => (/* binding */ verifyReview),
 /* harmony export */   z6: () => (/* binding */ runReviewOnce)
 /* harmony export */ });
-/* unused harmony exports CONCLUSIONS, LIKELIHOODS, resolveCitation, isRetryableError */
+/* unused harmony exports CONCLUSIONS, LIKELIHOODS, isLoopbackEndpoint, claimGrounded, resolveCitation, isRetryableError */
 /* harmony import */ var _util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(17097);
 /* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(11723);
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(45712);
@@ -3371,7 +3488,7 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
 const CONCLUSIONS = Object.freeze(['potential_issue', 'no_issue_observed', 'insufficient_evidence']);
 const LIKELIHOODS = Object.freeze(['low', 'medium', 'high']);
 const FORBIDDEN_MODEL_FIELDS = Object.freeze(['severity', 'proofTier', 'proof_tier', 'confirmation', 'confirmed', 'status', 'verdict', 'shipVerdict', 'ship_verdict', 'exploitability', 'cvss', 'exploit_confirmed', 'EXPLOIT_CONFIRMED']);
-const MAX_CITATION_SPAN = 200;
+const MAX_CITATION_SPAN = 60;
 const MAX_STR = 1200;
 const MAX_ITEMS = 24;
 
@@ -3409,8 +3526,10 @@ function buildReviewPrompt({ pack, entrypoints, packageTexts, contextHash }) {
   for (const g of pack.guidance) lines.push(`- ${g}`);
   lines.push('', 'OUTPUT (JSON, evidence listed first):', JSON.stringify(OUTPUT_SHAPE, null, 2), '');
   entrypoints.forEach((ep, i) => {
-    const fenced = (0,_util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__/* .fenceUntrusted */ .C0)(packageTexts[i], `context-${i + 1}`);
-    lines.push(`ENTRY POINT ${i + 1}: ${ep.label} (id ${ep.id})`);
+    // The label comes from a route string in the repository, so it is DATA: it goes inside the fence, sanitised, and never
+    // into the instruction text around it.
+    const fenced = (0,_util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__/* .fenceUntrusted */ .C0)(`ENTRY POINT LABEL (data): ${(0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .safeLabel */ .IW)(ep.label, 120)}\n${packageTexts[i]}`, `context-${i + 1}`);
+    lines.push(`ENTRY POINT ${i + 1} (id ${ep.id})`);
     lines.push(fenced.text, '');
   });
   const prompt = lines.join('\n');
@@ -3446,18 +3565,39 @@ function redactPackageText(text, { scanRoot }) {
 }
 
 /** Provider/model identity used in the job key, from the same resolver the rest of the discovery layer uses. */
-function describeModel() {
+function isLoopbackEndpoint(endpoint) {
+  if (!endpoint) return false;
+  const parts = String(endpoint).split(',').map(x => x.trim()).filter(Boolean);
+  if (!parts.length) return false;
+  return parts.every(u => {
+    try {
+      const h = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      return h === 'localhost' || h === '::1' || /^127\.\d+\.\d+\.\d+$/.test(h);
+    } catch { return false; }
+  });
+}
+
+function describeModel({ allowRemote = false } = {}) {
+  let m;
   try {
     const r = (0,_llm_validator_providers_js__WEBPACK_IMPORTED_MODULE_3__.resolveProvider)({ role: 'hunt' });
-    if (r.ok) return { provider: r.config.provider, model: r.config.model || process.env.AGENTIC_SECURITY_LLM_MODEL || 'endpoint-default', endpoint: r.config.endpoint || null };
+    if (r.ok) m = { provider: r.config.provider, model: r.config.model || process.env.AGENTIC_SECURITY_LLM_MODEL || 'endpoint-default', endpoint: r.config.endpoint || null };
   } catch { /* fall through */ }
-  const ep = process.env.AGENTIC_SECURITY_LLM_ENDPOINT || null;
-  return { provider: ep ? 'byo' : null, model: process.env.AGENTIC_SECURITY_LLM_MODEL || (ep ? 'endpoint-default' : null), endpoint: ep };
+  if (!m) {
+    const ep = process.env.AGENTIC_SECURITY_LLM_ENDPOINT || null;
+    m = { provider: ep ? 'byo' : null, model: process.env.AGENTIC_SECURITY_LLM_MODEL || (ep ? 'endpoint-default' : null), endpoint: ep };
+  }
+  // `remote` is true for any endpoint that is not loopback; an endpoint-less provider is judged remote too, since its host is not visible here.
+  const remote = m.provider ? !(m.provider === 'local' || isLoopbackEndpoint(m.endpoint)) : false;
+  return { ...m, remote, remoteApproved: allowRemote === true };
 }
 
 /** Evaluate the egress policy for every file that would appear in the prompt. Returns { allowed, reason }. */
 function checkEgressForFiles(files, { scanRoot, model }) {
   if (!model.endpoint) return { allowed: true, evaluated: false };
+  // Source bundles leave the machine only when the operator has said so. A loopback endpoint needs no approval; any
+  // other endpoint needs --allow-remote (or review.allowRemote), on top of the egress policy below, never instead of it.
+  if (model.remote && !model.remoteApproved) return { allowed: false, reason: 'remote-endpoint-not-approved (pass --allow-remote or set review.allowRemote after reviewing the egress policy)', file: files[0] || null, evaluated: false };
   for (const file of files) {
     const d = (0,_egress_policy_js__WEBPACK_IMPORTED_MODULE_2__/* .evaluateEgress */ .nn)({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file });
     if (!d.allowed) return { allowed: false, reason: d.reason, file, evaluated: true };
@@ -3493,14 +3633,29 @@ function normalizeCitations(list) {
   return { items, malformed };
 }
 
-/** A citation resolves when it is a real, bounded range inside a segment the reviewed package contained. */
+const CLAIM_STOPWORDS = new Set(['this', 'that', 'with', 'from', 'which', 'where', 'when', 'does', 'have', 'been', 'would', 'could', 'should', 'into', 'over', 'only', 'also', 'shows', 'show', 'line', 'lines', 'code', 'file', 'function']);
+
+/**
+ * A claim is grounded when at least one meaningful word in it (or the first five letters of a longer one, so "ownership"
+ * meets `ownerId`) appears in the lines it cites. This does not prove the claim is true; it stops a citation that points at
+ * real lines while describing something else, and an empty claim, from being accepted as evidence.
+ */
+function claimGrounded(claim, citedText) {
+  const hay = String(citedText).toLowerCase();
+  const words = (String(claim).toLowerCase().match(/[a-z_][a-z0-9_]{3,}/g) || []).filter(w => !CLAIM_STOPWORDS.has(w));
+  return words.some(w => hay.includes(w.length > 5 ? w.slice(0, 5) : w));
+}
+
+/** A citation resolves when it is a real, bounded range inside a segment the reviewed package contained, and its claim is about those lines. */
 function resolveCitation(c, segments, fileContents) {
   if (c.startLine < 1 || c.endLine < c.startLine || c.endLine - c.startLine > MAX_CITATION_SPAN) return 'range-invalid';
   const text = fileContents[c.file];
   if (typeof text !== 'string') return 'file-not-in-snapshot';
-  if (c.endLine > text.split('\n').length) return 'beyond-end-of-file';
+  const fileLines = text.split('\n');
+  if (c.endLine > fileLines.length) return 'beyond-end-of-file';
   const inside = segments.some(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
-  return inside ? null : 'outside-provided-context';
+  if (!inside) return 'outside-provided-context';
+  return claimGrounded(c.claim, fileLines.slice(c.startLine - 1, c.endLine).join('\n')) ? null : 'claim-not-grounded-in-cited-lines';
 }
 
 function decline(base, reasons, extra = {}) {
@@ -3589,13 +3744,24 @@ function verifyReview({ raw, pack, entrypoints, manifests, packageIndexes, fileC
       out.downgradedFrom = 'no_issue_observed';
       out.conclusion = 'insufficient_evidence';
       out.downgradeReason = 'no-mitigation-cited';
+    } else if (dim) {
+      // The cited mitigation must be a control the deterministic pass also recognised, and one the text actually shows:
+      // a model cannot clear a route by pointing at an arbitrary line or at a control known only from its name.
+      const recognised = mit.items.some(c => manifests.some(m => ((m.protection[dim] || {}).evidence || []).some(e => e.file === c.file && e.line >= c.startLine && e.line <= c.endLine)));
+      const onlyInferred = manifests.every(m => (m.protection[dim] || {}).state === 'present' && (m.protection[dim] || {}).strength === 'inferred');
+      if (!recognised || onlyInferred) {
+        out.downgradedFrom = 'no_issue_observed';
+        out.conclusion = 'insufficient_evidence';
+        out.downgradeReason = !recognised ? 'mitigation-not-a-recognised-control' : 'only-inferred-controls';
+      }
     }
   }
 
   // how the model's reading compares with the deterministic reading (metadata only; neither overrides the other)
   if (dim) {
     const states = manifests.map(m => m.protection[dim]?.state);
-    const present = states.every(s => s === 'present');
+    // `present` counts as agreement only when the control is shown by the text; a control known only from its name is neutral.
+    const present = manifests.every(m => m.protection[dim]?.state === 'present' && m.protection[dim]?.strength !== 'inferred');
     const absent = states.some(s => s === 'not_present' || s === 'evaluated_and_ineffective');
     out.deterministicProtection = { dimension: dim, states };
     out.deterministicAgreement = out.conclusion === 'potential_issue' ? (absent ? 'agrees' : present ? 'conflicts' : 'neutral') : (out.conclusion === 'no_issue_observed' ? (present ? 'agrees' : absent ? 'conflicts' : 'neutral') : 'neutral');

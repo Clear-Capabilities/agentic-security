@@ -17,17 +17,20 @@ import { checkEgressForFiles, pseudonymizer, stripUntrustedCommands } from '../.
 const NOW = new Date('2026-10-16T00:00:00Z');
 
 test('egress fails CLOSED: a policy check that throws, or returns nothing, is a deny, and nothing is sent', async () => {
-  const garbage = checkEgressForFiles(['src/app.js'], { scanRoot: os.tmpdir(), model: { provider: 'byo', model: 'm', endpoint: { not: 'a url' } } });
-  assert.equal(garbage.allowed, false); assert.equal(garbage.failedClosed, true); assert.match(garbage.reason, /egress-policy-error/);
+  const boom = { endpoint: 'http://127.0.0.1:9/v1', get provider() { throw new Error('policy exploded'); }, model: 'm' };
+  const garbage = checkEgressForFiles(['src/app.js'], { scanRoot: os.tmpdir(), model: boom });
+  assert.equal(garbage.allowed, false); assert.equal(garbage.failedClosed, true); assert.match(garbage.reason, /egress-policy-error: policy exploded/);
+  assert.equal(checkEgressForFiles(['a.js'], { scanRoot: os.tmpdir(), model: { provider: 'byo', model: 'm', endpoint: { not: 'a url' } } }).allowed, false, 'a nonsense endpoint is denied too');
   assert.deepEqual(checkEgressForFiles(['a.js'], { scanRoot: os.tmpdir(), model: { endpoint: null } }), { allowed: true, evaluated: false }, 'no endpoint means nothing leaves');
   const dir = tempProject('eval/corpus/c01/a');
   try {
     let calls = 0; const invoke = async () => { calls++; return '{}'; };
-    const run = await reviewWith(dir, invoke, { ctx: { model: { provider: 'byo', model: 'm', endpoint: { not: 'a url' } } } });
+    const run = await reviewWith(dir, invoke, { ctx: { model: boom } });
     assert.equal(calls, 0, 'the model was never called');
     const states = [...run.result.results.values()].map((r) => r.state);
     assert.ok(states.length > 0 && states.every((s) => s === 'skipped_by_policy'), states.join());
     assert.ok([...run.result.results.values()].every((r) => /egress policy denied/.test(r.reason)));
+    const states2 = [...run.result.results.values()].map((r) => r.reason); assert.ok(states2.every((x) => /policy exploded/.test(x)));
   } finally { cleanup(dir); }
 });
 
@@ -36,7 +39,7 @@ test('a remote endpoint with no approval is denied by the egress policy before a
   const realFetch = globalThis.fetch; let fetched = 0; globalThis.fetch = async () => { fetched++; throw new Error('network is not allowed in this test'); };
   try {
     let calls = 0;
-    const run = await reviewWith(dir, async () => { calls++; return '{}'; }, { ctx: { model: { provider: 'byo', model: 'm', endpoint: 'https://models.example.invalid/v1' } } });
+    const run = await reviewWith(dir, async () => { calls++; return '{}'; }, { ctx: { model: { provider: 'byo', model: 'm', endpoint: 'https://models.example.invalid/v1', remote: true, remoteApproved: false } } });
     assert.equal(calls, 0); assert.equal(fetched, 0);
     assert.ok([...run.result.results.values()].every((r) => r.state === 'skipped_by_policy'));
   } finally { globalThis.fetch = realFetch; cleanup(dir); }
@@ -92,22 +95,22 @@ test('a verified review carries model provenance, has its commands stripped, and
 });
 
 test('prompt anonymization: no real path reaches the model, the answer still verifies against the real snapshot, and the hash is of what was sent', async () => {
-  const dir = tempProject('eval/corpus/c01/a');
+  const dirA = tempProject('eval/corpus/c01/a'); const dirB = tempProject('eval/corpus/c01/a');
   try {
     const sent = [];
     const inner = scriptedReader();
     const spy = async (p) => { sent.push(p); return inner(p); };
-    const plain = await reviewWith(dir, spy);
+    const plain = await reviewWith(dirA, spy);
     const plainPrompt = sent[0]; assert.match(plainPrompt, /src\/app\.js/);
     sent.length = 0;
-    const anon = await reviewWith(dir, spy, { limits: { anonymizePrompts: true } });
-    assert.ok(sent.length >= 1);
+    const anon = await reviewWith(dirB, spy, { limits: { anonymizePrompts: true } });
+    assert.ok(sent.length >= 1, 'a fresh project, so the model is really asked');
     for (const p of sent) { assert.ok(!/src\/app\.js|app\.js/.test(p), 'a real path was sent'); assert.match(p, /f_[0-9a-f]{10}\.js/); }
     const ok = [...anon.result.results.values()].filter((r) => r.state === 'succeeded');
     assert.ok(ok.length >= 1); assert.ok(ok.every((r) => r.review.promptAnonymized === true));
     assert.ok(ok.some((r) => r.review.evidence.some((e) => e.file === 'src/app.js')), 'citations are mapped back to real paths and verified');
     assert.notEqual(ok[0].review.promptHash, [...plain.result.results.values()].find((r) => r.state === 'succeeded').review.promptHash, 'the hash covers the anonymized text');
-  } finally { cleanup(dir); }
+  } finally { cleanup(dirA); cleanup(dirB); }
   const p = pseudonymizer(['src/a.js', 'src/b.js']);
   assert.equal(p.toReal(p.toPseudo('see src/a.js and src/b.js')), 'see src/a.js and src/b.js'); assert.equal(p.size, 2);
 });

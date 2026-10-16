@@ -47,7 +47,46 @@ export function signatureText(lines, declLine, maxLines = 12) {
   for (let i = declLine - 1; i < Math.min(lines.length, declLine - 1 + maxLines); i++) { t += ' ' + lines[i]; if (/\)\s*(?:->[^:]*)?:\s*(?:#.*)?$/.test(lines[i])) break; }
   return t;
 }
-const OWNER_FIELD = /(?:owner|tenant|org(?:anization)?|account|created_?by|author|user_?id|userId|team|workspace)/i;
+// An owner/tenant FIELD NAME, not any word that merely contains one: `ownerId`, `owner_id`, `tenant`, `getOwnerId`
+// qualify; `owner_name` and `cols` do not (the trailing boundary rejects them).
+const OWNER_KEY = '\\w*?(?:[Oo]wner|[Tt]enant|[Oo]rg(?:ani[sz]ation)?|[Aa]ccount|[Cc]reated_?[Bb]y|[Aa]uthor|[Tt]eam|[Ww]orkspace)(?:_?(?:[Ii]d|ID))?\\b|[Uu]ser_?(?:[Ii]d|ID)\\b';
+const OWNER_KEY_RE = new RegExp(`(?<![\\w])(?:${OWNER_KEY})`);
+const TENANT_WORD = /tenant|org|workspace|team|account/i;
+// a SQL string comparing an owner column with a bound parameter: `owner_id = ?`, `owner_id = $1`, `tenant_id = :t`
+const SQL_OWNER_PLACEHOLDER = new RegExp(`(?<![\\w])(?:${OWNER_KEY})\\s*(?:=|\\bIN\\b|\\bin\\b)\\s*\\(?\\s*(?:\\?|\\$\\d+|:\\w+|%s|@\\w+)`);
+// an owner column compared with the principal written straight into the string: `owner_id = ${req.user.id}`
+const SQL_OWNER_INTERPOLATED = new RegExp(`(?<![\\w])(?:${OWNER_KEY})\\s*=\\s*(?:'?\\s*\\+\\s*|\\$\\{\\s*)(?:${QUALIFIED_PRINCIPAL.source}|${BARE_PRINCIPAL.source})`);
+const PRINCIPAL_GLOBAL = new RegExp(QUALIFIED_PRINCIPAL.source, 'g');
+const STRING_LITERAL = /(["'`])(?:\\.|(?!\1).)*\1/g;
+
+/**
+ * Is an owner/tenant FIELD actually tied to the principal in this text? The field and the principal must sit in the
+ * same clause (split on , ; && || braces), so `{ audit: req.user.id, cols: 'owner_name' }` is a decoy and
+ * `{ ownerId: req.user.id }` is a filter. A SQL string with an owner column against a bound placeholder counts when the
+ * principal is passed in the same call. Returns null or { level: 'qualified'|'bare', tenant }.
+ */
+export function ownerBinding(text, extra = null) {
+  let best = null;
+  const take = (level, tenant) => { if (!best || (level === 'qualified' && best.level !== 'qualified')) best = { level, tenant }; };
+  const code = text.replace(STRING_LITERAL, (m) => (SQL_OWNER_PLACEHOLDER.test(m) || SQL_OWNER_INTERPOLATED.test(m) ? m : '""'));
+  for (const clause of code.split(/[,;{}]|&&|\|\|/)) {
+    // the principal's own name (`req.user`, `current_user`) is not an owner field, so it is removed before looking for one
+    const forKey = clause.replace(STRING_LITERAL, ' ').replace(PRINCIPAL_GLOBAL, ' ');
+    if (!OWNER_KEY_RE.test(forKey)) continue;
+    const pr = principalIn(clause, extra);
+    if (pr) take(pr, TENANT_WORD.test(clause));
+  }
+  for (const m of text.match(STRING_LITERAL) || []) {
+    const placeholder = SQL_OWNER_PLACEHOLDER.test(m);
+    if (placeholder) {
+      const pr = principalIn(text, extra);
+      if (pr) take(pr, TENANT_WORD.test(m));
+    }
+    if (SQL_OWNER_INTERPOLATED.test(m)) take('qualified', TENANT_WORD.test(m));
+  }
+  return best;
+}
+
 const COMPARE = /(?:===|!==|==|!=|\.equals\(|\bis not\b|\bis\b|\bnot in\b|\bin\b|\.includes\(|\.has\()/;
 const REJECT = /(?:\breturn\b|\bthrow\b|\braise\b|\babort\b|\bexit\b|\b40[0-9]\b|\bforbidden\b|\bunauthori[sz]ed\b|\bHttpError\b|\breject\b|\bnot_?allowed\b|\bdeny\b|\bdenied\b|throwError|\bfinish\b|\bhalt\b|\bPermissionDenied\b|\bAccessDenied\b|status\()/i;
 
@@ -57,6 +96,13 @@ const SENSITIVE_NAME = /(?:^|[.:])(?:query|queryOne|queryRow|exec|execute|execut
 const DB_RECEIVER = /(?:^|\b)(?:db|database|conn|connection|pool|client|cursor|session|repo|repository|dao|model|models|collection|table|prisma|knex|sequelize|orm|store|objects|manager|em|entityManager|mongo|redis|cache|conn|stmt|statement|fs|child_process|cp|axios|http|https|requests|httpx|got|superagent|Database|Persist|Yesod|System)\b/;
 const SQL_TEXT = /\b(?:select\s[\s\S]{1,120}\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
 const HS_SENSITIVE = /(?:^|\.)(?:runDB|selectList|selectFirst|getBy|getJust|insert_?|insertEntity|update|updateWhere|delete|deleteWhere|replace|upsert|query|query_|execute|execute_|readFile|writeFile|callProcess|readProcess)$|^(?:Database\.|System\.Process\.|System\.Directory\.)/;
+
+// Names that answer a question rather than enforce a rule.
+const PREDICATE_NAME = /^(?:is|has|can|cannot|allow|owned|belongs)/i;
+function bareCallStatement(trimmedLine, name) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^(?:await\\s+)?${esc}\\s*\\(`).test(trimmedLine) && /\)\s*;?\s*(?:\/\/.*|\/\*.*)?$/.test(trimmedLine);
+}
 
 const WRITE_VERB = /(?:insert|update|upsert|delete|remove|destroy|save|create|write|append|unlink|rm|exec|spawn|system|popen|post|put|patch|replace)/i;
 
@@ -180,8 +226,12 @@ export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
     }
     for (const name of calls) {
       if (AUTH_NAME.test(name) && !/^(?:if|for|while|switch|catch|function)$/.test(name)) {
-        const rej = REJECT.test(lines.slice(ln - 1, ln + 3).join(' ')) || /^(?:require|ensure|enforce|assert|authori[sz]e|authenticate|protect)/i.test(name.split(/[.:]/).pop());
-        push({ line: ln, category: 'control', kind: kindOfAuthName(name), subkind: null, evidence: 'inferred', basis: 'call-name', rejectionSeen: rej, text: clip(raw) });
+        const lastSeg = name.split(/[.:]/).pop();
+        // A predicate (isOwner, hasRole, can) only returns an answer. Called as a bare statement its answer is thrown away,
+        // so it guards nothing, whatever the lines around it say.
+        const discarded = !haskell && PREDICATE_NAME.test(lastSeg) && bareCallStatement(t, name);
+        const rej = !discarded && (REJECT.test(lines.slice(ln - 1, ln + 3).join(' ')) || /^(?:require|ensure|enforce|assert|authori[sz]e|authenticate|protect)/i.test(lastSeg));
+        push({ line: ln, category: 'control', kind: kindOfAuthName(name), subkind: null, evidence: 'inferred', basis: discarded ? 'call-name-result-discarded' : 'call-name', rejectionSeen: rej, text: clip(raw) });
       }
       const last = name.split(/[.:]/).pop();
       const recv = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : '';
@@ -197,9 +247,9 @@ export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
         push({ line: ln, category: 'sensitive', kind: sub, subkind: verb, evidence: 'observed', basis: 'call-name', rejectionSeen: null, text: clip(raw) });
         // a data operation whose own statement mentions the principal and an owner/tenant field is scoped by it
         const stmt = statementAt(lines, ln);
-        const pr = sub.startsWith('data-') && OWNER_FIELD.test(stmt) ? principalIn(stmt, extraPrincipal) : null;
+        const pr = sub.startsWith('data-') ? ownerBinding(stmt, extraPrincipal) : null;
         if (pr) {
-          push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(stmt) ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr === 'qualified' ? 'observed' : 'inferred', basis: pr === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
+          push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
         }
       }
     }
@@ -207,17 +257,17 @@ export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
       const verb = /\b(?:insert|update|delete)\b/i.test(raw) ? 'write' : 'read';
       push({ line: ln, category: 'sensitive', kind: `data-${verb}`, subkind: verb, evidence: 'observed', basis: 'sql-text', rejectionSeen: null, text: clip(raw) });
       const stmt = statementAt(lines, ln);
-      const pr = OWNER_FIELD.test(stmt) ? principalIn(stmt, extraPrincipal) : null;
+      const pr = ownerBinding(stmt, extraPrincipal);
       if (pr) {
-        push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(stmt) ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr === 'qualified' ? 'observed' : 'inferred', basis: pr === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
+        push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
       }
     }
 
     // a resource field compared with the principal: the ownership check itself
-    const cmpPr = COMPARE.test(raw) && OWNER_FIELD.test(raw) && /\b(?:if|unless|assert|when|guard|require|expect|where|elif|&&|\|\|)\b|\?/.test(raw) ? principalIn(raw, extraPrincipal) : null;
+    const cmpPr = COMPARE.test(raw) && /\b(?:if|unless|assert|when|guard|require|expect|where|elif|&&|\|\|)\b|\?/.test(raw) ? ownerBinding(raw, extraPrincipal) : null;
     if (cmpPr) {
       const rej = REJECT.test(lines.slice(ln - 1, ln + 3).join(' '));
-      push({ line: ln, category: 'control', kind: /tenant|org|workspace|team|account/i.test(raw) ? 'tenant-scope' : 'ownership', subkind: null, evidence: cmpPr === 'qualified' ? 'observed' : 'inferred', basis: cmpPr === 'qualified' ? 'comparison' : 'comparison-bare-identifier', rejectionSeen: rej, text: clip(raw) });
+      push({ line: ln, category: 'control', kind: cmpPr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: cmpPr.level === 'qualified' ? 'observed' : 'inferred', basis: cmpPr.level === 'qualified' ? 'comparison' : 'comparison-bare-identifier', rejectionSeen: rej, text: clip(raw) });
     }
   }
   // A function whose NAME says it is a guard and whose BODY shows a rejection path is a guard function. This is
