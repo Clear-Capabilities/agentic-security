@@ -57,7 +57,8 @@ const chunkOk = (dir, c) => { const j = readJson(chunkFile(dir, c.offset)); retu
  * Run every chunk that has no result yet. `exec(argv, {cwd, wallMs, logPath})` defaults to the supervised runner and is injectable for tests.
  * Returns the progress record. A failed or timed-out chunk is recorded and skipped; `--run <id>` resumes and retries it once more.
  */
-export async function runChunks(root, runId, { chunkTimeoutMs = 90 * 60 * 1000, materialiseTimeoutMs = 40 * 60 * 1000, exec = null, measureRoot = null, onChunk = () => {} } = {}) {
+export async function runChunks(root, runId, { chunkTimeoutMs = 90 * 60 * 1000, materialiseTimeoutMs = 40 * 60 * 1000, exec = null, measureRoot = null, onChunk = () => {}, maxMinutes = null } = {}) {
+  const deadline = maxMinutes ? Date.now() + maxMinutes * 60000 : null;
   const dir = join(RUNS_DIR(root), runId);
   const plan = readJson(join(dir, 'plan.json'));
   if (!plan) throw new Error(`no plan for run ${runId}`);
@@ -69,6 +70,7 @@ export async function runChunks(root, runId, { chunkTimeoutMs = 90 * 60 * 1000, 
   });
   const body = async (measureDir) => {
     for (const c of plan.chunks) {
+      if (deadline && Date.now() > deadline && !chunkOk(dir, c)) { progress.pausedAt = nowIso(); progress.pausedBecause = `the ${maxMinutes} minute budget of this invocation was used; re-run with --run ${runId} to continue`; atomicWriteJson(progressPath, progress); break; }
       if (chunkOk(dir, c)) { progress.chunks[c.index] = { ...(progress.chunks[c.index] || {}), state: 'done', offset: c.offset, limit: c.limit }; continue; }
       const rec = { state: 'running', offset: c.offset, limit: c.limit, startedAt: nowIso(), attempts: (progress.chunks[c.index]?.attempts || 0) + 1 };
       progress.chunks[c.index] = rec; atomicWriteJson(progressPath, progress);
@@ -153,7 +155,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (a.includes('--run')) {
       let id = arg(a, '--run');
       if (!id || id.startsWith('--')) { id = (await planRun(root, { perLanguage: Number(arg(a, '--per-language', 30)), chunk: Number(arg(a, '--chunk', 20)) })).runId; }
-      const progress = await runChunks(root, id, { chunkTimeoutMs: Number(arg(a, '--chunk-timeout-min', 90)) * 60000, onChunk: (c, r) => console.log(`chunk ${c.index} ${r.state} (${c.offset}+${c.limit})`) });
+      const progress = await runChunks(root, id, { chunkTimeoutMs: Number(arg(a, '--chunk-timeout-min', 90)) * 60000, onChunk: (c, r) => console.log(`chunk ${c.index} ${r.state} (${c.offset}+${c.limit})`), maxMinutes: Number(arg(a, '--max-minutes', 0)) || null });
       const merged = await mergeRun(root, id);
       console.log(`run ${id}: ${merged.coverage.scored} scored, ${merged.coverage.unscored} unscored, ${merged.coverage.unaccounted} unaccounted; chunks missing: ${merged.chunks.missing.length}`);
       void progress;
