@@ -19,6 +19,7 @@ import { runScan } from '../../scanner/src/runScan.js';
 import { signLastScan } from '../../scanner/src/posture/integrity.js';
 import { verifyPatch } from '../../scanner/src/fix/verify-patch.js';
 import { sandboxAvailable } from '../../scanner/src/sandbox/index.js';
+import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, 'baseline.json');
@@ -39,6 +40,7 @@ async function setup(c) {
 }
 
 export async function runBench({ only = null } = {}) {
+  await disableStateWrites();
   const rows = [];
   const unscored = [];
   const canReplay = sandboxAvailable();

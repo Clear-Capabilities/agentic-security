@@ -16,6 +16,7 @@
 // a blank line above a function does not change any id in it. Ties between otherwise identical entities (two `exec(x)` in one function) are
 // broken by their order of appearance in that function.
 import { createHash } from 'node:crypto';
+import { analysisLimits } from '../dataflow/analysis-limits.js';
 
 export const SEMANTIC_GRAPH_SCHEMA = 'agentic-security/semantic-graph';
 export const SEMANTIC_GRAPH_VERSION = '1.0.0';
@@ -23,8 +24,8 @@ export const SUPPORTED_MAJOR = 1;
 
 export const ENTITY_LISTS = Object.freeze(['symbols', 'callSites', 'allocations', 'fieldAccesses', 'valueOrigins', 'serviceBoundaries', 'storageEdges', 'sanitizers', 'guards']);
 export const CONFIDENCE_TIERS = Object.freeze(['observed', 'inferred', 'unresolved']);
-export const SYMBOL_KINDS = Object.freeze(['module', 'function', 'class', 'variable', 'parameter']);
-export const ORIGIN_KINDS = Object.freeze(['parameter', 'call-result', 'literal', 'member', 'concat', 'object', 'array', 'function', 'identifier', 'unknown']);
+const SYMBOL_KINDS = Object.freeze(['module', 'function', 'class', 'variable', 'parameter']);
+const ORIGIN_KINDS = Object.freeze(['parameter', 'call-result', 'literal', 'member', 'concat', 'object', 'array', 'function', 'identifier', 'unknown']);
 
 const ID_PREFIX = Object.freeze({ symbols: 'sym', callSites: 'call', allocations: 'alloc', fieldAccesses: 'field', valueOrigins: 'orig', serviceBoundaries: 'svc', storageEdges: 'store', sanitizers: 'san', guards: 'guard' });
 
@@ -227,5 +228,7 @@ export function buildSemanticGraph(projectIR, meta = {}) {
     'a call resolves only to a same-file function of the same name; imports, re-exports and methods are unresolved until E2-02',
     'heap, alias and closure facts are not in the IR, so field accesses are syntactic, not points-to results',
   ];
-  return { schema: SEMANTIC_GRAPH_SCHEMA, schemaVersion: SEMANTIC_GRAPH_VERSION, producer: { layer: 'ir-v1', engineVersion: meta.engineVersion ?? null }, ...g, coverage, limits };
+  // Dynamic constructs the analysis cannot resolve, per function (E2-03): the graph says where precision was given up, instead of leaving it implicit.
+  const dynamicFeatures = analysisLimits(projectIR).map((l) => ({ symbol: symByQid.get(`${l.qid}@${(projectIR.perFile[l.file].functions.find((f) => stripLine(f.qid) === l.qid) || {}).line}`) ?? null, file: l.file, line: l.line, kind: l.kind, detail: l.detail, effect: l.effect }));
+  return { schema: SEMANTIC_GRAPH_SCHEMA, schemaVersion: SEMANTIC_GRAPH_VERSION, producer: { layer: 'ir-v1', engineVersion: meta.engineVersion ?? null }, ...g, coverage, limits, dynamicFeatures };
 }

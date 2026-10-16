@@ -44,7 +44,7 @@
 
 import { matchSource, matchSinkOrSanitizer, matchMemberWriteSink, matchAnnotationParams } from './catalog.js';
 import { functionRecord } from '../ir/callgraph.js';
-import { accessPathOf, isCoveredBy, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
+import { accessPathOf, isCoveredBy, hasTaintedDescendant, addPath, removePathAndDescendants, joinSets as joinAccessSets, setsEqual as accessSetsEqual, pathIsCoveredByPrefix } from './access-paths.js';
 import { aliasesForVar } from './points-to.js';
 import { higherOrderTaintFlow } from './higher-order.js';
 import { SummaryCache, entryStateFromCall } from './summaries.js';
@@ -387,9 +387,9 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
   if (!target) return false;
   const { qid, fn } = target;
   const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
-  const entry = paramNames.length
+  const entry = _withCapturedTaint(paramNames.length
     ? entryStateFromCall(paramNames, argExprs || [], state, argTaint || ((a) => exprTaint(a, state, callContext)))
-    : new Set();
+    : new Set(), fn, state, callContext);
   let sum = callContext._summaryCache.get(qid, entry);
   if (!sum && fn && fn.cfg) {
     sum = callContext._summaryCache.compute(qid, entry, () => {
@@ -430,18 +430,38 @@ function _nestedCallReturnTainted(calleeExpr, argExprs, state, callContext, argT
 // after its LAST '.' and checking that prefix directly against the access-
 // path lattice via `isCoveredBy` (handles both a bare var and a longer
 // chain, e.g. "req.session.user.toString" -> receiver "req.session.user").
-function _calleeReceiverTainted(callee, state, callContext) {
+function _calleeReceiverTainted(callee, state, callContext, args) {
   if (!callee) return false;
+  // E2-03: `m.get('k')` reads ONE key of a keyed collection. It is tainted when the collection as a whole is, or when that key was set
+  // tainted (`m.set('k', v)` records `m.$k`); a sibling key's taint (`m.$other`) does not reach it. Non-path receivers, and receivers that
+  // are themselves sources, take the generic route below.
+  if (typeof callee === 'object' && callee.kind === 'member' && callee.prop === 'get' && Array.isArray(args) && args.length === 1
+      && args[0] && args[0].kind === 'literal' && typeof args[0].value === 'string') {
+    const recvPath = accessPathOf(callee.object);
+    if (recvPath) return exprIsSource(callee.object, callContext) ? true : (isCoveredBy(state, recvPath) || isCoveredBy(state, `${recvPath}.$${args[0].value}`));
+  }
   if (typeof callee === 'string') {
     const idx = callee.lastIndexOf('.');
     if (idx <= 0) return false;
-    return isCoveredBy(state, callee.slice(0, idx));
+    return isCoveredBy(state, callee.slice(0, idx)) || hasTaintedDescendant(state, callee.slice(0, idx));
   }
   if (callee.kind === 'member' && callee.object) {
+    // A tainted FIELD below the receiver (`o.cmd`) taints a call on the whole receiver only for methods that read the container's contents
+    // (`arr.join()`, `list.map(..)`); on an arbitrary object it does not, because the method need not touch that field (object-instance
+    // sensitivity: see the single-field getter handling).
+    const recvPath = accessPathOf(callee.object);
+    if (recvPath && typeof callee.prop === 'string') {
+      if (exprIsSource(callee.object, callContext) || isCoveredBy(state, recvPath)) return true;
+      if (_CONTAINER_READ.test(callee.prop)) return hasTaintedDescendant(state, recvPath);
+      // `m.get(k)` with a non-literal key reads any key a literal `m.set('x', v)` recorded as `m.$x`
+      if (callee.prop === 'get') { const kp = `${recvPath}.$`; for (const st of state) if (typeof st === 'string' && st.startsWith(kp)) return true; }
+      return false;
+    }
     return exprTaint(callee.object, state, callContext);
   }
   return false;
 }
+const _CONTAINER_READ = /^(?:join|map|filter|flatMap|flat|slice|concat|reduce|reduceRight|find|findLast|findIndex|some|every|forEach|at|toString|toSorted|toReversed|entries|values|keys|pop|shift|sort|reverse|includes|indexOf|lastIndexOf)$/;
 
 // Next-gen taint capability #3 — object-instance field taint via method
 // calls (JS/TS). `classTaintedFields` (below, in the pre-pass) already
@@ -534,7 +554,8 @@ function exprTaint(expr, state, callContext) {
   // shorter prefix in the state covers it. This is what makes
   // `user.password` distinguishable from `user.email`.
   const ap = accessPathOf(expr);
-  if (ap !== null) return isCoveredBy(state, ap);
+  // E2-03: a whole-value read of `o` is tainted when any field below it is (`o.cmd`); a sibling read (`o.safe`) is not.
+  if (ap !== null) return isCoveredBy(state, ap) || hasTaintedDescendant(state, ap);
   switch (expr.kind) {
     case 'literal':           return false;
     case 'binary':
@@ -603,7 +624,7 @@ function exprTaint(expr, state, callContext) {
       // receiver taint matters exactly as much as `tainted.toString()`'s, and
       // this is already OR'd with argsTainted so it only WIDENS recall,
       // matching this engine's recall-preserving precedent everywhere else.
-      const receiverTainted = _calleeReceiverTainted(expr.callee, state, callContext);
+      const receiverTainted = _calleeReceiverTainted(expr.callee, state, callContext, expr.args);
       return argsTainted || nestedTainted || receiverTainted;
     }
     case 'unknown':           return false;
@@ -792,6 +813,77 @@ function _isInternalModuleCall(calleeExpr, callContext) {
   const mi = callContext && callContext._callGraph && callContext._callGraph.moduleIndex;
   if (!mi || !_currentFile) return false;
   try { return mi.resolveCall(_currentFile, text).status === 'resolved'; } catch { return false; }
+}
+
+// The field-by-field literal rules use the access paths parser-js.js produces (`o.cmd`, `arr.0`). The other parsers lower subscripts and
+// comprehensions to different path shapes (`d.[]`), so the rules apply to JavaScript and TypeScript only; elsewhere the whole-value rule is unchanged.
+const _JS_FILE = /\.(?:[cm]?[jt]sx?)$/i;
+function _isJsFile(file) { return typeof file === 'string' && _JS_FILE.test(file); }
+
+function _arrayLiteralTaint(expr, prefix, state, callContext) {
+  const out = { whole: false, paths: [] };
+  (expr.elements || []).forEach((el, i) => {
+    if (!el) return;
+    const path = prefix ? `${prefix}.${i}` : String(i);
+    if (el.kind === 'object') {
+      const inner = _objectLiteralTaint(el, path, state, callContext);
+      if (inner.whole) out.paths.push(path);
+      out.paths.push(...inner.paths);
+    } else if (el.kind === 'array' && !(el.spreads && el.spreads.length)) {
+      const inner = _arrayLiteralTaint(el, path, state, callContext);
+      if (inner.whole) out.paths.push(path);
+      out.paths.push(...inner.paths);
+    } else if (exprTaint(el, state, callContext)) out.paths.push(path);
+  });
+  return out;
+}
+
+function _objectLiteralTaint(expr, prefix, state, callContext) {
+  const out = { whole: false, paths: [] };
+  for (const p of expr.props || []) {
+    if (!p || !p.value) continue;
+    if (p.spread) {
+      // `{ ...a }` copies the fields of `a`: a tainted FIELD of `a` stays that field, a wholly tainted `a` (or a spread of something that is not
+      // a plain variable, such as a request object) has unknown keys and taints everything.
+      const sp = accessPathOf(p.value);
+      if (sp && !isCoveredBy(state, sp) && !exprIsSource(p.value, callContext)) {
+        for (const st of state) if (typeof st === 'string' && st.startsWith(`${sp}.`)) out.paths.push(prefix ? `${prefix}.${st.slice(sp.length + 1)}` : st.slice(sp.length + 1));
+      } else if (exprTaint(p.value, state, callContext)) out.whole = true;
+      continue;
+    }
+    if (p.key === '*' || typeof p.key !== 'string') { if (exprTaint(p.value, state, callContext)) out.whole = true; continue; }
+    const path = prefix ? `${prefix}.${p.key}` : p.key;
+    // a later explicit key overrides whatever an earlier spread brought in under that name
+    out.paths = out.paths.filter((q) => q !== path && !q.startsWith(`${path}.`));
+    if (p.value.kind === 'object') {
+      const inner = _objectLiteralTaint(p.value, path, state, callContext);
+      if (inner.whole) out.paths.push(path); // unknown keys below: the whole sub-object
+      out.paths.push(...inner.paths);
+    } else if (exprTaint(p.value, state, callContext)) out.paths.push(path);
+  }
+  return out;
+}
+
+// E2-03: a function defined INSIDE the one being analysed (`const f = () => exec(c)`) reads the caller's variables without receiving them as
+// parameters. When such a callee is entered, the caller's tainted paths whose root is not one of the callee's own parameters are carried in as
+// its entry state, so `c` is tainted inside `f`. Lexical nesting comes from the qid (`file::<enclosing function>::name@line`); a callee defined
+// at module level or elsewhere gets nothing extra. An assignment inside the callee still kills the taint, as it would anywhere.
+function _withCapturedTaint(entry, fn, state, callContext) {
+  if (!fn || typeof fn.qid !== 'string' || !callContext || !callContext._currentFnQid) return entry;
+  const callee = fn.qid.split('::');
+  const caller = String(callContext._currentFnQid).split('::');
+  if (callee.length < 3 || caller.length < 3 || callee[0] !== caller[0]) return entry;
+  const callerName = caller[caller.length - 1].replace(/@\d+$/, '');
+  if (callee[1] !== callerName || callee[1] === '<module>') return entry;
+  const params = new Set(fn.params || []);
+  let out = entry;
+  for (const p of state) {
+    const root = String(p).split('.')[0];
+    if (params.has(root)) continue;
+    if (out === entry) out = new Set(entry);
+    out.add(p);
+  }
+  return out;
 }
 
 function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
@@ -1461,9 +1553,9 @@ function step(node, stateIn, callContext) {
           const callerTainted = newState;
           const callArgs = (node.source.args || []);
           const paramNames = (fn && Array.isArray(fn.params)) ? fn.params : [];
-          const entry = paramNames.length
+          const entry = _withCapturedTaint(paramNames.length
             ? entryStateFromCall(paramNames, callArgs, callerTainted, (a) => exprTaint(a, callerTainted, callContext))
-            : new Set();
+            : new Set(), fn, callerTainted, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           if (!sum && fn && fn.cfg) {
             // Lazy compute under this entry state. Use a fresh ctx so we
@@ -1563,6 +1655,25 @@ function step(node, stateIn, callContext) {
           }
         }
       }
+      if (target && node.source && node.source.kind === 'array' && !src && _isJsFile(_currentFile) && !(node.source.spreads && node.source.spreads.length)) {
+        // E2-03: an array literal without spread elements is assigned index by index, so `[tainted, 'ls']` leaves `arr[1]` clean. Reading the
+        // array as a whole (`arr.join()`, passing `arr`) is still tainted through the descendant rule. A literal with a spread keeps the whole-array rule.
+        const lit = _arrayLiteralTaint(node.source, '', newState, callContext);
+        newState = removePathAndDescendants(newState, target);
+        if (lit.whole) newState = _addPathAliasAware(newState, target, callContext);
+        for (const p of lit.paths) newState = _addPathAliasAware(newState, `${target}.${p}`, callContext);
+        return { state: newState, findings };
+      }
+      if (target && node.source && node.source.kind === 'object' && !src && _isJsFile(_currentFile)) {
+        // E2-03: an object literal is assigned FIELD BY FIELD. `{ cmd: tainted, safe: 'ls' }` taints `o.cmd` and leaves `o.safe` clean; a spread of
+        // a tainted value or a computed key (whose property is unknown) taints the whole object. The literal is a fresh value, so whatever `o`
+        // held before is replaced, which also makes a later `o.cmd = 'ls'` an effective overwrite.
+        const lit = _objectLiteralTaint(node.source, '', newState, callContext);
+        newState = removePathAndDescendants(newState, target);
+        if (lit.whole) newState = _addPathAliasAware(newState, target, callContext);
+        for (const p of lit.paths) newState = _addPathAliasAware(newState, `${target}.${p}`, callContext);
+        return { state: newState, findings };
+      }
       if (target && _isCoercionCall(node.source)) {
         // See _isCoercionCall's header comment: a real type coercion kills
         // taint outright, unconditionally of sink family — the one case in
@@ -1607,9 +1718,9 @@ function step(node, stateIn, callContext) {
         const qid = _resolvedTarget && _resolvedTarget.qid;
         if (typeof qid === 'string' && fn && Array.isArray(fn.params)) {
           const paramNames = fn.params;
-          const entry = paramNames.length
+          const entry = _withCapturedTaint(paramNames.length
             ? entryStateFromCall(paramNames, node.args || [], state, (a) => exprTaint(a, state, callContext))
-            : new Set();
+            : new Set(), fn, state, callContext);
           let sum = callContext._summaryCache.get(qid, entry);
           // FR-SEM-2: context-sensitive lazy compute at the plain-call site,
           // mirroring the assign-call site. On a miss for a NON-empty entry,
@@ -1759,7 +1870,15 @@ function step(node, stateIn, callContext) {
             if (_end >= 0) _recv = _segs.slice(0, _end + 1).join('.');
           }
         }
-        if (_recv) state.add(_recv);
+        if (_recv) {
+          // E2-03: `m.set('k', v)` with a literal key taints that key only, so a later `m.get('other')` stays clean.
+          const keyArg = node.args && node.args[0];
+          const onlyValueTainted = argTaints.length >= 2 && !argTaints[0] && argTaints.slice(1).some(Boolean);
+          if (node.callee && node.callee.kind === 'member' && node.callee.prop === 'set' && node.args && node.args.length === 2
+              && keyArg && keyArg.kind === 'literal' && typeof keyArg.value === 'string' && onlyValueTainted && accessPathOf(node.callee.object) === _recv) {
+            state.add(`${_recv}.$${keyArg.value}`);
+          } else state.add(_recv);
+        }
       }
       findings.push(..._sinkFindingsForCall(node.callee, node.args, cat, argTaints, state, callContext, node.line, node.kwargs).findings);
       findings.push(..._nestedSinkFindings(node.args, state, callContext, node.line));
@@ -1777,7 +1896,7 @@ function step(node, stateIn, callContext) {
         const dot = callee.lastIndexOf('.');
         if (dot <= 0) return null;
         const recv = callee.slice(0, dot);
-        const recvTainted = isCoveredBy(state, recv);
+        const recvTainted = isCoveredBy(state, recv) || hasTaintedDescendant(state, recv);
         // higherOrderTaintFlow requires a flattened STRING callee (its own
         // `typeof callee !== 'string'` guard) — passing the raw `node` here
         // handed it a JS/TS structured callee expr ({kind:'member',...})

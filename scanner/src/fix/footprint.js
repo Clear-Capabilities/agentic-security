@@ -44,9 +44,12 @@ export function checkFootprint({ before, after, cwe = null, intentionalRemoval =
     const kb = kindsOf(b); const ka = kindsOf(afterText);
     const held = required ? kb.filter((k) => required.includes(k)) : kb;
     if (held.length) observed = true;
-    const lost = held.filter((k) => !ka.includes(k));
+    let lost = held.filter((k) => !ka.includes(k));
     const emptied = codeLines(afterText) === 0 && codeLines(b) > 0;
     const denialOnly = lost.length > 0 && DENIAL.test(stripComments(afterText)) && !DENIAL.test(stripComments(b));
+    // With no known weakness class, losing an operation kind is not by itself a defect (an auth fix may legitimately drop a response path).
+    // What marks feature REMOVAL is the signature of it: the file emptied, or the lost operation replaced by a deny response.
+    if (!required && !emptied && !denialOnly) lost = [];
     const shrunk = codeLines(b) >= 6 && codeLines(afterText) <= Math.floor(codeLines(b) * 0.25);
     files.push({ file: rel, kindsBefore: kb, kindsAfter: ka, lost, emptied, denialOnly, shrunk });
     if (emptied) { lost.push('everything'); observed = true; }

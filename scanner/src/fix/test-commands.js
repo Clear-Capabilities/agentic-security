@@ -11,9 +11,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectTestCommand } from '../posture/test-runner.js';
+import { STATE_DIR_NAME } from '../posture/state-dir.js';
 
 const MAX_COPY_BYTES = 200 * 1024 * 1024;
-const SKIP_DIRS = new Set(['.git', '.agentic-security', 'node_modules', 'target', 'dist', 'build', '.venv', '__pycache__', 'bin', 'obj']);
+const SKIP_DIRS = new Set(['.git', STATE_DIR_NAME, 'node_modules', 'target', 'dist', 'build', '.venv', '__pycache__', 'bin', 'obj']);
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 const has = (root, rel) => { try { return fs.existsSync(path.join(root, rel)); } catch { return false; } };

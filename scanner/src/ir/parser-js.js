@@ -182,7 +182,13 @@ function exprOf(n) {
         return { key: resolveObjectKey(p), value: exprOf(p.value) };
       }).filter(Boolean),
     };
-    case 'ArrayExpression':   return { kind: 'array', elements: (n.elements || []).map(exprOf) };
+    case 'ArrayExpression': {
+      // `spreads` is additive and present only when an element is `...x`: the position of every later element is then unknown, which the
+      // engine needs in order to treat the literal index by index (E2-03). Consumers that ignore it see the same shape as before.
+      const spreads = [];
+      (n.elements || []).forEach((el, i) => { if (el && el.type === 'SpreadElement') spreads.push(i); });
+      return spreads.length ? { kind: 'array', elements: (n.elements || []).map(exprOf), spreads } : { kind: 'array', elements: (n.elements || []).map(exprOf) };
+    }
     case 'SpreadElement':     return exprOf(n.argument);
     case 'ThisExpression':    return { kind: 'ident', name: '_this_' };
     // Taint-recall PRD (80%) Tier 3: JSX had ZERO IR modeling at all — every

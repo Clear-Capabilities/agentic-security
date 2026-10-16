@@ -144,6 +144,7 @@ export const ARTIFACT_REGISTRY = [
   { name: 'findings.csv', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'llm-cache', kind: 'dir', classification: 'generated', retentionClass: 'cache' },
   { name: 'fix-history', kind: 'dir', classification: 'generated', retentionClass: 'backup' },
+  { name: 'fix-batches', kind: 'dir', classification: 'generated', retentionClass: 'backup' },
   { name: 'verifier-runs', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'src/posture/verifier.js (recordVerifierRun)', note: 'Adversarial premortem Q1 (2026-09-07): one JSON record per `agentic-security verify` run, added so module:verifier (nist-800-171-r3.json 03.12.01, nist-csf-2.json RC.RP) has a real artifact to check for instead of a name in the ARTIFACT table nothing ever wrote.' },
   { name: 'fix-plans', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
   // The following were confirmed missing from the old hardcoded WIPE/
