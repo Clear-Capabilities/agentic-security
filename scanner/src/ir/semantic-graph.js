@@ -214,13 +214,24 @@ export function buildSemanticGraph(projectIR, meta = {}) {
     }
   }
 
+  // E2-07: service relationships are opt-in. A caller that ran dataflow/service-edges.js passes the result as `meta.serviceEdges`; HTTP and
+  // messaging relationships become `serviceBoundaries`, persistence relationships become `storageEdges`, and relationships with no counterpart
+  // are kept as boundaries with `to: null` and unresolved confidence. Without it both lists stay schema-only, as before.
+  const se = meta.serviceEdges && meta.serviceEdges.optedIn ? meta.serviceEdges : null;
+  if (se) {
+    const tier = (e) => (e === 'observed' ? 'observed' : e === 'inferred' ? 'inferred' : 'unresolved');
+    for (const e of se.edges) {
+      const list = e.kind === 'persistence' ? g.storageEdges : g.serviceBoundaries;
+      list.push({ id: `${e.kind === 'persistence' ? 'store' : 'svc'}:${e.id.slice('svcedge:'.length)}`, kind: e.kind, from: e.from, to: e.to, via: e.via, ...loc(e.from.file, e.from.line), evidence: e.evidence, confidence: { tier: tier(e.evidence), basis: e.basis } });
+    }
+    for (const u of se.unknown) g.serviceBoundaries.push({ id: `svc:${h16(['unknown', u.service, u.file, u.kind, u.reason])}`, kind: u.kind, from: { service: u.service, file: u.file, line: u.line }, to: null, via: null, ...loc(u.file, u.line), evidence: 'unknown', confidence: { tier: 'unresolved', basis: u.reason } });
+  }
   const SCHEMA_ONLY = {
-    serviceBoundaries: 'the IR carries no service-boundary facts; cross-service edges live in dataflow/cross-service-taint.js and are folded in by E2-07',
-    storageEdges: 'the IR carries no persistence facts; ORM write sinks live in dataflow/orm-write-catalog.js and are folded in by E2-07',
+    ...(se ? {} : { serviceBoundaries: 'opt-in: pass meta.serviceEdges (dataflow/service-edges.js) with two or more declared services; the IR itself carries no service-boundary facts', storageEdges: 'opt-in: pass meta.serviceEdges (dataflow/service-edges.js); the IR itself carries no persistence facts' }),
     sanitizers: 'sanitizer decisions are made by the dataflow layer (sanitizer-gate.js), not recorded in the IR; they are folded in by E2-08',
     guards: 'guard dominance is computed by dataflow/guard-dominance.js, not recorded in the IR; it is folded in by E2-08',
   };
-  const REASON_POP = { symbols: 'one per IR function and per file top level', callSites: 'every call recorded in an IR function, plus calls nested inside assignment sources', allocations: 'object, array and function-valued expressions in call arguments and assignments', fieldAccesses: 'member reads in arguments and assignments, and dotted writes', valueOrigins: 'every call argument and every assignment node in the CFG of a function' };
+  const REASON_POP = { serviceBoundaries: 'HTTP and messaging relationships between declared services, and the ones with no counterpart', storageEdges: 'tables one declared service writes and another reads', symbols: 'one per IR function and per file top level', callSites: 'every call recorded in an IR function, plus calls nested inside assignment sources', allocations: 'object, array and function-valued expressions in call arguments and assignments', fieldAccesses: 'member reads in arguments and assignments, and dotted writes', valueOrigins: 'every call argument and every assignment node in the CFG of a function' };
   const coverage = {};
   for (const k of ENTITY_LISTS) coverage[k] = SCHEMA_ONLY[k] ? { state: 'schema-only', reason: SCHEMA_ONLY[k] } : g[k].length ? { state: 'populated', reason: REASON_POP[k] } : { state: 'schema-only', reason: `no ${k} in this input` };
   const limits = [

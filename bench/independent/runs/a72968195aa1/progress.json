@@ -111,11 +111,22 @@
       "endedAt": "2026-10-16T15:49:53.889Z"
     },
     "6": {
-      "state": "running",
+      "state": "done",
       "offset": 120,
       "limit": 20,
       "startedAt": "2026-10-16T15:49:53.901Z",
-      "attempts": 1
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 144696
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 923003
+      },
+      "endedAt": "2026-10-16T16:07:41.607Z"
     }
   },
   "measuredIn": {
@@ -162,6 +173,6 @@
     "releaseTrust": "trusted",
     "invalidReasons": []
   },
-  "pausedAt": "2026-10-16T14:20:00.958Z",
-  "pausedBecause": "the 45 minute budget of this invocation was used; re-run with --run a72968195aa1 to continue"
+  "pausedAt": "2026-10-16T16:07:41.617Z",
+  "pausedBecause": "the 40 minute budget of this invocation was used; re-run with --run a72968195aa1 to continue"
 }
