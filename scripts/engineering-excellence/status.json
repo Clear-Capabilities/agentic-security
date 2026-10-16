@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:12:21.861Z",
-  "revision": 885,
+  "updatedAt": "2026-10-16T17:14:43.342Z",
+  "revision": 896,
   "checkout": {
-    "commit": "3ed30cad2d5963149ba9a4cbb140cade97ae2372",
+    "commit": "0aa913f977b855d8a51e71807db2a4ca905b61a9",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:12:19.641Z"
+    "capturedAt": "2026-10-16T17:14:43.341Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:12:21.861Z",
+      "heartbeatAt": "2026-10-16T17:14:41.873Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -7621,18 +7621,127 @@
       "notes": []
     },
     "E5-06": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:14:42.868Z",
+      "completedAt": "2026-10-16T17:14:43.341Z",
+      "heartbeatAt": "2026-10-16T17:14:43.102Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "0aa913f977b855d8a51e71807db2a4ca905b61a9",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-a0cc43b1",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e5-06-service-chain-graph.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:14:42.919Z",
+          "endedAt": "2026-10-16T17:14:43.099Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 165,
+          "log": "scripts/engineering-excellence/logs/E5-06/2026-10-16T17-14-42-919Z-c-a0cc43b1.log",
+          "logSha256": "e865c2f99094d0a9dd0645742bd42c7148f7752d4e6ea52b0c5710b830528f56",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E5-06",
+        "status": "done",
+        "sourceCommit": "0aa913f977b855d8a51e71807db2a4ca905b61a9",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/fleet/service-chain-graph.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e5-06-service-chain-graph.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E5-06/2026-10-16T17-14-42-919Z-c-a0cc43b1.log",
+            "logSha256": "e865c2f99094d0a9dd0645742bd42c7148f7752d4e6ea52b0c5710b830528f56",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e5-06-service-chain-graph.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "A three-repo fixture yields a route -> service -> library -> sink chain with cited steps and a two-repo fixture a route -> api -> handler -> sink chain; a call naming one service never reaches another service exposing the same route; ambiguous calls make no edge; budgets report truncation; other tenants are refused"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Built from supplied repo facts (routes, calls, outbound calls, exports); no extractor yet derives these facts from a scan, so the fixtures are hand-written",
+          "Service identity is the declared service name; no deployment config is read",
+          "Vulnerable-version matching supports exact and lt/gte bounds on dotted versions only",
+          "Tenant isolation is by tenant field in the facts, not an operating-system boundary"
+        ],
+        "closedAt": "2026-10-16T17:14:43.341Z"
+      },
       "notes": []
     },
     "E5-07": {
