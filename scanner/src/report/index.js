@@ -391,6 +391,8 @@ export function normalizeFindings(scan){
       // introduced this finding. A different question, and a different field,
       // from the two lines above it (see the import comment at the top).
       findingProvenance: _normalizedProvenance(f),
+      // E5-07: only present when a caller attached a runtime explanation, so findings without one keep exactly their previous shape
+      ...(f.runtimeExplanationSummary && typeof f.runtimeExplanationSummary === 'object' ? { runtimeExplanationSummary: f.runtimeExplanationSummary } : {}),
       typeNarrowed: f.typeNarrowed || null,
       strideCategory: f.strideCategory || null,
       personaScores: f.personaScores || null,
@@ -1191,6 +1193,8 @@ export function toSARIF(scan, meta={}){
           ...(f.unvalidated ? { unvalidated: true } : {}),
           ...(f.cross_language ? { crossLanguage: true } : {}),
           ...(f.family ? { family: f.family } : {}),
+          // E5-07: compact static/runtime explanation (digest-tied to the full object); present only when a caller attached one
+          ...(f.runtimeExplanationSummary ? { runtimeExplanation: f.runtimeExplanationSummary } : {}),
           // Premortem 3R-6 + 4R-10: emit the single signatureStatus tri-state
           // (verified | unsigned | pass-through). The legacy bool flags are
           // emitted alongside for one release of grace so existing dashboards
