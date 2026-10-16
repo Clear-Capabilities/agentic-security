@@ -9432,6 +9432,7 @@ function _deterministicFileTimings(timings) {
   const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
   let _deepCallGraph = null;
   let _deepFailure = null;
+  let _deepIncomplete = null;
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
@@ -9473,6 +9474,7 @@ function _deterministicFileTimings(timings) {
           confidence: 0.5,
         });
       }
+      if (Array.isArray(irFindings.analysisIncomplete) && irFindings.analysisIncomplete.length) _deepIncomplete = irFindings.analysisIncomplete;
       for (const f of irFindings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
@@ -9514,6 +9516,8 @@ function _deterministicFileTimings(timings) {
           ? (_inCi ? 'requested, but running in CI without AGENTIC_SECURITY_DEEP_IN_CI=1' : 'unknown')
           : (_inCi ? 'not requested (deep analysis defaults to off in CI)' : 'not requested')),
     failure: _deepFailure,
+    // E2-05: where the deep analysis stopped short (budget, deadline, function limit, a thrown analysis). Present only when something did.
+    ...(_deepIncomplete ? { incomplete: _deepIncomplete } : {}),
   };
   // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
   // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above

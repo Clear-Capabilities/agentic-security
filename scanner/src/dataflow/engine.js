@@ -1480,9 +1480,20 @@ function _memberWriteSinkFindings(hits, sourceExpr, state, callContext, line, ta
 // nested in runTaintEngine) because step()'s assign/plain-call interproc
 // branches call it too, and step() is a top-level function with no access
 // to runTaintEngine's locals.
+// E2-05: a callee's findings are merged into its caller's every time the call is evaluated, and a call can be evaluated several times (the
+// fixed-point passes, and JavaScript emits both a call node and a return node for `return g(x)`). Each level of a call chain then doubled the
+// list: a chain of 20 one-line wrappers produced 131072 copies of one finding, and the explosion ended in the whole result being dropped. The
+// same sink reached again by the same finding is one finding, so a copy is skipped when this context already holds it.
+function _findingKey(f) { return `${f.file ?? ''}|${f.line ?? ''}|${f.cwe ?? ''}|${f.vuln ?? ''}|${typeof f.callee === 'string' ? f.callee : ''}|${f.id ?? ''}`; }
 function _mergeSummaryFindings(callContext, callerQid, sum, via) {
   if (!sum || !Array.isArray(sum.findings) || !sum.findings.length) return;
-  callContext._findings.push(...sum.findings.map(f => ({ ...f, _funcQid: callerQid || null, _via: via })));
+  if (!callContext._findingKeys) callContext._findingKeys = new Set(callContext._findings.map(_findingKey));
+  for (const f of sum.findings) {
+    const key = _findingKey(f);
+    if (callContext._findingKeys.has(key)) continue;
+    callContext._findingKeys.add(key);
+    callContext._findings.push({ ...f, _funcQid: callerQid || null, _via: via });
+  }
 }
 
 // Apply a CFG node to a taint-state. Returns the new state + any finding emitted.
@@ -2170,7 +2181,7 @@ function analyzeFunction(fn, entryState, callContext) {
     if (++iterations > ITER_BUDGET) break;
     // Check the global deadline every 100 iterations — Date.now() is cheap
     // but not free; this keeps overhead negligible on small functions.
-    if ((iterations & 0x7f) === 0 && Date.now() > deadlineMs) break;
+    if ((iterations & 0x7f) === 0 && Date.now() > deadlineMs) { _noteIncomplete('deadline', `${fn.qid} worklist`); break; }
     const nid = work.shift();
     const node = nodes[nid];
     if (!node) continue;
@@ -2338,7 +2349,24 @@ function stateEq(a, b) {
 // The infra for it is in callContext.)
 //
 // Returns a flat array of findings, each enriched with file/line/etc.
+// E2-05: places where the analysis stopped short, reported instead of left silent. Each entry is a reason with a count and one example. A budget
+// that runs out used to leave a result that looked complete; now `runTaintEngine`'s return value carries `analysisIncomplete`, and the scan
+// reports it as `deepStatus.incomplete`.
+let _incomplete = new Map();
+function _noteIncomplete(reason, detail) {
+  const cur = _incomplete.get(reason);
+  if (cur) cur.count += 1; else _incomplete.set(reason, { reason, count: 1, example: String(detail ?? '').slice(0, 160) });
+}
+export const INCOMPLETE_REASONS = Object.freeze({
+  'summary-budget': 'the interprocedural summary budget ran out; later callees were treated as having no effect',
+  'deadline': 'the deep-analysis time budget ran out before every function was analysed',
+  'function-limit': 'more functions than the per-scan function limit; the rest were not analysed',
+  'higher-order-limit': 'more callback invocations than the per-function limit; the rest were not analysed',
+  'analysis-error': 'the analysis of a function threw and its result was discarded',
+});
+
 export function runTaintEngine(perFileIR, callGraph, opts = {}) {
+  _incomplete = new Map();
   const all = [];
   const seen = new Set();
   const fnLimit = opts.fnLimit || 5000;
@@ -2799,8 +2827,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   }
   const _progressTotal = Math.min(fnList.length, fnLimit);
   for (const fn of fnList) {
-    if (++n > fnLimit) break;
-    if (Date.now() > deadlineMs) break;  // global timeout
+    if (++n > fnLimit) { _noteIncomplete('function-limit', `limit ${fnLimit}`); break; }
+    if (Date.now() > deadlineMs) { _noteIncomplete('deadline', 'main function loop'); break; }  // global timeout
     if (onProgress) onProgress({ current: n, total: _progressTotal });
     // Module-level functions: analyze with an empty entry state. The function
     // discovers its own sources from req.body/process.env/etc. as it walks.
@@ -2826,13 +2854,14 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     };
     try {
       analyzeFunction(fn, _unionAnnotationTaint(fn, new Set()), callContext);
-    } catch { continue; }
+    } catch (e) { _noteIncomplete('analysis-error', `${fn.qid}: ${e && e.message}`); continue; }
     // Process higher-order invocations: resolve callbacks and analyze with
     // tainted first-param. Feed findings back into the caller's finding set.
     const hoInvocations = callContext._higherOrderInvocations || [];
     const HO_CAP = 50;
+    if (hoInvocations.length > HO_CAP) _noteIncomplete('higher-order-limit', `${fn.qid}: ${hoInvocations.length} callbacks`);
     for (let hi = 0; hi < Math.min(hoInvocations.length, HO_CAP); hi++) {
-      if (Date.now() > deadlineMs) break;
+      if (Date.now() > deadlineMs) { _noteIncomplete('deadline', 'callback analysis'); break; }
       const inv = hoInvocations[hi];
       if ((!inv.callee && !inv.calleeQid) || !inv.taintedParam) continue;
       // Two resolution strategies, matching the two shapes the push site can
@@ -2898,6 +2927,8 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     if (dg[f.severity]) f.severity = dg[f.severity];
   }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
+  if (summaryCache._budgetHits) _noteIncomplete('summary-budget', `${summaryCache._budgetHits} summary requests after ${summaryCache._maxIter} computations`);
+  Object.defineProperty(all, 'analysisIncomplete', { value: [..._incomplete.values()].sort((a, b) => (a.reason < b.reason ? -1 : 1)), enumerable: false });
   _collapseNestedHsSinks(all);
   return all;
 

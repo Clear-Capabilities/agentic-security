@@ -61,6 +61,10 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
   if (deepStatus?.failure) {
     conditions.push(`deep analysis (IR-taint) threw and fell back to pattern-only results: ${deepStatus.failure}`);
   }
+  if (Array.isArray(deepStatus?.incomplete) && deepStatus.incomplete.length) {
+    // E2-05: the deep analysis ran but stopped short somewhere. The result is less complete than it looks, so it is a condition, not a footnote.
+    conditions.push(`deep analysis stopped short (analysis_incomplete): ${deepStatus.incomplete.map((x) => `${x.reason} x${x.count}`).join(', ')}`);
+  }
   if (deepStatus?.requested && !deepStatus.enabled) {
     conditions.push(`deep analysis was requested but did not run: ${deepStatus.reason || 'unknown reason'}`);
   }
@@ -122,6 +126,7 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           ciOverrideAllowed: !!deepStatus.ciOverrideAllowed,
           reason: deepStatus.reason ?? null,
           failure: deepStatus.failure ?? null,
+          ...(Array.isArray(deepStatus.incomplete) && deepStatus.incomplete.length ? { incomplete: deepStatus.incomplete } : {}),
         }
       : null,
     lineageAnalysis: lineageStatus

@@ -163,6 +163,7 @@ export class SummaryCache {
       return { returnTainted: false, mutatedParams: new Set(), taintedGlobals: new Set(), findings: [], _recursive: true };
     }
     if (++this._iter > this._maxIter) {
+      this._budgetHits = (this._budgetHits || 0) + 1;
       return { returnTainted: false, mutatedParams: new Set(), taintedGlobals: new Set(), findings: [], _budgetExceeded: true };
     }
     this._stack.add(qid);
