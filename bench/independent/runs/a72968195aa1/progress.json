@@ -1,0 +1,57 @@
+{
+  "schema": "agentic-security/independent-run-progress@1",
+  "runId": "a72968195aa1",
+  "chunks": {
+    "0": {
+      "state": "running",
+      "offset": 0,
+      "limit": 20,
+      "startedAt": "2026-10-16T13:30:24.871Z",
+      "attempts": 2
+    }
+  },
+  "measuredIn": {
+    "detachedWorktreeOf": "27562878192278622e5711a6041ac5b439120b49",
+    "linkedFromSourceCheckout": [
+      "scanner/node_modules",
+      "scanner/vendor",
+      "bench/independent/cache"
+    ]
+  },
+  "identity": {
+    "schemaVersion": 1,
+    "sourceCommit": "27562878192278622e5711a6041ac5b439120b49",
+    "sourceBranch": "HEAD",
+    "sourceTreeClean": true,
+    "dirtyPaths": [],
+    "bookkeepingPathsIgnored": 2,
+    "bundleSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
+    "bundleSidecarSha256": "edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc",
+    "lockfileSha256": "49ccabbac95e1032e5e3f09d169efc63525fa067dd5e56b554fbbeda6f834cb4",
+    "configSha256": "7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71",
+    "config": {
+      "knobs": {},
+      "modelEndpointMode": "none",
+      "modelValidatorEnabled": false
+    },
+    "corpusId": "independent-selection",
+    "corpusSha256": "4766dbfe1a35b9145727ae968bb9a2fa100c49b5be4e0759cf02f16d9504a309",
+    "corpusFiles": 2,
+    "toolchain": {
+      "node": "v24.20.0",
+      "npm": "11.19.0",
+      "git": "git version 2.54.0",
+      "python3": "Python 3.13.9",
+      "java": null,
+      "go": null,
+      "ghc": "The Glorious Glasgow Haskell Compilation System, version 9.14.1",
+      "os": "darwin 27.0.0 arm64",
+      "cpus": 8,
+      "memoryGb": 16
+    },
+    "startedAt": "2026-10-16T13:30:24.360Z",
+    "measurementValid": true,
+    "releaseTrust": "trusted",
+    "invalidReasons": []
+  }
+}

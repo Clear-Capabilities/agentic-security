@@ -1,0 +1,108 @@
+{
+  "schema": "agentic-security/independent-run-plan@1",
+  "runId": "a72968195aa1",
+  "plannedAt": "2026-10-16T13:30:01.921Z",
+  "config": {
+    "deep": true,
+    "llm": "none",
+    "note": "the CLI default outside CI; no model endpoint, so deterministic and offline apart from the fetch"
+  },
+  "chunkSize": 20,
+  "chunks": [
+    {
+      "index": 0,
+      "offset": 0,
+      "limit": 20
+    },
+    {
+      "index": 1,
+      "offset": 20,
+      "limit": 20
+    },
+    {
+      "index": 2,
+      "offset": 40,
+      "limit": 20
+    },
+    {
+      "index": 3,
+      "offset": 60,
+      "limit": 20
+    },
+    {
+      "index": 4,
+      "offset": 80,
+      "limit": 20
+    },
+    {
+      "index": 5,
+      "offset": 100,
+      "limit": 20
+    },
+    {
+      "index": 6,
+      "offset": 120,
+      "limit": 20
+    },
+    {
+      "index": 7,
+      "offset": 140,
+      "limit": 20
+    },
+    {
+      "index": 8,
+      "offset": 160,
+      "limit": 20
+    },
+    {
+      "index": 9,
+      "offset": 180,
+      "limit": 20
+    },
+    {
+      "index": 10,
+      "offset": 200,
+      "limit": 20
+    },
+    {
+      "index": 11,
+      "offset": 220,
+      "limit": 20
+    },
+    {
+      "index": 12,
+      "offset": 240,
+      "limit": 20
+    },
+    {
+      "index": 13,
+      "offset": 260,
+      "limit": 20
+    },
+    {
+      "index": 14,
+      "offset": 280,
+      "limit": 3
+    }
+  ],
+  "selection": {
+    "entries": 283,
+    "counts": {
+      "php": 40,
+      "typescript": 40,
+      "ruby": 40,
+      "javascript": 40,
+      "go": 40,
+      "java": 27,
+      "csharp": 14,
+      "python": 40,
+      "kotlin": 2
+    },
+    "splitNames": [
+      "dev",
+      "validation"
+    ],
+    "perLanguage": 40
+  },
+  "plannedAtCommit": "9260567a39e011f7ff8b4ba2b727ec78fe4d9cca"
+}
