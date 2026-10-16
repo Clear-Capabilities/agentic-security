@@ -118,8 +118,9 @@ export function aggregateCorpus(detail) {
  * protocol is forced to `unmeasured`, and an absent report is `unmeasured` with
  * the reason, never an empty pass. Pure.
  */
-export function summarizeMeasurement(provenance, independent) {
+export function summarizeMeasurement(provenance, independent, independentRun = null) {
   const p = provenance || {};
+  const run = summarizeIndependentRun(independentRun, p);
   const clean = p.worktreeClean === true;
   const hist = independent && independent.engineVersion && independent.engineVersion !== p.engineVersion;
   return {
@@ -128,11 +129,44 @@ export function summarizeMeasurement(provenance, independent) {
     identity: clean
       ? 'the commit and bundle below identify exactly the tree that was measured'
       : p.worktreeClean === false ? 'the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement' : 'cleanliness of the measured tree was not recorded',
-    currentEngineIndependentAccuracy: 'unmeasured',
-    currentEngineIndependentReason: 'no adjudicated real-code population has been run against this engine; the independent record in this document, if any, describes an older engine',
+    currentEngineIndependentAccuracy: run && run.comparableToCurrentEngine ? (run.identity.measurementValid ? 'measured' : 'measured_not_release_grade') : 'unmeasured',
+    currentEngineIndependentReason: run && run.comparableToCurrentEngine
+      ? (run.identity.measurementValid ? `measured by run ${run.runId} on a clean commit; the figures are for the development and validation splits only` : `run ${run.runId} measured this engine but the measurement is not valid for a release claim: ${run.identity.invalidReasons.join(', ') || 'no identity recorded'}`)
+      : run ? `the latest independent run (${run.runId}) measured engine ${run.engineVersion}, not the engine above; it is a historical record` : 'no adjudicated real-code population has been run against this engine; the independent record in this document, if any, describes an older engine',
+    independentRun: run,
     historicalIndependentRecord: hist
       ? { engineVersion: independent.engineVersion, measuredAt: independent.measuredAt || null, usage: 'historical record only; not a measurement of the engine above and not combined with the corpus figures' }
       : null,
+  };
+}
+
+/**
+ * The latest clean-commit run of the independent population (bench/independent/runs/<id>/RESULT.json), reduced to what a reader may be shown.
+ * Only the localized definition is a claim. A language below the declared minimum is `insufficient_population` and shows counts, never a rate;
+ * a language in the manifest that was not scored at all is listed as unmeasured. Pure.
+ */
+export function summarizeIndependentRun(run, provenance) {
+  if (!run || !run.scoring) return null;
+  const loc = run.scoring.definitions.localized;
+  const d = run.scoring.denominators;
+  const id = run.identity || {};
+  const rate = (r) => (r && r.d > 0 ? { n: r.n, d: r.d, value: r.value } : { n: r?.n ?? 0, d: r?.d ?? 0, value: null });
+  const byLanguage = Object.entries(loc.byLanguage).map(([language, g]) => (g.status === 'reportable'
+    ? { language, entries: g.entries, status: 'reportable', recall: rate(g.recall), precision: rate(g.precision), f1: g.f1, recallInterval: g.recallInterval, precisionInterval: g.precisionInterval, counts: { tp: g.tp, fp: g.fp, fn: g.fn, tn: g.tn } }
+    : { language, entries: g.entries, status: 'insufficient_population', counts: { tp: g.tp, fp: g.fp, fn: g.fn, tn: g.tn } }));
+  const unmeasuredLanguages = (run.population?.selection?.counts ? Object.keys(run.population.selection.counts) : []).filter((l) => !loc.byLanguage[l] || loc.byLanguage[l].status !== 'reportable');
+  return {
+    runId: run.runId, engineVersion: run.engineVersion || null, measuredAt: run.mergedAt || null,
+    comparableToCurrentEngine: !!run.engineVersion && run.engineVersion === (provenance || {}).engineVersion,
+    historical: !!run.engineVersion && run.engineVersion !== (provenance || {}).engineVersion,
+    identity: { sourceCommit: id.sourceCommit || null, bundleSha256: id.bundleSha256 || null, bundleSidecarSha256: id.bundleSidecarSha256 || null, measurementValid: id.measurementValid === true, invalidReasons: id.invalidReasons || [], lockfileSha256: id.lockfileSha256 || null, configSha256: id.configSha256 || null, modelEndpointMode: id.config?.modelEndpointMode || null, toolchain: id.toolchain ? { node: id.toolchain.node, os: id.toolchain.os } : null },
+    population: { role: run.population?.role || 'independent population', manifestSha256: run.population?.manifestSha256 || null, splitsProtocolHash: run.population?.splitsProtocolHash || run.splits?.protocolHash || null, splitNames: run.population?.selection?.splitNames || [], perLanguageCap: run.population?.selection?.perLanguage ?? null, sealedSplitTouched: run.population?.sealedSplitTouched === true },
+    configuration: run.configuration || null,
+    denominators: { inScope: d.inScope, scored: d.scored, unscored: d.unscored, unscoredByClass: d.unscoredByClass, unaccounted: d.unaccounted, reconciles: d.reconciles },
+    headline: run.headline ? { quotable: run.headline.quotable === true, reason: run.headline.reason || null, precision: run.headline.precision ? rate(run.headline.precision) : null, recall: run.headline.recall ? rate(run.headline.recall) : null, f1: run.headline.f1 ?? null, f1Interval: run.headline.f1Interval || null } : null,
+    byLanguage, unmeasuredLanguages,
+    minEntriesForRate: run.scoring.minEntriesForRate,
+    fixedVersionPressure: run.scoring.fixedVersionPressure || null,
   };
 }
 
@@ -349,7 +383,7 @@ export function buildScorecard(inputs) {
     // QA-001/QA-003: the real-code gates registered in the evaluation protocol. Relayed, never computed here.
     evaluationGates: summarizeEvaluationGates(inputs.evaluation),
     // QA-008.AC01: what this scorecard measured, stated once. `clean` is what lets the commit and bundle identify the measured tree.
-    measurement: summarizeMeasurement(inputs.provenance, committed.independent),
+    measurement: summarizeMeasurement(inputs.provenance, committed.independent, committed.independentRun),
   };
 }
 
@@ -403,7 +437,10 @@ export function renderScorecardMarkdown(m) {
   }
   if (m.measurement) {
     L.push(`| Measurement identity | ${m.measurement.cleanMeasurement ? 'clean measurement: the commit and bundle above identify the measured tree' : 'NOT a clean measurement: the commit and bundle above do not identify the measured tree'} |`);
-    L.push('| Independent accuracy of THIS engine | unmeasured (no adjudicated real-code population has been run; see the historical record below, if present) |');
+    const ia = m.measurement.currentEngineIndependentAccuracy;
+    L.push(ia === 'unmeasured'
+      ? '| Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |'
+      : `| Independent accuracy of THIS engine | ${ia === 'measured' ? 'measured on a clean commit' : 'measured, but NOT release grade'}: ${m.measurement.currentEngineIndependentReason} |`);
   }
   L.push(`| Node | ${p.nodeVersion || 'unknown'} |`);
   L.push(`| Corpus entries | ${c.totalEntries} (${c.scoredEntries} scored) |`);
@@ -730,6 +767,45 @@ export function renderScorecardMarkdown(m) {
     if (ls.tools) L.push(`Tools present where this was measured: ${Object.entries(ls.tools).map(([k, x]) => `${k}=${x === false ? 'absent' : x}`).join(', ')}.`);
     L.push('');
     for (const lim of ls.limits) L.push(`- ${lim}`);
+    L.push('');
+  }
+
+  const run = m.measurement && m.measurement.independentRun;
+  if (run) {
+    const pc = (r) => (r && r.value !== null && r.value !== undefined ? `${(r.value * 100).toFixed(1)}% (${r.n}/${r.d})` : `n/a (${r ? r.n : 0}/${r ? r.d : 0})`);
+    const iv = (i) => (i && i.status === 'measured' ? `${(i.low * 100).toFixed(1)}% to ${(i.high * 100).toFixed(1)}%` : 'unmeasured');
+    L.push(run.comparableToCurrentEngine ? `## Independent accuracy of this engine (run ${run.runId})` : `## Independent run ${run.runId}: historical record (engine ${run.engineVersion})`);
+    L.push('');
+    L.push('This is the independent population, upstream code labelled by public advisories, run on the engine below at a named commit. It is a different');
+    L.push('instrument from the curated regression net above and the two figures are never combined. Only the **localized** definition (a matching finding landed on code the');
+    L.push('fix changed) is a claim; it is reported with numerator and denominator.');
+    L.push('');
+    L.push('| Field | Value |');
+    L.push('| --- | --- |');
+    L.push(`| Engine | ${run.engineVersion}${run.comparableToCurrentEngine ? '' : ' (NOT the engine this scorecard describes)'} |`);
+    L.push(`| Measured at commit | \`${run.identity.sourceCommit || 'unknown'}\` |`);
+    L.push(`| Bundle SHA-256 | \`${run.identity.bundleSha256 || 'unknown'}\` (sidecar ${run.identity.bundleSidecarSha256 && run.identity.bundleSidecarSha256 === run.identity.bundleSha256 ? 'matches' : 'does not match or is missing'}) |`);
+    L.push(`| Measurement | ${run.identity.measurementValid ? 'valid: clean tree, bundle matches its digest' : `NOT valid for a release claim: ${run.identity.invalidReasons.join(', ') || 'no identity recorded'}`} |`);
+    L.push(`| Configuration | ${run.configuration ? `deep=${run.configuration.deep}, model=${run.configuration.llm}` : 'unknown'}; model endpoint ${run.identity.modelEndpointMode || 'unknown'} |`);
+    L.push(`| Population | manifest \`${(run.population.manifestSha256 || 'unknown').slice(0, 16)}\`; splits protocol \`${(run.population.splitsProtocolHash || 'unknown').slice(0, 23)}\`; ${run.population.splitNames.join(' + ') || 'unknown'} only, at most ${run.population.perLanguageCap ?? 'all'} entries per language; sealed split touched: ${run.population.sealedSplitTouched ? 'YES' : 'no'} |`);
+    L.push(`| Date (UTC) | ${run.measuredAt || 'unknown'} |`);
+    L.push(`| Entries in scope | ${run.denominators.inScope}: scored ${run.denominators.scored}, unscored ${run.denominators.unscored}${Object.keys(run.denominators.unscoredByClass || {}).length ? ` (${Object.entries(run.denominators.unscoredByClass).map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}, unaccounted ${run.denominators.unaccounted}; denominators ${run.denominators.reconciles ? 'reconcile' : 'DO NOT reconcile'} |`);
+    L.push('');
+    if (run.headline && run.headline.quotable) {
+      L.push(`**Headline (localized):** precision ${pc(run.headline.precision)}, recall ${pc(run.headline.recall)}, F1 ${run.headline.f1 === null ? 'n/a' : run.headline.f1.toFixed(3)}${run.headline.f1Interval && run.headline.f1Interval.status === 'measured' ? ` (95% interval ${iv(run.headline.f1Interval)}, resampling whole repositories)` : ' (interval unmeasured)'}.`);
+    } else {
+      L.push(`**No headline figure:** ${run.headline && run.headline.reason ? run.headline.reason : 'the run is not quotable'}.`);
+    }
+    L.push('');
+    L.push(`| Language | Scored | Recall | Precision | Recall 95% interval | Status |`);
+    L.push('| --- | --- | --- | --- | --- | --- |');
+    for (const g of run.byLanguage) {
+      if (g.status === 'reportable') L.push(`| ${g.language} | ${g.entries} | ${pc(g.recall)} | ${pc(g.precision)} | ${iv(g.recallInterval)} | reportable |`);
+      else L.push(`| ${g.language} | ${g.entries} | counts only (${g.counts.tp} true positive, ${g.counts.fn} missed) | | | insufficient_population (below ${run.minEntriesForRate}) |`);
+    }
+    L.push('');
+    if (run.unmeasuredLanguages.length) L.push(`Languages with no rate in this run: ${run.unmeasuredLanguages.join(', ')}. They are unmeasured here, not good or bad.`, '');
+    L.push('This run does not use the sealed split, so it is a baseline on development and validation data, not a held-out result, and it makes no claim about the 80% per-language target.');
     L.push('');
   }
 

@@ -20,6 +20,8 @@ export const BOOKKEEPING_PATHS = Object.freeze([
   // generated dependency trees (an `npm install` creates them and they are gitignored as directories; a symlink to one is not matched by
   // that rule, so a measurement worktree that links them would otherwise read as dirty)
   /^scanner\/(node_modules|vendor)(\/|$)/,
+  // upstream code fetched for the independent population (gitignored as a directory; a linked cache is a symlink)
+  /^bench\/independent\/cache(\/|$)/,
 ]);
 
 const SECRETISH = /(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|ENDPOINT|HOST|URL|PROXY)/i;

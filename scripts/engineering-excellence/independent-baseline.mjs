@@ -123,7 +123,7 @@ export async function mergeRun(root, runId) {
     runId, mergedAt: nowIso(), engineVersion, configuration: plan.config,
     identity: progress.identity || null,
     measuredIn: progress.measuredIn || null,
-    population: { role: 'independent population, development and validation splits only', selection: plan.selection, entriesInSelection: entries.length, sealedSplitTouched: false },
+    population: { role: 'independent population, development and validation splits only', selection: plan.selection, manifestSha256: selection.manifestSha256 || null, splitsProtocolHash: selection.splitsProtocolHash || null, entriesInSelection: entries.length, sealedSplitTouched: false },
     chunks: { planned: plan.chunks.length, missing: missingChunks },
     coverage: { scored: rows.length, unscored: unscored.length, unaccounted: scoring.denominators.unaccounted },
     scoring, headline: scorer.headline(scoring),

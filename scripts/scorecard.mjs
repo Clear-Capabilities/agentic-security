@@ -99,6 +99,17 @@ function git(args) {
   return r.status === 0 ? (r.stdout || '').trim() : null;
 }
 
+/** The result of the run `bench/independent/runs/BASELINE.json` names, without its per-entry rows; null when no baseline is approved. */
+function readApprovedIndependentRun() {
+  const pointer = readJsonIfPresent('bench/independent/runs/BASELINE.json');
+  if (!pointer || !pointer.runId) return null;
+  const run = readJsonIfPresent(`bench/independent/runs/${pointer.runId}/RESULT.json`);
+  if (!run) return null;
+  const { perEntry, unscored, ...rest } = run;
+  void perEntry; void unscored;
+  return rest;
+}
+
 async function main() {
   process.stderr.write('· running the CVE-replay corpus (all tiers)…\n');
   const corpus = runJson('bench/cve-replay/runner.mjs', ['--json'], 'corpus runner');
@@ -224,6 +235,8 @@ function countPartiallyEvidenced(dir) {
       // publishing a recall figure (45.0%, n=40) that had already been
       // withdrawn. A number nobody regenerates is a number nobody corrects.
       independent: readJsonIfPresent('bench/independent/RESULT.json'),
+      // The approved baseline run of the CURRENT engine (E1-04/E1-07), if one exists: read from the run directory the pointer names.
+      independentRun: readApprovedIndependentRun(),
       // FR-905: same reasoning as `independent` above — the full-population
       // diagnostic run (bench/independent/why-missed.mjs --all) is measured
       // in minutes, so its summary is read from a committed file rather
