@@ -1,0 +1,14 @@
+{
+  "reviewer": "demo-reviewer",
+  "now": "2026-10-16T00:00:00Z",
+  "note": "The project's recorded reviewer decisions. 'lines' are the file lines the decision covers.",
+  "triage": [
+    { "id": "sqli-search", "class": "sql-injection", "label": "true_positive", "file": "services/api/app.js", "lines": [9, 13], "parser": "IR-TAINT", "reason": "the search term reaches the statement by concatenation" },
+    { "id": "sqli-report-constant", "class": "sql-injection", "label": "false_positive", "file": "services/api/app.js", "lines": [21, 26], "reason": "the only operand is a constant string; no request value reaches the statement" },
+    { "id": "sqli-lookup-bound", "class": "sql-injection", "label": "false_positive", "file": "services/api/app.js", "lines": [15, 19], "reason": "the value is bound as a parameter" },
+    { "id": "command-convert", "class": "command-injection", "label": "true_positive", "file": "services/worker/convert.py", "lines": [8, 13], "reason": "the file name reaches a shell" },
+    { "id": "command-probe-list", "class": "command-injection", "label": "false_positive", "file": "services/worker/convert.py", "lines": [17, 22], "reason": "an argument list is passed with no shell" },
+    { "id": "idor-notes-put", "class": "idor", "label": "true_positive", "file": "services/api/app.js", "lines": [35, 39], "parser": "OWNERSHIP-AUTHZ", "reason": "any signed-in user can change any note" },
+    { "id": "tenant-invoice-lines", "class": "cross-tenant", "label": "true_positive", "file": "services/api/app.js", "lines": [48, 52], "parser": "OWNERSHIP-AUTHZ", "reason": "the lines of any tenant's invoice can be read" }
+  ]
+}

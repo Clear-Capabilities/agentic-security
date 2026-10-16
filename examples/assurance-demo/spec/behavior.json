@@ -1,0 +1,127 @@
+{
+  "note": "The project's behaviour checks. Each request runs against the real handler code in the confined fixture runner; 'covers' names the routes a patch must not break. The outcome is what must still hold after the patch.",
+  "store": {
+    "notes": [
+      {
+        "id": "n1",
+        "ownerId": "A",
+        "body": "mine"
+      },
+      {
+        "id": "n2",
+        "ownerId": "B",
+        "body": "theirs"
+      }
+    ],
+    "invoices": [
+      {
+        "id": "i1",
+        "tenantId": "T1",
+        "total": 10
+      }
+    ],
+    "lines": [
+      {
+        "id": "l1",
+        "invoiceId": "i1",
+        "tenantId": "T1",
+        "sku": "S-1"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "owner-can-update-own-note",
+      "request": {
+        "method": "PUT",
+        "path": "/notes/n1",
+        "body": {
+          "body": "edited"
+        }
+      },
+      "user": {
+        "id": "A",
+        "tenantId": "T1"
+      },
+      "expect": {
+        "status": 204,
+        "storeChanged": true
+      },
+      "covers": [
+        "PUT /notes/:id"
+      ]
+    },
+    {
+      "id": "owner-can-read-own-note",
+      "request": {
+        "method": "GET",
+        "path": "/notes/n1"
+      },
+      "user": {
+        "id": "A",
+        "tenantId": "T1"
+      },
+      "expect": {
+        "status": 200
+      },
+      "covers": [
+        "PUT /notes/:id"
+      ]
+    },
+    {
+      "id": "other-user-cannot-update-note",
+      "request": {
+        "method": "PUT",
+        "path": "/notes/n1",
+        "body": {
+          "body": "hijacked"
+        }
+      },
+      "user": {
+        "id": "B",
+        "tenantId": "T2"
+      },
+      "expect": {
+        "storeChanged": false
+      },
+      "covers": [
+        "PUT /notes/:id"
+      ]
+    },
+    {
+      "id": "tenant-can-read-own-invoice-lines",
+      "request": {
+        "method": "GET",
+        "path": "/invoices/i1/lines"
+      },
+      "user": {
+        "id": "A",
+        "tenantId": "T1"
+      },
+      "expect": {
+        "status": 200,
+        "bodyIncludes": "S-1"
+      },
+      "covers": [
+        "GET /invoices/:id/lines"
+      ]
+    },
+    {
+      "id": "other-tenant-cannot-read-invoice-lines",
+      "request": {
+        "method": "GET",
+        "path": "/invoices/i1/lines"
+      },
+      "user": {
+        "id": "B",
+        "tenantId": "T2"
+      },
+      "expect": {
+        "bodyExcludes": "S-1"
+      },
+      "covers": [
+        "GET /invoices/:id/lines"
+      ]
+    }
+  ]
+}

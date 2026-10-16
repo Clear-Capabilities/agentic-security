@@ -2142,6 +2142,73 @@
         "docs/architecture/context-intelligence.md",
         "docs/architecture/DCI_INTEGRATION_AUDIT.md"
       ]
+    },
+    {
+      "id": "CAP-121",
+      "kind": "doc-link",
+      "title": "release assurance: a signed release package, a deterministic release verdict, release-view and offline verification",
+      "sources": [
+        "docs/guides/release-assurance.md"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "Language-agnostic: the package carries whatever findings and scan health a scan produced, and has no per-language behaviour of its own, so there is nothing Haskell-specific to add."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "Language-agnostic: the package carries whatever findings and scan health a scan produced, and has no Nix-specific behaviour."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "The release package is built from scan evidence; it has no runtime or NixOS-host execution surface of its own."
+      },
+      "entryPoints": [
+        "scanner/src/posture/assurance/release-verdict.js",
+        "scanner/src/posture/assurance/release-package.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/README.md",
+        "docs/guides/release-assurance.md"
+      ]
+    },
+    {
+      "id": "CAP-122",
+      "kind": "doc-link",
+      "title": "engineering excellence evidence: measured results, the end-to-end demo and the list of what is not proven",
+      "sources": [
+        "docs/engineering-excellence/README.md"
+      ],
+      "modes": [],
+      "modesInventoryTask": "CORE-001-T02",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "An index of measurement records; it adds no scanning capability, for Haskell or any other language."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "An index of measurement records; it adds no scanning capability."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "An index of measurement records; it has no execution surface."
+      },
+      "entryPoints": [
+        "scripts/engineering-excellence/doc-captures.mjs"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/README.md",
+        "docs/engineering-excellence/README.md"
+      ]
     }
   ],
   "docReviews": {

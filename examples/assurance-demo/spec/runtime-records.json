@@ -1,0 +1,7 @@
+{
+  "note": "Runtime metadata, ingested only when runtime collection is switched on. Two builds report: the released one, and an older one that is still serving some traffic.",
+  "records": [
+    { "kind": "route-hit", "route": "/search", "qid": "app.search", "service": "api", "count": 412, "build": "released" },
+    { "kind": "route-hit", "route": "/notes/:id", "qid": "app.updateNote", "service": "api", "count": 38, "build": "older" }
+  ]
+}

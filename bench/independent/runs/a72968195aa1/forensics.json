@@ -13,14 +13,14 @@
     "rule": "scored = localized true positives + localized false negatives; every false negative is classified exactly once"
   },
   "byCategory": {
-    "no_detector_candidate": 148,
+    "no_detector_candidate": 151,
     "parse_ir_gap": 5,
-    "missing_source_or_sink": 80,
+    "missing_source_or_sink": 81,
     "alias_or_callgraph_gap": 7,
-    "sanitizer_misclassification": 1,
-    "guard_or_suppression": 5,
+    "sanitizer_misclassification": 0,
+    "guard_or_suppression": 0,
     "reachability_demotion": 0,
-    "wrong_file_or_cwe": 25,
+    "wrong_file_or_cwe": 27,
     "tool_or_setup_incomplete": 1,
     "unlabelled_ambiguity": 0
   },
@@ -29,12 +29,12 @@
       "category": "no_detector_candidate",
       "stage": "sink-modelling",
       "reason": "no-detector-rule-fired",
-      "count": 148,
+      "count": 151,
       "languages": {
         "php": 28,
-        "typescript": 22,
-        "javascript": 14,
-        "go": 25,
+        "typescript": 23,
+        "javascript": 15,
+        "go": 26,
         "java": 15,
         "csharp": 5,
         "ruby": 20,
@@ -49,8 +49,10 @@
         "CWE-441": 2,
         "CWE-20": 10,
         "CWE-287": 5,
+        "CWE-799": 1,
         "CWE-400": 11,
         "CWE-284": 2,
+        "CWE-367": 5,
         "CWE-639": 8,
         "CWE-248": 3,
         "CWE-362": 1,
@@ -61,7 +63,7 @@
         "CWE-401": 1,
         "CWE-73": 3,
         "CWE-74": 3,
-        "CWE-863": 5,
+        "CWE-863": 6,
         "CWE-653": 1,
         "CWE-674": 1,
         "CWE-706": 1,
@@ -76,7 +78,6 @@
         "CWE-434": 2,
         "CWE-754": 1,
         "CWE-843": 1,
-        "CWE-367": 4,
         "CWE-377": 1,
         "CWE-190": 2,
         "CWE-694": 1,
@@ -114,7 +115,7 @@
         "GHSA-26gq-p25f-99cp",
         "GHSA-28f5-38xr-jh2w"
       ],
-      "share": 0.5441176470588235
+      "share": 0.5551470588235294
     },
     {
       "category": "missing_source_or_sink",
@@ -156,10 +157,10 @@
       "category": "missing_source_or_sink",
       "stage": "source-modelling",
       "reason": "no-source-recognized",
-      "count": 26,
+      "count": 27,
       "languages": {
         "ruby": 2,
-        "python": 1,
+        "python": 2,
         "csharp": 8,
         "typescript": 3,
         "php": 4,
@@ -170,7 +171,7 @@
       "cwes": {
         "CWE-79": 5,
         "CWE-94": 6,
-        "CWE-22": 6,
+        "CWE-22": 7,
         "CWE-918": 4,
         "CWE-611": 1,
         "CWE-1321": 3,
@@ -183,18 +184,18 @@
         "GHSA-4249-gjr8-jpq3",
         "GHSA-4jwf-m4wg-8p66"
       ],
-      "share": 0.09558823529411764
+      "share": 0.09926470588235294
     },
     {
       "category": "wrong_file_or_cwe",
       "stage": "attribution",
       "reason": "right-location-wrong-family",
-      "count": 20,
+      "count": 22,
       "languages": {
         "java": 1,
-        "typescript": 4,
+        "typescript": 5,
         "python": 6,
-        "javascript": 6,
+        "javascript": 7,
         "ruby": 1,
         "php": 2
       },
@@ -205,13 +206,14 @@
         "CWE-22": 2,
         "CWE-200": 3,
         "CWE-78": 1,
+        "CWE-287": 2,
+        "CWE-352": 1,
         "CWE-74": 1,
         "CWE-693": 1,
         "CWE-799": 1,
         "CWE-918": 1,
         "CWE-862": 1,
         "CWE-409": 1,
-        "CWE-287": 1,
         "CWE-913": 1,
         "CWE-89": 1,
         "CWE-79": 1,
@@ -224,7 +226,7 @@
         "GHSA-3f7w-8rr8-f37f",
         "GHSA-47pj-3jcm-6whg"
       ],
-      "share": 0.07352941176470588
+      "share": 0.08088235294117647
     },
     {
       "category": "missing_source_or_sink",
@@ -328,76 +330,6 @@
         "GHSA-wg2q-39h6-66x9"
       ],
       "share": 0.014705882352941176
-    },
-    {
-      "category": "guard_or_suppression",
-      "stage": "filters",
-      "reason": "value-too-short",
-      "count": 3,
-      "languages": {
-        "typescript": 1,
-        "go": 1,
-        "python": 1
-      },
-      "cwes": {
-        "CWE-799": 1,
-        "CWE-863": 1,
-        "CWE-22": 1
-      },
-      "sampleIds": [
-        "GHSA-2hv5-4h3g-4hjv",
-        "GHSA-jm28-2wcr-qf3h",
-        "GHSA-x6p3-76f2-xxvh"
-      ],
-      "share": 0.011029411764705883
-    },
-    {
-      "category": "guard_or_suppression",
-      "stage": "filters",
-      "reason": "entropy-filter:length<12",
-      "count": 1,
-      "languages": {
-        "typescript": 1
-      },
-      "cwes": {
-        "CWE-287": 1
-      },
-      "sampleIds": [
-        "GHSA-93rg-2xm5-2p9v"
-      ],
-      "share": 0.003676470588235294
-    },
-    {
-      "category": "guard_or_suppression",
-      "stage": "filters",
-      "reason": "logic-gate:compared-value-not-secret-shaped",
-      "count": 1,
-      "languages": {
-        "javascript": 1
-      },
-      "cwes": {
-        "CWE-367": 1
-      },
-      "sampleIds": [
-        "GHSA-35p6-xmwp-9g52"
-      ],
-      "share": 0.003676470588235294
-    },
-    {
-      "category": "sanitizer_misclassification",
-      "stage": "filters",
-      "reason": "sanitized:empty-args",
-      "count": 1,
-      "languages": {
-        "javascript": 1
-      },
-      "cwes": {
-        "CWE-352": 1
-      },
-      "sampleIds": [
-        "GHSA-f5vj-f2hx-8m93"
-      ],
-      "share": 0.003676470588235294
     },
     {
       "category": "tool_or_setup_incomplete",
@@ -667,19 +599,11 @@
       "language": "typescript",
       "cwe": "CWE-799",
       "repo": "openclaw/openclaw",
-      "stage": "filters",
-      "reason": "value-too-short",
-      "category": "guard_or_suppression",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
       "evidence": {
-        "ledger": {
-          "id": null,
-          "line": 288,
-          "family": null,
-          "cwe": null,
-          "reason": "value-too-short",
-          "identity": "location-only"
-        },
-        "alsoDropped": 0
+        "family": null
       },
       "location": {
         "file": "extensions/line/src/monitor.ts",
@@ -867,19 +791,11 @@
       "language": "javascript",
       "cwe": "CWE-367",
       "repo": "nodejs/undici",
-      "stage": "filters",
-      "reason": "logic-gate:compared-value-not-secret-shaped",
-      "category": "guard_or_suppression",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
       "evidence": {
-        "ledger": {
-          "id": null,
-          "line": 71,
-          "family": null,
-          "cwe": null,
-          "reason": "logic-gate:compared-value-not-secret-shaped",
-          "identity": "location-only"
-        },
-        "alsoDropped": 1
+        "family": null
       },
       "location": {
         "file": "lib/dispatcher/client-h1.js",
@@ -2299,19 +2215,16 @@
       "language": "typescript",
       "cwe": "CWE-287",
       "repo": "openclaw/openclaw",
-      "stage": "filters",
-      "reason": "entropy-filter:length<12",
-      "category": "guard_or_suppression",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
       "evidence": {
-        "ledger": {
-          "id": null,
-          "line": 262,
-          "family": null,
-          "cwe": null,
-          "reason": "entropy-filter:length<12",
-          "identity": "location-only"
-        },
-        "alsoDropped": 0
+        "reported": {
+          "id": "ir-taint:src/gateway/control-ui.ts:421:js-response-setheader",
+          "line": 421,
+          "family": "response-splitting",
+          "cwe": "CWE-113"
+        }
       },
       "location": {
         "file": "src/gateway/control-ui.ts",
@@ -2783,19 +2696,16 @@
       "language": "javascript",
       "cwe": "CWE-352",
       "repo": "webpack/webpack-dev-server",
-      "stage": "filters",
-      "reason": "sanitized:empty-args",
-      "category": "sanitizer_misclassification",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
       "evidence": {
-        "ledger": {
+        "reported": {
           "id": null,
-          "line": 2205,
-          "family": null,
-          "cwe": null,
-          "reason": "sanitized:empty-args",
-          "identity": "location-only"
-        },
-        "alsoDropped": 0
+          "line": 2966,
+          "family": "pii-exposure",
+          "cwe": "CWE-359"
+        }
       },
       "location": {
         "file": "lib/Server.js",
@@ -3369,19 +3279,11 @@
       "language": "go",
       "cwe": "CWE-863",
       "repo": "OliveTin/OliveTin",
-      "stage": "filters",
-      "reason": "value-too-short",
-      "category": "guard_or_suppression",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
       "evidence": {
-        "ledger": {
-          "id": null,
-          "line": 620,
-          "family": null,
-          "cwe": null,
-          "reason": "value-too-short",
-          "identity": "location-only"
-        },
-        "alsoDropped": 0
+        "family": "broken-authz"
       },
       "location": {
         "file": "service/internal/api/api.go",
@@ -5019,19 +4921,11 @@
       "language": "python",
       "cwe": "CWE-22",
       "repo": "BKDDFS/shamefile",
-      "stage": "filters",
-      "reason": "value-too-short",
-      "category": "guard_or_suppression",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
       "evidence": {
-        "ledger": {
-          "id": null,
-          "line": 79,
-          "family": null,
-          "cwe": null,
-          "reason": "value-too-short",
-          "identity": "location-only"
-        },
-        "alsoDropped": 1
+        "sourcesRecognized": 0
       },
       "location": {
         "file": "e2e_tests/test_shame_next.py",

@@ -195,6 +195,8 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 **AppSec** — set the gate, read the evidence
 - [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
 - [Assurance modes](docs/walkthroughs/assurance-modes.md) — `advisory` / `standard` / `strict`, real captured output
+- [Release assurance](docs/guides/release-assurance.md) — a signed release package, a deterministic `not_deployable` / `needs_review` / `deployable` verdict, `release-view`, offline verification
+- [Engineering excellence evidence](docs/engineering-excellence/README.md) — measured results, the end-to-end demo, and what is not proven
 - [Architecture: the finding lifecycle](docs/architecture/finding-lifecycle.md) — the real module pipeline, detector to report
 
 **Privacy** — trace where sensitive data actually goes
