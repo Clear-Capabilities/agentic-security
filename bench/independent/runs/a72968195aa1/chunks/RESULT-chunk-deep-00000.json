@@ -1,0 +1,1921 @@
+{
+  "schema": "agentic-security/independent-population-result@2",
+  "source": "bench/independent/runner.mjs",
+  "measuredAt": "2026-10-16",
+  "engineVersion": "0.172.0",
+  "configuration": "deep",
+  "population": {
+    "totalEntries": 283,
+    "chunk": {
+      "offset": 0,
+      "limit": 20,
+      "entriesInSlice": 20
+    },
+    "scoredEntries": 19,
+    "unscored": [
+      {
+        "id": "GHSA-2qj4-mmr9-4v2f",
+        "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-2756287819-36518/bench/independent/cache/GHSA-2qj4-mmr9-4v2f/post)"
+      }
+    ],
+    "labelSources": [
+      "github-security-advisory"
+    ]
+  },
+  "reliable": true,
+  "perEntry": [
+    {
+      "id": "GHSA-225x-3jhx-wh4q",
+      "cwe": "CWE-200",
+      "language": "php",
+      "repo": "statamic/cms",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 1,
+      "fnWide": 0,
+      "fpWide": 1,
+      "tnWide": 0,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 8,
+      "postFindings": 8
+    },
+    {
+      "id": "GHSA-23hp-3jrh-7fpw",
+      "cwe": "CWE-770",
+      "language": "typescript",
+      "repo": "isaacs/node-tar",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 105,
+      "postFindings": 105
+    },
+    {
+      "id": "GHSA-242p-4v39-2v8g",
+      "cwe": "CWE-79",
+      "language": "ruby",
+      "repo": "phlex-ruby/phlex",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 17,
+      "postFindings": 17
+    },
+    {
+      "id": "GHSA-248r-7h7q-cr24",
+      "cwe": "CWE-668",
+      "language": "javascript",
+      "repo": "patriksimek/vm2",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 48,
+      "postFindings": 48
+    },
+    {
+      "id": "GHSA-26gq-p25f-99cp",
+      "cwe": "CWE-129",
+      "language": "go",
+      "repo": "fatedier/frp",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 192,
+      "postFindings": 192
+    },
+    {
+      "id": "GHSA-26w5-6g95-gj28",
+      "cwe": "CWE-22",
+      "language": "go",
+      "repo": "runatlantis/atlantis",
+      "heldOut": true,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 1,
+      "fnWide": 0,
+      "fpWide": 1,
+      "tnWide": 0,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 34,
+      "postFindings": 34
+    },
+    {
+      "id": "GHSA-28f5-38xr-jh2w",
+      "cwe": "CWE-441",
+      "language": "java",
+      "repo": "appium/java-client",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 0,
+      "postFindings": 0
+    },
+    {
+      "id": "GHSA-28gm-jrmw-xx93",
+      "cwe": "CWE-20",
+      "language": "csharp",
+      "repo": "sipsorcery-org/sipsorcery",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 39,
+      "postFindings": 39
+    },
+    {
+      "id": "GHSA-2956-977x-2w3r",
+      "cwe": "CWE-22",
+      "language": "python",
+      "repo": "flytohub/flyto-core",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 1,
+      "fnWide": 0,
+      "fpWide": 1,
+      "tnWide": 0,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 134,
+      "postFindings": 134
+    },
+    {
+      "id": "GHSA-29g5-m8v7-v564",
+      "cwe": "CWE-22",
+      "language": "ruby",
+      "repo": "Shopify/measured",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 12,
+      "postFindings": 12
+    },
+    {
+      "id": "GHSA-29rf-f4vv-pvq6",
+      "cwe": "CWE-287",
+      "language": "go",
+      "repo": "authorizerdev/authorizer",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 654,
+      "postFindings": 656
+    },
+    {
+      "id": "GHSA-2c47-m757-32g6",
+      "cwe": "CWE-78",
+      "language": "go",
+      "repo": "Shopify/ejson2env",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 57,
+      "postFindings": 58
+    },
+    {
+      "id": "GHSA-2cp2-2r3c-7p7r",
+      "cwe": "CWE-94",
+      "language": "python",
+      "repo": "hydra-ecosystem/hydra",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 1,
+      "fnWide": 0,
+      "fpWide": 1,
+      "tnWide": 0,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 10,
+      "postFindings": 10
+    },
+    {
+      "id": "GHSA-2hv5-4h3g-4hjv",
+      "cwe": "CWE-799",
+      "language": "typescript",
+      "repo": "openclaw/openclaw",
+      "heldOut": true,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 2,
+      "postFindings": 2
+    },
+    {
+      "id": "GHSA-2j2x-hqr9-3h42",
+      "cwe": "CWE-601",
+      "language": "typescript",
+      "repo": "remix-run/react-router",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 186,
+      "postFindings": 186
+    },
+    {
+      "id": "GHSA-2jc5-xhx8-qj6h",
+      "cwe": "CWE-770",
+      "language": "ruby",
+      "repo": "fluent-plugins-nursery/fluent-plugin-opentelemetry",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 20,
+      "postFindings": 20
+    },
+    {
+      "id": "GHSA-2m96-52r3-2f3g",
+      "cwe": "CWE-400",
+      "language": "ruby",
+      "repo": "floraison/fugit",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 15,
+      "postFindings": 15
+    },
+    {
+      "id": "GHSA-2mhj-fhvg-v428",
+      "cwe": "CWE-20",
+      "language": "php",
+      "repo": "pimcore/pimcore",
+      "heldOut": false,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 102,
+      "postFindings": 102
+    },
+    {
+      "id": "GHSA-2mrg-gjxq-2gvr",
+      "cwe": "CWE-400",
+      "language": "php",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "heldOut": true,
+      "tp": 0,
+      "fn": 1,
+      "fp": 0,
+      "tn": 1,
+      "tpWide": 0,
+      "fnWide": 1,
+      "fpWide": 0,
+      "tnWide": 1,
+      "tpLocal": 0,
+      "fnLocal": 1,
+      "fpLocal": 0,
+      "tnLocal": 1,
+      "survivedFix": 0,
+      "survivedFixWide": 0,
+      "matchedParser": null,
+      "matchedLine": null,
+      "preFindings": 15,
+      "postFindings": 15
+    }
+  ],
+  "localized": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 19,
+    "tn": 19,
+    "precision": {
+      "n": 0,
+      "d": 0,
+      "value": null
+    },
+    "recall": {
+      "n": 0,
+      "d": 19,
+      "value": 0
+    },
+    "f1": null,
+    "scored": 19,
+    "meaning": "matching finding landed on code the fix actually changed (±3 lines)"
+  },
+  "fixDiscrimination": {
+    "n": 0,
+    "d": 0,
+    "value": null,
+    "meaning": "localized TPs whose finding disappears from the lines the fix produced"
+  },
+  "fixDiscriminationFileScoped": {
+    "n": 0,
+    "d": 0,
+    "value": null,
+    "meaning": "localized TPs with NO matching finding anywhere in the advisory files afterwards"
+  },
+  "byLayer": {},
+  "byLanguageLayer": {
+    "php": {
+      "entries": 3,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "typescript": {
+      "entries": 3,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "ruby": {
+      "entries": 4,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "javascript": {
+      "entries": 1,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "go": {
+      "entries": 4,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "java": {
+      "entries": 1,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "csharp": {
+      "entries": 1,
+      "localizedTps": 0,
+      "byLayer": {}
+    },
+    "python": {
+      "entries": 2,
+      "localizedTps": 0,
+      "byLayer": {}
+    }
+  },
+  "taintShare": {
+    "overall": {
+      "n": 0,
+      "d": 0
+    },
+    "byLanguage": {
+      "php": {
+        "n": 0,
+        "d": 0
+      },
+      "typescript": {
+        "n": 0,
+        "d": 0
+      },
+      "ruby": {
+        "n": 0,
+        "d": 0
+      },
+      "javascript": {
+        "n": 0,
+        "d": 0
+      },
+      "go": {
+        "n": 0,
+        "d": 0
+      },
+      "java": {
+        "n": 0,
+        "d": 0
+      },
+      "csharp": {
+        "n": 0,
+        "d": 0
+      },
+      "python": {
+        "n": 0,
+        "d": 0
+      }
+    }
+  },
+  "heldOut": {
+    "meaning": "LEGACY per-id slice, DEMOTED to development use (it splits repositories across both sides; see splits.json legacyHoldout). Never quoted as held-out.",
+    "entries": 3,
+    "localized": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 3,
+      "tn": 3,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 3,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 3
+    }
+  },
+  "development": {
+    "entries": 16,
+    "localized": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 16,
+      "tn": 16,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 16,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 16
+    }
+  },
+  "overall": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 19,
+    "tn": 19,
+    "precision": {
+      "n": 0,
+      "d": 0,
+      "value": null
+    },
+    "recall": {
+      "n": 0,
+      "d": 19,
+      "value": 0
+    },
+    "f1": null,
+    "scored": 19
+  },
+  "wide": {
+    "tp": 4,
+    "fp": 4,
+    "fn": 15,
+    "tn": 15,
+    "precision": {
+      "n": 4,
+      "d": 8,
+      "value": 0.5
+    },
+    "recall": {
+      "n": 4,
+      "d": 19,
+      "value": 0.21052631578947367
+    },
+    "f1": 0.2962962962962963,
+    "scored": 19,
+    "meaning": "same scans, advisory-file restriction OFF"
+  },
+  "byLanguage": {
+    "csharp": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "go": {
+      "entries": 4,
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "tn": 4,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 4,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 4
+    },
+    "java": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "javascript": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "php": {
+      "entries": 3,
+      "tp": 0,
+      "fp": 0,
+      "fn": 3,
+      "tn": 3,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 3,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 3
+    },
+    "python": {
+      "entries": 2,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2,
+      "tn": 2,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 2,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 2
+    },
+    "ruby": {
+      "entries": 4,
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "tn": 4,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 4,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 4
+    },
+    "typescript": {
+      "entries": 3,
+      "tp": 0,
+      "fp": 0,
+      "fn": 3,
+      "tn": 3,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 3,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 3
+    }
+  },
+  "byCwe": {
+    "CWE-129": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-20": {
+      "entries": 2,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2,
+      "tn": 2,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 2,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 2
+    },
+    "CWE-200": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-22": {
+      "entries": 3,
+      "tp": 0,
+      "fp": 0,
+      "fn": 3,
+      "tn": 3,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 3,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 3
+    },
+    "CWE-287": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-400": {
+      "entries": 2,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2,
+      "tn": 2,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 2,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 2
+    },
+    "CWE-441": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-601": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-668": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-770": {
+      "entries": 2,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2,
+      "tn": 2,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 2,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 2
+    },
+    "CWE-78": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-79": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-799": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    },
+    "CWE-94": {
+      "entries": 1,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "tn": 1,
+      "precision": {
+        "n": 0,
+        "d": 0,
+        "value": null
+      },
+      "recall": {
+        "n": 0,
+        "d": 1,
+        "value": 0
+      },
+      "f1": null,
+      "scored": 1
+    }
+  },
+  "splits": {
+    "protocolHash": "sha256:612425af9f0dd8ac0fd6a0f0c0dfb0d5fa055611de6faa11b57ac5ae3ffe4d65",
+    "counts": {
+      "dev": 591,
+      "validation": 204,
+      "sealed": 209
+    }
+  },
+  "scoring": {
+    "schemaVersion": 1,
+    "minEntriesForRate": 30,
+    "denominators": {
+      "inScope": 20,
+      "scored": 19,
+      "unscored": 1,
+      "unscoredByClass": {
+        "timeout": 1
+      },
+      "unaccounted": 0,
+      "unaccountedExamples": [],
+      "duplicateRows": [],
+      "rowsNotInScope": [],
+      "reconciles": true,
+      "rule": "in scope = scored + unscored + unaccounted; an unscored entry is in no denominator and is never a miss or a negative"
+    },
+    "definitions": {
+      "localized": {
+        "claim": true,
+        "meaning": "a matching finding landed on code the fix changed (advisory-local)",
+        "total": {
+          "entries": 19,
+          "status": "insufficient_population",
+          "tp": 0,
+          "fp": 0,
+          "fn": 19,
+          "tn": 19,
+          "note": "19 scored entries, below 30: counts only, no rate"
+        },
+        "intervals": {
+          "note": "insufficient_population: no interval is computed"
+        },
+        "byLanguage": {
+          "csharp": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "go": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 4,
+            "tn": 4,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "java": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "javascript": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "php": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "python": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "ruby": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 4,
+            "tn": 4,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "typescript": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "byCwe": {
+          "CWE-129": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-20": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-200": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-22": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-287": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-400": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-441": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-601": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-668": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-770": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-78": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-79": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-799": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-94": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "aggregates": {
+          "micro": null,
+          "macroF1": null,
+          "weightedF1": null,
+          "groupsUsed": 0,
+          "groupsTotal": 8
+        },
+        "bySplit": {
+          "dev": {
+            "entries": 14,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 14,
+            "tn": 14,
+            "note": "14 scored entries, below 30: counts only, no rate"
+          },
+          "validation": {
+            "entries": 5,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 5,
+            "tn": 5,
+            "note": "5 scored entries, below 30: counts only, no rate"
+          }
+        }
+      },
+      "file": {
+        "claim": false,
+        "meaning": "diagnostic: the labelled CWE appeared in the advisory files",
+        "total": {
+          "entries": 19,
+          "status": "insufficient_population",
+          "tp": 0,
+          "fp": 0,
+          "fn": 19,
+          "tn": 19,
+          "note": "19 scored entries, below 30: counts only, no rate"
+        },
+        "intervals": {
+          "note": "insufficient_population: no interval is computed"
+        },
+        "byLanguage": {
+          "csharp": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "go": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 4,
+            "tn": 4,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "java": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "javascript": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "php": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "python": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "ruby": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 4,
+            "tn": 4,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "typescript": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "byCwe": {
+          "CWE-129": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-20": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-200": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-22": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-287": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-400": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-441": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-601": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-668": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-770": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-78": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-79": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-799": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-94": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "aggregates": {
+          "micro": null,
+          "macroF1": null,
+          "weightedF1": null,
+          "groupsUsed": 0,
+          "groupsTotal": 8
+        },
+        "bySplit": {
+          "dev": {
+            "entries": 14,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 14,
+            "tn": 14,
+            "note": "14 scored entries, below 30: counts only, no rate"
+          },
+          "validation": {
+            "entries": 5,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 5,
+            "tn": 5,
+            "note": "5 scored entries, below 30: counts only, no rate"
+          }
+        }
+      },
+      "wide": {
+        "claim": false,
+        "meaning": "diagnostic: the labelled CWE appeared anywhere in the package",
+        "total": {
+          "entries": 19,
+          "status": "insufficient_population",
+          "tp": 4,
+          "fp": 4,
+          "fn": 15,
+          "tn": 15,
+          "note": "19 scored entries, below 30: counts only, no rate"
+        },
+        "intervals": {
+          "note": "insufficient_population: no interval is computed"
+        },
+        "byLanguage": {
+          "csharp": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "go": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 1,
+            "fp": 1,
+            "fn": 3,
+            "tn": 3,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "java": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "javascript": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "php": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 1,
+            "fp": 1,
+            "fn": 2,
+            "tn": 2,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "python": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 2,
+            "fp": 2,
+            "fn": 0,
+            "tn": 0,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "ruby": {
+            "entries": 4,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 4,
+            "tn": 4,
+            "note": "4 scored entries, below 30: counts only, no rate"
+          },
+          "typescript": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "byCwe": {
+          "CWE-129": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-20": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-200": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 1,
+            "fp": 1,
+            "fn": 0,
+            "tn": 0,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-22": {
+            "entries": 3,
+            "status": "insufficient_population",
+            "tp": 2,
+            "fp": 2,
+            "fn": 1,
+            "tn": 1,
+            "note": "3 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-287": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-400": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-441": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-601": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-668": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-770": {
+            "entries": 2,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 2,
+            "tn": 2,
+            "note": "2 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-78": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-79": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-799": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 0,
+            "fp": 0,
+            "fn": 1,
+            "tn": 1,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          },
+          "CWE-94": {
+            "entries": 1,
+            "status": "insufficient_population",
+            "tp": 1,
+            "fp": 1,
+            "fn": 0,
+            "tn": 0,
+            "note": "1 scored entries, below 30: counts only, no rate"
+          }
+        },
+        "aggregates": {
+          "micro": null,
+          "macroF1": null,
+          "weightedF1": null,
+          "groupsUsed": 0,
+          "groupsTotal": 8
+        },
+        "bySplit": {
+          "dev": {
+            "entries": 14,
+            "status": "insufficient_population",
+            "tp": 3,
+            "fp": 3,
+            "fn": 11,
+            "tn": 11,
+            "note": "14 scored entries, below 30: counts only, no rate"
+          },
+          "validation": {
+            "entries": 5,
+            "status": "insufficient_population",
+            "tp": 1,
+            "fp": 1,
+            "fn": 4,
+            "tn": 4,
+            "note": "5 scored entries, below 30: counts only, no rate"
+          }
+        }
+      }
+    },
+    "fixedVersionPressure": {
+      "meaning": "findings of ANY family on the fixed version, not only the labelled CWE: the alert burden a user would see",
+      "entriesMeasured": 19,
+      "total": 1653,
+      "mean": 87,
+      "median": 34,
+      "p95": 656,
+      "entriesWithAnyFinding": 18
+    },
+    "fixDiscrimination": {
+      "n": 0,
+      "d": 0,
+      "value": null,
+      "meaning": "localized true positives whose finding is gone from the lines the fix produced"
+    }
+  },
+  "headline": {
+    "quotable": false,
+    "reason": "insufficient_population: 19 scored entries, below 30",
+    "counts": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 19,
+      "tn": 19
+    },
+    "denominators": {
+      "inScope": 20,
+      "scored": 19,
+      "unscored": 1,
+      "unscoredByClass": {
+        "timeout": 1
+      },
+      "unaccounted": 0,
+      "unaccountedExamples": [],
+      "duplicateRows": [],
+      "rowsNotInScope": [],
+      "reconciles": true,
+      "rule": "in scope = scored + unscored + unaccounted; an unscored entry is in no denominator and is never a miss or a negative"
+    }
+  }
+}

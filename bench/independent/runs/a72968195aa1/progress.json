@@ -3,11 +3,29 @@
   "runId": "a72968195aa1",
   "chunks": {
     "0": {
-      "state": "running",
+      "state": "done",
       "offset": 0,
       "limit": 20,
       "startedAt": "2026-10-16T13:30:24.871Z",
-      "attempts": 2
+      "attempts": 2,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 84406
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2277094
+      },
+      "endedAt": "2026-10-16T14:09:46.377Z"
+    },
+    "1": {
+      "state": "running",
+      "offset": 20,
+      "limit": 20,
+      "startedAt": "2026-10-16T14:09:46.384Z",
+      "attempts": 1
     }
   },
   "measuredIn": {

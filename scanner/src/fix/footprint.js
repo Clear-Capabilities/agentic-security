@@ -8,11 +8,11 @@
 // This is a HEURISTIC over source text, not a proof of equivalence. It catches the removal of a whole operation kind, not a subtler
 // behaviour change. When it cannot see any operation kind in the original it says `unobservable` and the leg is not_run, never passed.
 const KINDS = {
-  'process-exec': /\b(?:child_process|execSync|execFileSync|execFile|spawnSync|spawn|exec|system|popen|Runtime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec|ProcessBuilder|subprocess\s*\.\s*\w+|os\s*\.\s*system|shell_exec|passthru|proc_open)\s*\(/,
+  'process-exec': /require\s*\(\s*['"](?:node:)?child_process['"]\s*\)|from\s+['"](?:node:)?child_process['"]|\b(?:execSync|execFileSync|execFile|spawnSync|spawn|exec|system|popen|Runtime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec|ProcessBuilder|subprocess\s*\.\s*\w+|os\s*\.\s*system|shell_exec|passthru|proc_open)\s*\(/,
   'data-access': /\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b|\.(?:find|findOne|findById|findAll|findUnique|findFirst|query|execute|executeQuery|executemany|prepare|raw|where|get_object_or_404|createQuery|queryForObject)\s*\(|\b(?:db|database|conn|connection|pool|cursor|collection|repository|repo|prisma|knex|sequelize|session)\w*\s*\.\s*\w+\s*\(/i,
   'file-access': /\b(?:readFile|readFileSync|createReadStream|writeFile|writeFileSync|createWriteStream|sendFile|readdir|readdirSync|unlink|open|os\.Open|ioutil\.ReadFile|file_get_contents|File\s*\(|FileInputStream|FileReader|Files\s*\.\s*\w+)\s*\(/,
   'network-out': /\b(?:fetch|axios|got|request|urlopen|requests\s*\.\s*\w+|http\s*\.\s*(?:get|request)|https\s*\.\s*(?:get|request)|HttpClient|http\.Get|curl_exec)\s*\(/,
-  'html-output': /\b(?:res\s*\.\s*(?:send|write|render|json|end)|render_template|render|HttpResponse|JsonResponse|jsonify|innerHTML|echo|print|ResponseEntity|c\.JSON|c\.String)\b/,
+  'html-output': /\b(?:res|response|reply|ctx)\b[^;\n]*\.\s*(?:send|write|render|json|end)\s*\(|\b(?:render_template|HttpResponse|JsonResponse|jsonify|innerHTML|echo|ResponseEntity|c\.JSON|c\.String)\b/,
 };
 const DENIAL = /\b(?:status\s*\(\s*(?:401|403|404|405|410|501|503)\s*\)|(?:abort|HTTPException|http_error|ResponseStatusException)\s*\(\s*(?:401|403|404|501)|(?:PermissionDenied|Forbidden|NotImplemented|AccessDenied|Unauthorized)\b|(?:forbidden|not implemented|access denied|disabled)\b|return\s+(?:403|401|501)\b|StatusForbidden|StatusNotImplemented)/i;
 // Which kinds a CWE's fix must keep. Unlisted weaknesses are held to every kind the original had.

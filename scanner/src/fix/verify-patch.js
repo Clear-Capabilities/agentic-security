@@ -13,6 +13,7 @@ import { stateDir } from '../posture/state-dir.js';
 import { recordFromVerifyFix } from './verification-adapters.js';
 import { replayExploit } from './exploit-replay.js';
 import { checkFootprint } from './footprint.js';
+import { checkSecretPersistence } from './secret-persistence.js';
 import { runTestsOnPatchedCopy } from './test-commands.js';
 import { legacyViewOf } from './verification-record.js';
 
@@ -56,15 +57,25 @@ export async function verifyPatch(o) {
   };
   const read = readOriginal(scanRoot);
   const footprint = checkFootprint({ before: Object.fromEntries(Object.keys(files).map((r) => [r, read(r)])), after: files, cwe: stored?.cwe || o.cwe || null, intentionalRemoval: fixMeta?.intentionalRemoval || null });
+  // A secret finding is only fixed when the secret is gone from the source, not when it was re-encoded.
+  const isSecret = /CWE-(798|259|321|312)/i.test(String(stored?.cwe || o.cwe || ''));
+  const persistence = isSecret && stored?.file && files[stored.file] !== undefined ? checkSecretPersistence({ before: read(stored.file), after: files[stored.file], line: stored.line }) : null;
   let verdict = await run({ scanRoot, originalFindingStableId: finding.stableId, files, fixMeta, runTests, ...(poc ? { poc } : {}), ...(extra || {}) });
   // The finding disappearing is not enough: a patch that removed the feature is rejected here, for every route at once.
+  if (persistence?.status === 'failed' && verdict.ok) verdict = { ...verdict, ok: false, rejectedBy: 'secret-persists', summary: `${persistence.reason}\n${verdict.summary || ''}`.trim() };
   if (footprint.status === 'failed' && verdict.ok) verdict = { ...verdict, ok: false, rejectedBy: 'behavior-preservation', summary: `${footprint.reason}\n${verdict.summary || ''}`.trim() };
   const fixVerification = recordFromVerifyFix(verdict, {
     finding: { id: finding.id ?? stored?.id ?? finding.stableId, stableId: finding.stableId },
     files, route, mode, findingPresent: !!(stored || finding.present), preFiles: readOriginal(scanRoot),
-    requiredLegs: replay ? [...REQUIRED_LEGS, 'exploitProofAfter'] : REQUIRED_LEGS, replay, footprint,
+    requiredLegs: replay ? [...REQUIRED_LEGS, 'exploitProofAfter'] : REQUIRED_LEGS, replay, footprint, persistence,
   });
-  return { verdict, fixVerification, canonical: legacyViewOf(fixVerification), replay, footprint };
+  const canonical = legacyViewOf(fixVerification);
+  // The record is the authority: a failed leg (a surviving exploit, tests that fail on the patched tree) rejects the patch on every route.
+  if (!canonical.ok && verdict.ok) {
+    const failed = ['securityAfter', 'exploitProofAfter', 'newFindingDelta', 'behaviorTests', 'behaviorPreservation', 'lint'].filter((n) => fixVerification[n].status === 'failed');
+    verdict = { ...verdict, ok: false, rejectedBy: verdict.rejectedBy || `leg:${failed[0] || 'failed'}`, summary: `${failed.map((n) => `${n}: ${fixVerification[n].reason}`).join('; ') || 'a verification leg failed'}\n${verdict.summary || ''}`.trim() };
+  }
+  return { verdict, fixVerification, canonical, replay, footprint, persistence };
 }
 
 /** The additive fields every route puts on its result. Existing fields are untouched. */

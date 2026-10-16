@@ -1,0 +1,20 @@
+{
+  "unsafeAccepted": [
+    "sqli-query/dodge-rule-by-indirection"
+  ],
+  "safeRejected": [
+    "authz-delete/owner-scoped",
+    "secret-jwt/from-env",
+    "xss-send/escape-helper"
+  ],
+  "declaredGaps": [
+    "sqli-query/dodge-rule-by-indirection"
+  ],
+  "denominators": {
+    "patches": 23,
+    "safe": 8,
+    "unsafe": 15
+  },
+  "unscored": [],
+  "unavailableMisreadAsBlocked": 0
+}
