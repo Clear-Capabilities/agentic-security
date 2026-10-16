@@ -93,6 +93,16 @@ function clip(s) { return s.trim().slice(0, 160); }
  *   lines   the FILE's lines (0-based array)
  * Returns [{ symbolId, line, category:'control'|'sensitive', kind, subkind, evidence, basis, rejectionSeen, text }]
  */
+function bodyAfterSignature(raw) {
+  const arrow = raw.indexOf('=>');
+  let rest = null;
+  if (arrow >= 0) rest = raw.slice(arrow + 2);
+  else { const m = /\)\s*\{(.*)$/.exec(raw); if (m) rest = m[1]; }
+  if (rest === null) return '';
+  const brace = /^\s*\{(.*)$/.exec(rest);
+  return brace ? brace[1] : rest;
+}
+
 export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
   const out = [];
   const seen = new Set();
@@ -125,7 +135,10 @@ export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
     const calls = [];
     const re = /([A-Za-z_$][\w$]*(?:(?:\.|::)[A-Za-z_$][\w$]*)*)\s*\(/g;
     let m;
-    if (!isDeclLine) { while ((m = re.exec(raw))) calls.push(m[1]); }
+    // A one-line handler (`app.get('/x', guard, async (req, res) => { res.json(await db.docs.findOne({ id })); })`) is its own declaration
+    // line, so skipping the whole line also skipped its body. Only the SIGNATURE is skipped: the calls after the arrow or the opening brace count.
+    const scanText = isDeclLine ? bodyAfterSignature(raw) : raw;
+    while ((m = re.exec(scanText))) calls.push(m[1]);
     if (haskell && !isDeclLine) {
       const hre = /\b([A-Z][\w.]*\.[a-z][\w']*|[a-z][\w']*)\b/g;
       while ((m = hre.exec(raw))) if (AUTH_NAME.test(m[1]) || HS_SENSITIVE.test(m[1])) calls.push(m[1]);

@@ -127,10 +127,17 @@
         "durationMs": 923003
       },
       "endedAt": "2026-10-16T16:07:41.607Z"
+    },
+    "7": {
+      "state": "running",
+      "offset": 140,
+      "limit": 20,
+      "startedAt": "2026-10-16T16:08:00.728Z",
+      "attempts": 1
     }
   },
   "measuredIn": {
-    "detachedWorktreeOf": "391760d52f6afeb5c6ef647bde6da3e4bdcf4ebc",
+    "detachedWorktreeOf": "c824a92e943e71db3997eeb3c7a86bb73094fc40",
     "linkedFromSourceCheckout": [
       "scanner/node_modules",
       "scanner/vendor",
@@ -139,7 +146,7 @@
   },
   "identity": {
     "schemaVersion": 1,
-    "sourceCommit": "391760d52f6afeb5c6ef647bde6da3e4bdcf4ebc",
+    "sourceCommit": "c824a92e943e71db3997eeb3c7a86bb73094fc40",
     "sourceBranch": "HEAD",
     "sourceTreeClean": true,
     "dirtyPaths": [],
@@ -168,7 +175,7 @@
       "cpus": 8,
       "memoryGb": 16
     },
-    "startedAt": "2026-10-16T15:21:03.420Z",
+    "startedAt": "2026-10-16T16:07:59.950Z",
     "measurementValid": true,
     "releaseTrust": "trusted",
     "invalidReasons": []
