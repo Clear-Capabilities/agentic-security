@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T13:17:03.199Z",
-  "revision": 141,
+  "updatedAt": "2026-10-16T13:28:35.063Z",
+  "revision": 145,
   "checkout": {
-    "commit": "3267b4c00d26298df8d26db7c196591703c6c5e6",
+    "commit": "3e6d952acc16e82f786dd1895fb463aa3588386a",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T13:17:03.198Z"
+    "capturedAt": "2026-10-16T13:28:35.063Z"
   },
   "tasks": {
     "E0-01": {
@@ -2229,18 +2229,131 @@
       "notes": []
     },
     "E3-01": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T13:28:32.958Z",
+      "completedAt": "2026-10-16T13:28:35.063Z",
+      "heartbeatAt": "2026-10-16T13:28:34.756Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "3e6d952acc16e82f786dd1895fb463aa3588386a",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-b91bafe8",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e3-01-patch-routes.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T13:28:33.006Z",
+          "endedAt": "2026-10-16T13:28:34.753Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 1736,
+          "log": "scripts/engineering-excellence/logs/E3-01/2026-10-16T13-28-33-006Z-c-b91bafe8.log",
+          "logSha256": "26cd0af5f7e61df6bb514b34a405010b52dc7e0f7cae4fa8b30ad69d91d9955e",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E3-01",
+        "status": "done",
+        "sourceCommit": "3e6d952acc16e82f786dd1895fb463aa3588386a",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "docs/engineering-excellence/patch-routes.json",
+          "scanner/test/engineering-excellence/e3-01-patch-routes.test.js",
+          "scanner/package.json"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e3-01-patch-routes.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E3-01/2026-10-16T13-28-33-006Z-c-b91bafe8.log",
+            "logSha256": "26cd0af5f7e61df6bb514b34a405010b52dc7e0f7cae4fa8b30ad69d91d9955e",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e3-01-patch-routes.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "docs/engineering-excellence/patch-routes.json",
+          "scanner/test/engineering-excellence/e3-01-patch-routes.test.js#every-route-names-a-real-entry-point-in-a-real-file-and-at-least-one-existing-test",
+          "scanner/test/engineering-excellence/e3-01-patch-routes.test.js#D10-a-patch-that-removes-the-vulnerable-behaviour-is-accepted-as-verified"
+        ],
+        "benchmarkComparisons": [
+          "unmeasured: an inventory of 16 routes and 10 divergences found by reading the code and confirmed with call tests; 3 divergences were reproduced by running the routes (deny-all and empty patches verified, tests run before the patch yet reported fully verified, apply and verify shapes differ)"
+        ],
+        "knownLimitations": [
+          "a read-only audit by a second agent produced the route table; the structural test checks that each entry point exists, not that the table is exhaustive",
+          "R5, R6, R11, R12, R13 are covered by existing tests, not by new call tests here"
+        ],
+        "closedAt": "2026-10-16T13:28:35.063Z"
+      },
       "notes": []
     },
     "E3-02": {

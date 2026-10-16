@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "note": "Every route by which a patch can be produced, verified or applied, as found by reading the code at the commit named in docs/engineering-excellence/baseline.json. `symbol` is a name that must occur in `file`; the test checks it, so a renamed or removed entry point fails the build instead of leaving the table stale. `writes` says whether the route can change files. `verifier` names what verifies the patch: verifyFix is scanner/src/posture/fix-verify.js. `legs` lists what the route checks. Divergences are listed separately with a status and the task that closes them.",
+  "routes": [
+    {
+      "id": "R1",
+      "name": "CLI fix --finding (print)",
+      "file": "scanner/bin/agentic-security.js",
+      "symbol": "cmdFix",
+      "writes": false,
+      "verifier": "none",
+      "legs": [],
+      "tests": [
+        "scanner/test/cli-fix-apply.test.js"
+      ]
+    },
+    {
+      "id": "R2",
+      "name": "CLI fix --preview",
+      "file": "scanner/bin/agentic-security.js",
+      "symbol": "previewDiff",
+      "writes": false,
+      "verifier": "none",
+      "legs": [],
+      "tests": [
+        "scanner/test/cli-fix-apply.test.js"
+      ]
+    },
+    {
+      "id": "R3",
+      "name": "CLI fix --apply",
+      "file": "scanner/src/fix/apply-fix-service.js",
+      "symbol": "applyVerifiedFix",
+      "writes": true,
+      "verifier": "verifyFix",
+      "legs": [
+        "rescan",
+        "new-findings",
+        "lint",
+        "tests",
+        "honesty-gate"
+      ],
+      "result": [
+        "ok",
+        "applied",
+        "verified",
+        "verifiedFull",
+        "degradedLegs"
+      ],
+      "tests": [
+        "scanner/test/apply-fix-service.test.js",
+        "scanner/test/cli-fix-apply.test.js",
+        "scanner/test/high-impact-approval-gate.test.js"
+      ]
+    },
+    {
+      "id": "R4",
+      "name": "CLI fix --apply --require-proof",
+      "file": "scanner/src/posture/proof-fabric/fix-proof.js",
+      "symbol": "verifyFixWithProof",
+      "writes": true,
+      "verifier": "verifyFix + exploit replay",
+      "legs": [
+        "exploit-replay",
+        "rescan",
+        "regression"
+      ],
+      "result": [
+        "state",
+        "verified",
+        "completeness",
+        "degradedLegs"
+      ],
+      "tests": [
+        "scanner/test/proof-fabric/fix-store-runner.test.js"
+      ]
+    },
+    {
+      "id": "R5",
+      "name": "CLI fix for Haskell and Nix findings",
+      "file": "scanner/src/language/fix-lifecycle.js",
+      "symbol": "runFixLifecycle",
+      "writes": true,
+      "verifier": "language lifecycle",
+      "legs": [
+        "path",
+        "syntax",
+        "rescan",
+        "effective-config",
+        "witness",
+        "compile"
+      ],
+      "result": [
+        "status",
+        "tier",
+        "label",
+        "gates"
+      ],
+      "tests": [
+        "scanner/test/language/language-integrations.test.js"
+      ]
+    },
+    {
+      "id": "R6",
+      "name": "CLI fix for Hackage and flake dependencies",
+      "file": "scanner/src/language/context.js",
+      "symbol": "languageUpgradePreview",
+      "writes": true,
+      "verifier": "none",
+      "legs": [],
+      "result": [
+        "status",
+        "tier",
+        "label",
+        "gates"
+      ],
+      "tests": [
+        "scanner/test/language/language-integrations.test.js"
+      ]
+    },
+    {
+      "id": "R7",
+      "name": "CLI undo",
+      "file": "scanner/src/posture/fix-history.js",
+      "symbol": "undoLast",
+      "writes": true,
+      "verifier": "none",
+      "legs": [],
+      "tests": [
+        "scanner/test/fix-history.test.js"
+      ]
+    },
+    {
+      "id": "R8",
+      "name": "MCP synthesize_fix",
+      "file": "scanner/src/mcp/tools.js",
+      "symbol": "synthesize_fix",
+      "writes": false,
+      "verifier": "none",
+      "legs": [],
+      "tests": [
+        "scanner/test/mcp.test.js",
+        "scanner/test/agent-mcp-tools.test.js"
+      ]
+    },
+    {
+      "id": "R9",
+      "name": "MCP verify_fix",
+      "file": "scanner/src/mcp/tools.js",
+      "symbol": "verify_fix",
+      "writes": false,
+      "verifier": "verifyFix",
+      "legs": [
+        "rescan",
+        "new-findings",
+        "lint",
+        "tests",
+        "poc",
+        "honesty-gate"
+      ],
+      "result": [
+        "ok",
+        "rescan",
+        "lint",
+        "tests",
+        "honesty",
+        "poc",
+        "summary",
+        "verificationRecord"
+      ],
+      "tests": [
+        "scanner/test/mcp.test.js",
+        "scanner/test/verification/verification-record.test.js"
+      ]
+    },
+    {
+      "id": "R10a",
+      "name": "MCP apply_fix with the stored replacement",
+      "file": "scanner/src/mcp/tools.js",
+      "symbol": "apply_fix",
+      "writes": true,
+      "verifier": "verifyFix (via applyVerifiedFix)",
+      "legs": [
+        "rescan",
+        "new-findings",
+        "lint",
+        "tests",
+        "honesty-gate"
+      ],
+      "result": [
+        "applied",
+        "verified",
+        "verifiedFull",
+        "degradedLegs"
+      ],
+      "tests": [
+        "scanner/test/mcp.test.js",
+        "scanner/test/apply-fix-service.test.js"
+      ]
+    },
+    {
+      "id": "R10b",
+      "name": "MCP apply_fix with a caller patch",
+      "file": "scanner/src/mcp/tools.js",
+      "symbol": "apply_fix",
+      "writes": true,
+      "verifier": "verifyFix (direct)",
+      "legs": [
+        "rescan",
+        "new-findings",
+        "lint",
+        "tests"
+      ],
+      "result": [
+        "applied",
+        "verified"
+      ],
+      "tests": [
+        "scanner/test/mcp.test.js",
+        "scanner/test/high-impact-approval-gate.test.js"
+      ]
+    },
+    {
+      "id": "R10c",
+      "name": "MCP apply_fix with a multi-file plan digest",
+      "file": "scanner/src/mcp/tools.js",
+      "symbol": "_applyMultiFilePlan",
+      "writes": true,
+      "verifier": "language lifecycle",
+      "legs": [
+        "path",
+        "syntax",
+        "rescan",
+        "effective-config",
+        "compile"
+      ],
+      "result": [
+        "applied",
+        "verified",
+        "planDigest",
+        "gates"
+      ],
+      "tests": [
+        "scanner/test/mcp-apply-fix-multifile.test.js"
+      ]
+    },
+    {
+      "id": "R11",
+      "name": "MCP synthesize_sca_upgrade",
+      "file": "scanner/src/posture/sca-upgrade.js",
+      "symbol": "planScaUpgrade",
+      "writes": false,
+      "verifier": "ecosystem dry run",
+      "legs": [
+        "dependency-dry-run"
+      ],
+      "tests": [
+        "scanner/test/sca-upgrade.test.js"
+      ]
+    },
+    {
+      "id": "R12",
+      "name": "MCP apply_sca_upgrade",
+      "file": "scanner/src/posture/sca-upgrade.js",
+      "symbol": "applyScaUpgrade",
+      "writes": true,
+      "verifier": "package manager install and the project tests",
+      "legs": [
+        "install",
+        "tests"
+      ],
+      "result": [
+        "applied",
+        "restored",
+        "testResult"
+      ],
+      "tests": [
+        "scanner/test/sca-upgrade.test.js"
+      ]
+    },
+    {
+      "id": "R13",
+      "name": "autopilot --apply",
+      "file": "scanner/src/posture/autopilot.js",
+      "symbol": "runAutopilot",
+      "writes": true,
+      "verifier": "exploit replay and the project tests",
+      "legs": [
+        "exploit-replay",
+        "tests"
+      ],
+      "result": [
+        "outcome",
+        "applied"
+      ],
+      "tests": [
+        "scanner/test/autopilot.test.js",
+        "scanner/test/autopilot-cli.test.js"
+      ]
+    },
+    {
+      "id": "R14",
+      "name": "deterministic rule-template swap",
+      "file": "scanner/src/posture/deterministic-fix.js",
+      "symbol": "synthesizeDeterministicPatch",
+      "writes": false,
+      "verifier": "none",
+      "legs": [],
+      "tests": [
+        "scanner/test/deterministic-fix.test.js"
+      ]
+    },
+    {
+      "id": "R15",
+      "name": "security-fixer agent",
+      "file": "agents/security-fixer.md",
+      "symbol": "verify_fix",
+      "writes": false,
+      "verifier": "inherits R9 and R10",
+      "legs": [],
+      "tests": [
+        "scanner/test/agent-mcp-tools.test.js"
+      ]
+    }
+  ],
+  "divergences": [
+    {
+      "id": "D1",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "Seven different result shapes for 'verified' (verifiedFull+degradedLegs, verified only, completeness, tier+gates, outcome, applied+restored). apply_fix with a caller patch returns no verifiedFull although the tool text promises it; verify_fix computes verifiedFull but does not return it."
+    },
+    {
+      "id": "D2",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "The PoC leg is requested only by verify_fix; applyVerifiedFix and the caller-patch branch report it not-requested, while autopilot and --require-proof use exploit replay as a hard gate."
+    },
+    {
+      "id": "D3",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "verifyFix runs the project tests on the current tree, before the patch is written. It sets testedPrePatch and says so in its summary, yet reports verifiedFull true with no degraded leg, so a passing test leg says nothing about the patch (autopilot writes first, so its test leg does test the patch)."
+    },
+    {
+      "id": "D4",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "AGENTIC_SECURITY_FIX_RUN_TESTS=1 swaps the verifier in the caller-patch branch for verifyFixWithTests and drops fixMeta, the honesty gate and the PoC leg; there are two test-runner implementations."
+    },
+    {
+      "id": "D5",
+      "status": "open",
+      "closedBy": "E3-06",
+      "summary": "Write safeguards differ per route: the baseline-hash race check exists only in applyVerifiedFix; the signed-scan requirement, the high-impact approval gate and the reserved-path list are not applied by the language routes, the SCA route or autopilot."
+    },
+    {
+      "id": "D6",
+      "status": "open",
+      "closedBy": "E3-07",
+      "summary": "autopilot --apply writes with fs.writeFileSync: no fix-history entry, no backup, no undo, no symlink check, no reserved-path check."
+    },
+    {
+      "id": "D7",
+      "status": "open",
+      "closedBy": "E3-06",
+      "summary": "apply_sca_upgrade claims worktree isolation in its header but installs in the real project; restore failures are swallowed; with no test command it returns applied with no test evidence."
+    },
+    {
+      "id": "D8",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "The language routes (R5, R6) do not use the shared service: no approval gate, no reserved-path check, no baseline-hash recheck; R6 hard-codes its rescan and compile gates as not run."
+    },
+    {
+      "id": "D9",
+      "status": "open",
+      "closedBy": "E3-03",
+      "summary": "The honesty gate runs only when fixMeta carries residual, verdict, evidence or signals; the CLI cannot supply them, so the gate never runs from the CLI."
+    },
+    {
+      "id": "D10",
+      "status": "open",
+      "closedBy": "E3-05",
+      "summary": "A patch that deletes the vulnerable behaviour is accepted as verified: observed on a command-injection route replaced by a handler that always returns 403 (ok and verified true), and on a patch that empties the file."
+    }
+  ]
+}
