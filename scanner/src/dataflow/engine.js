@@ -886,6 +886,45 @@ function _withCapturedTaint(entry, fn, state, callContext) {
   return out;
 }
 
+// E2-04: callbacks. A function passed as an argument runs later with values the call site supplies, so its parameters can be tainted. Two
+// shapes are recognised, both resolved structurally and never by guessing:
+//   1. promise and iterator methods (`p.then(cb)`, `list.map(cb)`): the callback's first parameter receives the RECEIVER's value, so it is
+//      tainted when the receiver expression is (a call, an awaited value, a path);
+//   2. a project function that CALLS its own parameter (`function later(v, cb) { cb(v); }`): the callback's parameter k is tainted when the
+//      argument that function passes at position k derives from one of its own tainted parameters.
+// Each tainted parameter becomes a `_higherOrderInvocations` entry, which the engine already consumes by analysing the callback with that
+// parameter tainted.
+const _RECEIVER_TO_CALLBACK = /^(?:then|catch|finally|map|forEach|filter|flatMap|find|findLast|some|every|reduce|reduceRight|sort)$/;
+function _recordCallbackInvocations(node, state, callContext) {
+  if (!node || !Array.isArray(node.args) || !node.args.length) return;
+  const push = (cb, paramIndex, via) => {
+    callContext._higherOrderInvocations = callContext._higherOrderInvocations || [];
+    callContext._higherOrderInvocations.push({ callee: cb.kind === 'ident' ? cb.name : null, calleeQid: cb.kind === 'function-value' ? (cb.qid || null) : null, paramIndex, taintedParam: true, line: node.line, via });
+  };
+  const isCb = (a) => a && (a.kind === 'function-value' || a.kind === 'ident');
+  const callee = node.callee;
+  if (callee && callee.kind === 'member' && typeof callee.prop === 'string' && _RECEIVER_TO_CALLBACK.test(callee.prop) && isCb(node.args[0]) && callee.prop !== 'catch') {
+    if (exprTaint(callee.object, state, callContext)) push(node.args[0], callee.prop === 'reduce' || callee.prop === 'reduceRight' ? 1 : 0, `receiver:${callee.prop}`);
+  }
+  // 2. project function that invokes its own callback parameter
+  const target = _resolveCalleeForSummary(node.callee, callContext);
+  const fn = target && target.fn;
+  if (!fn || !Array.isArray(fn.params) || !Array.isArray(fn.calls)) return;
+  node.args.forEach((cb, i) => {
+    if (!isCb(cb)) return;
+    const cbParam = fn.params[i];
+    if (!cbParam) return;
+    for (const inv of fn.calls) {
+      if (inv.callee !== cbParam) continue;
+      (inv.args || []).forEach((innerArg, k) => {
+        const root = innerArg && innerArg.kind === 'ident' ? innerArg.name : (accessPathOf(innerArg) || '').split('.')[0];
+        const j = root ? fn.params.indexOf(root) : -1;
+        if (j >= 0 && j !== i && node.args[j] && exprTaint(node.args[j], state, callContext)) push(cb, k, 'user-callback');
+      });
+    }
+  });
+}
+
 function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
   const receiverType = _receiverTypeFor(calleeExpr, callContext);
   let cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
@@ -1905,6 +1944,7 @@ function step(node, stateIn, callContext) {
         // `callee` here is `_plainCallCalleeName`, already flattened above.
         return higherOrderTaintFlow({ ...node, callee }, recvTainted);
       })();
+      _recordCallbackInvocations(node, state, callContext);
       if (hoFlow && hoFlow.taintsCallbackParam === 0) {
         // The first arg should be the callback. If it's a plain ident or
         // function-value, the engine's per-callee summary path will pick it
@@ -2037,7 +2077,42 @@ function _siteKey(expr) {
   return h.toString(16);
 }
 
+// E2-04: framework propagation through a shared request object. In Express/Koa/Connect style apps a middleware writes `req.user = ...` and
+// a later handler reads `req.user`; the engine analyses each function alone, so the handler never saw the write. Here every function whose first
+// parameter is a request (`req`/`request`/`ctx`) and which ASSIGNS to a field of it is analysed once with nothing tainted; the fields that end up
+// tainted are remembered per file and seeded into the entry state of the other request-taking functions of the SAME file. Same-file only, and
+// only for fields some function assigns, so `req.other` stays clean. Cross-file middleware chains need a router model and are out of scope.
+const _REQ_PARAM = /^(?:req|request|ctx)$/;
+let _requestFieldSeeds = new Map(); // file -> Set<'field' | 'a.b'>
+function _buildRequestFieldSeeds(fnList, callGraph, opts, deadlineMs) {
+  _requestFieldSeeds = new Map();
+  for (const fn of fnList) {
+    if (!fn || !Array.isArray(fn.params) || !_REQ_PARAM.test(fn.params[0] || '') || !fn.cfg || !fn.cfg.nodes) continue;
+    const p0 = fn.params[0];
+    const targets = new Set();
+    for (const n of Object.values(fn.cfg.nodes)) if (n && n.kind === 'assign' && typeof n.target === 'string' && n.target.startsWith(`${p0}.`)) targets.add(n.target);
+    if (!targets.size) continue;
+    const ctx = { _findings: [], _taintSources: [], _returnTainted: false, _stack: new Set(), deadlineMs, _summaryCache: new SummaryCache(), _callGraph: callGraph, _mutatedParamsOut: new Set(), _currentFnQid: fn.qid, _cha: opts && opts._cha, _pointsTo: opts && opts._pointsTo };
+    let exit = null;
+    try { analyzeFunction(fn, _unionAnnotationTaint(fn, new Set()), ctx); exit = ctx._exitState; } catch { exit = null; }
+    if (!exit) continue;
+    for (const t of targets) {
+      // the target itself (or a prefix of it) tainted seeds the target; otherwise each tainted path below it is seeded, so a literal
+      // `req.ctx = { cmd: tainted, safe: 'ls' }` seeds `ctx.cmd` and leaves `ctx.safe` clean
+      const paths = isCoveredBy(exit, t) ? [t] : [...exit].filter((q) => typeof q === 'string' && q.startsWith(`${t}.`));
+      for (const q of paths) {
+        if (!_requestFieldSeeds.has(fn.file)) _requestFieldSeeds.set(fn.file, new Set());
+        _requestFieldSeeds.get(fn.file).add(q.slice(p0.length + 1));
+      }
+    }
+  }
+}
+
 function _unionAnnotationTaint(fn, entrySet) {
+  const seeds = _requestFieldSeeds.get(fn.file);
+  if (seeds && seeds.size && Array.isArray(fn.params) && _REQ_PARAM.test(fn.params[0] || '')) {
+    entrySet = new Set([...entrySet, ...[...seeds].map((f) => `${fn.params[0]}.${f}`)]);
+  }
   if (!fn.paramAnnotations || !fn.paramAnnotations.length) return entrySet;
   const extra = matchAnnotationParams(fn.paramAnnotations, fn.file);
   if (!extra.size) return entrySet;
@@ -2299,6 +2374,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
     a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0
   );
   _buildRegexNames(fnList);
+  _buildRequestFieldSeeds(fnList, callGraph, opts, deadlineMs);
   // PRD W0.1 (SARD_80_F1_EXECUTION_PRD.md) — the main per-function loop below
   // silently `break`s once `n > fnLimit` (default 5000), which for a single
   // large SARD CWE directory (Java CWE-89 alone: 3668 files, 17604

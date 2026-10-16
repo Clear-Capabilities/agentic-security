@@ -492,7 +492,20 @@ export function parseJsFile(file, code) {
             const parentName = stack[stack.length - 1]?.name || '';
             enterFn(name || 'anon', parentName, path.node, path.node.params || []);
           },
-          exit() { exitFn(); },
+          exit(path) {
+            // An arrow with an EXPRESSION body (`(req) => req.query.c`) returns that expression. It has no ReturnStatement, so the function used to
+            // record no return at all and every helper written this way was invisible to return-taint summaries. The return node is added on exit so
+            // it follows any call nodes the expression contained.
+            const fn = currentFn();
+            const body = path.node.body;
+            if (fn && body && body.type !== 'BlockStatement') {
+              const nodeId = nextNodeId();
+              addNode(fn, { id: nodeId, kind: 'return', value: exprOf(body), line: body.loc?.start?.line || path.node.loc?.start?.line || 0, succ: [], pred: [] });
+              fn.returns.push(nodeId);
+              linkCfg(fn, nodeId, fn.cfg.exit);
+            }
+            exitFn();
+          },
         },
         ClassMethod: {
           enter(path) {

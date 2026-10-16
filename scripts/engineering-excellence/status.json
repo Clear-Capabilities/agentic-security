@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T15:34:39.574Z",
-  "revision": 511,
+  "updatedAt": "2026-10-16T15:54:04.446Z",
+  "revision": 574,
   "checkout": {
-    "commit": "391760d52f6afeb5c6ef647bde6da3e4bdcf4ebc",
+    "commit": "85c53d534b4f19176136f6e163e7b452845e67e6",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T15:34:39.572Z"
+    "capturedAt": "2026-10-16T15:54:04.445Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T15:34:21.708Z",
+      "heartbeatAt": "2026-10-16T15:54:02.008Z",
       "activeProcess": {
         "pid": 78792,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 40",
@@ -3201,18 +3201,139 @@
       "notes": []
     },
     "E2-04": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T15:54:01.993Z",
+      "completedAt": "2026-10-16T15:54:04.446Z",
+      "heartbeatAt": "2026-10-16T15:54:04.177Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "85c53d534b4f19176136f6e163e7b452845e67e6",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-c51c3698",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T15:54:02.039Z",
+          "endedAt": "2026-10-16T15:54:04.174Z",
+          "timeoutMs": 900000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 2122,
+          "log": "scripts/engineering-excellence/logs/E2-04/2026-10-16T15-54-02-040Z-c-c51c3698.log",
+          "logSha256": "bfa9d376ef526b4a86aad28f2d7d70b64d4418de0ed7dca6dcefbd862604c76b",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E2-04",
+        "status": "done",
+        "sourceCommit": "85c53d534b4f19176136f6e163e7b452845e67e6",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/dataflow/engine.js",
+          "scanner/src/ir/parser-js.js",
+          "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js",
+          "scanner/package.json"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E2-04/2026-10-16T15-54-02-040Z-c-c51c3698.log",
+            "logSha256": "bfa9d376ef526b4a86aad28f2d7d70b64d4418de0ed7dca6dcefbd862604c76b",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "scanner/src/dataflow/engine.js",
+          "scanner/src/ir/parser-js.js",
+          "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js#ingress-to-sink-an-awaited-async-helper-expression-bodied-arrow-found-and-the-safe-sibling-is-silent",
+          "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js#ingress-to-sink-a-promise-then-callback-found-and-the-safe-sibling-is-silent",
+          "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js#ingress-to-sink-a-user-defined-callback-found-and-the-safe-sibling-is-silent",
+          "scanner/test/engineering-excellence/e2-04-async-callbacks-frameworks.test.js#ingress-to-sink-a-middleware-that-stores-a-field-on-the-request-found-and-the-safe-sibling-is-silent"
+        ],
+        "benchmarkComparisons": [
+          "measured this turn on 12 request-to-sink Express fixtures: found 5 -> 11 of 12 (the awaited helper, expression-bodied arrows, promise .then, user callbacks and same-file middleware fields were all missed before); the safe sibling of each is silent; a real IR defect was found and fixed: expression-bodied arrow functions recorded no return, so every helper written as x => expr was invisible to return-taint; regression: test:dataflow 1461 pass, mutation 217/217, layer-recall equal to baseline, cve-replay 220/220, self-scan no drift"
+        ],
+        "knownLimitations": [
+          "JavaScript/TypeScript with Express-style handlers only; Flask/Django/Spring/Rails propagation is not modelled here",
+          "Promise.all destructuring and EventEmitter emit/on hand-offs are not followed (asserted as gaps)",
+          "request-field propagation is same-file only; a middleware in another file needs a router model",
+          "a callback is tainted only for the receiver-value methods and for project functions that call their own parameter",
+          "Number()/parseInt() results stay tainted and are demoted by the sanitizer gate, by existing policy; this task did not change that",
+          "layer-recall corpus has no async or callback entries so it could not show the gain"
+        ],
+        "closedAt": "2026-10-16T15:54:04.446Z"
+      },
       "notes": []
     },
     "E2-05": {
