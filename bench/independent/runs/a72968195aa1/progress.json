@@ -21,15 +21,33 @@
       "endedAt": "2026-10-16T14:09:46.377Z"
     },
     "1": {
-      "state": "running",
+      "state": "done",
       "offset": 20,
       "limit": 20,
       "startedAt": "2026-10-16T14:09:46.384Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 100498
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 514064
+      },
+      "endedAt": "2026-10-16T14:20:00.951Z"
+    },
+    "2": {
+      "state": "running",
+      "offset": 40,
+      "limit": 20,
+      "startedAt": "2026-10-16T14:21:14.599Z",
       "attempts": 1
     }
   },
   "measuredIn": {
-    "detachedWorktreeOf": "27562878192278622e5711a6041ac5b439120b49",
+    "detachedWorktreeOf": "37213ce0b7d0570522acaf254008fd8a9206b2c7",
     "linkedFromSourceCheckout": [
       "scanner/node_modules",
       "scanner/vendor",
@@ -38,7 +56,7 @@
   },
   "identity": {
     "schemaVersion": 1,
-    "sourceCommit": "27562878192278622e5711a6041ac5b439120b49",
+    "sourceCommit": "37213ce0b7d0570522acaf254008fd8a9206b2c7",
     "sourceBranch": "HEAD",
     "sourceTreeClean": true,
     "dirtyPaths": [],
@@ -67,9 +85,11 @@
       "cpus": 8,
       "memoryGb": 16
     },
-    "startedAt": "2026-10-16T13:30:24.360Z",
+    "startedAt": "2026-10-16T14:21:14.045Z",
     "measurementValid": true,
     "releaseTrust": "trusted",
     "invalidReasons": []
-  }
+  },
+  "pausedAt": "2026-10-16T14:20:00.958Z",
+  "pausedBecause": "the 45 minute budget of this invocation was used; re-run with --run a72968195aa1 to continue"
 }

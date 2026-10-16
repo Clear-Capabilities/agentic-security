@@ -1,0 +1,385 @@
+{
+  "schema": "agentic-security/ir-matrix",
+  "version": 1,
+  "constructs": [
+    "function-definition",
+    "call-site",
+    "assignment-origin",
+    "member-access",
+    "string-concatenation",
+    "closure-as-own-function",
+    "import"
+  ],
+  "languages": {
+    "javascript": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "function target(a) { return a; }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "function f(x) { sink(x); }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "function f(x) { const v = x.id; sink(v); }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "function f(req) { sink(req.query.id); }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "function f(x) { const v = \"a\" + x; sink(v); }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "modelled",
+        "probe": "function f(x) { const g = (y) => sink(y + x); g(1); }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "const m = require(\"./m\");\nfunction f(x) { m.go(x); }\n",
+        "expects": "call:require"
+      }
+    },
+    "typescript": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "export function target(a: string): string { return a; }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "export function f(x: string) { sink(x); }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "export function f(x: any) { const v: string = x.id; sink(v); }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "export function f(req: any) { sink(req.query.id); }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "export function f(x: string) { const v = `a${x}`; sink(v); }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "modelled",
+        "probe": "export function f(x: string) { const g = (y: string) => sink(y + x); g(\"1\"); }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "import { go } from \"./m\";\nexport function f(x: string) { go(x); }\n",
+        "expects": "call:go"
+      }
+    },
+    "python": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "def target(a):\n    return a\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "def f(x):\n    sink(x)\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "def f(x):\n    v = x.id\n    sink(v)\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "def f(req):\n    sink(req.args.id)\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "def f(x):\n    v = \"a\" + x\n    sink(v)\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "def f(x):\n    g = lambda y: sink(y + x)\n    g(1)\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "import os\ndef f(x):\n    os.system(x)\n",
+        "expects": "call:os.system"
+      }
+    },
+    "java": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "class P { String target(String a) { return a; } }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "class P { void f(String x) { sink(x); } }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "class P { void f(Req x) { String v = x.id(); sink(v); } }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "class P { void f(Req r) { sink(r.id); } }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "class P { void f(String x) { String v = \"a\" + x; sink(v); } }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "class P { void f(String x) { Runnable g = () -> sink(x); g.run(); } }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "import java.io.File;\nclass P { void f(String x) { new File(x); } }\n",
+        "expects": "call:File"
+      }
+    },
+    "go": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "package p\nfunc target(a string) string { return a }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "package p\nfunc f(x string) { sink(x) }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "package p\nfunc f(x Req) { v := x.ID\n sink(v) }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "package p\nfunc f(r Req) { sink(r.ID) }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "package p\nfunc f(x string) { v := \"a\" + x\n sink(v) }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "package p\nfunc f(x string) { g := func(y string) { sink(y + x) }\n g(\"1\") }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "package p\nimport \"os/exec\"\nfunc f(x string) { exec.Command(x) }\n",
+        "expects": "call:exec.Command"
+      }
+    },
+    "ruby": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "def target(a)\n  a\nend\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "def f(x)\n  sink(x)\nend\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "def f(x)\n  v = x.id\n  sink(v)\nend\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "def f(req)\n  sink(req.params)\nend\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "def f(x)\n  v = \"a\" + x\n  sink(v)\nend\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "def f(x)\n  g = ->(y) { sink(y + x) }\n  g.call(1)\nend\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "require \"open3\"\ndef f(x)\n  Open3.capture2(x)\nend\n",
+        "expects": "call:Open3.capture2"
+      }
+    },
+    "php": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "<?php\nfunction target($a) { return $a; }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "<?php\nfunction f($x) { sink($x); }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "<?php\nfunction f($x) { $v = $x[\"id\"]; sink($v); }\n",
+        "expects": "origin:$v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "<?php\nfunction f($r) { sink($r->id); }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "<?php\nfunction f($x) { $v = \"a\" . $x; sink($v); }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "<?php\nfunction f($x) { $g = function($y) use ($x) { sink($y . $x); }; $g(1); }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "<?php\nrequire \"m.php\";\nfunction f($x) { go($x); }\n",
+        "expects": "call:go"
+      }
+    },
+    "csharp": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "class P { string Target(string a) { return a; } }\n",
+        "expects": "fn:Target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "class P { void F(string x) { Sink(x); } }\n",
+        "expects": "call:Sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "class P { void F(Req x) { var v = x.Id; Sink(v); } }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "class P { void F(Req r) { Sink(r.Id); } }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "class P { void F(string x) { var v = \"a\" + x; Sink(v); } }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "class P { void F(string x) { Action<string> g = y => Sink(y + x); g(\"1\"); } }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "using System.Diagnostics;\nclass P { void F(string x) { Process.Start(x); } }\n",
+        "expects": "call:Process.Start"
+      }
+    },
+    "kotlin": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "fun target(a: String): String { return a }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "fun f(x: String) { sink(x) }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "fun f(x: Req) { val v = x.id\n sink(v) }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "fun f(r: Req) { sink(r.id) }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "fun f(x: String) { val v = \"a\" + x\n sink(v) }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "fun f(x: String) { val g = { y: String -> sink(y + x) }\n g(\"1\") }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "import java.io.File\nfun f(x: String) { File(x) }\n",
+        "expects": "call:File"
+      }
+    },
+    "rust": {
+      "function-definition": {
+        "state": "modelled",
+        "probe": "fn target(a: &str) -> &str { a }\n",
+        "expects": "fn:target"
+      },
+      "call-site": {
+        "state": "modelled",
+        "probe": "fn f(x: &str) { sink(x); }\n",
+        "expects": "call:sink"
+      },
+      "assignment-origin": {
+        "state": "modelled",
+        "probe": "fn f(x: Req) { let v = x.id;\n sink(v); }\n",
+        "expects": "origin:v"
+      },
+      "member-access": {
+        "state": "modelled",
+        "probe": "fn f(r: Req) { sink(r.id); }\n",
+        "expects": "kind:member"
+      },
+      "string-concatenation": {
+        "state": "modelled",
+        "probe": "fn f(x: &str) { let v = format!(\"a{}\", x);\n sink(&v); }\n",
+        "expects": "kind:binary|tpl"
+      },
+      "closure-as-own-function": {
+        "state": "not-modelled",
+        "probe": "fn f(x: &str) { let g = |y: &str| sink(y);\n g(x); }\n",
+        "expects": "fnCount:2"
+      },
+      "import": {
+        "state": "modelled",
+        "probe": "use std::process::Command;\nfn f(x: &str) { Command::new(x); }\n",
+        "expects": "call:Command.new"
+      }
+    }
+  }
+}
