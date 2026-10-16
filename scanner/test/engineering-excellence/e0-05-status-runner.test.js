@@ -46,7 +46,10 @@ test('closing a task needs a logged, passing test run that names an existing tes
     assert.throws(() => completeTask(root, 'E0-01', closing()), /names no existing test file/);
     const r1 = run(root, 'E0-01', 'test', [NODE, '--test', 'tests/pass.test.js']);
     assert.equal(r1.status, 0, r1.stdout + r1.stderr);
-    assert.throws(() => completeTask(root, 'E0-01', closing()), /names no existing test file/, 'the earlier non-test run still counts against it');
+    // a passing run that is not a test does not outvote a real one, but it is not hidden either: the closing evidence lists it as not used
+    completeTask(root, 'E0-01', closing());
+    const doc = JSON.parse(fs.readFileSync(path.join(root, 'scripts/engineering-excellence/status.json'), 'utf8'));
+    assert.ok(doc.tasks['E0-01'].evidence.knownLimitations.some((x) => /recorded but not used as evidence/.test(x)));
   } finally { cleanup(root); }
 });
 
@@ -373,4 +376,19 @@ test('task.mjs drives the lifecycle from the command line', async () => {
     assert.equal(task('block', 'E0-02', '--reason', 'needs a corpus', '--kind', 'external').status, 0, 'a pending task can be blocked before it starts');
     void heartbeat; void summarize;
   } finally { cleanup(root); }
+});
+
+test('a recorded run that names no test file does not block a task that has real evidence, and is listed as not used', async () => {
+  const { collectTestEvidence } = await import('../../../scripts/engineering-excellence/lib/store.mjs');
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path'); const crypto = await import('node:crypto');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ee-ign-'));
+  try {
+    fs.mkdirSync(path.join(root, 'logs'), { recursive: true }); fs.writeFileSync(path.join(root, 'real.test.js'), '//'); fs.writeFileSync(path.join(root, 'logs/a.log'), 'a');
+    const sha = crypto.createHash('sha256').update('a').digest('hex');
+    const cmd = (argv) => ({ kind: 'test', argv, cwd: root, outcome: 'exited', exitCode: 0, startedAt: '2026-01-02T00:00:00Z', log: 'logs/a.log', logSha256: sha });
+    const both = collectTestEvidence(root, { startedAt: '2026-01-01T00:00:00Z', commands: [cmd(['node', '--test', 'real.test.js']), cmd(['npm', 'run', 'whatever'])] });
+    assert.equal(both.passing.length, 1); assert.deepEqual(both.reasons, []); assert.equal(both.ignored.length, 1);
+    const only = collectTestEvidence(root, { startedAt: '2026-01-01T00:00:00Z', commands: [cmd(['npm', 'run', 'whatever'])] });
+    assert.equal(only.passing.length, 0); assert.match(only.reasons[0], /names no existing test file/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

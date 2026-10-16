@@ -273,6 +273,7 @@ export function collectTestEvidence(root, st) {
     latest.set(c.argv.join('\u0000'), c);
   }
   const passing = [];
+  const unusable = [];
   for (const c of latest.values()) {
     if (c.outcome !== 'exited' || c.exitCode !== 0) { reasons.push(`the latest run of \`${c.argv.join(' ').slice(0, 120)}\` did not pass (${c.outcome}${c.exitCode == null ? '' : `, exit ${c.exitCode}`})`); continue; }
     if (!c.log || !c.logSha256) { reasons.push(`the run of \`${c.argv.join(' ').slice(0, 120)}\` has no log`); continue; }
@@ -280,11 +281,14 @@ export function collectTestEvidence(root, st) {
     if (!lp || !existsSync(lp)) { reasons.push(`log ${c.log} is missing`); continue; }
     if (sha256File(lp) !== c.logSha256) { reasons.push(`log ${c.log} changed after the run`); continue; }
     const files = testFilesOf(root, c.argv, c.cwd);
-    if (!files.length) { reasons.push(`\`${c.argv.join(' ').slice(0, 120)}\` names no existing test file, so it does not exercise the task`); continue; }
+    if (!files.length) { unusable.push(`\`${c.argv.join(' ').slice(0, 120)}\` names no existing test file, so it does not exercise the task`); continue; }
     passing.push({ command: c.argv.join(' '), cwd: c.cwd, exitCode: 0, log: c.log, logSha256: c.logSha256, testFiles: files, durationMs: c.durationMs ?? null });
   }
+  // A run that names no test file is not evidence. It does not block a task that has real evidence (it is listed in `ignored`), but it can
+  // never be the only thing standing: with no usable run the reasons say so.
+  if (!passing.length) reasons.push(...unusable);
   if (!passing.length && !reasons.length) reasons.push('no test command was run for this attempt (use runner.mjs --kind test)');
-  return { passing, reasons };
+  return { passing, reasons, ignored: passing.length ? unusable : [] };
 }
 
 function validateClosing(root, def, st, input, { alreadySatisfied }) {
@@ -303,7 +307,7 @@ function validateClosing(root, def, st, input, { alreadySatisfied }) {
   }
   if (!Array.isArray(input.benchmarkComparisons)) problems.push('benchmarkComparisons must be present (use a one-item list with the unmeasured reason when there is no benchmark)');
   if (!Array.isArray(input.knownLimitations)) problems.push('knownLimitations must be present (an empty list is allowed)');
-  return { problems, tests: t.passing, acceptance, changed, refs };
+  return { problems, tests: t.passing, ignored: t.ignored, acceptance, changed, refs };
 }
 
 function close(root, id, input, to) {
@@ -323,7 +327,7 @@ function close(root, id, input, to) {
       testCommands: v.tests.map((t) => ({ command: t.command, exitCode: t.exitCode, log: t.log, logSha256: t.logSha256, testFiles: t.testFiles })),
       acceptanceEvidence: v.acceptance,
       benchmarkComparisons: input.benchmarkComparisons,
-      knownLimitations: input.knownLimitations,
+      knownLimitations: (v.ignored && v.ignored.length) ? [...(input.knownLimitations || []), ...v.ignored.map((x) => `recorded but not used as evidence: ${x}`)] : input.knownLimitations,
       closedAt: now,
     };
     return { type: `task_${to}`, task: id, commit: info.commit, tests: v.tests.length };
