@@ -129,10 +129,28 @@
       "endedAt": "2026-10-16T16:07:41.607Z"
     },
     "7": {
-      "state": "running",
+      "state": "done",
       "offset": 140,
       "limit": 20,
       "startedAt": "2026-10-16T16:08:00.728Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 69419
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 326809
+      },
+      "endedAt": "2026-10-16T16:14:36.962Z"
+    },
+    "8": {
+      "state": "running",
+      "offset": 160,
+      "limit": 20,
+      "startedAt": "2026-10-16T16:14:36.973Z",
       "attempts": 1
     }
   },
