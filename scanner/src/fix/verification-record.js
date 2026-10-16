@@ -104,6 +104,20 @@ export function deriveCompleteness(record, { workaround = false } = {}) {
   return deriveVerifiedFull(record) ? 'FULL' : 'MITIGATION';
 }
 
+// Residual risk after a patch, from what was and was not established (also used by patch-policy.js).
+export function deriveResidualRiskOf(record) {
+  const notes = [...record.degradedLegs];
+  const c = record.fixCompleteness;
+  let level;
+  if (c === 'FULL') level = record.exploitProofAfter.status === 'passed' ? 'low' : 'medium';
+  else if (c === 'MITIGATION') level = 'medium';
+  else if (c === 'WORKAROUND') level = 'high';
+  else level = 'unknown';
+  if (c === 'FULL' && record.exploitProofAfter.status !== 'passed') notes.push('no exploit replay confirmed the weakness is closed');
+  if (c === 'WORKAROUND') notes.push('exposure is reduced but the underlying cause remains');
+  return { level, notes };
+}
+
 export function buildFixVerificationRecord(f) {
   const legs = {};
   for (const n of LEG_NAMES) legs[n] = f[n] ? { status: f[n].status, evidenceIds: [...(f[n].evidenceIds || [])], reason: f[n].reason ?? null } : NOT_RUN('the route did not run this check');
@@ -127,6 +141,7 @@ export function buildFixVerificationRecord(f) {
   rec.coverage = { required: required.length, passed: required.filter((n) => rec[n].status === 'passed').length, notRun: required.filter((n) => rec[n].status === 'not_run').length, blocked: required.filter((n) => rec[n].status === 'blocked').length, failed: required.filter((n) => rec[n].status === 'failed').length };
   rec.fixCompleteness = f.fixCompleteness && f.fixCompleteness !== 'derive' ? f.fixCompleteness : deriveCompleteness(rec, { workaround: f.workaround === true });
   if (f.timestamps) rec.timestamps = f.timestamps;
+  if (!f.residualRisk) rec.residualRisk = deriveResidualRiskOf(rec);
   rec.id = fixRecordId(rec);
   return rec;
 }

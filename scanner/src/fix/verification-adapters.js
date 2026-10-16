@@ -47,7 +47,7 @@ export function recordFromVerifyFix(v, ctx) {
   let behaviorTests;
   if (!v.tests) behaviorTests = leg('not_run', { reason: 'the route returned no test result' });
   else if (v.tests.skipped) behaviorTests = leg('not_run', { reason: `tests were skipped (${v.tests.reason || 'no reason recorded'})` });
-  else if (v.tests.preExistingFailure || v.tests.reason === 'suite-already-failing-before-the-patch') behaviorTests = leg('blocked', { reason: 'the project test suite was already failing before the patch, so it cannot show the patch preserved behaviour' });
+  else if (v.tests.preExistingFailure || v.tests.reason === 'suite-already-failing-before-the-patch') behaviorTests = leg('not_run', { reason: 'the project test suite was already failing before the patch, so it cannot show the patch preserved behaviour' });
   else if (v.testedPrePatch) behaviorTests = leg('not_run', { evidenceIds: [], reason: 'the tests ran on the tree BEFORE the patch was written, so they say nothing about the patch' });
   else behaviorTests = v.tests.passed ? leg('passed', { evidenceIds: [add('test-result', v.tests)] }) : leg('failed', { evidenceIds: [add('test-result', v.tests)], reason: 'the project tests failed on the patched tree' });
 

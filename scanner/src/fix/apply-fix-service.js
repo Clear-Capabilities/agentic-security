@@ -40,6 +40,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { verifyLastScan } from '../posture/integrity.js';
 import { verifyPatch, additiveFields } from './verify-patch.js';
+import { decidePatchApplication } from './patch-policy.js';
 import { stateDir } from '../posture/state-dir.js';
 import { applyFix as applyFixHistory, revertEntryById as revertFixEntry } from '../posture/fix-history.js';
 import { classifyFixMaterialRisk } from '../posture/material-change.js';
@@ -210,7 +211,7 @@ async function getVerifyFixCore() {
  *   configured, tests when a runner is detected — genuinely ran and passed, not silently skipped.
  *   `verified:true, verifiedFull:false` is a real, honest state: applied, but on a degraded pass.
  */
-export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = null, dryRun = false, skipVerification = false, patchNegative = null, assuranceConfig } = {}) {
+export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = null, dryRun = false, skipVerification = false, patchNegative = null, assuranceConfig, applyMode = 'requested', policy } = {}) {
   if (!scanRoot) return { ok: false, applied: false, reason: 'scanRoot required' };
   if (!finding) return { ok: false, applied: false, reason: 'finding required' };
   if (!files || typeof files !== 'object' || !Object.keys(files).length) {
@@ -364,8 +365,15 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     }
   }
 
+  // E3-06: may this be written? `requested` (a person asked) proceeds on any verified tier and carries the warnings; `automatic` needs the
+  // policy to enable it and every required check to have passed, otherwise the patch is only proposed.
+  const policyDecision = fixVerification ? decidePatchApplication({ record: fixVerification, finding, materialClassification, mode: applyMode, policy }) : null;
+  if (policyDecision && policyDecision.decision !== 'apply' && !dryRun) {
+    return { ok: true, applied: false, proposed: policyDecision.decision === 'propose', reason: `not applied: ${policyDecision.reasons[0]}`, files: Object.keys(confined), verify, materialClassification, policyDecision, ...additiveFields(fixVerification) };
+  }
+
   if (dryRun) {
-    return { ok: true, applied: false, dryRun: true, verified: !skipVerification, files: Object.keys(confined), verify, materialClassification, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}), ...(fixVerification ? additiveFields(fixVerification) : {}) };
+    return { ok: true, applied: false, dryRun: true, ...(policyDecision ? { policyDecision } : {}), verified: !skipVerification, files: Object.keys(confined), verify, materialClassification, ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}), ...(fixVerification ? additiveFields(fixVerification) : {}) };
   }
 
   // FR-304: re-check every file against its pre-verification baseline hash,
@@ -432,6 +440,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     written,
     verify: verify ? { summary: verify.summary, verifiedFull: verify.verifiedFull, degradedLegs: verify.degradedLegs || [] } : null,
     materialClassification,
+    ...(policyDecision ? { policyDecision } : {}),
     ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
     // the canonical record is the authority for verifiedFull and degradedLegs: it also knows when the tests ran before the patch existed
     ...(fixVerification ? additiveFields(fixVerification) : {}),

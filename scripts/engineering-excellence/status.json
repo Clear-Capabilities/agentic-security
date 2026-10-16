@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T14:01:36.931Z",
-  "revision": 216,
+  "updatedAt": "2026-10-16T14:03:15.152Z",
+  "revision": 220,
   "checkout": {
-    "commit": "98317faf793d9fcc6d4ac9bea0f626ca915230af",
+    "commit": "ee39ef842865bb9e88ece151d377b2151dc3ffe0",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T14:01:36.930Z"
+    "capturedAt": "2026-10-16T14:03:15.152Z"
   },
   "tasks": {
     "E0-01": {
@@ -3502,18 +3502,135 @@
       "notes": []
     },
     "E3-06": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T14:03:13.485Z",
+      "completedAt": "2026-10-16T14:03:15.152Z",
+      "heartbeatAt": "2026-10-16T14:03:14.822Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "ee39ef842865bb9e88ece151d377b2151dc3ffe0",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-54c33d97",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e3-06-patch-policy.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T14:03:13.529Z",
+          "endedAt": "2026-10-16T14:03:14.819Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 1278,
+          "log": "scripts/engineering-excellence/logs/E3-06/2026-10-16T14-03-13-530Z-c-54c33d97.log",
+          "logSha256": "d20149f0bd241a02415797c3d4ea1e6fbd48250156cb1733fcab77094654ed79",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E3-06",
+        "status": "done",
+        "sourceCommit": "ee39ef842865bb9e88ece151d377b2151dc3ffe0",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/fix/patch-policy.js",
+          "scanner/src/fix/apply-fix-service.js",
+          "scanner/src/fix/verification-record.js",
+          "scanner/src/fix/verification-adapters.js",
+          "scanner/test/engineering-excellence/e3-06-patch-policy.test.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e3-06-patch-policy.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E3-06/2026-10-16T14-03-13-530Z-c-54c33d97.log",
+            "logSha256": "d20149f0bd241a02415797c3d4ea1e6fbd48250156cb1733fcab77094654ed79",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e3-06-patch-policy.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "scanner/src/fix/patch-policy.js",
+          "scanner/test/engineering-excellence/e3-06-patch-policy.test.js#the-five-tiers-are-what-the-matrix-says-they-are-each-record-is-valid-and-residual-risk-follows-the-tier",
+          "scanner/test/engineering-excellence/e3-06-patch-policy.test.js#automatic-mode-enabled-only-FULL-with-every-check-passed-and-low-risk-is-applied-MITIGATION-and-WORKAROUND-are-proposed-unverified-and-blocked-are-refused",
+          "scanner/test/engineering-excellence/e3-06-patch-policy.test.js#never-silently-auto-apply-with-absent-tests-an-unobservable-footprint-or-a-replay-that-did-not-run-when-policy-demands-one"
+        ],
+        "benchmarkComparisons": [
+          "unmeasured: policy matrix of 5 tiers x 2 modes plus severity, category and residual-risk cases; existing fix suites still pass"
+        ],
+        "knownLimitations": [
+          "automatic mode is only enforced where a caller passes applyMode:automatic; nothing in the CLI or MCP sets it today, so default behaviour for requested writes is unchanged",
+          "autopilot has no production caller, so policy is not wired into it",
+          "the policy is not configurable from a project file yet; it is a function argument"
+        ],
+        "closedAt": "2026-10-16T14:03:15.152Z"
+      },
       "notes": []
     },
     "E3-07": {
