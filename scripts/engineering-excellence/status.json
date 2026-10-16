@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:23:22.566Z",
-  "revision": 934,
+  "updatedAt": "2026-10-16T17:27:47.854Z",
+  "revision": 951,
   "checkout": {
-    "commit": "e937119286cb96f3f2f8637cd7b91aca562ea4f0",
+    "commit": "00407af3e26da64072620920f5ffaa69ff85071d",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:23:22.565Z"
+    "capturedAt": "2026-10-16T17:27:47.854Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:23:21.979Z",
+      "heartbeatAt": "2026-10-16T17:27:42.022Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -8394,18 +8394,141 @@
       "notes": []
     },
     "E6-07": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:27:43.524Z",
+      "completedAt": "2026-10-16T17:27:47.854Z",
+      "heartbeatAt": "2026-10-16T17:27:47.591Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "00407af3e26da64072620920f5ffaa69ff85071d",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-04510eef",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e6-07-adversarial-boundaries.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:27:43.572Z",
+          "endedAt": "2026-10-16T17:27:47.588Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 4000,
+          "log": "scripts/engineering-excellence/logs/E6-07/2026-10-16T17-27-43-572Z-c-04510eef.log",
+          "logSha256": "b4e58ef0ba287ed0ee679f5d1d0ef6a34466867e90e30480816e3fec9098d471",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E6-07",
+        "status": "done",
+        "sourceCommit": "00407af3e26da64072620920f5ffaa69ff85071d",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "docs/engineering-excellence/ADVERSARIAL_BOUNDARIES.md"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e6-07-adversarial-boundaries.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E6-07/2026-10-16T17-27-43-572Z-c-04510eef.log",
+            "logSha256": "b4e58ef0ba287ed0ee679f5d1d0ef6a34466867e90e30480816e3fec9098d471",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e6-07-adversarial-boundaries.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "A hostile repository (shell-syntax file names",
+          "malicious git config and hooks",
+          "diff driver",
+          "package scripts",
+          "agent hook",
+          "symlinks out of the tree",
+          "prompt-injection text",
+          "oversized and malformed files) scanned by the real CLI",
+          "default and deep",
+          "runs only git with its command hooks disabled",
+          "uses no shell",
+          "makes no network call",
+          "writes only inside the project state directory and follows no symlink to /etc; unsigned rule packs are refused; a hostile model reply causes no execution",
+          "write or field injection; a negative control shows the observer detects violations; the tests run in npm test"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Observation covers Node APIs only (child_process, net, dns, http, https, fetch, fs); git and native addons are not instrumented",
+          "A fixed set of vectors, not a fuzzer; no coverage-guided fuzzing was run",
+          "Model boundary tested with a fake loopback model and one hostile reply, not a real model",
+          "Run on macOS only; Linux and Windows not observed",
+          "No source change was needed: the existing git hardening, write confinement, egress policy and rule-pack signing held; this task adds the measurement and CI tests"
+        ],
+        "closedAt": "2026-10-16T17:27:47.854Z"
+      },
       "notes": []
     },
     "E6-08": {
