@@ -793,12 +793,12 @@
     "independentlyCertified": false,
     "statement": "Signed by a key this install generated for itself. It proves the bundle is unmodified since this key signed it. It is NOT independent third-party certification: whoever controls this install controls the key.",
     "issuer": {
-      "keyFingerprint": "08a6722e689fa174db5031fe21e86df3feb4d0f2157f6abecb88f500afe7e72c"
+      "keyFingerprint": "099fa3fbdf976e40920f40bf640442a238c193524dd44b708c9afcddf923e89c"
     }
   },
   "signature": {
     "algorithm": "ed25519",
     "domain": "agentic-security/release-package@1",
-    "value": "mV4r/XMjBpBSoTPDe/bOQDZzw4vH4+XBL6Sgv38FADGxxjLcMX/h1XXQ8FJBcQ9dK2zsdEkoxTnAUMUqF522CQ=="
+    "value": "amF2o+YESnUxvRA5aURn1XlCNEbZnoapB+l/Fl1sIs3dSn7wvnm0Dh47/BgAWYYOvUJqZD3/Xwg69rn4oZAyBQ=="
   }
 }

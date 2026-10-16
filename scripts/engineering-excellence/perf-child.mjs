@@ -6,7 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dir = path.resolve(process.argv[2]); const deep = process.argv[3] === '1';
+const source = path.resolve(process.argv[2]); const deep = process.argv[3] === '1';
+// scan a COPY: a scan with a scan root writes its state next to the code, and a fixture directory must not be left with a prior scan in it
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ee-perf-')); fs.cpSync(source, dir, { recursive: true, filter: (p) => !/(^|\/)(\.git|node_modules|\.agentic-security)(\/|$)/.test(p) });
+process.on('exit', () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } });
 const { runFullScan } = await import(path.join(ROOT, 'scanner', 'src', 'engine.js'));
 const { setStateWritesEnabled } = await import(path.join(ROOT, 'scanner', 'src', 'posture', 'state-dir.js'));
 setStateWritesEnabled(false);

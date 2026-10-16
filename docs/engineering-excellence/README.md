@@ -52,9 +52,9 @@ These cases are written and labelled by the programme's author, so this is **not
 
 <!-- capture: perf-large-verdict -->
 ```text
-small: P95 2327 ms, peak RSS 295 MB, within budget
-medium: P95 9470 ms, peak RSS 555 MB, within budget
-large: P95 93685 ms, peak RSS 1257 MB, NOT GREEN (3 of 3 runs finished with a scan health other than complete)
+small: P95 236 ms, peak RSS 218 MB, within budget
+medium: P95 3002 ms, peak RSS 563 MB, within budget
+large: P95 25850 ms, peak RSS 1232 MB, NOT GREEN (3 of 3 runs finished with a scan health other than complete)
 ```
 
 ### The end-to-end demo, step by step (E8-02)

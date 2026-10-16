@@ -1,88 +1,88 @@
 {
   "schema": "agentic-security/perf-budget@1",
-  "measuredAt": "2026-10-16T20:11:06.440Z",
+  "measuredAt": "2026-10-16T21:21:41.238Z",
   "hardware": {
     "os": "darwin 27.0.0 arm64",
     "cpus": 8,
     "cpuModel": "Apple M2",
     "memoryGb": 16,
     "node": "v24.20.0",
-    "loadAverage1mAtStart": 2.48
+    "loadAverage1mAtStart": 2.58
   },
   "budgetRule": "Wall budget = 1.5 x the observed P95, peak RSS budget = 1.5 x the observed maximum, rounded up to a whole second and 50 MB. The rule was fixed before the numbers were seen. The headroom absorbs machine noise; it is a regression tripwire for the machine that measured it, not a service level, and N is small (3 to 7), so a P95 is close to the maximum.",
   "classes": [
     {
       "id": "small",
-      "dir": "scanner/test/fixtures/vulnerable-js",
-      "note": "one fixture application (about 50 files)",
+      "dir": "examples/assurance-demo",
+      "note": "the end-to-end demo project (3 source files, two languages)",
       "samples": [
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2323,
-          "cpuMs": 539,
-          "maxRssMb": 268,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 235,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2283,
-          "cpuMs": 538,
-          "maxRssMb": 267,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 208,
+          "maxRssMb": 217,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2284,
-          "cpuMs": 539,
-          "maxRssMb": 267,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2327,
-          "cpuMs": 543,
-          "maxRssMb": 295,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 236,
+          "cpuMs": 208,
+          "maxRssMb": 218,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2289,
-          "cpuMs": 540,
-          "maxRssMb": 267,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 236,
+          "cpuMs": 210,
+          "maxRssMb": 215,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2290,
-          "cpuMs": 535,
-          "maxRssMb": 290,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 230,
+          "cpuMs": 200,
+          "maxRssMb": 217,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         },
         {
           "ok": true,
-          "files": 1,
-          "wallMs": 2290,
-          "cpuMs": 538,
-          "maxRssMb": 269,
-          "findings": 17,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
           "health": "complete",
           "conditions": []
         }
@@ -92,27 +92,27 @@
         "ok": 7,
         "errors": 0,
         "notComplete": 0,
-        "files": 1,
+        "files": 3,
         "wallMs": {
-          "p50": 2290,
-          "p95": 2327,
-          "min": 2283,
-          "max": 2327
+          "p50": 234,
+          "p95": 236,
+          "min": 230,
+          "max": 236
         },
         "cpuMs": {
-          "p50": 539
+          "p50": 209
         },
         "maxRssMb": {
-          "p50": 268,
-          "max": 295
+          "p50": 217,
+          "max": 218
         },
         "findings": [
-          17
+          9
         ]
       },
       "budget": {
-        "wallMsP95": 4000,
-        "maxRssMb": 450
+        "wallMsP95": 1000,
+        "maxRssMb": 350
       },
       "verdict": {
         "green": true,
@@ -127,9 +127,9 @@
         {
           "ok": true,
           "files": 122,
-          "wallMs": 9433,
-          "cpuMs": 5518,
-          "maxRssMb": 515,
+          "wallMs": 2975,
+          "cpuMs": 4156,
+          "maxRssMb": 546,
           "findings": 22,
           "health": "complete",
           "conditions": []
@@ -137,9 +137,9 @@
         {
           "ok": true,
           "files": 122,
-          "wallMs": 9461,
-          "cpuMs": 5485,
-          "maxRssMb": 526,
+          "wallMs": 3002,
+          "cpuMs": 4208,
+          "maxRssMb": 558,
           "findings": 22,
           "health": "complete",
           "conditions": []
@@ -147,9 +147,9 @@
         {
           "ok": true,
           "files": 122,
-          "wallMs": 9434,
-          "cpuMs": 5496,
-          "maxRssMb": 514,
+          "wallMs": 2982,
+          "cpuMs": 4177,
+          "maxRssMb": 563,
           "findings": 22,
           "health": "complete",
           "conditions": []
@@ -157,8 +157,8 @@
         {
           "ok": true,
           "files": 122,
-          "wallMs": 9470,
-          "cpuMs": 5508,
+          "wallMs": 2975,
+          "cpuMs": 4174,
           "maxRssMb": 555,
           "findings": 22,
           "health": "complete",
@@ -167,9 +167,9 @@
         {
           "ok": true,
           "files": 122,
-          "wallMs": 9460,
-          "cpuMs": 5470,
-          "maxRssMb": 506,
+          "wallMs": 2977,
+          "cpuMs": 4146,
+          "maxRssMb": 548,
           "findings": 22,
           "health": "complete",
           "conditions": []
@@ -182,24 +182,24 @@
         "notComplete": 0,
         "files": 122,
         "wallMs": {
-          "p50": 9460,
-          "p95": 9470,
-          "min": 9433,
-          "max": 9470
+          "p50": 2977,
+          "p95": 3002,
+          "min": 2975,
+          "max": 3002
         },
         "cpuMs": {
-          "p50": 5496
+          "p50": 4174
         },
         "maxRssMb": {
-          "p50": 515,
-          "max": 555
+          "p50": 555,
+          "max": 563
         },
         "findings": [
           22
         ]
       },
       "budget": {
-        "wallMsP95": 15000,
+        "wallMsP95": 5000,
         "maxRssMb": 850
       },
       "verdict": {
@@ -215,9 +215,9 @@
         {
           "ok": true,
           "files": 829,
-          "wallMs": 91676,
-          "cpuMs": 46868,
-          "maxRssMb": 1185,
+          "wallMs": 25564,
+          "cpuMs": 32136,
+          "maxRssMb": 1232,
           "findings": 464,
           "health": "partial",
           "conditions": [
@@ -227,9 +227,9 @@
         {
           "ok": true,
           "files": 829,
-          "wallMs": 93685,
-          "cpuMs": 48320,
-          "maxRssMb": 1257,
+          "wallMs": 25850,
+          "cpuMs": 32450,
+          "maxRssMb": 1112,
           "findings": 464,
           "health": "partial",
           "conditions": [
@@ -239,9 +239,9 @@
         {
           "ok": true,
           "files": 829,
-          "wallMs": 91882,
-          "cpuMs": 47488,
-          "maxRssMb": 1193,
+          "wallMs": 25625,
+          "cpuMs": 32255,
+          "maxRssMb": 1232,
           "findings": 464,
           "health": "partial",
           "conditions": [
@@ -256,25 +256,25 @@
         "notComplete": 3,
         "files": 829,
         "wallMs": {
-          "p50": 91882,
-          "p95": 93685,
-          "min": 91676,
-          "max": 93685
+          "p50": 25625,
+          "p95": 25850,
+          "min": 25564,
+          "max": 25850
         },
         "cpuMs": {
-          "p50": 47488
+          "p50": 32255
         },
         "maxRssMb": {
-          "p50": 1193,
-          "max": 1257
+          "p50": 1232,
+          "max": 1232
         },
         "findings": [
           464
         ]
       },
       "budget": {
-        "wallMsP95": 141000,
-        "maxRssMb": 1900
+        "wallMsP95": 39000,
+        "maxRssMb": 1850
       },
       "verdict": {
         "green": false,
@@ -360,7 +360,7 @@
   "limits": [
     "N is 3 to 7 per class, so P95 is effectively the slowest sample; it describes this machine on this day, not a population.",
     "Corpora are this repository's own code and fixtures, JavaScript heavy; a Java or monorepo-scale project (the baseline run needed 779 s for apache/camel) is far outside these classes and is covered by the timeout reproduction, not by these budgets.",
-    "The scan root is set, so git, SBOM and dependency steps run; wall time includes waits on child processes, so CPU time is lower than wall time.",
+    "Each sample scans a COPY of the corpus in the OS temp folder, with the scan root set and no git history, so history-dependent steps (finding provenance, blame) do not run; an earlier version scanned in place and was several times slower, which is why the first draft of this report is not comparable. Wall time can exceed CPU time when the scan waits on a child process.",
     "Findings counts are shown to prove every sample did the same work; a changed count would invalidate a comparison."
   ]
 }
