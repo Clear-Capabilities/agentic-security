@@ -1,0 +1,213 @@
+{
+  "schema": "agentic-security/engineering-excellence-unresolved@1",
+  "verdict": "release_blocked",
+  "items": [
+    {
+      "id": "U-01",
+      "title": "E2 exit gate not met: no missed real-code vulnerability shown recovered",
+      "priority": "P0",
+      "blocksRelease": true,
+      "task": "E2-06",
+      "nextStep": "Pick the largest forensics cluster that a detector can address without overfitting (151 no-detector misses, 81 missing source or sink), add rules with vulnerable, fixed, mutated and near-miss twins, and re-measure on the dev split before touching the holdout",
+      "blocking": true,
+      "waived": false
+    },
+    {
+      "id": "U-02",
+      "title": "Publish-time checks were not run: dependency currency and hosted CI",
+      "priority": "P0",
+      "blocksRelease": true,
+      "task": "E8-01",
+      "nextStep": "Run npm run release:check without --fast with network access, then the tag workflow in dry-run mode",
+      "blocking": true,
+      "waived": false
+    },
+    {
+      "id": "U-03",
+      "title": "No version bump or changelog entry for this work",
+      "priority": "P0",
+      "blocksRelease": true,
+      "task": "E8-06",
+      "nextStep": "Bump the version, add the changelog entry, run node scripts/sync-scanner-changelog.mjs, regenerate the scorecard for the new engine version",
+      "blocking": true,
+      "waived": false
+    },
+    {
+      "id": "U-04",
+      "title": "Branch merge was not authorised and nothing was pushed",
+      "priority": "P0",
+      "blocksRelease": true,
+      "task": "E8-06",
+      "nextStep": "Needs the maintainer's decision; the local commits on feature/engineering-excellence are ready for review",
+      "blocking": true,
+      "waived": false
+    },
+    {
+      "id": "U-05",
+      "title": "Independent accuracy is low: localized F1 0.040 on 278 scored entries",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E1-04",
+      "nextStep": "See U-01; no target is claimed",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-06",
+      "title": "Deep taint analysis is not incremental; warm one-file scans are 1.72 times faster, under the 2 times aspiration",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E6-04",
+      "nextStep": "Cache or summarise the deep stage per file; keep the byte-identical-output check",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-07",
+      "title": "The repository's own source (829 files) never completes its deep analysis (function and summary budgets)",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E6-08",
+      "nextStep": "Decide whether the budgets are right for trees this size, or report the early stop as a first-class scan-health state",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-08",
+      "title": "Pattern detectors flag a constant operand concatenated into a query or command (JS, Python, Go)",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E2-09",
+      "nextStep": "Constant-fold the operand before the pattern fires, and update the pinned test",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-09",
+      "title": "Ruby send_file with a request-built path produces no finding",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E2-06",
+      "nextStep": "Add the sink with a safe twin, and update the pinned test",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-10",
+      "title": "DCI corpus is synthetic and author-labelled; Flask mostly unresolved; two false positives; router-mounted routes unresolved",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E4-06",
+      "nextStep": "Add independently labelled cases from upstream advisories; recognise an owner check performed in code before the write",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-11",
+      "title": "Provenance attribution is below its 95 percent target for eligible findings",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E7-02",
+      "nextStep": "A project-scoped replay for whole-project detectors",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-12",
+      "title": "Fix verification: 1 of 15 unsafe fixes accepted and 3 of 8 safe fixes refused (declared gaps)",
+      "priority": "P1",
+      "blocksRelease": false,
+      "task": "E3-08",
+      "nextStep": "Close the dodge-rule-by-indirection gap; stop the scanner objecting to the three safe fixes",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-13",
+      "title": "Release package, verdict, perspectives, compliance truth model, fleet ranking and runtime explanation are libraries and scripts, not default scan behaviour",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E7-08",
+      "nextStep": "Add a package command and wire it into ci --assurance",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-14",
+      "title": "The verdict policy is fixed and uncalibrated; a skipped oversize or dense file now makes a scan partial",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E7-08",
+      "nextStep": "Measure how many real repositories flip to partial; make thresholds configurable",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-15",
+      "title": "Seven third-party targets were never attempted (no pinned commit)",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E6-02",
+      "nextStep": "Resolve and pin the commits, then run them",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-16",
+      "title": "Tests copy fixture directories that may hold scan state from earlier runs, so four S7 'no prior scan' tests failed once on a polluted fixture",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E8-01",
+      "nextStep": "Have those tests remove .agentic-security after copying a fixture",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-17",
+      "title": "The gate:trace --verify check for the fix-verification gate was not run",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E3-08",
+      "nextStep": "npm run gate:trace -- fix-verification-gate --verify",
+      "blocking": false,
+      "waived": false
+    },
+    {
+      "id": "U-18",
+      "title": "AGENTIC_SECURITY_INCREMENTAL is an inert flag (existing behaviour, found and disclosed by E6-04)",
+      "priority": "P2",
+      "blocksRelease": false,
+      "task": "E6-04",
+      "nextStep": "Remove the flag or wire it to the per-file cache",
+      "blocking": false,
+      "waived": false
+    }
+  ],
+  "blockers": [
+    {
+      "code": "EXIT_GATE_NOT_MET",
+      "message": "E2 exit gate is not_met: No missed vulnerability from the independent population was shown to be recovered. The dataflow and IR work was measured on fixtures; the baseline run already contains it, so its effect on real code has no before measurement. 272 of 278 scored entries are still missed."
+    },
+    {
+      "code": "UNRESOLVED_BLOCKER",
+      "message": "U-01: E2 exit gate not met: no missed real-code vulnerability shown recovered"
+    },
+    {
+      "code": "UNRESOLVED_BLOCKER",
+      "message": "U-02: Publish-time checks were not run: dependency currency and hosted CI"
+    },
+    {
+      "code": "UNRESOLVED_BLOCKER",
+      "message": "U-03: No version bump or changelog entry for this work"
+    },
+    {
+      "code": "UNRESOLVED_BLOCKER",
+      "message": "U-04: Branch merge was not authorised and nothing was pushed"
+    }
+  ],
+  "caveats": [
+    "E3 exit gate partially met: One declared gap still accepts an unsafe fix (1 of 15) and 3 of 8 safe fixes are refused; both are listed in the benchmark.",
+    "E4 exit gate partially met: Measurable and proof-backed, but the cases are synthetic and author-labelled, two safe routes become false positives, and Flask is mostly unresolved.",
+    "E6 exit gate partially met: Scans are bounded and containment is measured, but the measured benefit (1.72 times for one changed file) is under the 2 times aspiration and the 829-file class never completes its deep analysis."
+  ]
+}

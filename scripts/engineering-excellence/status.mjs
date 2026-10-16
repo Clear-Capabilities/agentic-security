@@ -96,4 +96,5 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().then((c) => process.exit(c));
+if (import.meta.url === `file://${process.argv[1]}`) // exitCode, not exit(): exiting straight after a large write to a pipe truncates it at 64 KB (the --json output is larger than that)
+  main().then((c) => { process.exitCode = c; });
