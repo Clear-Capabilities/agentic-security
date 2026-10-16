@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "facts": {
-    "commit": "c0a5ae7a677e9a27274e5e619c47c0e6a8ec061f",
+    "commit": "7011a6744593efb7832735f2ea95d754f396d745",
     "branch": "feature/engineering-excellence",
     "worktreeDirty": true,
-    "version": "0.172.0",
+    "version": "0.172.1",
     "package": "@clear-capabilities/agentic-security-scanner",
     "engines": {
       "node": ">=24.0.0"
@@ -17,13 +17,13 @@
       "(top level)": 12,
       "artifact": 10,
       "capabilities": 21,
-      "context-intelligence": 27,
-      "dataflow": 46,
+      "context-intelligence": 30,
+      "dataflow": 48,
       "discovery": 9,
       "egress": 3,
-      "fix": 2,
+      "fix": 11,
       "integrations": 2,
-      "ir": 25,
+      "ir": 27,
       "language": 60,
       "lineage": 64,
       "llm-validator": 16,
@@ -41,18 +41,18 @@
       "shared": 1,
       "util": 4
     },
-    "sourceFileCount": 789,
-    "testFileCount": 875,
+    "sourceFileCount": 805,
+    "testFileCount": 902,
     "testFilesByDir": {
       "(top level)": 553,
       "artifact": 10,
       "capabilities": 10,
       "cli": 23,
-      "context-intelligence": 13,
+      "context-intelligence": 14,
       "dataflow": 1,
       "deployment": 9,
       "documentation": 5,
-      "engineering-excellence": 6,
+      "engineering-excellence": 32,
       "evaluation": 12,
       "fleet": 3,
       "haskell": 18,
@@ -75,9 +75,9 @@
       "verification": 8
     },
     "npmScripts": {
-      "total": 184,
+      "total": 197,
       "test": 39,
-      "bench": 91
+      "bench": 97
     },
     "scopedTestScripts": [
       "test:bench-modules",
@@ -256,6 +256,7 @@
       "engine-reconnect",
       "family-producers",
       "fix-correctness",
+      "fix-verification",
       "holdout-independent",
       "iac-coverage",
       "independent",
@@ -283,7 +284,7 @@
       "self-scan",
       "ttff"
     ],
-    "docsFiles": 303,
+    "docsFiles": 311,
     "claudeMdFiles": [
       "CLAUDE.md",
       "frontend/CLAUDE.md",
@@ -303,7 +304,7 @@
       "scanner/src/sca/CLAUDE.md",
       "scanner/src/server/CLAUDE.md"
     ],
-    "generatedAt": "2026-10-16T12:49:23.436Z"
+    "generatedAt": "2026-10-16T16:27:35.682Z"
   },
   "capabilities": [
     {
@@ -330,9 +331,9 @@
         "docs/guides/scanning.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "37 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "cli-scan",
@@ -386,9 +387,9 @@
         "scanner/src/sast/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "11 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "sast-detectors",
@@ -439,9 +440,9 @@
         "scanner/src/ir/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "12 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "ir-layer",
@@ -494,9 +495,9 @@
         "scanner/src/dataflow/CLAUDE.md"
       ],
       "partial": "context sensitivity is limited (k=1/k=2); heap, alias and closure modelling is partial and is the subject of E2-03",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "context sensitivity is limited (k=1/k=2); heap, alias and closure modelling is partial and is the subject of E2-03"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "taint-engine",
@@ -555,9 +556,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "10 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "guard-recognition",
@@ -609,9 +610,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "30 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "suppression-ledger",
@@ -668,9 +669,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "55 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "scan-health",
@@ -722,9 +723,9 @@
       ],
       "docs": [],
       "partial": "isolation covers analyzers run through the supervisor; RAM and CPU caps are not enforced per worker (E6-05)",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "isolation covers analyzers run through the supervisor; RAM and CPU caps are not enforced per worker (E6-05)"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "analyzer-isolation",
@@ -774,9 +775,9 @@
       ],
       "docs": [],
       "partial": "cache keys cover content and tool version; transitive-dependency and feed-freshness invalidation is the subject of E6-04",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "cache keys cover content and tool version; transitive-dependency and feed-freshness invalidation is the subject of E6-04"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "incremental-cache",
@@ -827,9 +828,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "27 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "determinism",
@@ -887,9 +888,9 @@
         "docs/guides/fixing-vulnerabilities.md"
       ],
       "partial": "several patch routes (CLI fix, MCP apply_fix, autopilot) exist; whether they share one verification contract is E3-01",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "several patch routes (CLI fix, MCP apply_fix, autopilot) exist; whether they share one verification contract is E3-01"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "fix-synthesis",
@@ -943,9 +944,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "16 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "apply-fix-service",
@@ -1003,9 +1004,9 @@
         "docs/guides/exploit-proof-fabric.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "43 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "exploit-proof",
@@ -1063,9 +1064,9 @@
         "scanner/src/sandbox/CLAUDE.md"
       ],
       "partial": "enforced mode is advertised for Linux only and Linux is partially verified; macOS runs are host-proved",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "enforced mode is advertised for Linux only and Linux is partially verified; macOS runs are host-proved"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "sandbox",
@@ -1120,9 +1121,9 @@
         "scanner/src/context-intelligence/CLAUDE.md"
       ],
       "partial": "evaluation is synthetic with a scripted reader; no real adjudicated holdout exists, so review quality is unmeasured",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "evaluation is synthetic with a scripted reader; no real adjudicated holdout exists, so review quality is unmeasured"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "dci",
@@ -1177,9 +1178,9 @@
         "scanner/src/discovery/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "39 tests passed in 4 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "llm-discovery",
@@ -1236,9 +1237,9 @@
         "docs/guides/business-logic-invariants.md"
       ],
       "partial": "invariants are declared and checked on the existing evidence; first-class machine-checkable invariants with cross-route propagation are E4-02 and E4-03",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "invariants are declared and checked on the existing evidence; first-class machine-checkable invariants with cross-route propagation are E4-02 and E4-03"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "business-invariants",
@@ -1291,9 +1292,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "34 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "egress-policy",
@@ -1347,9 +1348,9 @@
       ],
       "docs": [],
       "partial": "default-on only when an endpoint is configured",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "default-on only when an endpoint is configured"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "llm-validator",
@@ -1405,9 +1406,9 @@
         "docs/guides/runtime-twin.md"
       ],
       "partial": "identity binding of observations to a deployed build digest is E5-02",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "identity binding of observations to a deployed build digest is E5-02"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "runtime-correlation",
@@ -1463,9 +1464,9 @@
         "docs/guides/data-flow-explorer.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "6 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "dataflow-explorer",
@@ -1519,9 +1520,9 @@
         "docs/guides/fleet.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "49 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "fleet",
@@ -1574,9 +1575,9 @@
         "scanner/src/artifact/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "7 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "artifact-provenance",
@@ -1628,9 +1629,9 @@
         "docs/guides/finding-provenance.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "5 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "finding-provenance",
@@ -1681,9 +1682,9 @@
       ],
       "docs": [],
       "partial": "bundles are per finding; a release-level package is E7-03",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "bundles are per finding; a release-level package is E7-03"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "signed-evidence",
@@ -1735,9 +1736,9 @@
         "docs/OSCAL.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "15 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "oscal",
@@ -1788,9 +1789,9 @@
         "docs/guides/compliance.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "34 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "compliance-mapping",
@@ -1847,9 +1848,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "50 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "privacy-controls",
@@ -1906,9 +1907,9 @@
         "scanner/src/mcp/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "37 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "mcp-server",
@@ -1959,9 +1960,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "9 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "lsp-server",
@@ -2016,9 +2017,9 @@
         "scanner/src/language/CLAUDE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "14 tests passed in 1 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "language-support",
@@ -2074,9 +2075,9 @@
         "docs/METRICS.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "63 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "scorecard",
@@ -2132,9 +2133,9 @@
         "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "16 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "evaluation-holdout",
@@ -2185,9 +2186,9 @@
         "docs/guides/loop-engineering.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "27 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "loop-engineering",
@@ -2238,9 +2239,9 @@
       ],
       "docs": [],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "30 tests passed in 2 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "engineering-excellence-tracker",
@@ -2295,9 +2296,9 @@
         "docs/guides/exploit-proof-fabric.md"
       ],
       "partial": null,
-      "maturity": "VERIFIED",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "39 tests passed in 3 file(s) at ee16dbb90f"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "proof-fabric",
@@ -2355,9 +2356,9 @@
         "docs/guides/assurance-rollout-and-rollback.md"
       ],
       "partial": "the verification record is a hypothesis-level contract; a patch-level FixVerificationRecord that unifies every patch route is what E3-02 and E3-03 must establish or confirm",
-      "maturity": "PARTIAL",
+      "maturity": "EXISTS-UNVERIFIED",
       "reasons": [
-        "the verification record is a hypothesis-level contract; a patch-level FixVerificationRecord that unifies every patch route is what E3-02 and E3-03 must establish or confirm"
+        "its recorded test run is for 0.172.0, not 0.172.1"
       ],
       "run": {
         "capability": "assurance-contracts",
@@ -2395,9 +2396,9 @@
   ],
   "maturityCounts": {
     "ABSENT": 0,
-    "EXISTS-UNVERIFIED": 0,
-    "PARTIAL": 11,
-    "VERIFIED": 26,
+    "EXISTS-UNVERIFIED": 37,
+    "PARTIAL": 0,
+    "VERIFIED": 0,
     "BLOCKED": 0
   },
   "absent": [
@@ -2409,8 +2410,21 @@
         "bench:realcode"
       ],
       "note": "no script of that name exists; the independent gate is scripts/independent-population-gate.mjs",
-      "status": "ABSENT",
-      "hits": []
+      "status": "FOUND-ELSEWHERE",
+      "hits": [
+        {
+          "term": "realcode",
+          "files": [
+            "bench/independent/realcode.mjs"
+          ]
+        },
+        {
+          "term": "bench:realcode",
+          "files": [
+            "bench/independent/realcode.mjs"
+          ]
+        }
+      ]
     },
     {
       "id": "scan-measurement-identity",
@@ -2421,8 +2435,17 @@
         "untrusted_for_release"
       ],
       "note": "baseline-inventory.js captures part of this; no measurement-validity flag exists",
-      "status": "ABSENT",
-      "hits": []
+      "status": "FOUND-ELSEWHERE",
+      "hits": [
+        {
+          "term": "measurementValid",
+          "files": [
+            "bench/independent/realcode.mjs",
+            "bench/independent/runs/a72968195aa1/RESULT.json",
+            "bench/independent/runs/a72968195aa1/progress.json"
+          ]
+        }
+      ]
     },
     {
       "id": "service-boundary-ir",
@@ -2432,8 +2455,23 @@
         "StorageEdge"
       ],
       "note": "cross-service edges are not modelled in the taint IR",
-      "status": "ABSENT",
-      "hits": []
+      "status": "FOUND-ELSEWHERE",
+      "hits": [
+        {
+          "term": "ServiceBoundary",
+          "files": [
+            "scanner/src/ir/CLAUDE.md",
+            "scanner/src/ir/semantic-graph.js"
+          ]
+        },
+        {
+          "term": "StorageEdge",
+          "files": [
+            "scanner/src/ir/CLAUDE.md",
+            "scanner/src/ir/semantic-graph.js"
+          ]
+        }
+      ]
     },
     {
       "id": "semantic-evidence-edge",
@@ -2452,8 +2490,15 @@
         "analysis_incomplete"
       ],
       "note": "budget exhaustion is reported through scanHealth, not a per-finding marker",
-      "status": "ABSENT",
-      "hits": []
+      "status": "FOUND-ELSEWHERE",
+      "hits": [
+        {
+          "term": "analysis_incomplete",
+          "files": [
+            "scanner/src/pipeline/scan-health.js"
+          ]
+        }
+      ]
     },
     {
       "id": "insufficient-population-verdict",
@@ -2465,6 +2510,14 @@
       "note": "the hyphenated form is used by the evaluation gates (scanner/src/posture/evaluation/gates.js, four statuses: pass, fail, insufficient-population, unmeasured). The PRD's eight-state taxonomy is not used everywhere; mapping it is E1-03.",
       "status": "FOUND-ELSEWHERE",
       "hits": [
+        {
+          "term": "insufficient_population",
+          "files": [
+            "bench/independent/realcode.mjs",
+            "bench/independent/runner.mjs",
+            "bench/independent/runs/a72968195aa1/RESULT.json"
+          ]
+        },
         {
           "term": "insufficient-population",
           "files": [
@@ -2502,29 +2555,29 @@
     {
       "doc": "CLAUDE.md",
       "claim": "Version line",
-      "expected": "0.172.0",
-      "actual": "0.172.0",
+      "expected": "0.172.1",
+      "actual": "0.172.1",
       "ok": true
     },
     {
       "doc": "README.md",
       "claim": "version badge",
-      "expected": "0.172.0",
-      "actual": "0.172.0",
+      "expected": "0.172.1",
+      "actual": "0.172.1",
       "ok": true
     },
     {
       "doc": ".claude-plugin/plugin.json",
       "claim": "version",
-      "expected": "0.172.0",
-      "actual": "0.172.0",
+      "expected": "0.172.1",
+      "actual": "0.172.1",
       "ok": true
     },
     {
       "doc": "gemini-extension.json",
       "claim": "version",
-      "expected": "0.172.0",
-      "actual": "0.172.0",
+      "expected": "0.172.1",
+      "actual": "0.172.1",
       "ok": true
     },
     {
