@@ -2923,6 +2923,18 @@ async function cmdCompliance(args) {
     const { loadFreshLineageGraph } = await import('../src/server/graph-loader.js');
     const { graph: wtGraph, fresh: wtGraphIsFresh, loaded: wtLoaded } = loadFreshLineageGraph(scanRoot, scan);
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: wtGraph });
+    // `--truth`: restate every control in the six-state truth model (assessed_satisfied, assessed_not_satisfied, not_assessed, not_applicable,
+    // requires_human_review, insufficient_evidence) with explicit denominators, instead of the evaluator's four statuses.
+    if (args.flags.truth === true && (fmt === 'oscal' || fmt === 'json')) {
+      const { assessFrameworkTruth } = await import('../src/posture/compliance-truth.js');
+      let notApplicable = {};
+      try { notApplicable = JSON.parse(fs.readFileSync(statePath(scanRoot, 'compliance-applicability.json'), 'utf8'))?.[fw.id] || {}; } catch { /* none declared */ }
+      const truth = assessFrameworkTruth(fw, evaluation, { scanStatus: scan.scanHealth?.status, scanExaminedFiles: scan.filesScanned > 0, notApplicable });
+      if (fmt === 'json') { writeStdout(JSON.stringify(truth, null, 2) + '\n'); return 0; }
+      const { toOSCALCompliance, complianceRowsFromTruth } = await import('../src/report/oscal.js');
+      writeStdout(JSON.stringify(toOSCALCompliance(fw, complianceRowsFromTruth(truth), { startedAt: scan.startedAt || scan._scanMeta?.startedAt }), null, 2) + '\n');
+      return 0;
+    }
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
       writeStdout(JSON.stringify(

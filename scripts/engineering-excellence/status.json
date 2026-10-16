@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T18:48:18.521Z",
-  "revision": 1201,
+  "updatedAt": "2026-10-16T18:51:55.594Z",
+  "revision": 1216,
   "checkout": {
-    "commit": "e8c8258f6e47ae402c1547a37af77cbf84509216",
+    "commit": "807fe94338b0462ceb74d22cc5e67a6cac024743",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T18:48:18.520Z"
+    "capturedAt": "2026-10-16T18:51:55.593Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 3,
       "startedAt": "2026-10-16T17:39:24.508Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T18:48:14.873Z",
+      "heartbeatAt": "2026-10-16T18:51:54.894Z",
       "activeProcess": {
         "pid": 43127,
         "command": "node bench/independent/forensics.mjs --run a72968195aa1",
@@ -9375,18 +9375,129 @@
       "notes": []
     },
     "E7-04": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T18:51:52.632Z",
+      "completedAt": "2026-10-16T18:51:55.594Z",
+      "heartbeatAt": "2026-10-16T18:51:55.335Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "807fe94338b0462ceb74d22cc5e67a6cac024743",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-367a3899",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e7-04-compliance-truth.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T18:51:52.679Z",
+          "endedAt": "2026-10-16T18:51:55.332Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 2638,
+          "log": "scripts/engineering-excellence/logs/E7-04/2026-10-16T18-51-52-679Z-c-367a3899.log",
+          "logSha256": "1e252e2125ab7a5533d06a39db27cfd5dfbfe9041079c2055f70c2ec4977ad5f",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E7-04",
+        "status": "done",
+        "sourceCommit": "807fe94338b0462ceb74d22cc5e67a6cac024743",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/artifact-registry.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e7-04-compliance-truth.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E7-04/2026-10-16T18-51-52-679Z-c-367a3899.log",
+            "logSha256": "1e252e2125ab7a5533d06a39db27cfd5dfbfe9041079c2055f70c2ec4977ad5f",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e7-04-compliance-truth.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Every control is classified into one of six states by explicit rules; a clean mapped signal on an incomplete scan",
+          "a weakly evidenced signal",
+          "or a control not fully code-testable never becomes satisfied; OSCAL findings exist only for the two assessed states and every other state is an observation with its own remark; explicit denominators and a framework claim that never says compliant; the existing evaluator-status OSCAL export is unchanged; a real framework (NIST 800-171 r3) runs end to end through the CLI"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "The truth model restates the evaluators' rows; it adds no new evidence. A control's satisfied state still rests on the evaluator's own mapping of signals and on the publisher's code-testable rating",
+          "Not-applicable declarations come from an operator file (compliance-applicability.json) and are honoured only with a reason and a named person; they are not signed or expiring",
+          "Only the NIST 800-171 r3 framework was run through the CLI end to end; the other frameworks use the same evaluator rows but were not each run",
+          "No framework was shown to an external assessor"
+        ],
+        "closedAt": "2026-10-16T18:51:55.594Z"
+      },
       "notes": []
     },
     "E7-05": {

@@ -173,6 +173,7 @@ export const ARTIFACT_REGISTRY = [
   { name: 'compliance', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'posture/auditor-walkthrough.js' },
   { name: 'attestations', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'posture/evidence-bundle.js' },
   { name: 'auditor-walkthroughs', kind: 'dir', classification: 'generated', retentionClass: 'evidence' },
+  { name: 'compliance-applicability.json', kind: 'file', classification: 'operator-config', note: 'operator declarations that a framework control does not apply ({ <framework id>: { <control id>: { reason, declaredBy } } }); read by `compliance --report <framework> --truth`. The tool never infers non-applicability.' },
   { name: 'analysis-cache.jsonl', kind: 'file', classification: 'generated', retentionClass: 'cache', confidential: true, source: 'posture/scan-checkpoint.js (openCheckpoint persistent mode), engine.js', note: 'Opt-in (AGENTIC_SECURITY_ANALYSIS_CACHE=1) cross-scan cache of per-file detector results. Each record is authenticated with the install key, so a cache carried in from elsewhere is discarded. It holds findings with source excerpts, so it is treated like the source tree.' },
   { name: 'incremental', kind: 'dir', classification: 'generated', retentionClass: 'cache', source: 'dataflow/incremental.js (cache)' },
   { name: 'model-rescan', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
