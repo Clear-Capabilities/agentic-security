@@ -51,7 +51,8 @@ export function toFindingShape(candidate) {
     description: candidate.rationale
       ? `${candidate.rationale} (entry point: ${candidate.entryPoint || 'unstated'}; sink: ${candidate.sink || 'unstated'})`
       : `Proposed by the ${candidate.lens} lens; no rationale supplied.`,
-    remediation: `Review ${candidate.file}:${candidate.line}. Confirm whether ${candidate.entryPoint || 'attacker-controlled input'} can reach ${candidate.sink || 'this operation'}, and constrain it at the boundary if so.`,
+    // a candidate that carries its own concrete remediation (a deterministic finding with a known fix shape) keeps it; every other candidate gets the generic review text
+    remediation: (typeof candidate.remediation === 'string' && candidate.remediation) ? candidate.remediation : `Review ${candidate.file}:${candidate.line}. Confirm whether ${candidate.entryPoint || 'attacker-controlled input'} can reach ${candidate.sink || 'this operation'}, and constrain it at the boundary if so.`,
     parser: 'DISCOVERY',
     family: candidate.family || 'other',
     ruleId: `discovery:${candidate.lens}`,

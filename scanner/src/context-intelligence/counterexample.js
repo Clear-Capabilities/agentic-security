@@ -131,6 +131,32 @@ export function runFixture(f) {
   return parsed.error ? { ok: false, error: parsed.error, detail: parsed.detail } : { ok: true, ...parsed };
 }
 
+/**
+ * Make the attacker's request against the real handler code and say what happened to the victim's object. Used by assessCandidate and, after a patch,
+ * by the final verification of a fix (which must execute even when a static look already says the control is present).
+ * @returns {{state:'proven'|'refuted'|'unresolved', trace:object[], reasons:string[], reason?:string, status?:number}}
+ */
+export function executeAttempt(candidate, fx) {
+  const trace = [];
+  const method = fx.method || (candidate.operations?.includes('delete') ? 'DELETE' : candidate.operations?.includes('update') ? 'PUT' : 'GET');
+  const attack = runFixture({ files: fx.files, entry: fx.entry, request: { method, path: fx.path, body: fx.body }, user: fx.attacker.user, store: fx.store });
+  if (!attack.ok) { trace.push(step('executed', 'attacker request', `${attack.error}: ${attack.detail || ''}`)); return { state: 'unresolved', trace, reasons: [`the fixture could not run (${attack.error}); the claim stays unproven`], reason: `the fixture could not run (${attack.error}); the claim stays unproven` }; }
+  trace.push(step('executed', 'attacker request', `${method} ${fx.path} as ${JSON.stringify(fx.attacker.user)} -> ${attack.status}`));
+  const marker = fx.victim.marker;
+  const leaked = marker ? JSON.stringify(attack.body ?? '').includes(marker) : attack.status >= 200 && attack.status < 300 && attack.body != null;
+  const changed = JSON.stringify(attack.store?.[fx.victim.collection] || []) !== JSON.stringify(fx.store[fx.victim.collection] || []);
+  if (leaked || changed) {
+    trace.push(step('executed', 'effect on the victim\'s object', leaked ? 'the attacker received the victim\'s data' : 'the victim\'s object was modified by the attacker'));
+    if (fx.siblingPath) {
+      const sib = runFixture({ files: fx.files, entry: fx.entry, request: { method: fx.siblingMethod || 'GET', path: fx.siblingPath }, user: fx.attacker.user, store: fx.store });
+      if (sib.ok) trace.push(step('executed', 'the enforcing sibling, same attacker', `${fx.siblingMethod || 'GET'} ${fx.siblingPath} -> ${sib.status}${marker && !JSON.stringify(sib.body ?? '').includes(marker) ? ' (victim data withheld)' : ''}`));
+    }
+    return { state: 'proven', trace, reasons: ['an executed local request let a principal who does not own the object ' + (leaked ? 'read' : 'change') + ' it'], status: attack.status };
+  }
+  trace.push(step('executed', 'effect on the victim\'s object', 'none: the attacker was denied or got nothing'));
+  return { state: 'refuted', trace, reasons: [`an executed attempt by the attacker was denied (status ${attack.status})`], status: attack.status };
+}
+
 // ---- the assessment ---------------------------------------------------------------------------------------------------------
 
 const step = (kind, what, detail = null) => ({ kind, what, ...(detail ? { detail } : {}) });
@@ -166,23 +192,9 @@ export function assessCandidate(candidate, ctx) {
   const fx = ctx.fixture;
   if (!fx) return { state: 'plausible', trace, reasons: ['every edge on the path is resolved and no control precedes the sensitive operation; nothing was executed'] };
 
-  // execute: the attacker (who does not own the object) makes the request; the victim's object must be read or changed
-  const method = fx.method || (candidate.operations?.includes('delete') ? 'DELETE' : candidate.operations?.includes('update') ? 'PUT' : 'GET');
-  const attack = runFixture({ files: fx.files, entry: fx.entry, request: { method, path: fx.path, body: fx.body }, user: fx.attacker.user, store: fx.store });
-  if (!attack.ok) { trace.push(step('executed', 'attacker request', `${attack.error}: ${attack.detail || ''}`)); return fail('unresolved', `the fixture could not run (${attack.error}); the claim stays unproven`); }
-  trace.push(step('executed', 'attacker request', `${method} ${fx.path} as ${JSON.stringify(fx.attacker.user)} -> ${attack.status}`));
-  const marker = fx.victim.marker;
-  const leaked = marker ? JSON.stringify(attack.body ?? '').includes(marker) : attack.status >= 200 && attack.status < 300 && attack.body != null;
-  const before0 = JSON.stringify(fx.store[fx.victim.collection] || []);
-  const changed = JSON.stringify(attack.store?.[fx.victim.collection] || []) !== before0;
-  if (leaked || changed) {
-    trace.push(step('executed', 'effect on the victim\'s object', leaked ? 'the attacker received the victim\'s data' : 'the victim\'s object was modified by the attacker'));
-    if (fx.siblingPath) {
-      const sib = runFixture({ files: fx.files, entry: fx.entry, request: { method: fx.siblingMethod || 'GET', path: fx.siblingPath }, user: fx.attacker.user, store: fx.store });
-      if (sib.ok) trace.push(step('executed', 'the enforcing sibling, same attacker', `${fx.siblingMethod || 'GET'} ${fx.siblingPath} -> ${sib.status}${marker && !JSON.stringify(sib.body ?? '').includes(marker) ? ' (victim data withheld)' : ''}`));
-    }
-    return { state: 'proven', trace, reasons: ['an executed local request let a principal who does not own the object ' + (leaked ? 'read' : 'change') + ' it'] };
-  }
-  trace.push(step('executed', 'effect on the victim\'s object', 'none: the attacker was denied or got nothing'));
-  return { state: 'refuted', trace, reasons: [`an executed attempt by the attacker was denied (status ${attack.status})`] };
+  const ex = executeAttempt(candidate, fx);
+  trace.push(...ex.trace);
+  if (ex.state === 'unresolved') return fail('unresolved', ex.reason);
+  if (ex.state === 'proven') return { state: 'proven', trace, reasons: ex.reasons };
+  return { state: 'refuted', trace, reasons: ex.reasons };
 }
