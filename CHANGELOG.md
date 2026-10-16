@@ -9,6 +9,20 @@
 > make the history less accurate, not more.
 
 
+## 0.172.1 - Deterministic Context Intelligence: adversarial review fixes
+
+An adversarial review of the first release found nine problems, each demonstrated against the shipped code and each now pinned by a regression test (`scanner/test/context-intelligence/premortem.test.js`).
+
+- **False ownership protection.** A route that built SQL from `req.params.id` and merely mentioned `req.user.id` and `owner_name` in the same call reported `ownership: present` with a `complete` bundle. An owner field now counts only when it is tied to the principal in the same clause, and the principal's own name is never read as an owner field. `present` carries a `strength` (`observed` or `inferred`).
+- **Discarded guards.** `isOwner(...)` called as a bare statement no longer counts as a guard; it is `evaluated_and_ineffective`.
+- **Prompt injection through the route label.** The label sat in the instruction text outside the untrusted fence. It is now sanitised and placed inside the fence.
+- **Remote egress.** A non-loopback endpoint now needs `--allow-remote` or `review.allowRemote`; the egress policy and redaction still apply after approval.
+- **Terminal escapes.** Every line the command prints has control characters and bidirectional marks replaced.
+- **Citations.** A citation must now be about its cited lines (not only inside the bundle), spans at most 60 lines, and `no_issue_observed` must cite a control the deterministic pass also found.
+- **Unmeasured numbers.** Precision, recall, F1 and calls per true positive are withheld while the interval is unmeasured; the CSV carries a `synthetic` column.
+- **Compiler export.** A reference must name a callee that its cited line contains, or the whole import degrades.
+- **Locale.** The one locale-sensitive ordering now uses code-unit order, so manifests do not differ by host locale.
+
 ## 0.172.0 - Deterministic Context Intelligence (`context` command)
 
 An opt-in, additive subsystem. The default scan, `hunt` and every existing command are unchanged.

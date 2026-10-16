@@ -20,14 +20,14 @@ import { redactPayload } from '../egress/redact.js';
 import { evaluateEgress } from '../egress/policy.js';
 import { resolveProvider } from '../llm-validator/providers.js';
 import { resolveLlmInvokeWithDecision } from '../discovery/llm-invoke.js';
-import { hashOf, safeRelPath, sha256 } from './canonical.js';
+import { hashOf, safeLabel, safeRelPath, sha256 } from './canonical.js';
 import { estimateTokens } from './packer.js';
 import { REVIEW_SCHEMA_VERSION, packRef } from './prompts/packs.js';
 
 export const CONCLUSIONS = Object.freeze(['potential_issue', 'no_issue_observed', 'insufficient_evidence']);
 export const LIKELIHOODS = Object.freeze(['low', 'medium', 'high']);
 const FORBIDDEN_MODEL_FIELDS = Object.freeze(['severity', 'proofTier', 'proof_tier', 'confirmation', 'confirmed', 'status', 'verdict', 'shipVerdict', 'ship_verdict', 'exploitability', 'cvss', 'exploit_confirmed', 'EXPLOIT_CONFIRMED']);
-const MAX_CITATION_SPAN = 200;
+const MAX_CITATION_SPAN = 60;
 const MAX_STR = 1200;
 const MAX_ITEMS = 24;
 
@@ -65,8 +65,10 @@ export function buildReviewPrompt({ pack, entrypoints, packageTexts, contextHash
   for (const g of pack.guidance) lines.push(`- ${g}`);
   lines.push('', 'OUTPUT (JSON, evidence listed first):', JSON.stringify(OUTPUT_SHAPE, null, 2), '');
   entrypoints.forEach((ep, i) => {
-    const fenced = fenceUntrusted(packageTexts[i], `context-${i + 1}`);
-    lines.push(`ENTRY POINT ${i + 1}: ${ep.label} (id ${ep.id})`);
+    // The label comes from a route string in the repository, so it is DATA: it goes inside the fence, sanitised, and never
+    // into the instruction text around it.
+    const fenced = fenceUntrusted(`ENTRY POINT LABEL (data): ${safeLabel(ep.label, 120)}\n${packageTexts[i]}`, `context-${i + 1}`);
+    lines.push(`ENTRY POINT ${i + 1} (id ${ep.id})`);
     lines.push(fenced.text, '');
   });
   const prompt = lines.join('\n');
@@ -102,18 +104,39 @@ export function redactPackageText(text, { scanRoot }) {
 }
 
 /** Provider/model identity used in the job key, from the same resolver the rest of the discovery layer uses. */
-export function describeModel() {
+export function isLoopbackEndpoint(endpoint) {
+  if (!endpoint) return false;
+  const parts = String(endpoint).split(',').map(x => x.trim()).filter(Boolean);
+  if (!parts.length) return false;
+  return parts.every(u => {
+    try {
+      const h = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      return h === 'localhost' || h === '::1' || /^127\.\d+\.\d+\.\d+$/.test(h);
+    } catch { return false; }
+  });
+}
+
+export function describeModel({ allowRemote = false } = {}) {
+  let m;
   try {
     const r = resolveProvider({ role: 'hunt' });
-    if (r.ok) return { provider: r.config.provider, model: r.config.model || process.env.AGENTIC_SECURITY_LLM_MODEL || 'endpoint-default', endpoint: r.config.endpoint || null };
+    if (r.ok) m = { provider: r.config.provider, model: r.config.model || process.env.AGENTIC_SECURITY_LLM_MODEL || 'endpoint-default', endpoint: r.config.endpoint || null };
   } catch { /* fall through */ }
-  const ep = process.env.AGENTIC_SECURITY_LLM_ENDPOINT || null;
-  return { provider: ep ? 'byo' : null, model: process.env.AGENTIC_SECURITY_LLM_MODEL || (ep ? 'endpoint-default' : null), endpoint: ep };
+  if (!m) {
+    const ep = process.env.AGENTIC_SECURITY_LLM_ENDPOINT || null;
+    m = { provider: ep ? 'byo' : null, model: process.env.AGENTIC_SECURITY_LLM_MODEL || (ep ? 'endpoint-default' : null), endpoint: ep };
+  }
+  // `remote` is true for any endpoint that is not loopback; an endpoint-less provider is judged remote too, since its host is not visible here.
+  const remote = m.provider ? !(m.provider === 'local' || isLoopbackEndpoint(m.endpoint)) : false;
+  return { ...m, remote, remoteApproved: allowRemote === true };
 }
 
 /** Evaluate the egress policy for every file that would appear in the prompt. Returns { allowed, reason }. */
 export function checkEgressForFiles(files, { scanRoot, model }) {
   if (!model.endpoint) return { allowed: true, evaluated: false };
+  // Source bundles leave the machine only when the operator has said so. A loopback endpoint needs no approval; any
+  // other endpoint needs --allow-remote (or review.allowRemote), on top of the egress policy below, never instead of it.
+  if (model.remote && !model.remoteApproved) return { allowed: false, reason: 'remote-endpoint-not-approved (pass --allow-remote or set review.allowRemote after reviewing the egress policy)', file: files[0] || null, evaluated: false };
   for (const file of files) {
     const d = evaluateEgress({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file });
     if (!d.allowed) return { allowed: false, reason: d.reason, file, evaluated: true };
@@ -149,14 +172,29 @@ function normalizeCitations(list) {
   return { items, malformed };
 }
 
-/** A citation resolves when it is a real, bounded range inside a segment the reviewed package contained. */
+const CLAIM_STOPWORDS = new Set(['this', 'that', 'with', 'from', 'which', 'where', 'when', 'does', 'have', 'been', 'would', 'could', 'should', 'into', 'over', 'only', 'also', 'shows', 'show', 'line', 'lines', 'code', 'file', 'function']);
+
+/**
+ * A claim is grounded when at least one meaningful word in it (or the first five letters of a longer one, so "ownership"
+ * meets `ownerId`) appears in the lines it cites. This does not prove the claim is true; it stops a citation that points at
+ * real lines while describing something else, and an empty claim, from being accepted as evidence.
+ */
+export function claimGrounded(claim, citedText) {
+  const hay = String(citedText).toLowerCase();
+  const words = (String(claim).toLowerCase().match(/[a-z_][a-z0-9_]{3,}/g) || []).filter(w => !CLAIM_STOPWORDS.has(w));
+  return words.some(w => hay.includes(w.length > 5 ? w.slice(0, 5) : w));
+}
+
+/** A citation resolves when it is a real, bounded range inside a segment the reviewed package contained, and its claim is about those lines. */
 export function resolveCitation(c, segments, fileContents) {
   if (c.startLine < 1 || c.endLine < c.startLine || c.endLine - c.startLine > MAX_CITATION_SPAN) return 'range-invalid';
   const text = fileContents[c.file];
   if (typeof text !== 'string') return 'file-not-in-snapshot';
-  if (c.endLine > text.split('\n').length) return 'beyond-end-of-file';
+  const fileLines = text.split('\n');
+  if (c.endLine > fileLines.length) return 'beyond-end-of-file';
   const inside = segments.some(s => s.file === c.file && c.startLine >= s.startLine && c.endLine <= s.endLine);
-  return inside ? null : 'outside-provided-context';
+  if (!inside) return 'outside-provided-context';
+  return claimGrounded(c.claim, fileLines.slice(c.startLine - 1, c.endLine).join('\n')) ? null : 'claim-not-grounded-in-cited-lines';
 }
 
 function decline(base, reasons, extra = {}) {
@@ -245,13 +283,24 @@ export function verifyReview({ raw, pack, entrypoints, manifests, packageIndexes
       out.downgradedFrom = 'no_issue_observed';
       out.conclusion = 'insufficient_evidence';
       out.downgradeReason = 'no-mitigation-cited';
+    } else if (dim) {
+      // The cited mitigation must be a control the deterministic pass also recognised, and one the text actually shows:
+      // a model cannot clear a route by pointing at an arbitrary line or at a control known only from its name.
+      const recognised = mit.items.some(c => manifests.some(m => ((m.protection[dim] || {}).evidence || []).some(e => e.file === c.file && e.line >= c.startLine && e.line <= c.endLine)));
+      const onlyInferred = manifests.every(m => (m.protection[dim] || {}).state === 'present' && (m.protection[dim] || {}).strength === 'inferred');
+      if (!recognised || onlyInferred) {
+        out.downgradedFrom = 'no_issue_observed';
+        out.conclusion = 'insufficient_evidence';
+        out.downgradeReason = !recognised ? 'mitigation-not-a-recognised-control' : 'only-inferred-controls';
+      }
     }
   }
 
   // how the model's reading compares with the deterministic reading (metadata only; neither overrides the other)
   if (dim) {
     const states = manifests.map(m => m.protection[dim]?.state);
-    const present = states.every(s => s === 'present');
+    // `present` counts as agreement only when the control is shown by the text; a control known only from its name is neutral.
+    const present = manifests.every(m => m.protection[dim]?.state === 'present' && m.protection[dim]?.strength !== 'inferred');
     const absent = states.some(s => s === 'not_present' || s === 'evaluated_and_ineffective');
     out.deterministicProtection = { dimension: dim, states };
     out.deterministicAgreement = out.conclusion === 'potential_issue' ? (absent ? 'agrees' : present ? 'conflicts' : 'neutral') : (out.conclusion === 'no_issue_observed' ? (present ? 'agrees' : absent ? 'conflicts' : 'neutral') : 'neutral');

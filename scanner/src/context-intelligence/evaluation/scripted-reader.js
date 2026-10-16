@@ -189,6 +189,16 @@ function stripUntrustedKeepUser(t) { return stripUntrusted(t).replace(/""/g, '""
 
 function cite(l, role, claim) { return { role, file: l.file, startLine: l.n, endLine: l.n, claim }; }
 
+/** A reader that cites a line says what is on it: the claim quotes the cited text, as a careful model would. */
+function quoteCited(obj, blocks) {
+  const text = (c) => {
+    for (const b of blocks) if (b.file === c.file) { const l = b.lines.find(x => x.n === c.startLine); if (l) return l.text.trim().slice(0, 100); }
+    return '';
+  };
+  const fix = (list) => (Array.isArray(list) ? list.map(c => ({ ...c, claim: `${c.claim}: ${text(c)}` })) : list);
+  return { ...obj, evidence: fix(obj.evidence), observedMitigations: fix(obj.observedMitigations) };
+}
+
 /** The decision for a pack, from the observations. Returns the review JSON object. */
 export function decide(packId, obs, ctx) {
   const base = { observedMitigations: [], attackerControl: [], uncertainties: [], likelihood: 'low' };
@@ -237,7 +247,7 @@ export function scriptedReader() {
   const invoke = async (prompt) => {
     if (/^QUESTION PACK: /m.test(prompt)) {
       const packId = /^QUESTION PACK: ([\w-]+)\//m.exec(prompt)[1];
-      const label = /^ENTRY POINT 1: (.*?) \(id /m.exec(prompt)[1];
+      const label = (/^ENTRY POINT LABEL \(data\): (.*)$/m.exec(prompt) || [])[1] || '';
       const { blocks, unresolved, notIncluded, limit } = blocksFromReviewPrompt(prompt);
       const routes = findRoutes(blocks);
       const [method, ...rest] = label.split(' ');
@@ -246,7 +256,7 @@ export function scriptedReader() {
       if (!route) return JSON.stringify({ evidence: [], observedMitigations: [], conclusion: 'insufficient_evidence', invariant: 'unspecified', uncertainties: ['the registration is not in the provided context'] });
       const obs = analyseRoute(route, blocks);
       const complete = !unresolved && !notIncluded && !limit;
-      return JSON.stringify(decide(packId, obs, { complete, unresolved }));
+      return JSON.stringify(quoteCited(decide(packId, obs, { complete, unresolved }), blocks));
     }
     // hunt prompt: report the candidates for the lens, with a location
     const lens = /Your lens is ([\w ]+)\./.exec(prompt);

@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   maxFiles: 3000,
   semanticMetadata: { mode: 'off', haskellHieDir: null },
   context: { profile: 'standard', maxTokens: null, pruneLowValue: true, maxSymbols: 60, maxDepth: 12 },
-  review: { enabled: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
+  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
   replay: { contentAddressed: true, retention: 'inherit' },
 });
 
@@ -63,6 +63,7 @@ export function normalizeConfig(raw) {
     },
     review: {
       enabled: rv.enabled === true,
+      allowRemote: rv.allowRemote === true,
       questionPacks: Array.isArray(rv.questionPacks) && rv.questionPacks.length ? rv.questionPacks.filter(x => typeof x === 'string') : d.review.questionPacks,
       concurrency: clamp(rv.concurrency, 1, 16, d.review.concurrency),
       maxCalls: clamp(rv.maxCalls, 1, 5000, d.review.maxCalls),
