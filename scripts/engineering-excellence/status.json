@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:20:27.768Z",
-  "revision": 921,
+  "updatedAt": "2026-10-16T17:23:22.566Z",
+  "revision": 934,
   "checkout": {
-    "commit": "6464b782ce7d13371f68c7a24c0b5089a84a8e33",
+    "commit": "e937119286cb96f3f2f8637cd7b91aca562ea4f0",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:20:27.768Z"
+    "capturedAt": "2026-10-16T17:23:22.565Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:20:21.942Z",
+      "heartbeatAt": "2026-10-16T17:23:21.979Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -8268,18 +8268,129 @@
       "notes": []
     },
     "E6-06": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:23:18.181Z",
+      "completedAt": "2026-10-16T17:23:22.566Z",
+      "heartbeatAt": "2026-10-16T17:23:22.290Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "e937119286cb96f3f2f8637cd7b91aca562ea4f0",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-91dd419b",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e6-06-determinism.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:23:18.234Z",
+          "endedAt": "2026-10-16T17:23:22.287Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 4037,
+          "log": "scripts/engineering-excellence/logs/E6-06/2026-10-16T17-23-18-234Z-c-91dd419b.log",
+          "logSha256": "8e1f11546acac3936c6fb9398e949c38d530285174aab22157862b1902d77e51",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E6-06",
+        "status": "done",
+        "sourceCommit": "e937119286cb96f3f2f8637cd7b91aca562ea4f0",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/waf-ingest.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e6-06-determinism.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E6-06/2026-10-16T17-23-18-234Z-c-91dd419b.log",
+            "logSha256": "8e1f11546acac3936c6fb9398e949c38d530285174aab22157862b1902d77e51",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e6-06-determinism.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Five file orders run concurrently over three fixture sets (JS",
+          "Python+Java",
+          "taint chain) give one canonical digest; run timings stay in a separate part; nondeterminism sources are named; the one random id reaching output (WAF rules) is now content-derived; a negative control proves the stress method detects order sensitivity"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "canonical-output is not yet applied to the CLI output or last-scan.json; it is a function over a scan result",
+          "Race stress covers file order and concurrent scans in one process on fixtures, not hundreds of repositories or multi-process scheduling",
+          "No model pinning is enforced here: the LLM validator is named as a nondeterminism source, not made deterministic",
+          "federated-learning noise still uses Math.random by design (differential privacy) and does not reach scan findings"
+        ],
+        "closedAt": "2026-10-16T17:23:22.566Z"
+      },
       "notes": []
     },
     "E6-07": {
