@@ -39,10 +39,46 @@
       "endedAt": "2026-10-16T14:20:00.951Z"
     },
     "2": {
-      "state": "running",
+      "state": "done",
       "offset": 40,
       "limit": 20,
       "startedAt": "2026-10-16T14:21:14.599Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 68182
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 265052
+      },
+      "endedAt": "2026-10-16T14:26:47.839Z"
+    },
+    "3": {
+      "state": "done",
+      "offset": 60,
+      "limit": 20,
+      "startedAt": "2026-10-16T14:26:47.847Z",
+      "attempts": 1,
+      "materialise": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 64562
+      },
+      "score": {
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 255512
+      },
+      "endedAt": "2026-10-16T14:32:07.928Z"
+    },
+    "4": {
+      "state": "running",
+      "offset": 80,
+      "limit": 20,
+      "startedAt": "2026-10-16T14:32:07.933Z",
       "attempts": 1
     }
   },

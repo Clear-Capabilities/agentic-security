@@ -28,6 +28,8 @@ export function functionRecord(callGraph, resolved) {
   return fns.get(resolved) || null;
 }
 
+import { buildModuleIndex } from './module-resolver.js';
+
 export function buildCallGraph(perFileIR, fileContents) {
   const functions = new Map();
   const byNameInFile = new Map();
@@ -186,11 +188,26 @@ export function buildCallGraph(perFileIR, fileContents) {
     return null;
   }
 
+  // E2-02: import-aware resolution. A call whose head identifier is an import binding is resolved by following the program's own
+  // import/export statements (exact, bounded, cycle-safe). It never throws: a failure to build the index leaves the older name-based
+  // resolution exactly as it was.
+  let moduleIndex = null;
+  if (fileContents) { try { moduleIndex = buildModuleIndex(fileContents, perFileIR); } catch { moduleIndex = null; } }
+  const viaImport = (callerFile, name) => {
+    if (!moduleIndex || !callerFile) return null;
+    try { return moduleIndex.resolveCall(callerFile, name); } catch { return null; }
+  };
+
   // Resolve each call site.
   const edges = []; // { caller, site, callee, ambiguous? }
   for (const fn of functions.values()) {
     for (const c of (fn.calls || [])) {
       if (!c.callee) { edges.push({ caller: fn.qid, site: c.site, callee: null, line: c.line }); continue; }
+      // 0. Import binding (E2-02): explicit evidence beats every name-based rule below. A binding to an external package or builtin resolves
+      // to nothing, so a same-named function elsewhere in the project can no longer be taken for it.
+      const imp = viaImport(fn.file, c.callee);
+      if (imp && imp.status === 'resolved') { edges.push({ caller: fn.qid, site: c.site, callee: imp.qid, calleeName: c.callee, line: c.line, via: 'import', hops: imp.hops }); continue; }
+      if (imp && imp.status === 'external') { edges.push({ caller: fn.qid, site: c.site, callee: null, calleeName: c.callee, line: c.line, external: true }); continue; }
       // 1. Direct name in same file
       const sameFileMap = byNameInFile.get(fn.file);
       const resolved = sameFileMap?.get(c.callee) ||
@@ -284,6 +301,11 @@ export function buildCallGraph(perFileIR, fileContents) {
   // because the guard lived only in that one file's helper instead of here).
   function _resolveImpl(name, callerFile, allowTailGuess) {
     if (!name || typeof name !== 'string') return null;
+    {
+      const imp = viaImport(callerFile, name);
+      if (imp && imp.status === 'resolved') return imp.qid;
+      if (imp && imp.status === 'external') return null;
+    }
     // Roadmap #3: same-file preference. A bare name (`handler`, `save`,
     // `query`) defined in several files would otherwise resolve to whichever
     // file Map is iterated first, mis-targeting interprocedural taint to a
@@ -363,5 +385,5 @@ export function buildCallGraph(perFileIR, fileContents) {
   function resolveKnownCallee(name, callerFile) {
     return _resolveImpl(name, callerFile, false);
   }
-  return { functions, edges, callersOf, resolve, resolveKnownCallee };
+  return { functions, edges, callersOf, resolve, resolveKnownCallee, moduleIndex };
 }

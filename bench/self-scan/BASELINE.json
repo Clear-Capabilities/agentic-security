@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-14T22:55:14.958Z",
-  "commit": "3f12344b0cf66b6b581515fdaf998f28f5317dcd",
+  "generatedAt": "2026-10-16T14:36:49.220Z",
+  "commit": "af7acfc434e26d3b3ede2f4e3b4521e2c66fbedc",
   "targets": {
     "hooks": {
       "total": 21,
@@ -47,7 +47,7 @@
       }
     },
     "scanner/src": {
-      "total": 665,
+      "total": 669,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/provenance-graph.js": 1,
@@ -81,8 +81,11 @@
         "discovery/memory.js": 1,
         "egress/audit.js": 1,
         "egress/policy.js": 1,
-        "fix/apply-fix-service.js": 3,
+        "fix/apply-fix-service.js": 4,
         "fix/approver-registry.js": 1,
+        "fix/test-commands.js": 1,
+        "fix/verification-adapters.js": 1,
+        "fix/verify-patch.js": 1,
         "history-scan.js": 1,
         "integrations/index.js": 10,
         "integrations/tickets.js": 9,

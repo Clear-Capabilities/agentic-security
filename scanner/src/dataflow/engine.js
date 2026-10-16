@@ -342,6 +342,14 @@ function _resolveMemberCalleeViaCHA(calleeExpr, callContext) {
 function _resolveCalleeForSummary(calleeExpr, callContext) {
   if (!callContext || !callContext._callGraph || !callContext._callGraph.resolveKnownCallee) return null;
   const _callerFile = (callContext._currentFnQid || '').split('::')[0] || undefined;
+  // E2-02: a member call through an IMPORTED MODULE (`const svc = require('./service'); svc.run(x)`) is resolved by following the import,
+  // not by name. This is exact (the binding names the module), so it does not reopen the guessed-edge problem described above: only a
+  // callee whose head identifier is an import binding of this very file is eligible, and the answer is the module's own export.
+  if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string' && calleeExpr.object && calleeExpr.object.kind === 'ident' && callContext._callGraph.moduleIndex && _callerFile) {
+    let viaImport = null;
+    try { viaImport = callContext._callGraph.moduleIndex.resolveCall(_callerFile, `${calleeExpr.object.name}.${calleeExpr.prop}`); } catch { viaImport = null; }
+    if (viaImport && viaImport.status === 'resolved') return { qid: viaImport.qid, fn: functionRecord(callContext._callGraph, viaImport.qid) };
+  }
   const _resolvableName = _resolvableCalleeName(calleeExpr);
   if (_resolvableName) {
     const resolved = callContext._callGraph.resolveKnownCallee(_resolvableName, _callerFile);
@@ -772,9 +780,27 @@ function literalSkeletonMatchesFamily(expr, cwe) {
 // state: the taint-state Set to evaluate argument taint against.
 // callContext: context from the engine (contains _cha for CHA lookups).
 // Returns { cat, argTaints }.
+// E2-02: a member call through an imported PROJECT module (`util.exec(c)` where `util` is `require('./util')`) calls that module's own
+// function, whatever it is named. The catalog matches sinks by callee name, so `util.exec` looked like child_process's `exec` and every
+// caller of a helper called `exec`/`query`/`send` was reported as a sink. When the import resolves to a function in this project the sink
+// match is dropped: the helper's body is analysed through its summary, so a real sink inside it is still found, at the real line.
+function _isInternalModuleCall(calleeExpr, callContext) {
+  let text = null;
+  if (calleeExpr && calleeExpr.kind === 'member' && typeof calleeExpr.prop === 'string' && calleeExpr.object && calleeExpr.object.kind === 'ident') text = `${calleeExpr.object.name}.${calleeExpr.prop}`;
+  else if (calleeExpr && calleeExpr.kind === 'ident' && typeof calleeExpr.name === 'string') text = calleeExpr.name; // `const { exec } = require('./util'); exec(c)`
+  if (!text) return false;
+  const mi = callContext && callContext._callGraph && callContext._callGraph.moduleIndex;
+  if (!mi || !_currentFile) return false;
+  try { return mi.resolveCall(_currentFile, text).status === 'resolved'; } catch { return false; }
+}
+
 function _matchCallCatalog(calleeExpr, argExprs, state, callContext) {
   const receiverType = _receiverTypeFor(calleeExpr, callContext);
-  const cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
+  let cat = matchSinkOrSanitizer(calleeExpr, _currentFile, receiverType);
+  if (Array.isArray(cat) && _isInternalModuleCall(calleeExpr, callContext)) {
+    const kept = cat.filter((e) => e.kind !== 'sink');
+    cat = kept.length ? kept : null;
+  }
   const argTaints = (argExprs || []).map(a => exprTaint(a, state, callContext));
   return { cat, argTaints };
 }
