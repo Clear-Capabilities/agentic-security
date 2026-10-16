@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const DEMO = path.join(ROOT, 'examples', 'assurance-demo');
-const OUT_DIR = path.join(ROOT, 'docs', 'engineering-excellence', 'data', 'e2e-demo');
+const COMMITTED_DIR = path.join(ROOT, 'docs', 'engineering-excellence', 'data', 'e2e-demo');
+// a --check run must leave the committed package and key alone, or checking would dirty the tree it is checking
+const OUT_DIR = process.argv.includes('--check') ? fs.mkdtempSync(path.join(os.tmpdir(), 'ee-e2e-check-')) : COMMITTED_DIR;
 const OUT_MD = path.join(ROOT, 'docs', 'engineering-excellence', 'E2E_DEMO.md');
 const OUT_OUTLINE = path.join(ROOT, 'docs', 'engineering-excellence', 'data', 'e2e-demo-outline.json');
 const argv = process.argv.slice(2);
@@ -177,7 +179,7 @@ export async function run() {
   const stated = verifyStatedVerdict(pkgObj);
   step('verify-offline', 'Verify offline', `the independent verifier ${ok.status === 0 ? 'accepted' : 'REJECTED'} the package (exit ${ok.status}); a copy with one finding's severity lowered was ${bad.status === 1 ? 'rejected' : 'NOT rejected'} (exit ${bad.status}); the stated verdict ${stated.ok ? 'matches' : 'does not match'} the one recomputed from the contents`, { genuine: { exit: ok.status, output: ok.stdout.trim() }, tampered: { exit: bad.status, firstError: (bad.stderr.split('\n')[0] || '').slice(0, 160) }, statedVerdictMatches: stated.ok, replay: `node scripts/verify-release-package.mjs docs/engineering-excellence/data/e2e-demo/release-package.json --public-key docs/engineering-excellence/data/e2e-demo/public-key.pem` });
 
-  fs.rmSync(work, { recursive: true, force: true });
+  fs.rmSync(work, { recursive: true, force: true }); if (OUT_DIR !== COMMITTED_DIR) fs.rmSync(OUT_DIR, { recursive: true, force: true });
   const outline = { schema: 'agentic-security/e2e-demo-outline@1', networkAttempts: networkAttempts.length, steps: steps.map((s) => ({ id: s.id, summary: s.summary })), verdict: v.verdict, blockerCodes: v.blockers.map((b) => b.code).sort(), unknownCodes: v.unknowns.map((u) => u.code).sort(), triage: decisions.map((d) => [d.id, d.reported]), verified: verified.map((x) => [x.patch, x.verifiedFull]), sca: scaRows.map((r) => [r.package, r.reachable]) };
   return { steps, outline, networkAttempts };
 }

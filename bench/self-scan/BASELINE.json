@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-16T19:53:36.921Z",
-  "commit": "4248af31a7e72b043788b1b19f3797ecd36b3076",
+  "generatedAt": "2026-10-16T21:39:54.650Z",
+  "commit": "7067d1dc6e2ca489a01b1eac2844a4e016e77fc4",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 94,
+      "total": 102,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -31,9 +31,13 @@
         "engineering-excellence/analysis-cache-measure.mjs": 2,
         "engineering-excellence/completion-analysis.mjs": 2,
         "engineering-excellence/dci-audit.mjs": 27,
+        "engineering-excellence/doc-captures.mjs": 2,
+        "engineering-excellence/e2e-demo.mjs": 2,
         "engineering-excellence/evidence-inventory.mjs": 2,
         "engineering-excellence/lib/evidence-samples.mjs": 2,
         "engineering-excellence/parse-reuse-measure.mjs": 1,
+        "engineering-excellence/perf-budget.mjs": 2,
+        "engineering-excellence/perf-child.mjs": 2,
         "engineering-excellence/runtime-audit.mjs": 2,
         "gate-verdict-cache.mjs": 1,
         "llm-cost-ceiling.py": 1,
