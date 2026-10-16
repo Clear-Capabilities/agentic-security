@@ -15,7 +15,7 @@ import { REPO_ROOT } from './model.mjs';
 // Files the program itself rewrites while it works. They do not make the SCANNER source dirty for measurement purposes, and they are
 // listed in the record so the exclusion is visible rather than silent.
 export const BOOKKEEPING_PATHS = Object.freeze([
-  /^scripts\/engineering-excellence\/(status\.json|events\.jsonl|data\/inventory\.verification\.json)$/,
+  /^scripts\/engineering-excellence\/(status\.json|events\.jsonl|data\/(inventory\.verification|baseline\.results)\.json)$/,
   /^docs\/engineering-excellence\//,
 ]);
 

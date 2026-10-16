@@ -22,7 +22,7 @@ Cost: evidence logs are machine-local (`logs/` is gitignored, PRD 14.1 allows ex
 
 ## D5. Program bookkeeping does not make the scanner source "dirty"
 
-`measurementIdentity` ignores `scripts/engineering-excellence/status.json`, `events.jsonl`, `data/inventory.verification.json` and `docs/engineering-excellence/**` when deciding `sourceTreeClean`; the number ignored is recorded in `bookkeepingPathsIgnored`. Otherwise every status update would invalidate every measurement taken during the program. Every other uncommitted path, including untracked files, makes the measurement `untrusted_for_release`, and the paths are listed.
+`measurementIdentity` ignores `scripts/engineering-excellence/status.json`, `events.jsonl`, `data/inventory.verification.json`, `data/baseline.results.json` and `docs/engineering-excellence/**` when deciding `sourceTreeClean`; the number ignored is recorded in `bookkeepingPathsIgnored`. Otherwise every status update would invalidate every measurement taken during the program. Every other uncommitted path, including untracked files, makes the measurement `untrusted_for_release`, and the paths are listed.
 
 ## D6. Work happens in a separate git worktree
 
