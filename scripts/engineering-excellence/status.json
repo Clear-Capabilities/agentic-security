@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T16:46:59.353Z",
-  "revision": 792,
+  "updatedAt": "2026-10-16T16:53:14.111Z",
+  "revision": 814,
   "checkout": {
-    "commit": "d458a0f8bf143ef6e9322085694b39d878443943",
+    "commit": "fd7992993ee096bc31b8f468698a111a54d3d057",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T16:46:42.699Z"
+    "capturedAt": "2026-10-16T16:53:14.111Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T16:46:59.353Z",
+      "heartbeatAt": "2026-10-16T16:52:59.389Z",
       "activeProcess": {
         "pid": 50646,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -7028,18 +7028,128 @@
       "notes": []
     },
     "E5-02": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T16:53:13.198Z",
+      "completedAt": "2026-10-16T16:53:14.111Z",
+      "heartbeatAt": "2026-10-16T16:53:13.689Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "fd7992993ee096bc31b8f468698a111a54d3d057",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-60738605",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e5-02-build-identity.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T16:53:13.278Z",
+          "endedAt": "2026-10-16T16:53:13.679Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 377,
+          "log": "scripts/engineering-excellence/logs/E5-02/2026-10-16T16-53-13-279Z-c-60738605.log",
+          "logSha256": "ccdbdebd7d4671edee6d2379dfee20b4fe57dca9d399b3652e91a48d7e7a94a7",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E5-02",
+        "status": "done",
+        "sourceCommit": "fd7992993ee096bc31b8f468698a111a54d3d057",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/runtime-correlation.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e5-02-build-identity.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E5-02/2026-10-16T16-53-13-279Z-c-60738605.log",
+            "logSha256": "ccdbdebd7d4671edee6d2379dfee20b4fe57dca9d399b3652e91a48d7e7a94a7",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e5-02-build-identity.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "A mismatched build cannot be labelled as runtime corroborating a static finding: observations and trace records from another build are excluded and counted",
+          "only matched identity yields 'corroborated'",
+          "no identity yields 'unattested'"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "correlateWithBuild is not yet the default hook in lineage/coverage.js (a pinned import-list test forbids it); callers must pass snapshotIdentity explicitly",
+          "Observation importers do not yet record the build identity; observationBuilds is supplied by the caller. Trace records read commit/buildHash/imageDigest if present, no emitter writes them yet",
+          "Tests use synthetic observations and a temp git repo; no real deployment was measured"
+        ],
+        "closedAt": "2026-10-16T16:53:14.111Z"
+      },
       "notes": []
     },
     "E5-03": {

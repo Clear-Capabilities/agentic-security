@@ -36,6 +36,7 @@ import * as readline from 'node:readline';
 import { createReadStream } from 'node:fs';
 
 import { statePath } from './state-dir.js';
+import { linkObservationToSnapshot, normalizeIdentity } from '../lineage/deployment-identity.js';
 const DEFAULT_TRACE_NAMES = ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl'];
 const DEFAULT_OBSERVATION_WINDOW_DAYS = 30;
 
@@ -55,7 +56,11 @@ export async function loadTrace(scanRoot, opts = {}) {
     fileLinesObserved: new Map(), // file → Set<line>
     syscallsObserved: new Set(),
     recordCount: 0,
+    // E5-02: with a snapshot identity, each record is compared with it. A record from a different build is dropped and counted; one that carries no
+    // comparable identity is kept as unattested; one that matches is counted as matched.
+    recordsMatched: 0, recordsUnattested: 0, recordsMismatched: 0,
   };
+  const snap = opts.snapshotIdentity ? normalizeIdentity(opts.snapshotIdentity) : null;
   const window = (opts.windowDays || DEFAULT_OBSERVATION_WINDOW_DAYS) * 86400_000;
   const now = Date.now();
   const stream = createReadStream(chosen, { encoding: 'utf8' });
@@ -68,6 +73,11 @@ export async function loadTrace(scanRoot, opts = {}) {
       const tsMs = Date.parse(r.ts);
       if (Number.isFinite(tsMs) && now - tsMs > window) continue;
     }
+    if (snap) {
+      const link = linkObservationToSnapshot({ commit: r.commit, buildHash: r.buildHash, imageDigest: r.imageDigest, sbomRef: r.sbomRef, environment: r.environment }, snap);
+      if (link.state === 'mismatched') { trace.recordsMismatched++; continue; }
+      if (link.state === 'matched') trace.recordsMatched++; else trace.recordsUnattested++;
+    } else trace.recordsUnattested++;
     trace.recordCount++;
     switch (r.kind) {
       case 'function-call':
@@ -158,9 +168,11 @@ export async function annotateRuntimeCorrelation(scanRoot, findings, opts = {}) 
   if (!Array.isArray(findings)) return { observed: 0, dead: 0, unknown: 0, demoted: 0 };
   const trace = await loadTrace(scanRoot, opts);
   const windowDays = opts.windowDays || DEFAULT_OBSERVATION_WINDOW_DAYS;
-  if (!trace) {
-    for (const f of findings) { f.runtimeObserved = 'unknown'; f.runtimeEvidence = { state: 'unknown', basis: 'no runtime trace was available', windowDays, recordCount: 0 }; }
-    return { observed: 0, dead: 0, unknown: findings.length, demoted: 0, trace: null };
+  if (!trace || trace.recordCount === 0) {
+    // no file, or nothing usable in it (empty, outside the window, or every record from another build): there is nothing to compare a finding with
+    const basis = !trace ? 'no runtime trace was available' : (trace.recordsMismatched > 0 ? `all ${trace.recordsMismatched} usable record(s) came from a different build` : 'the trace holds no records inside the window');
+    for (const f of findings) { f.runtimeObserved = 'unknown'; f.runtimeEvidence = { state: 'unknown', basis, windowDays, recordCount: 0, ...(trace ? { recordsMismatched: trace.recordsMismatched } : {}) }; }
+    return { observed: 0, dead: 0, unknown: findings.length, demoted: 0, trace: trace ? { recordCount: 0, path: trace.path, recordsMismatched: trace.recordsMismatched } : null };
   }
   const demote = opts.demote === true || process.env.AGENTIC_SECURITY_RUNTIME_DEMOTE === '1';
   const minRecords = Number.isInteger(opts.minRecords) ? opts.minRecords : 100;
@@ -170,7 +182,7 @@ export async function annotateRuntimeCorrelation(scanRoot, findings, opts = {}) 
     const v = findingObservedInRuntime(f, trace);
     f.runtimeObserved = v;
     const file = f.file || (f.sink && f.sink.file);
-    f.runtimeEvidence = v === true ? { state: 'observed', basis: 'a function, line or route on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount }
+    f.runtimeEvidence = v === true ? { state: 'observed', basis: 'a function, line or route on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, corroboration: (opts.snapshotIdentity && trace.recordsMatched > 0 && trace.recordsUnattested === 0) ? 'corroborated' : 'unattested', recordsMismatched: trace.recordsMismatched }
       : v === false ? { state: 'not_observed_in_window', basis: 'nothing on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, meaning: 'absence of observation is not evidence that the code is unreachable or safe' }
       : { state: 'unknown', basis: 'the trace cannot say (the file appears but no line on the path matches, or there is no trace)', windowDays, recordCount: trace.recordCount };
     if (v === true) observed++;

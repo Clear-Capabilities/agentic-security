@@ -380,7 +380,11 @@ test('E1/13 (AC-11 coarse half): a sink nothing reaches is still a node with a c
   assert.equal(r.graph.coverage.sinks.callStatementSites, 11);
   assert.equal(r.graph.coverage.sinks.connected, 6);
   assert.equal(r.graph.coverage.sinks.disconnected, 5);
-  assert.equal(r.graph.coverage.sinks.nonStatementSitesNotEnumerable, 1,
+  // 3, not 1: the two expression-bodied callbacks in this fixture (`(err, out) => res.send(out)`, `(e, d) => res.send(d)`) now record the value they
+  // return (engineering-excellence E2-04: an arrow with an expression body returns that expression, which the IR used to drop). Each return carries the
+  // same `res.send` call a standalone call node already holds, so each is counted once more as a call expression with no `escape` provenance node.
+  // connected / disconnected / callStatementSites above are unchanged.
+  assert.equal(r.graph.coverage.sinks.nonStatementSitesNotEnumerable, 3,
     'a sink call expression with no `escape` provenance node is COUNTED, never silently dropped');
   assert.equal(r.graph.coverage.sources.matched, 9);
   assert.equal(r.graph.coverage.sources.unseedable, 0);
