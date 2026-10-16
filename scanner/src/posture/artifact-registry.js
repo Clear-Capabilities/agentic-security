@@ -280,6 +280,8 @@ export const ARTIFACT_REGISTRY = [
   // retention cannot reach it. Operator-config, not generated: these are
   // hand-supplied eBPF/APM trace exports the scanner only ever reads.
   { name: 'runtime-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'eBPF/APM runtime trace consumed by posture/runtime-correlation.js\'s own trace loader (deliberately not named by its literal export here — no-dead-modules.test.js scans note strings too, and naming it would make it look, wrongly, like a real call site) — operator-supplied, never scanner-written; $AGENTIC_SECURITY_RUNTIME_TRACE_PATH overrides the location entirely' },
+  { name: 'runtime-policy.json', kind: 'file', classification: 'operator-config', note: 'opt-in policy for runtime observation ingestion (collect, kinds, retentionDays, sampleRate); read by posture/runtime-trace-ingest.js' },
+  { name: 'runtime-trace.meta.json', kind: 'file', classification: 'generated', retentionClass: 'evidence', note: 'ingestion record beside runtime-trace.jsonl: declared sampling, retention, counts of dropped and rejected fields (counts only, never values)' },
   { name: 'runtime.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
   { name: 'ebpf-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
 ];

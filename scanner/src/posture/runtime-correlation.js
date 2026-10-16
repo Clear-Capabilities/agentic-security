@@ -36,6 +36,7 @@ import * as readline from 'node:readline';
 import { createReadStream } from 'node:fs';
 
 import { statePath } from './state-dir.js';
+import { loadTraceMeta } from './runtime-trace-ingest.js';
 import { linkObservationToSnapshot, normalizeIdentity } from '../lineage/deployment-identity.js';
 const DEFAULT_TRACE_NAMES = ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl'];
 const DEFAULT_OBSERVATION_WINDOW_DAYS = 30;
@@ -60,6 +61,7 @@ export async function loadTrace(scanRoot, opts = {}) {
     // comparable identity is kept as unattested; one that matches is counted as matched.
     recordsMatched: 0, recordsUnattested: 0, recordsMismatched: 0,
   };
+  trace.meta = loadTraceMeta(chosen);
   const snap = opts.snapshotIdentity ? normalizeIdentity(opts.snapshotIdentity) : null;
   const window = (opts.windowDays || DEFAULT_OBSERVATION_WINDOW_DAYS) * 86400_000;
   const now = Date.now();
@@ -179,12 +181,15 @@ export async function annotateRuntimeCorrelation(scanRoot, findings, opts = {}) 
   let observed = 0, dead = 0, unknown = 0, demoted = 0;
   const demoteLadder = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
   for (const f of findings) {
-    const v = findingObservedInRuntime(f, trace);
+    let v = findingObservedInRuntime(f, trace);
+    // E5-03: a trace ingested with sampling below 1, or with no declared sampling, cannot show that something did NOT run. Absence becomes unknown.
+    if (v === false && trace.meta && trace.meta.sampleRate !== 1) v = 'unknown';
     f.runtimeObserved = v;
     const file = f.file || (f.sink && f.sink.file);
     f.runtimeEvidence = v === true ? { state: 'observed', basis: 'a function, line or route on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, corroboration: (opts.snapshotIdentity && trace.recordsMatched > 0 && trace.recordsUnattested === 0) ? 'corroborated' : 'unattested', recordsMismatched: trace.recordsMismatched }
       : v === false ? { state: 'not_observed_in_window', basis: 'nothing on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, meaning: 'absence of observation is not evidence that the code is unreachable or safe' }
       : { state: 'unknown', basis: 'the trace cannot say (the file appears but no line on the path matches, or there is no trace)', windowDays, recordCount: trace.recordCount };
+    f.runtimeEvidence.sampling = samplingOf(trace);
     if (v === true) observed++;
     else if (v === false) {
       dead++;
@@ -202,6 +207,15 @@ export async function annotateRuntimeCorrelation(scanRoot, findings, opts = {}) 
     } else unknown++;
   }
   return { observed, dead, unknown, demoted, trace: { recordCount: trace.recordCount, path: trace.path } };
+}
+
+/** How completely the trace sees the service: 'complete', 'sampled' (with the rate), or 'undisclosed'. */
+export function samplingOf(trace) {
+  const m = trace && trace.meta;
+  if (!m) return { state: 'undisclosed', basis: 'the trace came with no ingestion record, so how much traffic it samples is not known' };
+  if (m.sampleRate === 1) return { state: 'complete', rate: 1 };
+  if (typeof m.sampleRate === 'number') return { state: 'sampled', rate: m.sampleRate, basis: 'not observed cannot be concluded from a sampled trace' };
+  return { state: 'undisclosed', basis: 'the collector did not declare a sampling rate' };
 }
 
 export const _internals = { DEFAULT_TRACE_NAMES, DEFAULT_OBSERVATION_WINDOW_DAYS };
