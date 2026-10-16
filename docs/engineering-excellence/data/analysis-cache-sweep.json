@@ -1,0 +1,14 @@
+{
+  "schema": "agentic-security/analysis-cache-sweep@1",
+  "fixtureDirectories": 156,
+  "comparisons": 437,
+  "mutationKinds": [
+    "edit",
+    "constant",
+    "add",
+    "remove"
+  ],
+  "fileResultsReused": 1152,
+  "mismatches": [],
+  "note": "each comparison scans a fixture tree to fill the cache, mutates it, and compares a warm scan with a cold scan that has the same on-disk history; directories with more than 120 files are skipped"
+}

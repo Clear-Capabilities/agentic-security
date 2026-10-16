@@ -84,6 +84,9 @@ const FORMAT = 'agentic-security-scan-checkpoint/2';
 // what it would find.
 const RUN_KEY_ENV_EXCLUDE = new Set([
   'AGENTIC_SECURITY_RESUME',
+  // E6-04: these choose WHETHER a cache is used, or only how fast shared helpers run; neither changes what any file's analysis produces
+  'AGENTIC_SECURITY_ANALYSIS_CACHE',
+  'AGENTIC_SECURITY_NO_STRING_MEMO',
   'AGENTIC_SECURITY_CHECKPOINT_ABORT_AFTER',
   'AGENTIC_SECURITY_HMAC_KEY',
 ]);
@@ -126,7 +129,7 @@ export function bundleShaForRunKey() {
  */
 export function computeRunKey({
   engineVersion, rulesetVersion, bundleSha,
-  fileContents = {}, depFileContents = {}, env = process.env,
+  fileContents = {}, depFileContents = {}, env = process.env, extra = null,
 } = {}) {
   const h = crypto.createHash('sha256');
   h.update(FORMAT); h.update('\n');
@@ -142,6 +145,8 @@ export function computeRunKey({
       h.update('\n');
     }
   }
+  // E6-04: cross-file inputs a single file's analysis reads (project constants, custom rules, ...). Absent means the key is unchanged from before.
+  if (extra !== null && extra !== undefined) { h.update('x'); h.update(String(extra)); h.update('\n'); }
   const envKeys = Object.keys(env || {})
     .filter(k => k.startsWith('AGENTIC_SECURITY_') && !RUN_KEY_ENV_EXCLUDE.has(k))
     .sort();
@@ -160,8 +165,8 @@ export function computeRunKey({
  * no per-file granularity to offer there; any manifest change invalidates
  * everything, same as before this change.
  */
-export function computeGlobalKey({ engineVersion, rulesetVersion, bundleSha, depFileContents = {}, env = process.env } = {}) {
-  return computeRunKey({ engineVersion, rulesetVersion, bundleSha, fileContents: {}, depFileContents, env });
+export function computeGlobalKey({ engineVersion, rulesetVersion, bundleSha, depFileContents = {}, env = process.env, extra = null } = {}) {
+  return computeRunKey({ engineVersion, rulesetVersion, bundleSha, fileContents: {}, depFileContents, env, extra });
 }
 
 /**
@@ -228,11 +233,16 @@ function _emptyHandle(reason) {
     enabled: false, file: null, fd: null, globalKey: null,
     recovered: new Map(), order: [], written: new Set(),
     discarded: false, reason, invalidatedFiles: [], fileContents: {},
+    // E6-04: persistent (cross-scan) mode. `sign` authenticates records with the install key; `lines` keeps the latest verified line per file for compaction.
+    persistent: false, sign: null, lines: new Map(),
   };
 }
 
-function _headerLine(globalKey, meta) {
-  return JSON.stringify({ v: FORMAT, gk: globalKey, meta: meta || {} }) + '\n';
+function _headerMac(sign, globalKey) { return sign ? sign(`hdr\0${FORMAT}\0${globalKey}`) : undefined; }
+function _recordMac(sign, f, h, globalKey, d) { return sign ? sign(`rec\0${f}\0${h ?? ''}\0${globalKey}\0${d}`) : _sha(d); }
+
+function _headerLine(globalKey, meta, sign = null) {
+  return JSON.stringify({ v: FORMAT, gk: globalKey, meta: meta || {}, ...(sign ? { hm: _headerMac(sign, globalKey) } : {}) }) + '\n';
 }
 
 // Read forward from a byte offset, keeping records while they verify. Returns
@@ -258,6 +268,9 @@ function _recover(handle, file, globalKey, meta, fileContents) {
   try { header = JSON.parse(text.slice(0, nl)); } catch { return { offset: 0, discardReason: 'corrupt checkpoint header' }; }
   if (!header || header.v !== FORMAT) return { offset: 0, discardReason: 'checkpoint format changed' };
   if (header.gk !== globalKey) return { offset: 0, discardReason: _explainGlobalMismatch(header.meta, meta) };
+  // E6-04: a persistent cache is read back on later scans, possibly in a checkout someone else prepared. Only a header made with THIS install's key counts;
+  // a file carried in from elsewhere (or planted in a repository) is discarded whole, never trusted.
+  if (handle.sign && header.hm !== _headerMac(handle.sign, globalKey)) return { offset: 0, discardReason: 'cache was not written by this installation (header signature does not verify)' };
 
   let offset = Buffer.byteLength(text.slice(0, nl + 1), 'utf8');
   let cursor = nl + 1;
@@ -270,7 +283,7 @@ function _recover(handle, file, globalKey, meta, fileContents) {
     let rec;
     try { rec = JSON.parse(line); } catch { break; }
     if (!rec || typeof rec.f !== 'string' || typeof rec.d !== 'string') break;
-    if (rec.c !== _sha(rec.d)) break;         // tampered or torn-then-patched
+    if (rec.c !== _recordMac(handle.sign, rec.f, rec.h ?? null, globalKey, rec.d)) break;         // tampered or torn-then-patched (or, with a key, not ours)
     let payload;
     try { payload = JSON.parse(rec.d); } catch { break; }
     // Structurally intact and parseable — advance past it regardless of what
@@ -294,6 +307,7 @@ function _recover(handle, file, globalKey, meta, fileContents) {
     }
     if (!handle.recovered.has(rec.f)) handle.order.push(rec.f);
     handle.recovered.set(rec.f, payload);
+    handle.lines.set(rec.f, line + '\n');
   }
   return { offset, discardReason: null };
 }
@@ -315,7 +329,7 @@ function _recover(handle, file, globalKey, meta, fileContents) {
  * `meta`: a plaintext summary of the inputs behind `globalKey` (see
  * `globalKeyMeta`), stored in the header purely to explain a mismatch later.
  */
-export function openCheckpoint(scanRoot, { globalKey, meta = {}, fileContents = {} } = {}) {
+export function openCheckpoint(scanRoot, { globalKey, meta = {}, fileContents = {}, persistent = false, fileName = null, sign = null } = {}) {
   if (!scanRoot || !globalKey) return _emptyHandle('no-global-key');
   // A read-only scan cannot checkpoint, and must not try. Resume is purely an
   // optimisation — without it the scan recomputes, which is slower and
@@ -328,9 +342,11 @@ export function openCheckpoint(scanRoot, { globalKey, meta = {}, fileContents = 
   try {
     const dir = path.join(scanRoot, STATE_DIR);
     fs.mkdirSync(dir, { recursive: true });
-    const file = checkpointPath(scanRoot);
+    const file = fileName ? path.join(dir, fileName) : checkpointPath(scanRoot);
     handle.file = file;
     handle.globalKey = globalKey;
+    handle.persistent = !!persistent; handle.sign = typeof sign === 'function' ? sign : null;
+    handle.meta = meta || {};
 
     const { offset: keepBytes, discardReason } = _recover(handle, file, globalKey, meta, handle.fileContents);
     if (keepBytes <= 0) {
@@ -340,9 +356,10 @@ export function openCheckpoint(scanRoot, { globalKey, meta = {}, fileContents = 
       handle.recovered.clear();
       handle.order.length = 0;
       handle.invalidatedFiles = [];
+      handle.lines.clear();
       handle.discarded = keepBytes === 0;
       handle.reason = keepBytes === 0 ? discardReason : null;
-      fs.writeFileSync(file, _headerLine(globalKey, meta));
+      fs.writeFileSync(file, _headerLine(globalKey, meta, handle.sign));
     } else {
       // Drop any torn tail so appends land after the last verified record.
       try {
@@ -381,10 +398,11 @@ export function recordFileDone(handle, relPath, findings) {
     if (typeof d !== 'string') return false;
     const src = handle.fileContents ? handle.fileContents[relPath] : undefined;
     const h = typeof src === 'string' ? _sha(src) : null;
-    const line = JSON.stringify({ f: relPath, h, c: _sha(d), d }) + '\n';
+    const line = JSON.stringify({ f: relPath, h, c: _recordMac(handle.sign, relPath, h, handle.globalKey, d), d }) + '\n';
     fs.writeSync(handle.fd, line);
     fs.fsyncSync(handle.fd);
     handle.written.add(relPath);
+    handle.lines.set(relPath, line);
     return true;
   } catch {
     return false;
@@ -430,6 +448,16 @@ export function closeCheckpoint(handle, { complete = false } = {}) {
   try { if (handle.fd !== null) fs.closeSync(handle.fd); } catch { ok = false; }
   handle.fd = null;
   handle.enabled = false;
+  if (complete && handle.file && handle.persistent) {
+    // A persistent cache is kept for the next scan, compacted to one line per file still in scope so it cannot grow without bound.
+    try {
+      const keep = [...handle.lines.entries()].filter(([f]) => typeof handle.fileContents[f] === 'string').map(([, l]) => l);
+      const tmp = `${handle.file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, _headerLine(handle.globalKey, handle.meta || {}, handle.sign) + keep.join(''));
+      fs.renameSync(tmp, handle.file);
+    } catch { ok = false; }
+    return ok;
+  }
   if (complete && handle.file) {
     try { fs.rmSync(handle.file, { force: true }); } catch { ok = false; }
   }

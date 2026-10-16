@@ -61,6 +61,15 @@ export function canaryHit(s) {
   return null;
 }
 
+const SECRET_CANARY_NAMES = new Set(['bearer-token', 'jwt', 'cloud-key', 'private-key', 'secret-assignment']);
+/** Name of the first SECRET-shaped pattern in a text (keys, tokens, passwords, card numbers), or null. Narrower than canaryHit: personal data and opaque strings are not matched. */
+export function secretCanaryHit(s) {
+  if (typeof s !== 'string') return null;
+  for (const [name, re] of CANARIES) if (SECRET_CANARY_NAMES.has(name) && re.test(s)) return name;
+  for (const m of s.matchAll(/\b\d(?:[ -]?\d){12,18}\b/g)) { const d = m[0].replace(/[ -]/g, ''); if (d.length >= 13 && d.length <= 19 && luhn(d)) return 'payment-card'; }
+  return null;
+}
+
 /** The path of a route with the query and fragment removed and id-like segments generalised. Null when it is not a path. */
 export function normalizeRoute(raw) {
   if (typeof raw !== 'string' || raw.length > 300) return null;

@@ -52,6 +52,8 @@ export function buildRuntimeExplanation(finding, ctx = {}) {
   const body = {
     schema: EXPLANATION_SCHEMA,
     findingId: finding && finding.id != null ? String(finding.id) : null,
+    // the refactor-stable id other evidence is keyed by; `findingId` alone is the scan-local id and changes when code moves
+    findingStableId: finding && finding.stableId != null ? String(finding.stableId) : null,
     snapshot,
     static: { staticallyReachable: levels.staticallyReachable, externallyReachable: levels.externallyReachable, pathEdges: keys },
     runtime: { observed: levels.runtimeObserved, sampling, windowDays: ctx.windowDays ?? null, edges, missingObservations: [...new Set(missing)].sort() },

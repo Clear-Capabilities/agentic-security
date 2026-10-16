@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-16T17:55:55.547Z",
-  "commit": "3c762474e81659d06f40e014828d29b9c795d30f",
+  "generatedAt": "2026-10-16T18:33:17.402Z",
+  "commit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 86,
+      "total": 92,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -28,7 +28,10 @@
         "capability-ledger/check.mjs": 1,
         "check-assurance-docs.mjs": 3,
         "detector-fuzz-runner.mjs": 3,
+        "engineering-excellence/analysis-cache-measure.mjs": 2,
         "engineering-excellence/dci-audit.mjs": 27,
+        "engineering-excellence/evidence-inventory.mjs": 2,
+        "engineering-excellence/lib/evidence-samples.mjs": 2,
         "engineering-excellence/parse-reuse-measure.mjs": 1,
         "engineering-excellence/runtime-audit.mjs": 2,
         "gate-verdict-cache.mjs": 1,
@@ -50,7 +53,7 @@
       }
     },
     "scanner/src": {
-      "total": 673,
+      "total": 674,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/provenance-graph.js": 1,
@@ -168,6 +171,7 @@
         "posture/assurance/baseline.js": 2,
         "posture/assurance/bounded-io.js": 1,
         "posture/assurance/config.js": 1,
+        "posture/assurance/evidence-registry.js": 1,
         "posture/assurance/rollback.js": 2,
         "posture/attack-playbooks.js": 2,
         "posture/auditor-walkthrough.js": 3,

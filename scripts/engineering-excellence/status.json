@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:59:40.768Z",
-  "revision": 1055,
+  "updatedAt": "2026-10-16T18:37:45.872Z",
+  "revision": 1178,
   "checkout": {
-    "commit": "3c762474e81659d06f40e014828d29b9c795d30f",
+    "commit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:59:40.767Z"
+    "capturedAt": "2026-10-16T18:37:45.871Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 3,
       "startedAt": "2026-10-16T17:39:24.508Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:59:24.813Z",
+      "heartbeatAt": "2026-10-16T18:37:45.264Z",
       "activeProcess": {
         "pid": 78691,
         "command": "node bench/independent/forensics.mjs --run a72968195aa1",
@@ -8479,18 +8479,140 @@
       "notes": []
     },
     "E6-04": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T18:37:39.721Z",
+      "completedAt": "2026-10-16T18:37:44.048Z",
+      "heartbeatAt": "2026-10-16T18:37:43.776Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-f08ea921",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e6-04-analysis-cache.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T18:37:39.785Z",
+          "endedAt": "2026-10-16T18:37:43.773Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 3969,
+          "log": "scripts/engineering-excellence/logs/E6-04/2026-10-16T18-37-39-786Z-c-f08ea921.log",
+          "logSha256": "f6017fe775d0223a60470741c3321f52aff9fa97c0f3de88cad99ed0ffdc85e7",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E6-04",
+        "status": "done",
+        "sourceCommit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "docs/engineering-excellence/ANALYSIS_CACHE.md"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e6-04-analysis-cache.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E6-04/2026-10-16T18-37-39-786Z-c-f08ea921.log",
+            "logSha256": "f6017fe775d0223a60470741c3321f52aff9fa97c0f3de88cad99ed0ffdc85e7",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e6-04-analysis-cache.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "A cross-scan per-file analysis cache (opt-in) keyed by content",
+          "version",
+          "configuration",
+          "project context and rules gives warm results equal to cold results after entrypoint",
+          "dependency",
+          "configuration and rule changes (437 comparisons over 156 fixture directories",
+          "0 mismatches); stale",
+          "planted",
+          "forged and damaged caches are discarded; secret-bearing results are not kept"
+        ],
+        "benchmarkComparisons": [
+          "docs/engineering-excellence/data/analysis-cache-sweep.json",
+          "docs/engineering-excellence/data/analysis-cache.json",
+          "docs/engineering-excellence/data/analysis-cache-deep.json"
+        ],
+        "knownLimitations": [
+          "Only the per-file detector stage is cached (37% of a deep scan); deep taint analysis is recomputed on every scan, so the gain is about 29% with deep analysis and 45% without, not 2x",
+          "The existing AGENTIC_SECURITY_INCREMENTAL deep-summary cache was found inert (summaries keyed by file, re-seeded under keys the engine never looks up; version recorded as unknown) and was left unchanged",
+          "SCA feeds are not cached at all, so feed freshness cannot go stale through this cache; a cache for them was not built",
+          "Cross-file inputs of the per-file stage were identified by reading the cascade and by the sweep; a detector that begins to read a new cross-file input would need it added to the context digest",
+          "Timings on one JavaScript corpus on a loaded machine; sweep mutations are edit, constant, add and remove on fixtures with at most 120 files"
+        ],
+        "closedAt": "2026-10-16T18:37:44.048Z"
+      },
       "notes": []
     },
     "E6-05": {
@@ -8899,18 +9021,130 @@
       "notes": []
     },
     "E7-01": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T18:37:44.275Z",
+      "completedAt": "2026-10-16T18:37:45.872Z",
+      "heartbeatAt": "2026-10-16T18:37:45.604Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-e68b53d5",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e7-01-evidence-contracts.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T18:37:44.321Z",
+          "endedAt": "2026-10-16T18:37:45.601Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 1265,
+          "log": "scripts/engineering-excellence/logs/E7-01/2026-10-16T18-37-44-322Z-c-e68b53d5.log",
+          "logSha256": "159d6ae19cd6034bfb764be5e9e7576f5519f8fe8d73d99e2de1424afdcc48c3",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E7-01",
+        "status": "done",
+        "sourceCommit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "docs/engineering-excellence/evidence-contracts.json"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e7-01-evidence-contracts.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E7-01/2026-10-16T18-37-44-322Z-c-e68b53d5.log",
+            "logSha256": "159d6ae19cd6034bfb764be5e9e7576f5519f8fe8d73d99e2de1424afdcc48c3",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e7-01-evidence-contracts.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Sixteen evidence kinds are inventoried; fifteen are exercised with real records whose schema",
+          "version",
+          "identity and snapshot binding are read and checked; any record is wrapped in a digest-bound EvidenceRef that rejects tampering; lineage reports dangling references",
+          "cycles and cross-snapshot dependencies; findingProvenance is kept apart from other provenance; legacy shapes migrate without inventing confirmation"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Producers are not changed: formats that declare no schema, no identity or no snapshot are reported as gaps and bridged by the EvidenceRef wrapper, not fixed at the source",
+          "release-evidence has no producer called from a scan and is the one kind not exercised with a real record",
+          "Snapshot digests are built by the caller from what it knows; nothing yet makes a scan produce one automatically",
+          "Several samples are built with small fixed inputs (a one-file project), not from a full real scan"
+        ],
+        "closedAt": "2026-10-16T18:37:45.872Z"
+      },
       "notes": []
     },
     "E7-02": {
