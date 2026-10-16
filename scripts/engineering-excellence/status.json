@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T16:12:13.606Z",
-  "revision": 645,
+  "updatedAt": "2026-10-16T16:14:15.000Z",
+  "revision": 655,
   "checkout": {
-    "commit": "c824a92e943e71db3997eeb3c7a86bb73094fc40",
+    "commit": "8d13d781efa24e04d779df8dc1594fbc96d40fac",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T16:12:13.606Z"
+    "capturedAt": "2026-10-16T16:14:14.999Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T16:11:59.008Z",
+      "heartbeatAt": "2026-10-16T16:13:59.053Z",
       "activeProcess": {
         "pid": 50646,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -5752,18 +5752,136 @@
       "notes": []
     },
     "E4-02": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T16:14:14.003Z",
+      "completedAt": "2026-10-16T16:14:15.000Z",
+      "heartbeatAt": "2026-10-16T16:14:14.733Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "8d13d781efa24e04d779df8dc1594fbc96d40fac",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-4a2f002a",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e4-02-invariants.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T16:14:14.059Z",
+          "endedAt": "2026-10-16T16:14:14.729Z",
+          "timeoutMs": 900000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 657,
+          "log": "scripts/engineering-excellence/logs/E4-02/2026-10-16T16-14-14-059Z-c-4a2f002a.log",
+          "logSha256": "54c793b39393de1b662fc0ca13cb4f93622e44d9976df56cc168baa703d31b66",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E4-02",
+        "status": "done",
+        "sourceCommit": "8d13d781efa24e04d779df8dc1594fbc96d40fac",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/context-intelligence/invariants.js",
+          "scanner/test/fixtures/engineering-excellence/dci-invariants.example.json",
+          "scanner/test/engineering-excellence/e4-02-invariants.test.js",
+          "scanner/package.json"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e4-02-invariants.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E4-02/2026-10-16T16-14-14-059Z-c-4a2f002a.log",
+            "logSha256": "54c793b39393de1b662fc0ca13cb4f93622e44d9976df56cc168baa703d31b66",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e4-02-invariants.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "scanner/src/context-intelligence/invariants.js",
+          "scanner/test/fixtures/engineering-excellence/dci-invariants.example.json",
+          "scanner/test/engineering-excellence/e4-02-invariants.test.js#malformed-policies-are-refused-with-a-code-and-a-path-never-silently-dropped",
+          "scanner/test/engineering-excellence/e4-02-invariants.test.js#a-satisfied-invariant-a-violated-one-and-a-documented-public-route-each-with-its-evidence",
+          "scanner/test/engineering-excellence/e4-02-invariants.test.js#path-scoped-validity-a-handler-outside-the-validity-paths-is-not_applicable-never-satisfied"
+        ],
+        "benchmarkComparisons": [
+          "unmeasured: behaviour tests on a 6-route fixture: 1 satisfied, 2 violated (an unauthenticated delete, an authenticated but unscoped listing), 1 public_by_policy, plus not_applicable, unknown and expired cases; 26 malformed-policy codes asserted"
+        ],
+        "knownLimitations": [
+          "evaluation reads the protection verdicts DCI already computed, so it is as strong as that evidence; Java, Go, C#, Ruby and PHP produce no bundles (E4-01), so no invariant can be checked there",
+          "not yet wired into the context command or into findings; that is E4-07",
+          "cross-route consistency is not evaluated here; that is E4-03",
+          "tenant-scope is read from facts, not from a protection verdict"
+        ],
+        "closedAt": "2026-10-16T16:14:15.000Z"
+      },
       "notes": []
     },
     "E4-03": {
