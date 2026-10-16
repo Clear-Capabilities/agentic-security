@@ -84,20 +84,6 @@
     "vuln": "JWT Signed Without expiresIn"
   },
   {
-    "fixture": "host-header",
-    "file": "app.js",
-    "line": 14,
-    "family": "open-redirect",
-    "vuln": "Open Redirect (Express/Koa)"
-  },
-  {
-    "fixture": "csharp-sast",
-    "file": "Vuln.cs",
-    "line": 38,
-    "family": "insecure-deserialization",
-    "vuln": "Insecure Deserialization — BinaryFormatter.Deserialize call"
-  },
-  {
     "fixture": "csharp-sast",
     "file": "Vuln.cs",
     "line": 14,

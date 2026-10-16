@@ -96,12 +96,12 @@
       "state": "running",
       "offset": 100,
       "limit": 20,
-      "startedAt": "2026-10-16T15:10:07.770Z",
-      "attempts": 1
+      "startedAt": "2026-10-16T15:21:04.158Z",
+      "attempts": 2
     }
   },
   "measuredIn": {
-    "detachedWorktreeOf": "37213ce0b7d0570522acaf254008fd8a9206b2c7",
+    "detachedWorktreeOf": "391760d52f6afeb5c6ef647bde6da3e4bdcf4ebc",
     "linkedFromSourceCheckout": [
       "scanner/node_modules",
       "scanner/vendor",
@@ -110,7 +110,7 @@
   },
   "identity": {
     "schemaVersion": 1,
-    "sourceCommit": "37213ce0b7d0570522acaf254008fd8a9206b2c7",
+    "sourceCommit": "391760d52f6afeb5c6ef647bde6da3e4bdcf4ebc",
     "sourceBranch": "HEAD",
     "sourceTreeClean": true,
     "dirtyPaths": [],
@@ -139,7 +139,7 @@
       "cpus": 8,
       "memoryGb": 16
     },
-    "startedAt": "2026-10-16T14:21:14.045Z",
+    "startedAt": "2026-10-16T15:21:03.420Z",
     "measurementValid": true,
     "releaseTrust": "trusted",
     "invalidReasons": []
