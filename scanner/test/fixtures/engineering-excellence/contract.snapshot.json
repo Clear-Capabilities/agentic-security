@@ -2178,7 +2178,6 @@
               "findings": {
                 "array": "empty"
               },
-              "first": "boolean",
               "summary": {
                 "object": {
                   "added": "number",
@@ -2372,7 +2371,8 @@
       "scanClean": 2,
       "scanVulnerable": 3,
       "ciStrictClean": 0,
-      "ciStrictVulnerable": 1
+      "ciStrictVulnerable": 1,
+      "ciStrictCleanWithoutHistory": 1
     },
     "mcpTools": [
       {
@@ -3046,5 +3046,16 @@
       }
     }
   },
-  "history": []
+  "history": [
+    {
+      "at": "2026-10-16T13:01:41.271Z",
+      "version": "0.172.0",
+      "acceptedBreakingChange": "the first snapshot scanned the fixture directory in place, so scan state written by an earlier capture changed the shape (sbomDiff.first); captures now scan a fresh copy each time and are repeatable"
+    },
+    {
+      "at": "2026-10-16T13:02:26.943Z",
+      "version": "0.172.0",
+      "acceptedBreakingChange": "fixtures are scanned as one-commit repositories (strict assurance needs history) and a no-history case was added"
+    }
+  ]
 }

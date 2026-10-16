@@ -67,6 +67,7 @@ test('scan and ci --assurance strict keep distinct exit codes for clean and vuln
   assert.equal(c.ciStrictVulnerable, 1);
   assert.notEqual(c.scanClean, c.scanVulnerable);
   assert.ok(c.scanVulnerable > c.scanClean, 'findings raise the scan exit code');
+  assert.equal(c.ciStrictCleanWithoutHistory, 1, 'strict assurance fails a clean project that has no history to attribute findings to');
 });
 
 test('signed evidence verifies when intact and is rejected when a field is edited', async () => {

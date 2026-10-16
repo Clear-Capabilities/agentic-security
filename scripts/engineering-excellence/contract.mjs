@@ -12,7 +12,7 @@
 // Surfaces: scan JSON, scanHealth, assurance modes, CLI exit codes (scan and ci --assurance strict), MCP tool schemas, verify_fix,
 // findingProvenance, the signed evidence bundle, OSCAL.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -94,8 +94,26 @@ function cliExit(root, args) {
   return r.status;
 }
 
+/** A fresh copy of a fixture. A scan writes state into the directory it scans (and a second scan of the same directory behaves differently), so every capture scans its own copy. */
+function freshCopy(root, name, bag, { git = true } = {}) {
+  const dir = mkdtempSync(join(os.tmpdir(), `ee-contract-${name}-`));
+  cpSync(join(root, 'scanner', 'test', 'fixtures', name), dir, { recursive: true });
+  bag.push(dir);
+  if (git) {
+    // a real project has history, and strict assurance depends on it (finding provenance), so the copy is a one-commit repository
+    const g = (...a) => spawnSync('git', a, { cwd: dir, stdio: 'ignore' });
+    g('init', '-q'); g('config', 'user.email', 'contract@example.invalid'); g('config', 'user.name', 'contract'); g('add', '-A'); g('commit', '-q', '-m', 'fixture');
+  }
+  return dir;
+}
+
 export async function captureContract(root = REPO_ROOT) {
-  const fixture = (n) => join(root, 'scanner', 'test', 'fixtures', n);
+  const copies = [];
+  try { return await capture(root, copies); } finally { for (const d of copies) rmSync(d, { recursive: true, force: true }); }
+}
+
+async function capture(root, copies) {
+  const fixture = (n) => freshCopy(root, n, copies);
   const surfaces = {};
 
   const { runScan } = await imp(root, 'src/runScan.js');
@@ -129,6 +147,8 @@ export async function captureContract(root = REPO_ROOT) {
     scanVulnerable: cliExit(root, ['scan', fixture('vulnerable-js')]),
     ciStrictClean: cliExit(root, ['ci', fixture('clean-js'), '--assurance', 'strict']),
     ciStrictVulnerable: cliExit(root, ['ci', fixture('vulnerable-js'), '--assurance', 'strict']),
+    // strict assurance needs history: the same clean project with no repository fails the gate
+    ciStrictCleanWithoutHistory: cliExit(root, ['ci', freshCopy(root, 'clean-js', copies, { git: false }), '--assurance', 'strict']),
   };
 
   const tools = await imp(root, 'src/mcp/tools.js');

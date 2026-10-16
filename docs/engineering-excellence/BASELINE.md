@@ -4,9 +4,9 @@
 
 ## Identity
 
-- Commit: `ee16dbb90f48968114b7424ff0f7e961072e79a1` on `feature/engineering-excellence`
-- Source tree: **dirty** (29 path(s): `.gitignore`, `docs/capability-ledger.json`, `scanner/package.json`, `scripts/run-unit-tests.mjs`, `scanner/test/engineering-excellence/e0-01-inventory.test.js`, `scanner/test/engineering-excellence/e0-02-baseline.test.js`, ...); 10 program bookkeeping path(s) not counted
-- Release trust: **untrusted_for_release** (dirty_worktree)
+- Commit: `57134973d83be24bb15c6e04e3523af4c2cf49f2` on `feature/engineering-excellence`
+- Source tree: clean; 0 program bookkeeping path(s) not counted
+- Release trust: **trusted**
 - Bundle: `edcc9e08f076b2bc50946c512557c15038e337fa568bc490586fc882ca1c11bc` (sidecar matches)
 - Lockfile: `49ccabbac95e1032e5e3f09d169efc63525fa067dd5e56b554fbbeda6f834cb4`
 - Config digest: `7a9f18deda06dcf6ee8ce5864e2c3d50c15f8aba4ee9122b0a788ed3e2369a71`; model endpoint: none; knobs set: none
@@ -17,12 +17,12 @@
 
 | Gate | Kind | Status | Exit | Duration | Command | Log |
 |---|---|---|---|---|---|---|
-| Curated CVE replay regression net | regression | **passed** | 0 | 118.7 s | `npm run bench:cve-replay:check` | `scripts/engineering-excellence/logs/E0-02/cve-replay.log` |
-| Metamorphic and adversarial mutation gate | regression | **passed** | 0 | 3.7 s | `npm run bench:mutation:check` | `scripts/engineering-excellence/logs/E0-02/mutation.log` |
+| Curated CVE replay regression net | regression | **passed** | 0 | 118.9 s | `npm run bench:cve-replay:check` | `scripts/engineering-excellence/logs/E0-02/cve-replay.log` |
+| Metamorphic and adversarial mutation gate | regression | **passed** | 0 | 2.7 s | `npm run bench:mutation:check` | `scripts/engineering-excellence/logs/E0-02/mutation.log` |
 | Protection verdict gate | regression | **passed** | 0 | 0.3 s | `npm run bench:protection-verdict:check` | `scripts/engineering-excellence/logs/E0-02/protection-verdict.log` |
-| Per-layer recall (curated corpus) | regression | **passed** | 0 | 108.6 s | `npm run bench:layer-recall:check` | `scripts/engineering-excellence/logs/E0-02/layer-recall.log` |
-| Finding provenance accuracy | regression | **passed** | 0 | 5.2 s | `npm run bench:provenance-accuracy:check` | `scripts/engineering-excellence/logs/E0-02/provenance-accuracy.log` |
-| Self-scan precision baseline | regression | **passed** | 0 | 116.1 s | `npm run bench:self-scan:check` | `scripts/engineering-excellence/logs/E0-02/self-scan.log` |
+| Per-layer recall (curated corpus) | regression | **passed** | 0 | 109.3 s | `npm run bench:layer-recall:check` | `scripts/engineering-excellence/logs/E0-02/layer-recall.log` |
+| Finding provenance accuracy | regression | **passed** | 0 | 5.3 s | `npm run bench:provenance-accuracy:check` | `scripts/engineering-excellence/logs/E0-02/provenance-accuracy.log` |
+| Self-scan precision baseline | regression | **passed** | 0 | 110.3 s | `npm run bench:self-scan:check` | `scripts/engineering-excellence/logs/E0-02/self-scan.log` |
 | Independent-population floor check (reads archived results; does not re-measure) | archived-floor | **passed** | 0 | 0.2 s | `npm run bench:independent:gate:check` | `scripts/engineering-excellence/logs/E0-02/independent-gate.log` |
 
 Gate `passed` means the existing gate exits 0 on this checkout. For the curated regression net that is a ceiling by construction, not an accuracy figure.

@@ -152,6 +152,7 @@ export function startTask(root, id) {
     const open = def.requires.filter((r) => !isVerified(doc.tasks[r]));
     if (open.length) throw new TransitionError(`${id} cannot start: not yet verified: ${open.join(', ')}`);
     move(st, id, 'in_progress');
+    doc.checkout = checkoutInfo(root);
     const now = nowIso();
     st.attempts++; st.startedAt = now; st.completedAt = null; st.heartbeatAt = now;
     st.blocker = null; st.failure = null; st.exitCode = null; st.evidence = null;
@@ -312,6 +313,7 @@ function close(root, id, input, to) {
     const v = validateClosing(root, def, st, input, { alreadySatisfied: to === 'already_satisfied' });
     if (v.problems.length) throw new TransitionError(`${id} cannot be ${to}: ${v.problems.join('; ')}`);
     const info = checkoutInfo(root);
+    doc.checkout = info;
     move(st, id, to);
     const now = nowIso();
     st.completedAt = now; st.commit = info.commit; st.activeProcess = null; st.exitCode = 0;
