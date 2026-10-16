@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:10:12.505Z",
-  "revision": 874,
+  "updatedAt": "2026-10-16T17:12:21.861Z",
+  "revision": 885,
   "checkout": {
-    "commit": "83be9192bdb6b6c5f580450c06e59192e751a83e",
+    "commit": "3ed30cad2d5963149ba9a4cbb140cade97ae2372",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:10:12.504Z"
+    "capturedAt": "2026-10-16T17:12:19.641Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:10:01.837Z",
+      "heartbeatAt": "2026-10-16T17:12:21.861Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -7496,18 +7496,128 @@
       "notes": []
     },
     "E5-05": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:12:19.176Z",
+      "completedAt": "2026-10-16T17:12:19.641Z",
+      "heartbeatAt": "2026-10-16T17:12:19.399Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "3ed30cad2d5963149ba9a4cbb140cade97ae2372",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-fbee8f68",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e5-05-exploitability-evidence.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:12:19.233Z",
+          "endedAt": "2026-10-16T17:12:19.396Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 148,
+          "log": "scripts/engineering-excellence/logs/E5-05/2026-10-16T17-12-19-233Z-c-fbee8f68.log",
+          "logSha256": "698f6129ad55b2e7a47e0ef39617b26ccd9a6ab36f636232738ee09ea52159dd",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E5-05",
+        "status": "done",
+        "sourceCommit": "3ed30cad2d5963149ba9a4cbb140cade97ae2372",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/exploitability-evidence.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e5-05-exploitability-evidence.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E5-05/2026-10-16T17-12-19-233Z-c-fbee8f68.log",
+            "logSha256": "698f6129ad55b2e7a47e0ef39617b26ccd9a6ab36f636232738ee09ea52159dd",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e5-05-exploitability-evidence.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Seven independent levels plus an unknown list; runtime not_observed is never no",
+          "unreachable or safe and moves nothing; priority moves only under a digest-checked pre-registered policy with cited evidence; lowering on absence is rejected at validation; findings are never erased"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Not wired into scan output or triage; library entry point exercised on synthetic findings",
+          "externallyReachable is route-rooting, which does not verify the route is exposed beyond the service",
+          "includedInArtifact and compensating controls are unknown unless the caller supplies artifact or control evidence",
+          "Default policy rules are a starting point, not calibrated against outcomes"
+        ],
+        "closedAt": "2026-10-16T17:12:19.641Z"
+      },
       "notes": []
     },
     "E5-06": {
