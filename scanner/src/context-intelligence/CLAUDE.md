@@ -10,6 +10,10 @@ Deterministic Context Intelligence (the `context` command). Opt-in and additive:
 - Model output cannot set severity. A citation outside the bundle invalidates the review. Severity comes from the existing confirmation tier.
 - Store writes are atomic and refuse links and unsafe paths. Stored packages are re-checked against their hashes.
 - A job with no verified result is missing coverage, never a clean result.
+- Names from the repository (route strings, file names) are data: sanitised before they are printed, never placed in prompt text outside the fence.
+- Source reaches a non-loopback endpoint only with an explicit approval, and the egress policy still applies after it.
+- A citation is checked for range AND for being about the cited lines. `no_issue_observed` needs a control the deterministic pass also found.
+- Orderings that reach a hashed value use `cmpCodeUnit`, never the locale.
 - Evaluation is synthetic. Scorecards must say so and must not state an accuracy claim. Holdout use is ledgered.
 
 ## Where things are

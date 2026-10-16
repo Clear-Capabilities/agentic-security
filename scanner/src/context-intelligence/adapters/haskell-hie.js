@@ -85,14 +85,41 @@ export function loadHieMetadata(rootReal, hieDir, { fileContents }) {
   return { status: 'ok', tool: doc.tool, compiler: doc.compiler, declarations, references, exportHash: hashOf({ declarations, references }) };
 }
 
+function uncorroboratedReferences(graph, references, fileContents) {
+  const byName = new Map();
+  for (const sym of graph.symbols) {
+    if (sym.kind !== 'function' || sym.id.includes('::<anon>@')) continue;
+    if (!byName.has(sym.name)) byName.set(sym.name, []);
+    byName.get(sym.name).push(sym);
+  }
+  const bad = [];
+  for (const r of references) {
+    const owners = byName.get(r.from) || [];
+    if (owners.length !== 1) continue; // an ambiguous or unknown name is already counted as unmatched and adds nothing
+    const sym = owners[0];
+    const text = fileContents[sym.file];
+    const callee = String(r.to).split(/[.:]/).pop();
+    const lineText = typeof text === 'string' ? text.split('\n')[r.line - 1] : undefined;
+    const inside = r.line >= sym.startLine && r.line <= sym.endLine;
+    if (!inside || lineText === undefined || !callee || !lineText.includes(callee)) bad.push(`${r.from}->${r.to}@${r.line}`);
+  }
+  return bad;
+}
+
 /**
  * Merge an imported export into the static graph. Returns { graph, semantic } where `semantic` carries the provenance
  * and the static-versus-compiler difference report.
  */
 export function mergeHieIntoGraph(graph, meta, fileContents) {
-  void fileContents;
   if (meta.status !== 'ok') {
     return { graph, semantic: { source: ['static-ir'], status: meta.status, reason: meta.reason || null, detail: meta.detail || null, diff: null } };
+  }
+  // The export is untrusted even when its file hashes match: it is checked into the repository it describes. A reference
+  // is accepted only if the line it names, inside the declaration it names, actually mentions the callee. One that does
+  // not degrades the whole import, so a crafted export cannot add edges that the source does not contain.
+  const uncorroborated = uncorroboratedReferences(graph, meta.references, fileContents || {});
+  if (uncorroborated.length) {
+    return { graph, semantic: { source: ['static-ir'], status: 'degraded', reason: 'reference-not-in-source', detail: uncorroborated.slice(0, 5).join(', '), diff: null } };
   }
   const idsByName = new Map();
   for (const s of graph.symbols) {

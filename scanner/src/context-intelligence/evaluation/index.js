@@ -92,6 +92,8 @@ export function metricsFor(units, protocolHash, name) {
     precision: precisionOf(c), recall: recallOf(c), f1: f1Of(c),
     precisionInterval: pn > 0 ? wilsonInterval(c.tp, pn) : { status: 'unmeasured', reason: 'nothing was reported' },
     f1Interval: f1,
+    // A point estimate with no interval around it reads as a finding. It is reportable only when the interval is measured.
+    reportable: f1 && f1.status === 'measured',
   };
 }
 
@@ -127,6 +129,9 @@ function readLedger(root) {
 const pct = (x) => (x === null || x === undefined ? 'n/a' : (x * 100).toFixed(0) + '%');
 const interval = (i) => (!i || i.status !== 'measured' ? `unmeasured (${i && i.reason ? i.reason.split(',')[0] : 'no data'})` : `${pct(i.low)} to ${pct(i.high)}`);
 
+// Precision, recall and F1 are printed only when their interval is measured; otherwise the counts stand alone.
+const shown = (m, x) => (m.reportable ? pct(x) : 'withheld');
+
 export function renderMarkdown(card) {
   const L = [];
   L.push('# Context Intelligence evaluation scorecard', '');
@@ -141,18 +146,20 @@ export function renderMarkdown(card) {
   for (const s of card.systems) {
     if (s.status !== 'measured') { L.push(`| ${s.system} | ${s.status}: ${s.reason} | | | | | | | | | | |`); continue; }
     const m = s.metrics;
-    L.push(`| ${s.system} | measured | ${m.counts.tp} | ${m.counts.fp} | ${m.counts.fn} | ${m.counts.tn} | ${pct(m.precision)} | ${pct(m.recall)} | ${pct(m.f1)} | ${interval(m.f1Interval)} | ${s.calls} | ${s.promptChars} |`);
+    L.push(`| ${s.system} | measured | ${m.counts.tp} | ${m.counts.fp} | ${m.counts.fn} | ${m.counts.tn} | ${shown(m, m.precision)} | ${shown(m, m.recall)} | ${shown(m, m.f1)} | ${interval(m.f1Interval)} | ${s.calls} | ${s.promptChars} |`);
   }
   L.push('', '## Economics (estimated; no price supplied)', '', '| system | median ctx tokens | P95 | P99 | model calls | calls per true positive | wall ms |', '|---|---|---|---|---|---|---|');
-  for (const s of card.systems) if (s.economics) { const e = s.economics; L.push(`| ${s.system} | ${e.contextTokens.median ?? 'n/a'} | ${e.contextTokens.p95 ?? 'n/a'} | ${e.contextTokens.p99 ?? 'n/a'} | ${e.modelCalls} | ${e.callsPerTruePositive === null ? 'n/a' : e.callsPerTruePositive.toFixed(1)} | ${e.wallMs} |`); }
+  for (const s of card.systems) if (s.economics) { const e = s.economics; L.push(`| ${s.system} | ${e.contextTokens.median ?? 'n/a'} | ${e.contextTokens.p95 ?? 'n/a'} | ${e.contextTokens.p99 ?? 'n/a'} | ${e.modelCalls} | ${e.callsPerTruePositive === null || !s.metrics || !s.metrics.reportable ? 'withheld' : e.callsPerTruePositive.toFixed(1)} | ${e.wallMs} |`); }
+  L.push('', 'Precision, recall, F1 and calls per true positive are withheld while their interval is unmeasured (fewer than 10 independent groups). The counts above are what was observed; they are not an estimate of anything.');
   L.push('', `Replay: \`${card.replay}\``, '');
   if (card.leakage.length) { L.push('## Leakage hits', ...card.leakage.map(h => `- ${h.where} ${h.file || ''} ${h.term}`), ''); }
   return L.join('\n');
 }
 
 export function renderCsv(card) {
-  const rows = [['system', 'case', 'variant', 'vulnerable', 'flagged', 'outcome', 'calls', 'promptChars']];
-  for (const s of card.systems) for (const u of (s.units || [])) rows.push([s.system, u.caseId, u.variant, u.vulnerable, u.flagged, u.outcome, u.calls, u.promptChars]);
+  // The marker is a column, not a banner: a CSV is the format that gets pasted into a spreadsheet without its header text.
+  const rows = [['system', 'case', 'variant', 'vulnerable', 'flagged', 'outcome', 'calls', 'promptChars', 'synthetic']];
+  for (const s of card.systems) for (const u of (s.units || [])) rows.push([s.system, u.caseId, u.variant, u.vulnerable, u.flagged, u.outcome, u.calls, u.promptChars, card.synthetic === false ? false : true]);
   return rows.map(r => r.join(',')).join('\n') + '\n';
 }
 

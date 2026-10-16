@@ -12,7 +12,7 @@
 //                        not resolve, a handler matched by name only, a router whose mount point is not visible
 //   unresolved           no handler could be identified; the manifest still exists and says so
 //   excluded_by_policy   deliberately not processed (operator exclusion, or the entry-point cap)
-import { hashOf } from './canonical.js';
+import { hashOf, safeLabel } from './canonical.js';
 import { callStatement, inlineBlockSpan, splitArgs } from './spans.js';
 import { dependencyParams, signatureText } from './controls.js';
 import { buildEntrypointInventory } from '../posture/entrypoint-inventory.js';
@@ -313,7 +313,7 @@ export async function collectEntrypoints({ fileContents, graph, config = {} }) {
     const n = (ord.get(stem) || 0) + 1;
     ord.set(stem, n);
     r.id = `ep:${stem.slice(0, 20)}${n > 1 ? `-${n}` : ''}`;
-    r.label = `${r.method ? r.method + ' ' : ''}${r.pathTemplate}`.trim() || r.kind;
+    r.label = safeLabel(`${r.method ? r.method + ' ' : ''}${r.pathTemplate}`) || r.kind;
     void hname;
     let disposition;
     const excluded = exclude.some(re => re.test(r.registrationSite.file) || re.test(r.pathTemplate));
