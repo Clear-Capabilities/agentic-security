@@ -11,7 +11,7 @@
 
 import { runFullScan, _snapshotSuppressionLog, _restoreSuppressionLog } from '../../engine.js';
 import { computeStableId } from '../stable-id.js';
-import { getBlobAtCommit, listFilesAtCommit } from './git-evidence.js';
+import { getBlobAtCommit, listFilesAtCommit, renameChain } from './git-evidence.js';
 
 // Task 11 concurrency fix: `coordinator.js` resolves several findings' origins
 // CONCURRENTLY (its own comment: "the scheduler runs these four at a time"),
@@ -57,7 +57,11 @@ export function _runExclusive(fn) {
   return run;
 }
 
-export async function replayAt(scanRoot, sha, files, targetStableId) {
+/**
+ * @param {object} [opts] `deep` replays with the deep layer on. `renames` follows a file back through renames and moves: at a commit where the current path
+ *   does not exist, the file's earlier names are tried, and the content is read under the CURRENT path so the replayed finding keeps the identity it has now.
+ */
+export async function replayAt(scanRoot, sha, files, targetStableId, opts = {}) {
   const fileContents = {};
   // A NixOS option is decided by every module the configuration imports, including ones deleted later, so a Nix
   // finding is replayed against ALL Nix sources and the lock file as they existed at that commit.
@@ -65,8 +69,14 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
     const all = listFilesAtCommit(scanRoot, sha, /(?:\.nix|(?:^|\/)flake\.lock)$/i);
     files = [...new Set([...files, ...all])];
   }
+  let chains = null;
   for (const f of files) {
-    const content = getBlobAtCommit(scanRoot, sha, f);
+    let content = getBlobAtCommit(scanRoot, sha, f);
+    if (content == null) {
+      chains = chains || new Map();
+      if (!chains.has(f)) chains.set(f, renameChain(scanRoot, f));
+      for (const old of chains.get(f)) { content = getBlobAtCommit(scanRoot, sha, old); if (content != null) break; }
+    }
     if (content != null) fileContents[f] = content;
   }
   if (Object.keys(fileContents).length === 0) {
@@ -108,7 +118,7 @@ export async function replayAt(scanRoot, sha, files, targetStableId) {
         // message for methodology.
         // Haskell/Nix findings come from the IR-taint layer, which only runs in deep mode: a replay that skips it
         // can never see the finding at ANY commit, so origin resolution would end "never confirmed" for every one.
-        const _langDeep = Object.keys(fileContents).some((f) => /\.(?:l?hs|nix)$/i.test(f)) ? { deep: true } : {};
+        const _langDeep = (opts.deep || Object.keys(fileContents).some((f) => /\.(?:l?hs|nix)$/i.test(f))) ? { deep: true } : {};
         return await runFullScan({ fileContents, scanRoot, provenance: false, skipAnnotators: true, ..._langDeep }, () => {});
       } finally {
         _restoreSuppressionLog(_suppSnapshot);

@@ -293,23 +293,17 @@ test('historyCoverage.boundaryCommit stays null on a full clone with no --proven
   }
 });
 
-// Second independent Finding Provenance PRD audit (Task 3): the rename-
-// shaped miss (origin-resolver.js's `renameShapedMiss`) must surface its own
-// specific reason end-to-end through the coordinator, not collapse into the
-// generic `predicate-never-confirmed-in-candidates` string — same shape as
-// the shallow-boundary test above, for the sibling reason. This does NOT
-// assert the origin resolves correctly (it still doesn't — that is the
-// separately-scoped, honestly-disclosed rename-follow gap; see
-// bench/provenance-accuracy/fixtures/rename.mjs's header), only that the
-// reason is now honest about WHY it stayed partial.
-test('a rename-shaped partial result reports rename-detected-not-followed, not the generic reason', async () => {
+// E7-02: this test used to pin a gap — a file renamed after the code was introduced stayed `partial` with the specific reason
+// `rename_detected_not_followed`. The resolver now follows the rename, so the same history resolves, end to end through the coordinator, to the commit that
+// introduced the code (Bob's), not to the rename commit (Carol's).
+test('a file renamed after introduction resolves through the coordinator to the commit that introduced the code', async () => {
   const fx = createGitFixture();
   try {
     fx.writeFile(
       'server.js',
       'function h(req) {\n  const input = req.query.id;\n  db.query("SELECT * FROM t WHERE id = " + input);\n}\n',
     );
-    fx.commit('introduce sqli', { date: '2026-01-01T00:00:00Z', authorName: 'Bob' });
+    const introduced = fx.commit('introduce sqli', { date: '2026-01-01T00:00:00Z', authorName: 'Bob' });
 
     const serverPath = path.join(fx.root, 'server.js');
     const content = fs.readFileSync(serverPath, 'utf8');
@@ -317,16 +311,19 @@ test('a rename-shaped partial result reports rename-detected-not-followed, not t
     fx.writeFile('api.js', content + '\n// renamed module\n');
     fx.commit('rename server.js to api.js', { date: '2026-01-02T00:00:00Z', authorName: 'Carol' });
 
-    const finding = { file: 'api.js', line: 3, vuln: 'SQL Injection', ruleId: 'sql-injection', cwe: 'CWE-89' };
-    finding.stableId = computeStableId(finding);
+    // the finding comes from a real scan of the file as it is now: a hand-written finding would not be reproducible by the replay at any commit
+    const { runFullScan } = await import('../../src/engine.js');
+    const scan = await runFullScan({ fileContents: { 'api.js': fs.readFileSync(path.join(fx.root, 'api.js'), 'utf8') }, scanRoot: fx.root, provenance: false }, () => {});
+    const finding = (scan.findings || []).find((f) => f.file === 'api.js' && f.family === 'sql-injection');
+    assert.ok(finding, 'the scan finds the SQL injection');
 
     await annotateGitProvenance([finding], { scanRoot: fx.root, scanId: 's1', observedAt: '2026-01-01T00:00:00Z' });
 
     const fp = finding.findingProvenance;
-    assert.equal(fp.status, 'partial');
-    assert.match(fp.limitations[0], /renamed after that commit/,
-      'the rename-specific limitation text must survive, not collapse into the generic reason');
-    assert.ok(fp.confidence.reasons.includes('rename_detected_not_followed'));
+    assert.equal(fp.status, 'complete', JSON.stringify(fp.limitations));
+    assert.equal(fp.findingOrigin.commit, introduced);
+    assert.equal(fp.findingOrigin.authorName, 'Bob');
+    assert.ok(!(fp.confidence.reasons || []).includes('rename_detected_not_followed'));
     const { valid } = validateFindingsProvenance([finding]);
     assert.equal(valid, true);
   } finally {

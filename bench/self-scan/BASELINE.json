@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-16T18:33:17.402Z",
-  "commit": "1bca27f9a270ccd21fc77d29770edb3b605c6cc3",
+  "generatedAt": "2026-10-16T19:25:14.588Z",
+  "commit": "5750cd39c73e289190a0b12e9be1908194847925",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 92,
+      "total": 94,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -29,6 +29,7 @@
         "check-assurance-docs.mjs": 3,
         "detector-fuzz-runner.mjs": 3,
         "engineering-excellence/analysis-cache-measure.mjs": 2,
+        "engineering-excellence/completion-analysis.mjs": 2,
         "engineering-excellence/dci-audit.mjs": 27,
         "engineering-excellence/evidence-inventory.mjs": 2,
         "engineering-excellence/lib/evidence-samples.mjs": 2,
@@ -53,7 +54,7 @@
       }
     },
     "scanner/src": {
-      "total": 674,
+      "total": 677,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/provenance-graph.js": 1,
@@ -173,6 +174,7 @@
         "posture/assurance/config.js": 1,
         "posture/assurance/evidence-registry.js": 1,
         "posture/assurance/rollback.js": 2,
+        "posture/assurance/waiver.js": 1,
         "posture/attack-playbooks.js": 2,
         "posture/auditor-walkthrough.js": 3,
         "posture/auth-posture-import.js": 3,
@@ -260,6 +262,8 @@
         "posture/proof-fabric/runner.js": 3,
         "posture/proof-fabric/store.js": 1,
         "posture/provenance/cache.js": 1,
+        "posture/provenance/coverage.js": 1,
+        "posture/provenance/git-evidence.js": 1,
         "posture/provenance/lifecycle.js": 1,
         "posture/provenance/providers/config.js": 1,
         "posture/provenance/repo-lineage.js": 1,

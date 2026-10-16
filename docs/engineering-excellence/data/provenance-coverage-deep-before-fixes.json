@@ -1,0 +1,44 @@
+{
+  "schema": "agentic-security/provenance-coverage@1",
+  "scanned": "scanner/src",
+  "deepAnalysis": true,
+  "budgetMinutes": 20,
+  "wallMs": 109155,
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "loadAverage1m": 3.11
+  },
+  "total": 469,
+  "categories": {
+    "attributed": 384,
+    "uncommitted": 0,
+    "ineligible:ignored": 0,
+    "ineligible:generated": 0,
+    "ineligible:untracked": 1,
+    "ineligible:history-unavailable": 0,
+    "eligible:budget_exhausted": 0,
+    "eligible:project-wide": 64,
+    "eligible:unconfirmed": 20,
+    "eligible:not_available": 0,
+    "eligible:error": 0
+  },
+  "attributed": 384,
+  "ineligible": 1,
+  "eligible": 468,
+  "eligibleUnattributed": 84,
+  "overallRate": 0.8188,
+  "eligibleRate": 0.8205,
+  "target": 0.95,
+  "targetStatus": "not_met",
+  "unattributedReasons": [
+    {
+      "reason": "eligible:project-wide | the finding comes from a whole-project analysis; replaying one file at an old commit cannot reproduce it",
+      "findings": 64
+    },
+    {
+      "reason": "eligible:unconfirmed | earliest observable — history could not confirm a verified parent boundary (predicate-never-confirmed-in-candidates)",
+      "findings": 20
+    }
+  ]
+}

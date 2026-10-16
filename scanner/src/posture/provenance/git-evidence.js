@@ -277,6 +277,24 @@ export function candidateCommitsForLine(scanRoot, file, line, { since } = {}) {
   return [...new Set(shas)];
 }
 
+/**
+ * The names a file had before it was last renamed or moved, nearest first (E7-02). `git log --follow` reports each rename as `R<score> old new`; chaining
+ * them back gives every earlier name, so a replay at an old commit can look for the file where it used to be. Empty for a file that was never renamed or
+ * where the history cannot be read. Not recorded: copies, which git reports only with extra flags and which do not rename a file.
+ */
+export function renameChain(scanRoot, file) {
+  const rel = _relPath(scanRoot, file);
+  if (!rel) return [];
+  const r = _run(scanRoot, ['log', '--follow', '-M', '--name-status', '--format=commit %H', '--no-textconv', '--', rel]);
+  if (!r.ok) return [];
+  const names = []; let current = rel;
+  for (const ln of r.stdout.split('\n')) {
+    const m = /^R\d*\t([^\t]+)\t([^\t]+)$/.exec(ln);
+    if (m && m[2] === current) { names.push(m[1]); current = m[1]; }
+  }
+  return names;
+}
+
 export function candidateCommitsForFile(scanRoot, file, { since } = {}) {
   const rel = _relPath(scanRoot, file);
   if (!rel) return [];
@@ -311,9 +329,75 @@ export function getRootCommits(scanRoot) {
   return r.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
+// ---- one blame per file, not one per line (E7-02) ---------------------------------------------------------------------------------
+//
+// Resolving a finding blames the finding's line, and again for every evidence line on its path. A file with a dozen findings therefore started a dozen or
+// more `git blame` processes, and on a large repository that is what used up the provenance time budget before the later findings were reached
+// (`budget_exhausted`). Attribution of a line does not depend on which other lines were asked about, so the second time a file is asked about it is blamed
+// whole, once, and every later line is answered from memory. The first question about a file still uses the cheap single-line form, so a file with one
+// finding costs what it always did. The answer is keyed by the file's size and modification time, so a file that changed mid-scan is blamed again.
+const _fileBlame = new Map();
+const _seenOnce = new Set();
+const WHOLE_FILE_MAX_LINES = 20000;
+const GIT_WHOLE_FILE_TIMEOUT_MS = 20000;
+
+function parseBlamePorcelain(out) {
+  const lines = new Map(); const metaBySha = new Map();
+  const rows = out.split('\n');
+  let cur = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (cur === null) {
+      const m = /^([0-9a-f]{40,64}) (\d+) (\d+)(?: (\d+))?$/.exec(r);
+      if (m) { cur = { sha: m[1], final: Number(m[3]) }; if (!metaBySha.has(cur.sha)) metaBySha.set(cur.sha, { commit: cur.sha }); }
+      continue;
+    }
+    if (r.startsWith('\t')) {
+      const meta = metaBySha.get(cur.sha);
+      lines.set(cur.final, /^0+$/.test(cur.sha) ? { commit: null, uncommitted: true } : { ...meta });
+      cur = null; continue;
+    }
+    const meta = metaBySha.get(cur.sha);
+    if (r.startsWith('author ')) meta.authorName = r.slice(7);
+    else if (r.startsWith('author-mail ')) meta.authorEmail = r.slice(12).replace(/[<>]/g, '');
+    else if (r.startsWith('author-time ')) meta.authorDate = new Date(parseInt(r.slice(12), 10) * 1000).toISOString();
+    else if (r.startsWith('summary ')) meta.summary = r.slice(8);
+  }
+  return lines;
+}
+
+function blameWholeFile(scanRoot, rel) {
+  const abs = path.join(scanRoot, rel);
+  let st; try { st = fs.statSync(abs); } catch { return null; }
+  const key = `${st.size}:${st.mtimeMs}`;
+  const cacheKey = `${scanRoot}\0${rel}`;
+  const hit = _fileBlame.get(cacheKey);
+  if (hit && hit.key === key) return hit.lines;
+  if (st.size > 2 * 1024 * 1024) return null;
+  let r;
+  try {
+    const stdout = cp.execFileSync('git', hardenGitArgs(['blame', '--porcelain', '--no-textconv', '--', rel]), { cwd: scanRoot, encoding: 'utf8', timeout: GIT_WHOLE_FILE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024, env: hardenGitEnv() });
+    r = { ok: true, stdout };
+  } catch { r = { ok: false }; }
+  if (!r.ok) return null;
+  const lines = parseBlamePorcelain(r.stdout);
+  if (lines.size === 0 || lines.size > WHOLE_FILE_MAX_LINES) return null;
+  _fileBlame.set(cacheKey, { key, lines });
+  return lines;
+}
+
+/** Forget remembered blames (tests, and a long-lived process that wants the memory back). */
+export function clearBlameCache() { _fileBlame.clear(); _seenOnce.clear(); }
+
 export function blameLine(scanRoot, file, line) {
   const rel = _relPath(scanRoot, file);
   if (!rel || !line || line < 1) return null;
+  const once = `${scanRoot}\0${rel}`;
+  if (process.env.AGENTIC_SECURITY_NO_BLAME_CACHE !== '1' && _seenOnce.has(once)) {
+    const whole = blameWholeFile(scanRoot, rel);
+    const m = whole && whole.get(line);
+    if (m) return { ...m };
+  } else _seenOnce.add(once);
   // `--no-textconv`: VERIFIED exploitable without it — `git blame` applies
   // a hostile `.gitattributes` textconv driver by default in current git.
   const r = _run(scanRoot, ['blame', '-L', `${line},${line}`, '--porcelain', '--no-textconv', '--', rel]);

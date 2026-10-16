@@ -1,7 +1,7 @@
 {
   "schema": "provenance-accuracy/v1",
-  "generatedAt": "2026-08-28",
-  "matched": 12,
+  "generatedAt": "2026-10-16",
+  "matched": 13,
   "scoreable": 13,
   "totalFixtures": 13,
   "entries": {
@@ -14,7 +14,7 @@
     "multi-touch-same-line": "pass",
     "path-traversal-direct": "pass",
     "reintroduction": "pass",
-    "rename": "fail",
+    "rename": "pass",
     "root-commit-no-parent": "pass",
     "shallow-clone-partial": "pass",
     "uncommitted-change": "pass"

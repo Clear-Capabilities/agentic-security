@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T18:54:34.908Z",
-  "revision": 1228,
+  "updatedAt": "2026-10-16T19:27:19.830Z",
+  "revision": 1330,
   "checkout": {
-    "commit": "21c8ea2d5cb90d423dccfef9774251976f75aa7c",
+    "commit": "5750cd39c73e289190a0b12e9be1908194847925",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T18:54:34.874Z"
+    "capturedAt": "2026-10-16T19:27:19.830Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 3,
       "startedAt": "2026-10-16T17:39:24.508Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T18:54:34.908Z",
+      "heartbeatAt": "2026-10-16T19:27:15.135Z",
       "activeProcess": {
         "pid": 43127,
         "command": "node bench/independent/forensics.mjs --run a72968195aa1",
@@ -9227,18 +9227,141 @@
       "notes": []
     },
     "E7-02": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T19:27:15.960Z",
+      "completedAt": "2026-10-16T19:27:19.830Z",
+      "heartbeatAt": "2026-10-16T19:27:19.557Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "5750cd39c73e289190a0b12e9be1908194847925",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-e8b1f95e",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e7-02-provenance-coverage.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T19:27:16.007Z",
+          "endedAt": "2026-10-16T19:27:19.554Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 3532,
+          "log": "scripts/engineering-excellence/logs/E7-02/2026-10-16T19-27-16-007Z-c-e8b1f95e.log",
+          "logSha256": "4275ccb053062b96533c6e0424d5a4628ae1e78356d6b4bf177a5986b3013b1e",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E7-02",
+        "status": "done",
+        "sourceCommit": "5750cd39c73e289190a0b12e9be1908194847925",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "docs/engineering-excellence/PROVENANCE_COVERAGE.md"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e7-02-provenance-coverage.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E7-02/2026-10-16T19-27-16-007Z-c-e8b1f95e.log",
+            "logSha256": "4275ccb053062b96533c6e0424d5a4628ae1e78356d6b4bf177a5986b3013b1e",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e7-02-provenance-coverage.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Attribution coverage separates attributed",
+          "ineligible (ignored",
+          "generated",
+          "untracked",
+          "history-unavailable) and eligible-unattributed findings with explicit denominators and a 95% aspirational target (not met: 83.8% eligible on this repository); deep-layer findings and renamed or moved files are now attributed correctly; multi-author",
+          "rename",
+          "move",
+          "rebase",
+          "uncommitted",
+          "shallow-clone",
+          "ignored",
+          "generated and broken-repository cases are each tested in real repositories; errors surface as a status and a reason"
+        ],
+        "benchmarkComparisons": [
+          "docs/engineering-excellence/data/provenance-coverage-deep.json",
+          "docs/engineering-excellence/data/provenance-blame.json"
+        ],
+        "knownLimitations": [
+          "The 95% target is not met: 64 of the 76 unattributed findings come from whole-project analyses that a single-file replay cannot reproduce, and a project-scoped replay is not built",
+          "A later edit to the text of the vulnerable line itself (even a trailing comment) is credited as the origin; pinned by a test, not fixed",
+          "Measured on this repository only, on a machine running other work; blame caching saves about 12% of the provenance stage on a small sample",
+          "Two existing tests that pinned the old rename limitation were rewritten, and the provenance accuracy baseline moved from 12/13 to 13/13"
+        ],
+        "closedAt": "2026-10-16T19:27:19.830Z"
+      },
       "notes": []
     },
     "E7-03": {
