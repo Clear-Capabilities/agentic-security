@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:08:13.193Z",
-  "revision": 864,
+  "updatedAt": "2026-10-16T17:10:12.505Z",
+  "revision": 874,
   "checkout": {
-    "commit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
+    "commit": "83be9192bdb6b6c5f580450c06e59192e751a83e",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:08:13.192Z"
+    "capturedAt": "2026-10-16T17:10:12.504Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:08:01.809Z",
+      "heartbeatAt": "2026-10-16T17:10:01.837Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -7366,18 +7366,133 @@
       "notes": []
     },
     "E5-04": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:10:11.887Z",
+      "completedAt": "2026-10-16T17:10:12.505Z",
+      "heartbeatAt": "2026-10-16T17:10:12.242Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "83be9192bdb6b6c5f580450c06e59192e751a83e",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-61d5e55d",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e5-04-graph-reconciliation.test.js",
+            "test/engineering-excellence/e5-03-privacy-ingest.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:10:11.939Z",
+          "endedAt": "2026-10-16T17:10:12.239Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 284,
+          "log": "scripts/engineering-excellence/logs/E5-04/2026-10-16T17-10-11-939Z-c-61d5e55d.log",
+          "logSha256": "ce8851fe05e278ad207f9144face1a873b0a25d3806d4fbb2524568e30908844",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E5-04",
+        "status": "done",
+        "sourceCommit": "83be9192bdb6b6c5f580450c06e59192e751a83e",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/runtime-trace-ingest.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e5-04-graph-reconciliation.test.js test/engineering-excellence/e5-03-privacy-ingest.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E5-04/2026-10-16T17-10-11-939Z-c-61d5e55d.log",
+            "logSha256": "ce8851fe05e278ad207f9144face1a873b0a25d3806d4fbb2524568e30908844",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e5-04-graph-reconciliation.test.js",
+              "scanner/test/engineering-excellence/e5-03-privacy-ingest.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Edges are stated as statically_inferred",
+          "runtime_observed",
+          "both",
+          "conflicted or unknown; both needs a matched build; fixtures with matching and non-matching builds never yield a corroborated path; confidence decays on build mismatch and partial coverage"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Spans are not used; matching is by qualified symbol with configurable rewrite rules",
+          "Route to handler static edges must be supplied by the caller; the IR has no route entity",
+          "Conflicts are detected for routes only",
+          "Not wired into scan output or findings; library entry point verified on synthetic fixtures with a real semantic graph from a small JS file",
+          "Confidence numbers are fixed heuristics, not calibrated"
+        ],
+        "closedAt": "2026-10-16T17:10:12.505Z"
+      },
       "notes": []
     },
     "E5-05": {

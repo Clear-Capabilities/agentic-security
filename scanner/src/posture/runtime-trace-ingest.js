@@ -26,8 +26,8 @@ export const POLICY_FILE = 'runtime-policy.json';
 const TRACE_FILE = 'runtime-trace.jsonl';
 const META_FILE = 'runtime-trace.meta.json';
 const DEFAULT_RETENTION_DAYS = 30;
-const ALLOWED_KINDS = Object.freeze(['function-call', 'route-hit', 'syscall', 'file-touch']);
-export const ALLOWED_FIELDS = Object.freeze(['ts', 'kind', 'qid', 'route', 'fileRel', 'line', 'count', 'name', 'commit', 'buildHash', 'imageDigest', 'sbomRef', 'environment']);
+const ALLOWED_KINDS = Object.freeze(['function-call', 'route-hit', 'syscall', 'file-touch', 'service-call']);
+export const ALLOWED_FIELDS = Object.freeze(['ts', 'kind', 'qid', 'route', 'fileRel', 'line', 'count', 'name', 'caller', 'service', 'peer', 'commit', 'buildHash', 'imageDigest', 'sbomRef', 'environment']);
 
 const SYMBOL = /^[A-Za-z_$][\w$]*(?:[.:#/][A-Za-z_$][\w$]*)*(?:\(\))?$/;
 const TOKEN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -83,6 +83,8 @@ export function normalizeRecord(raw) {
   const reject = (reason) => ({ rejected: reason, dropped });
   if (raw.ts !== undefined) { if (typeof raw.ts !== 'string' || !Number.isFinite(Date.parse(raw.ts))) return reject('bad-timestamp'); out.ts = new Date(raw.ts).toISOString(); }
   if (raw.qid !== undefined) { if (typeof raw.qid !== 'string' || raw.qid.length > 300 || !SYMBOL.test(raw.qid)) return reject('bad-symbol'); out.qid = raw.qid; }
+  if (raw.caller !== undefined) { if (typeof raw.caller !== 'string' || raw.caller.length > 300 || !SYMBOL.test(raw.caller)) return reject('bad-caller'); out.caller = raw.caller; }
+  for (const k of ['service', 'peer']) if (raw[k] !== undefined) { if (typeof raw[k] !== 'string' || !TOKEN.test(raw[k])) return reject(`bad-${k}`); out[k] = raw[k]; }
   if (raw.route !== undefined) { const r = normalizeRoute(raw.route); if (!r) return reject('bad-route'); out.route = r; }
   if (raw.fileRel !== undefined) { if (typeof raw.fileRel !== 'string' || !REL_PATH.test(raw.fileRel)) return reject('bad-file'); out.fileRel = raw.fileRel; }
   if (raw.name !== undefined) { if (typeof raw.name !== 'string' || !SYSCALL.test(raw.name)) return reject('bad-name'); out.name = raw.name; }
@@ -94,6 +96,7 @@ export function normalizeRecord(raw) {
     const hit = canaryHit(v);
     if (hit) return reject(`canary:${hit}`);
   }
+  if (raw.kind === 'service-call' && (!out.service || !out.peer)) return reject('service-call-without-endpoints');
   if (raw.kind === 'route-hit' && !out.route) return reject('route-hit-without-route');
   if (raw.kind === 'function-call' && !out.qid && !out.fileRel) return reject('function-call-without-symbol');
   return { record: out, dropped };
