@@ -61,17 +61,17 @@ test('--check exits 0 on the baseline and non-zero on a doctored one (both direc
   const ok = spawnSync(process.execPath, [RUN, '--check'], { cwd: REPO, encoding: 'utf8' });
   assert.equal(ok.status, 0, ok.stdout + ok.stderr);
   const bad = fs.mkdtempSync(path.join(os.tmpdir(), 'fixbench-bad-'));
-  const file = path.join(REPO, 'bench/fix-verification/baseline.json');
-  const original = fs.readFileSync(file, 'utf8');
+  const file = path.join(bad, 'baseline.json');
+  const run = () => spawnSync(process.execPath, [RUN, '--check'], { cwd: REPO, encoding: 'utf8', env: { ...process.env, FIXBENCH_BASELINE_PATH: file } });
   try {
     const doctored = structuredClone(BASE); doctored.unsafeAccepted = []; doctored.declaredGaps = [];
     fs.writeFileSync(file, JSON.stringify(doctored));
-    const r = spawnSync(process.execPath, [RUN, '--check'], { cwd: REPO, encoding: 'utf8' });
+    const r = run();
     assert.notEqual(r.status, 0); assert.match(r.stderr, /FAIL/);
     fs.rmSync(file);
-    const m = spawnSync(process.execPath, [RUN, '--check'], { cwd: REPO, encoding: 'utf8' });
+    const m = run();
     assert.notEqual(m.status, 0); assert.match(m.stderr, /no baseline/);
-  } finally { fs.writeFileSync(file, original); fs.rmSync(bad, { recursive: true, force: true }); }
+  } finally { fs.rmSync(bad, { recursive: true, force: true }); }
 });
 
 test('the published doc states denominators, the declared gaps and its limitations, and matches the baseline', () => {

@@ -22,7 +22,8 @@ import { sandboxAvailable } from '../../scanner/src/sandbox/index.js';
 import { disableStateWrites } from '../_lib/tree-integrity.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const BASELINE = path.join(HERE, 'baseline.json');
+// FIXBENCH_BASELINE_PATH lets a test point the gate at a doctored copy instead of editing the committed file (an interrupted test used to leave it doctored)
+const BASELINE = process.env.FIXBENCH_BASELINE_PATH || path.join(HERE, 'baseline.json');
 const DOC = path.join(HERE, '../../docs/engineering-excellence/FIX_BENCHMARK.md');
 
 async function setup(c) {
