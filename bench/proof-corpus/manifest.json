@@ -31,7 +31,7 @@
       "id": "grafana",
       "url": "https://github.com/grafana/grafana.git",
       "ref": "main",
-      "commit": null,
+      "commit": "d950a0fd98c2bf0fe9c5ded8c50cae86d71eabc2",
       "tier": "deep",
       "expectedLanguages": [
         "go",
@@ -44,7 +44,7 @@
       "id": "sentry",
       "url": "https://github.com/getsentry/sentry.git",
       "ref": "master",
-      "commit": null,
+      "commit": "5a4a9ea75fa4447c67e61975dde2237903f3bb9b",
       "tier": "breadth",
       "expectedLanguages": [
         "python",
@@ -57,7 +57,7 @@
       "id": "discourse",
       "url": "https://github.com/discourse/discourse.git",
       "ref": "main",
-      "commit": null,
+      "commit": "5d0ce5fd8f90622a7d2ea2aa8a2f6df9c11f6783",
       "tier": "deep",
       "expectedLanguages": [
         "ruby",
@@ -70,7 +70,7 @@
       "id": "jellyfin",
       "url": "https://github.com/jellyfin/jellyfin.git",
       "ref": "master",
-      "commit": null,
+      "commit": "aec42b345e1a7da25ee5492183f12209338df688",
       "tier": "breadth",
       "expectedLanguages": [
         "csharp"
@@ -82,7 +82,7 @@
       "id": "mattermost",
       "url": "https://github.com/mattermost/mattermost.git",
       "ref": "master",
-      "commit": null,
+      "commit": "9878ab425a41496d5d30c788219d643414843231",
       "tier": "breadth",
       "expectedLanguages": [
         "go",
@@ -95,7 +95,7 @@
       "id": "jenkins",
       "url": "https://github.com/jenkinsci/jenkins.git",
       "ref": "master",
-      "commit": null,
+      "commit": "f5d0dcb8ab0ff713ec71d3bd38383fc9ff094037",
       "tier": "deep",
       "expectedLanguages": [
         "java"
@@ -107,7 +107,7 @@
       "id": "nextcloud",
       "url": "https://github.com/nextcloud/server.git",
       "ref": "master",
-      "commit": null,
+      "commit": "1eac091767a1653b1a80cb32125967cc49936e9e",
       "tier": "breadth",
       "expectedLanguages": [
         "php",

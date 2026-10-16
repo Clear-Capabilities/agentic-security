@@ -219,6 +219,17 @@ export function summarizeEvaluationGates(report) {
  *                such scan renders "not measured this run" rather than a
  *                fabricated rate. See PRD Success Metrics.
  */
+/**
+ * What happened to one third-party target: `completed`, `not_attempted` (it never ran: no pinned commit, so there was nothing to clone) or `failed`
+ * (it ran and did not finish). A pre-existing summary records an unpinned target as `error`; the message is the evidence, so it is read from there.
+ */
+export function proofTargetOutcome(t) {
+  if (t && t.status === 'ok') return 'completed';
+  if (t && t.status === 'not_attempted') return 'not_attempted';
+  if (t && t.status === 'error' && /has no pinned commit/.test(String(t.error || ''))) return 'not_attempted';
+  return 'failed';
+}
+
 export function buildScorecard(inputs) {
   const corpus = aggregateCorpus(inputs.corpusDetail);
   const selfScan = inputs.selfScan || {};
@@ -358,9 +369,11 @@ export function buildScorecard(inputs) {
           bundleSha: proof.bundleSha || null,
           targetCount: proof.targetCount ?? null,
           ok: proof.ok ?? null,
-          failed: proof.failed ?? null,
+          // `failed` in the committed summary counted targets that never ran; the three outcomes are separated here
+          failed: (proof.targets || []).filter(t => proofTargetOutcome(t) === 'failed').length,
+          notAttempted: (proof.targets || []).filter(t => proofTargetOutcome(t) === 'not_attempted').length,
           targets: (proof.targets || []).map(t => ({
-            id: t.id, commit: t.commit, status: t.status,
+            id: t.id, commit: t.commit, status: t.status, outcome: proofTargetOutcome(t),
             filesInScope: t.coverage?.totals?.inScope ?? null,
             filesParsed: t.coverage?.totals?.parsed ?? null,
             determinismChecked: t.determinism?.checked ?? null,
@@ -950,7 +963,7 @@ export function renderScorecardMarkdown(m) {
   const pc = m.committedInputs.proofCorpus;
   if (pc) {
     L.push(`- **Third-party repository run** (*committed artifact*, \`${pc.source}\`,`);
-    L.push(`  bundle \`${pc.bundleSha}\`): ${pc.ok}/${pc.targetCount} targets completed.`);
+    L.push(`  bundle \`${pc.bundleSha}\`): ${pc.ok} of ${pc.targetCount} targets completed, ${pc.notAttempted ?? 0} not attempted (no pinned commit, so nothing was cloned), ${pc.failed ?? 0} failed after starting.`);
     L.push('  Reported for scale and parse coverage only — these repositories have no');
     L.push('  vulnerability ground truth, so no accuracy rate is derived from them.');
     L.push('');
@@ -958,7 +971,7 @@ export function renderScorecardMarkdown(m) {
     L.push('| --- | --- | --- | --- | --- | --- |');
     for (const t of pc.targets) {
       const det = t.determinismChecked ? (t.determinismIdentical ? 'identical' : 'checked, not byte-identical') : 'not checked';
-      L.push(`| ${t.id} | \`${String(t.commit || '').slice(0, 12)}\` | ${t.status} | ${formatRate(t.filesParsed ?? 0, t.filesInScope ?? 0)} | ${t.resultsEmitted ?? 'n/a'} | ${det} |`);
+      L.push(`| ${t.id} | \`${String(t.commit || '').slice(0, 12)}\` | ${t.outcome === 'not_attempted' ? 'not attempted' : t.status} | ${formatRate(t.filesParsed ?? 0, t.filesInScope ?? 0)} | ${t.resultsEmitted ?? 'n/a'} | ${det} |`);
     }
   }
   L.push('');

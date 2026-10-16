@@ -147,6 +147,12 @@ async function runTarget(t, opts) {
   fs.mkdirSync(rawDir, { recursive: true });
 
   try {
+    // A target with no pinned commit was never cloned or scanned; that is a setup state, not a scan failure, and the summary must not count it as one
+    if (!t.commit) {
+      record.status = 'not_attempted';
+      record.reason = 'no pinned commit: run the runner with --refresh-pins to resolve it';
+      return record;
+    }
     const { dir, cached } = ensureClone(t);
     record.cached = cached;
 
@@ -268,15 +274,16 @@ async function main() {
     bundleSha: bundle.sha,
     targetCount: records.length,
     ok: records.filter(r => r.status === 'ok').length,
-    failed: records.filter(r => r.status !== 'ok').length,
+    notAttempted: records.filter(r => r.status === 'not_attempted').length,
+    failed: records.filter(r => r.status !== 'ok' && r.status !== 'not_attempted').length,
     targets: records,
   };
   const summaryPath = path.join(opts.outDir, 'summary.json');
   fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf8');
   process.stdout.write(`\nsummary: ${summaryPath}\n`);
-  process.stdout.write(`ok=${summary.ok} failed=${summary.failed}\n`);
+  process.stdout.write(`ok=${summary.ok} notAttempted=${summary.notAttempted} failed=${summary.failed}\n`);
 
-  return summary.failed === 0 ? 0 : 1;
+  return summary.failed === 0 && summary.notAttempted === 0 ? 0 : 1; // an unpinned target is a gap in the run, not a pass
 }
 
 // Guarded so importing this module (e.g. from a test that only wants

@@ -71,7 +71,9 @@ async function main() {
   }));
   const result = { findings };
   if (mode === 'diagnose') result.diagnostics = await diagnosticsOf(scan);
-  process.stdout.write(`${RESULT_BEGIN}${JSON.stringify(result)}${RESULT_END}\n`);
+  // The parent reads this through a pipe. A pipe holds about 64 KB, and `process.exit()` right after a larger write drops what has not been read, so the
+  // parent saw "no result block" for any scan with a big diagnostics payload (62 of 272 forensics re-scans). Wait until the write has been handed over.
+  await new Promise((resolve, reject) => process.stdout.write(`${RESULT_BEGIN}${JSON.stringify(result)}${RESULT_END}\n`, (err) => (err ? reject(err) : resolve())));
 }
 
 // Only when run as a script: runner.js imports the markers and must not start a scan.
