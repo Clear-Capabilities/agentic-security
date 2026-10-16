@@ -103,7 +103,9 @@ export function classifyMiss({ label, outcome, diagnostics, policy, layer = 'dee
 
   // ---- a candidate was DROPPED with a recorded reason: filters or suppression
   const dropped = (diagnostics.suppressions || [])
-    .filter((s) => here(s) && inWindow(s.line, win) && sameKind(s, label))
+    // A drop that records neither a family nor a CWE says only that SOMETHING near the defect was dropped. Blaming the miss on it is a coincidence of location
+    // (a too-short secret candidate beside an authorization bug), so it is not a cause; it is counted in the evidence of whatever stage does explain the miss.
+    .filter((s) => here(s) && inWindow(s.line, win) && sameKind(s, label) && sameKind(s, label) !== 'location-only')
     .sort((a, b) => String(a.reason).localeCompare(String(b.reason)) || (a.line ?? 0) - (b.line ?? 0));
   if (dropped.length) {
     const d = dropped[0];
