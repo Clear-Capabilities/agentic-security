@@ -41,6 +41,8 @@ import * as crypto from 'node:crypto';
 import { verifyLastScan } from '../posture/integrity.js';
 import { verifyPatch, additiveFields } from './verify-patch.js';
 import { decidePatchApplication } from './patch-policy.js';
+import { beginBatch, commitBatch, abandonBatch, recoverBatches, faultPoint } from './batch-journal.js';
+import { spawnSync } from 'node:child_process';
 import { stateDir } from '../posture/state-dir.js';
 import { applyFix as applyFixHistory, revertEntryById as revertFixEntry } from '../posture/fix-history.js';
 import { classifyFixMaterialRisk } from '../posture/material-change.js';
@@ -233,6 +235,9 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     return { ok: false, applied: false, reason: `last-scan.json integrity check failed: ${integrityStatus}` };
   }
 
+  // A previous run that died part-way through a multi-file write is settled first, so everything below sees the tree it was in before that run.
+  const settledBatches = dryRun ? [] : await recoverBatches(scanRoot);
+
   const confined = {};
   for (const [rel, content] of Object.entries(files)) {
     let abs;
@@ -254,6 +259,12 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
       baselineHash = hashFileContentSync(abs);
     } catch (e) {
       return { ok: false, applied: false, reason: `could not read current content of ${rel} to detect concurrent changes: ${e.message}` };
+    }
+    // Binary content cannot be patched as text: reading it as UTF-8 and writing it back would corrupt it.
+    if (String(content).includes('\0')) return { ok: false, applied: false, reason: `binary content refused: the replacement for ${rel} contains NUL bytes` };
+    if (fs.existsSync(abs)) {
+      const raw = fs.readFileSync(abs);
+      if (raw.includes(0) || Buffer.from(raw.toString('utf8'), 'utf8').compare(raw) !== 0) return { ok: false, applied: false, reason: `binary file refused: ${rel} is not valid UTF-8 text, so a text patch would corrupt it` };
     }
     confined[rel] = { abs, content: String(content), baselineHash };
   }
@@ -367,7 +378,12 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
 
   // E3-06: may this be written? `requested` (a person asked) proceeds on any verified tier and carries the warnings; `automatic` needs the
   // policy to enable it and every required check to have passed, otherwise the patch is only proposed.
-  const policyDecision = fixVerification ? decidePatchApplication({ record: fixVerification, finding, materialClassification, mode: applyMode, policy }) : null;
+  const uncommitted = uncommittedFiles(scanRoot, Object.keys(confined));
+  let policyDecision = fixVerification ? decidePatchApplication({ record: fixVerification, finding, materialClassification, mode: applyMode, policy }) : null;
+  if (policyDecision && uncommitted.length) {
+    policyDecision = { ...policyDecision, warnings: [...policyDecision.warnings, `uncommitted changes in ${uncommitted.join(', ')}`] };
+    if (applyMode === 'automatic' && policyDecision.decision === 'apply') policyDecision = { ...policyDecision, decision: 'propose', reasons: [`uncommitted changes in ${uncommitted.join(', ')}: an automatic write would mix with unsaved work`] };
+  }
   if (policyDecision && policyDecision.decision !== 'apply' && !dryRun) {
     return { ok: true, applied: false, proposed: policyDecision.decision === 'propose', reason: `not applied: ${policyDecision.reasons[0]}`, files: Object.keys(confined), verify, materialClassification, policyDecision, ...additiveFields(fixVerification) };
   }
@@ -386,8 +402,11 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
   }
 
   const written = [];
+  const batch = await beginBatch(scanRoot, { findingId: finding.id || finding.findingId, files: Object.entries(confined).map(([rel, v]) => ({ file: rel, content: v.content, existed: fs.existsSync(v.abs) })) });
   try {
+    let n = 0;
     for (const [rel, v] of Object.entries(confined)) {
+      faultPoint(`before-file-${n}`);
       const fileExisted = fs.existsSync(v.abs);
       const originalContent = fileExisted ? await fsp.readFile(v.abs, 'utf8') : '';
       const entry = await applyFixHistory({
@@ -399,7 +418,10 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
         findingProvenance: finding.findingProvenance || null,
       });
       written.push({ file: rel, historyId: entry.id, backupPath: entry.backupPath, attemptOrdinal: entry.attemptOrdinal });
+      faultPoint(`after-file-${n}`);
+      n++;
     }
+    await commitBatch(scanRoot, batch);
   } catch (e) {
     // FR-306: "injected write failure restores all files" — applyFixHistory
     // already rolled back the ONE file that just failed; this rolls back
@@ -411,6 +433,7 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     for (const w of written) {
       try { await revertFixEntry(scanRoot, w.historyId); } catch { /* best-effort; original error still propagates below */ }
     }
+    await abandonBatch(scanRoot, batch).catch(() => {});
     // X-204: the rollback is its own record, after the promotion it undoes (a write that failed part-way)
     if (pn) {
       const rolled = appendRepairRecord(repairRecords, { kind: 'rolled-back', hypothesisId: finding.stableId, revision: pn.promotion?.revision ?? null, diffDigest: pn.patchDigest, reason: `the write failed and every file written in this batch was restored: ${String(e?.message || e).slice(0, 160)}` });
@@ -441,8 +464,18 @@ export async function applyVerifiedFix({ scanRoot, finding, files, fixMeta = nul
     verify: verify ? { summary: verify.summary, verifiedFull: verify.verifiedFull, degradedLegs: verify.degradedLegs || [] } : null,
     materialClassification,
     ...(policyDecision ? { policyDecision } : {}),
+    ...(settledBatches.length ? { recoveredBatches: settledBatches } : {}),
     ...(pn ? { patchNegative: pnView(pn), repairRecords } : {}),
     // the canonical record is the authority for verifiedFull and degradedLegs: it also knows when the tests ran before the patch existed
     ...(fixVerification ? additiveFields(fixVerification) : {}),
   };
+}
+
+/** Files among `rels` with uncommitted changes in a git work tree. [] when not a git repo or git is unavailable (unknown is not clean, but is not blocking). */
+function uncommittedFiles(scanRoot, rels) {
+  try {
+    const r = spawnSync('git', ['status', '--porcelain', '--', ...rels], { cwd: scanRoot, encoding: 'utf8', timeout: 8000 });
+    if (r.status !== 0 || !r.stdout) return [];
+    return r.stdout.split('\n').filter(Boolean).map((l) => l.slice(3).trim()).filter((f) => rels.includes(f));
+  } catch { return []; }
 }
