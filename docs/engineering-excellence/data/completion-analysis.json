@@ -1,0 +1,84 @@
+{
+  "schema": "agentic-security/completion-analysis@1",
+  "runId": "a72968195aa1",
+  "rows": [
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "grafana",
+      "reason": "target \"grafana\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "sentry",
+      "reason": "target \"sentry\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "discourse",
+      "reason": "target \"discourse\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "jellyfin",
+      "reason": "target \"jellyfin\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "mattermost",
+      "reason": "target \"mattermost\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "jenkins",
+      "reason": "target \"jenkins\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "third-party corpus (committed summary)",
+      "id": "nextcloud",
+      "reason": "target \"nextcloud\" has no pinned commit — run the runner with --refresh-pins to resolve it",
+      "cause": "not_attempted_unpinned"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (unscored)",
+      "id": "GHSA-2qj4-mmr9-4v2f",
+      "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-2756287819-36518/bench/independent/cache/GHSA-2qj4-mmr9-4v2f/post)",
+      "cause": "timeout"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (unscored)",
+      "id": "GHSA-f7g3-2cg6-f5hj",
+      "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-391760d52f-78952/bench/independent/cache/GHSA-f7g3-2cg6-f5hj/pre)",
+      "cause": "timeout"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (unscored)",
+      "id": "GHSA-hcm8-x79p-wx2w",
+      "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-c824a92e94-50649/bench/independent/cache/GHSA-hcm8-x79p-wx2w/pre)",
+      "cause": "timeout"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (unscored)",
+      "id": "GHSA-hpcc-26xq-25fv",
+      "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-c824a92e94-50649/bench/independent/cache/GHSA-hpcc-26xq-25fv/pre)",
+      "cause": "timeout"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (unscored)",
+      "id": "GHSA-qcxp-gm7m-4j5v",
+      "reason": "scan failed: entry exceeded 600000ms (/Users/ross/code/agentic-security-ee-measure-c824a92e94-50649/bench/independent/cache/GHSA-qcxp-gm7m-4j5v/pre)",
+      "cause": "timeout"
+    },
+    {
+      "population": "independent baseline a72968195aa1 (forensics re-scan)",
+      "id": "GHSA-794g-x443-36f7",
+      "reason": "no result within 600000 ms",
+      "cause": "timeout"
+    }
+  ]
+}

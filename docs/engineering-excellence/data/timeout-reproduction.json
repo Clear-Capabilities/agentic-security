@@ -1,0 +1,69 @@
+{
+  "schema": "agentic-security/timeout-reproduction@1",
+  "runId": "a72968195aa1",
+  "baselineLimitSeconds": 600,
+  "retryLimitMinutes": 45,
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "memoryGb": 16
+  },
+  "note": "run one at a time; other work was using the machine, see loadAverage1m per row",
+  "rows": [
+    {
+      "id": "GHSA-2qj4-mmr9-4v2f",
+      "repo": "netty/netty",
+      "language": "java",
+      "variant": "post",
+      "files": 4166,
+      "loadAverage1m": 2.72802734375,
+      "outcome": "completed",
+      "seconds": 279,
+      "findings": 293
+    },
+    {
+      "id": "GHSA-f7g3-2cg6-f5hj",
+      "repo": "apache/camel",
+      "language": "java",
+      "variant": "pre",
+      "files": 38196,
+      "loadAverage1m": 2.994140625,
+      "outcome": "completed",
+      "seconds": 779,
+      "findings": 2892
+    },
+    {
+      "id": "GHSA-hcm8-x79p-wx2w",
+      "repo": "apache/camel",
+      "language": "java",
+      "variant": "pre",
+      "files": 38196,
+      "loadAverage1m": 5.37548828125,
+      "outcome": "completed",
+      "seconds": 2093,
+      "findings": 2804
+    },
+    {
+      "id": "GHSA-hpcc-26xq-25fv",
+      "repo": "netty/netty",
+      "language": "java",
+      "variant": "pre",
+      "files": 4136,
+      "loadAverage1m": 6.486328125,
+      "outcome": "completed",
+      "seconds": 342,
+      "findings": 293
+    },
+    {
+      "id": "GHSA-qcxp-gm7m-4j5v",
+      "repo": "quarkusio/quarkus",
+      "language": "java",
+      "variant": "pre",
+      "files": 15789,
+      "loadAverage1m": 9.3837890625,
+      "outcome": "completed",
+      "seconds": 1245,
+      "findings": 1067
+    }
+  ]
+}

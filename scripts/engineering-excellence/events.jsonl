@@ -317,3 +317,17 @@
 {"at":"2026-10-16T20:01:41.658Z","revision":1403,"type":"command_started","task":"E4-06","command":"c-c144f2e1","argv0":"node"}
 {"at":"2026-10-16T20:01:42.998Z","revision":1404,"type":"command_finished","task":"E4-06","command":"c-c144f2e1","outcome":"exited","exitCode":0}
 {"at":"2026-10-16T20:01:43.256Z","revision":1405,"type":"task_done","task":"E4-06","commit":"89245dd330f5f18bbf185a265b84e0ba5a11e055","tests":1}
+{"at":"2026-10-16T20:11:17.982Z","revision":1406,"type":"task_started","task":"E6-02","attempt":1}
+{"at":"2026-10-16T20:11:18.034Z","revision":1407,"type":"command_started","task":"E6-02","command":"c-ac8000f6","argv0":"node"}
+{"at":"2026-10-16T20:11:18.147Z","revision":1408,"type":"command_finished","task":"E6-02","command":"c-ac8000f6","outcome":"exited","exitCode":1}
+{"at":"2026-10-16T20:11:20.916Z","revision":1409,"type":"command_started","task":"E6-02","command":"c-d5c06a4f","argv0":"node"}
+{"at":"2026-10-16T20:11:22.549Z","revision":1410,"type":"command_finished","task":"E6-02","command":"c-d5c06a4f","outcome":"exited","exitCode":0}
+{"at":"2026-10-16T20:11:42.756Z","revision":1411,"type":"task_blocked","task":"E6-02","kind":"external","reason":"a mistyped test file name was run (no such file); restarting the task so the evidence is for the real test"}
+{"at":"2026-10-16T20:11:43.015Z","revision":1412,"type":"task_started","task":"E6-02","attempt":2}
+{"at":"2026-10-16T20:11:47.571Z","revision":1413,"type":"command_started","task":"E6-02","command":"c-7d7bce71","argv0":"node"}
+{"at":"2026-10-16T20:11:49.386Z","revision":1414,"type":"command_finished","task":"E6-02","command":"c-7d7bce71","outcome":"exited","exitCode":0}
+{"at":"2026-10-16T20:11:49.642Z","revision":1415,"type":"task_done","task":"E6-02","commit":"02c961f7603051411ff7be12dbd8e880c45ef7ef","tests":1}
+{"at":"2026-10-16T20:12:04.852Z","revision":1416,"type":"task_started","task":"E6-08","attempt":1}
+{"at":"2026-10-16T20:12:04.910Z","revision":1417,"type":"command_started","task":"E6-08","command":"c-f412e37c","argv0":"node"}
+{"at":"2026-10-16T20:12:05.066Z","revision":1418,"type":"command_finished","task":"E6-08","command":"c-f412e37c","outcome":"exited","exitCode":0}
+{"at":"2026-10-16T20:12:11.146Z","revision":1419,"type":"task_done","task":"E6-08","commit":"02c961f7603051411ff7be12dbd8e880c45ef7ef","tests":1}
