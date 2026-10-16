@@ -18,7 +18,7 @@ import { canaryHit } from './runtime-trace-ingest.js';
 import { pathCorroboration } from './graph-reconciliation.js';
 import { buildEvidenceLevels } from './exploitability-evidence.js';
 
-export const EXPLANATION_SCHEMA = 'agentic-security/runtime-explanation@1';
+const EXPLANATION_SCHEMA = 'agentic-security/runtime-explanation@1';
 const SKIP_CANARY = new Set(['commit', 'buildHash', 'imageDigest', 'digest', 'snapshotDigest']);
 
 const canon = (v) => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
