@@ -58,7 +58,8 @@ import { proofCoverage } from './posture/proof-coverage.js';
 import { computeScanHealth, applyFreshness } from './pipeline/scan-health.js';
 import { computeCoverageLedger, summarizeCoverageForScanHealth } from './pipeline/coverage-ledger.js';
 import { runAnnotatorAsync } from './pipeline/annotator-runner.js';
-import { runDetector } from './pipeline/detector-runner.js';
+import { runDetector, setDetectorTimingSink } from './pipeline/detector-runner.js';
+import { createTelemetry, attributeErrors } from './pipeline/telemetry.js';
 import { registerProducer } from './pipeline/producer-registry.js';
 import { collectProducerResult } from './pipeline/producer-collector.js';
 import { completeEnrichment } from './pipeline/enrichment-completion.js';
@@ -8859,7 +8860,12 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){
+  // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
+  const _tel = createTelemetry({ deterministic: isDeterministic() });
+  setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
+  _tel.sample();
+  _resetSuppressions();_tel.time('index', () => _buildProjectIndex(fileContents));await _tel.timeAsync('custom-rules', () => _loadCustomRules(scanRoot));
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -8978,6 +8984,7 @@ function _deterministicFileTimings(timings) {
     });
   }
   let i=0;
+  const _tDet = Date.now();
   try {
   for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
@@ -9146,6 +9153,8 @@ function _deterministicFileTimings(timings) {
     };
     filterArr(aF); filterArr(aLogic); filterArr(aSecrets); filterArr(aSupply);
   }
+  _tel.record('detectors-per-file', Date.now() - _tDet);
+  const _tLink = Date.now();
   setProgress({current:i,total:files.length,file:"Cross-file...",phase:"Linking"});const ii=buildImportGraph(fc);const cf=crossFileTaint(pfr,fc,ii);aF.push(...cf);
   setProgress({current:i,total:files.length,file:"Stored taint...",phase:"Linking"});const storedRegistry=buildStoredTaintRegistry(fc);const stf=crossStoredTaint(fc,storedRegistry);aF.push(...stf);
   setProgress({current:i,total:files.length,file:"Session taint...",phase:"Linking"});const sess=crossSessionTaint(fc);aF.push(...sess);
@@ -9153,6 +9162,7 @@ function _deterministicFileTimings(timings) {
   // R19 (PRD §5): cross-route BOLA/BFLA over the aggregated route inventory.
   // Convention deviation is PROJECT-scoped by design: the convention is a
   // property of the codebase, not of one file (see convention-deviation.js).
+  _tel.record('cross-file-linking', Date.now() - _tLink);
   aF.push(...(runDetector(_detectorErrors,'<project>','scanConventionDeviationProject',()=>scanConventionDeviationProject(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanApiBrokenAuthz',()=>scanApiBrokenAuthz(aR))||[]));
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
@@ -9463,6 +9473,8 @@ function _deterministicFileTimings(timings) {
         }),
       });
       const elapsed = Date.now() - t0;
+      _tel.record('deep-analysis', elapsed);
+      if (irFindings.analysisIncomplete && irFindings._summaryCache && typeof irFindings._summaryCache.stats === 'function') { const st = irFindings._summaryCache.stats(); _tel.set('cache.summary.hits', st.hits); _tel.set('cache.summary.misses', st.misses); }
       if (elapsed > budgetMs) {
         // We exceeded budget — surface a single info finding so operators see it.
         aF.push({
@@ -9865,7 +9877,7 @@ function _deterministicFileTimings(timings) {
   let _annotatorIdx = 0;
   const _runAnnotator = (phase, fn) => {
     setProgress({ phase: 'Annotating', current: ++_annotatorIdx, total: _ANNOTATOR_TOTAL_ESTIMATE, file: phase });
-    return runAnnotatorAsync(_annotatorErrors, phase, fn);
+    return _tel.timeAsync(`annotator:${phase}`, () => runAnnotatorAsync(_annotatorErrors, phase, fn));
   };
   await _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
   await _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
@@ -11167,7 +11179,10 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
+  setDetectorTimingSink(null);
+  attributeErrors(_tel, { annotatorErrors: _annotatorErrors, detectorErrors: (typeof _detectorErrors !== 'undefined' ? _detectorErrors : []), deepFailure: _deepFailure, filesTimedOut: (_scanMeta && _scanMeta.filesTimedOut) || 0 });
+  _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
+  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.
