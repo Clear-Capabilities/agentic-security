@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T19:29:14.396Z",
-  "revision": 1339,
+  "updatedAt": "2026-10-16T19:34:29.117Z",
+  "revision": 1359,
   "checkout": {
-    "commit": "96a465d5ee9f0a0000490d389b9912a4fd509173",
+    "commit": "881b66b590b3584f0d5984fbf338bd79ef549535",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T19:29:14.395Z"
+    "capturedAt": "2026-10-16T19:34:29.116Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 3,
       "startedAt": "2026-10-16T17:39:24.508Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T19:28:55.166Z",
+      "heartbeatAt": "2026-10-16T19:34:15.204Z",
       "activeProcess": {
         "pid": 43127,
         "command": "node bench/independent/forensics.mjs --run a72968195aa1",
@@ -9891,18 +9891,137 @@
       "notes": []
     },
     "E7-07": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T19:32:15.330Z",
+      "completedAt": "2026-10-16T19:34:29.117Z",
+      "heartbeatAt": "2026-10-16T19:32:18.904Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "881b66b590b3584f0d5984fbf338bd79ef549535",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-670591ef",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e7-07-perspectives.test.js",
+            "test/engineering-excellence/e7-03-release-package.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T19:32:15.386Z",
+          "endedAt": "2026-10-16T19:32:18.901Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 3500,
+          "log": "scripts/engineering-excellence/logs/E7-07/2026-10-16T19-32-15-386Z-c-670591ef.log",
+          "logSha256": "501781fd605bd3cb2db0ab8fd501e1d4eadc272d64837b5d64c58b6728caba68",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E7-07",
+        "status": "done",
+        "sourceCommit": "881b66b590b3584f0d5984fbf338bd79ef549535",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/posture/assurance/release-package-verify.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e7-07-perspectives.test.js test/engineering-excellence/e7-03-release-package.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E7-07/2026-10-16T19-32-15-386Z-c-670591ef.log",
+            "logSha256": "501781fd605bd3cb2db0ab8fd501e1d4eadc272d64837b5d64c58b6728caba68",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e7-07-perspectives.test.js",
+              "scanner/test/engineering-excellence/e7-03-release-package.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "The developer",
+          "CISO and auditor views are projections of one canonical finding list built once from the release package; every view carries the same finding id",
+          "status",
+          "evidence hash and confidence (checked in the data and in the HTML data attributes); a self-contained offline page loads nothing",
+          "runs no script",
+          "escapes repository-supplied text and passes a CSP; the CLI release-view prints each view as text",
+          "json or html",
+          "verifies against a public key when given",
+          "and exits 1 when the package does not verify"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "The views read a release package; there is no command yet that assembles a package from a scan, so packages in the tests are built from sample evidence",
+          "Existing HTML and OSCAL reports were not changed; this adds a report beside them rather than extending them, and the explorer (Code Boundaries) was not given these views",
+          "Finding status comes only from fix-verification records in the package; waivers are not folded into status",
+          "The page was checked for structure and escaping by tests, not rendered in a browser"
+        ],
+        "closedAt": "2026-10-16T19:34:29.117Z"
+      },
       "notes": []
     },
     "E7-08": {

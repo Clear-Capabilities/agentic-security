@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { buildSamples } from '../../../scripts/engineering-excellence/lib/evidence-samples.mjs';
 import { buildSnapshotRef } from '../../src/posture/assurance/evidence-registry.js';
 import { MANDATORY_KINDS, buildReleasePackage, signReleasePackage, signedBytes } from '../../src/posture/assurance/release-package.js';
-import { verifyReleasePackage, MINIMUM_KINDS } from '../../../scripts/verify-release-package.mjs';
+import { verifyReleasePackage, MINIMUM_KINDS } from '../../src/posture/assurance/release-package-verify.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const VERIFIER = path.join(ROOT, 'scripts', 'verify-release-package.mjs');
@@ -53,10 +53,10 @@ test('an intact package verifies, with the offline verifier alone and from the c
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('the verifier is independent: it imports only Node built-ins, and the minimum it holds matches the producer\'s', () => {
-  const src = fs.readFileSync(VERIFIER, 'utf8');
-  const imports = [...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]);
-  assert.deepEqual(imports.sort(), ['node:crypto', 'node:fs']);
+test('the verifier is independent: it imports only Node built-ins, the command-line wrapper adds nothing but the file system, and the minimum it holds matches the producer\'s', () => {
+  const importsOf = (file) => [...fs.readFileSync(file, 'utf8').matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(importsOf(path.join(ROOT, 'scanner', 'src', 'posture', 'assurance', 'release-package-verify.js')), ['node:crypto'], 'the verifier shares no code with the producer');
+  assert.deepEqual(importsOf(VERIFIER), ['../scanner/src/posture/assurance/release-package-verify.js', 'node:fs', 'node:url']);
   assert.deepEqual([...MINIMUM_KINDS], [...MANDATORY_KINDS]);
 });
 
