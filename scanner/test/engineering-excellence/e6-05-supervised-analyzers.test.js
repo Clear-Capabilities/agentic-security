@@ -116,6 +116,20 @@ test('a missing module or export is a failed result with the reason, never a cra
   assert.deepEqual(rs.map((r) => r.status), ['failed', 'failed']); assert.match(rs[1].error, /is not an exported function/);
 });
 
+test('LIMITS ARE NUMBERS: a limit that is shell syntax or not a number is refused before anything starts, and nothing is executed', async () => {
+  const sent = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ee-e6-05-inj-')), 'PWNED');
+  try {
+    const rs = await runSupervised([
+      task('heap', 'good', ['a'], { maxHeapMb: `64; touch ${sent}` }), task('cpu', 'good', ['b'], { cpuSeconds: `1; touch ${sent}` }),
+      task('rss', 'good', ['c'], { maxRssMb: 'lots' }), task('neg', 'good', ['d'], { timeoutMs: -5 }), task('ok', 'good', ['e'], { cpuSeconds: 30 }),
+    ], { timeoutMs: 20_000 });
+    assert.deepEqual(rs.map((r) => r.status), ['failed', 'failed', 'failed', 'failed', 'completed']);
+    assert.match(rs[0].error, /invalid limit maxHeapMb/); assert.match(rs[1].error, /invalid limit cpuSeconds/);
+    assert.equal(fs.existsSync(sent), false, 'no command was run');
+    assert.equal(rs[4].result[0].id, 'f-e', 'a numeric CPU ceiling still works through the same path');
+  } finally { fs.rmSync(path.dirname(sent), { recursive: true, force: true }); }
+});
+
 test('CPU ceiling (POSIX): a busy analyzer is stopped by its CPU-seconds limit before the wall deadline', { skip: process.platform === 'win32' }, async () => {
   const t0 = Date.now();
   const [r] = await runSupervised([task('cpu', 'busyCpu', [], { cpuSeconds: 1 })], { timeoutMs: 30_000 });

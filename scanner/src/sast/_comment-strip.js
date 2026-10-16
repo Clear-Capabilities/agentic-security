@@ -1,3 +1,5 @@
+import { createStringMemo } from '../util/string-memo.js';
+
 // Replace comments with same-length whitespace (newlines preserved) so that
 // character indices in the returned string match the original source one-to-one.
 // Required by detectors that emit `line = lineOf(raw, m.index)` after running
@@ -37,7 +39,7 @@
 // and only the comment runs (a small minority of any real file) are rewritten,
 // via a native regex for the newline-preserving cases. Characters are scanned;
 // they are no longer individually concatenated.
-export function blankComments(s, lang) {
+function blankCommentsUncached(s, lang) {
   const parts = [];
   let verbatimFrom = 0;   // start of the run of input not yet emitted as-is
   let inS = null;
@@ -122,3 +124,8 @@ export function blankComments(s, lang) {
   if (verbatimFrom < s.length) parts.push(s.slice(verbatimFrom));
   return parts.join('');
 }
+
+// Every detector that wants a comment-free view of a file asks for it again; the engine alone asks about fifteen times per file. The output depends
+// only on (text, lang), so it is computed once per distinct pair. AGENTIC_SECURITY_NO_STRING_MEMO=1 turns the memo off (used to measure it).
+export const blankComments = createStringMemo((s, lang) => blankCommentsUncached(s, lang === '' ? undefined : lang), { version: 'blankComments@1', disableEnv: 'AGENTIC_SECURITY_NO_STRING_MEMO' });
+export const _blankCommentsUncached = blankCommentsUncached;

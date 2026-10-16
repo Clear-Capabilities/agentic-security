@@ -31,9 +31,15 @@ function runOne(task, o, state) {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const lim = { timeoutMs: task.timeoutMs ?? o.timeoutMs, maxHeapMb: task.maxHeapMb ?? o.maxHeapMb, maxRssMb: task.maxRssMb ?? o.maxRssMb, cpuSeconds: task.cpuSeconds ?? o.cpuSeconds };
-    const node = [`--max-old-space-size=${lim.maxHeapMb}`, CHILD];
+    // limits become command-line text, so each must be a plain positive number before it goes anywhere near a command line
+    for (const [k, v] of Object.entries(lim)) {
+      if (!(typeof v === 'number' && Number.isFinite(v) && v >= 0)) return resolve({ id: task.id, status: 'failed', ok: false, error: `invalid limit ${k}: must be a non-negative number`, durationMs: 0 });
+    }
+    const node = [`--max-old-space-size=${Math.ceil(lim.maxHeapMb)}`, CHILD];
     const posix = process.platform !== 'win32';
-    const [cmd, args] = posix && lim.cpuSeconds > 0 ? ['/bin/sh', ['-c', `ulimit -t ${Math.ceil(lim.cpuSeconds)}; exec "${process.execPath}" ${node.map((a) => `"${a}"`).join(' ')}`]] : [process.execPath, node];
+    // the CPU ceiling is applied with `ulimit` in a shell that then `exec`s node. The values are passed as positional parameters and quoted by the
+    // shell itself, so nothing from the task is ever parsed as shell syntax
+    const [cmd, args] = posix && lim.cpuSeconds > 0 ? ['/bin/sh', ['-c', 'ulimit -t "$1"; shift; exec "$@"', 'sh', String(Math.ceil(lim.cpuSeconds)), process.execPath, ...node]] : [process.execPath, node];
     const child = spawn(cmd, args, { detached: posix, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, AGENTIC_SECURITY_SUPERVISED_SPEC: JSON.stringify({ modulePath: task.modulePath, exportName: task.exportName, args: task.args || [] }) } });
     const pid = child.pid; state.pids.add(pid);
     let status = null; let msg = null; let stderr = ''; let settled = false;

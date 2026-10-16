@@ -211,6 +211,7 @@ import { applyPathConstraints } from './posture/path-predicates.js';
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
 import _v8 from 'node:v8';
 import _vm from 'node:vm';
+import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
@@ -447,7 +448,11 @@ function _ruleAppliesIn(pat, ctx){
 // comments would put the second pass into a stuck string state, blanking the
 // rest of the file. Backtick `${...}` template expressions are preserved
 // verbatim because they contain real source/sink references.
-function stripNoiseAndStrings(code){
+// Called by several detectors per file with the same text; the result depends only on the text, so it is computed once per distinct text
+// (util/string-memo.js). AGENTIC_SECURITY_NO_STRING_MEMO=1 turns the memo off.
+const _stripNoiseAndStringsMemo = createStringMemo((c) => _stripNoiseAndStringsRaw(c), { version: 'stripNoiseAndStrings@1', disableEnv: 'AGENTIC_SECURITY_NO_STRING_MEMO' });
+function stripNoiseAndStrings(code){ return _stripNoiseAndStringsMemo(code); }
+function _stripNoiseAndStringsRaw(code){
   const out = code.split('');
   const n = code.length;
   let i = 0;
