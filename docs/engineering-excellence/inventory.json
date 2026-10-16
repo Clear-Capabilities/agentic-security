@@ -1,0 +1,2563 @@
+{
+  "schemaVersion": 1,
+  "facts": {
+    "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+    "branch": "feature/engineering-excellence",
+    "worktreeDirty": true,
+    "version": "0.172.0",
+    "package": "@clear-capabilities/agentic-security-scanner",
+    "engines": {
+      "node": ">=24.0.0"
+    },
+    "node": "v24.20.0",
+    "platform": "darwin arm64",
+    "cpus": 8,
+    "memoryGb": 16,
+    "sourceFilesByDir": {
+      "(top level)": 12,
+      "artifact": 10,
+      "capabilities": 21,
+      "context-intelligence": 27,
+      "dataflow": 46,
+      "discovery": 9,
+      "egress": 3,
+      "fix": 2,
+      "integrations": 2,
+      "ir": 25,
+      "language": 60,
+      "lineage": 64,
+      "llm-validator": 16,
+      "lsp": 1,
+      "mcp": 9,
+      "pipeline": 15,
+      "posture": 306,
+      "privacy": 1,
+      "report": 3,
+      "sandbox": 13,
+      "sast": 122,
+      "sca": 11,
+      "secrets": 1,
+      "server": 5,
+      "shared": 1,
+      "util": 4
+    },
+    "sourceFileCount": 789,
+    "testFileCount": 869,
+    "testFilesByDir": {
+      "(top level)": 553,
+      "artifact": 10,
+      "capabilities": 10,
+      "cli": 23,
+      "context-intelligence": 13,
+      "dataflow": 1,
+      "deployment": 9,
+      "documentation": 5,
+      "evaluation": 12,
+      "fleet": 3,
+      "haskell": 18,
+      "helpers": 1,
+      "invariants": 8,
+      "language": 30,
+      "lineage": 71,
+      "nix": 18,
+      "pipeline": 1,
+      "portfolio": 9,
+      "posture": 25,
+      "proof-fabric": 3,
+      "release-closure": 11,
+      "report": 2,
+      "routing": 12,
+      "rule-compiler": 1,
+      "sast": 1,
+      "security": 2,
+      "server": 9,
+      "verification": 8
+    },
+    "npmScripts": {
+      "total": 184,
+      "test": 39,
+      "bench": 91
+    },
+    "scopedTestScripts": [
+      "test:bench-modules",
+      "test:capabilities",
+      "test:chrome",
+      "test:ci-parity",
+      "test:dataflow",
+      "test:deployment",
+      "test:discovery",
+      "test:documentation",
+      "test:engineering-excellence",
+      "test:eval",
+      "test:evaluation",
+      "test:extras",
+      "test:glob",
+      "test:haskell",
+      "test:invariants",
+      "test:language",
+      "test:language-gates",
+      "test:language-slow",
+      "test:language-stress",
+      "test:language-tools",
+      "test:lifecycle",
+      "test:lineage",
+      "test:loop",
+      "test:loop-real-prd",
+      "test:mcp",
+      "test:nix",
+      "test:nixos-host",
+      "test:ollama-e2e",
+      "test:portfolio",
+      "test:posture",
+      "test:python",
+      "test:release-closure",
+      "test:report",
+      "test:routing",
+      "test:sast",
+      "test:server",
+      "test:smoke",
+      "test:verification"
+    ],
+    "cliCommands": [
+      "accept",
+      "ask",
+      "attest",
+      "badge",
+      "boundaries",
+      "cache-report",
+      "cache-statusline",
+      "calibration-feedback",
+      "calibration-report",
+      "ci",
+      "compliance",
+      "context",
+      "cve-watch",
+      "dataflow",
+      "digest",
+      "explore",
+      "export",
+      "federate",
+      "fix",
+      "fleet",
+      "governance",
+      "harness",
+      "history",
+      "hunt",
+      "image",
+      "invariants",
+      "leaderboard-row",
+      "legal-hold",
+      "lsp",
+      "mcp",
+      "models",
+      "org-scan",
+      "packs",
+      "policy-explain",
+      "policy-sign",
+      "portfolio",
+      "pr-comment",
+      "pr-delta",
+      "profile",
+      "proof",
+      "provenance",
+      "remediation",
+      "reset",
+      "rule",
+      "rule-synth",
+      "rules",
+      "runtime",
+      "scan",
+      "scan-baseline",
+      "secure",
+      "setup",
+      "ship",
+      "supply",
+      "tickets",
+      "triage",
+      "undo",
+      "validator-cache",
+      "verify",
+      "verify-attestation",
+      "what-if"
+    ],
+    "mcpTools": {
+      "dataflow-tools.js": [
+        "dataflow_get_graph",
+        "dataflow_get_node",
+        "dataflow_get_edge",
+        "dataflow_get_flow"
+      ],
+      "invariant-tools.js": [
+        "invariant_scenario_export"
+      ],
+      "portfolio-tools.js": [
+        "portfolio_progress"
+      ],
+      "tools.js": [
+        "scan_diff",
+        "query_taint",
+        "explain_finding",
+        "apply_fix",
+        "verify_fix",
+        "synthesize_fix",
+        "find_rule_module",
+        "append_scratchpad",
+        "read_scratchpad",
+        "append_agents_memory",
+        "read_agents_memory",
+        "query_triage_memory",
+        "query_findings_memory",
+        "lookup_cve",
+        "query_cache_telemetry",
+        "synthesize_sca_upgrade",
+        "apply_sca_upgrade"
+      ]
+    },
+    "mcpToolCount": 23,
+    "mcpToolsRegistered": {
+      "count": 23,
+      "names": [
+        "scan_diff",
+        "query_taint",
+        "explain_finding",
+        "apply_fix",
+        "verify_fix",
+        "synthesize_fix",
+        "find_rule_module",
+        "append_scratchpad",
+        "read_scratchpad",
+        "append_agents_memory",
+        "read_agents_memory",
+        "lookup_cve",
+        "synthesize_sca_upgrade",
+        "apply_sca_upgrade",
+        "query_triage_memory",
+        "query_findings_memory",
+        "query_cache_telemetry",
+        "dataflow_get_graph",
+        "dataflow_get_node",
+        "dataflow_get_edge",
+        "dataflow_get_flow",
+        "invariant_scenario_export",
+        "portfolio_progress"
+      ]
+    },
+    "slashCommandFiles": 17,
+    "agentFiles": 10,
+    "benchDirs": [
+      "_lib",
+      "agent-tasks",
+      "bigquery-github",
+      "cve-replay",
+      "data-lineage",
+      "determinism",
+      "engine-recall",
+      "engine-reconnect",
+      "family-producers",
+      "fix-correctness",
+      "holdout-independent",
+      "iac-coverage",
+      "independent",
+      "independent-eval",
+      "language-support",
+      "layer-recall",
+      "live-feed",
+      "memory",
+      "mutation",
+      "nist-800-171-labels",
+      "owasp-benchmark-v1.2",
+      "polyglot",
+      "privacy-recall",
+      "prompt-injection",
+      "proof-corpus",
+      "protection-verdict",
+      "provenance",
+      "provenance-accuracy",
+      "realworld-recall",
+      "router-replay",
+      "sard",
+      "sard-juliet-java",
+      "sca-replay",
+      "secrets-precision",
+      "self-scan",
+      "ttff"
+    ],
+    "docsFiles": 296,
+    "claudeMdFiles": [
+      "CLAUDE.md",
+      "frontend/CLAUDE.md",
+      "scanner/CLAUDE.md",
+      "scanner/src/artifact/CLAUDE.md",
+      "scanner/src/capabilities/CLAUDE.md",
+      "scanner/src/context-intelligence/CLAUDE.md",
+      "scanner/src/dataflow/CLAUDE.md",
+      "scanner/src/discovery/CLAUDE.md",
+      "scanner/src/ir/CLAUDE.md",
+      "scanner/src/language/CLAUDE.md",
+      "scanner/src/lineage/CLAUDE.md",
+      "scanner/src/mcp/CLAUDE.md",
+      "scanner/src/posture/CLAUDE.md",
+      "scanner/src/sandbox/CLAUDE.md",
+      "scanner/src/sast/CLAUDE.md",
+      "scanner/src/sca/CLAUDE.md",
+      "scanner/src/server/CLAUDE.md"
+    ],
+    "generatedAt": "2026-10-16T12:37:19.835Z"
+  },
+  "capabilities": [
+    {
+      "id": "cli-scan",
+      "name": "Scan command and engine",
+      "epics": [
+        "E0",
+        "E6"
+      ],
+      "source": [
+        "scanner/bin/agentic-security.js",
+        "scanner/src/runScan.js",
+        "scanner/src/engine.js"
+      ],
+      "scopes": [
+        "smoke"
+      ],
+      "tests": [
+        "scanner/test/smoke.test.js",
+        "scanner/test/backward-default.test.js",
+        "scanner/test/ci-parity.test.js"
+      ],
+      "docs": [
+        "docs/guides/scanning.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "37 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "cli-scan",
+        "files": [
+          "scanner/test/smoke.test.js",
+          "scanner/test/backward-default.test.js",
+          "scanner/test/ci-parity.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/smoke.test.js",
+          "test/backward-default.test.js",
+          "test/ci-parity.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 28645,
+        "counts": {
+          "tests": 37,
+          "pass": 37,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-cli-scan.log",
+        "logSha256": "4881abeacd7cf41d5a464b34927f3a09f7b532a5bc01cdfee9ef814b521b5ddb",
+        "ranAt": "2026-10-16T12:34:18.904Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "sast-detectors",
+      "name": "SAST detector modules",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/sast"
+      ],
+      "scopes": [
+        "sast"
+      ],
+      "tests": [
+        "scanner/test/sibling-guard.test.js"
+      ],
+      "docs": [
+        "scanner/src/sast/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "11 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "sast-detectors",
+        "files": [
+          "scanner/test/sibling-guard.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/sibling-guard.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 441,
+        "counts": {
+          "tests": 11,
+          "pass": 11,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-sast-detectors.log",
+        "logSha256": "443efcf9071205aa56168bac96691f2a4f98a5946118caa9617d0a2ed77830a5",
+        "ranAt": "2026-10-16T12:34:19.559Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "ir-layer",
+      "name": "Layer-1 IR (JS/TS, Python, Java, tree-sitter languages)",
+      "epics": [
+        "E2",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/ir"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/closure-capture.test.js"
+      ],
+      "docs": [
+        "scanner/src/ir/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "12 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "ir-layer",
+        "files": [
+          "scanner/test/closure-capture.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/closure-capture.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 154,
+        "counts": {
+          "tests": 12,
+          "pass": 12,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-ir-layer.log",
+        "logSha256": "c644eaae775c023520944a81c0ff527a162c74a39211ef020565b9ad88191b2a",
+        "ranAt": "2026-10-16T12:34:19.992Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "taint-engine",
+      "name": "Layer-2 taint engine (k=1 monovariant return-taint, k=2 summaries)",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/dataflow"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/interproc-k2.test.js",
+        "scanner/test/collection-taint.test.js",
+        "scanner/test/csharp-cross-file.test.js",
+        "scanner/test/java-structural-cross-file.test.js"
+      ],
+      "docs": [
+        "scanner/src/dataflow/CLAUDE.md"
+      ],
+      "partial": "context sensitivity is limited (k=1/k=2); heap, alias and closure modelling is partial and is the subject of E2-03",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "context sensitivity is limited (k=1/k=2); heap, alias and closure modelling is partial and is the subject of E2-03"
+      ],
+      "run": {
+        "capability": "taint-engine",
+        "files": [
+          "scanner/test/interproc-k2.test.js",
+          "scanner/test/collection-taint.test.js",
+          "scanner/test/csharp-cross-file.test.js",
+          "scanner/test/java-structural-cross-file.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/interproc-k2.test.js",
+          "test/collection-taint.test.js",
+          "test/csharp-cross-file.test.js",
+          "test/java-structural-cross-file.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 782,
+        "counts": {
+          "tests": 32,
+          "pass": 32,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-taint-engine.log",
+        "logSha256": "cd6d52e94cb6d5c04c36420acfff1e04fa3770f873b7f7c16a05422d155edc3b",
+        "ranAt": "2026-10-16T12:34:20.992Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "guard-recognition",
+      "name": "Guard and sanitizer recognition",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/dataflow/guard-dominance.js",
+        "scanner/src/dataflow/sanitizer-gate.js",
+        "scanner/src/dataflow/sanitizer-proof.js",
+        "scanner/src/sast/sibling-guard.js"
+      ],
+      "scopes": [
+        "dataflow",
+        "sast"
+      ],
+      "tests": [
+        "scanner/test/guard-recognition.test.js",
+        "scanner/test/guard-window-identifier-correlation.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "10 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "guard-recognition",
+        "files": [
+          "scanner/test/guard-recognition.test.js",
+          "scanner/test/guard-window-identifier-correlation.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/guard-recognition.test.js",
+          "test/guard-window-identifier-correlation.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 618,
+        "counts": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-guard-recognition.log",
+        "logSha256": "7b3cda23a5b1619fa430d6ff56815e9b2c4de8c94e48e341fb2dba3c16d20447",
+        "ranAt": "2026-10-16T12:34:21.864Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "suppression-ledger",
+      "name": "Suppression pragmas and their visible ledger",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/posture/suppressions.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/suppression-visibility.test.js",
+        "scanner/test/suppression-exceptions.test.js",
+        "scanner/test/ignore-pragma.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "30 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "suppression-ledger",
+        "files": [
+          "scanner/test/suppression-visibility.test.js",
+          "scanner/test/suppression-exceptions.test.js",
+          "scanner/test/ignore-pragma.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/suppression-visibility.test.js",
+          "test/suppression-exceptions.test.js",
+          "test/ignore-pragma.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1795,
+        "counts": {
+          "tests": 30,
+          "pass": 30,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-suppression-ledger.log",
+        "logSha256": "24395a01befac18dad9a1307bbdecacc2df403f1a2668b7c091ade5d204234b9",
+        "ranAt": "2026-10-16T12:34:23.914Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "scan-health",
+      "name": "scanHealth and assurance modes",
+      "epics": [
+        "E0",
+        "E6",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/pipeline/scan-health.js",
+        "scanner/src/pipeline/assurance-mode.js",
+        "scanner/src/pipeline/coverage-ledger.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/scan-health.test.js",
+        "scanner/test/assurance-mode.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "55 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "scan-health",
+        "files": [
+          "scanner/test/scan-health.test.js",
+          "scanner/test/assurance-mode.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/scan-health.test.js",
+          "test/assurance-mode.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 4854,
+        "counts": {
+          "tests": 55,
+          "pass": 55,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-scan-health.log",
+        "logSha256": "34c557595056bcab09f5846e39b6b627280eeb871b2d38fe367bc19e97f39d4d",
+        "ranAt": "2026-10-16T12:34:29.020Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "analyzer-isolation",
+      "name": "Supervised analyzer workers",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scanner/src/pipeline/analyzer-supervisor.js",
+        "scanner/src/pipeline/analyzer-worker.js",
+        "scanner/src/pipeline/detector-runner.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/analyzer-supervisor.test.js"
+      ],
+      "docs": [],
+      "partial": "isolation covers analyzers run through the supervisor; RAM and CPU caps are not enforced per worker (E6-05)",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "isolation covers analyzers run through the supervisor; RAM and CPU caps are not enforced per worker (E6-05)"
+      ],
+      "run": {
+        "capability": "analyzer-isolation",
+        "files": [
+          "scanner/test/analyzer-supervisor.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/analyzer-supervisor.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1565,
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-analyzer-isolation.log",
+        "logSha256": "ed58b01600b2c84d90434c7406f0fafb682ba1dfaf1b9200cf69c4109ff8f818",
+        "ranAt": "2026-10-16T12:34:30.798Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "incremental-cache",
+      "name": "Incremental analysis cache",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scanner/src/dataflow/incremental.js",
+        "scanner/src/dataflow/k2-summary-cache.js"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/incremental-cache.test.js",
+        "scanner/test/incremental-parity.test.js"
+      ],
+      "docs": [],
+      "partial": "cache keys cover content and tool version; transitive-dependency and feed-freshness invalidation is the subject of E6-04",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "cache keys cover content and tool version; transitive-dependency and feed-freshness invalidation is the subject of E6-04"
+      ],
+      "run": {
+        "capability": "incremental-cache",
+        "files": [
+          "scanner/test/incremental-cache.test.js",
+          "scanner/test/incremental-parity.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/incremental-cache.test.js",
+          "test/incremental-parity.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 963,
+        "counts": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-incremental-cache.log",
+        "logSha256": "fbf7ed483e864f3ab979ae52994cc8298095498deaae2879730029abf4a29fdf",
+        "ranAt": "2026-10-16T12:34:31.997Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "determinism",
+      "name": "Deterministic output",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scripts/determinism-compare.mjs"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/determinism-cross-machine.test.js",
+        "scanner/test/format-determinism.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "27 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "determinism",
+        "files": [
+          "scanner/test/determinism-cross-machine.test.js",
+          "scanner/test/format-determinism.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/determinism-cross-machine.test.js",
+          "test/format-determinism.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 56032,
+        "counts": {
+          "tests": 27,
+          "pass": 27,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-determinism.log",
+        "logSha256": "772aa1302431fe353d55ccd04edf17aa3fc7ff36f6574f0fe171db8e0afae753",
+        "ranAt": "2026-10-16T12:35:28.291Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "fix-synthesis",
+      "name": "Fix synthesis, verification loop and honesty gate",
+      "epics": [
+        "E3"
+      ],
+      "source": [
+        "scanner/src/posture/fix-verify.js",
+        "scanner/src/posture/fix-verify-loop.js",
+        "scanner/src/posture/fix-honesty-gate.js",
+        "scanner/src/posture/deterministic-fix.js"
+      ],
+      "scopes": [
+        "verification",
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/fix-verify-loop.test.js",
+        "scanner/test/fix-verify-tests.test.js",
+        "scanner/test/fix-honesty-gate.test.js"
+      ],
+      "docs": [
+        "docs/guides/fixing-vulnerabilities.md"
+      ],
+      "partial": "several patch routes (CLI fix, MCP apply_fix, autopilot) exist; whether they share one verification contract is E3-01",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "several patch routes (CLI fix, MCP apply_fix, autopilot) exist; whether they share one verification contract is E3-01"
+      ],
+      "run": {
+        "capability": "fix-synthesis",
+        "files": [
+          "scanner/test/fix-verify-loop.test.js",
+          "scanner/test/fix-verify-tests.test.js",
+          "scanner/test/fix-honesty-gate.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/fix-verify-loop.test.js",
+          "test/fix-verify-tests.test.js",
+          "test/fix-honesty-gate.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 3336,
+        "counts": {
+          "tests": 58,
+          "pass": 58,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-fix-synthesis.log",
+        "logSha256": "6be1b2568e3d36a4adf1ea18c0ce77c63543493f8af0b638569e07f5014c2fb9",
+        "ranAt": "2026-10-16T12:35:31.880Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "apply-fix-service",
+      "name": "Apply-fix service and approvers",
+      "epics": [
+        "E3"
+      ],
+      "source": [
+        "scanner/src/fix/apply-fix-service.js",
+        "scanner/src/fix/approver-registry.js"
+      ],
+      "scopes": [
+        "verification",
+        "mcp"
+      ],
+      "tests": [
+        "scanner/test/mcp-apply-fix-multifile.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "16 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "apply-fix-service",
+        "files": [
+          "scanner/test/mcp-apply-fix-multifile.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/mcp-apply-fix-multifile.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 567,
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-apply-fix-service.log",
+        "logSha256": "8e2de2cee34623aacd4f46c303261fa78c47ee45b15fdbf4523caf1e8b7c9248",
+        "ranAt": "2026-10-16T12:35:32.699Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "exploit-proof",
+      "name": "Exploit proof (symbolic path feasibility, execution proof, proof tiers)",
+      "epics": [
+        "E3",
+        "E4"
+      ],
+      "source": [
+        "scanner/src/dataflow/exploit-prover.js",
+        "scanner/src/dataflow/symbolic-exec.js",
+        "scanner/src/posture/execution-proof.js",
+        "scanner/src/posture/proof-tier.js",
+        "scanner/src/posture/prove-findings.js"
+      ],
+      "scopes": [
+        "verification",
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/execution-proof.test.js",
+        "scanner/test/smt-path-feasibility.test.js",
+        "scanner/test/symbolic-exec-proof.test.js"
+      ],
+      "docs": [
+        "docs/guides/exploit-proof-fabric.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "43 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "exploit-proof",
+        "files": [
+          "scanner/test/execution-proof.test.js",
+          "scanner/test/smt-path-feasibility.test.js",
+          "scanner/test/symbolic-exec-proof.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/execution-proof.test.js",
+          "test/smt-path-feasibility.test.js",
+          "test/symbolic-exec-proof.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1868,
+        "counts": {
+          "tests": 43,
+          "pass": 43,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-exploit-proof.log",
+        "logSha256": "fc6437778ae943b200338511dd57af74435c6e93a433f26fdf04ef1d7b2c1672",
+        "ranAt": "2026-10-16T12:35:34.811Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "sandbox",
+      "name": "Sandboxed execution and capability enforcement",
+      "epics": [
+        "E3",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/sandbox",
+        "scanner/src/capabilities"
+      ],
+      "scopes": [
+        "capabilities"
+      ],
+      "tests": [
+        "scanner/test/sandbox.test.js",
+        "scanner/test/sandbox-escape.test.js"
+      ],
+      "docs": [
+        "scanner/src/capabilities/CLAUDE.md",
+        "scanner/src/sandbox/CLAUDE.md"
+      ],
+      "partial": "enforced mode is advertised for Linux only and Linux is partially verified; macOS runs are host-proved",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "enforced mode is advertised for Linux only and Linux is partially verified; macOS runs are host-proved"
+      ],
+      "run": {
+        "capability": "sandbox",
+        "files": [
+          "scanner/test/sandbox.test.js",
+          "scanner/test/sandbox-escape.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/sandbox.test.js",
+          "test/sandbox-escape.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 8616,
+        "counts": {
+          "tests": 44,
+          "pass": 44,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-sandbox.log",
+        "logSha256": "d78bf99fd3916995e94cb7cc4aa0ef1a7e4bea1e4eadca86cf0520195c692acd",
+        "ranAt": "2026-10-16T12:35:43.679Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "dci",
+      "name": "Deterministic Context Intelligence (context command)",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/context-intelligence"
+      ],
+      "scopes": [
+        "discovery"
+      ],
+      "tests": [
+        "scanner/test/context-intelligence/build-js.test.js",
+        "scanner/test/context-intelligence/review-queue.test.js"
+      ],
+      "docs": [
+        "docs/guides/context-intelligence.md",
+        "docs/architecture/context-intelligence.md",
+        "scanner/src/context-intelligence/CLAUDE.md"
+      ],
+      "partial": "evaluation is synthetic with a scripted reader; no real adjudicated holdout exists, so review quality is unmeasured",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "evaluation is synthetic with a scripted reader; no real adjudicated holdout exists, so review quality is unmeasured"
+      ],
+      "run": {
+        "capability": "dci",
+        "files": [
+          "scanner/test/context-intelligence/build-js.test.js",
+          "scanner/test/context-intelligence/review-queue.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/context-intelligence/build-js.test.js",
+          "test/context-intelligence/review-queue.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 832,
+        "counts": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-dci.log",
+        "logSha256": "ec1db7fc746894d7105e89152616dda0e44eb851877bf814bd63e0ac66d4c8f8",
+        "ranAt": "2026-10-16T12:35:44.772Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "llm-discovery",
+      "name": "LLM candidate discovery (hunt) with deterministic gating",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/discovery"
+      ],
+      "scopes": [
+        "discovery"
+      ],
+      "tests": [
+        "scanner/test/discovery-hunter.test.js",
+        "scanner/test/discovery-confirm.test.js",
+        "scanner/test/discovery-disprove.test.js",
+        "scanner/test/discovery-judge.test.js"
+      ],
+      "docs": [
+        "scanner/src/discovery/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "39 tests passed in 4 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "llm-discovery",
+        "files": [
+          "scanner/test/discovery-hunter.test.js",
+          "scanner/test/discovery-confirm.test.js",
+          "scanner/test/discovery-disprove.test.js",
+          "scanner/test/discovery-judge.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/discovery-hunter.test.js",
+          "test/discovery-confirm.test.js",
+          "test/discovery-disprove.test.js",
+          "test/discovery-judge.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 221,
+        "counts": {
+          "tests": 39,
+          "pass": 39,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-discovery.log",
+        "logSha256": "e892a122aadb54878ba50083ea63b106a32336d36187285b09332facb40c276f",
+        "ranAt": "2026-10-16T12:35:45.244Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "business-invariants",
+      "name": "Business-logic invariants",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/posture/invariants"
+      ],
+      "scopes": [
+        "invariants"
+      ],
+      "tests": [
+        "scanner/test/invariants/invariant-lifecycle.test.js",
+        "scanner/test/invariants/business-coverage.test.js"
+      ],
+      "docs": [
+        "docs/guides/business-logic-invariants.md"
+      ],
+      "partial": "invariants are declared and checked on the existing evidence; first-class machine-checkable invariants with cross-route propagation are E4-02 and E4-03",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "invariants are declared and checked on the existing evidence; first-class machine-checkable invariants with cross-route propagation are E4-02 and E4-03"
+      ],
+      "run": {
+        "capability": "business-invariants",
+        "files": [
+          "scanner/test/invariants/invariant-lifecycle.test.js",
+          "scanner/test/invariants/business-coverage.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/invariants/invariant-lifecycle.test.js",
+          "test/invariants/business-coverage.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 4036,
+        "counts": {
+          "tests": 34,
+          "pass": 34,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-business-invariants.log",
+        "logSha256": "5a30343432f6060affed03b7fd165afba39294fc0d4c99adc4e8e064ce1b2993",
+        "ranAt": "2026-10-16T12:35:49.494Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "egress-policy",
+      "name": "Model egress policy, redaction and offline mode",
+      "epics": [
+        "E4",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/egress"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/egress-policy.test.js",
+        "scanner/test/egress-policy-integration.test.js",
+        "scanner/test/egress-audit.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "34 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "egress-policy",
+        "files": [
+          "scanner/test/egress-policy.test.js",
+          "scanner/test/egress-policy-integration.test.js",
+          "scanner/test/egress-audit.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/egress-policy.test.js",
+          "test/egress-policy-integration.test.js",
+          "test/egress-audit.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 224,
+        "counts": {
+          "tests": 34,
+          "pass": 34,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-egress-policy.log",
+        "logSha256": "907727534493e6c683ee86ac8f184b0823ed2f5067c6fc4d6768c0d3f15283ce",
+        "ranAt": "2026-10-16T12:35:49.966Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "llm-validator",
+      "name": "Layer-3 LLM validator",
+      "epics": [
+        "E4",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/llm-validator"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/llm-validator-consistency.test.js",
+        "scanner/test/cost-ceiling.test.js"
+      ],
+      "docs": [],
+      "partial": "default-on only when an endpoint is configured",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "default-on only when an endpoint is configured"
+      ],
+      "run": {
+        "capability": "llm-validator",
+        "files": [
+          "scanner/test/llm-validator-consistency.test.js",
+          "scanner/test/cost-ceiling.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/llm-validator-consistency.test.js",
+          "test/cost-ceiling.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 187,
+        "counts": {
+          "tests": 21,
+          "pass": 21,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-validator.log",
+        "logSha256": "966c9d579aa2ac07ee76d9bca93495c4a1e2c6821b3ec88c9c12146c6312159f",
+        "ranAt": "2026-10-16T12:35:50.403Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "runtime-correlation",
+      "name": "Runtime observation and correlation",
+      "epics": [
+        "E5"
+      ],
+      "source": [
+        "scanner/src/lineage/runtime-observation.js",
+        "scanner/src/lineage/runtime-assurance.js",
+        "scanner/src/posture/runtime-correlation.js"
+      ],
+      "scopes": [
+        "lineage",
+        "deployment"
+      ],
+      "tests": [
+        "scanner/test/container-runtime.test.js",
+        "scanner/test/posture/assurance-contracts.test.js"
+      ],
+      "docs": [
+        "docs/guides/runtime-twin.md"
+      ],
+      "partial": "identity binding of observations to a deployed build digest is E5-02",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "identity binding of observations to a deployed build digest is E5-02"
+      ],
+      "run": {
+        "capability": "runtime-correlation",
+        "files": [
+          "scanner/test/container-runtime.test.js",
+          "scanner/test/posture/assurance-contracts.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/container-runtime.test.js",
+          "test/posture/assurance-contracts.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 171,
+        "counts": {
+          "tests": 29,
+          "pass": 29,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-runtime-correlation.log",
+        "logSha256": "f57baf2be58231d101bc27d88f26f5092f90bdfa9c128a004ea80bb6c70c2ac7",
+        "ranAt": "2026-10-16T12:35:50.827Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "dataflow-explorer",
+      "name": "Data Flow Explorer graph and local server",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/lineage",
+        "scanner/src/server"
+      ],
+      "scopes": [
+        "lineage",
+        "server"
+      ],
+      "tests": [
+        "scanner/test/lineage-scan-wiring.test.js",
+        "scanner/test/lineage-artifact-write.test.js"
+      ],
+      "docs": [
+        "docs/guides/data-flow-explorer.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "6 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "dataflow-explorer",
+        "files": [
+          "scanner/test/lineage-scan-wiring.test.js",
+          "scanner/test/lineage-artifact-write.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/lineage-scan-wiring.test.js",
+          "test/lineage-artifact-write.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 1021,
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-dataflow-explorer.log",
+        "logSha256": "8061a32469b9a9ae22baca350676d9b3b4d7cdc3c63042dede091aed56d3f7ee",
+        "ranAt": "2026-10-16T12:35:52.058Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "fleet",
+      "name": "Fleet scanning and cross-repository graph",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/fleet",
+        "scanner/src/posture/fleet.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/fleet.test.js"
+      ],
+      "docs": [
+        "docs/guides/fleet.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "49 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "fleet",
+        "files": [
+          "scanner/test/fleet.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/fleet.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 217,
+        "counts": {
+          "tests": 49,
+          "pass": 49,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-fleet.log",
+        "logSha256": "a0484487dc26918aae1260752b3ef5d1fe87dfcf1faba5aeae2d8fbc5a2f71ec",
+        "ranAt": "2026-10-16T12:35:52.527Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "artifact-provenance",
+      "name": "Source-to-artifact security and provenance (image scan, VEX)",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/artifact"
+      ],
+      "scopes": [
+        "deployment"
+      ],
+      "tests": [
+        "scanner/test/vex.test.js",
+        "scanner/test/image-packages.test.js"
+      ],
+      "docs": [
+        "docs/guides/artifact-provenance.md",
+        "scanner/src/artifact/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "7 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "artifact-provenance",
+        "files": [
+          "scanner/test/vex.test.js",
+          "scanner/test/image-packages.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/vex.test.js",
+          "test/image-packages.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 354,
+        "counts": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-artifact-provenance.log",
+        "logSha256": "f1a7e9c03a6ac49150a2ba7046e2ed1604b1a80cc1e55d6b9bdb6709629edf04",
+        "ranAt": "2026-10-16T12:35:53.133Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "finding-provenance",
+      "name": "Finding provenance (introducing commit)",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/provenance"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/provenance.test.js"
+      ],
+      "docs": [
+        "docs/guides/finding-provenance.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "5 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "finding-provenance",
+        "files": [
+          "scanner/test/provenance.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/provenance.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 152,
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-finding-provenance.log",
+        "logSha256": "75d228d961e39bbacdf865a5012cde727715cc1f0bbf5479963b2987adae9c52",
+        "ranAt": "2026-10-16T12:35:53.497Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "signed-evidence",
+      "name": "Signed finding evidence bundles and attestation",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/evidence-bundle.js",
+        "scanner/src/posture/attestation.js",
+        "scanner/src/posture/provenance-evidence-bundle.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/evidence-bundle.test.js",
+        "scanner/test/verify-attestation-cli.test.js"
+      ],
+      "docs": [],
+      "partial": "bundles are per finding; a release-level package is E7-03",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "bundles are per finding; a release-level package is E7-03"
+      ],
+      "run": {
+        "capability": "signed-evidence",
+        "files": [
+          "scanner/test/evidence-bundle.test.js",
+          "scanner/test/verify-attestation-cli.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/evidence-bundle.test.js",
+          "test/verify-attestation-cli.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2634,
+        "counts": {
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-signed-evidence.log",
+        "logSha256": "f7f865c3744f82caf4ec1aa32eb6b9871d80412ec3e879906a3e422a41122e8a",
+        "ranAt": "2026-10-16T12:35:56.376Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "oscal",
+      "name": "OSCAL emission and compliance truth",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/report/oscal.js"
+      ],
+      "scopes": [
+        "report"
+      ],
+      "tests": [
+        "scanner/test/oscal-conformance.test.js"
+      ],
+      "docs": [
+        "docs/OSCAL.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "15 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "oscal",
+        "files": [
+          "scanner/test/oscal-conformance.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/oscal-conformance.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 362,
+        "counts": {
+          "tests": 15,
+          "pass": 15,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-oscal.log",
+        "logSha256": "4fe61035151ffc999be6b77e2c33e37c869b4d8b4bf70d4c6e3f60324c98c4a6",
+        "ranAt": "2026-10-16T12:35:56.990Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "compliance-mapping",
+      "name": "Compliance framework mapping",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/compliance-mapping-liveness.test.js",
+        "scanner/test/compliance-evidence-binding.test.js"
+      ],
+      "docs": [
+        "docs/guides/compliance.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "34 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "compliance-mapping",
+        "files": [
+          "scanner/test/compliance-mapping-liveness.test.js",
+          "scanner/test/compliance-evidence-binding.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/compliance-mapping-liveness.test.js",
+          "test/compliance-evidence-binding.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 269,
+        "counts": {
+          "tests": 34,
+          "pass": 34,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-compliance-mapping.log",
+        "logSha256": "d740b69fbc8fe6e4215f88e4017ecd0ba305c2dd91cd609def9f3a039f747188",
+        "ranAt": "2026-10-16T12:35:57.470Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "privacy-controls",
+      "name": "Privacy analysis, retention and legal hold",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/privacy",
+        "scanner/src/posture/retention-policy.js",
+        "scanner/src/posture/legal-hold.js",
+        "scanner/src/dataflow/privacy-governance.js"
+      ],
+      "scopes": [
+        "posture",
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/retention-policy.test.js",
+        "scanner/test/legal-hold.test.js",
+        "scanner/test/privacy-governance.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "50 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "privacy-controls",
+        "files": [
+          "scanner/test/retention-policy.test.js",
+          "scanner/test/legal-hold.test.js",
+          "scanner/test/privacy-governance.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/retention-policy.test.js",
+          "test/legal-hold.test.js",
+          "test/privacy-governance.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2997,
+        "counts": {
+          "tests": 50,
+          "pass": 50,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-privacy-controls.log",
+        "logSha256": "1a6bad7aaf7a9052ed3e7c7d0e0ad68bf9a73175b324230a31529b0720a24793",
+        "ranAt": "2026-10-16T12:36:00.723Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "mcp-server",
+      "name": "MCP server (17 tools, 2 write)",
+      "epics": [
+        "E3",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/mcp"
+      ],
+      "scopes": [
+        "mcp"
+      ],
+      "tests": [
+        "scanner/test/mcp-audit.test.js",
+        "scanner/test/mcp-dataflow-tools.test.js",
+        "scanner/test/agent-mcp-tools.test.js"
+      ],
+      "docs": [
+        "scanner/src/mcp/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "37 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "mcp-server",
+        "files": [
+          "scanner/test/mcp-audit.test.js",
+          "scanner/test/mcp-dataflow-tools.test.js",
+          "scanner/test/agent-mcp-tools.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/mcp-audit.test.js",
+          "test/mcp-dataflow-tools.test.js",
+          "test/agent-mcp-tools.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2412,
+        "counts": {
+          "tests": 37,
+          "pass": 37,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-mcp-server.log",
+        "logSha256": "9a0ae015d0e1c60a7d3a8deae6a6e06fe462180406530538ac2fe56c72a368c6",
+        "ranAt": "2026-10-16T12:36:03.376Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "lsp-server",
+      "name": "LSP server",
+      "epics": [
+        "E8"
+      ],
+      "source": [
+        "scanner/src/lsp"
+      ],
+      "scopes": [],
+      "tests": [
+        "scanner/test/lsp-server.test.js",
+        "scanner/test/lsp-protocol-smoke.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "9 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "lsp-server",
+        "files": [
+          "scanner/test/lsp-server.test.js",
+          "scanner/test/lsp-protocol-smoke.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/lsp-server.test.js",
+          "test/lsp-protocol-smoke.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 2401,
+        "counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-lsp-server.log",
+        "logSha256": "4737b47b88abbde76be77fc3e1f459a023abf337f27765914455d2cba1517b89",
+        "ranAt": "2026-10-16T12:36:06.000Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "language-support",
+      "name": "Haskell and Nix language support registry",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/language"
+      ],
+      "scopes": [
+        "haskell",
+        "nix",
+        "language"
+      ],
+      "tests": [
+        "scanner/test/language/capability-ledger.test.js"
+      ],
+      "docs": [
+        "docs/language-support.md",
+        "scanner/src/language/CLAUDE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "14 tests passed in 1 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "language-support",
+        "files": [
+          "scanner/test/language/capability-ledger.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/language/capability-ledger.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 227,
+        "counts": {
+          "tests": 14,
+          "pass": 14,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-language-support.log",
+        "logSha256": "6219891db1ff1da2e39c8a47862ee94e5014c65c94541a290dcc22dd6c30c7e4",
+        "ranAt": "2026-10-16T12:37:19.418Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "scorecard",
+      "name": "Accuracy scorecard generation",
+      "epics": [
+        "E1",
+        "E8"
+      ],
+      "source": [
+        "scripts/scorecard.mjs",
+        "scripts/scorecard-check.mjs",
+        "scanner/src/posture/accuracy-scorecard.js"
+      ],
+      "scopes": [
+        "evaluation"
+      ],
+      "tests": [
+        "scanner/test/scorecard.test.js",
+        "scanner/test/scorecard-gate.test.js",
+        "scanner/test/accuracy-scorecard.test.js"
+      ],
+      "docs": [
+        "docs/SCORECARD.md",
+        "docs/METRICS.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "63 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "scorecard",
+        "files": [
+          "scanner/test/scorecard.test.js",
+          "scanner/test/scorecard-gate.test.js",
+          "scanner/test/accuracy-scorecard.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/scorecard.test.js",
+          "test/scorecard-gate.test.js",
+          "test/accuracy-scorecard.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 421,
+        "counts": {
+          "tests": 63,
+          "pass": 63,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-scorecard.log",
+        "logSha256": "a7c0b9f4b6959aec16f4d98fe1798f495fe3d9d03033eeaa62cc96dada7ae3b5",
+        "ranAt": "2026-10-16T12:36:07.179Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "evaluation-holdout",
+      "name": "Held-out evaluation tooling",
+      "epics": [
+        "E1"
+      ],
+      "source": [
+        "scanner/src/posture/holdout-eval.js",
+        "scripts/independent-population-gate.mjs"
+      ],
+      "scopes": [
+        "evaluation"
+      ],
+      "tests": [
+        "scanner/test/holdout-eval.test.js",
+        "scanner/test/sard-independent-holdout.test.js"
+      ],
+      "docs": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "16 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "evaluation-holdout",
+        "files": [
+          "scanner/test/holdout-eval.test.js",
+          "scanner/test/sard-independent-holdout.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/holdout-eval.test.js",
+          "test/sard-independent-holdout.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 379,
+        "counts": {
+          "tests": 16,
+          "pass": 16,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-evaluation-holdout.log",
+        "logSha256": "288f79423e758853f090ec43a4cc2197d3b29f54749caf0f9ae05e6f7d427edb",
+        "ranAt": "2026-10-16T12:36:07.782Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "loop-engineering",
+      "name": "Supervised implementation loop tooling",
+      "epics": [
+        "E0"
+      ],
+      "source": [
+        "scripts/loop-engineering"
+      ],
+      "scopes": [],
+      "tests": [
+        "scripts/loop-engineering/test/loop-manifest.test.js",
+        "scripts/loop-engineering/test/loop-watchdog.test.js"
+      ],
+      "docs": [
+        "docs/guides/loop-engineering.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "27 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "loop-engineering",
+        "files": [
+          "scripts/loop-engineering/test/loop-manifest.test.js",
+          "scripts/loop-engineering/test/loop-watchdog.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "../scripts/loop-engineering/test/loop-manifest.test.js",
+          "../scripts/loop-engineering/test/loop-watchdog.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 20681,
+        "counts": {
+          "tests": 27,
+          "pass": 27,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-loop-engineering.log",
+        "logSha256": "72d5133d95b063ee3dcfa0df47cc89b30d890c8f97d0cef42bec2f59040bb46f",
+        "ranAt": "2026-10-16T12:36:28.721Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "engineering-excellence-tracker",
+      "name": "Engineering Excellence status tracker (this program)",
+      "epics": [
+        "E0"
+      ],
+      "source": [
+        "scripts/engineering-excellence"
+      ],
+      "scopes": [
+        "engineering-excellence"
+      ],
+      "tests": [
+        "scanner/test/engineering-excellence/e0-04-task-manifest.test.js",
+        "scanner/test/engineering-excellence/e0-05-status-runner.test.js"
+      ],
+      "docs": [],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "30 tests passed in 2 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "engineering-excellence-tracker",
+        "files": [
+          "scanner/test/engineering-excellence/e0-04-task-manifest.test.js",
+          "scanner/test/engineering-excellence/e0-05-status-runner.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/engineering-excellence/e0-04-task-manifest.test.js",
+          "test/engineering-excellence/e0-05-status-runner.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 13332,
+        "counts": {
+          "tests": 30,
+          "pass": 30,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-engineering-excellence-tracker.log",
+        "logSha256": "c7c38cf65649af7dae516f0547b8d159eb9cc43d221d487743f490f3d02d3dd9",
+        "ranAt": "2026-10-16T12:36:42.312Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "proof-fabric",
+      "name": "Exploit proof fabric (hypothesis states, oracles, reproducer, fix proof)",
+      "epics": [
+        "E3",
+        "E4"
+      ],
+      "source": [
+        "scanner/src/posture/proof-fabric"
+      ],
+      "scopes": [
+        "verification"
+      ],
+      "tests": [
+        "scanner/test/proof-fabric/core.test.js",
+        "scanner/test/proof-fabric/fix-store-runner.test.js",
+        "scanner/test/proof-fabric/fixtures.test.js"
+      ],
+      "docs": [
+        "docs/guides/exploit-proof-fabric.md"
+      ],
+      "partial": null,
+      "maturity": "VERIFIED",
+      "reasons": [
+        "39 tests passed in 3 file(s) at ee16dbb90f"
+      ],
+      "run": {
+        "capability": "proof-fabric",
+        "files": [
+          "scanner/test/proof-fabric/core.test.js",
+          "scanner/test/proof-fabric/fix-store-runner.test.js",
+          "scanner/test/proof-fabric/fixtures.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/proof-fabric/core.test.js",
+          "test/proof-fabric/fix-store-runner.test.js",
+          "test/proof-fabric/fixtures.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 14782,
+        "counts": {
+          "tests": 39,
+          "pass": 39,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-proof-fabric.log",
+        "logSha256": "c2c86740112b4c39ba478adebe10d90d9793639549ef8da85729011807e93466",
+        "ranAt": "2026-10-16T12:36:57.353Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    },
+    {
+      "id": "assurance-contracts",
+      "name": "Assurance evidence contracts (verification record, identities, baseline inventory, rollout and rollback)",
+      "epics": [
+        "E3",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/assurance"
+      ],
+      "scopes": [
+        "verification"
+      ],
+      "tests": [
+        "scanner/test/posture/assurance-contracts.test.js",
+        "scanner/test/posture/assurance-baseline.test.js",
+        "scanner/test/posture/assurance-config.test.js"
+      ],
+      "docs": [
+        "docs/guides/assurance-scope-and-contracts.md",
+        "docs/guides/assurance-rollout-and-rollback.md"
+      ],
+      "partial": "the verification record is a hypothesis-level contract; a patch-level FixVerificationRecord that unifies every patch route is what E3-02 and E3-03 must establish or confirm",
+      "maturity": "PARTIAL",
+      "reasons": [
+        "the verification record is a hypothesis-level contract; a patch-level FixVerificationRecord that unifies every patch route is what E3-02 and E3-03 must establish or confirm"
+      ],
+      "run": {
+        "capability": "assurance-contracts",
+        "files": [
+          "scanner/test/posture/assurance-contracts.test.js",
+          "scanner/test/posture/assurance-baseline.test.js",
+          "scanner/test/posture/assurance-config.test.js"
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-concurrency=2",
+          "test/posture/assurance-contracts.test.js",
+          "test/posture/assurance-baseline.test.js",
+          "test/posture/assurance-config.test.js"
+        ],
+        "cwd": "scanner",
+        "outcome": "exited",
+        "exitCode": 0,
+        "durationMs": 5574,
+        "counts": {
+          "tests": 50,
+          "pass": 50,
+          "fail": 0,
+          "skipped": 0
+        },
+        "log": "scripts/engineering-excellence/logs/E0-01/inventory-assurance-contracts.log",
+        "logSha256": "fad2913ce2dca4e3c7c4890d7b5feac41405e80edcf56d881d6c69bba1a4316d",
+        "ranAt": "2026-10-16T12:37:03.198Z",
+        "commit": "ee16dbb90f48968114b7424ff0f7e961072e79a1",
+        "worktreeDirty": true,
+        "version": "0.172.0"
+      }
+    }
+  ],
+  "maturityCounts": {
+    "ABSENT": 0,
+    "EXISTS-UNVERIFIED": 0,
+    "PARTIAL": 11,
+    "VERIFIED": 26,
+    "BLOCKED": 0
+  },
+  "absent": [
+    {
+      "id": "realcode-bench",
+      "name": "bench:realcode:report and bench:realcode:check (E1-07)",
+      "terms": [
+        "realcode",
+        "bench:realcode"
+      ],
+      "note": "no script of that name exists; the independent gate is scripts/independent-population-gate.mjs",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "scan-measurement-identity",
+      "name": "ScanMeasurementIdentity record (E0-02, E1-04)",
+      "terms": [
+        "ScanMeasurementIdentity",
+        "measurementValid",
+        "untrusted_for_release"
+      ],
+      "note": "baseline-inventory.js captures part of this; no measurement-validity flag exists",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "service-boundary-ir",
+      "name": "ServiceBoundary and StorageEdge IR entities (E2-01, E2-07)",
+      "terms": [
+        "ServiceBoundary",
+        "StorageEdge"
+      ],
+      "note": "cross-service edges are not modelled in the taint IR",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "semantic-evidence-edge",
+      "name": "SemanticEvidenceEdge with observed/inferred/unknown confidence (E2-01, E5-04)",
+      "terms": [
+        "SemanticEvidenceEdge"
+      ],
+      "note": "lineage graph carries protection and classification, not an origin/confidence edge triple",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "analysis-incomplete-state",
+      "name": "analysis_incomplete marker on budget exhaustion (E2-05)",
+      "terms": [
+        "analysis_incomplete"
+      ],
+      "note": "budget exhaustion is reported through scanHealth, not a per-finding marker",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "insufficient-population-verdict",
+      "name": "insufficient_population verdict state (PRD 3.1, E1-03)",
+      "terms": [
+        "insufficient_population"
+      ],
+      "note": "the interval module reports `unmeasured` for small groups; the full eight-state taxonomy is not used",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "build-digest-binding",
+      "name": "Runtime observations bound to a deployed build digest (E5-02)",
+      "terms": [
+        "buildDigest",
+        "deploymentDigest"
+      ],
+      "note": "image digests exist in artifact provenance; runtime records do not carry one",
+      "status": "ABSENT",
+      "hits": []
+    },
+    {
+      "id": "release-assurance-package",
+      "name": "Signed release-level assurance package (E7-03)",
+      "terms": [
+        "AssuranceEvidenceRef",
+        "releaseAssurancePackage"
+      ],
+      "note": "finding-level bundles and portfolio bundles exist; a release package with an offline verifier does not",
+      "status": "ABSENT",
+      "hits": []
+    }
+  ],
+  "claims": [
+    {
+      "doc": "CLAUDE.md",
+      "claim": "Version line",
+      "expected": "0.172.0",
+      "actual": "0.172.0",
+      "ok": true
+    },
+    {
+      "doc": "README.md",
+      "claim": "version badge",
+      "expected": "0.172.0",
+      "actual": "0.172.0",
+      "ok": true
+    },
+    {
+      "doc": ".claude-plugin/plugin.json",
+      "claim": "version",
+      "expected": "0.172.0",
+      "actual": "0.172.0",
+      "ok": true
+    },
+    {
+      "doc": "gemini-extension.json",
+      "claim": "version",
+      "expected": "0.172.0",
+      "actual": "0.172.0",
+      "ok": true
+    },
+    {
+      "doc": "CLAUDE.md",
+      "claim": "slash command dispatchers (\"17 dispatchers\")",
+      "expected": 17,
+      "actual": 17,
+      "ok": true
+    },
+    {
+      "doc": "CLAUDE.md",
+      "claim": "MCP tool count (\"17 tools\")",
+      "expected": 17,
+      "actual": 23,
+      "ok": false
+    },
+    {
+      "doc": "docs/ARCHITECTURE.md",
+      "claim": "MCP tool count (\"17 tools\")",
+      "expected": 17,
+      "actual": 23,
+      "ok": false
+    },
+    {
+      "doc": "docs/HARNESS_COMPATIBILITY.md",
+      "claim": "MCP tool count (\"17 MCP tools\")",
+      "expected": 17,
+      "actual": 23,
+      "ok": false
+    },
+    {
+      "doc": ".codex-plugin/plugin.json",
+      "claim": "MCP tool count (\"17 tools\")",
+      "expected": 17,
+      "actual": 23,
+      "ok": false
+    },
+    {
+      "doc": ".cursor-plugin/plugin.json",
+      "claim": "MCP tool count (\"17 tools\")",
+      "expected": 17,
+      "actual": 23,
+      "ok": false
+    }
+  ],
+  "problems": []
+}

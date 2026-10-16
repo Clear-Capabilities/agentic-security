@@ -176,3 +176,9 @@ ide/jetbrains/build/
 
 # Supervised-loop controller state (run state, evidence, logs); never committed
 .loop-engineering/
+
+# Engineering Excellence program: command logs are local evidence, not source
+scripts/engineering-excellence/logs/
+scripts/engineering-excellence/status.lock
+scripts/engineering-excellence/status.json.bak
+scripts/engineering-excellence/*.tmp

@@ -26,6 +26,10 @@
     {
       "prefix": "docs/superpowers/",
       "reason": "Dated internal implementation plans for finished subsystems, not user-facing capability documentation."
+    },
+    {
+      "prefix": "docs/engineering-excellence/",
+      "reason": "Status, inventory, baseline, decision and report records of the Engineering Excellence program, generated from machine-readable state under scripts/engineering-excellence/. Not capability documentation; public documentation for any command the program adds is written under E8-04 and linked from the index."
     }
   ],
   "existingBehavior": [

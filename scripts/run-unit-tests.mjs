@@ -100,7 +100,7 @@ export function testConcurrencyFor(env = process.env, cpus = 4) {
 export const SCOPES = [
   'smoke', 'glob', 'sast', 'posture', 'dataflow', 'mcp',
   'report', 'bench-modules', 'lifecycle', 'eval', 'discovery', 'lineage',
-  'server', 'haskell', 'nix', 'language', 'verification', 'deployment', 'evaluation', 'capabilities', 'invariants', 'portfolio', 'routing', 'documentation', 'release-closure',
+  'server', 'haskell', 'nix', 'language', 'verification', 'deployment', 'evaluation', 'capabilities', 'invariants', 'portfolio', 'routing', 'documentation', 'release-closure', 'engineering-excellence',
 ];
 
 const FILE_RE = /test\/[\w.\-/]+\.test\.js/g;
