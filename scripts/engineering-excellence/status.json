@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "program": "agentic-security-engineering-excellence",
   "createdAt": "2026-10-16T12:20:50.208Z",
-  "updatedAt": "2026-10-16T17:17:01.901Z",
-  "revision": 907,
+  "updatedAt": "2026-10-16T17:20:27.768Z",
+  "revision": 921,
   "checkout": {
-    "commit": "29edc7a34241893beefa62e55d6e54f2bf3b40d8",
+    "commit": "6464b782ce7d13371f68c7a24c0b5089a84a8e33",
     "branch": "feature/engineering-excellence",
     "dirty": true,
-    "capturedAt": "2026-10-16T17:16:54.404Z"
+    "capturedAt": "2026-10-16T17:20:27.768Z"
   },
   "tasks": {
     "E0-01": {
@@ -1827,7 +1827,7 @@
       "attempts": 2,
       "startedAt": "2026-10-16T15:20:53.091Z",
       "completedAt": null,
-      "heartbeatAt": "2026-10-16T17:17:01.900Z",
+      "heartbeatAt": "2026-10-16T17:20:21.942Z",
       "activeProcess": {
         "pid": 20764,
         "command": "node scripts/engineering-excellence/independent-baseline.mjs --run a72968195aa1 --chunk-timeout-min 40 --max-minutes 48",
@@ -8142,18 +8142,129 @@
       "notes": []
     },
     "E6-05": {
-      "state": "pending",
-      "attempts": 0,
-      "startedAt": null,
-      "completedAt": null,
-      "heartbeatAt": null,
+      "state": "done",
+      "attempts": 1,
+      "startedAt": "2026-10-16T17:20:18.473Z",
+      "completedAt": "2026-10-16T17:20:27.768Z",
+      "heartbeatAt": "2026-10-16T17:20:27.506Z",
       "activeProcess": null,
-      "exitCode": null,
-      "commit": null,
+      "exitCode": 0,
+      "commit": "6464b782ce7d13371f68c7a24c0b5089a84a8e33",
       "blocker": null,
       "failure": null,
-      "commands": [],
-      "evidence": null,
+      "commands": [
+        {
+          "id": "c-92fdb457",
+          "argv": [
+            "node",
+            "--test",
+            "test/engineering-excellence/e6-05-supervised-analyzers.test.js"
+          ],
+          "cwd": "/Users/ross/code/agentic-security-ee/scanner",
+          "kind": "test",
+          "startedAt": "2026-10-16T17:20:18.525Z",
+          "endedAt": "2026-10-16T17:20:27.503Z",
+          "timeoutMs": 600000,
+          "outcome": "exited",
+          "exitCode": 0,
+          "signal": null,
+          "durationMs": 8964,
+          "log": "scripts/engineering-excellence/logs/E6-05/2026-10-16T17-20-18-525Z-c-92fdb457.log",
+          "logSha256": "6fd6780bf1c7e09eb8277c98aa7baf099fbb634bbecfdb99011c684f03f20470",
+          "attempt": 1,
+          "envKeys": [
+            "AI_AGENT",
+            "CLAUDECODE",
+            "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET",
+            "CLAUDE_CODE_SESSION_ATTENDED",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_EFFORT",
+            "CLAUDE_PID",
+            "COLORTERM",
+            "CONDA_DEFAULT_ENV",
+            "CONDA_EXE",
+            "CONDA_PREFIX",
+            "CONDA_PROMPT_MODIFIER",
+            "CONDA_PYTHON_EXE",
+            "CONDA_SHLVL",
+            "COREPACK_ENABLE_AUTO_PIN",
+            "FPATH",
+            "GIT_EDITOR",
+            "GSETTINGS_SCHEMA_DIR",
+            "GSETTINGS_SCHEMA_DIR_CONDA_BACKUP",
+            "HOME",
+            "HOMEBREW_CELLAR",
+            "HOMEBREW_PREFIX",
+            "HOMEBREW_REPOSITORY",
+            "INFOPATH",
+            "LANG",
+            "LOGNAME",
+            "NVM_BIN",
+            "NVM_CD_FLAGS",
+            "NVM_DIR",
+            "NVM_INC",
+            "NoDefaultCurrentDirectoryInExePath",
+            "OLDPWD",
+            "OSLogRateLimit",
+            "PATH",
+            "PWD",
+            "SHELL",
+            "SHLVL",
+            "SSH_AUTH_SOCK",
+            "TERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM_SESSION_ID",
+            "TMPDIR",
+            "USER",
+            "XPC_FLAGS",
+            "XPC_SERVICE_NAME",
+            "_",
+            "_CE_CONDA",
+            "_CE_M",
+            "_CONDA_EXE",
+            "_CONDA_ROOT",
+            "__CFBundleIdentifier",
+            "__CF_USER_TEXT_ENCODING"
+          ]
+        }
+      ],
+      "evidence": {
+        "taskId": "E6-05",
+        "status": "done",
+        "sourceCommit": "6464b782ce7d13371f68c7a24c0b5089a84a8e33",
+        "worktreeDirty": true,
+        "changedPaths": [
+          "scanner/src/pipeline/supervised-child.js"
+        ],
+        "testCommands": [
+          {
+            "command": "node --test test/engineering-excellence/e6-05-supervised-analyzers.test.js",
+            "exitCode": 0,
+            "log": "scripts/engineering-excellence/logs/E6-05/2026-10-16T17-20-18-525Z-c-92fdb457.log",
+            "logSha256": "6fd6780bf1c7e09eb8277c98aa7baf099fbb634bbecfdb99011c684f03f20470",
+            "testFiles": [
+              "scanner/test/engineering-excellence/e6-05-supervised-analyzers.test.js"
+            ]
+          }
+        ],
+        "acceptanceEvidence": [
+          "Injected infinite loop and OOM are terminated and classified; a forked grandchild dies with its analyzer; completed analyzers keep their findings; scan health becomes partial and strict assurance fails while standard passes; no orphan process or indefinite wait (overall deadline",
+          "cancellation",
+          "bounded queue tested)"
+        ],
+        "benchmarkComparisons": [],
+        "knownLimitations": [
+          "Not wired into the scan loop: engine.js still runs its analyzers in-process; this is the supervised runner and its summary, verified on injected stand-ins",
+          "Child script is located by path next to the module, so the ncc bundle would need it shipped as an asset before the bundle can use it",
+          "RSS is polled from ps every 200 ms, so a fast allocator can overshoot the ceiling before the next poll; the heap ceiling is the backstop",
+          "CPU limit uses POSIX ulimit and is untested on Windows; process groups are POSIX only"
+        ],
+        "closedAt": "2026-10-16T17:20:27.768Z"
+      },
       "notes": []
     },
     "E6-06": {
