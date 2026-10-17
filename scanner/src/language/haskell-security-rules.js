@@ -33,6 +33,8 @@ export const RULES = Object.freeze({
   'hs-unbounded-input-read': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Whole input read into memory without a size limit', remediation: 'Bound the read (`BL.take n`, `hGetSome`, a request-size limit) before the data is consumed.' },
   'hs-unbounded-allocation': { cwe: 'CWE-770', severity: 'medium', family: 'resource-exhaustion', vuln: 'Allocation sized by parsed caller text without an upper bound', remediation: 'Clamp the size (`min limit n`) before allocating.' },
   'hs-partial-function-on-input': { cwe: 'CWE-248', severity: 'low', family: 'unhandled-exception', vuln: 'Partial function applied to caller-supplied text', remediation: 'Use the total variant (`readMaybe`, `listToMaybe`, pattern matching) and handle the failure.' },
+  'hs-tls-validation-disabled': { cwe: 'CWE-295', severity: 'high', family: 'tls-validation', vuln: 'TLS certificate validation is disabled', remediation: 'Do not disable certificate validation. Use the default settings (`tlsManagerSettings`, `TLSSettingsSimple False False False`, `VerifyPeer`) and, for a private certificate authority, add that authority to the trust store instead.' },
+  'hs-hardcoded-secret': { cwe: 'CWE-798', severity: 'high', family: 'hardcoded-credentials', vuln: 'Signing or encryption secret written in the source', remediation: 'Read the secret from the environment or a secret store at start-up, and rotate the one that was committed: it is now in the repository history.' },
   'hs-unsafe-io-boundary': { cwe: 'CWE-676', severity: 'low', family: 'unsafe-boundary', vuln: 'Unsafe IO / coercion boundary', remediation: 'Confine `unsafePerformIO`/`unsafeCoerce` to audited, well-tested wrappers.' },
 });
 
@@ -56,6 +58,11 @@ const PBKDF2_CALLS = new Set(['Crypto.KDF.PBKDF2.generate', 'Crypto.KDF.PBKDF2.f
 const STRONG_KDF = /^(?:Crypto\.KDF\.BCrypt\.|Crypto\.Argon2\.|Crypto\.Scrypt\.|Crypto\.KDF\.Scrypt\.|Crypto\.PasswordStore\.|Crypto\.BCrypt\.)/;
 const UNSAFE_CALLS = { 'System.IO.Unsafe.unsafePerformIO': 'unsafePerformIO', 'System.IO.Unsafe.unsafeInterleaveIO': 'unsafeInterleaveIO', 'System.IO.Unsafe.unsafeDupablePerformIO': 'unsafeDupablePerformIO', 'Unsafe.Coerce.unsafeCoerce': 'unsafeCoerce' };
 
+// TLS: the first field of TLSSettingsSimple (Network.Connection) is settingDisableCertificateValidation, and `VerifyNone` (OpenSSL.Session) skips peer verification.
+// The IR keeps a constructor's name in `hs.con` but not the module it came from, so a constructor counts only in a file that imports the module defining it.
+// Calls whose argument is a key or signing secret.
+const SECRET_KEY_CALLS = new Set(['Web.JWT.hmacSecret', 'Web.JWT.secret', 'Servant.Auth.Server.fromSecret', 'Web.ClientSession.initKey']);
+const isTrueLit = (e) => !!e && ((e.kind === 'literal' && /^true$/i.test(String(e.value))) || (e.kind === 'ident' && /(?:^|\.)True$/.test(e.name || '')));
 const TIME_SOURCES = new Set(['Data.Time.Clock.POSIX.getPOSIXTime', 'Data.Time.Clock.getCurrentTime', 'System.CPUTime.getCPUTime']);
 const SECURITY_FN_SUBSTR = /(?:token|nonce|secret|otp|csrf|session|salt|apikey|resetcode|passcode|verification)/i;
 // Short credential words that would over-match as substrings (`spin`, `mapping`, `keyboard`): matched as whole camelCase / snake_case words.
@@ -215,6 +222,16 @@ export function analyzeHaskellRules(files, opts = {}) {
               }
               continue;
             }
+            // TLS certificate validation switched off, by constructor
+            if (e.hs && e.hs.con) {
+              const importsFrom = (mods) => (fir.imports || []).some((im) => mods.includes(im.module));
+              if (e.hs.con === 'TLSSettingsSimple' && importsFrom(['Network.Connection', 'Network.Connection.Types'])) {
+                const positional = e.kind === 'array' && isTrueLit(e.elements[0]);
+                const named = e.kind === 'object' && (e.props || []).some((p) => p && p.key === 'settingDisableCertificateValidation' && isTrueLit(p.value));
+                if (positional || named) emit('hs-tls-validation-disabled', file, e.line || node.line, { detail: 'TLSSettingsSimple with settingDisableCertificateValidation = True', evidence: { setting: 'settingDisableCertificateValidation' } });
+              }
+              if (e.hs.con === 'VerifyNone' && e.kind === 'literal' && importsFrom(['OpenSSL.Session'])) emit('hs-tls-validation-disabled', file, e.line || node.line, { detail: 'OpenSSL verification mode VerifyNone', evidence: { mode: 'VerifyNone' } });
+            }
             // `xs !! n` raises on a short list: a partial function, written as an operator, applied to caller-supplied text
             if (e.kind === 'binary' && e.op === '!!' && e.left && mentionsText(e.left)) {
               emit('hs-partial-function-on-input', file, e.line || node.line, { detail: '!! on a caller-supplied list', evidence: { partial: '!!' } });
@@ -225,6 +242,9 @@ export function analyzeHaskellRules(files, opts = {}) {
             const line = e.line || node.line;
             const args = e.args || [];
 
+            // TLS certificate validation switched off
+            // a signing/encryption secret that is a constant in the source
+            if (SECRET_KEY_CALLS.has(c) && args[0] && isLiteralLike(args[0]) && !(args[0].kind === 'literal' && String(args[0].value).length < 8)) emit('hs-hardcoded-secret', file, line, { detail: `${c} given a constant`, confidence: 0.85, evidence: { call: c } });
             // weak hash
             if (WEAK_HASH_CALLS.has(c) || (c === 'Crypto.Hash.hashWith' && args[0] && args[0].kind === 'literal' && WEAK_ALGO_CONS.has(args[0].value))) {
               const pw = args.some((a) => [...names(a)].some((n) => PASSWORD_VAR.test(n)));

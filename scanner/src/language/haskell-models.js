@@ -66,6 +66,11 @@ export const HS_PACKAGES = Object.freeze({
   happstack: { modules: ['Happstack.Server', 'Happstack.Server.Internal.Types'], tested: [] },
   network: { modules: ['Network.Socket.ByteString', 'Network.Socket.ByteString.Lazy'], tested: [] },
   unix: { modules: ['System.Posix.Files'], tested: [] },
+  jwt: { modules: ['Web.JWT'], tested: [] },
+  'servant-auth-server': { modules: ['Servant.Auth.Server'], tested: [] },
+  'clientsession': { modules: ['Web.ClientSession'], tested: [] },
+  connection: { modules: ['Network.Connection'], tested: [] },
+  HsOpenSSL: { modules: ['OpenSSL.Session'], tested: [] },
 });
 
 // ── sources ─────────────────────────────────────────────────────────────────
@@ -306,6 +311,8 @@ export const HS_RULE_APIS = Object.freeze([
   ...E('Data.Text.IO', ['getContents', 'hGetContents']), ...E('Data.Text.Lazy.IO', ['getContents', 'hGetContents']),
   ...E('Data.Text', ['replicate', 'take']), ...E('Data.Vector', ['replicate']),
   ...E('Web.Cookie', ['defaultSetCookie']),
+  ...E('Web.JWT', ['hmacSecret', 'secret']), ...E('Servant.Auth.Server', ['fromSecret']), ...E('Web.ClientSession', ['initKey']),
+  ...E('Network.HTTP.Client.TLS', ['mkManagerSettings']), ...E('OpenSSL.Session', ['contextSetVerificationMode']),
   ...E('Text.XML.HXT.Core', ['withSubstDTDEntities']),
   ...E('System.IO.Unsafe', ['unsafePerformIO', 'unsafeInterleaveIO', 'unsafeDupablePerformIO']),
   ...E('Unsafe.Coerce', ['unsafeCoerce']),

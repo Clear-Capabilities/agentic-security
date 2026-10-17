@@ -551,7 +551,12 @@
           "Spock": [],
           "happstack": [],
           "network": [],
-          "unix": []
+          "unix": [],
+          "jwt": [],
+          "servant-auth-server": [],
+          "clientsession": [],
+          "connection": [],
+          "HsOpenSSL": []
         },
         "webFrameworks": {
           "scotty": [
