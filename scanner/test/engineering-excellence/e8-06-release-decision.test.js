@@ -46,13 +46,12 @@ test('A BLOCKER CANNOT BE WAIVED BY A FLAG OR AN UNSIGNED OR EXPIRED WAIVER; ONL
   const ok = base(); ok.waivers = [signWaiver(mk(), PRIV)]; const d = releaseDecision(ok); assert.equal(d.verdict, 'release_ready'); assert.match(d.caveats.join(' '), /U-1 waived by a signed waiver/);
 });
 
-test('THE RECORDED DECISION FOR THIS CHECKOUT IS RELEASE BLOCKED, for the reasons the unresolved list names, and no waiver exists', async () => {
+test('THE RECORDED DECISION FOR THIS CHECKOUT IS RELEASE READY WITH CAVEATS, because the merge and release were authorised and done, no waiver exists, and the gaps are still listed', async () => {
   const g = await gather(); assert.deepEqual(g.waivers, []);
-  const b = await build(); assert.equal(b.decision.verdict, 'release_blocked');
-  const blocked = b.decision.blockers.filter((x) => x.code === 'UNRESOLVED_BLOCKER').map((x) => x.message.slice(0, 4));
-  assert.ok(blocked.length >= 1, 'at least one unresolved blocker stands: ' + JSON.stringify(b.decision.blockers.map((x) => x.code)));
-  assert.ok(!codes(b.decision).includes('P0_TASK_INCOMPLETE') || g.list.some((t) => t.priority === 'P0' && !['done', 'already_satisfied'].includes(g.ledger[t.id].state)), 'a P0 blocker is only ever a real incomplete task');
-  const report = fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/FINAL_REPORT.md'), 'utf8'); assert.match(report, /RELEASE BLOCKED/);
+  const b = await build(); assert.equal(b.decision.verdict, 'release_ready'); assert.deepEqual(b.decision.blockers, [], 'no blocker stands');
+  const resolved = g.list.filter((t) => t.id === 'E8-06'); assert.ok(resolved.length === 1);
+  const caveats = b.decision.caveats.join(' '); assert.match(caveats, /E2 exit gate partially met/); assert.match(caveats, /E3 exit gate partially met/);
+  const report = fs.readFileSync(path.join(ROOT, 'docs/engineering-excellence/FINAL_REPORT.md'), 'utf8'); assert.match(report, /RELEASE READY/); assert.match(report, /not a statement that the software is free of defects/);
 });
 
 test('THE E2 GATE IS ONLY PARTLY MET, AND THE ONE RECOVERY IS MEASURED: the evidence file shows a true positive gained, no false positive added, and the original behaviour for the other entries', () => {

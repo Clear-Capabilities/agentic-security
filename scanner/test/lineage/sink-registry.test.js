@@ -224,7 +224,9 @@ test('D3/preservation: every `unsupported` sink entry carries a non-empty reason
   // 116 -> 134: the Haskell sink model (HS-003..HS-006, X-003/X-004: 135 import-qualified sinks, generated from
   // language/haskell-models.js) added CWE-78/CWE-88 process sinks, which are `unsupported` for the same reason as every
   // other CWE-78 entry. Re-measured against the live catalog.
-  assert.equal(unsupported.length, 134);
+  // 134 -> 174: the post-0.173 Haskell sinks (System.Cmd, Turtle, Shelly process sinks, hint code evaluation) are `unsupported` for the same
+  // reason as every other CWE-78/CWE-88/CWE-94 entry. Re-measured against the live catalog.
+  assert.equal(unsupported.length, 174);
   for (const r of unsupported) {
     assert.equal(r.kind, 'process');
     assert.ok(r.reason && r.reason.length > 0);
@@ -527,12 +529,14 @@ test('pinned sink coverage counts: re-measured after merging the Rust + Java SAR
   // OPTIONS, so the URL was never checked) to 32 (the URL position per function, the `options`/`patch`/custom-method forms and the Session
   // module). SSRF URL sinks are a modeled category. Re-measured against the live catalog, not hand-summed.
   // 478 -> 481 and 329 -> 332 modeled: QA-006 added php-header-location (a static-prefix gated header() sink) and two Go redirect helpers.
-  assert.equal(SINKS.length, 481);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 332);
+  // 481 -> 574 and 332 -> 385 modeled, 134 -> 174 unsupported: 93 Haskell sinks added after 0.173 (legacy System.Cmd, Turtle, Shelly, hint, HDBC,
+  // direct-sqlite, libpq, persistent backends, Req, HTTP, redirects in five frameworks, more path operations). Re-measured against the live catalog.
+  assert.equal(SINKS.length, 574);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 385);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 6);      // the 6 DOM/React CWE-79 entries
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 9);    // the 9 CWE-90 LDAP entries
-  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 134);
-  assert.equal(332 + 6 + 9 + 134, SINKS.length);
+  assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 174);
+  assert.equal(385 + 6 + 9 + 174, SINKS.length);
 });
 
 test('pinned privacy-catalog coverage counts: 16 modeled / 2 partial / 0 candidate / 0 unsupported', () => {
