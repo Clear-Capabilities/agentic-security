@@ -1,0 +1,6 @@
+{
+  "note": "Two sizes read once from the baseline commit, so the regression report can be regenerated and checked on a clone that has only the latest commit (hosted CI does).",
+  "baseCommit": "57134973d83be24bb15c6e04e3523af4c2cf49f2",
+  "bundleBytes": 5343912,
+  "publishedPackageFiles": 2869
+}
