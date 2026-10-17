@@ -257,12 +257,14 @@ test('pinned coverage counts: re-measured after merging the Rust + Java SARD cat
   // NO_PROVENANCE_OVERRIDES (category user-input). Re-measured against the live catalog.
   // 444 -> 460 and 101 -> 117 candidate: QA-006 added 16 request-bound sources (2 implicit handler parameters, 14 Laravel request
   // accessors). None declares a `provenance`, so each resolves through NO_PROVENANCE_OVERRIDES and, like every such entry, is `candidate`.
-  assert.equal(SOURCES.length, 460);
-  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 284);
+  // 460 -> 570 and 284 -> 394 modeled: 55 Haskell sources added after 0.173 (Snap, Spock, Happstack, Yesod getRequest and friends, Scotty request, socket
+  // reads, more file readers), each as a call form and a lineage twin; every one declares a request, file or network provenance. Re-measured against the live catalog.
+  assert.equal(SOURCES.length, 570);
+  assert.equal(results.filter((r) => r.coverageStatus === 'modeled').length, 394);
   assert.equal(results.filter((r) => r.coverageStatus === 'partial').length, 59);
   assert.equal(results.filter((r) => r.coverageStatus === 'candidate').length, 117);
   assert.equal(results.filter((r) => r.coverageStatus === 'unsupported').length, 0);
-  assert.equal(284 + 59 + 117, SOURCES.length);
+  assert.equal(394 + 59 + 117, SOURCES.length);
 });
 
 // ───────────────────────────────────────────────────────────────────────────
