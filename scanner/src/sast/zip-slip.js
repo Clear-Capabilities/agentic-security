@@ -38,11 +38,90 @@ import { blankComments } from './_comment-strip.js';
 
 function _lineOf(raw, idx) { return raw.substring(0, idx).split('\n').length; }
 
+// Go (archive/zip, archive/tar). The entry name comes from the archive, so `filepath.Join(dest, f.Name)` is attacker-chosen unless the joined path is checked
+// against `dest`. The check is looked for in the SAME FUNCTION as the use, and it must name the joined path (or the entry name), because a `HasPrefix` on some
+// other value in the same function proves nothing about this one.
+const GO_ARCHIVE_IMPORT_RE = /["`](?:archive\/(?:zip|tar)|github\.com\/(?:klauspost\/compress\/zip|mholt\/archiver(?:\/v\d+)?|mholt\/archives|bodgit\/sevenzip|nwaples\/rardecode(?:\/v\d+)?))["`]/;
+const GO_ZIP_RANGE_RE = /\bfor\s+(?:\w+\s*,\s*)?(\w+)\s*:=\s*range\s+[\w.()]+?\.File\b/g;
+const GO_TAR_NEXT_RE = /\b(\w+)\s*,\s*\w+\s*:?=\s*[\w.]+\.Next\s*\(\s*\)/g;
+const GO_WRITE_SINKS = 'os\\.(?:Create|OpenFile|MkdirAll|Mkdir|WriteFile|Rename|Symlink|Link|Chmod|Remove|RemoveAll)|ioutil\\.WriteFile|afero\\.WriteFile|fs\\.(?:Create|OpenFile|MkdirAll|WriteFile)';
+const GO_GUARD_CALL_RE = /\b(?:strings\.HasPrefix|filepath\.IsLocal|filepath\.Rel|filepath\.IsAbs|securejoin\.SecureJoin|SecureJoin|os\.OpenRoot|OpenInRoot)\s*\(|\bstrings\.Contains\s*\([^)]*[\"`]\.\.[\"`]/;
+
+/** The text of the Go function around `idx`, by brace matching from the nearest preceding `func`. */
+function _goFunctionAround(code, idx) {
+  const start = code.lastIndexOf('\nfunc ', idx);
+  const from = start === -1 ? 0 : start + 1;
+  const open = code.indexOf('{', from);
+  if (open === -1 || open > idx) return code.slice(from, Math.min(code.length, idx + 2000));
+  let depth = 0; let inS = null;
+  for (let i = open; i < code.length; i++) {
+    const c = code[i];
+    if (inS) { if (c === '\\' && inS !== '`') { i++; continue; } if (c === inS) inS = null; continue; }
+    if (c === '"' || c === '`') { inS = c; continue; }
+    if (c === "'") { const e = code.indexOf("'", i + 2); if (e !== -1 && e - i <= 4) { i = e; continue; } }
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return code.slice(from, i + 1); }
+  }
+  return code.slice(from);
+}
+
+function _scanGoArchive(fp, raw, push) {
+  const code = blankComments(raw);
+  if (!GO_ARCHIVE_IMPORT_RE.test(code)) return;
+  // the names that hold an archive entry: `for _, f := range r.File`, `hdr, err := tr.Next()`
+  const entries = new Set();
+  for (const re of [GO_ZIP_RANGE_RE, GO_TAR_NEXT_RE]) { const r = new RegExp(re.source, re.flags); let m; while ((m = r.exec(code))) entries.add(m[1]); }
+  if (!entries.size) return;
+  const ent = `(?:${[...entries].map((e) => e.replace(/[$]/g, '\\$')).join('|')})`;
+  const nameRef = `${ent}\\s*\\.\\s*Name\\b`;
+  // a path built from the entry name: filepath.Join(x, f.Name) / path.Join / dest + "/" + f.Name
+  const builtRe = new RegExp(`(\\w+)\\s*:?=\\s*(?:(?:filepath|path)\\.(?:Join|Clean)\\s*\\([^\\n]*?${nameRef}[^\\n]*\\)|[^\\n]*?\\+\\s*${nameRef}[^\\n]*|[^\\n]*?${nameRef}\\s*\\+[^\\n]*)`, 'g');
+  const sinkRe = new RegExp(`\\b(?:${GO_WRITE_SINKS})\\s*\\(([^\\n]*)`, 'g');
+  const lineOfIdx = (i) => _lineOf(raw, i);
+  const flag = (idx, how) => {
+    const line = lineOfIdx(idx);
+    push({
+      id: `zip-slip:${fp}:${line}:go`, file: fp, line,
+      vuln: `Zip Slip: an archive entry name reaches a file operation (${how}) without a check that the result stays inside the extraction directory`,
+      severity: 'high', cwe: 'CWE-22', stride: 'Tampering',
+      snippet: (raw.split('\n')[line - 1] || '').trim().slice(0, 200),
+      remediation: 'An archive entry may be named `../../x` or be absolute. After joining, clean the path and refuse it unless it is inside the destination: `target := filepath.Join(dest, f.Name); if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) { return error }` (or `filepath.IsLocal(f.Name)` on Go 1.20+, or `os.Root` on Go 1.24+).',
+      confidence: 0.8, parser: 'ZIP-SLIP',
+    });
+  };
+  const handled = new Set();
+  // 1) a variable built from the entry name, then used by a write
+  let b;
+  while ((b = builtRe.exec(code))) {
+    const v = b[1];
+    const fn = _goFunctionAround(code, b.index);
+    const fnStart = code.indexOf(fn);
+    // is the variable checked in this function? a guard call must mention it (or the entry name)
+    const mention = new RegExp(`\\b${v}\\b|${nameRef}`);
+    const guarded = fn.split('\n').some((l) => GO_GUARD_CALL_RE.test(l) && mention.test(l));
+    if (guarded) { handled.add(b.index); continue; }
+    const useRe = new RegExp(`\\b(?:${GO_WRITE_SINKS})\\s*\\([^\\n]*\\b${v}\\b`, 'g');
+    useRe.lastIndex = 0;
+    const use = useRe.exec(fn);
+    if (use) { handled.add(b.index); flag(fnStart + use.index, 'built from the entry name'); }
+  }
+  // 2) the entry name used directly in a write
+  let s;
+  while ((s = sinkRe.exec(code))) {
+    if (!new RegExp(nameRef).test(s[1])) continue;
+    const fn = _goFunctionAround(code, s.index);
+    const guarded = fn.split('\n').some((l) => GO_GUARD_CALL_RE.test(l) && new RegExp(nameRef).test(l));
+    if (!guarded) flag(s.index, 'the entry name itself');
+  }
+}
+
 export function scanZipSlip(fp, raw) {
   if (!raw || raw.length > 500_000) return [];
   const findings = [];
   const seen = new Set();
   const push = (f) => { if (!seen.has(f.id)) { seen.add(f.id); findings.push(f); } };
+
+  if (/\.go$/i.test(fp) && !/_test\.go$/i.test(fp)) _scanGoArchive(fp, raw, push);
 
   if (/\.(?:java|kt|kts|scala|groovy)$/i.test(fp)) {
     const code = blankComments(raw);
