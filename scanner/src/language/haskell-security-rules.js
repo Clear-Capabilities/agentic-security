@@ -46,7 +46,7 @@ export const BOUNDARIES = Object.freeze({
   unsafeCoerce: 'Reinterprets a value as another type without a check. Modelled as a boundary only.',
 });
 
-const WEAK_HASH_CALLS = new Set(['Crypto.Hash.MD5.hash', 'Crypto.Hash.MD5.hashlazy', 'Crypto.Hash.SHA1.hash', 'Crypto.Hash.SHA1.hashlazy', 'Data.Digest.Pure.MD5.md5', 'Data.Digest.Pure.SHA.sha1']);
+const WEAK_HASH_CALLS = new Set(['Crypto.Hash.MD5.hash', 'Crypto.Hash.MD5.hashlazy', 'Crypto.Hash.SHA1.hash', 'Crypto.Hash.SHA1.hashlazy', 'Data.Digest.Pure.MD5.md5', 'Data.Digest.Pure.MD5.md5DigestBytes', 'Data.Digest.Pure.SHA.sha1', 'Data.Digest.Pure.SHA.sha1Incremental']);
 const WEAK_ALGO_CONS = new Set(['MD5', 'MD4', 'MD2', 'SHA1']);
 const ANY_HASH_CALLS = new Set([...WEAK_HASH_CALLS, 'Crypto.Hash.hash', 'Crypto.Hash.hashlazy', 'Crypto.Hash.hashWith', 'Crypto.Hash.SHA256.hash', 'Crypto.Hash.SHA256.hashlazy', 'Crypto.Hash.SHA512.hash', 'Crypto.Hash.SHA512.hashlazy', 'Data.Digest.Pure.SHA.sha256', 'Data.Digest.Pure.SHA.sha512']);
 const WEAK_CIPHER_MODULES = new Set(['Crypto.Cipher.DES', 'Crypto.Cipher.RC4', 'Crypto.Cipher.RC2', 'Crypto.Cipher.Blowfish']);

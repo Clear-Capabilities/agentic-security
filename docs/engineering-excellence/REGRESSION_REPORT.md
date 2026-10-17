@@ -92,7 +92,7 @@ Before: evidence existed as separate files with no shared contract. After: 16 re
 
 | Area | Change |
 |---|---|
-| Bundle size | 5.34 MB to 5.49 MB (+2.8%) |
+| Bundle size | 5.34 MB to 5.50 MB (+2.9%) |
 | Published package files | 2869 to 3095 (+226) |
 | Scan health | A scan that skipped a file for size or density is now `partial`, where it used to say `complete`. Strict assurance fails such scans. Repositories with minified bundles or large data files will see it. |
 | Large trees | The repository's own source (829 files) stops its deep analysis early on every run, so its scan is never `complete`. |

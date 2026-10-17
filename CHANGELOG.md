@@ -9,6 +9,13 @@
 > make the history less accurate, not more.
 
 
+## 0.175.0 - More NixOS and Haskell detection
+
+Development cases only (renamed copies and near misses that must stay silent); no accuracy measurement was run, and the frozen holdout and unseen-shapes split were not read.
+
+- **NixOS rules.** `nix-sandbox-off`, `nix-signatures-off` (`require-sigs = false`), `nix-trusted-users-wildcard`, `kernel-sysctl-weakened` (ASLR, kptr_restrict, unprivileged BPF, dmesg, ptrace scope, protected links), `nfs-no-root-squash` and `docker-tcp-no-tls`. Commented-out lines, `mkForce` safe overrides and disabled services stay silent.
+- **Haskell.** The weak-hash rule also recognises the pureMD5 and SHA package entry points `md5DigestBytes` and `sha1Incremental`.
+
 ## 0.174.0 - Wider Haskell and NixOS detection, Zip Slip for Go
 
 New detection for Haskell and NixOS, and a Zip Slip rule for Go. Every addition has development cases written next to it, with renamed copies and near misses that must stay silent. They show that the entries work. They are **not an accuracy measurement**: the frozen holdout and the unseen-shapes split were not read or run, and the support registry's numbers are unchanged (it was rebuilt from the stored measurement only to list the new model packages).

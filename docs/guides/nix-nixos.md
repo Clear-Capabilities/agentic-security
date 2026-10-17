@@ -134,7 +134,7 @@ Judged against the effective configuration, never raw text. Enabled, listening a
 is merely declared is not a finding, and reachability is always `unknown` (only the host firewall is modelled).
 
 <!-- generated:nix-hardening:start -->
-27 rules, judged against the effective configuration:
+33 rules, judged against the effective configuration:
 
 | Rule | Family | CWE | Severity | Finding |
 | --- | --- | --- | --- | --- |
@@ -165,6 +165,12 @@ is merely declared is not a finding, and reachability is always `unknown` (only 
 | `getty-autologin` | login-access | CWE-306 | high | The console logs a user in without a password |
 | `display-autologin` | login-access | CWE-306 | low | The display manager logs a user in without a password |
 | `pam-null-password` | login-access | CWE-258 | high | A PAM service accepts accounts with an empty password |
+| `nix-sandbox-off` | nix-daemon-trust | CWE-693 | medium | The Nix build sandbox is disabled |
+| `nix-signatures-off` | nix-daemon-trust | CWE-347 | high | Nix accepts unsigned store paths |
+| `nix-trusted-users-wildcard` | nix-daemon-trust | CWE-269 | high | Every user is a Nix trusted user |
+| `kernel-sysctl-weakened` | kernel-hardening | CWE-693 | medium | A kernel hardening sysctl is set to a weaker value |
+| `nfs-no-root-squash` | network-filesystem | CWE-269 | high | NFS export keeps remote root as root |
+| `docker-tcp-no-tls` | container-declaration | CWE-306 | high | The Docker daemon listens on an unauthenticated TCP socket |
 <!-- generated:nix-hardening:end -->
 
 **Firewall port ranges.** `networking.firewall.allowedTCPPortRanges` and `allowedUDPPortRanges` open ports exactly as the
