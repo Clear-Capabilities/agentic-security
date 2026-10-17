@@ -59,6 +59,12 @@ export const HARDENING_RULES = Object.freeze({
   'getty-autologin': { family: 'login-access', cwe: 'CWE-306', severity: 'high', ruleVersion: 1, vuln: 'The console logs a user in without a password', why: 'services.getty.autologinUser starts a session on every virtual console with no authentication. For root that is a root shell for anyone with the keyboard, a serial line or a hypervisor console.', fix: 'Remove services.getty.autologinUser. Keep autologin to throwaway virtual machines and tests.' },
   'display-autologin': { family: 'login-access', cwe: 'CWE-306', severity: 'low', ruleVersion: 1, vuln: 'The display manager logs a user in without a password', why: 'Automatic login skips authentication at the graphical login, so anyone who can power the machine on gets the session. Disk encryption is the only remaining barrier.', fix: 'Disable autoLogin, or keep it only where physical access is controlled and the disk is encrypted.' },
   'pam-null-password': { family: 'login-access', cwe: 'CWE-258', severity: 'high', ruleVersion: 1, vuln: 'A PAM service accepts accounts with an empty password', why: 'allowNullPassword lets an account with no password log in through this service with an empty answer, which turns every passwordless account into an open login.', fix: 'Remove allowNullPassword (it defaults to false) and give every account a password hash or a key.' },
+  'nix-sandbox-off': { family: 'nix-daemon-trust', cwe: 'CWE-693', severity: 'medium', ruleVersion: 1, vuln: 'The Nix build sandbox is disabled', why: 'With the sandbox off, a build can read the host filesystem and the network, so a malicious or impure derivation can steal files and secrets or change its output depending on the host.', fix: 'Remove nix.settings.sandbox = false (the default is true). Fix the one derivation that needs impurity instead of weakening every build.' },
+  'nix-signatures-off': { family: 'nix-daemon-trust', cwe: 'CWE-347', severity: 'high', ruleVersion: 1, vuln: 'Nix accepts unsigned store paths', why: 'require-sigs = false lets the daemon import any store path from a client or substituter without a trusted signature, so whoever can push a path can run code as every user of that path.', fix: 'Remove nix.settings.require-sigs = false and sign the paths you copy with a key listed in trusted-public-keys.' },
+  'nix-trusted-users-wildcard': { family: 'nix-daemon-trust', cwe: 'CWE-269', severity: 'high', ruleVersion: 1, vuln: 'Every user is a Nix trusted user', why: 'A trusted user can import unsigned paths and set daemon options, which is root on the machine. Listing "*" or a broad group extends that to everyone who can reach the daemon.', fix: 'Keep nix.settings.trusted-users to root (and named administrators). Give other users nix.settings.allowed-users instead.' },
+  'kernel-sysctl-weakened': { family: 'kernel-hardening', cwe: 'CWE-693', severity: 'medium', ruleVersion: 1, vuln: 'A kernel hardening sysctl is set to a weaker value', why: 'Turning off address space randomisation, kernel pointer hiding or the unprivileged BPF restriction removes a mitigation that makes local exploits harder.', fix: 'Remove the boot.kernel.sysctl entry or restore the hardened value (randomize_va_space = 2, kptr_restrict = 1 or 2, unprivileged_bpf_disabled = 1).' },
+  'nfs-no-root-squash': { family: 'network-filesystem', cwe: 'CWE-269', severity: 'high', ruleVersion: 1, vuln: 'NFS export keeps remote root as root', why: 'no_root_squash maps a client\'s root user to root on the exported files, so anyone with root on a client can plant setuid binaries on the server.', fix: 'Drop no_root_squash (root_squash is the default) and restrict the client list to specific hosts.' },
+  'docker-tcp-no-tls': { family: 'container-declaration', cwe: 'CWE-306', severity: 'high', ruleVersion: 1, vuln: 'The Docker daemon listens on an unauthenticated TCP socket', why: 'A tcp:// host without TLS client verification gives anyone who can reach the port root on the machine, since the Docker API starts privileged containers.', fix: 'Remove the tcp:// host, or enable TLS with --tlsverify and a CA, and bind only to a private address.' },
 });
 
 /** Which rules explain each privileged entry-point kind (reconciliation join). */
@@ -407,6 +413,37 @@ export function analyzeNixosHardening(opts, extra = {}) {
     const j = judge(note(o, 'login'), (x) => x === true);
     if (j === 'yes' || j === 'conditional') addFinding('pam-null-password', { anchor: anchorOf(o), scope: o.path.replace(/\.allowNullPassword$/, ''), state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(o).definite, evidence: [evidenceOf(o)] });
   }
+
+  // ── nix daemon trust, kernel sysctls, network filesystems, docker socket ──
+  const sandboxRes = note(nixos('nix.settings.sandbox'), 'nix');
+  { const j = judge(sandboxRes, (x) => x === false); if (j === 'yes' || j === 'conditional') addFinding('nix-sandbox-off', { anchor: anchorOf(sandboxRes), scope: 'nix.settings.sandbox', state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(sandboxRes).definite, evidence: [evidenceOf(sandboxRes)] }); }
+  const sigsRes = note(nixos('nix.settings.require-sigs'), 'nix');
+  { const j = judge(sigsRes, (x) => x === false); if (j === 'yes' || j === 'conditional') addFinding('nix-signatures-off', { anchor: anchorOf(sigsRes), scope: 'nix.settings.require-sigs', state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(sigsRes).definite, evidence: [evidenceOf(sigsRes)] }); }
+  const trustedRes = note(nixos('nix.settings.trusted-users'), 'nix');
+  { const v = view(trustedRes);
+    const items = v.state === 'known' ? asList(v.value) : v.state === 'conditional' ? asList(v.definiteItems) : [];
+    if (items.some((u) => u === '*' || u === '@users' || u === '@everyone')) addFinding('nix-trusted-users-wildcard', { anchor: anchorOf(trustedRes), scope: 'nix.settings.trusted-users', state: v.state === 'conditional' ? 'conditional' : 'active', uncertain: !v.definite, evidence: [evidenceOf(trustedRes)] }); }
+  const SYSCTL_WEAK = new Map([['kernel.randomize_va_space', (x) => String(x) === '0'], ['kernel.kptr_restrict', (x) => String(x) === '0'], ['kernel.unprivileged_bpf_disabled', (x) => String(x) === '0'], ['kernel.dmesg_restrict', (x) => String(x) === '0'], ['kernel.yama.ptrace_scope', (x) => String(x) === '0'], ['fs.protected_symlinks', (x) => String(x) === '0'], ['fs.protected_hardlinks', (x) => String(x) === '0']]);
+  for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^boot\.kernel\.sysctl\./.test(x.path))) {
+    const key = o.path.slice('boot.kernel.sysctl.'.length).replace(/^"|"$/g, '');
+    const weak = SYSCTL_WEAK.get(key);
+    if (!weak) continue;
+    const j = judge(note(o, 'kernel'), weak);
+    if (j === 'yes' || j === 'conditional') addFinding('kernel-sysctl-weakened', { anchor: anchorOf(o), scope: `boot.kernel.sysctl.${key}`, state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(o).definite, evidence: [evidenceOf(o)], extra: { sysctl: key } });
+  }
+  const nfsRes = note(nixos('services.nfs.server.exports'), 'nfs');
+  { const j = judge(nfsRes, (x) => typeof x === 'string' && /(^|[\s,(])no_root_squash(?=[\s,)]|$)/.test(x.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n')));
+    if (j === 'yes' || j === 'conditional') addFinding('nfs-no-root-squash', { anchor: anchorOf(nfsRes), scope: 'services.nfs.server.exports', state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(nfsRes).definite, evidence: [evidenceOf(nfsRes)] }); }
+  { const dockerOn = judge(nixos('virtualisation.docker.enable'), (x) => x === true);
+    if (dockerOn === 'yes' || dockerOn === 'conditional') {
+      const optRes = nixos('virtualisation.docker.extraOptions');
+      const hostsRes = nixos('virtualisation.docker.daemon.settings.hosts');
+      const tlsOn = ['tls', 'tlsverify'].some((k) => view(nixos(`virtualisation.docker.daemon.settings.${k}`)).value === true);
+      const j1 = judge(optRes, (x) => typeof x === 'string' && /(?:-H|--host)[ =]+tcp:\/\//.test(x) && !/--tlsverify|--tls\b/.test(x));
+      const j2 = tlsOn ? 'no' : judge(hostsRes, (x) => Array.isArray(x) && x.some((h) => typeof h === 'string' && /^tcp:\/\//.test(h)));
+      const j = j1 === 'yes' ? 'yes' : j2 === 'yes' ? 'yes' : j1 === 'conditional' || j2 === 'conditional' ? 'conditional' : 'no';
+      if (j === 'yes' || j === 'conditional') { const res = j1 !== 'no' ? optRes : hostsRes; addFinding('docker-tcp-no-tls', { anchor: anchorOf(res), scope: 'virtualisation.docker', state: j === 'conditional' || dockerOn === 'conditional' ? 'conditional' : 'active', uncertain: false, evidence: [evidenceOf(res)] }); }
+    } }
 
   // ── databases / listeners ──
   if (hasDefs('services.postgresql.')) {
