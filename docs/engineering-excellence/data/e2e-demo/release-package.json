@@ -1,0 +1,804 @@
+{
+  "schema": "agentic-security/release-package",
+  "schemaVersion": "1.0.0",
+  "snapshot": {
+    "schema": "agentic-security/snapshot-ref",
+    "commit": "cccccccccccccccccccccccccccccccccccccccc",
+    "treeDigest": null,
+    "dirty": false,
+    "engineVersion": "demo",
+    "bundleSha": null,
+    "configDigest": null,
+    "immutable": true,
+    "digest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e"
+  },
+  "evidence": [
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "finding",
+        "payloadSchema": null,
+        "payloadVersion": null,
+        "payloadId": "8b20a2064d9a3755",
+        "payloadDigest": "sha256:c524dcf3e954c276adf45250928622bf510ad1d7dcd22c290d2e5fe7e0d4b051",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:0ff44ef88eb183b2e19b4dc652bfb1d0df2e7db467ff4766179930e1e64031d7",
+        "findingProvenanceDigest": null,
+        "otherProvenanceDigest": null
+      },
+      "payload": {
+        "id": "discovery-dci-authz-c6f2f535bd34",
+        "stableId": "8b20a2064d9a3755",
+        "severity": "medium",
+        "vuln": "Inconsistent ownership enforcement on note: GET /search",
+        "file": "services/api/app.js",
+        "line": 10,
+        "parser": "DISCOVERY",
+        "family": "authorization",
+        "cwe": "CWE-639",
+        "proofTier": "unproven",
+        "contextIntelligence": {
+          "counterexample": {
+            "state": "plausible"
+          }
+        }
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "finding",
+        "payloadSchema": null,
+        "payloadVersion": null,
+        "payloadId": "1df41ce7ed691b59",
+        "payloadDigest": "sha256:bae40adfbae43bd1b27ce96ce6df4e8a4dbd6593634e12271653b158a93d6216",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:94039040d5e6288a4bcf686050faf4f6561a2b4bb4be60d258158b84b0d0f689",
+        "findingProvenanceDigest": null,
+        "otherProvenanceDigest": null
+      },
+      "payload": {
+        "id": "discovery-dci-authz-ab8a408dcded",
+        "stableId": "1df41ce7ed691b59",
+        "severity": "medium",
+        "vuln": "Invariant TENANT-1 violated: GET /invoices/:id/lines",
+        "file": "services/api/app.js",
+        "line": 49,
+        "parser": "DISCOVERY",
+        "family": "authorization",
+        "cwe": "CWE-639",
+        "proofTier": "unproven",
+        "contextIntelligence": {
+          "counterexample": {
+            "state": "plausible"
+          }
+        }
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "fix-verification",
+        "payloadSchema": "agentic-security/fix-verification-record",
+        "payloadVersion": "1.0.0",
+        "payloadId": "fvrec:2f45b742fe3ee1f1",
+        "payloadDigest": "sha256:1792b3e2d12a1184edaa73e199e94006cc6a0a4a994c8a0edaabc46039ca9175",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [
+          "sha256:94039040d5e6288a4bcf686050faf4f6561a2b4bb4be60d258158b84b0d0f689"
+        ],
+        "digest": "sha256:33084d5b9cbd983b1c8d4539e6b7623415f7d19ad773bb7f789e8c4e4e957be8"
+      },
+      "payload": {
+        "schema": "agentic-security/fix-verification-record",
+        "schemaVersion": "1.0.0",
+        "findingId": "discovery-dci-authz-ab8a408dcded",
+        "findingStableId": "1df41ce7ed691b59",
+        "mode": "verify",
+        "route": "dci-reverify",
+        "preCommit": null,
+        "preTreeHash": null,
+        "postPatchHash": "sha256:1f3e4a935930e4b7171b9ec27c05f2348e3bcf1c082e137052456be286ad7c64",
+        "patchHash": "sha256:ec349ef5a27a5190e9ed4218549956681bdd99a5e6d5b9c5b726188998cef5fd",
+        "affectedFiles": [
+          "services/api/app.js"
+        ],
+        "securityBefore": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:99a4ab40fe8b7eea"
+          ],
+          "reason": null
+        },
+        "securityAfter": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:b253615063c233cd"
+          ],
+          "reason": null
+        },
+        "exploitProofBefore": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the finding had no executed counterexample"
+        },
+        "exploitProofAfter": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "no fixture was supplied"
+        },
+        "newFindingDelta": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "other inconsistencies remain; not compared with the pre-patch set here"
+        },
+        "behaviorPreservation": {
+          "status": "passed",
+          "evidenceIds": [],
+          "reason": "2 of 2 behaviour checks passed"
+        },
+        "behaviorTests": {
+          "status": "passed",
+          "evidenceIds": [],
+          "reason": "2 of 2 behaviour checks passed"
+        },
+        "regressionTests": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "lint": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "typecheck": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "dependencyChecks": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "requiredLegs": [
+          "securityAfter",
+          "behaviorPreservation",
+          "behaviorTests"
+        ],
+        "failures": [],
+        "evidence": [
+          {
+            "id": "ev:99a4ab40fe8b7eea",
+            "kind": "dci-finding",
+            "mediaType": "application/json",
+            "sha256": "08aa5dd4c6b9e3f963898424cee602caccec700c8ea7bac444ed625b5724f027"
+          },
+          {
+            "id": "ev:b253615063c233cd",
+            "kind": "dci-reanalysis",
+            "mediaType": "application/json",
+            "sha256": "b2b10253882dd6dca5d0e6317bbf7d0e3649d7e2f4c64f161a63c4251bd05148"
+          }
+        ],
+        "residualRisk": {
+          "level": "medium",
+          "notes": [
+            "behaviorPreservation: not_run (run the project tests through the fix verifier (verifyPatch) to cover behaviour)",
+            "behaviorTests: not_run (not run by this check)"
+          ]
+        },
+        "confidence": {
+          "level": "unknown",
+          "policy": null,
+          "evidenceIds": []
+        },
+        "tools": {
+          "engineVersion": null,
+          "verifier": "dci-reverify"
+        },
+        "verifiedFull": true,
+        "degradedLegs": [],
+        "coverage": {
+          "required": 3,
+          "passed": 3,
+          "notRun": 0,
+          "blocked": 0,
+          "failed": 0
+        },
+        "fixCompleteness": "MITIGATION",
+        "id": "fvrec:2f45b742fe3ee1f1"
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "runtime-explanation",
+        "payloadSchema": "agentic-security/runtime-explanation",
+        "payloadVersion": "1.0.0",
+        "payloadId": "fd3e0e5433b6cb89",
+        "payloadDigest": "sha256:626abcf93178cea675709b60531e61ea654c30b249fc20ebd007dd2ba03ceeda",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:48aba516c85464b576025286b9a15eee8bdc81fac26b4bee0833b0a2f41763a5"
+      },
+      "payload": {
+        "schema": "agentic-security/runtime-explanation@1",
+        "findingId": "discovery-dci-authz-b2433dcb54bc",
+        "findingStableId": "fd3e0e5433b6cb89",
+        "snapshot": {
+          "commit": "cccccccccccccccccccccccccccccccccccccccc",
+          "buildHash": "build-released",
+          "imageDigest": null,
+          "environment": null,
+          "dirty": false
+        },
+        "static": {
+          "staticallyReachable": {
+            "value": "unknown",
+            "basis": "no path analysis backs this finding",
+            "source": "none"
+          },
+          "externallyReachable": {
+            "value": "unknown",
+            "basis": "no route handler roots this path",
+            "source": "none"
+          },
+          "pathEdges": [
+            "route|/notes/:id|app.updateNote"
+          ]
+        },
+        "runtime": {
+          "observed": {
+            "value": "unknown",
+            "basis": "no runtime trace",
+            "source": "none"
+          },
+          "sampling": {
+            "state": "complete"
+          },
+          "windowDays": null,
+          "edges": [
+            {
+              "key": "route|/notes/:id|app.updateNote",
+              "state": "statically_inferred",
+              "confidence": 0.3,
+              "matchedRecords": 0,
+              "mismatchedRecords": 1,
+              "unattestedRecords": 0
+            }
+          ],
+          "missingObservations": [
+            "only a different build was observed using route|/notes/:id|app.updateNote"
+          ]
+        },
+        "compare": {
+          "state": "uncorroborated",
+          "missing": [
+            "route|/notes/:id|app.updateNote"
+          ]
+        },
+        "offline": true,
+        "digest": "4b66404a52691ed02731cef64e2e1cd893f9e7ce75ca8354b2acac3ffe37a769"
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "finding",
+        "payloadSchema": null,
+        "payloadVersion": null,
+        "payloadId": "fd3e0e5433b6cb89",
+        "payloadDigest": "sha256:2aefcd743bee0b832fb413276eae318e8b3495e07b29cca1d749d90838c7d9c8",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:9427c26d5ca384e1c84739c8fc2a932863ff221687287295c91b6487f4259a71",
+        "findingProvenanceDigest": null,
+        "otherProvenanceDigest": null
+      },
+      "payload": {
+        "id": "discovery-dci-authz-b2433dcb54bc",
+        "stableId": "fd3e0e5433b6cb89",
+        "severity": "high",
+        "vuln": "Inconsistent ownership enforcement on note: PUT /notes/:id",
+        "file": "services/api/app.js",
+        "line": 36,
+        "parser": "DISCOVERY",
+        "family": "authorization",
+        "cwe": "CWE-639",
+        "proofTier": "execution-proven",
+        "triage": {
+          "state": "confirmed",
+          "by": "demo-reviewer",
+          "reason": "executed counterexample"
+        },
+        "contextIntelligence": {
+          "counterexample": {
+            "state": "proven"
+          }
+        }
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "fix-verification",
+        "payloadSchema": "agentic-security/fix-verification-record",
+        "payloadVersion": "1.0.0",
+        "payloadId": "fvrec:60f1c8acf41eba8f",
+        "payloadDigest": "sha256:9f11d7b2606e20d5da7ff4660dae16ecdf356381f327e9d6981835a4328de1a7",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [
+          "sha256:9427c26d5ca384e1c84739c8fc2a932863ff221687287295c91b6487f4259a71"
+        ],
+        "digest": "sha256:4ac47698c56c380d4711741d6575deb50c4640c13b3beb7665ef010f58c61025"
+      },
+      "payload": {
+        "schema": "agentic-security/fix-verification-record",
+        "schemaVersion": "1.0.0",
+        "findingId": "discovery-dci-authz-b2433dcb54bc",
+        "findingStableId": "fd3e0e5433b6cb89",
+        "mode": "verify",
+        "route": "dci-reverify",
+        "preCommit": null,
+        "preTreeHash": null,
+        "postPatchHash": "sha256:631082da954db078079073c49db04ad2a72f4e315101f5f8e2a860feb25bec9d",
+        "patchHash": "sha256:103da2bb110412611a06e221581716d54736db3dfec690b7044817b12c7ea8f4",
+        "affectedFiles": [
+          "services/api/app.js"
+        ],
+        "securityBefore": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:9f8a0c1ba343fb69"
+          ],
+          "reason": null
+        },
+        "securityAfter": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:b253615063c233cd"
+          ],
+          "reason": null
+        },
+        "exploitProofBefore": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:2eb03547b47d162b"
+          ],
+          "reason": null
+        },
+        "exploitProofAfter": {
+          "status": "passed",
+          "evidenceIds": [
+            "ev:47b6aeec88220436"
+          ],
+          "reason": null
+        },
+        "newFindingDelta": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "other inconsistencies remain; not compared with the pre-patch set here"
+        },
+        "behaviorPreservation": {
+          "status": "passed",
+          "evidenceIds": [],
+          "reason": "3 of 3 behaviour checks passed"
+        },
+        "behaviorTests": {
+          "status": "passed",
+          "evidenceIds": [],
+          "reason": "3 of 3 behaviour checks passed"
+        },
+        "regressionTests": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "lint": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "typecheck": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "dependencyChecks": {
+          "status": "not_run",
+          "evidenceIds": [],
+          "reason": "the route did not run this check"
+        },
+        "requiredLegs": [
+          "securityAfter",
+          "exploitProofAfter",
+          "behaviorPreservation",
+          "behaviorTests"
+        ],
+        "failures": [],
+        "evidence": [
+          {
+            "id": "ev:2eb03547b47d162b",
+            "kind": "dci-counterexample",
+            "mediaType": "application/json",
+            "sha256": "c4d6bffc3e6fd0b50d011061e19e894ae7724a0b50eb496f022040db4b5a716d"
+          },
+          {
+            "id": "ev:47b6aeec88220436",
+            "kind": "dci-counterexample-after",
+            "mediaType": "application/json",
+            "sha256": "98cb1678f0f404e65a6276940dc5007267bc681e2c7ddf3ed0efd68cb46bb988"
+          },
+          {
+            "id": "ev:9f8a0c1ba343fb69",
+            "kind": "dci-finding",
+            "mediaType": "application/json",
+            "sha256": "4f3cb02818adfb761bc78c358678ded830e9f8c24e2c171946ef29605953e83a"
+          },
+          {
+            "id": "ev:b253615063c233cd",
+            "kind": "dci-reanalysis",
+            "mediaType": "application/json",
+            "sha256": "b2b10253882dd6dca5d0e6317bbf7d0e3649d7e2f4c64f161a63c4251bd05148"
+          }
+        ],
+        "residualRisk": {
+          "level": "medium",
+          "notes": [
+            "behaviorPreservation: not_run (run the project tests through the fix verifier (verifyPatch) to cover behaviour)",
+            "behaviorTests: not_run (not run by this check)"
+          ]
+        },
+        "confidence": {
+          "level": "unknown",
+          "policy": null,
+          "evidenceIds": []
+        },
+        "tools": {
+          "engineVersion": null,
+          "verifier": "dci-reverify"
+        },
+        "verifiedFull": true,
+        "degradedLegs": [],
+        "coverage": {
+          "required": 4,
+          "passed": 4,
+          "notRun": 0,
+          "blocked": 0,
+          "failed": 0
+        },
+        "fixCompleteness": "MITIGATION",
+        "id": "fvrec:60f1c8acf41eba8f"
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "runtime-explanation",
+        "payloadSchema": "agentic-security/runtime-explanation",
+        "payloadVersion": "1.0.0",
+        "payloadId": "ec61e1145b1dd25b",
+        "payloadDigest": "sha256:f6288f8b7dc1339ff55639b9f142746e206d75f5ed4a14dcd08f31d6aa2857db",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:5b03d3bf1225e07ed3005f66df6a5f18022409625233f37c4c4c038b99d895e7"
+      },
+      "payload": {
+        "schema": "agentic-security/runtime-explanation@1",
+        "findingId": "ir-taint:services/api/app.js:11:js-sql-query",
+        "findingStableId": "ec61e1145b1dd25b",
+        "snapshot": {
+          "commit": "cccccccccccccccccccccccccccccccccccccccc",
+          "buildHash": "build-released",
+          "imageDigest": null,
+          "environment": null,
+          "dirty": false
+        },
+        "static": {
+          "staticallyReachable": {
+            "value": "yes",
+            "basis": "a taint path from a source reaches the sink",
+            "source": "dataflow"
+          },
+          "externallyReachable": {
+            "value": "unknown",
+            "basis": "no route handler roots this path",
+            "source": "none"
+          },
+          "pathEdges": [
+            "route|/search|app.search"
+          ]
+        },
+        "runtime": {
+          "observed": {
+            "value": "unknown",
+            "basis": "no runtime trace was available",
+            "source": "none"
+          },
+          "sampling": {
+            "state": "complete"
+          },
+          "windowDays": null,
+          "edges": [
+            {
+              "key": "route|/search|app.search",
+              "state": "both",
+              "confidence": 0.95,
+              "matchedRecords": 1,
+              "mismatchedRecords": 0,
+              "unattestedRecords": 0
+            }
+          ],
+          "missingObservations": []
+        },
+        "compare": {
+          "state": "corroborated"
+        },
+        "offline": true,
+        "digest": "ac8f2cf6e46023a90f1cfa4052c71b523385edcb2771cec751c7139e47570c4b"
+      }
+    },
+    {
+      "role": "completeness",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "scan-health",
+        "payloadSchema": "agentic-security/scan-health",
+        "payloadVersion": "1.0.0",
+        "payloadId": null,
+        "payloadDigest": "sha256:ae9709e70d13dba21bac2d0932ac1195553c94d40487ececcbbaeab016431f82",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+      },
+      "payload": {
+        "schemaVersion": 1,
+        "status": "complete",
+        "files": {
+          "expected": 3,
+          "scanned": 3,
+          "skipped": 0,
+          "unanalysed": 0,
+          "timedOut": 0
+        },
+        "analyzers": {
+          "expected": 120,
+          "completed": 120,
+          "failed": 0,
+          "timedOut": 0,
+          "skippedByPolicy": 0
+        },
+        "deepAnalysis": {
+          "requested": true,
+          "enabled": true,
+          "inCi": false,
+          "ciOverrideAllowed": false,
+          "reason": null,
+          "failure": null
+        },
+        "lineageAnalysis": {
+          "requested": false,
+          "enabled": false,
+          "reason": "not requested",
+          "failure": null
+        },
+        "annotatorErrorCount": 0,
+        "freshness": {
+          "kev": {
+            "source": "offline-skipped",
+            "fetchedAt": null,
+            "ageDays": null,
+            "stale": null,
+            "entries": 0,
+            "meaning": "KEV membership escalates severity. A stale catalog omits recently-added CVEs, so it understates risk rather than overstating it."
+          },
+          "epss": {
+            "source": "not-loaded",
+            "ageDays": null,
+            "stale": null,
+            "cvesChecked": 0
+          },
+          "calibration": {
+            "generatedAt": "2026-05-18T19:15:00-07:00",
+            "ageDays": 150,
+            "stale": false
+          },
+          "compliance": null
+        },
+        "conditions": []
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "finding",
+        "payloadSchema": null,
+        "payloadVersion": null,
+        "payloadId": "ec61e1145b1dd25b",
+        "payloadDigest": "sha256:172181cc9522f177a38093ce84b145cf25a4cd019d7289f5a40bc980697ab2ca",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:b26127e0218f6647b80a26da640cc3b3781d0fd5484fd2cded7c37eab315ae26",
+        "findingProvenanceDigest": null,
+        "otherProvenanceDigest": null
+      },
+      "payload": {
+        "id": "ir-taint:services/api/app.js:11:js-sql-query",
+        "stableId": "ec61e1145b1dd25b",
+        "severity": "high",
+        "vuln": "SQL Injection (db.query)",
+        "file": "services/api/app.js",
+        "line": 11,
+        "parser": "IR-TAINT",
+        "family": "sql-injection",
+        "cwe": "CWE-89",
+        "proofTier": "taint-proven",
+        "triage": {
+          "state": "confirmed",
+          "by": "demo-reviewer",
+          "reason": "the search term reaches the statement by concatenation"
+        }
+      }
+    },
+    {
+      "role": "finding",
+      "ref": {
+        "schema": "agentic-security/evidence-ref",
+        "schemaVersion": "1.0.0",
+        "kind": "finding",
+        "payloadSchema": null,
+        "payloadVersion": null,
+        "payloadId": "a669cb1ca1da1a6b",
+        "payloadDigest": "sha256:55639fc33114b6e850ef6fbcce84e3a37013a8c4c54fb36b5d6a5c56defd23a2",
+        "snapshotDigest": "sha256:4995898f922101238859dc9acf4be1602a06c3276659e525e3fd00ad4a1d587e",
+        "snapshotImmutable": true,
+        "restsOn": [],
+        "digest": "sha256:fe89b4c31761d51149b10143115eed675aa598b83a4491c4ac061b4a376b2f97",
+        "findingProvenanceDigest": null,
+        "otherProvenanceDigest": null
+      },
+      "payload": {
+        "id": "ir-taint:services/worker/convert.py:11:py-subprocess-run",
+        "stableId": "a669cb1ca1da1a6b",
+        "severity": "high",
+        "vuln": "Command Injection (subprocess.run shell=True)",
+        "file": "services/worker/convert.py",
+        "line": 11,
+        "parser": "IR-TAINT",
+        "family": "command-injection",
+        "cwe": "CWE-78",
+        "proofTier": "taint-proven",
+        "triage": {
+          "state": "confirmed",
+          "by": "demo-reviewer",
+          "reason": "the file name reaches a shell"
+        }
+      }
+    }
+  ],
+  "lineageOrder": [
+    "sha256:0ff44ef88eb183b2e19b4dc652bfb1d0df2e7db467ff4766179930e1e64031d7",
+    "sha256:94039040d5e6288a4bcf686050faf4f6561a2b4bb4be60d258158b84b0d0f689",
+    "sha256:33084d5b9cbd983b1c8d4539e6b7623415f7d19ad773bb7f789e8c4e4e957be8",
+    "sha256:48aba516c85464b576025286b9a15eee8bdc81fac26b4bee0833b0a2f41763a5",
+    "sha256:9427c26d5ca384e1c84739c8fc2a932863ff221687287295c91b6487f4259a71",
+    "sha256:4ac47698c56c380d4711741d6575deb50c4640c13b3beb7665ef010f58c61025",
+    "sha256:5b03d3bf1225e07ed3005f66df6a5f18022409625233f37c4c4c038b99d895e7",
+    "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5",
+    "sha256:b26127e0218f6647b80a26da640cc3b3781d0fd5484fd2cded7c37eab315ae26",
+    "sha256:fe89b4c31761d51149b10143115eed675aa598b83a4491c4ac061b4a376b2f97"
+  ],
+  "requiredKinds": [
+    "finding",
+    "scan-health"
+  ],
+  "findings": [
+    {
+      "findingRef": "sha256:0ff44ef88eb183b2e19b4dc652bfb1d0df2e7db467ff4766179930e1e64031d7",
+      "findingId": "8b20a2064d9a3755",
+      "integrity": "unmodified-since-signing",
+      "proofTier": "unproven",
+      "exploitabilityProven": false
+    },
+    {
+      "findingRef": "sha256:94039040d5e6288a4bcf686050faf4f6561a2b4bb4be60d258158b84b0d0f689",
+      "findingId": "1df41ce7ed691b59",
+      "integrity": "unmodified-since-signing",
+      "proofTier": "unproven",
+      "exploitabilityProven": false
+    },
+    {
+      "findingRef": "sha256:9427c26d5ca384e1c84739c8fc2a932863ff221687287295c91b6487f4259a71",
+      "findingId": "fd3e0e5433b6cb89",
+      "integrity": "unmodified-since-signing",
+      "proofTier": "execution-proven",
+      "exploitabilityProven": true
+    },
+    {
+      "findingRef": "sha256:b26127e0218f6647b80a26da640cc3b3781d0fd5484fd2cded7c37eab315ae26",
+      "findingId": "ec61e1145b1dd25b",
+      "integrity": "unmodified-since-signing",
+      "proofTier": "taint-proven",
+      "exploitabilityProven": false
+    },
+    {
+      "findingRef": "sha256:fe89b4c31761d51149b10143115eed675aa598b83a4491c4ac061b4a376b2f97",
+      "findingId": "a669cb1ca1da1a6b",
+      "integrity": "unmodified-since-signing",
+      "proofTier": "taint-proven",
+      "exploitabilityProven": false
+    }
+  ],
+  "completeness": {
+    "scanStatus": "complete",
+    "conditions": [],
+    "verdict": "complete",
+    "source": "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+  },
+  "policy": {
+    "decisions": [
+      {
+        "id": "release-verdict",
+        "outcome": "not_deployable",
+        "reason": "2 condition(s) block the release.",
+        "policyVersion": "1"
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "id": "scan-finished",
+      "text": "the scan finished",
+      "status": "supported",
+      "reason": null,
+      "evidence": [
+        "sha256:96883089e2d084604a7d397954ed8294affaf73a82615862f3710d21374051c5"
+      ]
+    }
+  ],
+  "proves": "Nothing in this package changed after the key holder signed it: no field, no record, no ordering, no omission of the records it lists.",
+  "doesNotProve": "That any finding is real or exploitable (read each finding's proofTier), that the scan covered everything (read completeness), or that the key holder is independently certified (read issuance).",
+  "issuance": {
+    "trustBasis": "self-issued-local-key",
+    "independentlyCertified": false,
+    "statement": "Signed by a key this install generated for itself. It proves the bundle is unmodified since this key signed it. It is NOT independent third-party certification: whoever controls this install controls the key.",
+    "issuer": {
+      "keyFingerprint": "099fa3fbdf976e40920f40bf640442a238c193524dd44b708c9afcddf923e89c"
+    }
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "domain": "agentic-security/release-package@1",
+    "value": "amF2o+YESnUxvRA5aURn1XlCNEbZnoapB+l/Fl1sIs3dSn7wvnm0Dh47/BgAWYYOvUJqZD3/Xwg69rn4oZAyBQ=="
+  }
+}

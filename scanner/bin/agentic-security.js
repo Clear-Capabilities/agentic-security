@@ -141,6 +141,7 @@ Commands:
   validator-cache stats|gc     Inspect / prune .agentic-security/llm-cache/ (use --older-than <days> --dry-run)
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   ask "<question>" [target]    Bounded local-model Q&A with read-only tool access (requires AGENTIC_SECURITY_LLM_PRESET=ollama)
+  release-view <package.json>  Developer, CISO and auditor views of one signed release package (--view, --format text|json|html, --previous, --public-key)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
@@ -2923,6 +2924,18 @@ async function cmdCompliance(args) {
     const { loadFreshLineageGraph } = await import('../src/server/graph-loader.js');
     const { graph: wtGraph, fresh: wtGraphIsFresh, loaded: wtLoaded } = loadFreshLineageGraph(scanRoot, scan);
     const evaluation = evaluateFramework(scanRoot, fw, { ...scan, lineageGraph: wtGraph });
+    // `--truth`: restate every control in the six-state truth model (assessed_satisfied, assessed_not_satisfied, not_assessed, not_applicable,
+    // requires_human_review, insufficient_evidence) with explicit denominators, instead of the evaluator's four statuses.
+    if (args.flags.truth === true && (fmt === 'oscal' || fmt === 'json')) {
+      const { assessFrameworkTruth } = await import('../src/posture/compliance-truth.js');
+      let notApplicable = {};
+      try { notApplicable = JSON.parse(fs.readFileSync(statePath(scanRoot, 'compliance-applicability.json'), 'utf8'))?.[fw.id] || {}; } catch { /* none declared */ }
+      const truth = assessFrameworkTruth(fw, evaluation, { scanStatus: scan.scanHealth?.status, scanExaminedFiles: scan.filesScanned > 0, notApplicable });
+      if (fmt === 'json') { writeStdout(JSON.stringify(truth, null, 2) + '\n'); return 0; }
+      const { toOSCALCompliance, complianceRowsFromTruth } = await import('../src/report/oscal.js');
+      writeStdout(JSON.stringify(toOSCALCompliance(fw, complianceRowsFromTruth(truth), { startedAt: scan.startedAt || scan._scanMeta?.startedAt }), null, 2) + '\n');
+      return 0;
+    }
     if (fmt === 'oscal') {
       const { toOSCALCompliance, complianceRowsFromEvaluation } = await import('../src/report/oscal.js');
       writeStdout(JSON.stringify(
@@ -3235,6 +3248,29 @@ async function cmdVerifyRunAttestation(attestation, args) {
   console.log(`  proves:          ${attestation.proves}`);
   console.log(`  does NOT prove:  ${attestation.doesNotProve}`);
   return 0;
+}
+
+// `release-view <package.json>`: the developer, CISO and auditor views of one signed release package, built from the same findings (E7-07).
+async function cmdReleaseView(args) {
+  const file = args._[1];
+  if (!file) { console.error('Usage: agentic-security release-view <release-package.json> [--view developer|ciso|auditor|all] [--format text|json|html] [--previous <older-package.json>] [--public-key <path>]'); return 2; }
+  let pkg; let previous = null;
+  try { pkg = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8')); } catch (e) { console.error(`Could not read the package: ${e.message}`); return 2; }
+  if (args.flags.previous) { try { previous = JSON.parse(fs.readFileSync(path.resolve(String(args.flags.previous)), 'utf8')); } catch (e) { console.error(`Could not read the previous package: ${e.message}`); return 2; } }
+  let verification = null;
+  if (args.flags['public-key']) {
+    let key; try { key = fs.readFileSync(path.resolve(String(args.flags['public-key'])), 'utf8'); } catch { console.error(`Could not read public key at ${args.flags['public-key']}.`); return 2; }
+    const { verifyReleasePackage } = await import('../src/posture/assurance/release-package-verify.js');
+    verification = verifyReleasePackage(pkg, key);
+  }
+  const { buildViews, renderText, renderHtml } = await import('../src/report/perspectives.js');
+  const views = buildViews(pkg, { previous, verification });
+  const fmt = String(args.flags.format || 'text'); const view = String(args.flags.view || 'all');
+  if (!['text', 'json', 'html'].includes(fmt) || !['developer', 'ciso', 'auditor', 'all'].includes(view)) { console.error('Unknown --format or --view.'); return 2; }
+  if (fmt === 'json') writeStdout(JSON.stringify(view === 'all' ? { developer: views.developer, ciso: views.ciso, auditor: views.auditor } : views[view], null, 2) + '\n');
+  else if (fmt === 'html') writeStdout(renderHtml(views));
+  else writeStdout(renderText(views, view));
+  return verification && !verification.ok ? 1 : 0;
 }
 
 async function cmdVerifyAttestation(args) {
@@ -7645,6 +7681,7 @@ async function main() {
       case 'compliance': process.exit(await cmdCompliance(args));
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
+      case 'release-view': process.exit(await cmdReleaseView(args));
       case 'policy-explain': process.exit(await cmdPolicyExplain(args));
       case 'policy-sign': process.exit(await cmdPolicySign(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));

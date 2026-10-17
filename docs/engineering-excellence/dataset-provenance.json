@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-16T12:54:13.028Z",
+  "requiredFacts": [
+    "sourceProject",
+    "commitBefore",
+    "commitAfter",
+    "advisory",
+    "language",
+    "scope",
+    "license",
+    "labelConfidence",
+    "acquisitionChecksum",
+    "split"
+  ],
+  "populations": {
+    "independent": {
+      "role": "independent",
+      "status": "audited",
+      "manifest": "bench/independent/manifest.json",
+      "schema": "agentic-security/independent-population@1",
+      "manifestSha256": "113b30ac8e03bdb35b6577f52ad8a3f3b394e329c03afaa235e75897cde9d599",
+      "entries": 1004,
+      "repositories": 424,
+      "byLanguage": {
+        "csharp": 15,
+        "go": 84,
+        "java": 34,
+        "javascript": 124,
+        "kotlin": 2,
+        "php": 73,
+        "python": 100,
+        "ruby": 250,
+        "typescript": 322
+      },
+      "factCoverage": {
+        "sourceProject": 1004,
+        "commitBefore": 1004,
+        "commitAfter": 1004,
+        "advisory": 1004,
+        "language": 1004,
+        "scope": 1004,
+        "license": 1004,
+        "labelConfidence": 1004,
+        "acquisitionChecksum": 0,
+        "split": 1004
+      },
+      "missingExamples": {
+        "sourceProject": [],
+        "commitBefore": [],
+        "commitAfter": [],
+        "advisory": [],
+        "language": [],
+        "scope": [],
+        "license": [],
+        "labelConfidence": [],
+        "acquisitionChecksum": [
+          "GHSA-225x-3jhx-wh4q",
+          "GHSA-228g-948r-83gx",
+          "GHSA-22g5-r2x5-97cx",
+          "GHSA-22jq-vg5j-6vgg",
+          "GHSA-22p9-r2f5-22mf"
+        ],
+        "split": []
+      },
+      "completeEntries": 0,
+      "upstreamSample": {
+        "sampled": 34,
+        "confirmed": 34,
+        "missingUpstream": 0,
+        "notChecked": 0
+      },
+      "licenseSummary": {
+        "repositories": 424,
+        "looked": 424,
+        "noLicenseAsserted": 82,
+        "notLookedUp": 0,
+        "topLicenses": [
+          [
+            "MIT",
+            213
+          ],
+          [
+            "NOASSERTION",
+            82
+          ],
+          [
+            "Apache-2.0",
+            69
+          ],
+          [
+            "AGPL-3.0",
+            16
+          ],
+          [
+            "BSD-3-Clause",
+            11
+          ],
+          [
+            "GPL-3.0",
+            8
+          ],
+          [
+            "BSD-2-Clause",
+            7
+          ],
+          [
+            "LGPL-2.1",
+            5
+          ]
+        ]
+      },
+      "splitProtocolHash": "sha256:612425af9f0dd8ac0fd6a0f0c0dfb0d5fa055611de6faa11b57ac5ae3ffe4d65",
+      "reconstructableFromUpstream": 1004,
+      "unavailable": [],
+      "unavailableCount": 0,
+      "duplicateIds": [],
+      "note": "Reconstructable means the manifest names a repository, both commits and an advisory; it was not re-fetched here. A missing licence, split or acquisition checksum is reported as missing, not defaulted."
+    },
+    "cveReplay": {
+      "role": "regression",
+      "status": "audited",
+      "entries": 220,
+      "bySourceTier": {
+        "synthetic-shape-of-disclosed-cve": 212,
+        "family-shape-known-clean-win": 2,
+        "synthetic-example": 1,
+        "synthetic-shape-of-owasp-api5-bfla": 1,
+        "synthetic-shape-of-owasp-llm01-system-prompt-injection": 1,
+        "synthetic-shape-of-mcp-supply-chain-bootstrap": 1,
+        "execution-proven": 1,
+        "synthetic-shape-of-common-open-ssh-misconfig": 1
+      },
+      "usableForAccuracyClaims": false,
+      "note": "Fixtures written in this repository and admitted once they score. A regression net: its detection rate is at the ceiling by construction, so it can never support a precision or recall claim."
+    },
+    "sard": {
+      "role": "regenerated",
+      "status": "audited",
+      "usableForAccuracyClaims": "only the held-out test split, never the full corpus",
+      "sources": [
+        {
+          "name": "sard-php-vulnerability-test-suite",
+          "url": "https://samate.nist.gov/SARD/downloads/test-suites/2015-10-27-php-vulnerability-test-suite.zip",
+          "sha256": "3407473fc2cfa38eea9216b8a7f22559b656f20ba5f2eb3b6992010265780f8c",
+          "pinned": true
+        }
+      ],
+      "splits": [
+        "sard-juliet-csharp-strict.json",
+        "sard-juliet-java-strict.json"
+      ],
+      "note": "Public suites pulled and transformed locally; not vendored. The ledger records that no number in it came from a held-out test split."
+    }
+  }
+}

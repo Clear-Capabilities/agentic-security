@@ -116,8 +116,13 @@ export class SummaryCache {
   }
 
   get(qid, taintedParams, receiverType) {
-    return this._cache.get(this._key(qid, taintedParams, receiverType));
+    const r = this._cache.get(this._key(qid, taintedParams, receiverType));
+    if (r === undefined) this._misses = (this._misses || 0) + 1; else this._hits = (this._hits || 0) + 1;
+    return r;
   }
+
+  /** Lookups that found and did not find a summary (E6-01). */
+  stats() { return { hits: this._hits || 0, misses: this._misses || 0, size: this._cache.size }; }
 
   set(qid, taintedParams, summary, receiverType) {
     const k = this._key(qid, taintedParams, receiverType);
@@ -163,6 +168,7 @@ export class SummaryCache {
       return { returnTainted: false, mutatedParams: new Set(), taintedGlobals: new Set(), findings: [], _recursive: true };
     }
     if (++this._iter > this._maxIter) {
+      this._budgetHits = (this._budgetHits || 0) + 1;
       return { returnTainted: false, mutatedParams: new Set(), taintedGlobals: new Set(), findings: [], _budgetExceeded: true };
     }
     this._stack.add(qid);

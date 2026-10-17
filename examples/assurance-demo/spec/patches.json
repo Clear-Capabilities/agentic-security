@@ -1,0 +1,8 @@
+{
+  "note": "Candidate patches, as exact text edits. 'notes-deny-all' is a false fix: it silences the detector by refusing every request, owners included.",
+  "patches": [
+    { "id": "notes-owner-scope", "fixes": "PUT /notes/:id", "kind": "correct", "edits": [ { "file": "services/api/app.js", "find": "await db.notes.updateOne({ id: req.params.id }, { $set: req.body });", "replace": "await db.notes.updateOne({ id: req.params.id, ownerId: req.user.id }, { $set: req.body });" } ] },
+    { "id": "notes-deny-all", "fixes": "PUT /notes/:id", "kind": "false-fix", "edits": [ { "file": "services/api/app.js", "find": "app.put('/notes/:id', requireUser, async (req, res) => {\n  await db.notes.updateOne({ id: req.params.id }, { $set: req.body });\n  res.sendStatus(204);\n});", "replace": "app.put('/notes/:id', requireUser, async (req, res) => {\n  return res.sendStatus(403);\n});" } ] },
+    { "id": "invoice-lines-tenant-scope", "fixes": "GET /invoices/:id/lines", "kind": "correct", "edits": [ { "file": "services/api/app.js", "find": "await db.lines.find({ invoiceId: req.params.id });", "replace": "await db.lines.find({ invoiceId: req.params.id, tenantId: req.user.tenantId });" } ] }
+  ]
+}

@@ -1,0 +1,56 @@
+> @clear-capabilities/agentic-security-scanner@0.172.1 gate:prepush
+> node ../scripts/pre-push-gate.mjs --force
+  running npm run check:bundle-source …
+> @clear-capabilities/agentic-security-scanner@0.172.1 check:bundle-source
+> node ../scripts/check-bundle-source.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 test:ci-parity
+> CI=true GITHUB_ACTIONS=true node --test test/backward-default.test.js test/ci-parity.test.js test/container-taint.test.js test/deep-taint.test.js test/engine-recall.test.js test/engine-reconnect.test.js test/gate-verdict-cache.test.js test/ignore-pragma.test.js test/java-taint-flow.test.js test/kt-taint-flow.test.js test/py-annotation-sources.test.js test/runscan-deep-option.test.js test/sanitizer-typed-flow.test.js
+> @clear-capabilities/agentic-security-scanner@0.172.1 test
+> node ../scripts/run-unit-tests.mjs
+✔ the gate is registered in the pre-push gate and the release gate, and its npm script exists (0.540375ms)
+  ✔ [X-208.AC02] the gate is wired into the release gate (and its group, so the parallel workflow cannot drop it) and the pre-push gate (0.533167ms)
+> @clear-capabilities/agentic-security-scanner@0.172.1 test:extras
+> AGENTIC_SECURITY_CPP_DATAFLOW=1 node --test test/cpp-dataflow.test.js && node --experimental-test-module-mocks --test test/fault-injection.test.js && node --experimental-test-module-mocks --test test/detector-fault-injection.test.js && node --experimental-test-module-mocks --test test/detector-fault-injection-k8s-admission.test.js && node --experimental-test-module-mocks --test test/lineage-fault-injection.test.js && npm run test:python
+> @clear-capabilities/agentic-security-scanner@0.172.1 test:python
+> node ../scripts/run-python-tests.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:cve-replay:check
+> node ../bench/cve-replay/runner.mjs --check-baseline
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:self-scan:check
+> node ../bench/self-scan/check.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:protection-verdict:check
+> node ../bench/protection-verdict/runner.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:provenance-accuracy:check
+> node ../bench/provenance-accuracy/runner.mjs --check
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:mutation:check
+> node ../bench/mutation/runner.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:fix-verify:check
+> node ../bench/fix-verification/runner.mjs --check
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:layer-recall:check
+> node ../bench/layer-recall/runner.mjs --check
+> @clear-capabilities/agentic-security-scanner@0.172.1 bench:language-support:check
+> node ../bench/language-support/check.mjs
+> @clear-capabilities/agentic-security-scanner@0.172.1 verification:conformance:static
+> node ../scripts/verification-conformance-check.mjs --static
+> @clear-capabilities/agentic-security-scanner@0.172.1 release:closure:static
+> node ../scripts/release-closure.mjs --static
+PASS  Working tree matches the commit being pushed
+PASS  Push does not delete an implausible number of tracked files
+      ! no base commit to compare against, so deletion blast radius was NOT measured for this push (a brand-new branch with no shared ancestor).
+PASS  Built bundle matches its SHA-256 sidecar
+PASS  Committed bundle equals a fresh build of the source
+PASS  Package contents match the committed expectation
+PASS  Env-sensitive tests agree with hosted-CI conditions
+PASS  Full test suite passes
+PASS  CVE-replay corpus baseline holds
+PASS  Self-scan precision baseline holds
+PASS  Metamorphic + adversarial mutation gate holds
+PASS  False-protected release gate holds (transit/atRest verdicts)
+PASS  Known-origin provenance accuracy baseline holds
+PASS  Fix verification benchmark matches its baseline (no new unsafe fix accepted)
+PASS  Per-layer, per-language taint recall baseline holds
+PASS  Haskell/Nix support registry matches the stored measurement
+PASS  Every registered verification oracle satisfies the static conformance contract
+PASS  The release closure plan is sound (areas, scripts, scopes, release group, hosted jobs)
+pre-push gate PASSED in 924s — verified: worktree-matches-push, push-blast-radius, bundle-integrity, bundle-matches-source, package-contents, ci-parity, test-suite, corpus-gate, self-scan-gate, mutation-gate, protection-verdict-gate, provenance-accuracy-gate, fix-verification-gate, layer-recall-gate, language-support-gate, verification-conformance-static, release-closure-static. (Network checks — dependency currency, hosted CI — run at publish time via `npm run release:check`.)
+exit 0
+commit 5c1af313ca8c (HEAD at the time): 5c1af31382e4001af4ad41c0458f943d74341e16

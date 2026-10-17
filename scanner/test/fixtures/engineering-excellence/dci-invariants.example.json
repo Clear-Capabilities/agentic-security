@@ -1,0 +1,23 @@
+{
+  "schema": "agentic-security/dci-invariants",
+  "schemaVersion": "1.0.0",
+  "invariants": [
+    {
+      "id": "ORDERS-001",
+      "title": "Order routes are authenticated and owner-scoped",
+      "rule": "requires",
+      "appliesTo": { "routes": ["/orders/*", "/orders"], "methods": ["GET", "POST", "PUT", "DELETE"] },
+      "requires": ["authentication", "ownership"],
+      "severity": "high",
+      "validity": { "paths": ["src/**", "app.js"] }
+    },
+    {
+      "id": "HEALTH-001",
+      "title": "The health check is open on purpose",
+      "rule": "public-by-design",
+      "appliesTo": { "routes": ["/health"] },
+      "waives": ["authentication", "ownership"],
+      "public": { "reason": "load balancer probe, returns a constant", "owner": "platform-team", "reviewBy": "2099-01-01" }
+    }
+  ]
+}

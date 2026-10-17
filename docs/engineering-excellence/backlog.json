@@ -1,0 +1,485 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-16T12:46:07.779Z",
+  "independentMisses": {
+    "count": 96,
+    "byLanguage": {
+      "typescript": 32,
+      "python": 50,
+      "javascript": 14
+    },
+    "byCategory": {
+      "shape-doesnt-occur/deeper-engine-gap": 83,
+      "shape-doesnt-occur": 6,
+      "shape-doesnt-occur/missing-catalog": 6,
+      "masked-downstream": 1
+    },
+    "source": "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md",
+    "engineVersion": "0.137.1 (archived; not the current engine)"
+  },
+  "formula": "examples x impact x confidence / effort",
+  "items": [
+    {
+      "id": "path-traversal-symlink",
+      "title": "Path traversal and symlink escapes through values that do not come from a web request",
+      "summary": "Misses where the attacker-controlled value arrives through a workflow context, a parsed document attribute or a library parameter rather than req.query, so no source is modelled; plus walks and archives that never check for symlinks. Source and sink catalogues exist; the gap is source modelling and cross-file propagation.",
+      "cwes": [
+        "CWE-22",
+        "CWE-59",
+        "CWE-61",
+        "CWE-73"
+      ],
+      "categories": [
+        "deeper-engine-gap",
+        "missing-catalog"
+      ],
+      "evidenceKind": "reproducer",
+      "reproducer": "values from a workflow context, a missing symlink check and a parsed XSD attribute",
+      "effort": "M",
+      "effortReason": "cross-file symbol resolution plus a handful of new source kinds",
+      "ownerTask": "E2-02",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#4",
+        "scanner/src/dataflow"
+      ],
+      "reproducerPrefixes": [
+        "GHSA-2956",
+        "GHSA-22p9",
+        "GHSA-442q"
+      ],
+      "examples": 14,
+      "reproducerIds": [
+        "GHSA-2956-977x-2w3r",
+        "GHSA-22p9-r2f5-22mf",
+        "GHSA-442q-2j6p-642g"
+      ],
+      "unresolvedReproducers": [],
+      "impact": 4,
+      "confidence": 0.9,
+      "effortWeight": 3,
+      "score": 16.8,
+      "problems": []
+    },
+    {
+      "id": "injection-via-forwarded-arguments",
+      "title": "Code, command and argument injection through forwarded keyword arguments and generated code",
+      "summary": "Library entry points that forward **kwargs to a CLI or interpolate a parsed value into generated source. The taint engine tracks a value to a call but not through argument forwarding and code-generation templates.",
+      "cwes": [
+        "CWE-94",
+        "CWE-88",
+        "CWE-78"
+      ],
+      "categories": [
+        "deeper-engine-gap",
+        "missing-catalog"
+      ],
+      "evidenceKind": "reproducer",
+      "reproducer": "keyword arguments forwarded to git commands and a code-generator template",
+      "effort": "M",
+      "effortReason": "summary keys that carry keyword-argument maps, bounded by E2-05's budgets",
+      "ownerTask": "E2-05",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#4",
+        "scanner/src/dataflow"
+      ],
+      "reproducerPrefixes": [
+        "GHSA-3f7w",
+        "GHSA-4gmw",
+        "GHSA-386q"
+      ],
+      "examples": 10,
+      "reproducerIds": [
+        "GHSA-3f7w-8rr8-f37f",
+        "GHSA-4gmw-gg2m-w46p",
+        "GHSA-386q-5hp3-95m9"
+      ],
+      "unresolvedReproducers": [],
+      "impact": 5,
+      "confidence": 0.9,
+      "effortWeight": 3,
+      "score": 15,
+      "problems": []
+    },
+    {
+      "id": "corpus-scoping",
+      "title": "Independent entries whose vulnerable file is not in the materialised scope",
+      "summary": "Entries the root-cause record labels as corpus-scoping issues: they are scored as misses although the vulnerable code was deleted by the fix or lives outside the packaged scope. (The record's prose says five; four table rows carry the label, and that count is what is scored here.) That penalises the engine for the dataset; it must be separated from engine gaps before any rate is quoted.",
+      "cwes": [],
+      "impact": 3,
+      "evidenceKind": "reproducer",
+      "reproducer": "the root-cause record explains each entry",
+      "effort": "S",
+      "effortReason": "label the entries unscored in the manifest with the reason",
+      "ownerTask": "E1-01",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#2.1",
+        "bench/independent/manifest.json"
+      ],
+      "reproducerPrefixes": [
+        "GHSA-4j8x",
+        "GHSA-52fh",
+        "GHSA-5xvg",
+        "GHSA-954p",
+        "GHSA-jx74"
+      ],
+      "evidenceRegex": "CORPUS SCOPING",
+      "examples": 4,
+      "reproducerIds": [
+        "GHSA-4j8x-x6v7-w9rq",
+        "GHSA-52fh-8v99-63c2",
+        "GHSA-5xvg-pmgg-3mxr",
+        "GHSA-954p-556p-r752",
+        "GHSA-jx74-cqjv-2c67"
+      ],
+      "unresolvedReproducers": [],
+      "confidence": 0.9,
+      "effortWeight": 1,
+      "score": 10.8,
+      "problems": []
+    },
+    {
+      "id": "authz-ownership",
+      "title": "Authorization and ownership checks the engine cannot see (IDOR, missing auth, cross-workspace)",
+      "summary": "The largest cluster of independent misses where the fix adds an ownership, workspace or permission check that the engine never modelled as missing: handlers that forward query or body identifiers to a service with no scope check, sibling routes that carry middleware while one does not, and checks ANDed in the wrong way. These need route-to-service-to-persistence comparison, which DCI is built for, not another pattern.",
+      "cwes": [
+        "CWE-639",
+        "CWE-862",
+        "CWE-863",
+        "CWE-284",
+        "CWE-285"
+      ],
+      "categories": [
+        "deeper-engine-gap",
+        "missing-catalog"
+      ],
+      "evidenceKind": "reproducer",
+      "reproducer": "each entry's evidence column cites the missing check",
+      "effort": "L",
+      "effortReason": "needs cross-route and cross-layer propagation (E4-03) and measured families (E4-06)",
+      "ownerTask": "E4-03",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#4",
+        "bench/independent/manifest.json"
+      ],
+      "reproducerPrefixes": [
+        "GHSA-2364",
+        "GHSA-chm3",
+        "GHSA-fm2f",
+        "GHSA-jxc9",
+        "GHSA-mj5r"
+      ],
+      "examples": 12,
+      "reproducerIds": [
+        "GHSA-2364-jh4q-m9vm",
+        "GHSA-chm3-vqcf-52rx",
+        "GHSA-fm2f-4339-4p2f",
+        "GHSA-jxc9-xmc4-gr23",
+        "GHSA-mj5r-jf49-m3w7"
+      ],
+      "unresolvedReproducers": [],
+      "impact": 5,
+      "confidence": 0.9,
+      "effortWeight": 8,
+      "score": 6.75,
+      "problems": []
+    },
+    {
+      "id": "ssrf-unguarded-fetch",
+      "title": "SSRF where the guard lives in a different file or the redirect is followed",
+      "summary": "Client-controlled URLs reaching an HTTP client across files, and outbound clients that follow a redirect into internal space. Some sinks are covered by accident; the guard model (what counts as a validated fetch) is not.",
+      "cwes": [
+        "CWE-918"
+      ],
+      "categories": [
+        "deeper-engine-gap",
+        "missing-catalog"
+      ],
+      "evidenceKind": "trace",
+      "effort": "M",
+      "effortReason": "cross-file resolution of the guarded-fetch helper plus redirect handling in the sink model",
+      "ownerTask": "E2-04",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#4"
+      ],
+      "reproducerPrefixes": [
+        "GHSA-gcvv",
+        "GHSA-g366",
+        "GHSA-c9hr",
+        "GHSA-pgwh",
+        "GHSA-rfr2"
+      ],
+      "trace": "the record traces these misses to an HTTP client with no guard on the path from a client-controlled URL (GHSA-gcvv, GHSA-g366), a redirect followed without re-validation (GHSA-c9hr) and a sink matched only by accident (GHSA-rfr2)",
+      "examples": 6,
+      "reproducerIds": [
+        "GHSA-gcvv-72q8-9v76",
+        "GHSA-g366-23fw-ggp6",
+        "GHSA-c9hr-64h3-gxpc",
+        "GHSA-pgwh-4jj4-qm8v",
+        "GHSA-rfr2-mq9m-x2qx"
+      ],
+      "unresolvedReproducers": [],
+      "impact": 4,
+      "confidence": 0.6,
+      "effortWeight": 3,
+      "score": 4.8,
+      "problems": []
+    },
+    {
+      "id": "data-exposure-ordering",
+      "title": "Sensitive data returned before the authorization decision is computed",
+      "summary": "Responses that spread a full model into the body before a permission flag is evaluated, and cross-tenant namespace queries without segment anchoring. These are ordering and scoping properties of a handler, so they belong with the invariant work.",
+      "cwes": [
+        "CWE-200",
+        "CWE-204"
+      ],
+      "categories": [
+        "deeper-engine-gap",
+        "missing-catalog"
+      ],
+      "evidenceKind": "hypothesis",
+      "hypothesis": "the pattern is write-after-read ordering inside one handler (response built before the access decision); an invariant of the form 'authorization checked before the response is assembled' would catch it. Not yet reproduced against the current engine.",
+      "effort": "M",
+      "effortReason": "depends on first-class invariants (E4-02)",
+      "ownerTask": "E4-02",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#4"
+      ],
+      "examples": 9,
+      "reproducerIds": [
+        "GHSA-3r7g-q6cg-q2vx",
+        "GHSA-47pj-3jcm-6whg",
+        "GHSA-4cwx-7wf7-3272",
+        "GHSA-4jc5-g844-4x33",
+        "GHSA-79qm-7rj5-m7r9",
+        "GHSA-chgm-3698-jm42",
+        "GHSA-fr6g-7cq8-fg82",
+        "GHSA-jm22-3w23-5q7w"
+      ],
+      "unresolvedReproducers": [],
+      "impact": 3,
+      "confidence": 0.3,
+      "effortWeight": 3,
+      "score": 2.7,
+      "problems": []
+    },
+    {
+      "id": "third-party-completion",
+      "title": "Third-party repository completion was 3 of 10 and its causes were not separated",
+      "summary": "A scored run completed 3 of 10 targets. Without separating clone, tool, parser, timeout and engine causes the number cannot say whether the engine or the setup failed.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 4,
+      "evidenceKind": "reproducer",
+      "reproducer": "docs/SCORECARD.md line 417: 3/10 targets completed at the recorded bundle",
+      "effort": "M",
+      "effortReason": "reproduce per target, classify, fix the engine-controlled categories",
+      "ownerTask": "E6-02",
+      "sources": [
+        "docs/SCORECARD.md"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.9,
+      "effortWeight": 3,
+      "score": 1.2,
+      "problems": []
+    },
+    {
+      "id": "mcp-tool-count-drift",
+      "title": "Five documents state 17 MCP tools; the server registers 23",
+      "summary": "Found by the E0-01 inventory. Documentation drift is not a detection problem, but it is a public claim that is wrong at HEAD.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 1,
+      "evidenceKind": "reproducer",
+      "reproducer": "docs/engineering-excellence/inventory.json, claims table",
+      "effort": "S",
+      "effortReason": "edit five files",
+      "ownerTask": "E8-04",
+      "sources": [
+        "docs/engineering-excellence/INVENTORY.md"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.9,
+      "effortWeight": 1,
+      "score": 0.9,
+      "problems": []
+    },
+    {
+      "id": "wrongful-suppression",
+      "title": "Findings produced and then lost (suppression, sanitizer assumptions, CWE remapping)",
+      "summary": "One independent miss was a detector that silently discarded every finding it produced. Others show a finding present under a different file or CWE. A stage-by-stage candidate ledger is the way to find the rest instead of guessing.",
+      "cwes": [
+        "CWE-307",
+        "CWE-20"
+      ],
+      "categories": [
+        "masked-downstream"
+      ],
+      "examplesOverride": 1,
+      "impact": 3,
+      "evidenceKind": "reproducer",
+      "reproducer": "scanner/src/sast/rate-limit.js discarded all findings because they carried no `vuln` field (fixed in 640da42); the root-cause record documents it",
+      "effort": "M",
+      "effortReason": "instrument the lifecycle once, then triage what the ledger shows",
+      "ownerTask": "E2-08",
+      "sources": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md#3",
+        "scanner/src/engine.js"
+      ],
+      "examples": 1,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.9,
+      "effortWeight": 3,
+      "score": 0.9,
+      "problems": []
+    },
+    {
+      "id": "java-this-call-lowering",
+      "title": "Java parser lowers this.method(...) to the literal \"unknown\"",
+      "summary": "Recorded as flagged and not started in the SARD ledger: calls through `this` do not resolve in the Java call graph, hiding intra-class flows.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 4,
+      "evidenceKind": "trace",
+      "effort": "M",
+      "effortReason": "parser-level fix with safe twins",
+      "ownerTask": "E2-06",
+      "sources": [
+        "bench/sard/IMPLEMENTATION_STATUS.md",
+        "scanner/src/ir"
+      ],
+      "trace": "the SARD ledger records that parser-java lowers `this.method(...)` to the literal \"unknown\", so the call never enters the call graph (section \"What remains genuinely open\")",
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.6,
+      "effortWeight": 3,
+      "score": 0.8,
+      "problems": []
+    },
+    {
+      "id": "no-current-independent-measurement",
+      "title": "No independent measurement exists for the current engine",
+      "summary": "The published scorecard describes the current engine with only a curated regression net; the only independent figures are for engine 0.141.0 with a dirty measurement worktree. Every accuracy statement about the current engine is unsupported until a clean-commit run exists.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 5,
+      "evidenceKind": "reproducer",
+      "reproducer": "docs/SCORECARD.md states 'no independent evaluation of this engine' and bench/independent/gate-baseline.json records engine 0.141.0",
+      "effort": "L",
+      "effortReason": "hours of network fetch and scanning, run in checkpointed shards",
+      "ownerTask": "E1-04",
+      "sources": [
+        "docs/SCORECARD.md",
+        "bench/independent/gate-baseline.json"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.9,
+      "effortWeight": 8,
+      "score": 0.56,
+      "problems": []
+    },
+    {
+      "id": "csharp-source-propagation",
+      "title": "C# taint propagation gap for LDAP, XPath and command-injection source shapes",
+      "summary": "Five plausible mechanisms were tested and ruled out in the SARD ledger; the cause is unidentified. The PRD names C# input-source propagation as a confirmed historical gap to re-check in the current checkout.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 4,
+      "evidenceKind": "hypothesis",
+      "hypothesis": "a source shape shared by the three CWE families is not propagated; needs a probe on synthetic twins, not corpus access",
+      "effort": "M",
+      "effortReason": "probe, then a targeted propagation fix with safe sibling",
+      "ownerTask": "E2-06",
+      "sources": [
+        "bench/sard/IMPLEMENTATION_STATUS.md"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.3,
+      "effortWeight": 3,
+      "score": 0.4,
+      "problems": []
+    },
+    {
+      "id": "incremental-cache-invalidation",
+      "title": "Incremental cache keys may miss transitive dependency and feed-freshness changes",
+      "summary": "The incremental cache is keyed by content and tool version. Changing a callee or a sanitizer in another file, or advancing the advisory feed, must invalidate dependents; a stale clean result is a false green.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 4,
+      "evidenceKind": "hypothesis",
+      "hypothesis": "scanner/src/dataflow/incremental.js and k2-summary-cache.js invalidate on file content; transitive callers and feed age are the unproven part. E6-04 builds the counterexample test.",
+      "effort": "M",
+      "effortReason": "dependency-aware invalidation with parity tests",
+      "ownerTask": "E6-04",
+      "sources": [
+        "scanner/src/dataflow/incremental.js",
+        "scanner/src/dataflow/k2-summary-cache.js"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.3,
+      "effortWeight": 3,
+      "score": 0.4,
+      "problems": []
+    },
+    {
+      "id": "analyzer-resource-caps",
+      "title": "Analyzer isolation does not cap memory or CPU per worker",
+      "summary": "The supervisor isolates analyzer failures and timeouts; no RSS or CPU limit is enforced per worker, so a runaway analyzer can exhaust the host before the timeout fires.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 3,
+      "evidenceKind": "hypothesis",
+      "hypothesis": "scanner/src/pipeline/analyzer-supervisor.js bounds time and restarts workers; no resource limit is passed to the worker. E6-05 reproduces with an allocation loop.",
+      "effort": "M",
+      "effortReason": "supervised workers with limits on the existing supervisor",
+      "ownerTask": "E6-05",
+      "sources": [
+        "scanner/src/pipeline/analyzer-supervisor.js"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.3,
+      "effortWeight": 3,
+      "score": 0.3,
+      "problems": []
+    },
+    {
+      "id": "patch-route-fragmentation",
+      "title": "Several patch routes may not share one verification contract",
+      "summary": "CLI fix, MCP apply_fix, autopilot and SCA upgrades exist, and a hypothesis-level verification record exists in the assurance contracts. Whether every route produces the same patch-level verdict, and whether a deny-all patch is rejected everywhere, is not established.",
+      "cwes": [],
+      "examplesOverride": 0,
+      "impact": 5,
+      "evidenceKind": "hypothesis",
+      "hypothesis": "the routes were built at different times (fix-verify-loop, apply-fix-service, deterministic-fix) and each may apply a different subset of checks; E3-01 produces the contract table that confirms or refutes this",
+      "effort": "L",
+      "effortReason": "one verifier behind every route, with compatibility adapters",
+      "ownerTask": "E3-01",
+      "sources": [
+        "scanner/src/fix/apply-fix-service.js",
+        "scanner/src/posture/fix-verify.js",
+        "scanner/src/posture/assurance/verification-record.js"
+      ],
+      "examples": 0,
+      "reproducerIds": [],
+      "unresolvedReproducers": [],
+      "confidence": 0.3,
+      "effortWeight": 8,
+      "score": 0.19,
+      "problems": []
+    }
+  ]
+}

@@ -58,7 +58,8 @@ import { proofCoverage } from './posture/proof-coverage.js';
 import { computeScanHealth, applyFreshness } from './pipeline/scan-health.js';
 import { computeCoverageLedger, summarizeCoverageForScanHealth } from './pipeline/coverage-ledger.js';
 import { runAnnotatorAsync } from './pipeline/annotator-runner.js';
-import { runDetector } from './pipeline/detector-runner.js';
+import { runDetector, setDetectorTimingSink } from './pipeline/detector-runner.js';
+import { createTelemetry, attributeErrors } from './pipeline/telemetry.js';
 import { registerProducer } from './pipeline/producer-registry.js';
 import { collectProducerResult } from './pipeline/producer-collector.js';
 import { completeEnrichment } from './pipeline/enrichment-completion.js';
@@ -129,6 +130,8 @@ import { scanClientSide } from './sast/client-side.js';
 import { scanPromptFirewall } from './sast/prompt-firewall.js';
 import { scanLlmRedteam } from './posture/llm-redteam.js';
 import { assessPrivacyFramework, persistPrivacyFramework } from './posture/privacy-framework.js';
+import { signLastScan } from './posture/integrity.js';
+import { secretCanaryHit } from './posture/runtime-trace-ingest.js';
 import { safeWriteState as _safeWriteState, statePath, statePath as _statePath } from './posture/state-dir.js';
 import { scanContainer } from './sca/container.js';
 import { detectDepConfusion } from './sca/dep-confusion.js';
@@ -210,6 +213,7 @@ import { applyPathConstraints } from './posture/path-predicates.js';
 import { buildProjectIR, buildProjectIRAsync } from './ir/index.js';
 import _v8 from 'node:v8';
 import _vm from 'node:vm';
+import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
@@ -446,7 +450,11 @@ function _ruleAppliesIn(pat, ctx){
 // comments would put the second pass into a stuck string state, blanking the
 // rest of the file. Backtick `${...}` template expressions are preserved
 // verbatim because they contain real source/sink references.
-function stripNoiseAndStrings(code){
+// Called by several detectors per file with the same text; the result depends only on the text, so it is computed once per distinct text
+// (util/string-memo.js). AGENTIC_SECURITY_NO_STRING_MEMO=1 turns the memo off.
+const _stripNoiseAndStringsMemo = createStringMemo((c) => _stripNoiseAndStringsRaw(c), { version: 'stripNoiseAndStrings@1', disableEnv: 'AGENTIC_SECURITY_NO_STRING_MEMO' });
+function stripNoiseAndStrings(code){ return _stripNoiseAndStringsMemo(code); }
+function _stripNoiseAndStringsRaw(code){
   const out = code.split('');
   const n = code.length;
   let i = 0;
@@ -3132,6 +3140,27 @@ function getProjectConstant(name){
   if (!name || !_projectIndex.constantsByExport) return null;
   const hit = _projectIndex.constantsByExport.get(name);
   return hit ? hit.value : null;
+}
+
+// E6-04: a digest of every input OUTSIDE a single file that the per-file detector cascade reads: the project index (constants, properties, the
+// e-commerce flag), the Java tainted-method index, and the operator's rules file with its signature. A cached per-file result is reused only when this
+// is unchanged, so a change to a constant in one file cannot leave another file's cached answer standing.
+const _ANALYSIS_CACHE_NEVER_RE = /(?:^|[\\/])\.?mcp(?:\.[a-z]+)?\.json$|(?:^|[\\/])\.mcp\.json$/i;
+function _analysisContextDigest(scanRoot){
+  const h = crypto.createHash('sha256');
+  const mapEntries = (m) => [...(m || new Map()).entries()].map(([k, v]) => [k, v]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  h.update(JSON.stringify({
+    ecommerce: !!_projectIndex.hasEcommerceModel,
+    byFile: mapEntries(_projectIndex.constantsByFile),
+    byExport: mapEntries(_projectIndex.constantsByExport),
+    props: mapEntries(_projectIndex.javaProperties),
+    javaTainted: [..._GLOBAL_JAVA_TAINTED_METHODS].sort(),
+  }));
+  for (const name of ['rules.yml', 'rules.yaml', 'rules.json', 'rules.yml.sig', 'rules.yaml.sig', 'rules.json.sig']) {
+    h.update(`\n${name}\0`);
+    try { h.update(fs.readFileSync(statePath(scanRoot, name))); } catch { h.update('absent'); }
+  }
+  return h.digest('hex');
 }
 
 const _COUPON_MUTATION_RE = /\b(?:apply|redeem|validate|use|deduct|decrement|increment|update|save|consume|create|destroy|remove|insert)\b/i;
@@ -8859,7 +8888,12 @@ function _gcHint(minHeapMiB) {
   _gcFn();
 }
 
-async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){_resetSuppressions();_buildProjectIndex(fileContents);await _loadCustomRules(scanRoot);
+async function runFullScan({fileContents={}, depFileContents={}, scanRoot=null, resume=undefined, deep=undefined, deepInCi=undefined, provenance=true, completeScan=true, skipAnnotators=false, policyExcluded=[], sizeSkipped=[]}, setProgress=()=>{}){
+  // E6-01: local, aggregate telemetry for this scan (see pipeline/telemetry.js). Nothing is sent anywhere; the snapshot is a field of the result.
+  const _tel = createTelemetry({ deterministic: isDeterministic() });
+  setDetectorTimingSink((name, ms) => _tel.detector(name, ms));
+  _tel.sample();
+  _resetSuppressions();_tel.time('index', () => _buildProjectIndex(fileContents));await _tel.timeAsync('custom-rules', () => _loadCustomRules(scanRoot));
   // Pre-pass: build cross-file Java tainted-method index so per-file taint
   // analysis can recognize calls to user-input-returning helper methods
   // defined in OTHER files (Juliet's DataflowThruInnerClass / Vector / Stream
@@ -8885,17 +8919,20 @@ function _deterministicFileTimings(timings) {
 }
 
   const _fileTimings = [];
-  let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0;
+  let _filesSkipped = 0, _filesTimedOut = 0, _filesDenseSkipped = 0, _filesOversizeSkipped = 0;
   const files=Object.keys(fileContents).filter(f=>(shouldScan(f) || isKubernetesManifest(f, fileContents[f]) || isCloudFormationTemplate(f, fileContents[f]) || isInstructionFile(f)) && !_isPathIgnored(f));const fc={},pfr={};const aR=[],aF=[],aSrc=[],aSink=[],aSan=[],aLogic=[],aSupply=[],aSecrets=[],aCiphersRest=[],aCiphersTransit=[];const _detectorErrors=[];
   // ---- R8: opt-in per-file checkpointing (AGENTIC_SECURITY_RESUME=1, or
   // runScan({resume:true})). Default OFF, so existing behaviour is untouched.
   // Only this loop is checkpointed; every cross-file pass below re-runs, so
   // nothing that depends on the whole tree can be stale on resume.
   const _ckptEnabled = (resume === undefined ? process.env.AGENTIC_SECURITY_RESUME === '1' : !!resume) && !!scanRoot;
+  // E6-04: opt-in cross-scan analysis cache (AGENTIC_SECURITY_ANALYSIS_CACHE=1). Same per-file record format as the resume checkpoint, but it is kept after
+  // a completed scan, its records are authenticated with the install key, and the global key also covers the cross-file inputs a file's cascade reads.
+  const _cacheEnabled = !_ckptEnabled && process.env.AGENTIC_SECURITY_ANALYSIS_CACHE === '1' && !!scanRoot;
   let _ckpt = null; const _ckptPayloads = new Map(); let _ckptDone = new Set(); let _ckptResumed = 0, _ckptWrites = 0;
   const _ckptAbortAfter = parseInt(process.env.AGENTIC_SECURITY_CHECKPOINT_ABORT_AFTER || '0', 10) || 0;
   let _ckptInvalidated = [];
-  if (_ckptEnabled) {
+  if (_ckptEnabled || _cacheEnabled) {
     try {
       const _ckptIdentity = {
         engineVersion: _ENGINE_VERSION,
@@ -8909,8 +8946,9 @@ function _deterministicFileTimings(timings) {
       // instead, so changing one file no longer discards every other file's
       // already-completed work — see scan-checkpoint.js's module header.
       _ckpt = openCheckpoint(scanRoot, {
-        globalKey: computeGlobalKey(_ckptIdentity),
+        globalKey: computeGlobalKey(_cacheEnabled ? { ..._ckptIdentity, extra: _analysisContextDigest(scanRoot) } : _ckptIdentity),
         meta: globalKeyMeta(_ckptIdentity),
+        ...(_cacheEnabled ? { persistent: true, fileName: 'analysis-cache.jsonl', sign: signLastScan } : {}),
         // Haskell/Nix sources hash with their import closure, so an imported
         // module's change invalidates its importers' checkpointed work too.
         fileContents: withLanguageClosure(fileContents, depFileContents),
@@ -8939,6 +8977,17 @@ function _deterministicFileTimings(timings) {
     for (const x of (d.ciphersRest || [])) aCiphersRest.push(x);
     for (const x of (d.ciphersTransit || [])) aCiphersTransit.push(x);
     for (const x of (d.suppressions || [])) _suppressionLog.push(x);
+    // A finding's `source` and `sink` ARE the entries of this file's source and sink lists (one object, two references), and later passes annotate them in
+    // place (flowStatus, riskStatus, ...). Reading a record back from JSON gives each reference its own copy, so the annotation would reach the list entry
+    // and not the finding. Re-pointing the finding at the matching list entry restores the sharing a fresh analysis has.
+    {
+      const srcByJson = new Map(); for (const x of aSrc.slice(s0)) srcByJson.set(JSON.stringify(x), x);
+      const sinkByJson = new Map(); for (const x of aSink.slice(k0)) sinkByJson.set(JSON.stringify(x), x);
+      for (const f of aF.slice(f0)) {
+        if (f && f.source && typeof f.source === 'object') { const m = srcByJson.get(JSON.stringify(f.source)); if (m) f.source = m; }
+        if (f && f.sink && typeof f.sink === 'object') { const m = sinkByJson.get(JSON.stringify(f.sink)); if (m) f.sink = m; }
+      }
+    }
     const ta = Object.assign({}, d.pfr || {});
     ta.findings = aF.slice(f0, f0 + (d.pfrFindings || 0));
     ta.sources = aSrc.slice(s0); ta.sinks = aSink.slice(k0); ta.sanitizers = aSan.slice(n0);
@@ -8947,9 +8996,10 @@ function _deterministicFileTimings(timings) {
     _ckptResumed++;
     return true;
   };
+  let _cacheSecretSkips = 0;
   const _ckptRecord = (p, mk, ms, ta) => {
     if (!_ckpt || !_ckpt.enabled) return;
-    recordFileDone(_ckpt, p, {
+    const _payload = {
       routes: aR.slice(mk.aR), findings: aF.slice(mk.aF),
       sources: aSrc.slice(mk.aSrc), sinks: aSink.slice(mk.aSink), sanitizers: aSan.slice(mk.aSan),
       logic: aLogic.slice(mk.aLogic), secrets: aSecrets.slice(mk.aSecrets),
@@ -8958,7 +9008,10 @@ function _deterministicFileTimings(timings) {
       pfr: _pfrMetaOnly(ta),
       pfrFindings: (ta && Array.isArray(ta.findings)) ? ta.findings.length : 0,
       ms,
-    });
+    };
+    // A cache that outlives the scan must not become a second copy of a secret: a file whose result contains a secret-shaped value is analysed afresh each time.
+    if (_cacheEnabled) { let _txt = ''; try { _txt = JSON.stringify(_payload); } catch { /* not serializable: recordFileDone refuses it too */ } if (secretCanaryHit(_txt)) { _cacheSecretSkips++; return; } }
+    recordFileDone(_ckpt, p, _payload);
     _ckptWrites++;
     // Fault injection for the resume test: a hard exit with no unwinding, which
     // is what the checkpoint format has to survive. Never set in normal use.
@@ -8978,12 +9031,13 @@ function _deterministicFileTimings(timings) {
     });
   }
   let i=0;
+  const _tDet = Date.now();
   try {
   for(const p of files){i++;const _ft0=Date.now();setProgress({current:i,total:files.length,file:p.split("/").pop(),phase:"Scanning"});
     if(_ckptDone.has(p)&&_ckptReplay(p))continue;
     const _mk={aR:aR.length,aF:aF.length,aSrc:aSrc.length,aSink:aSink.length,aSan:aSan.length,aLogic:aLogic.length,aSecrets:aSecrets.length,aCR:aCiphersRest.length,aCT:aCiphersTransit.length,sup:_suppressionLog.length};
-    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}
-      let _delta;
+    try{const c=fileContents[p];if(!c||c.length>500000){_filesSkipped++;if(c&&c.length>500000)_filesOversizeSkipped++;continue;}const _avgLine=c.length/Math.max(c.split('\n').length,1);if(_avgLine>400&&c.length>10000){_filesDenseSkipped++;continue;}
+      let _delta; const _errsBefore = _detectorErrors.length;
       if (_cascadePool) {
         const _res = await _cascadePool.runFile(p, c, scanRoot, _detectorErrors, { timeoutMs: _perFileTimeoutMs });
         if (_res.ok) { _delta = _res.result; }
@@ -8997,7 +9051,9 @@ function _deterministicFileTimings(timings) {
       const _ftElapsed=Date.now()-_ft0;
       if(_ftElapsed>_perFileTimeoutMs){aF.push({id:`file-timeout:${p}`,file:p,line:0,vuln:`File analysis exceeded ${_perFileTimeoutMs}ms (${_ftElapsed}ms)`,severity:'info',parser:'ENGINE',confidence:0.5,_timeout:true});_filesTimedOut++;}
       _fileTimings.push({file:p,ms:_ftElapsed});
-      _ckptRecord(p,_mk,_ftElapsed,_delta.pfr);
+      // The cache only keeps a file whose analysis finished cleanly: a detector that threw, a timeout, or a file whose analysis reads or writes state outside
+      // itself (the MCP rug-pull baseline) is analysed afresh every time so health reporting and side effects stay exactly as they are.
+      if (!_cacheEnabled || (_detectorErrors.length === _errsBefore && _ftElapsed <= _perFileTimeoutMs && !_ANALYSIS_CACHE_NEVER_RE.test(p))) _ckptRecord(p,_mk,_ftElapsed,_delta.pfr);
     }catch(_){_fileTimings.push({file:p,ms:Date.now()-_ft0,error:true});}
     if(i%5===0)await new Promise(r=>setTimeout(r,0));}
   } finally {
@@ -9146,6 +9202,8 @@ function _deterministicFileTimings(timings) {
     };
     filterArr(aF); filterArr(aLogic); filterArr(aSecrets); filterArr(aSupply);
   }
+  _tel.record('detectors-per-file', Date.now() - _tDet);
+  const _tLink = Date.now();
   setProgress({current:i,total:files.length,file:"Cross-file...",phase:"Linking"});const ii=buildImportGraph(fc);const cf=crossFileTaint(pfr,fc,ii);aF.push(...cf);
   setProgress({current:i,total:files.length,file:"Stored taint...",phase:"Linking"});const storedRegistry=buildStoredTaintRegistry(fc);const stf=crossStoredTaint(fc,storedRegistry);aF.push(...stf);
   setProgress({current:i,total:files.length,file:"Session taint...",phase:"Linking"});const sess=crossSessionTaint(fc);aF.push(...sess);
@@ -9153,6 +9211,7 @@ function _deterministicFileTimings(timings) {
   // R19 (PRD §5): cross-route BOLA/BFLA over the aggregated route inventory.
   // Convention deviation is PROJECT-scoped by design: the convention is a
   // property of the codebase, not of one file (see convention-deviation.js).
+  _tel.record('cross-file-linking', Date.now() - _tLink);
   aF.push(...(runDetector(_detectorErrors,'<project>','scanConventionDeviationProject',()=>scanConventionDeviationProject(fc))||[]));
   aF.push(...(runDetector(_detectorErrors,'<project>','scanApiBrokenAuthz',()=>scanApiBrokenAuthz(aR))||[]));
   // R22 (PRD §5): cross-service edges inferred from code (client call → matched route).
@@ -9432,6 +9491,7 @@ function _deterministicFileTimings(timings) {
   const _deepEnabled = _deepRequested && (!_inCi || _deepInCiAllowed);
   let _deepCallGraph = null;
   let _deepFailure = null;
+  let _deepIncomplete = null;
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
@@ -9462,6 +9522,8 @@ function _deterministicFileTimings(timings) {
         }),
       });
       const elapsed = Date.now() - t0;
+      _tel.record('deep-analysis', elapsed);
+      if (irFindings.analysisIncomplete && irFindings._summaryCache && typeof irFindings._summaryCache.stats === 'function') { const st = irFindings._summaryCache.stats(); _tel.set('cache.summary.hits', st.hits); _tel.set('cache.summary.misses', st.misses); }
       if (elapsed > budgetMs) {
         // We exceeded budget — surface a single info finding so operators see it.
         aF.push({
@@ -9473,6 +9535,7 @@ function _deterministicFileTimings(timings) {
           confidence: 0.5,
         });
       }
+      if (Array.isArray(irFindings.analysisIncomplete) && irFindings.analysisIncomplete.length) _deepIncomplete = irFindings.analysisIncomplete;
       for (const f of irFindings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
@@ -9514,6 +9577,8 @@ function _deterministicFileTimings(timings) {
           ? (_inCi ? 'requested, but running in CI without AGENTIC_SECURITY_DEEP_IN_CI=1' : 'unknown')
           : (_inCi ? 'not requested (deep analysis defaults to off in CI)' : 'not requested')),
     failure: _deepFailure,
+    // E2-05: where the deep analysis stopped short (budget, deadline, function limit, a thrown analysis). Present only when something did.
+    ...(_deepIncomplete ? { incomplete: _deepIncomplete } : {}),
   };
   // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
   // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above
@@ -9861,7 +9926,7 @@ function _deterministicFileTimings(timings) {
   let _annotatorIdx = 0;
   const _runAnnotator = (phase, fn) => {
     setProgress({ phase: 'Annotating', current: ++_annotatorIdx, total: _ANNOTATOR_TOTAL_ESTIMATE, file: phase });
-    return runAnnotatorAsync(_annotatorErrors, phase, fn);
+    return _tel.timeAsync(`annotator:${phase}`, () => runAnnotatorAsync(_annotatorErrors, phase, fn));
   };
   await _runAnnotator('annotateStableIds', () => annotateStableIds(finalFindings));
   await _runAnnotator("clusterByRootCause", () => { finalFindings = clusterByRootCause(finalFindings); });
@@ -10740,7 +10805,7 @@ function _deterministicFileTimings(timings) {
   // seen when only N-of-those-candidates were actually analyzed.
   // checkpoint.total intentionally keeps files.length — that field means the
   // full candidate set for resume bookkeeping, a different, correct meaning.
-  _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
+  _scanMeta={filesScanned:Object.keys(fc).length,filesSkipped:_filesSkipped,filesOversizeSkipped:_filesOversizeSkipped,filesDenseSkipped:_filesDenseSkipped,filesTimedOut:_filesTimedOut,analysisTier:_analysisTier,unmodeledSinkCandidates:_unmodeledSinks,fileTimings:_deterministicFileTimings(_fileTimings),findingsBySeverity:{critical:finalFindings.filter(f=>f.severity==='critical').length,high:finalFindings.filter(f=>f.severity==='high').length,medium:finalFindings.filter(f=>f.severity==='medium').length,low:finalFindings.filter(f=>f.severity==='low').length,info:finalFindings.filter(f=>f.severity==='info').length},checkpoint:{enabled:!!(_ckpt&&_ckpt.enabled),...(_cacheEnabled?{kind:'analysis-cache',secretSkips:_cacheSecretSkips}:{}),resumed:_ckptResumed,total:files.length,discarded:!!(_ckpt&&_ckpt.discarded),discardReason:(_ckpt&&_ckpt.discarded)?(_ckpt.reason||null):null,invalidatedFileCount:_ckptInvalidated.length,invalidatedFiles:_ckptInvalidated.slice(0,20),invalidatedFilesTruncated:_ckptInvalidated.length>20}};
   // R8: the scan completed, so the checkpoint has been fully consumed — remove
   // it. Anything that threw before this point leaves it in place to resume from.
   try { closeCheckpoint(_ckpt, { complete: true }); } catch (_) {}
@@ -11163,7 +11228,10 @@ function _deterministicFileTimings(timings) {
     compliance: _complianceReport ? { stale: _complianceReport.summary?.stale || 0 } : null,
   });
   } // end if (!skipAnnotators) — FR-PROV-029
-  return{entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
+  setDetectorTimingSink(null);
+  attributeErrors(_tel, { annotatorErrors: _annotatorErrors, detectorErrors: (typeof _detectorErrors !== 'undefined' ? _detectorErrors : []), deepFailure: _deepFailure, filesTimedOut: (_scanMeta && _scanMeta.filesTimedOut) || 0 });
+  _tel.set('files.scanned', (_scanMeta && _scanMeta.filesScanned) || 0); _tel.set('files.skipped', (_scanMeta && _scanMeta.filesSkipped) || 0);
+  return{telemetry:_tel.snapshot(),entrypointInventory:_entrypointInventory,rootCauseSweep:_rootCauseSweep,proofCoverage:_proofCoverage,kevCatalog:kevCatalogMeta(),routes:dd(aR,r=>`${r.method}:${r.path}:${r.file}:${r.line}`),findings:finalFindings,sources:aSrc,sinks:aSink,sanitizers:aSan,filesScanned:files.length,linesScanned:Object.values(fc).reduce((_n,_c)=>_n+(typeof _c==='string'?_c.split("\n").length:0),0),crossFileCount:cf.length,logicVulns:aLogic,supplyChain,components:annotatedComponents,secrets:aSecrets,ciphers:{atRest:aCiphersRest,inTransit:aCiphersTransit},pfr,fc,depFileContents,suppressions:_getSuppressions(),...(_stageEvidenceOn()?{stageEvidence:{dedupe:[..._stageEvidence.dedupe],guard:[..._stageEvidence.guard]}}:{}),_v3,_scanMeta,_engineErrors:{cppDataflowParseErrors:_cppDataflowParseErrors.value},annotatorErrors:_annotatorErrors,detectorErrors:_detectorErrors,executionProof:_executionProofSummary,logicClaims:_logicClaims,vulnHistory:_vulnHistory,threatModel:_threatModel,privacyFramework:_privacyFramework,privacyIrBacked:_privacyIrBacked,privacyTaxonomyVersion:_privacyTaxonomyVersion,sbomDiff:_sbomDiff,complianceReport:_complianceReport,exploitBundles:_exploitBundles,pqcPlan:_pqcPlan,licenseGraph:_licenseGraph,attributions:_attributions,attackTaxonomy:_taxonomySummary,scanHealth:_scanHealth,coverageLedger:_coverageLedger,lineageGraph:_lineageGraph,lineageStatus:_lineageStatus,languageBridges:_languageBridges,languageBom:_languageBom,aiAssistance:_aiAssistance};}
 
 // Post-aggregation classification: every source becomes "unsafe"|"safe"; every sink becomes "confirmed"|"safe".
 // Orphans (no finding linkage) are bucketed by file-local heuristic so the UI shows binary states only.

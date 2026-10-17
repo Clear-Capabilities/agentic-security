@@ -1,0 +1,5141 @@
+{
+  "schemaVersion": 1,
+  "runId": "a72968195aa1",
+  "reconciliation": {
+    "scored": 278,
+    "localizedTruePositives": 6,
+    "localizedFalseNegatives": 272,
+    "classified": 272,
+    "unclassified": [],
+    "classifiedButNotAMiss": [],
+    "duplicateClassifications": [],
+    "reconciles": true,
+    "rule": "scored = localized true positives + localized false negatives; every false negative is classified exactly once"
+  },
+  "byCategory": {
+    "no_detector_candidate": 151,
+    "parse_ir_gap": 5,
+    "missing_source_or_sink": 81,
+    "alias_or_callgraph_gap": 7,
+    "sanitizer_misclassification": 0,
+    "guard_or_suppression": 0,
+    "reachability_demotion": 0,
+    "wrong_file_or_cwe": 27,
+    "tool_or_setup_incomplete": 1,
+    "unlabelled_ambiguity": 0
+  },
+  "clusters": [
+    {
+      "category": "no_detector_candidate",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "count": 151,
+      "languages": {
+        "php": 28,
+        "typescript": 23,
+        "javascript": 15,
+        "go": 26,
+        "java": 15,
+        "csharp": 5,
+        "ruby": 20,
+        "python": 18,
+        "kotlin": 1
+      },
+      "cwes": {
+        "CWE-200": 7,
+        "CWE-770": 5,
+        "CWE-668": 2,
+        "CWE-129": 1,
+        "CWE-441": 2,
+        "CWE-20": 10,
+        "CWE-287": 5,
+        "CWE-799": 1,
+        "CWE-400": 11,
+        "CWE-284": 2,
+        "CWE-367": 5,
+        "CWE-639": 8,
+        "CWE-248": 3,
+        "CWE-362": 1,
+        "CWE-862": 10,
+        "CWE-306": 1,
+        "CWE-256": 1,
+        "CWE-184": 1,
+        "CWE-401": 1,
+        "CWE-73": 3,
+        "CWE-74": 3,
+        "CWE-863": 6,
+        "CWE-653": 1,
+        "CWE-674": 1,
+        "CWE-706": 1,
+        "CWE-444": 3,
+        "CWE-913": 2,
+        "CWE-288": 1,
+        "CWE-346": 2,
+        "CWE-407": 4,
+        "CWE-203": 1,
+        "CWE-93": 1,
+        "CWE-732": 1,
+        "CWE-434": 2,
+        "CWE-754": 1,
+        "CWE-843": 1,
+        "CWE-377": 1,
+        "CWE-190": 2,
+        "CWE-694": 1,
+        "CWE-150": 2,
+        "CWE-1333": 3,
+        "CWE-209": 2,
+        "CWE-319": 1,
+        "CWE-201": 2,
+        "CWE-347": 1,
+        "CWE-915": 1,
+        "CWE-185": 2,
+        "CWE-522": 1,
+        "CWE-476": 2,
+        "CWE-125": 2,
+        "CWE-285": 1,
+        "CWE-294": 1,
+        "CWE-88": 3,
+        "CWE-943": 1,
+        "CWE-269": 1,
+        "CWE-384": 1,
+        "CWE-312": 1,
+        "CWE-672": 1,
+        "CWE-338": 1,
+        "CWE-350": 1,
+        "CWE-266": 1,
+        "CWE-1395": 1,
+        "CWE-178": 1,
+        "CWE-352": 1,
+        "CWE-693": 1
+      },
+      "sampleIds": [
+        "GHSA-225x-3jhx-wh4q",
+        "GHSA-23hp-3jrh-7fpw",
+        "GHSA-248r-7h7q-cr24",
+        "GHSA-26gq-p25f-99cp",
+        "GHSA-28f5-38xr-jh2w"
+      ],
+      "share": 0.5551470588235294
+    },
+    {
+      "category": "missing_source_or_sink",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "count": 44,
+      "languages": {
+        "go": 6,
+        "python": 5,
+        "ruby": 10,
+        "java": 2,
+        "javascript": 7,
+        "typescript": 8,
+        "php": 5,
+        "csharp": 1
+      },
+      "cwes": {
+        "CWE-22": 11,
+        "CWE-94": 5,
+        "CWE-611": 1,
+        "CWE-918": 4,
+        "CWE-1321": 2,
+        "CWE-79": 11,
+        "CWE-601": 2,
+        "CWE-78": 2,
+        "CWE-89": 5,
+        "CWE-95": 1
+      },
+      "sampleIds": [
+        "GHSA-26w5-6g95-gj28",
+        "GHSA-2956-977x-2w3r",
+        "GHSA-29g5-m8v7-v564",
+        "GHSA-2cp2-2r3c-7p7r",
+        "GHSA-2rr5-8q37-2w7h"
+      ],
+      "share": 0.16176470588235295
+    },
+    {
+      "category": "missing_source_or_sink",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "count": 27,
+      "languages": {
+        "ruby": 2,
+        "python": 2,
+        "csharp": 8,
+        "typescript": 3,
+        "php": 4,
+        "go": 3,
+        "java": 2,
+        "javascript": 3
+      },
+      "cwes": {
+        "CWE-79": 5,
+        "CWE-94": 6,
+        "CWE-22": 7,
+        "CWE-918": 4,
+        "CWE-611": 1,
+        "CWE-1321": 3,
+        "CWE-89": 1
+      },
+      "sampleIds": [
+        "GHSA-242p-4v39-2v8g",
+        "GHSA-3496-9g83-7v6x",
+        "GHSA-3hrf-2gc2-mx32",
+        "GHSA-4249-gjr8-jpq3",
+        "GHSA-4jwf-m4wg-8p66"
+      ],
+      "share": 0.09926470588235294
+    },
+    {
+      "category": "wrong_file_or_cwe",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "count": 22,
+      "languages": {
+        "java": 1,
+        "typescript": 5,
+        "python": 6,
+        "javascript": 7,
+        "ruby": 1,
+        "php": 2
+      },
+      "cwes": {
+        "CWE-266": 1,
+        "CWE-284": 1,
+        "CWE-328": 1,
+        "CWE-22": 2,
+        "CWE-200": 3,
+        "CWE-78": 1,
+        "CWE-287": 2,
+        "CWE-352": 1,
+        "CWE-74": 1,
+        "CWE-693": 1,
+        "CWE-799": 1,
+        "CWE-918": 1,
+        "CWE-862": 1,
+        "CWE-409": 1,
+        "CWE-913": 1,
+        "CWE-89": 1,
+        "CWE-79": 1,
+        "CWE-294": 1
+      },
+      "sampleIds": [
+        "GHSA-32h4-44jj-c5vx",
+        "GHSA-382c-vx95-w3p5",
+        "GHSA-39pv-4j6c-2g6v",
+        "GHSA-3f7w-8rr8-f37f",
+        "GHSA-47pj-3jcm-6whg"
+      ],
+      "share": 0.08088235294117647
+    },
+    {
+      "category": "missing_source_or_sink",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "count": 10,
+      "languages": {
+        "python": 6,
+        "go": 1,
+        "ruby": 1,
+        "javascript": 1,
+        "php": 1
+      },
+      "cwes": {
+        "CWE-94": 4,
+        "CWE-22": 2,
+        "CWE-918": 1,
+        "CWE-79": 2,
+        "CWE-1321": 1
+      },
+      "sampleIds": [
+        "GHSA-386q-5hp3-95m9",
+        "GHSA-45pq-889g-fcgh",
+        "GHSA-8359-h9fx-j6v9",
+        "GHSA-8m8r-38jm-f355",
+        "GHSA-95px-34x5-p37h"
+      ],
+      "share": 0.03676470588235294
+    },
+    {
+      "category": "alias_or_callgraph_gap",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "count": 7,
+      "languages": {
+        "typescript": 1,
+        "python": 1,
+        "ruby": 4,
+        "go": 1
+      },
+      "cwes": {
+        "CWE-601": 1,
+        "CWE-78": 1,
+        "CWE-89": 1,
+        "CWE-22": 2,
+        "CWE-918": 1,
+        "CWE-94": 1
+      },
+      "sampleIds": [
+        "GHSA-2j2x-hqr9-3h42",
+        "GHSA-8h25-q488-4hxw",
+        "GHSA-cxwf-qc32-375f",
+        "GHSA-vvp7-h4fj-m28w",
+        "GHSA-vx6p-q4gj-x6xx"
+      ],
+      "share": 0.025735294117647058
+    },
+    {
+      "category": "parse_ir_gap",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "count": 5,
+      "languages": {
+        "go": 1,
+        "javascript": 4
+      },
+      "cwes": {
+        "CWE-78": 1,
+        "CWE-79": 3,
+        "CWE-776": 1
+      },
+      "sampleIds": [
+        "GHSA-2c47-m757-32g6",
+        "GHSA-53g2-mvcc-q9x3",
+        "GHSA-53p3-c7vp-4mcc",
+        "GHSA-8r6m-32jq-jx6q",
+        "GHSA-g9jg-w8vm-g96v"
+      ],
+      "share": 0.01838235294117647
+    },
+    {
+      "category": "wrong_file_or_cwe",
+      "stage": "attribution",
+      "reason": "right-file-and-family-wrong-line",
+      "count": 4,
+      "languages": {
+        "javascript": 2,
+        "java": 1,
+        "go": 1
+      },
+      "cwes": {
+        "CWE-79": 1,
+        "CWE-89": 1,
+        "CWE-611": 1,
+        "CWE-22": 1
+      },
+      "sampleIds": [
+        "GHSA-7v5m-pr3q-6453",
+        "GHSA-v8fg-2rw7-q452",
+        "GHSA-vr8q-g5c7-m54m",
+        "GHSA-wg2q-39h6-66x9"
+      ],
+      "share": 0.014705882352941176
+    },
+    {
+      "category": "tool_or_setup_incomplete",
+      "stage": "scan-execution",
+      "reason": "scan-timeout",
+      "count": 1,
+      "languages": {
+        "java": 1
+      },
+      "cwes": {
+        "CWE-1287": 1
+      },
+      "sampleIds": [
+        "GHSA-794g-x443-36f7"
+      ],
+      "share": 0.003676470588235294
+    },
+    {
+      "category": "wrong_file_or_cwe",
+      "stage": "attribution",
+      "reason": "finding-has-no-line",
+      "count": 1,
+      "languages": {
+        "python": 1
+      },
+      "cwes": {
+        "CWE-639": 1
+      },
+      "sampleIds": [
+        "GHSA-4xfr-4p46-gc6p"
+      ],
+      "share": 0.003676470588235294
+    }
+  ],
+  "unscored": {
+    "count": 5,
+    "byClass": {
+      "timeout": 5
+    },
+    "note": "never scored, so never a miss; the cause is a tool or setup limitation"
+  },
+  "reproduce": "node bench/independent/forensics.mjs --run a72968195aa1",
+  "classifications": [
+    {
+      "entryId": "GHSA-225x-3jhx-wh4q",
+      "language": "php",
+      "cwe": "CWE-200",
+      "repo": "statamic/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "src/Http/Controllers/CP/Users/UserWizardController.php",
+        "startLine": 5,
+        "endLine": 12
+      }
+    },
+    {
+      "entryId": "GHSA-23hp-3jrh-7fpw",
+      "language": "typescript",
+      "cwe": "CWE-770",
+      "repo": "isaacs/node-tar",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "rate-limit"
+      },
+      "location": {
+        "file": "src/options.ts",
+        "startLine": 155,
+        "endLine": 155
+      }
+    },
+    {
+      "entryId": "GHSA-242p-4v39-2v8g",
+      "language": "ruby",
+      "cwe": "CWE-79",
+      "repo": "phlex-ruby/phlex",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "lib/phlex/sgml.rb",
+        "startLine": 394,
+        "endLine": 422
+      }
+    },
+    {
+      "entryId": "GHSA-248r-7h7q-cr24",
+      "language": "javascript",
+      "cwe": "CWE-668",
+      "repo": "patriksimek/vm2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/setup-sandbox.js",
+        "startLine": 983,
+        "endLine": 985
+      }
+    },
+    {
+      "entryId": "GHSA-26gq-p25f-99cp",
+      "language": "go",
+      "cwe": "CWE-129",
+      "repo": "fatedier/frp",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/ssh/server.go",
+        "startLine": 19,
+        "endLine": 326
+      }
+    },
+    {
+      "entryId": "GHSA-26w5-6g95-gj28",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "runatlantis/atlantis",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 14
+      },
+      "location": {
+        "file": "server/core/config/raw/project.go",
+        "startLine": 126,
+        "endLine": 139
+      }
+    },
+    {
+      "entryId": "GHSA-28f5-38xr-jh2w",
+      "language": "java",
+      "cwe": "CWE-441",
+      "repo": "appium/java-client",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/main/java/io/appium/java_client/remote/AppiumCommandExecutor.java",
+        "startLine": 20,
+        "endLine": 160
+      }
+    },
+    {
+      "entryId": "GHSA-28gm-jrmw-xx93",
+      "language": "csharp",
+      "cwe": "CWE-20",
+      "repo": "sipsorcery-org/sipsorcery",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/SIPSorcery/net/RTP/RTPChannel.cs",
+        "startLine": 393,
+        "endLine": 393
+      }
+    },
+    {
+      "entryId": "GHSA-2956-977x-2w3r",
+      "language": "python",
+      "cwe": "CWE-22",
+      "repo": "flytohub/flyto-core",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 122
+      },
+      "location": {
+        "file": "src/core/engine/variable_resolver.py",
+        "startLine": 9,
+        "endLine": 196
+      }
+    },
+    {
+      "entryId": "GHSA-29g5-m8v7-v564",
+      "language": "ruby",
+      "cwe": "CWE-22",
+      "repo": "Shopify/measured",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 1
+      },
+      "location": {
+        "file": "lib/measured/cache/json.rb",
+        "startLine": 8,
+        "endLine": 8
+      }
+    },
+    {
+      "entryId": "GHSA-29rf-f4vv-pvq6",
+      "language": "go",
+      "cwe": "CWE-287",
+      "repo": "authorizerdev/authorizer",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "cmd/root.go",
+        "startLine": 250,
+        "endLine": 455
+      }
+    },
+    {
+      "entryId": "GHSA-2c47-m757-32g6",
+      "language": "go",
+      "cwe": "CWE-78",
+      "repo": "Shopify/ejson2env",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "category": "parse_ir_gap",
+      "evidence": {
+        "file": "env_test.go"
+      },
+      "location": {
+        "file": "env_test.go",
+        "startLine": 142,
+        "endLine": 142
+      }
+    },
+    {
+      "entryId": "GHSA-2cp2-2r3c-7p7r",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "hydra-ecosystem/hydra",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 1
+      },
+      "location": {
+        "file": "hydra/_internal/instantiate/_instantiate2.py",
+        "startLine": 4,
+        "endLine": 132
+      }
+    },
+    {
+      "entryId": "GHSA-2hv5-4h3g-4hjv",
+      "language": "typescript",
+      "cwe": "CWE-799",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/line/src/monitor.ts",
+        "startLine": 17,
+        "endLine": 293
+      }
+    },
+    {
+      "entryId": "GHSA-2j2x-hqr9-3h42",
+      "language": "typescript",
+      "cwe": "CWE-601",
+      "repo": "remix-run/react-router",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 22
+      },
+      "location": {
+        "file": "packages/router/router.ts",
+        "startLine": 52,
+        "endLine": 5189
+      }
+    },
+    {
+      "entryId": "GHSA-2jc5-xhx8-qj6h",
+      "language": "ruby",
+      "cwe": "CWE-770",
+      "repo": "fluent-plugins-nursery/fluent-plugin-opentelemetry",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "rate-limit"
+      },
+      "location": {
+        "file": "lib/fluent/plugin/in_opentelemetry.rb",
+        "startLine": 29,
+        "endLine": 29
+      }
+    },
+    {
+      "entryId": "GHSA-2m96-52r3-2f3g",
+      "language": "ruby",
+      "cwe": "CWE-400",
+      "repo": "floraison/fugit",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "spec/parse_spec.rb",
+        "startLine": 120,
+        "endLine": 162
+      }
+    },
+    {
+      "entryId": "GHSA-2mhj-fhvg-v428",
+      "language": "php",
+      "cwe": "CWE-20",
+      "repo": "pimcore/pimcore",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "models/DataObject/ClassDefinition.php",
+        "startLine": 1149,
+        "endLine": 1154
+      }
+    },
+    {
+      "entryId": "GHSA-2mrg-gjxq-2gvr",
+      "language": "php",
+      "cwe": "CWE-400",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/PhpSpreadsheet/Reader/Gnumeric.php",
+        "startLine": 66,
+        "endLine": 195
+      }
+    },
+    {
+      "entryId": "GHSA-2rr5-8q37-2w7h",
+      "language": "java",
+      "cwe": "CWE-611",
+      "repo": "sparklemotion/nokogiri",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 2
+      },
+      "location": {
+        "file": "ext/java/nokogiri/Html4SaxPushParser.java",
+        "startLine": 3,
+        "endLine": 137
+      }
+    },
+    {
+      "entryId": "GHSA-3277-h8g9-qj5f",
+      "language": "php",
+      "cwe": "CWE-284",
+      "repo": "wintercms/winter",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "modules/backend/formwidgets/FileUpload.php",
+        "startLine": 1,
+        "endLine": 358
+      }
+    },
+    {
+      "entryId": "GHSA-32h4-44jj-c5vx",
+      "language": "java",
+      "cwe": "CWE-266",
+      "repo": "keycloak/keycloak",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "quarkus:no-authz:services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedClientResource.java:181:deleteClientScopeMapping",
+          "line": 181,
+          "family": "quarkus-missing-authz",
+          "cwe": "CWE-862"
+        }
+      },
+      "location": {
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/ScopeMappedClientResource.java",
+        "startLine": 169,
+        "endLine": 198
+      }
+    },
+    {
+      "entryId": "GHSA-3496-9g83-7v6x",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "andialbrecht/sqlparse",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "sqlparse/filters/output.py",
+        "startLine": 65,
+        "endLine": 116
+      }
+    },
+    {
+      "entryId": "GHSA-34pj-2622-jvxq",
+      "language": "javascript",
+      "cwe": "CWE-918",
+      "repo": "apostrophecms/apostrophe",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 640
+      },
+      "location": {
+        "file": "packages/apostrophe/modules/@apostrophecms/file/index.js",
+        "startLine": 251,
+        "endLine": 258
+      }
+    },
+    {
+      "entryId": "GHSA-35p6-xmwp-9g52",
+      "language": "javascript",
+      "cwe": "CWE-367",
+      "repo": "nodejs/undici",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/dispatcher/client-h1.js",
+        "startLine": 59,
+        "endLine": 1123
+      }
+    },
+    {
+      "entryId": "GHSA-382c-vx95-w3p5",
+      "language": "typescript",
+      "cwe": "CWE-284",
+      "repo": "JSONbored/gittensory",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": null,
+          "line": 1524,
+          "family": "api-contract",
+          "cwe": "CWE-1059"
+        }
+      },
+      "location": {
+        "file": "src/api/routes.ts",
+        "startLine": 1525,
+        "endLine": 1525
+      }
+    },
+    {
+      "entryId": "GHSA-386q-5hp3-95m9",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 13
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/parser/jsonschema.py",
+        "startLine": 614,
+        "endLine": 811
+      }
+    },
+    {
+      "entryId": "GHSA-39pv-4j6c-2g6v",
+      "language": "typescript",
+      "cwe": "CWE-328",
+      "repo": "angular/angular",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "concurrency:fire-forget:packages/common/http/src/transfer_cache.ts:435",
+          "line": 435,
+          "family": "concurrency-bug",
+          "cwe": "CWE-703"
+        }
+      },
+      "location": {
+        "file": "packages/common/http/src/transfer_cache.ts",
+        "startLine": 106,
+        "endLine": 535
+      }
+    },
+    {
+      "entryId": "GHSA-3f7w-8rr8-f37f",
+      "language": "python",
+      "cwe": "CWE-22",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "convention-deviation:guard-omitted:git/index/base.py:326:from_tree",
+          "line": 326,
+          "family": "convention-deviation",
+          "cwe": "CWE-88"
+        }
+      },
+      "location": {
+        "file": "git/index/base.py",
+        "startLine": 132,
+        "endLine": 1263
+      }
+    },
+    {
+      "entryId": "GHSA-3hgv-jr5j-cg9x",
+      "language": "php",
+      "cwe": "CWE-639",
+      "repo": "grokability/snipe-it",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "app/Http/Controllers/Api/UsersController.php",
+        "startLine": 896,
+        "endLine": 896
+      }
+    },
+    {
+      "entryId": "GHSA-3hrf-2gc2-mx32",
+      "language": "csharp",
+      "cwe": "CWE-94",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/Extensions/OpenApiUrlTreeNodeExtensions.cs",
+        "startLine": 154,
+        "endLine": 154
+      }
+    },
+    {
+      "entryId": "GHSA-3r53-75j5-3g7j",
+      "language": "javascript",
+      "cwe": "CWE-1321",
+      "repo": "quasarframework/quasar",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 29
+      },
+      "location": {
+        "file": "ui/src/utils/extend/extend.js",
+        "startLine": 60,
+        "endLine": 60
+      }
+    },
+    {
+      "entryId": "GHSA-3x6r-wxxg-53vv",
+      "language": "go",
+      "cwe": "CWE-248",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "backend/webdav/tus.go",
+        "startLine": 47,
+        "endLine": 54
+      }
+    },
+    {
+      "entryId": "GHSA-4249-gjr8-jpq3",
+      "language": "ruby",
+      "cwe": "CWE-79",
+      "repo": "etaminstudio/prosemirror_to_html",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "lib/prosemirror_to_html.rb",
+        "startLine": 249,
+        "endLine": 249
+      }
+    },
+    {
+      "entryId": "GHSA-42cj-99w8-cp2p",
+      "language": "go",
+      "cwe": "CWE-362",
+      "repo": "open-telemetry/opentelemetry-go",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "bridge/opencensus/version.go",
+        "startLine": 8,
+        "endLine": 8
+      }
+    },
+    {
+      "entryId": "GHSA-45ph-gxxr-gwgw",
+      "language": "java",
+      "cwe": "CWE-862",
+      "repo": "xwiki/xwiki-platform",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "xwiki-platform-core/xwiki-platform-livedata/xwiki-platform-livedata-livetable/src/main/java/org/xwiki/livedata/internal/livetable/ModelBridge.java",
+        "startLine": 44,
+        "endLine": 272
+      }
+    },
+    {
+      "entryId": "GHSA-45pq-889g-fcgh",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 3
+      },
+      "location": {
+        "file": "cmd/serve/restic/restic.go",
+        "startLine": 8,
+        "endLine": 248
+      }
+    },
+    {
+      "entryId": "GHSA-47pj-3jcm-6whg",
+      "language": "python",
+      "cwe": "CWE-200",
+      "repo": "langchain-ai/langgraph",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "py-struct-cursor-sqli:libs/checkpoint-postgres/langgraph/store/postgres/base.py:1120",
+          "line": 1120,
+          "family": "sql-injection",
+          "cwe": "CWE-89"
+        }
+      },
+      "location": {
+        "file": "libs/checkpoint-postgres/langgraph/store/postgres/base.py",
+        "startLine": 6,
+        "endLine": 1282
+      }
+    },
+    {
+      "entryId": "GHSA-49h3-cwhj-4737",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "cloudreve/cloudreve",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 22
+      },
+      "location": {
+        "file": "pkg/wopi/wopi.go",
+        "startLine": 7,
+        "endLine": 46
+      }
+    },
+    {
+      "entryId": "GHSA-4g3v-8h47-v7g6",
+      "language": "typescript",
+      "cwe": "CWE-79",
+      "repo": "withastro/astro",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 60
+      },
+      "location": {
+        "file": "packages/astro/src/core/app/dev/pipeline.ts",
+        "startLine": 12,
+        "endLine": 107
+      }
+    },
+    {
+      "entryId": "GHSA-4h97-p9wq-chqj",
+      "language": "python",
+      "cwe": "CWE-862",
+      "repo": "Netflix/lemur",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "lemur/certificates/views.py",
+        "startLine": 12,
+        "endLine": 1608
+      }
+    },
+    {
+      "entryId": "GHSA-4hf8-5mjm-rfgq",
+      "language": "javascript",
+      "cwe": "CWE-306",
+      "repo": "dtwang/line-desktop-mcp",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "src/automation/macos-line-automation.js",
+        "startLine": 95,
+        "endLine": 287
+      }
+    },
+    {
+      "entryId": "GHSA-4j8x-x6v7-w9rq",
+      "language": "typescript",
+      "cwe": "CWE-94",
+      "repo": "FlowiseAI/Flowise",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 56
+      },
+      "location": {
+        "file": "packages/components/src/index.ts",
+        "startLine": 6,
+        "endLine": 22
+      }
+    },
+    {
+      "entryId": "GHSA-4j9m-h44m-2hv8",
+      "language": "csharp",
+      "cwe": "CWE-256",
+      "repo": "SteeltoeOSS/Steeltoe",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "hardcoded-secret"
+      },
+      "location": {
+        "file": "src/Configuration/src/Encryption/Cryptography/RsaKeyStoreDecryptor.cs",
+        "startLine": 43,
+        "endLine": 43
+      }
+    },
+    {
+      "entryId": "GHSA-4jc5-g844-4x33",
+      "language": "python",
+      "cwe": "CWE-200",
+      "repo": "Linuxfabrik/lib",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "crypto-tls-no-verify:url.py:66",
+          "line": 66,
+          "family": "crypto-tls-no-verify",
+          "cwe": "CWE-295"
+        }
+      },
+      "location": {
+        "file": "url.py",
+        "startLine": 14,
+        "endLine": 486
+      }
+    },
+    {
+      "entryId": "GHSA-4jwf-m4wg-8p66",
+      "language": "csharp",
+      "cwe": "CWE-22",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/OpenApiExtensions/OpenApiAiCapabilitiesExtension.cs",
+        "startLine": 149,
+        "endLine": 370
+      }
+    },
+    {
+      "entryId": "GHSA-4rj6-vrwv-wr8m",
+      "language": "csharp",
+      "cwe": "CWE-22",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/WorkspaceManagement/BaseApiConsumerConfiguration.cs",
+        "startLine": 45,
+        "endLine": 46
+      }
+    },
+    {
+      "entryId": "GHSA-4vmm-5qvc-w5p7",
+      "language": "php",
+      "cwe": "CWE-200",
+      "repo": "alextselegidis/easyappointments",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "application/controllers/Customers.php",
+        "startLine": 203,
+        "endLine": 226
+      }
+    },
+    {
+      "entryId": "GHSA-4vv7-jj25-4gh6",
+      "language": "csharp",
+      "cwe": "CWE-22",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/Configuration/GenerationConfiguration.cs",
+        "startLine": 5,
+        "endLine": 207
+      }
+    },
+    {
+      "entryId": "GHSA-4w3q-qpfq-v992",
+      "language": "java",
+      "cwe": "CWE-20",
+      "repo": "apolloconfig/apollo",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/ConfigServiceAutoConfiguration.java",
+        "startLine": 99,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-4x76-22x2-rx8v",
+      "language": "typescript",
+      "cwe": "CWE-94",
+      "repo": "OpenZeppelin/contracts-wizard",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "packages/core/solidity/src/utils/sanitize.ts",
+        "startLine": 1,
+        "endLine": 5
+      }
+    },
+    {
+      "entryId": "GHSA-4xfr-4p46-gc6p",
+      "language": "python",
+      "cwe": "CWE-639",
+      "repo": "django-cms/django-cms",
+      "stage": "attribution",
+      "reason": "finding-has-no-line",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "cms/admin/placeholderadmin.py:338:270:IDOR",
+          "line": null,
+          "family": "idor",
+          "cwe": "CWE-639"
+        },
+        "distanceLines": null
+      },
+      "location": {
+        "file": "cms/admin/placeholderadmin.py",
+        "startLine": 535,
+        "endLine": 763
+      }
+    },
+    {
+      "entryId": "GHSA-52fh-8v99-63c2",
+      "language": "typescript",
+      "cwe": "CWE-184",
+      "repo": "FlowiseAI/Flowise",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "packages/components/src/index.ts",
+        "startLine": 6,
+        "endLine": 22
+      }
+    },
+    {
+      "entryId": "GHSA-52jp-gj8w-j6xh",
+      "language": "ruby",
+      "cwe": "CWE-401",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/mcp/server/transports/streamable_http_transport.rb",
+        "startLine": 27,
+        "endLine": 655
+      }
+    },
+    {
+      "entryId": "GHSA-539m-9xh6-q6rr",
+      "language": "python",
+      "cwe": "CWE-73",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "git/repo/base.py",
+        "startLine": 153,
+        "endLine": 174
+      }
+    },
+    {
+      "entryId": "GHSA-53g2-mvcc-q9x3",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "basecamp/trix",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "category": "parse_ir_gap",
+      "evidence": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js"
+      },
+      "location": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js",
+        "startLine": 6865,
+        "endLine": 6865
+      }
+    },
+    {
+      "entryId": "GHSA-53p3-c7vp-4mcc",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "basecamp/trix",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "category": "parse_ir_gap",
+      "evidence": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js"
+      },
+      "location": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js",
+        "startLine": 6865,
+        "endLine": 6865
+      }
+    },
+    {
+      "entryId": "GHSA-5624-2pmv-jx46",
+      "language": "typescript",
+      "cwe": "CWE-862",
+      "repo": "steipete/summarize",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "apps/chrome-extension/src/automation/native-input-guard.ts",
+        "startLine": 7,
+        "endLine": 44
+      }
+    },
+    {
+      "entryId": "GHSA-579v-mp3v-rrw5",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "jquery/jquery",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 23
+      },
+      "location": {
+        "file": "src/core.js",
+        "startLine": 19,
+        "endLine": 20
+      }
+    },
+    {
+      "entryId": "GHSA-58w9-8g37-x9v5",
+      "language": "typescript",
+      "cwe": "CWE-79",
+      "repo": "angular/angular",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "packages/compiler/src/template/pipeline/src/phases/resolve_sanitizers.ts",
+        "startLine": 58,
+        "endLine": 58
+      }
+    },
+    {
+      "entryId": "GHSA-5f94-x226-ccpm",
+      "language": "typescript",
+      "cwe": "CWE-74",
+      "repo": "acacode/swagger-typescript-api",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/code-gen-process.ts",
+        "startLine": 19,
+        "endLine": 591
+      }
+    },
+    {
+      "entryId": "GHSA-5gvw-p9qm-jgwh",
+      "language": "java",
+      "cwe": "CWE-863",
+      "repo": "FasterXML/jackson-databind",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "src/main/java/com/fasterxml/jackson/databind/deser/impl/UnwrappedPropertyHandler.java",
+        "startLine": 58,
+        "endLine": 60
+      }
+    },
+    {
+      "entryId": "GHSA-5h77-88j3-r659",
+      "language": "php",
+      "cwe": "CWE-79",
+      "repo": "YOURLS/YOURLS",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 264
+      },
+      "location": {
+        "file": "includes/functions-infos.php",
+        "startLine": 41,
+        "endLine": 363
+      }
+    },
+    {
+      "entryId": "GHSA-5jch-xhw4-r43v",
+      "language": "ruby",
+      "cwe": "CWE-601",
+      "repo": "basecamp/google_sign_in",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 4
+      },
+      "location": {
+        "file": "lib/google_sign_in/redirect_protector.rb",
+        "startLine": 12,
+        "endLine": 25
+      }
+    },
+    {
+      "entryId": "GHSA-5p9g-j988-pcwv",
+      "language": "ruby",
+      "cwe": "CWE-284",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/mcp/server/transports/streamable_http_transport.rb",
+        "startLine": 60,
+        "endLine": 965
+      }
+    },
+    {
+      "entryId": "GHSA-5xpp-75jx-m839",
+      "language": "javascript",
+      "cwe": "CWE-78",
+      "repo": "sebhildebrandt/systeminformation",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "concurrency:fire-forget:lib/network.js:264",
+          "line": 264,
+          "family": "concurrency-bug",
+          "cwe": "CWE-703"
+        }
+      },
+      "location": {
+        "file": "lib/network.js",
+        "startLine": 19,
+        "endLine": 552
+      }
+    },
+    {
+      "entryId": "GHSA-62fc-8686-hfmq",
+      "language": "go",
+      "cwe": "CWE-653",
+      "repo": "traefik/traefik",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/provider/kubernetes/crd/kubernetes_http.go",
+        "startLine": 425,
+        "endLine": 425
+      }
+    },
+    {
+      "entryId": "GHSA-62hf-57xw-28j9",
+      "language": "javascript",
+      "cwe": "CWE-674",
+      "repo": "axios/axios",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/core/AxiosError.js",
+        "startLine": 20,
+        "endLine": 88
+      }
+    },
+    {
+      "entryId": "GHSA-6477-wvjj-47v6",
+      "language": "typescript",
+      "cwe": "CWE-706",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/zalo/src/monitor.webhook.ts",
+        "startLine": 83,
+        "endLine": 83
+      }
+    },
+    {
+      "entryId": "GHSA-68r5-9hpg-7qw9",
+      "language": "java",
+      "cwe": "CWE-73",
+      "repo": "OpenIdentityPlatform/OpenDJ",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "opendj-dsml-servlet/src/main/java/org/opends/dsml/protocol/ByteStringUtility.java",
+        "startLine": 14,
+        "endLine": 76
+      }
+    },
+    {
+      "entryId": "GHSA-6f62-3596-g6w7",
+      "language": "ruby",
+      "cwe": "CWE-444",
+      "repo": "ruby/webrick",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/webrick/httprequest.rb",
+        "startLine": 533,
+        "endLine": 533
+      }
+    },
+    {
+      "entryId": "GHSA-6hq5-7373-42rg",
+      "language": "php",
+      "cwe": "CWE-918",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/PhpSpreadsheet/Calculation/Web/Service.php",
+        "startLine": 44,
+        "endLine": 57
+      }
+    },
+    {
+      "entryId": "GHSA-6hr6-w5qg-qmwg",
+      "language": "python",
+      "cwe": "CWE-444",
+      "repo": "python-hyper/h2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/h2/utilities.py",
+        "startLine": 451,
+        "endLine": 451
+      }
+    },
+    {
+      "entryId": "GHSA-6j2x-vhqr-qr7q",
+      "language": "javascript",
+      "cwe": "CWE-913",
+      "repo": "patriksimek/vm2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/setup-sandbox.js",
+        "startLine": 475,
+        "endLine": 475
+      }
+    },
+    {
+      "entryId": "GHSA-6pvm-2vjj-rx4w",
+      "language": "php",
+      "cwe": "CWE-20",
+      "repo": "thorsten/phpMyFAQ",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "phpmyfaq/src/phpMyFAQ/Chat.php",
+        "startLine": 299,
+        "endLine": 306
+      }
+    },
+    {
+      "entryId": "GHSA-6x2m-p4xp-wg22",
+      "language": "typescript",
+      "cwe": "CWE-22",
+      "repo": "Jovancoding/Network-AI",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 86
+      },
+      "location": {
+        "file": "lib/agent-runtime.ts",
+        "startLine": 21,
+        "endLine": 422
+      }
+    },
+    {
+      "entryId": "GHSA-6xj8-qv9j-xcjq",
+      "language": "go",
+      "cwe": "CWE-94",
+      "repo": "JanDeDobbeleer/oh-my-posh",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 1
+      },
+      "location": {
+        "file": "src/color/colors.go",
+        "startLine": 163,
+        "endLine": 163
+      }
+    },
+    {
+      "entryId": "GHSA-746g-3gfp-hfhw",
+      "language": "ruby",
+      "cwe": "CWE-288",
+      "repo": "heartcombo/devise",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/devise.rb",
+        "startLine": 118,
+        "endLine": 118
+      }
+    },
+    {
+      "entryId": "GHSA-76w7-j9cq-rx2j",
+      "language": "javascript",
+      "cwe": "CWE-913",
+      "repo": "patriksimek/vm2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/setup-sandbox.js",
+        "startLine": 89,
+        "endLine": 89
+      }
+    },
+    {
+      "entryId": "GHSA-77vg-94rm-hx3p",
+      "language": "javascript",
+      "cwe": "CWE-770",
+      "repo": "sveltejs/devalue",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "rate-limit"
+      },
+      "location": {
+        "file": "src/constants.js",
+        "startLine": 7,
+        "endLine": 7
+      }
+    },
+    {
+      "entryId": "GHSA-794g-x443-36f7",
+      "language": "java",
+      "cwe": "CWE-1287",
+      "repo": "keycloak/keycloak",
+      "stage": "scan-execution",
+      "reason": "scan-timeout",
+      "category": "tool_or_setup_incomplete",
+      "evidence": {
+        "failureReason": "no result within 600000 ms"
+      },
+      "location": {
+        "file": "adapters/saml/core/src/main/java/org/keycloak/adapters/saml/profile/AbstractSamlAuthenticationHandler.java",
+        "startLine": 32,
+        "endLine": 593
+      }
+    },
+    {
+      "entryId": "GHSA-7hrg-5w46-5r2x",
+      "language": "typescript",
+      "cwe": "CWE-346",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/slack/src/monitor/media.ts",
+        "startLine": 339,
+        "endLine": 402
+      }
+    },
+    {
+      "entryId": "GHSA-7mpf-4465-7fc2",
+      "language": "php",
+      "cwe": "CWE-79",
+      "repo": "wintercms/winter",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 47
+      },
+      "location": {
+        "file": "modules/backend/widgets/Lists.php",
+        "startLine": 1521,
+        "endLine": 1523
+      }
+    },
+    {
+      "entryId": "GHSA-7p4m-qxvv-g567",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "rclone/rclone",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "backend/local/clone_darwin.go",
+        "startLine": 45,
+        "endLine": 62
+      }
+    },
+    {
+      "entryId": "GHSA-7v5m-pr3q-6453",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "earendil-works/pi",
+      "stage": "attribution",
+      "reason": "right-file-and-family-wrong-line",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "spec-drift:output-sanitizer:packages/coding-agent/src/core/export-html/template.js:607",
+          "line": 607,
+          "family": "spec-drift",
+          "cwe": "CWE-79"
+        },
+        "distanceLines": 4
+      },
+      "location": {
+        "file": "packages/coding-agent/src/core/export-html/template.js",
+        "startLine": 614,
+        "endLine": 1588
+      }
+    },
+    {
+      "entryId": "GHSA-7v6w-c3f4-9wpq",
+      "language": "java",
+      "cwe": "CWE-611",
+      "repo": "openremote/openremote",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "agent/src/main/java/org/openremote/agent/protocol/knx/KNXProtocol.java",
+        "startLine": 21,
+        "endLine": 286
+      }
+    },
+    {
+      "entryId": "GHSA-7vh7-fw88-wj87",
+      "language": "ruby",
+      "cwe": "CWE-407",
+      "repo": "gjtorikian/commonmarker",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/commonmarker/version.rb",
+        "startLine": 4,
+        "endLine": 4
+      }
+    },
+    {
+      "entryId": "GHSA-7x2p-4jvh-6384",
+      "language": "php",
+      "cwe": "CWE-203",
+      "repo": "dompdf/dompdf",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Css/Stylesheet.php",
+        "startLine": 1505,
+        "endLine": 1505
+      }
+    },
+    {
+      "entryId": "GHSA-8359-h9fx-j6v9",
+      "language": "python",
+      "cwe": "CWE-22",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 13
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/parser/jsonschema.py",
+        "startLine": 4815,
+        "endLine": 4893
+      }
+    },
+    {
+      "entryId": "GHSA-83w8-p2f5-377r",
+      "language": "javascript",
+      "cwe": "CWE-22",
+      "repo": "fastify/fastify-static",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "ownership-authz:lifecycle-gate-missing:index.js:86",
+          "line": 86,
+          "family": "broken-access-control",
+          "cwe": "CWE-863"
+        }
+      },
+      "location": {
+        "file": "index.js",
+        "startLine": 22,
+        "endLine": 743
+      }
+    },
+    {
+      "entryId": "GHSA-866w-xmhq-wj7x",
+      "language": "javascript",
+      "cwe": "CWE-1321",
+      "repo": "sveltejs/kit",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 69
+      },
+      "location": {
+        "file": "packages/kit/src/runtime/client/remote-functions/form.svelte.js",
+        "startLine": 20,
+        "endLine": 523
+      }
+    },
+    {
+      "entryId": "GHSA-87fv-vqqr-m4jr",
+      "language": "go",
+      "cwe": "CWE-918",
+      "repo": "seaweedfs/seaweedfs",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 434
+      },
+      "location": {
+        "file": "weed/command/mini.go",
+        "startLine": 348,
+        "endLine": 348
+      }
+    },
+    {
+      "entryId": "GHSA-87mf-gv2c-c62c",
+      "language": "typescript",
+      "cwe": "CWE-248",
+      "repo": "voodoocreation/ts-deepmerge",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/index.ts",
+        "startLine": 46,
+        "endLine": 67
+      }
+    },
+    {
+      "entryId": "GHSA-87x5-vmc3-756j",
+      "language": "python",
+      "cwe": "CWE-400",
+      "repo": "vllm-project/vllm",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "vllm/entrypoints/openai/completion/protocol.py",
+        "startLine": 11,
+        "endLine": 497
+      }
+    },
+    {
+      "entryId": "GHSA-8832-4mm5-x2r6",
+      "language": "ruby",
+      "cwe": "CWE-78",
+      "repo": "shardlab/discordrb",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 4
+      },
+      "location": {
+        "file": "lib/discordrb/voice/encoder.rb",
+        "startLine": 80,
+        "endLine": 97
+      }
+    },
+    {
+      "entryId": "GHSA-8877-prq4-9xfw",
+      "language": "ruby",
+      "cwe": "CWE-601",
+      "repo": "rails/rails",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 32
+      },
+      "location": {
+        "file": "actionpack/lib/action_dispatch/middleware/host_authorization.rb",
+        "startLine": 106,
+        "endLine": 110
+      }
+    },
+    {
+      "entryId": "GHSA-8c48-q9wj-3w37",
+      "language": "go",
+      "cwe": "CWE-93",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "backend/ftp/ftp.go",
+        "startLine": 639,
+        "endLine": 648
+      }
+    },
+    {
+      "entryId": "GHSA-8h25-q488-4hxw",
+      "language": "python",
+      "cwe": "CWE-78",
+      "repo": "th30d4y/OpenLearnX",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 65
+      },
+      "location": {
+        "file": "backend/routes/admin.py",
+        "startLine": 370,
+        "endLine": 370
+      }
+    },
+    {
+      "entryId": "GHSA-8hm4-r66f-29wr",
+      "language": "php",
+      "cwe": "CWE-639",
+      "repo": "alextselegidis/easyappointments",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "application/controllers/Google.php",
+        "startLine": 521,
+        "endLine": 526
+      }
+    },
+    {
+      "entryId": "GHSA-8jr4-6r33-phwm",
+      "language": "typescript",
+      "cwe": "CWE-862",
+      "repo": "steipete/summarize",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "src/daemon/server-summarize-request.ts",
+        "startLine": 41,
+        "endLine": 41
+      }
+    },
+    {
+      "entryId": "GHSA-8m8r-38jm-f355",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 3
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/model/pydantic_v2/base_model.py",
+        "startLine": 13,
+        "endLine": 428
+      }
+    },
+    {
+      "entryId": "GHSA-8pf2-vj79-4wxg",
+      "language": "typescript",
+      "cwe": "CWE-441",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/msteams/src/monitor-handler/message-handler.ts",
+        "startLine": 462,
+        "endLine": 462
+      }
+    },
+    {
+      "entryId": "GHSA-8r6m-32jq-jx6q",
+      "language": "javascript",
+      "cwe": "CWE-776",
+      "repo": "NaturalIntelligence/fast-xml-parser",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "category": "parse_ir_gap",
+      "evidence": {
+        "file": "spec/entities_security_spec.js"
+      },
+      "location": {
+        "file": "spec/entities_security_spec.js",
+        "startLine": 538,
+        "endLine": 538
+      }
+    },
+    {
+      "entryId": "GHSA-9299-c6m4-mjhc",
+      "language": "java",
+      "cwe": "CWE-400",
+      "repo": "jetty/jetty.project",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "jetty-server/src/main/java/org/eclipse/jetty/server/HttpConnection.java",
+        "startLine": 377,
+        "endLine": 391
+      }
+    },
+    {
+      "entryId": "GHSA-93qh-5269-9wcf",
+      "language": "php",
+      "cwe": "CWE-287",
+      "repo": "statamic/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "src/Http/Controllers/OAuthController.php",
+        "startLine": 11,
+        "endLine": 53
+      }
+    },
+    {
+      "entryId": "GHSA-93rg-2xm5-2p9v",
+      "language": "typescript",
+      "cwe": "CWE-287",
+      "repo": "openclaw/openclaw",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "ir-taint:src/gateway/control-ui.ts:421:js-response-setheader",
+          "line": 421,
+          "family": "response-splitting",
+          "cwe": "CWE-113"
+        }
+      },
+      "location": {
+        "file": "src/gateway/control-ui.ts",
+        "startLine": 57,
+        "endLine": 659
+      }
+    },
+    {
+      "entryId": "GHSA-945v-v9p3-v5xw",
+      "language": "go",
+      "cwe": "CWE-732",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "permissions"
+      },
+      "location": {
+        "file": "backend/local/local.go",
+        "startLine": 80,
+        "endLine": 355
+      }
+    },
+    {
+      "entryId": "GHSA-95px-34x5-p37h",
+      "language": "python",
+      "cwe": "CWE-918",
+      "repo": "MobSF/Mobile-Security-Framework-MobSF",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 2
+      },
+      "location": {
+        "file": "mobsf/DynamicAnalyzer/views/android/operations.py",
+        "startLine": 17,
+        "endLine": 24
+      }
+    },
+    {
+      "entryId": "GHSA-97r8-rf7q-wmjw",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "sveltia/sveltia-cms",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/lib/services/contents/entry/summary.js",
+        "startLine": 56,
+        "endLine": 59
+      }
+    },
+    {
+      "entryId": "GHSA-98pp-vccm-qm25",
+      "language": "php",
+      "cwe": "CWE-434",
+      "repo": "redaxo/core",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "unrestricted-upload"
+      },
+      "location": {
+        "file": "redaxo/src/addons/mediapool/lib/mediapool.php",
+        "startLine": 116,
+        "endLine": 123
+      }
+    },
+    {
+      "entryId": "GHSA-996f-334j-67g7",
+      "language": "php",
+      "cwe": "CWE-79",
+      "repo": "alextselegidis/easyappointments",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 34
+      },
+      "location": {
+        "file": "application/controllers/Booking_settings.php",
+        "startLine": 101,
+        "endLine": 117
+      }
+    },
+    {
+      "entryId": "GHSA-9g8x-92q2-p28f",
+      "language": "javascript",
+      "cwe": "CWE-668",
+      "repo": "patriksimek/vm2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/builtin.js",
+        "startLine": 102,
+        "endLine": 102
+      }
+    },
+    {
+      "entryId": "GHSA-9hfr-gw99-8rhx",
+      "language": "ruby",
+      "cwe": "CWE-754",
+      "repo": "sgbett/bsv-ruby-sdk",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/bsv/network/arc.rb",
+        "startLine": 5,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-9rjg-x2p2-h68h",
+      "language": "php",
+      "cwe": "CWE-843",
+      "repo": "api-platform/core",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Serializer/AbstractItemNormalizer.php",
+        "startLine": 230,
+        "endLine": 618
+      }
+    },
+    {
+      "entryId": "GHSA-9w99-78rj-hmxq",
+      "language": "ruby",
+      "cwe": "CWE-79",
+      "repo": "decidim/decidim",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 819
+      },
+      "location": {
+        "file": "decidim-core/app/cells/decidim/upload_modal_cell.rb",
+        "startLine": 162,
+        "endLine": 170
+      }
+    },
+    {
+      "entryId": "GHSA-c2j3-45gr-mqc4",
+      "language": "typescript",
+      "cwe": "CWE-79",
+      "repo": "cure53/DOMPurify",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 11
+      },
+      "location": {
+        "file": "src/attrs.ts",
+        "startLine": 157,
+        "endLine": 284
+      }
+    },
+    {
+      "entryId": "GHSA-c2w2-prh8-qm98",
+      "language": "php",
+      "cwe": "CWE-20",
+      "repo": "guzzle/psr7",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Uri.php",
+        "startLine": 104,
+        "endLine": 457
+      }
+    },
+    {
+      "entryId": "GHSA-c32j-vqhx-rx3x",
+      "language": "ruby",
+      "cwe": "CWE-287",
+      "repo": "jwt/ruby-jwt",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "lib/jwt/jwa/hmac.rb",
+        "startLine": 24,
+        "endLine": 52
+      }
+    },
+    {
+      "entryId": "GHSA-c4gh-rv8h-q9vw",
+      "language": "typescript",
+      "cwe": "CWE-94",
+      "repo": "microsoft/prompty",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 10
+      },
+      "location": {
+        "file": "runtime/typescript/packages/core/src/core/loader.ts",
+        "startLine": 82,
+        "endLine": 104
+      }
+    },
+    {
+      "entryId": "GHSA-cf3w-g86h-35x4",
+      "language": "ruby",
+      "cwe": "CWE-74",
+      "repo": "carrierwaveuploader/carrierwave",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/carrierwave/processing/rmagick.rb",
+        "startLine": 381,
+        "endLine": 383
+      }
+    },
+    {
+      "entryId": "GHSA-cgfv-jrfp-2r7v",
+      "language": "java",
+      "cwe": "CWE-89",
+      "repo": "openremote/openremote",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 111
+      },
+      "location": {
+        "file": "manager/src/main/java/org/openremote/manager/datapoint/AssetDatapointService.java",
+        "startLine": 28,
+        "endLine": 441
+      }
+    },
+    {
+      "entryId": "GHSA-ch52-px8q-f22j",
+      "language": "javascript",
+      "cwe": "CWE-367",
+      "repo": "TryGhost/Ghost",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "ghost/core/core/server/lib/request-external.js",
+        "startLine": 6,
+        "endLine": 229
+      }
+    },
+    {
+      "entryId": "GHSA-cmxg-94mg-jq94",
+      "language": "typescript",
+      "cwe": "CWE-1321",
+      "repo": "tmlmobilidade/go",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "packages/utils/src/generic/value-at-path.ts",
+        "startLine": 65,
+        "endLine": 67
+      }
+    },
+    {
+      "entryId": "GHSA-cr5q-6q9f-rq6q",
+      "language": "ruby",
+      "cwe": "CWE-377",
+      "repo": "rails/rails",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "activesupport/lib/active_support/encrypted_file.rb",
+        "startLine": 4,
+        "endLine": 94
+      }
+    },
+    {
+      "entryId": "GHSA-crjr-9rc5-ghw8",
+      "language": "ruby",
+      "cwe": "CWE-400",
+      "repo": "sparklemotion/nokogiri",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/nokogiri/html4/document.rb",
+        "startLine": 271,
+        "endLine": 271
+      }
+    },
+    {
+      "entryId": "GHSA-cw28-63x4-37c3",
+      "language": "typescript",
+      "cwe": "CWE-367",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/voice-call/src/providers/plivo.ts",
+        "startLine": 546,
+        "endLine": 546
+      }
+    },
+    {
+      "entryId": "GHSA-cwj3-vqpp-pmxr",
+      "language": "typescript",
+      "cwe": "CWE-862",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "src/agents/tools/gateway-tool.ts",
+        "startLine": 29,
+        "endLine": 259
+      }
+    },
+    {
+      "entryId": "GHSA-cxjq-mrr5-89rv",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "traefik/traefik",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "pkg/middlewares/replacepathregex/replace_path_regex.go",
+        "startLine": 50,
+        "endLine": 71
+      }
+    },
+    {
+      "entryId": "GHSA-cxwf-qc32-375f",
+      "language": "ruby",
+      "cwe": "CWE-89",
+      "repo": "decidim-ice/decidim-module-decidim_awesome",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 3
+      },
+      "location": {
+        "file": "app/controllers/concerns/decidim/decidim_awesome/admin_accountability/admin/filterable_helper.rb",
+        "startLine": 16,
+        "endLine": 19
+      }
+    },
+    {
+      "entryId": "GHSA-f27w-vcwj-c954",
+      "language": "java",
+      "cwe": "CWE-190",
+      "repo": "bcrypt-ruby/bcrypt-ruby",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "ext/jruby/bcrypt_jruby/BCrypt.java",
+        "startLine": 691,
+        "endLine": 704
+      }
+    },
+    {
+      "entryId": "GHSA-f3cj-j4f6-wq85",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "sveltejs/svelte",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 88
+      },
+      "location": {
+        "file": "packages/svelte/src/internal/server/hydratable.js",
+        "startLine": 6,
+        "endLine": 68
+      }
+    },
+    {
+      "entryId": "GHSA-f3qq-49m6-rw8f",
+      "language": "python",
+      "cwe": "CWE-367",
+      "repo": "Netflix/lemur",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lemur/certificates/verify.py",
+        "startLine": 33,
+        "endLine": 174
+      }
+    },
+    {
+      "entryId": "GHSA-f5fm-9jmp-c88r",
+      "language": "typescript",
+      "cwe": "CWE-639",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "src/gateway/net.ts",
+        "startLine": 403,
+        "endLine": 404
+      }
+    },
+    {
+      "entryId": "GHSA-f5vj-f2hx-8m93",
+      "language": "javascript",
+      "cwe": "CWE-352",
+      "repo": "webpack/webpack-dev-server",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": null,
+          "line": 2966,
+          "family": "pii-exposure",
+          "cwe": "CWE-359"
+        }
+      },
+      "location": {
+        "file": "lib/Server.js",
+        "startLine": 2165,
+        "endLine": 3390
+      }
+    },
+    {
+      "entryId": "GHSA-fgjj-px3w-67xx",
+      "language": "go",
+      "cwe": "CWE-694",
+      "repo": "traefik/traefik",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/provider/kubernetes/gateway/grpcroute.go",
+        "startLine": 14,
+        "endLine": 287
+      }
+    },
+    {
+      "entryId": "GHSA-fm29-4mq3-phg6",
+      "language": "php",
+      "cwe": "CWE-862",
+      "repo": "wintercms/winter",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "modules/backend/behaviors/ImportExportController.php",
+        "startLine": 5,
+        "endLine": 471
+      }
+    },
+    {
+      "entryId": "GHSA-fmx4-26r3-wxpf",
+      "language": "ruby",
+      "cwe": "CWE-190",
+      "repo": "gjtorikian/commonmarker",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/commonmarker/version.rb",
+        "startLine": 4,
+        "endLine": 4
+      }
+    },
+    {
+      "entryId": "GHSA-fq3f-m5qm-99f5",
+      "language": "java",
+      "cwe": "CWE-400",
+      "repo": "open-telemetry/opentelemetry-java-instrumentation",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "instrumentation/rmi/javaagent/src/main/java/io/opentelemetry/javaagent/instrumentation/rmi/context/ContextPayload.java",
+        "startLine": 26,
+        "endLine": 70
+      }
+    },
+    {
+      "entryId": "GHSA-frr5-j3mh-h9ch",
+      "language": "typescript",
+      "cwe": "CWE-367",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/openshell/src/fs-bridge.ts",
+        "startLine": 1,
+        "endLine": 354
+      }
+    },
+    {
+      "entryId": "GHSA-fv2f-rw9f-v9cm",
+      "language": "javascript",
+      "cwe": "CWE-400",
+      "repo": "nodemailer/smtp-server",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/smtp-connection.js",
+        "startLine": 132,
+        "endLine": 424
+      }
+    },
+    {
+      "entryId": "GHSA-fwjx-9p69-h25h",
+      "language": "go",
+      "cwe": "CWE-150",
+      "repo": "JanDeDobbeleer/oh-my-posh",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/terminal/writer.go",
+        "startLine": 673,
+        "endLine": 694
+      }
+    },
+    {
+      "entryId": "GHSA-g2gp-3wwq-f4ph",
+      "language": "php",
+      "cwe": "CWE-407",
+      "repo": "thephpleague/commonmark",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Extension/Attributes/Event/AttributesListener.php",
+        "startLine": 97,
+        "endLine": 97
+      }
+    },
+    {
+      "entryId": "GHSA-g35j-m5xg-vh3q",
+      "language": "go",
+      "cwe": "CWE-770",
+      "repo": "quic-go/webtransport-go",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "rate-limit"
+      },
+      "location": {
+        "file": "session.go",
+        "startLine": 172,
+        "endLine": 172
+      }
+    },
+    {
+      "entryId": "GHSA-g65v-27r3-5p6m",
+      "language": "ruby",
+      "cwe": "CWE-22",
+      "repo": "guard/guard-livereload",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 4
+      },
+      "location": {
+        "file": "lib/guard/livereload/websocket.rb",
+        "startLine": 8,
+        "endLine": 62
+      }
+    },
+    {
+      "entryId": "GHSA-g7p5-89mh-248h",
+      "language": "python",
+      "cwe": "CWE-862",
+      "repo": "Netflix/lemur",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "lemur/authorities/views.py",
+        "startLine": 233,
+        "endLine": 233
+      }
+    },
+    {
+      "entryId": "GHSA-g9j2-8w95-3vwv",
+      "language": "go",
+      "cwe": "CWE-400",
+      "repo": "cloudreve/cloudreve",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/thumb/builtin.go",
+        "startLine": 3,
+        "endLine": 40
+      }
+    },
+    {
+      "entryId": "GHSA-g9jg-w8vm-g96v",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "basecamp/trix",
+      "stage": "parser-ir",
+      "reason": "no-function-lowered",
+      "category": "parse_ir_gap",
+      "evidence": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js"
+      },
+      "location": {
+        "file": "action_text-trix/app/assets/javascripts/trix.js",
+        "startLine": 3366,
+        "endLine": 3366
+      }
+    },
+    {
+      "entryId": "GHSA-ggxm-pgc9-g7fp",
+      "language": "ruby",
+      "cwe": "CWE-74",
+      "repo": "ruby/rdoc",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/rdoc/rdoc.rb",
+        "startLine": 446,
+        "endLine": 446
+      }
+    },
+    {
+      "entryId": "GHSA-gm37-52c6-37mw",
+      "language": "python",
+      "cwe": "CWE-1333",
+      "repo": "facelessuser/pymdown-extensions",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "redos"
+      },
+      "location": {
+        "file": "pymdownx/__meta__.py",
+        "startLine": 196,
+        "endLine": 196
+      }
+    },
+    {
+      "entryId": "GHSA-gwfq-86j8-7qhv",
+      "language": "go",
+      "cwe": "CWE-209",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "fs/rc/jobs/job.go",
+        "startLine": 111,
+        "endLine": 111
+      }
+    },
+    {
+      "entryId": "GHSA-h4mf-4v27-hggj",
+      "language": "go",
+      "cwe": "CWE-319",
+      "repo": "rclone/rclone",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "backend/webdav/webdav.go",
+        "startLine": 182,
+        "endLine": 513
+      }
+    },
+    {
+      "entryId": "GHSA-h4pc-58cc-hc95",
+      "language": "java",
+      "cwe": "CWE-20",
+      "repo": "apolloconfig/apollo",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "apollo-configservice/src/main/java/com/ctrip/framework/apollo/configservice/ConfigServiceAutoConfiguration.java",
+        "startLine": 99,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-h6gj-6jjq-h8g9",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "jquery/jquery-ui",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 386
+      },
+      "location": {
+        "file": "ui/widgets/checkboxradio.js",
+        "startLine": 53,
+        "endLine": 79
+      }
+    },
+    {
+      "entryId": "GHSA-h95v-h523-3mw8",
+      "language": "php",
+      "cwe": "CWE-201",
+      "repo": "guzzle/guzzle",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Cookie/CookieJar.php",
+        "startLine": 13,
+        "endLine": 323
+      }
+    },
+    {
+      "entryId": "GHSA-hc36-c89j-5f4j",
+      "language": "ruby",
+      "cwe": "CWE-347",
+      "repo": "sgbett/bsv-ruby-sdk",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/bsv/network/arc.rb",
+        "startLine": 5,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-hf3j-86p7-mfw8",
+      "language": "typescript",
+      "cwe": "CWE-95",
+      "repo": "aws-amplify/amplify-codegen-ui",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 18
+      },
+      "location": {
+        "file": "packages/codegen-ui-react/lib/react-component-render-helper.ts",
+        "startLine": 67,
+        "endLine": 145
+      }
+    },
+    {
+      "entryId": "GHSA-hgv7-v322-mmgr",
+      "language": "javascript",
+      "cwe": "CWE-200",
+      "repo": "sveltejs/kit",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "packages/kit/src/runtime/app/server/remote/query.js",
+        "startLine": 252,
+        "endLine": 284
+      }
+    },
+    {
+      "entryId": "GHSA-hh9p-6wh2-4mfc",
+      "language": "python",
+      "cwe": "CWE-73",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "git/cmd.py",
+        "startLine": 654,
+        "endLine": 654
+      }
+    },
+    {
+      "entryId": "GHSA-hhmc-q9hp-r662",
+      "language": "php",
+      "cwe": "CWE-22",
+      "repo": "codeigniter4/CodeIgniter4",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 3
+      },
+      "location": {
+        "file": "system/HTTP/Files/UploadedFile.php",
+        "startLine": 126,
+        "endLine": 145
+      }
+    },
+    {
+      "entryId": "GHSA-hp36-v28f-w3r4",
+      "language": "javascript",
+      "cwe": "CWE-915",
+      "repo": "joaonuno/flat-to-nested-js",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "mass-assignment"
+      },
+      "location": {
+        "file": "index.js",
+        "startLine": 45,
+        "endLine": 46
+      }
+    },
+    {
+      "entryId": "GHSA-hp3v-mfqw-h74c",
+      "language": "typescript",
+      "cwe": "CWE-185",
+      "repo": "withastro/astro",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "packages/integrations/netlify/src/index.ts",
+        "startLine": 36,
+        "endLine": 120
+      }
+    },
+    {
+      "entryId": "GHSA-hq9q-27g5-qwpj",
+      "language": "csharp",
+      "cwe": "CWE-94",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/LanguageInformation.cs",
+        "startLine": 43,
+        "endLine": 65
+      }
+    },
+    {
+      "entryId": "GHSA-hr7p-wg7r-hg9m",
+      "language": "python",
+      "cwe": "CWE-522",
+      "repo": "flytohub/flyto-core",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/core/engine/variable_resolver.py",
+        "startLine": 9,
+        "endLine": 196
+      }
+    },
+    {
+      "entryId": "GHSA-j5f8-grm9-p9fc",
+      "language": "javascript",
+      "cwe": "CWE-200",
+      "repo": "axios/axios",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "lib/adapters/http.js",
+        "startLine": 197,
+        "endLine": 243
+      }
+    },
+    {
+      "entryId": "GHSA-j8qw-6jw8-r297",
+      "language": "php",
+      "cwe": "CWE-209",
+      "repo": "dompdf/dompdf",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "src/Helpers.php",
+        "startLine": 62,
+        "endLine": 62
+      }
+    },
+    {
+      "entryId": "GHSA-jfm3-95jq-q3rf",
+      "language": "php",
+      "cwe": "CWE-407",
+      "repo": "thephpleague/commonmark",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Extension/Footnote/Event/GatherFootnotesListener.php",
+        "startLine": 33,
+        "endLine": 56
+      }
+    },
+    {
+      "entryId": "GHSA-jjhx-jhvp-74wq",
+      "language": "ruby",
+      "cwe": "CWE-1333",
+      "repo": "rails/rails",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "redos"
+      },
+      "location": {
+        "file": "actionpack/lib/action_dispatch/http/mime_type.rb",
+        "startLine": 157,
+        "endLine": 196
+      }
+    },
+    {
+      "entryId": "GHSA-jm28-2wcr-qf3h",
+      "language": "go",
+      "cwe": "CWE-863",
+      "repo": "OliveTin/OliveTin",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "service/internal/api/api.go",
+        "startLine": 282,
+        "endLine": 686
+      }
+    },
+    {
+      "entryId": "GHSA-jm78-9fvv-mhgr",
+      "language": "python",
+      "cwe": "CWE-74",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "resource-exhaustion:unbounded-size:git/config.py:179",
+          "line": 179,
+          "family": "resource-exhaustion",
+          "cwe": "CWE-400"
+        }
+      },
+      "location": {
+        "file": "git/config.py",
+        "startLine": 77,
+        "endLine": 902
+      }
+    },
+    {
+      "entryId": "GHSA-jpcw-4wr7-c3vq",
+      "language": "go",
+      "cwe": "CWE-476",
+      "repo": "getkin/kin-openapi",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "openapi3filter/req_resp_decoder.go",
+        "startLine": 194,
+        "endLine": 194
+      }
+    },
+    {
+      "entryId": "GHSA-jqwh-526h-c92j",
+      "language": "csharp",
+      "cwe": "CWE-94",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/Writers/Php/CodeEnumWriter.cs",
+        "startLine": 51,
+        "endLine": 51
+      }
+    },
+    {
+      "entryId": "GHSA-jr4p-4xjh-fwvw",
+      "language": "php",
+      "cwe": "CWE-918",
+      "repo": "koel/koel",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "app/Ai/Tools/AddRadioStation.php",
+        "startLine": 45,
+        "endLine": 45
+      }
+    },
+    {
+      "entryId": "GHSA-jwjp-4649-v8jp",
+      "language": "csharp",
+      "cwe": "CWE-125",
+      "repo": "sipsorcery-org/sipsorcery",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/SIPSorcery/net/SCTP/Chunks/SctpSackChunk.cs",
+        "startLine": 19,
+        "endLine": 143
+      }
+    },
+    {
+      "entryId": "GHSA-jxpj-9j24-w337",
+      "language": "java",
+      "cwe": "CWE-639",
+      "repo": "apolloconfig/apollo",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "apollo-portal/src/main/java/com/ctrip/framework/apollo/portal/controller/ReleaseController.java",
+        "startLine": 138,
+        "endLine": 138
+      }
+    },
+    {
+      "entryId": "GHSA-m2hg-wjq3-28wq",
+      "language": "javascript",
+      "cwe": "CWE-1321",
+      "repo": "kaspernj/form-data-objectizer",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "index.cjs",
+        "startLine": 1,
+        "endLine": 73
+      }
+    },
+    {
+      "entryId": "GHSA-m34r-v34r-rf9q",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 13
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/parser/jsonschema.py",
+        "startLine": 79,
+        "endLine": 2071
+      }
+    },
+    {
+      "entryId": "GHSA-m5q2-4fm3-vfqp",
+      "language": "javascript",
+      "cwe": "CWE-693",
+      "repo": "patriksimek/vm2",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "resource-exhaustion:unbounded-size:lib/bridge.js:835",
+          "line": 835,
+          "family": "resource-exhaustion",
+          "cwe": "CWE-400"
+        }
+      },
+      "location": {
+        "file": "lib/bridge.js",
+        "startLine": 170,
+        "endLine": 1706
+      }
+    },
+    {
+      "entryId": "GHSA-m7jc-g4rc-jmvh",
+      "language": "php",
+      "cwe": "CWE-89",
+      "repo": "wintercms/winter",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 47
+      },
+      "location": {
+        "file": "modules/backend/widgets/Filter.php",
+        "startLine": 782,
+        "endLine": 1116
+      }
+    },
+    {
+      "entryId": "GHSA-mf69-r24q-ghhr",
+      "language": "typescript",
+      "cwe": "CWE-799",
+      "repo": "openclaw/openclaw",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "toctou-fs:src/pairing/pairing-store.ts:405",
+          "line": 405,
+          "family": "toctou-file-existence-permission-check-b",
+          "cwe": "CWE-367"
+        }
+      },
+      "location": {
+        "file": "src/pairing/pairing-store.ts",
+        "startLine": 196,
+        "endLine": 773
+      }
+    },
+    {
+      "entryId": "GHSA-mfx4-hv73-q22v",
+      "language": "python",
+      "cwe": "CWE-444",
+      "repo": "aio-libs/aiohttp",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "aiohttp/http_parser.py",
+        "startLine": 295,
+        "endLine": 570
+      }
+    },
+    {
+      "entryId": "GHSA-mhwj-73qx-jqxm",
+      "language": "javascript",
+      "cwe": "CWE-1321",
+      "repo": "TheeCryptoChad/merge-guard",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "index.js",
+        "startLine": 5,
+        "endLine": 16
+      }
+    },
+    {
+      "entryId": "GHSA-mmfr-pmjx-hw9w",
+      "language": "go",
+      "cwe": "CWE-476",
+      "repo": "getkin/kin-openapi",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "openapi3filter/validation_error_encoder.go",
+        "startLine": 120,
+        "endLine": 129
+      }
+    },
+    {
+      "entryId": "GHSA-mpmw-f6h6-3g26",
+      "language": "php",
+      "cwe": "CWE-639",
+      "repo": "wintercms/winter",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "modules/backend/controllers/MyAccount.php",
+        "startLine": 9,
+        "endLine": 53
+      }
+    },
+    {
+      "entryId": "GHSA-mqjf-5f49-2fjh",
+      "language": "java",
+      "cwe": "CWE-89",
+      "repo": "geotools/geotools",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "modules/plugin/jdbc/jdbc-postgis/src/main/java/org/geotools/data/postgis/FilterToSqlHelper.java",
+        "startLine": 803,
+        "endLine": 803
+      }
+    },
+    {
+      "entryId": "GHSA-p279-2cqp-84jg",
+      "language": "java",
+      "cwe": "CWE-285",
+      "repo": "OpenIdentityPlatform/OpenDJ",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "opendj-server-legacy/src/main/java/org/opends/server/extensions/PlainSASLMechanismHandler.java",
+        "startLine": 15,
+        "endLine": 444
+      }
+    },
+    {
+      "entryId": "GHSA-p28p-j94q-pg32",
+      "language": "kotlin",
+      "cwe": "CWE-294",
+      "repo": "http4k/http4k",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "core/security/digest/src/main/kotlin/org/http4k/filter/serverFilterExtensions.kt",
+        "startLine": 30,
+        "endLine": 30
+      }
+    },
+    {
+      "entryId": "GHSA-p33q-4h4m-j994",
+      "language": "ruby",
+      "cwe": "CWE-79",
+      "repo": "jamesmartin/inline_svg",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 3
+      },
+      "location": {
+        "file": "lib/inline_svg/action_view/helpers.rb",
+        "startLine": 58,
+        "endLine": 58
+      }
+    },
+    {
+      "entryId": "GHSA-p538-c434-8v24",
+      "language": "python",
+      "cwe": "CWE-88",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "git/objects/commit.py",
+        "startLine": 272,
+        "endLine": 286
+      }
+    },
+    {
+      "entryId": "GHSA-p849-8hwh-84j9",
+      "language": "typescript",
+      "cwe": "CWE-89",
+      "repo": "nocobase/nocobase",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 2
+      },
+      "location": {
+        "file": "packages/plugins/@nocobase/plugin-notification-in-app-message/src/server/defineMyInAppChannels.ts",
+        "startLine": 14,
+        "endLine": 64
+      }
+    },
+    {
+      "entryId": "GHSA-pfvm-w89x-94jw",
+      "language": "csharp",
+      "cwe": "CWE-248",
+      "repo": "sipsorcery-org/sipsorcery",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/SIPSorcery/net/TURN/TurnServer.cs",
+        "startLine": 505,
+        "endLine": 586
+      }
+    },
+    {
+      "entryId": "GHSA-pgwh-4jj4-qm8v",
+      "language": "python",
+      "cwe": "CWE-918",
+      "repo": "flytohub/flyto-core",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "llm-owasp:src/core/modules/atomic/ai/vision_analyze.py:320:llm10-no-token-budget",
+          "line": 320,
+          "family": "unbounded-consumption-llm-call-has-no-to",
+          "cwe": "CWE-400"
+        }
+      },
+      "location": {
+        "file": "src/core/modules/atomic/ai/vision_analyze.py",
+        "startLine": 18,
+        "endLine": 363
+      }
+    },
+    {
+      "entryId": "GHSA-pmwx-rm49-xv39",
+      "language": "ruby",
+      "cwe": "CWE-22",
+      "repo": "basecamp/activerecord-tenanted",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 2
+      },
+      "location": {
+        "file": "lib/active_record/tenanted/storage.rb",
+        "startLine": 20,
+        "endLine": 25
+      }
+    },
+    {
+      "entryId": "GHSA-pp92-crg2-gfv9",
+      "language": "ruby",
+      "cwe": "CWE-200",
+      "repo": "ruby-oauth/oauth2",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "lib/oauth2/client.rb",
+        "startLine": 162,
+        "endLine": 467
+      }
+    },
+    {
+      "entryId": "GHSA-pqh8-p93p-2rx7",
+      "language": "typescript",
+      "cwe": "CWE-943",
+      "repo": "dynatrace-oss/dynatrace-mcp",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/capabilities/find-monitored-entity-by-name.ts",
+        "startLine": 2,
+        "endLine": 41
+      }
+    },
+    {
+      "entryId": "GHSA-prg7-hcfm-mfcr",
+      "language": "python",
+      "cwe": "CWE-1333",
+      "repo": "andialbrecht/sqlparse",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "redos"
+      },
+      "location": {
+        "file": "sqlparse/keywords.py",
+        "startLine": 7,
+        "endLine": 33
+      }
+    },
+    {
+      "entryId": "GHSA-prjp-h48f-jgf6",
+      "language": "ruby",
+      "cwe": "CWE-79",
+      "repo": "rails/rails",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 56
+      },
+      "location": {
+        "file": "actiontext/app/helpers/action_text/content_helper.rb",
+        "startLine": 18,
+        "endLine": 18
+      }
+    },
+    {
+      "entryId": "GHSA-pwgv-4x5q-6m9f",
+      "language": "python",
+      "cwe": "CWE-407",
+      "repo": "andialbrecht/sqlparse",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "sqlparse/sql.py",
+        "startLine": 167,
+        "endLine": 330
+      }
+    },
+    {
+      "entryId": "GHSA-pxmc-2ffp-8j67",
+      "language": "python",
+      "cwe": "CWE-639",
+      "repo": "Netflix/lemur",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "lemur/certificates/views.py",
+        "startLine": 14,
+        "endLine": 1696
+      }
+    },
+    {
+      "entryId": "GHSA-q6hh-gp44-4hcm",
+      "language": "go",
+      "cwe": "CWE-400",
+      "repo": "pterodactyl/wings",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "parser/parser.go",
+        "startLine": 36,
+        "endLine": 544
+      }
+    },
+    {
+      "entryId": "GHSA-q8qp-cvcw-x6jj",
+      "language": "javascript",
+      "cwe": "CWE-1321",
+      "repo": "axios/axios",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 4
+      },
+      "location": {
+        "file": "lib/adapters/http.js",
+        "startLine": 618,
+        "endLine": 742
+      }
+    },
+    {
+      "entryId": "GHSA-qf5v-m7p4-95rp",
+      "language": "go",
+      "cwe": "CWE-269",
+      "repo": "fission/fission",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/apis/core/v1/podspec_safety.go",
+        "startLine": 14,
+        "endLine": 122
+      }
+    },
+    {
+      "entryId": "GHSA-qf9q-q4hh-qph3",
+      "language": "ruby",
+      "cwe": "CWE-89",
+      "repo": "ankane/blazer",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 280
+      },
+      "location": {
+        "file": "app/controllers/blazer/base_controller.rb",
+        "startLine": 35,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-qgx9-6px9-7p75",
+      "language": "typescript",
+      "cwe": "CWE-863",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "src/gateway/control-ui.ts",
+        "startLine": 41,
+        "endLine": 309
+      }
+    },
+    {
+      "entryId": "GHSA-qh8c-7588-qfrv",
+      "language": "php",
+      "cwe": "CWE-639",
+      "repo": "statamic/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "src/Http/Controllers/CP/Navigation/NavigationPagesController.php",
+        "startLine": 20,
+        "endLine": 162
+      }
+    },
+    {
+      "entryId": "GHSA-qhr7-v3xp-vw9m",
+      "language": "php",
+      "cwe": "CWE-434",
+      "repo": "statamic/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "unrestricted-upload"
+      },
+      "location": {
+        "file": "src/Http/Requests/FrontendFormRequest.php",
+        "startLine": 4,
+        "endLine": 89
+      }
+    },
+    {
+      "entryId": "GHSA-qm77-8qjp-4vcm",
+      "language": "typescript",
+      "cwe": "CWE-346",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/slack/src/monitor/media.ts",
+        "startLine": 339,
+        "endLine": 402
+      }
+    },
+    {
+      "entryId": "GHSA-qmcq-xw74-w667",
+      "language": "go",
+      "cwe": "CWE-88",
+      "repo": "uniget-org/cli",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "cmd/uniget/hooks.go",
+        "startLine": 6,
+        "endLine": 426
+      }
+    },
+    {
+      "entryId": "GHSA-qq9q-x9w4-chhj",
+      "language": "go",
+      "cwe": "CWE-863",
+      "repo": "traefik/traefik",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "pkg/provider/kubernetes/gateway/httproute.go",
+        "startLine": 284,
+        "endLine": 284
+      }
+    },
+    {
+      "entryId": "GHSA-qv62-xfj6-32xm",
+      "language": "ruby",
+      "cwe": "CWE-20",
+      "repo": "rubygems/rubygems",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "lib/rubygems/remote_fetcher.rb",
+        "startLine": 99,
+        "endLine": 99
+      }
+    },
+    {
+      "entryId": "GHSA-qvc3-6q9x-95pj",
+      "language": "java",
+      "cwe": "CWE-287",
+      "repo": "apache/camel",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "components/camel-keycloak/src/main/java/org/apache/camel/component/keycloak/security/KeycloakSecurityProcessor.java",
+        "startLine": 62,
+        "endLine": 76
+      }
+    },
+    {
+      "entryId": "GHSA-qvqr-5cv7-wh35",
+      "language": "ruby",
+      "cwe": "CWE-384",
+      "repo": "modelcontextprotocol/ruby-sdk",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "session-fixation"
+      },
+      "location": {
+        "file": "lib/mcp/server/transports/streamable_http_transport.rb",
+        "startLine": 144,
+        "endLine": 342
+      }
+    },
+    {
+      "entryId": "GHSA-r2v3-8gwf-7ghm",
+      "language": "go",
+      "cwe": "CWE-918",
+      "repo": "bank-vaults/vault-secrets-webhook",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "pkg/webhook/config.go",
+        "startLine": 32,
+        "endLine": 475
+      }
+    },
+    {
+      "entryId": "GHSA-r5vv-ff45-prp2",
+      "language": "python",
+      "cwe": "CWE-200",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "crypto-tls-no-verify:src/datamodel_code_generator/http.py:362",
+          "line": 362,
+          "family": "crypto-tls-no-verify",
+          "cwe": "CWE-295"
+        }
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/http.py",
+        "startLine": 13,
+        "endLine": 613
+      }
+    },
+    {
+      "entryId": "GHSA-r9r3-g9fp-3q4q",
+      "language": "php",
+      "cwe": "CWE-862",
+      "repo": "grokability/snipe-it",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "app/Http/Controllers/MaintenancesController.php",
+        "startLine": 307,
+        "endLine": 307
+      }
+    },
+    {
+      "entryId": "GHSA-rg4h-fpcp-2qm8",
+      "language": "csharp",
+      "cwe": "CWE-22",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/Configuration/GenerationConfiguration.cs",
+        "startLine": 138,
+        "endLine": 178
+      }
+    },
+    {
+      "entryId": "GHSA-rjg7-r26h-cfp2",
+      "language": "php",
+      "cwe": "CWE-918",
+      "repo": "koel/koel",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "app/Ai/Tools/AddRadioStation.php",
+        "startLine": 45,
+        "endLine": 45
+      }
+    },
+    {
+      "entryId": "GHSA-rm43-82j9-r4mj",
+      "language": "python",
+      "cwe": "CWE-22",
+      "repo": "dep0we/atomic-agents-stack",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 79
+      },
+      "location": {
+        "file": "atomic_agents/dashboard/serve.py",
+        "startLine": 21,
+        "endLine": 100
+      }
+    },
+    {
+      "entryId": "GHSA-rmxw-pq4x-3fvh",
+      "language": "javascript",
+      "cwe": "CWE-862",
+      "repo": "goshs-labs/goshs",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "weak-rng:assets/js/src/collab.js:599",
+          "line": 599,
+          "family": "weak-rng",
+          "cwe": "CWE-338"
+        }
+      },
+      "location": {
+        "file": "assets/js/src/collab.js",
+        "startLine": 295,
+        "endLine": 1119
+      }
+    },
+    {
+      "entryId": "GHSA-rr89-w3h9-m66j",
+      "language": "javascript",
+      "cwe": "CWE-409",
+      "repo": "mattiasw/ExifReader",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "concurrency:fire-forget:src/utils.js:154",
+          "line": 154,
+          "family": "concurrency-bug",
+          "cwe": "CWE-703"
+        }
+      },
+      "location": {
+        "file": "src/utils.js",
+        "startLine": 152,
+        "endLine": 218
+      }
+    },
+    {
+      "entryId": "GHSA-rvmm-v933-jgxq",
+      "language": "php",
+      "cwe": "CWE-862",
+      "repo": "craftcms/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "src/controllers/ChartsController.php",
+        "startLine": 39,
+        "endLine": 39
+      }
+    },
+    {
+      "entryId": "GHSA-rx7j-mw4c-76g9",
+      "language": "ruby",
+      "cwe": "CWE-200",
+      "repo": "binarylogic/authlogic",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "lib/authlogic/session/session.rb",
+        "startLine": 38,
+        "endLine": 39
+      }
+    },
+    {
+      "entryId": "GHSA-rxrh-4j9h-xgg9",
+      "language": "csharp",
+      "cwe": "CWE-312",
+      "repo": "SteeltoeOSS/Steeltoe",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Configuration/src/Abstractions/ConfigurationDictionaryMapper.cs",
+        "startLine": 104,
+        "endLine": 112
+      }
+    },
+    {
+      "entryId": "GHSA-v46j-h43h-rwrm",
+      "language": "ruby",
+      "cwe": "CWE-287",
+      "repo": "autolab/Autolab",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "ir-taint:app/controllers/users_controller.rb:177:rb-redirect-to",
+          "line": 177,
+          "family": "open-redirect",
+          "cwe": "CWE-601"
+        }
+      },
+      "location": {
+        "file": "app/controllers/users_controller.rb",
+        "startLine": 4,
+        "endLine": 418
+      }
+    },
+    {
+      "entryId": "GHSA-v529-vhwc-wfc5",
+      "language": "ruby",
+      "cwe": "CWE-89",
+      "repo": "OpenC3/cosmos",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 264
+      },
+      "location": {
+        "file": "openc3/lib/openc3/models/cvt_model.rb",
+        "startLine": 272,
+        "endLine": 294
+      }
+    },
+    {
+      "entryId": "GHSA-v5rc-cpwc-cfpr",
+      "language": "python",
+      "cwe": "CWE-918",
+      "repo": "Netflix/lemur",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 193
+      },
+      "location": {
+        "file": "lemur/authorities/service.py",
+        "startLine": 42,
+        "endLine": 42
+      }
+    },
+    {
+      "entryId": "GHSA-v6mx-mf47-r5wg",
+      "language": "javascript",
+      "cwe": "CWE-913",
+      "repo": "patriksimek/vm2",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "resource-exhaustion:unbounded-size:lib/bridge.js:675",
+          "line": 675,
+          "family": "resource-exhaustion",
+          "cwe": "CWE-400"
+        }
+      },
+      "location": {
+        "file": "lib/bridge.js",
+        "startLine": 490,
+        "endLine": 1807
+      }
+    },
+    {
+      "entryId": "GHSA-v8fg-2rw7-q452",
+      "language": "javascript",
+      "cwe": "CWE-89",
+      "repo": "sequelize/sequelize",
+      "stage": "attribution",
+      "reason": "right-file-and-family-wrong-line",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "js-fw-sqli:src/dialects/postgres/connection-manager.js:283",
+          "line": 283,
+          "family": "sql-injection",
+          "cwe": "CWE-89"
+        },
+        "distanceLines": 149
+      },
+      "location": {
+        "file": "src/dialects/postgres/connection-manager.js",
+        "startLine": 131,
+        "endLine": 131
+      }
+    },
+    {
+      "entryId": "GHSA-v8j2-5f9p-fmh4",
+      "language": "typescript",
+      "cwe": "CWE-672",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "extensions/webhooks/src/http.ts",
+        "startLine": 670,
+        "endLine": 694
+      }
+    },
+    {
+      "entryId": "GHSA-vchh-r53j-8mpw",
+      "language": "go",
+      "cwe": "CWE-20",
+      "repo": "fission/fission",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "pkg/apis/core/v1/types.go",
+        "startLine": 710,
+        "endLine": 710
+      }
+    },
+    {
+      "entryId": "GHSA-vgp4-2fc4-qff2",
+      "language": "php",
+      "cwe": "CWE-79",
+      "repo": "wintercms/winter",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "modules/backend/models/BrandSetting.php",
+        "startLine": 198,
+        "endLine": 198
+      }
+    },
+    {
+      "entryId": "GHSA-vh45-f885-3848",
+      "language": "javascript",
+      "cwe": "CWE-338",
+      "repo": "JuneAndGreen/sm-crypto",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "weak-rng"
+      },
+      "location": {
+        "file": ".eslintrc.js",
+        "startLine": 92,
+        "endLine": 95
+      }
+    },
+    {
+      "entryId": "GHSA-vmv7-4m6c-3cg5",
+      "language": "typescript",
+      "cwe": "CWE-94",
+      "repo": "FlowiseAI/Flowise",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 56
+      },
+      "location": {
+        "file": "packages/components/src/index.ts",
+        "startLine": 6,
+        "endLine": 22
+      }
+    },
+    {
+      "entryId": "GHSA-vr8q-g5c7-m54m",
+      "language": "java",
+      "cwe": "CWE-611",
+      "repo": "sparklemotion/nokogiri",
+      "stage": "attribution",
+      "reason": "right-file-and-family-wrong-line",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "xxe:ext/java/nokogiri/XmlRelaxng.java:106:TransformerFactory",
+          "line": 106,
+          "family": "xxe",
+          "cwe": "CWE-611"
+        },
+        "distanceLines": 18
+      },
+      "location": {
+        "file": "ext/java/nokogiri/XmlRelaxng.java",
+        "startLine": 58,
+        "endLine": 85
+      }
+    },
+    {
+      "entryId": "GHSA-vvp7-h4fj-m28w",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "gtsteffaniak/filebrowser",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 11
+      },
+      "location": {
+        "file": "backend/http/media.go",
+        "startLine": 8,
+        "endLine": 241
+      }
+    },
+    {
+      "entryId": "GHSA-vx6p-q4gj-x6xx",
+      "language": "ruby",
+      "cwe": "CWE-918",
+      "repo": "owen2345/camaleon-cms",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 49
+      },
+      "location": {
+        "file": "app/controllers/camaleon_cms/admin/media_controller.rb",
+        "startLine": 6,
+        "endLine": 82
+      }
+    },
+    {
+      "entryId": "GHSA-vx7x-vcc2-c44g",
+      "language": "python",
+      "cwe": "CWE-350",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/http.py",
+        "startLine": 10,
+        "endLine": 266
+      }
+    },
+    {
+      "entryId": "GHSA-w27m-rmmf-g5w4",
+      "language": "php",
+      "cwe": "CWE-89",
+      "repo": "froxlor/froxlor",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "php-backtickInterp:lib/Froxlor/Api/Commands/Admins.php:280",
+          "line": 280,
+          "family": "command-injection",
+          "cwe": "CWE-78"
+        }
+      },
+      "location": {
+        "file": "lib/Froxlor/Api/Commands/Admins.php",
+        "startLine": 273,
+        "endLine": 729
+      }
+    },
+    {
+      "entryId": "GHSA-w3cp-g2pf-65wh",
+      "language": "php",
+      "cwe": "CWE-79",
+      "repo": "silverstripe/silverstripe-cms",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 3
+      },
+      "location": {
+        "file": "code/Controllers/CMSMain.php",
+        "startLine": 1649,
+        "endLine": 1688
+      }
+    },
+    {
+      "entryId": "GHSA-w626-296m-8f85",
+      "language": "typescript",
+      "cwe": "CWE-266",
+      "repo": "openclaw/openclaw",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/agents/acp-spawn.ts",
+        "startLine": 35,
+        "endLine": 1072
+      }
+    },
+    {
+      "entryId": "GHSA-w62v-xxxg-mg59",
+      "language": "typescript",
+      "cwe": "CWE-79",
+      "repo": "honojs/hono",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "resource-exhaustion:unbounded-size:src/helper/css/common.ts:239",
+          "line": 239,
+          "family": "resource-exhaustion",
+          "cwe": "CWE-400"
+        }
+      },
+      "location": {
+        "file": "src/helper/css/common.ts",
+        "startLine": 57,
+        "endLine": 247
+      }
+    },
+    {
+      "entryId": "GHSA-w62w-66v9-vvgv",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "seaweedfs/seaweedfs",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 162
+      },
+      "location": {
+        "file": "weed/s3api/iceberg/server.go",
+        "startLine": 73,
+        "endLine": 73
+      }
+    },
+    {
+      "entryId": "GHSA-w8x7-h2px-xmq8",
+      "language": "go",
+      "cwe": "CWE-863",
+      "repo": "cloudreve/cloudreve",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "service/explorer/events.go",
+        "startLine": 37,
+        "endLine": 44
+      }
+    },
+    {
+      "entryId": "GHSA-wchh-9x6h-7f6p",
+      "language": "python",
+      "cwe": "CWE-1395",
+      "repo": "matrix-nio/matrix-nio",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/nio/crypto/__init__.py",
+        "startLine": 23,
+        "endLine": 23
+      }
+    },
+    {
+      "entryId": "GHSA-wf43-fpp3-cf65",
+      "language": "javascript",
+      "cwe": "CWE-79",
+      "repo": "apostrophecms/apostrophe",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 640
+      },
+      "location": {
+        "file": "packages/apostrophe/modules/@apostrophecms/file/index.js",
+        "startLine": 251,
+        "endLine": 258
+      }
+    },
+    {
+      "entryId": "GHSA-wg23-69c2-gjc8",
+      "language": "php",
+      "cwe": "CWE-294",
+      "repo": "craftcms/cms",
+      "stage": "attribution",
+      "reason": "right-location-wrong-family",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "weak-rng:src/controllers/AuthController.php:51",
+          "line": 51,
+          "family": "weak-rng",
+          "cwe": "CWE-338"
+        }
+      },
+      "location": {
+        "file": "src/controllers/AuthController.php",
+        "startLine": 13,
+        "endLine": 205
+      }
+    },
+    {
+      "entryId": "GHSA-wg2q-39h6-66x9",
+      "language": "go",
+      "cwe": "CWE-22",
+      "repo": "goshs-labs/goshs",
+      "stage": "attribution",
+      "reason": "right-file-and-family-wrong-line",
+      "category": "wrong_file_or_cwe",
+      "evidence": {
+        "reported": {
+          "id": "sibling-guard:httpserver/handler.go:entry.FilePath",
+          "line": 1115,
+          "family": "sibling-guard-omission",
+          "cwe": "CWE-22"
+        },
+        "distanceLines": 308
+      },
+      "location": {
+        "file": "httpserver/handler.go",
+        "startLine": 784,
+        "endLine": 804
+      }
+    },
+    {
+      "entryId": "GHSA-whmm-qj9r-wvr2",
+      "language": "go",
+      "cwe": "CWE-770",
+      "repo": "gotd/td",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "rate-limit"
+      },
+      "location": {
+        "file": "proto/unencrypted_message.go",
+        "startLine": 3,
+        "endLine": 39
+      }
+    },
+    {
+      "entryId": "GHSA-wjv6-jcfj-mf9r",
+      "language": "python",
+      "cwe": "CWE-94",
+      "repo": "koxudaxi/datamodel-code-generator",
+      "stage": "sink-modelling",
+      "reason": "no-sink-recognized-near-defect",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesInFile": 10
+      },
+      "location": {
+        "file": "src/datamodel_code_generator/model/base.py",
+        "startLine": 129,
+        "endLine": 1004
+      }
+    },
+    {
+      "entryId": "GHSA-wm3w-8rrp-j577",
+      "language": "php",
+      "cwe": "CWE-201",
+      "repo": "guzzle/guzzle",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Cookie/CookieJar.php",
+        "startLine": 13,
+        "endLine": 323
+      }
+    },
+    {
+      "entryId": "GHSA-wmjg-vqhv-q5p5",
+      "language": "ruby",
+      "cwe": "CWE-22",
+      "repo": "owen2345/camaleon-cms",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 1
+      },
+      "location": {
+        "file": "app/helpers/camaleon_cms/uploader_helper.rb",
+        "startLine": 60,
+        "endLine": 60
+      }
+    },
+    {
+      "entryId": "GHSA-wvh6-f5jh-8gw4",
+      "language": "php",
+      "cwe": "CWE-20",
+      "repo": "dompdf/dompdf",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/Options.php",
+        "startLine": 1177,
+        "endLine": 1196
+      }
+    },
+    {
+      "entryId": "GHSA-wvpp-8hx9-p66j",
+      "language": "python",
+      "cwe": "CWE-88",
+      "repo": "gitpython-developers/GitPython",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "git/cmd.py",
+        "startLine": 1047,
+        "endLine": 1052
+      }
+    },
+    {
+      "entryId": "GHSA-wxhm-2mq7-7697",
+      "language": "csharp",
+      "cwe": "CWE-22",
+      "repo": "microsoft/prompty",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 61
+      },
+      "location": {
+        "file": "runtime/csharp/Prompty.Core.Tests/LoaderTests.cs",
+        "startLine": 250,
+        "endLine": 252
+      }
+    },
+    {
+      "entryId": "GHSA-wxw3-q3m9-c3jr",
+      "language": "typescript",
+      "cwe": "CWE-287",
+      "repo": "better-auth/better-auth",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-auth"
+      },
+      "location": {
+        "file": "packages/better-auth/src/plugins/oauth-proxy/index.ts",
+        "startLine": 377,
+        "endLine": 377
+      }
+    },
+    {
+      "entryId": "GHSA-x36r-4347-pm5x",
+      "language": "typescript",
+      "cwe": "CWE-20",
+      "repo": "acacode/swagger-typescript-api",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/code-gen-process.ts",
+        "startLine": 19,
+        "endLine": 591
+      }
+    },
+    {
+      "entryId": "GHSA-x3g7-qrwc-f6c5",
+      "language": "go",
+      "cwe": "CWE-150",
+      "repo": "alexandre-daubois/ember",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "internal/ui/app.go",
+        "startLine": 366,
+        "endLine": 368
+      }
+    },
+    {
+      "entryId": "GHSA-x426-x7cc-3fpc",
+      "language": "javascript",
+      "cwe": "CWE-200",
+      "repo": "hapijs/wreck",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "info-disclosure"
+      },
+      "location": {
+        "file": "lib/index.js",
+        "startLine": 252,
+        "endLine": 255
+      }
+    },
+    {
+      "entryId": "GHSA-x487-866m-p8hr",
+      "language": "ruby",
+      "cwe": "CWE-94",
+      "repo": "owen2345/camaleon-cms",
+      "stage": "propagation",
+      "reason": "source-and-sink-recognized-no-flow",
+      "category": "alias_or_callgraph_gap",
+      "evidence": {
+        "sourcesInFile": 50
+      },
+      "location": {
+        "file": "app/controllers/camaleon_cms/admin/media_controller.rb",
+        "startLine": 83,
+        "endLine": 109
+      }
+    },
+    {
+      "entryId": "GHSA-x677-9fxg-v5c5",
+      "language": "go",
+      "cwe": "CWE-178",
+      "repo": "traefik/traefik",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "integration/simple_test.go",
+        "startLine": 1678,
+        "endLine": 1678
+      }
+    },
+    {
+      "entryId": "GHSA-x6p3-76f2-xxvh",
+      "language": "python",
+      "cwe": "CWE-22",
+      "repo": "BKDDFS/shamefile",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "e2e_tests/test_shame_next.py",
+        "startLine": 71,
+        "endLine": 114
+      }
+    },
+    {
+      "entryId": "GHSA-x768-8642-mmq9",
+      "language": "python",
+      "cwe": "CWE-400",
+      "repo": "MobSF/Mobile-Security-Framework-MobSF",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "mobsf/DynamicAnalyzer/views/android/operations.py",
+        "startLine": 17,
+        "endLine": 24
+      }
+    },
+    {
+      "entryId": "GHSA-xc5w-4v5w-7x65",
+      "language": "go",
+      "cwe": "CWE-78",
+      "repo": "OliveTin/OliveTin",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 30
+      },
+      "location": {
+        "file": "service/internal/executor/arguments.go",
+        "startLine": 314,
+        "endLine": 362
+      }
+    },
+    {
+      "entryId": "GHSA-xg2h-5xr2-29jw",
+      "language": "csharp",
+      "cwe": "CWE-94",
+      "repo": "microsoft/kiota",
+      "stage": "source-modelling",
+      "reason": "no-source-recognized",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognized": 0
+      },
+      "location": {
+        "file": "src/Kiota.Builder/Writers/Ruby/CodeMethodWriter.cs",
+        "startLine": 93,
+        "endLine": 359
+      }
+    },
+    {
+      "entryId": "GHSA-xh5m-36r6-47m3",
+      "language": "php",
+      "cwe": "CWE-400",
+      "repo": "PHPOffice/PhpSpreadsheet",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/PhpSpreadsheet/Reader/Gnumeric.php",
+        "startLine": 66,
+        "endLine": 195
+      }
+    },
+    {
+      "entryId": "GHSA-xj53-j257-hxvg",
+      "language": "java",
+      "cwe": "CWE-862",
+      "repo": "openremote/openremote",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "missing-authz"
+      },
+      "location": {
+        "file": "manager/src/main/java/org/openremote/manager/datapoint/AssetPredictedDatapointResourceImpl.java",
+        "startLine": 85,
+        "endLine": 165
+      }
+    },
+    {
+      "entryId": "GHSA-xpmj-wjcp-6pww",
+      "language": "python",
+      "cwe": "CWE-918",
+      "repo": "Netflix/lemur",
+      "stage": "source-modelling",
+      "reason": "no-source-in-defect-file",
+      "category": "missing_source_or_sink",
+      "evidence": {
+        "sourcesRecognizedElsewhere": 193
+      },
+      "location": {
+        "file": "lemur/authorities/service.py",
+        "startLine": 13,
+        "endLine": 59
+      }
+    },
+    {
+      "entryId": "GHSA-xpr4-8vp6-c87j",
+      "language": "php",
+      "cwe": "CWE-352",
+      "repo": "froxlor/froxlor",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "csrf"
+      },
+      "location": {
+        "file": "lib/Froxlor/Ajax/Ajax.php",
+        "startLine": 28,
+        "endLine": 101
+      }
+    },
+    {
+      "entryId": "GHSA-xqr9-4wvv-gvch",
+      "language": "java",
+      "cwe": "CWE-639",
+      "repo": "openremote/openremote",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "idor"
+      },
+      "location": {
+        "file": "manager/src/main/java/org/openremote/manager/security/UserResourceImpl.java",
+        "startLine": 102,
+        "endLine": 493
+      }
+    },
+    {
+      "entryId": "GHSA-xrhx-7g5j-rcj5",
+      "language": "typescript",
+      "cwe": "CWE-185",
+      "repo": "honojs/hono",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/middleware/ip-restriction/index.ts",
+        "startLine": 8,
+        "endLine": 232
+      }
+    },
+    {
+      "entryId": "GHSA-xvg2-cgv6-6h7v",
+      "language": "go",
+      "cwe": "CWE-693",
+      "repo": "tinfoil-factory/netfoil",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "dns/dns_proxy.go",
+        "startLine": 391,
+        "endLine": 394
+      }
+    },
+    {
+      "entryId": "GHSA-xx22-p4ch-683r",
+      "language": "java",
+      "cwe": "CWE-125",
+      "repo": "yawkat/lz4-java",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": null
+      },
+      "location": {
+        "file": "src/java/net/jpountz/util/ByteBufferUtils.java",
+        "startLine": 29,
+        "endLine": 31
+      }
+    },
+    {
+      "entryId": "GHSA-xxpx-f366-4xpq",
+      "language": "php",
+      "cwe": "CWE-863",
+      "repo": "craftcms/cms",
+      "stage": "sink-modelling",
+      "reason": "no-detector-rule-fired",
+      "category": "no_detector_candidate",
+      "evidence": {
+        "family": "broken-authz"
+      },
+      "location": {
+        "file": "src/elements/Category.php",
+        "startLine": 203,
+        "endLine": 203
+      }
+    }
+  ]
+}

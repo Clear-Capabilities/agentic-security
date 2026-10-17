@@ -36,6 +36,8 @@ links each, into the docs on this page:
 **AppSec** — set the gate, read the evidence
 - [Scan health](walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
 - [Assurance modes](walkthroughs/assurance-modes.md) — `advisory` / `standard` / `strict`, real captured output
+- [Release assurance](guides/release-assurance.md) — a signed release package, a deterministic `not_deployable` / `needs_review` / `deployable` verdict, `release-view`, offline verification
+- [Engineering excellence evidence](engineering-excellence/README.md) — measured results, the end-to-end demo, and what is not proven
 - [Architecture: the finding lifecycle](architecture/finding-lifecycle.md) — the real module pipeline, detector to report
 - [Runtime-Corroborated Security Twin](guides/runtime-twin.md) — corroborate a static finding against real telemetry, honestly `complete`/`partial`/`unavailable`
 - [Source-to-artifact provenance](guides/artifact-provenance.md) — trace a finding to the exact container image digest that ships it, and catch a fix that never reached production

@@ -236,6 +236,13 @@ export const CHECKS = [
       'which mutant failed to flip.',
   },
   {
+    // E3-08: see the same check in pre-push-gate.mjs.
+    id: 'fix-verification-gate',
+    title: 'Fix verification benchmark matches its baseline (no new unsafe fix accepted)',
+    slow: true,
+    remedy: 'Run `npm run bench:fix-verify:check` in scanner/ — a fake-but-green fix is now accepted, or a real fix is now refused.',
+  },
+  {
     id: 'layer-recall-gate',
     title: 'Per-layer, per-language taint recall baseline holds',
     slow: true,
@@ -1066,6 +1073,7 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('self-scan-gate', () => runNpmGate('bench:self-scan:check'));
   evaluate('mutation-gate', () => runNpmGate('bench:mutation:check'));
   evaluate('protection-verdict-gate', () => runNpmGate('bench:protection-verdict:check'));
+  evaluate('fix-verification-gate', () => runNpmGate('bench:fix-verify:check'));
   evaluate('layer-recall-gate', () => runNpmGate('bench:layer-recall:check'));
   evaluate('language-support-gate', () => runNpmGate('bench:language-support:check'));
   evaluate('ttff-gate', () => runNpmGate('bench:ttff:check'));

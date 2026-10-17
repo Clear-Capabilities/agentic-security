@@ -77,11 +77,13 @@ test('a join whose last component is a literal is not a finding', () => {
 });
 
 test('a join that never reaches the filesystem is not a finding', () => {
-  // Building a path is not using one. `path_for` returning a string is the
-  // cross-file case this rule deliberately declines rather than guessing —
-  // basecamp/activerecord-tenanted is exactly that shape and stays missed.
-  const body = 'def path_for(key)\n  File.join(root, folder_for(key), key)\nend';
+  // Building a path is not using one. The rule declines a join that is merely assigned, or returned from a method that is not NAMED for a path.
+  // (This test once also pinned `def path_for(key)` as a deliberate miss, because the caller is in another file. The independent run showed that
+  // declining it left basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39, missed, so a path-named resolver returning a join whose last component is
+  // its own parameter now counts: see test/engineering-excellence/u01-ruby-path-resolver.test.js for the narrow rule and its refusals.)
+  const body = 'def label_for(key)\n  File.join(root, folder_for(key), key)\nend';
   assert.equal(hits(body).length, 0);
+  assert.equal(hits('def build(key)\n  p = File.join(root, folder_for(key), key)\n  log(p)\nend').length, 0);
 });
 
 test('Ruby predicate methods count as filesystem operations', () => {

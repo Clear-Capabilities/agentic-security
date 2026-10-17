@@ -521,34 +521,30 @@ test('resolveOrigin: deep mode tags a genuine revert with revertOf', async (t) =
 // call (see origin-resolver.js's `renameShapedMiss`), so this now reports
 // `reason:'rename-detected-not-followed'` — still `partial`, still no
 // misattribution, just an honest reason for staying partial.
-test('resolveOrigin: a file renamed after introduction is handled honestly — either the pre-rename origin is found, or an explicit reason is reported, never silently lost', async (t) => {
+test('resolveOrigin: a file renamed after introduction is followed — the pre-rename origin is found and never misattributed to the rename commit', async (t) => {
+  // E7-02. This test used to pin the OPPOSITE: the resolver did not follow a rename, stayed `partial`, and said so with
+  // `rename-detected-not-followed`. It now looks for the file under its earlier names (`git log --follow`), reads the old content under the
+  // CURRENT name so the replayed finding keeps its identity, and attributes the finding to the commit that introduced it.
   const fx = createGitFixture();
   t.after(() => fx.cleanup());
   fx.writeFile('old-name.js', 'safe();\n');
   fx.commit('safe baseline');
   fx.writeFile('old-name.js', 'eval(x);\n');
-  fx.commit('introduce eval in old-name.js');
+  const introduced = fx.commit('introduce eval in old-name.js');
   const { execFileSync } = await import('node:child_process');
   execFileSync('git', ['mv', 'old-name.js', 'new-name.js'], { cwd: fx.root });
   execFileSync('git', ['commit', '-m', 'rename old-name.js to new-name.js'], { cwd: fx.root });
 
-  const { computeStableId } = await import('../../src/posture/stable-id.js');
-  const finding = { file: 'new-name.js', line: 1, ruleId: 'no-eval', vuln: 'eval() Injection' };
-  finding.stableId = computeStableId(finding);
+  // a real finding, from a scan of the file as it is now (a hand-written one cannot be reproduced by the replay at any commit)
+  const fs2 = await import('node:fs'); const path2 = await import('node:path');
+  const { runFullScan } = await import('../../src/engine.js');
+  const scan = await runFullScan({ fileContents: { 'new-name.js': fs2.readFileSync(path2.join(fx.root, 'new-name.js'), 'utf8') }, scanRoot: fx.root, provenance: false }, () => {});
+  const finding = (scan.findings || []).find((f) => f.file === 'new-name.js');
+  assert.ok(finding, 'the scan reports the eval');
 
   const result = await resolveOrigin(fx.root, finding, {});
-  // OUTCOME A, confirmed by direct observation (see comment above): the walk
-  // never crosses the rename boundary far enough to claim it PROVED the
-  // pre-rename origin, and it never misattributes the origin to the rename
-  // commit itself.
-  assert.notEqual(result.status, 'complete', 'must not misattribute the origin to the rename commit');
-  assert.ok(['partial', 'not_available'].includes(result.status));
-  // Task 3 (second audit remediation): the reason must name the rename-
-  // shaped miss specifically, not the generic candidates-exhausted string —
-  // see the comment above for why this is cheaply distinguishable.
-  if (result.status === 'partial') {
-    assert.equal(result.reason, 'rename-detected-not-followed');
-  }
+  assert.equal(result.status, 'complete', `expected complete, got ${result.status} (${result.reason || ''})`);
+  assert.equal(result.findingOrigin.commit, introduced, 'the origin is the commit that introduced the code, not the rename commit');
 });
 
 // M4 §4.2: cross-repo lineage continuation. `loadRepoLineage` (Task 4) reads

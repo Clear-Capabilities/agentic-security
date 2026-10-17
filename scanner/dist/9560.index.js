@@ -2931,18 +2931,19 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(71130);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(31174);
 /* harmony import */ var _posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(58752);
-/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(83468);
+/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(83468);
 /* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(75917);
 /* harmony import */ var _posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(51864);
-/* harmony import */ var _lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(73596);
-/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(34594);
-/* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(20095);
-/* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(82407);
-/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(99027);
-/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(79907);
-/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(71364);
-var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_report_index_js__WEBPACK_IMPORTED_MODULE_12__]);
-_report_index_js__WEBPACK_IMPORTED_MODULE_12__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
+/* harmony import */ var _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(2046);
+/* harmony import */ var _lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(73596);
+/* harmony import */ var _posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(34594);
+/* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(20095);
+/* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(82407);
+/* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(99027);
+/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(79907);
+/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(71364);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__]);
+([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
 // MCP tool implementations — PRD Feature 2, hardened against the OWASP MCP
 // Top 10 (see ./redact.js, ./audit.js, ./server.js for sibling controls).
 //
@@ -2974,6 +2975,7 @@ _report_index_js__WEBPACK_IMPORTED_MODULE_12__ = (__webpack_async_dependencies__
 // X-206: the one projection of the verification record, shared with the JSON report, the text report and the autopilot response.
 
 
+
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
@@ -2993,7 +2995,7 @@ async function getRunScan() {
 }
 let _verifyFixCore;
 async function getVerifyFixCore() {
-  if (!_verifyFixCore) _verifyFixCore = (await __webpack_require__.e(/* import() */ 7838).then(__webpack_require__.bind(__webpack_require__, 27838))).verifyFix;
+  if (!_verifyFixCore) _verifyFixCore = (await Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, 27838))).verifyFix;
   return _verifyFixCore;
 }
 
@@ -3388,7 +3390,7 @@ const scan_diff = {
     // scanning), left as-is rather than silently claimed fixed here.
     const findings = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_12__.normalizeFindings)(result.scan)
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
-      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactFinding */ .lE)({
+      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
         title: f.vuln, cwe: f.cwe,
         description: f.description, remediation: f.remediation,
@@ -3451,7 +3453,7 @@ const query_taint = {
       const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(f.trace || '')].join(' ').toLowerCase();
       return hay.includes(srcL) && hay.includes(sinkL);
     });
-    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactFinding */ .lE)({
+    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, description: f.description,
       trace: f.trace || null,
@@ -3489,7 +3491,7 @@ const explain_finding = {
     if (!scan) throw new Error(`No usable scan state (${status}).`);
     const f = _findById(scan, finding_id);
     if (!f) throw new Error(`Finding not found: ${finding_id}`);
-    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactFinding */ .lE)({
+    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, cwe: f.cwe,
       description: f.description, remediation: f.remediation,
@@ -3546,7 +3548,7 @@ const explain_finding = {
       // logins/CODEOWNERS lines) through this MCP surface because this call
       // passed no options object at all, silently defeating their policy at
       // this one output boundary while report/index.js honoured it.
-      findingProvenance: f.findingProvenance ? (0,_posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_15__/* .redactFindingProvenance */ .As)(f.findingProvenance, {
+      findingProvenance: f.findingProvenance ? (0,_posture_provenance_schema_js__WEBPACK_IMPORTED_MODULE_16__/* .redactFindingProvenance */ .As)(f.findingProvenance, {
         pseudonymize: process.env.AGENTIC_SECURITY_PSEUDONYMIZE_AUTHORS === '1',
       }) : null,
       // X-206: the same verification projection the JSON and text reports carry; absent when the finding has no record.
@@ -3555,7 +3557,7 @@ const explain_finding = {
         : {}),
       // X-307: the same boundary projection the JSON and text reports carry; absent when the finding has no context.
       ...(f.boundaryContext && typeof f.boundaryContext === 'object'
-        ? (0,_lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_14__/* .boundaryFields */ .Q)(f.boundaryContext)
+        ? (0,_lineage_deployment_projection_js__WEBPACK_IMPORTED_MODULE_15__/* .boundaryFields */ .Q)(f.boundaryContext)
         : {}),
     };
   },
@@ -3634,7 +3636,7 @@ const _scrubRoot = (sessionRoot, text) => {
   const roots = new Set([node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot)]);
   try { roots.add(node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot))); } catch { /* root vanished: the plain path is still scrubbed */ }
   for (const r of roots) out = out.split(r).join('<root>');
-  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactString */ .rd)(out);
+  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(out);
 };
 const _gateSummary = (g) => (g ? {
   path: g.path ? g.path.ok : undefined, syntax: g.syntax ? g.syntax.ok : undefined,
@@ -3824,25 +3826,14 @@ const apply_fix = {
       }
       // Inline re-verify — the load-bearing gate. Must pass to write.
       let verdict;
+      let fixVerification = null;
       try {
         const _files = Object.fromEntries(Object.entries(confinedAbs).map(([rel, v]) => [rel, v.content]));
-        if (process.env.AGENTIC_SECURITY_FIX_RUN_TESTS === '1') {
-          // Addition #7 — connect the closed-loop verifier: add the project test
-          // suite as a fourth verification leg (scan + lint + tests). Opt-in
-          // because many repos have no runner and we must not fail-closed by
-          // default. Normalized to the scan+lint verdict shape used below.
-          const { verifyFixWithTests } = await __webpack_require__.e(/* import() */ 4113).then(__webpack_require__.bind(__webpack_require__, 64113));
-          const t = await verifyFixWithTests({ scanRoot: ctx.sessionRoot, originalFindingStableId: f.stableId, files: _files });
-          verdict = { ok: t.ok, summary: t.summary, rescan: t.legs?.scan?.detail, lint: t.legs?.lint?.detail, tests: t.legs?.tests, testVerdict: t.verdict, verificationRecord: t.verificationRecord ?? null };
-        } else {
-          const verifyFixCore = await getVerifyFixCore();
-          verdict = await verifyFixCore({
-            scanRoot: ctx.sessionRoot,
-            originalFindingStableId: f.stableId,
-            files: _files,
-            fixMeta,
-          });
-        }
+        // One verifier for every route (E3-03). AGENTIC_SECURITY_FIX_RUN_TESTS used to swap in a second test runner here; verifyFix
+        // already carries the test leg, so the flag is now inert.
+        const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { id: f.id, stableId: f.stableId }, files: _files, fixMeta, route: 'mcp-apply-fix', mode: dry_run ? 'preview' : 'apply', verify: await getVerifyFixCore() });
+        verdict = central.verdict;
+        fixVerification = central.fixVerification;
       } catch (e) {
         return { _meta: META, applied: false, reason: `patch verification failed: ${e.message}` };
       }
@@ -3854,6 +3845,7 @@ const apply_fix = {
           // X-201: the same version-1 verification record every surface emits (additive; null when none could be formed).
           verificationRecord: verdict.verificationRecord ?? null,
           ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord),
+          ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}),
         };
       }
       // FR-307/FR-1002/D-0024: this caller-supplied-patch branch writes via
@@ -3874,7 +3866,7 @@ const apply_fix = {
       }
       const materialClassification = (0,_posture_material_change_js__WEBPACK_IMPORTED_MODULE_6__/* .classifyFixMaterialRisk */ .kz)(filesForMaterialClassification);
       if (dry_run) {
-        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification };
+        return { _meta: META, applied: false, dryRun: true, verified: true, files: Object.keys(confinedAbs), summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord), materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}) };
       }
       const approvalRefusal = _highImpactApprovalRefusal(ctx, materialClassification, fixMeta);
       if (approvalRefusal) return approvalRefusal;
@@ -3905,7 +3897,7 @@ const apply_fix = {
       }
       let acceptance = null;
       try { acceptance = (0,_posture_fix_history_js__WEBPACK_IMPORTED_MODULE_4__/* .fixAcceptanceRate */ .XR)(ctx.sessionRoot); } catch { /* best-effort */ }
-      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification };
+      return { _meta: META, applied: true, verified: true, patched: written, integrity: status, verify: { summary: verdict.summary, verificationRecord: verdict.verificationRecord ?? null, ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(verdict.verificationRecord) }, acceptance, materialClassification, ...(fixVerification ? (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(fixVerification) : {}) };
     }
 
     if (typeof f.fix?.replacement !== 'string') {
@@ -4063,26 +4055,13 @@ const verify_fix = {
       // Best-effort: a missing/unsigned/tampered scan just means no PoC is
       // available to re-check, not a verify_fix failure — the rescan/lint/
       // tests legs below are independent of this and still apply.
-      let poc = null;
-      try {
-        const { scan: lastScan } = _readLastScanVerified(ctx.sessionRoot, { allowUnsigned: true });
-        const orig = lastScan && (lastScan.findings || []).find(f => f.stableId === stable_id);
-        if (orig && orig.poc && orig.poc.code) poc = { ...orig.poc, finding: orig };
-      } catch { /* best-effort lookup; poc stays null */ }
-
-      const verifyFixCore = await getVerifyFixCore();
-      const r = await verifyFixCore({
-        scanRoot: ctx.sessionRoot,
-        originalFindingStableId: stable_id,
-        files: confined,
-        poc,
-        fixMeta,
-      });
+      const central = await (0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .verifyPatch */ .F)({ scanRoot: ctx.sessionRoot, finding: { stableId: stable_id }, files: confined, fixMeta, route: 'mcp-verify-fix', mode: 'verify', verify: await getVerifyFixCore() });
+      const r = central.verdict;
       return {
         _meta: META,
         ok: r.ok,
         rescan: { ok: r.rescan.ok, reason: r.rescan.reason, introduced: r.rescan.introduced || [] },
-        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
+        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
         // verifyFix computes five legs, not two — tests/honesty/poc were
         // being silently dropped here, leaving an agent with no structured
         // way to see WHY verification failed when the failure was in one
@@ -4093,12 +4072,13 @@ const verify_fix = {
         // it can echo proof-harness detail derived from scanned source.
         tests: r.tests,
         honesty: r.honesty,
-        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
+        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
         // X-201: the one version-1 verification record (additive). It states what was actually established, e.g.
         // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
         verificationRecord: r.verificationRecord ?? null,
         ...(0,_posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__/* .verificationFields */ .ze)(r.verificationRecord),
+        ...(0,_fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__/* .additiveFields */ .Y)(central.fixVerification),
       };
     } catch (e) {
       return { _meta: META, ok: false, reason: `verify_fix failed: ${e.message}` };
@@ -4441,7 +4421,7 @@ const append_agents_memory = {
     required: ['agent', 'body'],
   },
   async handler({ agent, body }, ctx) {
-    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_20__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
+    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
     return { _meta: META, ...r };
   },
 };
@@ -4457,7 +4437,7 @@ const read_agents_memory = {
     },
   },
   async handler({ full }, ctx) {
-    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_20__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
+    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
     if (!body) return { _meta: META, present: false };
     if (full) return { _meta: META, present: true, length: body.length, content: body };
     // Tail-only — same logic as summarizeForSession but inlined to avoid a
@@ -4501,7 +4481,7 @@ const query_triage_memory = {
     // they landed in, rather than hardcoding a field allowlist that could
     // miss one.
     let results;
-    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { results = raw; }
     return {
       _meta: META,
@@ -4537,7 +4517,7 @@ const query_findings_memory = {
     // whole-structure redactString round-trip is applied rather than a
     // per-field allowlist that could miss one of the four shapes.
     let body;
-    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_19__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { body = raw; }
     return { _meta: META, ...body };
   },
@@ -4559,7 +4539,7 @@ const lookup_cve = {
     required: ['cve'],
   },
   async handler({ cve }, _ctx) {
-    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_21__/* .lookupCve */ .x)(cve);
+    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_22__/* .lookupCve */ .x)(cve);
     return { _meta: META, ...r };
   },
 };
@@ -4665,11 +4645,11 @@ const apply_sca_upgrade = {
 };
 
 // X-407: read-only scenario export; the factory takes this file's confinement so the two modules do not import each other.
-const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .makeInvariantTools */ ._)({ confine: _confine, META });
+const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .makeInvariantTools */ ._)({ confine: _confine, META });
 // X-707: read-only portfolio progress view, same factory shape.
-const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .makePortfolioTools */ ._)({ confine: _confine, META });
+const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__/* .makePortfolioTools */ ._)({ confine: _confine, META });
 
-const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_16__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_16__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_16__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_16__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress];
+const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress];
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } });

@@ -33,6 +33,7 @@
 //
 //  AWS WAF list-rules JSON: same expression-based heuristic.
 
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -81,9 +82,13 @@ function parseNormalized(obj) {
   }));
 }
 
+// A rule with no id of its own gets one derived from its content, so the same export always yields the same ids (a random suffix made every
+// ingestion of an unnamed rule a different rule).
+function _contentId(r) { return createHash('sha256').update(JSON.stringify(r)).digest('hex').slice(0, 8); }
+
 function parseCloudflare(arr) {
   return arr.filter(r => r && (r.action === 'block' || r.action === 'managed_challenge')).map((r) => ({
-    id: r.id || r.ref || 'cf-' + Math.random().toString(36).slice(2, 8),
+    id: r.id || r.ref || 'cf-' + _contentId(r),
     pattern: r.description || r.expression || '',
     families: inferFamilyFromExpression(r.expression || r.description || ''),
     vendor: 'cloudflare',
@@ -93,7 +98,7 @@ function parseCloudflare(arr) {
 function parseAwsWaf(obj) {
   const rules = obj.Rules || obj.rules || [];
   return rules.map((r) => ({
-    id: r.Name || r.name || 'aws-' + Math.random().toString(36).slice(2, 8),
+    id: r.Name || r.name || 'aws-' + _contentId(r),
     pattern: JSON.stringify(r.Statement || r.statement || {}).slice(0, 200),
     families: inferFamilyFromExpression(JSON.stringify(r.Statement || r.statement || {})),
     vendor: 'aws-waf',

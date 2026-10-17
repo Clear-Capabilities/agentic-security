@@ -186,6 +186,7 @@ export async function verifyFix({
   depFileContents,
   fixMeta,
   testTimeoutMs,
+  runTests,
   recordMetrics = true,
   poc,
   patchNegative,
@@ -203,12 +204,13 @@ export async function verifyFix({
   _lap('rescan');
   const lint = runProjectLinter(scanRoot, Object.keys(files || {}));
   _lap('lint');
-  const tests = runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
+  // `runTests` lets a caller supply a runner that tests the PATCHED tree (fix/test-commands.js); the default runs the tree as it is on disk.
+  const tests = runTests ? runTests() : runProjectTests(scanRoot, testTimeoutMs != null ? { timeoutMs: testTimeoutMs } : {});
   _lap('tests');
   // True when a candidate patch was supplied but has not been written, so the
   // suite necessarily ran against the pre-patch tree. Surfaced in the summary
   // and on the result so a caller cannot mistake it for a verified patch.
-  const _testedPrePatch = !tests.skipped && _candidateDiffersFromDisk(scanRoot, files);
+  const _testedPrePatch = !runTests && !tests.skipped && _candidateDiffersFromDisk(scanRoot, files);
   const testsOk = tests.skipped ? true : tests.passed === true;
   // R5 — the PoC leg. Re-run the finding's proof-of-concept against the
   // CANDIDATE patch inside R1's sandbox. A patch that still lets the PoC

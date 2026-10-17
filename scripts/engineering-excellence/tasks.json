@@ -1,0 +1,1181 @@
+{
+  "schemaVersion": 1,
+  "program": "agentic-security-engineering-excellence",
+  "source": {
+    "file": "AGENTIC_SECURITY_ENGINEERING_EXCELLENCE_MASTER.prd",
+    "sha256": "98b770e82a07dba0cbb2887a05310e087a248b495e99300f8ea270bf696963d9"
+  },
+  "epics": [
+    {
+      "id": "E0",
+      "title": "Baseline, compatibility and execution infrastructure",
+      "priority": "P0",
+      "exitGate": "inventory, baseline and status observer work before any epic is marked in progress. `already_satisfied` tasks are supported by new/recent evidence, not merely previous status prose.",
+      "taskCount": 6
+    },
+    {
+      "id": "E1",
+      "title": "Genuine independent accuracy and anti-overfitting",
+      "priority": "P0",
+      "exitGate": "At least one current-engine independent evaluation is accurately run **or** explicitly `blocked/unmeasured` with actionable external dependency, with scoring and leakage instrumentation complete. Do not claim target F1 attainment absent a frozen, sufficiently powered held-out test.",
+      "taskCount": 8
+    },
+    {
+      "id": "E2",
+      "title": "Semantic IR, interprocedural taint and real-world detection",
+      "priority": "P0",
+      "exitGate": "Concrete missed real-code vulnerabilities recovered with causal explanations and matched safe controls, no known regression hidden by curated perfect-score tests, deterministic completion under analysis budgets.",
+      "taskCount": 9
+    },
+    {
+      "id": "E3",
+      "title": "Unified exploit and functional fix verification",
+      "priority": "P0",
+      "exitGate": "Every supported patch route produces the same evidence-based verification result, behavioral regressions are caught, and no write occurs when mandatory verification fails.",
+      "taskCount": 8
+    },
+    {
+      "id": "E4",
+      "title": "Production-grade Deterministic Context Intelligence",
+      "priority": "P1",
+      "exitGate": "Real-world-context examples are measurable, high-confidence findings have reproducible proof, safe paths do not become false positives, and unknowns are not promoted to vulnerabilities.",
+      "taskCount": 7
+    },
+    {
+      "id": "E5",
+      "title": "Runtime, deployment and exploitability corroboration",
+      "priority": "P1",
+      "exitGate": "Cross-artifact evidence matches immutable identities, unknowns are preserved, and no private runtime data leaks by default.",
+      "taskCount": 7
+    },
+    {
+      "id": "E6",
+      "title": "Reliable, efficient, maintainable, hardened engine",
+      "priority": "P1",
+      "exitGate": "Bounded scans, trustworthy scan-health semantics, no new uncontrolled egress/execution behavior, and measured—not assumed—performance benefit.",
+      "taskCount": 8
+    },
+    {
+      "id": "E7",
+      "title": "Auditable enterprise assurance, governance and explainability",
+      "priority": "P2",
+      "exitGate": "Independent offline verification, truthful compliance/coverage claims, privacy safe, and one coherent lineage from code and tests to executive/audit report.",
+      "taskCount": 8
+    },
+    {
+      "id": "E8",
+      "title": "Integration, distribution and production-readiness",
+      "priority": "P0",
+      "exitGate": null,
+      "taskCount": 6
+    }
+  ],
+  "tasks": [
+    {
+      "id": "E0-01",
+      "title": "Repository inventory",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [],
+      "informedBy": [],
+      "description": "Enumerate packages, supported languages, module boundaries, build scripts, CLI commands, MCP tools, existing test and benchmark directories, runtime/privacy features, recent PRDs, and unfinished work. Produce `docs/engineering-excellence/INVENTORY.md` with real links, owners and capability maturity.",
+      "acceptance": "no claimed feature without source and at least one executable test; accurate naming/version at HEAD.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-01*.test.js"
+      ]
+    },
+    {
+      "id": "E0-02",
+      "title": "Clean baseline manifest",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01"
+      ],
+      "informedBy": [],
+      "description": "Capture Git commit/dirtiness, package/bundle hashes, OS/CPU/RAM, Node/toolchain versions, model endpoint mode, knobs and benchmark corpus identifiers. Export canonical `baseline.json`.",
+      "acceptance": "full run provenance; dirty checkout flagged `untrusted_for_release`; no silent auto-stash/clean.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-02*.test.js"
+      ]
+    },
+    {
+      "id": "E0-03",
+      "title": "Existing behavior contract",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01"
+      ],
+      "informedBy": [],
+      "description": "Snapshot output schemas, exit codes, `scanHealth`, assurance modes, `verify_fix`, `findingProvenance`, signed bundle and OSCAL behavior. Record compatibility tests including CLI/MCP JSON shape and `scan` vs `ci --assurance strict`.",
+      "acceptance": "regression tests fail when public existing contracts change accidentally.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-03*.test.js"
+      ]
+    },
+    {
+      "id": "E0-04",
+      "title": "Durable task manifest",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [],
+      "informedBy": [],
+      "description": "Generate `scripts/engineering-excellence/tasks.json` and `status.json` with every task ID from Sections 5–13, dependencies, statuses and evidence links. Include a schema validator and idempotent initialization.",
+      "acceptance": "rerun preserves completed tasks, never resets evidence, handles corrupt state atomically with explicit failure.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-04*.test.js"
+      ]
+    },
+    {
+      "id": "E0-05",
+      "title": "Progress and watchdog",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-04"
+      ],
+      "informedBy": [],
+      "description": "Implement a lightweight terminal status tool with current task, done/total, blockers, last heartbeat, task elapsed time, test pass counts and ETA `unknown` unless measured. Make statuses update atomically; kill timed-out subprocess groups; log exit codes.",
+      "acceptance": "simulated hang terminates and marks `blocked`, and fresh invocation resumes the next available task.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-05*.test.js"
+      ]
+    },
+    {
+      "id": "E0-06",
+      "title": "Prioritize root causes",
+      "epic": "E0",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-02"
+      ],
+      "informedBy": [
+        "E1-05"
+      ],
+      "description": "Build `docs/engineering-excellence/PRIORITY_BACKLOG.md` from independent misses, SARD gaps, verification and reliability logs; score by independent examples affected × exploit impact × confidence / effort.",
+      "acceptance": "every top issue has an upstream source, reproducer or explicit hypothesis and an owner task.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e0-06*.test.js"
+      ]
+    },
+    {
+      "id": "E1-01",
+      "title": "Dataset provenance and clean acquisition",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Audit `bench/independent/`, CVE replay, SARD, mutation and proof corpora. Each entry must reference source project, upstream commit before/after fix, advisory/CWE provenance, affected-language label, scope, license, label confidence, acquisition checksum and split identifier. Follow licensing/security restrictions.",
+      "acceptance": "manifest can be reconstructed from original upstream artifacts or flagged unavailable, with no fabricated labels.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-01*.test.js"
+      ]
+    },
+    {
+      "id": "E1-02",
+      "title": "Immutable evaluation protocol and leakage barrier",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-01"
+      ],
+      "informedBy": [],
+      "description": "Freeze holdout membership and evaluation rules before observing results. Separate development / validation / sealed holdout by upstream **project/advisory family/time** to prevent near-duplicate leakage; preserve existing deterministic splits but evaluate whether they leak related variants. Prohibit LLM access to hidden labels/fix diffs; prohibit tuning after sealed-score inspection. CI test prevents benchmark roots, answer keys and vulnerability comments from becoming model input/scanner feature shortcuts.",
+      "acceptance": "isolation/leakage tests and sealed protocol hash are reproducible; prior exposed holdouts demoted to development if contaminated.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-02*.test.js"
+      ]
+    },
+    {
+      "id": "E1-03",
+      "title": "Accurate scoring engine",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-02"
+      ],
+      "informedBy": [],
+      "description": "Report TP, FP, FN, TN under explicitly declared advisory-local criteria, plus scoped fixed-version FP, all-finding false positive pressure, precision/recall/F1 per CWE and language, micro/macro/weighted metrics, coverage and uncertainty intervals. Distinguish unscored acquisition/parse failures from negatives and show complete denominator accounting. Preserve historical reports as historical.",
+      "acceptance": "synthetic scorer truth-table tests for zero denominators, missing entries, unknown CWE, duplicate findings, same-code multi-CWE, and excluded files.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-03*.test.js"
+      ]
+    },
+    {
+      "id": "E1-04",
+      "title": "Fresh baseline run",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-03"
+      ],
+      "informedBy": [],
+      "description": "Run the current engine against the independently sourced population using frozen settings, clean commit and exact bundle hash, with bounded shards and durable checkpoints. Report current engine results separately from archived v0.141.0.",
+      "acceptance": "fresh timestamp, clean provenance or explicit invalid state, raw artifacts, commands and score calculation. If unreachable, status `unmeasured`.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-04*.test.js"
+      ]
+    },
+    {
+      "id": "E1-05",
+      "title": "False-negative/false-positive forensics",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-04"
+      ],
+      "informedBy": [],
+      "description": "Classify misses into: no detector candidate; parse/IR gap; missing source/sink; alias/call-graph gap; sanitizer misclassification; guard/suppression; reachability demotion; wrong file/CWE; tool/setup incomplete; and unlabelled ambiguity. Every classification references a concrete trace.",
+      "acceptance": "totals reconcile exactly with scored population; human-readable ranked clusters and reproducible sample IDs.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-05*.test.js"
+      ]
+    },
+    {
+      "id": "E1-06",
+      "title": "Adversarial and negative controls",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-02"
+      ],
+      "informedBy": [],
+      "description": "Extend `bench/mutation/` using semantics-preserving rewrites, meaning-changing near misses, false-positive lookalikes, framework variants, multilingual variants, and independent code written without peeking at matching rules. Include bad comments and malicious benchmark descriptions to prove the engine follows code behavior, not words in labels.",
+      "acceptance": "metamorphic verdict-flip gate stable and measured; adversarial cases cannot improve evaluation by copying answer keys.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-06*.test.js"
+      ]
+    },
+    {
+      "id": "E1-07",
+      "title": "Regression and release policy",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-03",
+        "E1-04"
+      ],
+      "informedBy": [],
+      "description": "Implement `bench:realcode:report` and `bench:realcode:check` (actual names may differ if a coherent equivalent exists) with separate quick-PR diagnostic tier and pinned nightly/release tier. Pre-register floors from observed baseline and statistical uncertainty; gate regressions only for adequate population and healthy scan. Absence of measurement is a blocking state for externally advertised accuracy claims.",
+      "acceptance": "intentionally worsening a known detection fails the regression gate, and a missing corpus cannot pass green.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-07*.test.js"
+      ]
+    },
+    {
+      "id": "E1-08",
+      "title": "Public accuracy scorecard",
+      "epic": "E1",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E1-07"
+      ],
+      "informedBy": [],
+      "description": "Extend `docs/SCORECARD.md` and machine-readable scorecard to show clean HEAD, engine/bundle hash, population version, date, independent vs regression labels, per-language denominators, confidence intervals, timeout/unscored states, and explicit unmeasured languages.",
+      "acceptance": "independent and curated metrics visually/semantically separated; no headline “100%” drawn from a curated net.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e1-08*.test.js"
+      ]
+    },
+    {
+      "id": "E2-01",
+      "title": "IR and graph design contract",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Document current AST/IR and dataflow layers by language and construct. Specify additive typed entities: `Symbol`, `CallSite`, `Allocation`, `FieldAccess`, `ValueOrigin`, `ServiceBoundary`, `StorageEdge`, `Sanitizer`, `Guard`, `EvidenceConfidence`, with file/line/column, symbol ID and a versioned serialization. Preserve existing `chain[]`/findings JSON.",
+      "acceptance": "fixtures round-trip with stable IDs and low serialization overhead; no breaking output without migration.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-01*.test.js"
+      ]
+    },
+    {
+      "id": "E2-02",
+      "title": "Cross-file symbol resolution",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-01"
+      ],
+      "informedBy": [
+        "E1-05"
+      ],
+      "description": "Resolve imports/exports, re-exports, modules, and call sites through known framework patterns, with bounded graph traversal, uncertainty markers and explicit unsupported syntax. Prioritize JS/TS/Python then languages indicated by measured misses.",
+      "acceptance": "positive vulnerable and matched safe fixtures spanning at least 3 files; cycles and unresolved imports terminate predictably.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-02*.test.js"
+      ]
+    },
+    {
+      "id": "E2-03",
+      "title": "Heap, fields, aliases and closures",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-02"
+      ],
+      "informedBy": [],
+      "description": "Extend dataflow to track object/property assignment, destructuring, captured closures, collections and alias propagation, with conservative but precise merging. Avoid contaminating unrelated object properties or identities.",
+      "acceptance": "field-sensitive positive and adversarial negative controls; sound limits reported when dynamic language features cannot be resolved.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-03*.test.js"
+      ]
+    },
+    {
+      "id": "E2-04",
+      "title": "Async, callbacks and framework propagation",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-02"
+      ],
+      "informedBy": [],
+      "description": "Model promises/`await`, request middleware, callbacks, event handlers and common router→handler→service→DB flows. Prefer declarative framework models with versioned source/sink definitions and provenance.",
+      "acceptance": "runnable end-to-end tests from request ingress to sensitive sink with safe-control sibling.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-04*.test.js"
+      ]
+    },
+    {
+      "id": "E2-05",
+      "title": "Interprocedural contexts",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-03"
+      ],
+      "informedBy": [],
+      "description": "Improve existing k=1 return-taint and call-graph handling only where supported by measured cases; implement bounded context/summary keys and recursion/memoization with depth and budget counters.",
+      "acceptance": "no exponential explosion on recursive fixtures; correct distinct-call-site treatment in representative cases; explicit `analysis_incomplete` on budget exhaustion.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-05*.test.js"
+      ]
+    },
+    {
+      "id": "E2-06",
+      "title": "Cross-language-specific root cause remediation",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-02"
+      ],
+      "informedBy": [
+        "E1-05"
+      ],
+      "description": "Reproduce and test documented historical gaps, such as C# input-source propagation, LDAP attacker-control differentiation, Java cross-method finding suppression and parser classification where confirmed in current checkout. Also evaluate PHP/Go/Ruby/TS as indicated by independent miss mix.",
+      "acceptance": "original failing examples fixed + safe twins green; no language-wide regression; avoid patching a historical bug if already fixed.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-06*.test.js"
+      ]
+    },
+    {
+      "id": "E2-07",
+      "title": "Inter-service and persistence edges",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-04"
+      ],
+      "informedBy": [],
+      "description": "Add opt-in static service relationships (HTTP route/client, messaging topics, database write/read and serializer contracts) only when justified by configuration/code; encode `observed`, `inferred`, `unknown` separately. Cross-service ambiguity cannot be described as a proven exploit chain.",
+      "acceptance": "fixture traces span two services and an asynchronous/persistence hop, negative fixture denies unsupported edge; bounded traversal.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-07*.test.js"
+      ]
+    },
+    {
+      "id": "E2-08",
+      "title": "Suppression/guard correctness",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-02"
+      ],
+      "informedBy": [
+        "E1-05"
+      ],
+      "description": "Instrument stage-by-stage candidate lifecycle so suppressions, sanitizer assumptions, dead-code analyses and CWE remapping are auditable; repair biggest measured wrongful suppressions, without turning off guard recognition globally.",
+      "acceptance": "previously suppressed true positives recovered; sanitized/guarded negative controls remain silent; why-failed trace includes the decision rule.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-08*.test.js"
+      ]
+    },
+    {
+      "id": "E2-09",
+      "title": "Semantic accuracy gates",
+      "epic": "E2",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E2-06",
+        "E1-02"
+      ],
+      "informedBy": [],
+      "description": "For each new/changed model, provide vulnerable example, fixed example, semantics-preserving mutation, similar-but-safe example, and independently sourced example where available. Measure contribution on dev set, then use sealed holdout per E1 protocol.",
+      "acceptance": "improvement on independently scored cases or transparent inconclusive outcome; precision guardrails satisfied and regression suites green.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e2-09*.test.js"
+      ]
+    },
+    {
+      "id": "E3-01",
+      "title": "Inventory all patch paths",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Identify CLI `fix`, `verify_fix` via MCP, `apply_fix`, autotriage/autopilot, rule-template swaps, agent-composed patches, SCA upgrades and `undo`. Map differing internal objects, verification status fields and failure handling.",
+      "acceptance": "one contract table with reproducible call tests, no guessed integrations.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-01*.test.js"
+      ]
+    },
+    {
+      "id": "E3-02",
+      "title": "Versioned verification schema",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-01"
+      ],
+      "informedBy": [],
+      "description": "Define canonical `FixVerificationRecord` fields: `findingId`, immutable `preCommit/postPatchHash`, `patchHash`, `affectedFiles`, `securityBefore`, `securityAfter`, `exploitProofBefore`, `exploitProofAfter`, `behaviorTests`, `lint`, `typecheck`, `dependencyChecks`, `newFindingDelta`, `regressionTests`, `coverage`, `degradedLegs[]`, `verifiedFull`, `fixCompleteness`, `residualRisk`, `confidence`, tool versions, timestamps, mode, failures, and evidence hashes. Include `not_applicable` and `not_run` without conflating either with `passed`.",
+      "acceptance": "schema-validated records and backward-compatible adapter for existing consumers.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-02*.test.js"
+      ]
+    },
+    {
+      "id": "E3-03",
+      "title": "Central verification engine",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-02"
+      ],
+      "informedBy": [],
+      "description": "Route existing patch entry points through a single verifier and policy gate. Do not duplicate scanners or trust one route's weaker rules. Return additive fields to existing CLI/MCP outputs without breaking existing callers; upgrade adapters/tests.",
+      "acceptance": "identical patch and settings yield the same canonical verdict across CLI/MCP/agent paths; degraded evidence surfaced consistently.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-03*.test.js"
+      ]
+    },
+    {
+      "id": "E3-04",
+      "title": "Controlled pre/post exploit replay",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-03"
+      ],
+      "informedBy": [],
+      "description": "For authorized local fixtures only, run reproducible PoC or regression reproduction against pristine vulnerable code and then patched copy, with resource/network sandboxing, bounded time and no external targeting. Claim `execution_proven` only if precondition succeeds and postcondition demonstrably fails by a security-preserving mechanism.",
+      "acceptance": "exploitation fails safely after good fix and catches fake fix that merely suppresses a scanner rule.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-04*.test.js"
+      ]
+    },
+    {
+      "id": "E3-05",
+      "title": "Functional invariant preservation",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-03"
+      ],
+      "informedBy": [],
+      "description": "Discover existing test runners (`node:test`, Jest/Vitest, pytest, go test, cargo, dotnet, JUnit, etc.) and allow explicit affected-scope commands. Add positive authorized-use and negative unauthorized-use tests; detect APIs becoming inaccessible, response/schema changes and unacceptable performance regressions.",
+      "acceptance": "a blanket-deny IDOR patch or disable-feature SQLi patch is rejected despite disappearance of the original security finding.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-05*.test.js"
+      ]
+    },
+    {
+      "id": "E3-06",
+      "title": "Risk-tiered patch policy",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-03"
+      ],
+      "informedBy": [],
+      "description": "Default automatic application to configured low-risk patches only when all *required* checks pass. For high/critical/semantic auth changes, propose patch and request authorized application where policy requires. Never silently auto-apply with absent tests or degraded proof; preserve preview/undo.",
+      "acceptance": "test matrices enforce `FULL`, `MITIGATION`, `WORKAROUND`, `unverified`, `blocked` distinctions and residual risk.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-06*.test.js"
+      ]
+    },
+    {
+      "id": "E3-07",
+      "title": "Rollback, crash and workspace safety",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-03"
+      ],
+      "informedBy": [],
+      "description": "Patch in isolated temporary worktrees or copies; use atomic file changes and durable rollback references; guard symlinks and path traversal, concurrent modifications, uncommitted changes, binary files and tool errors. No unexpected writes outside approved root.",
+      "acceptance": "injected crash and test failure leave target untouched/revertible, including after restart.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-07*.test.js"
+      ]
+    },
+    {
+      "id": "E3-08",
+      "title": "Fix benchmark and release gate",
+      "epic": "E3",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E3-04",
+        "E3-05"
+      ],
+      "informedBy": [],
+      "description": "Build a corpus of true security fixes and fake-but-green fixes covering SQLi, XSS, path traversal, IDOR, authz, dependency upgrades and secret remediation. Score exploit success, functional correctness, new vulnerabilities, fallback/degraded rates and costs; publish denominator and limitations.",
+      "acceptance": "unsafe fixes rejected, safe fixes accepted where verifiable, and unavailable PoC never masquerades as failed exploit after patch.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e3-08*.test.js"
+      ]
+    },
+    {
+      "id": "E4-01",
+      "title": "DCI maturity audit",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Locate context commands, invariant schemas, code/AST extraction, model review, hash-bound evidence, downstream finding promotion, and test harness. Evaluate current synthetic cases and language coverage independently of marketing/docs.",
+      "acceptance": "precise functionality matrix: authorization, tenancy, workflows, transaction integrity, state transitions, language/framework capability, confidence and limitation.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-01*.test.js"
+      ]
+    },
+    {
+      "id": "E4-02",
+      "title": "First-class security invariants",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-01"
+      ],
+      "informedBy": [],
+      "description": "Formalize explicit, machine-checkable invariants such as `actor owns target resource`, `tenant on read equals tenant on write`, `authorization checked before mutation`, `approval state is enforced`, `idempotency key prevents replay`, and `ledger debit/credit conservation`. Bind roles, resources, transaction state and code symbols.",
+      "acceptance": "versioned schema with path-scoped validity, validation of malformed policies and examples of both satisfied and violated invariants.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-02*.test.js"
+      ]
+    },
+    {
+      "id": "E4-03",
+      "title": "Cross-route and cross-layer propagation",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-02",
+        "E2-02"
+      ],
+      "informedBy": [],
+      "description": "Trace route→middleware→handler→service→persistence and compare write/read/update/delete enforcement at all relevant paths. Treat unresolved dynamic dispatch as unknown, not proof of absence or safety.",
+      "acceptance": "evidence supports actual multi-route IDOR/cross-tenant bug and suppresses intentionally public access with documented policy.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-03*.test.js"
+      ]
+    },
+    {
+      "id": "E4-04",
+      "title": "Deterministic counterexample validation",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-03"
+      ],
+      "informedBy": [],
+      "description": "Given a candidate invariant violation, attempt proof using graph/path constraints, route tests and authorized local request fixtures. State `proven`, `plausible`, `refuted`, `unresolved` separately. Do not promote LLM assertions directly into gating findings.",
+      "acceptance": "confidence and evidence trace remain stable with LLM disabled and adversarial prompt-injection comments ignored.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-04*.test.js"
+      ]
+    },
+    {
+      "id": "E4-05",
+      "title": "LLM advisory safeguards",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-01"
+      ],
+      "informedBy": [],
+      "description": "Keep local-only and deny egress behavior; hash/anonymize prompts when policy requires; cap tokens, tokens-per-repo, retries, wall clock and model input. Strip model-provided untrusted commands. Attribute suggestions to model provenance and validate through deterministic verifier.",
+      "acceptance": "offline mode always works for deterministic components; egress deny prevents outbound request even on validator error.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-05*.test.js"
+      ]
+    },
+    {
+      "id": "E4-06",
+      "title": "Real-app DCI validation",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-04",
+        "E1-02"
+      ],
+      "informedBy": [],
+      "description": "Build independent, held-out authorization/business-logic cases across at least two web stacks, with vulnerable/fixed twins and non-obvious safe counterexamples. Label by independent reviewer or upstream advisory. Include missing middleware, indirect ownership, multi-tenant joins, state machine bypass and race/TOCTOU when deterministically representable.",
+      "acceptance": "per-family precision/recall/confidence; failures reported as limitations rather than silently excluded.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-06*.test.js"
+      ]
+    },
+    {
+      "id": "E4-07",
+      "title": "Findings and developer workflow integration",
+      "epic": "E4",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E4-04",
+        "E3-03"
+      ],
+      "informedBy": [],
+      "description": "Reuse normalized findings, `chain[]`, SAST provenance, SARIF, triage, verified-fix policy, CI assurance and privacy controls; include the exact invariant violated and affected authorization scope.",
+      "acceptance": "one DCI finding traces back to rule, code, counterexample, fix recommendation and final verification without creating a parallel reporting system.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e4-07*.test.js"
+      ]
+    },
+    {
+      "id": "E5-01",
+      "title": "Existing runtime/asset provenance audit",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Identify runtime-twin ingest, static dataflow graph, dependency reachability, service topology, Git finding provenance and artifact attestations. Map matching confidence and missing function-level evidence.",
+      "acceptance": "validated current integration points and incompatible source-of-truth conflicts resolved.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-01*.test.js"
+      ]
+    },
+    {
+      "id": "E5-02",
+      "title": "Attested deployment identity",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-01"
+      ],
+      "informedBy": [],
+      "description": "Use build hash, image digest, artifact/SBOM reference, Git commit and environment ID to tie data to deployed code. Reject mismatched source snapshot links.",
+      "acceptance": "mismatched build cannot be labeled as runtime corroborating a static finding.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-02*.test.js"
+      ]
+    },
+    {
+      "id": "E5-03",
+      "title": "Privacy-preserving symbol/route observations",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-01"
+      ],
+      "informedBy": [],
+      "description": "Support opt-in ingestion of observed route IDs, service edges and stable function symbols through minimal normalized records; avoid raw request bodies, tokens, PII, PHI and payment data by default. Collect only after user policy allows; local/offline ingestion must work.",
+      "acceptance": "PII/secret canaries never persist, retention policies apply, telemetry sampling and unknown status disclosed.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-03*.test.js"
+      ]
+    },
+    {
+      "id": "E5-04",
+      "title": "Static/runtime graph reconciliation",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-02",
+        "E5-03",
+        "E2-01"
+      ],
+      "informedBy": [],
+      "description": "Match route/function/service edges to semantic graph using qualified symbols, spans, build manifests and configurable normalization; state each edge as `statically_inferred`, `runtime_observed`, `both`, `conflicted`, or `unknown`. Confidence decays on version mismatch and partial coverage.",
+      "acceptance": "fixtures with both matching and nonmatching builds never produce falsely corroborated exploit paths.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-04*.test.js"
+      ]
+    },
+    {
+      "id": "E5-05",
+      "title": "Multi-level exploitability evidence",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-04"
+      ],
+      "informedBy": [],
+      "description": "Represent independent states: present in dependency, included in deployed artifact, statically reachable, runtime observed, externally reachable, proof-of-execution, blocked by compensating control, and unknown. Context can raise/lower prioritization only with cited evidence and pre-registered policy, never erase the finding.",
+      "acceptance": "tests show no false claim that `runtime not observed` means unreachable or safe.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-05*.test.js"
+      ]
+    },
+    {
+      "id": "E5-06",
+      "title": "Multi-repo fleet graph",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-01"
+      ],
+      "informedBy": [],
+      "description": "Reuse existing fleet scanning, cross-repository dependency maps and code boundaries; link shared libraries, deployment environments, API calls, event topics, data classification and vulnerable version. Add analysis-budget caps and tenant isolation.",
+      "acceptance": "two-repo, two-service fixture produces a coherent route→library→sink chain and discriminates wrong-service edges.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-06*.test.js"
+      ]
+    },
+    {
+      "id": "E5-07",
+      "title": "Verification and view/report integration",
+      "epic": "E5",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E5-04"
+      ],
+      "informedBy": [],
+      "description": "Add side-by-side static/runtime explanation to existing data-flow explorer, CLI JSON, SARIF/evidence schema where appropriate; preserve offline operation and clearly label missing observations.",
+      "acceptance": "tests verify state synchronization, deterministic source snapshots and privacy-compliant export.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e5-07*.test.js"
+      ]
+    },
+    {
+      "id": "E6-01",
+      "title": "Profiling and scan telemetry",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Measure per-stage parser time, detector time, dataflow time, memory high-water, cache hit rate, file budgets, SCA feed freshness and scanHealth failure reasons, without default outbound telemetry.",
+      "acceptance": "every scan records structured aggregate timings and error attribution, with low overhead measured against baseline.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-01*.test.js"
+      ]
+    },
+    {
+      "id": "E6-02",
+      "title": "True third-party repo completion analysis",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01"
+      ],
+      "informedBy": [],
+      "description": "Reproduce previously failed targets where legally and technically available; separate clone/fetch issues, missing tools, unsupported language, parsing, engine crashes, timeout and OOM. Use fixture repos when upstream cannot be retrieved.",
+      "acceptance": "at least one causal fix for each reproducible engine-controlled category; unavailable targets marked `blocked`, not fake passes.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-02*.test.js"
+      ]
+    },
+    {
+      "id": "E6-03",
+      "title": "Shared parsing/IR infrastructure",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01"
+      ],
+      "informedBy": [],
+      "description": "Audit 121-detector dispatch and repeated parsing; introduce versioned per-file IR reuse, explicit per-detector capability declarations and minimal compatibility adapters where profiling proves benefit. No wholesale rewrite without benchmarks.",
+      "acceptance": "same findings/evidence on fixtures, fewer repeated parse passes, quantified memory/time difference.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-03*.test.js"
+      ]
+    },
+    {
+      "id": "E6-04",
+      "title": "Incremental content-addressed cache",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-03"
+      ],
+      "informedBy": [],
+      "description": "Cache versioned analysis by content hash, tool version, configuration, transitive dependency graph and relevant feed freshness; recursively invalidate affected dependents. Keep secret-bearing payloads out of cache or encrypt under configured policy.",
+      "acceptance": "incremental vs cold results semantically identical after changing entrypoint, dependency, config or sanitizer; stale cache never causes false green.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-04*.test.js"
+      ]
+    },
+    {
+      "id": "E6-05",
+      "title": "Bounded concurrency and isolation",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01"
+      ],
+      "informedBy": [],
+      "description": "Run expensive analyzers in supervised workers or subprocesses with RAM/CPU/time limits, cancellation, bounded queues and process-group cleanup. Preserve findings from successful analyzers when one fails, but ensure scan health degrades and assurance strict fails.",
+      "acceptance": "injected infinite loop and OOM terminate; partial successes retained; no orphan process, indefinite wait, or hidden crash.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-05*.test.js"
+      ]
+    },
+    {
+      "id": "E6-06",
+      "title": "Determinism and output reproducibility",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01"
+      ],
+      "informedBy": [],
+      "description": "Canonical ordering, stable IDs and rounding, seeded heuristics, pinned model/analyzer provenance, explicit nondeterministic metadata.",
+      "acceptance": "repeated same-input runs produce identical canonical findings while tool run timestamps remain separate; race-stress tests detect no order-sensitive analysis.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-06*.test.js"
+      ]
+    },
+    {
+      "id": "E6-07",
+      "title": "Adversarial input and model boundary hardening",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01"
+      ],
+      "informedBy": [],
+      "description": "Threat-model `scanner/src/llm-validator/`, discovery pipeline, source snippets, model prompts, CLI arguments, MCP tools, code fixtures and report exports for prompt injection, traversal, unsafe file writes, command injection and uncontrolled egress. Fuzz/bound parsers and deny-by-default on violation.",
+      "acceptance": "hostile repo text cannot cause arbitrary shell/network/write actions; authorization boundary tests run in CI.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-07*.test.js"
+      ]
+    },
+    {
+      "id": "E6-08",
+      "title": "Performance budget and load tests",
+      "epic": "E6",
+      "priority": "P1",
+      "weight": 2,
+      "requires": [
+        "E6-01",
+        "E6-04"
+      ],
+      "informedBy": [],
+      "description": "Choose P50/P95/RSS/error-budget floors based on E0 baseline and realistic small/medium/large projects. For planning, aspire to ≥2x warm incremental performance for changed-file scans with no loss of findings; adjust after measurement.",
+      "acceptance": "performance report includes distribution, hardware, N, corpus and tradeoffs; resource/budget exhaustion is reported not green.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e6-08*.test.js"
+      ]
+    },
+    {
+      "id": "E7-01",
+      "title": "Evidence contract inventory",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Normalize how findings, fix proofs, DCI invariants, static/runtime evidence, scorecards, SCA/AI-BOM, provenance, scan health and compliance mapping reference immutable snapshots. Preserve `findingProvenance` vs unrelated `.provenance` fields per module instructions.",
+      "acceptance": "comprehensive evidence lineage, stable schema versions and compatibility migration tests.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-01*.test.js"
+      ]
+    },
+    {
+      "id": "E7-02",
+      "title": "Complete provenance defensibly",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-01"
+      ],
+      "informedBy": [],
+      "description": "Improve finding-to-commit attribution coverage where applicable; distinguish ignored/unknown/history-unavailable/generated/uncommitted files from attributed. Do not force an author/date for evidence-lacking cases. Establish a baseline and target ≥95% *eligible* finding attribution as an aspirational metric, with transparent denominator.",
+      "acceptance": "renamed/moved files, shallow clones, uncommitted files, rebases and multi-author changes tested; errors surfaced.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-02*.test.js"
+      ]
+    },
+    {
+      "id": "E7-03",
+      "title": "Signed release assurance package",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-01"
+      ],
+      "informedBy": [],
+      "description": "Compose scan result, source/build identity, `scanHealth`, findings, verification records, policy decisions, runtime corroboration, inventory and control-evidence references into a portable manifest. Use existing Ed25519 signing and verification where appropriate, canonical JSON and immutable content digests. Distinguish finding authenticity/integrity from proof of exploitability.",
+      "acceptance": "independent offline verifier succeeds with valid public key and rejects tampered fields, reordering/signature substitution and missing mandatory evidence.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-03*.test.js"
+      ]
+    },
+    {
+      "id": "E7-04",
+      "title": "Compliance truth model",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-01"
+      ],
+      "informedBy": [],
+      "description": "Extend existing framework mappings only with traceable technical evidence; classify `assessed_satisfied`, `assessed_not_satisfied`, `not_assessed`, `not_applicable`, `requires_human_review`, and `insufficient_evidence`. Never map framework-wide obligation satisfaction from one SAST check. Maintain OSCAL 1.1.2 conformance and existing honest treatment of unknown controls.",
+      "acceptance": "incomplete data yields no fabricated OSCAL control verdict, coverage denominators explicit, existing reports round-trip.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-04*.test.js"
+      ]
+    },
+    {
+      "id": "E7-05",
+      "title": "Policies, approvals, retention and tenancy",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-01"
+      ],
+      "informedBy": [],
+      "description": "Reuse existing egress policies, legal hold, state TTL and encryption; introduce approval/waiver record schema with actor, justification, expiry, scope, policy version, signature/audit log where relevant. Enforce tenant/environment isolation and avoid log PII.",
+      "acceptance": "expired waivers cannot silently suppress issues; unauthorized access to other tenant's evidence denied; erasure/legal-hold semantics maintained.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-05*.test.js"
+      ]
+    },
+    {
+      "id": "E7-06",
+      "title": "Cross-fleet exposure and prioritization",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-01",
+        "E5-06"
+      ],
+      "informedBy": [],
+      "description": "Correlate findings across code repos, deployed artifacts, services and environments. Rank using independently separate impact/exposure/exploitability/confidence and coverage completeness, with traceable risk factors, not an opaque single ungrounded number.",
+      "acceptance": "explainable ranked results and negative controls for stale runtime evidence and nonmatching dependencies.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-06*.test.js"
+      ]
+    },
+    {
+      "id": "E7-07",
+      "title": "CISO/developer/auditor experiences",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-03"
+      ],
+      "informedBy": [],
+      "description": "Use the existing reporting and Code Boundaries interfaces. Provide three perspectives using the same evidence: developer (`where/why/how to fix`), CISO (`what is proven, change since last release, risk/coverage`), auditor (`what evidence supports each assertion/unknown`). No new dashboard if CLI/HTML/OSCAL enhancement suffices.",
+      "acceptance": "views agree on finding IDs, status, evidence hash and confidence; offline shareable report renders correctly.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-07*.test.js"
+      ]
+    },
+    {
+      "id": "E7-08",
+      "title": "End-to-end assurance and tamper tests",
+      "epic": "E7",
+      "priority": "P2",
+      "weight": 1,
+      "requires": [
+        "E7-03",
+        "E7-04",
+        "E7-05"
+      ],
+      "informedBy": [],
+      "description": "Test a release snapshot with true positive, false positive, unscanned file, one timed-out analyzer, a verified fix, an uncertain DCI signal and mismatched runtime artifact. Assert that policy does not report “safe to deploy” when required scans/verification are incomplete.",
+      "acceptance": "deterministic assurance verdict and signed package, tamper refusal and human-readable unknown reasons.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e7-08*.test.js"
+      ]
+    },
+    {
+      "id": "E8-01",
+      "title": "Full compatibility and security gates",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E0-01",
+        "E0-02",
+        "E0-05"
+      ],
+      "informedBy": [],
+      "description": "Run affected scoped tests, full unit suite, `npm run build`, bundle smoke, pre-push gates and offline benchmark checks according to repository's current scripts; do not use unsupported syntax like `agentic-security scan --help`.",
+      "acceptance": "all executable gates pass or explicitly report failing names, commands, logs and reason.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-01*.test.js"
+      ]
+    },
+    {
+      "id": "E8-02",
+      "title": "Cross-capability E2E project",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E8-01"
+      ],
+      "informedBy": [],
+      "description": "Build a small *owned* multi-service, multi-language example with SQL injection, IDOR, cross-tenant access, safe lookalikes, false-fix candidate, SCA reachability and opt-in runtime metadata.",
+      "acceptance": "start→scan→triage→validate→patch→verify→runtime correlate→sign→offline verify demos are actually runnable, no network required by default.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-02*.test.js"
+      ]
+    },
+    {
+      "id": "E8-03",
+      "title": "Regression and release candidates",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E8-01"
+      ],
+      "informedBy": [],
+      "description": "Produce before/after report for independent accuracy, known-miss clusters, verification safety, scan completion, CPU/RAM, privacy hardening and evidence coverage. Include confidence intervals, provenance, limitations and failures.",
+      "acceptance": "no misleading historical comparison or synthetic-to-real score mixing; areas of regression plainly shown.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-03*.test.js"
+      ]
+    },
+    {
+      "id": "E8-04",
+      "title": "Docs, examples and CLI/help updates",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E8-01"
+      ],
+      "informedBy": [],
+      "description": "Update README documentation index, architecture and developer manuals, `docs/METRICS.md`, `docs/SCORECARD.md`, DCI/fix/privacy/runtime/assurance pages, command help and a clear “what is not proven” section.",
+      "acceptance": "every new public command and field has example output captured from the implementation; docs tests do not contain fictitious pass values.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-04*.test.js"
+      ]
+    },
+    {
+      "id": "E8-05",
+      "title": "Resumable terminal handoff",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E8-01"
+      ],
+      "informedBy": [],
+      "description": "Produce `docs/engineering-excellence/FINAL_REPORT.md`, `STATUS.md`, `status.json`, `unresolved.json` and re-run commands with artifact provenance.",
+      "acceptance": "another Claude Code session can resume from disk without guessing progress, and terminal summary agrees with task ledger.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-05*.test.js"
+      ]
+    },
+    {
+      "id": "E8-06",
+      "title": "Release decision",
+      "epic": "E8",
+      "priority": "P0",
+      "weight": 3,
+      "requires": [
+        "E8-03",
+        "E8-04",
+        "E8-05"
+      ],
+      "informedBy": [],
+      "description": "Release-ready only when the blocking high-priority gates pass, no P0 task is incomplete/untested, critical security regressions are resolved, and measured claims are valid. Otherwise produce a complete **release-blocked** report and a prioritized remaining task queue; do not announce success.",
+      "acceptance": "a failing/missing gate cannot become green by changing a metric label or waiving tests without signed, expiring and explicit policy approval.",
+      "expectedTests": [
+        "scanner/test/engineering-excellence/e8-06*.test.js"
+      ]
+    }
+  ]
+}

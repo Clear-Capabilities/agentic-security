@@ -11,7 +11,7 @@
 //   * hide a limit. Hitting the symbol or depth cap marks the walk `capped` and lists what was left unvisited.
 //   * lose a control. Middleware and every callee are walked, and each visited symbol's controls are collected by the
 //     same classifier the packer uses to refuse pruning.
-import { analyzeSymbolText } from './controls.js';
+import { analyzeSymbolText, blankComments } from './controls.js';
 import { cmpCodeUnit } from './canonical.js';
 import { MATERIAL_REASONS } from './graph-schema.js';
 
@@ -36,7 +36,7 @@ export function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
   const lim = { ...DEFAULT_LIMITS, ...limits };
   const { byId, edgesFrom } = indexGraph(graph);
   const linesCache = new Map();
-  const linesOf = (f) => { if (!linesCache.has(f)) linesCache.set(f, (fileContents[f] || '').split('\n')); return linesCache.get(f); };
+  const linesOf = (f) => { if (!linesCache.has(f)) linesCache.set(f, blankComments(fileContents[f] || '', f).split('\n')); return linesCache.get(f); };
 
   const visited = [];
   const seen = new Set();

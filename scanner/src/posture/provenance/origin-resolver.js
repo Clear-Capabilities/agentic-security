@@ -30,6 +30,12 @@ import { checkAbsentInSomeParent, detectRevert, detectCherryPick } from './dag-w
 import { loadRepoLineage } from './repo-lineage.js';
 import { resolveAIAuthorship } from './ai-authorship.js';
 
+// Findings produced by the deep (IR taint) layer exist only when that layer runs. A replay that skips it can never see such a finding at ANY commit, so origin
+// resolution would end "never confirmed" for every one of them (78 of 559 findings in this repository's own scan did). The same reasoning is applied to
+// Haskell and Nix in predicate-replay.js.
+const DEEP_PARSERS = new Set(['IR-TAINT', 'IR-TAINT-IFDS', 'IR-PRIVACY-TAINT']);
+const needsDeepReplay = (finding) => !!finding && DEEP_PARSERS.has(finding.parser);
+
 function relevantFiles(finding) {
   const files = new Set();
   if (finding.file) files.add(finding.file);
@@ -224,7 +230,7 @@ export async function resolveOrigin(scanRoot, finding, { since, deadlineAt, repo
   const replayCache = new Map();
   const replay = (sha) => {
     if (replayCache.has(sha)) return replayCache.get(sha);
-    const p = replayAt(scanRoot, sha, files, stableId);
+    const p = replayAt(scanRoot, sha, files, stableId, { deep: needsDeepReplay(finding) });
     replayCache.set(sha, p);
     return p;
   };

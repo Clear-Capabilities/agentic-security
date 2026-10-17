@@ -182,7 +182,13 @@ function exprOf(n) {
         return { key: resolveObjectKey(p), value: exprOf(p.value) };
       }).filter(Boolean),
     };
-    case 'ArrayExpression':   return { kind: 'array', elements: (n.elements || []).map(exprOf) };
+    case 'ArrayExpression': {
+      // `spreads` is additive and present only when an element is `...x`: the position of every later element is then unknown, which the
+      // engine needs in order to treat the literal index by index (E2-03). Consumers that ignore it see the same shape as before.
+      const spreads = [];
+      (n.elements || []).forEach((el, i) => { if (el && el.type === 'SpreadElement') spreads.push(i); });
+      return spreads.length ? { kind: 'array', elements: (n.elements || []).map(exprOf), spreads } : { kind: 'array', elements: (n.elements || []).map(exprOf) };
+    }
     case 'SpreadElement':     return exprOf(n.argument);
     case 'ThisExpression':    return { kind: 'ident', name: '_this_' };
     // Taint-recall PRD (80%) Tier 3: JSX had ZERO IR modeling at all — every
@@ -486,7 +492,20 @@ export function parseJsFile(file, code) {
             const parentName = stack[stack.length - 1]?.name || '';
             enterFn(name || 'anon', parentName, path.node, path.node.params || []);
           },
-          exit() { exitFn(); },
+          exit(path) {
+            // An arrow with an EXPRESSION body (`(req) => req.query.c`) returns that expression. It has no ReturnStatement, so the function used to
+            // record no return at all and every helper written this way was invisible to return-taint summaries. The return node is added on exit so
+            // it follows any call nodes the expression contained.
+            const fn = currentFn();
+            const body = path.node.body;
+            if (fn && body && body.type !== 'BlockStatement') {
+              const nodeId = nextNodeId();
+              addNode(fn, { id: nodeId, kind: 'return', value: exprOf(body), line: body.loc?.start?.line || path.node.loc?.start?.line || 0, succ: [], pred: [] });
+              fn.returns.push(nodeId);
+              linkCfg(fn, nodeId, fn.cfg.exit);
+            }
+            exitFn();
+          },
         },
         ClassMethod: {
           enter(path) {

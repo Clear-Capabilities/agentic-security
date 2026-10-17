@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-58w9-8g37-x9v5  packages/compiler  291 source file(s)
+[err]   ✓ GHSA-5f94-x226-ccpm  (whole repo)  132 source file(s)
+[err]   ✓ GHSA-5gvw-p9qm-jgwh  src/main/java/com/fasterxml/jackson/databind/deser  101 source file(s)
+[err]   ✓ GHSA-5h77-88j3-r659  (whole repo)  61 source file(s)
+[err]   ✓ GHSA-5jch-xhw4-r43v  (whole repo)  43 source file(s)
+[err]   ✓ GHSA-5p9g-j988-pcwv  (whole repo)  113 source file(s)
+[err]   ✓ GHSA-5xpp-75jx-m839  (whole repo)  29 source file(s)
+[err]   ✓ GHSA-62fc-8686-hfmq  pkg/provider  322 source file(s)
+[err]   ✓ GHSA-62hf-57xw-28j9  (whole repo)  214 source file(s)
+[err]   ✓ GHSA-6477-wvjj-47v6  extensions/zalo  47 source file(s)
+[err]   ✓ GHSA-68r5-9hpg-7qw9  opendj-dsml-servlet  12 source file(s)
+[err]   ✓ GHSA-6f62-3596-g6w7  (whole repo)  56 source file(s)
+[err]   ✓ GHSA-6hq5-7373-42rg  src/PhpSpreadsheet/Calculation  207 source file(s)
+[err]   ✓ GHSA-6hr6-w5qg-qmwg  (whole repo)  58 source file(s)
+[err]   ✓ GHSA-6j2x-vhqr-qr7q  (whole repo)  61 source file(s)
+[err]   ✓ GHSA-6pvm-2vjj-rx4w  phpmyfaq/src/phpMyFAQ  638 source file(s)
+[err]   ✓ GHSA-6x2m-p4xp-wg22  (whole repo)  176 source file(s)
+[err]   ✓ GHSA-6xj8-qv9j-xcjq  src  478 source file(s)
+[err]   ✓ GHSA-746g-3gfp-hfhw  (whole repo)  183 source file(s)
+[err]   ✓ GHSA-76w7-j9cq-rx2j  (whole repo)  57 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 64s
+[err] 2 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

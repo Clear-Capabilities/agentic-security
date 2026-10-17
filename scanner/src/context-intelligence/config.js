@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   maxFiles: 3000,
   semanticMetadata: { mode: 'off', haskellHieDir: null },
   context: { profile: 'standard', maxTokens: null, pruneLowValue: true, maxSymbols: 60, maxDepth: 12 },
-  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
+  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3, maxTokensPerRepo: null, anonymizePrompts: false },
   replay: { contentAddressed: true, retention: 'inherit' },
 });
 
@@ -71,6 +71,8 @@ export function normalizeConfig(raw) {
       maxCostUsd: Number.isFinite(rv.maxCostUsd) && rv.maxCostUsd >= 0 ? rv.maxCostUsd : null,
       maxTokensPerJob: clamp(rv.maxTokensPerJob, 1000, 400000, d.review.maxTokensPerJob),
       maxRetries: clamp(rv.maxRetries, 0, 3, d.review.maxRetries),
+      maxTokensPerRepo: Number.isFinite(rv.maxTokensPerRepo) && rv.maxTokensPerRepo >= 1000 ? Math.trunc(rv.maxTokensPerRepo) : null,
+      anonymizePrompts: rv.anonymizePrompts === true,
     },
     replay: { contentAddressed: rp.contentAddressed !== false, retention: typeof rp.retention === 'string' ? rp.retention : 'inherit' },
   };

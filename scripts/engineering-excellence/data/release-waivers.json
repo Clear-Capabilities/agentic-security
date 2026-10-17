@@ -1,0 +1,1 @@
+{ "note": "Signed, expiring waivers for release-blocking unresolved items (scope kind rule, value = item id). Each is judged by posture/assurance/waiver.js: a signed, unexpired, tenant-and-environment-matched, justified waiver with a compensating control. None exist.", "waivers": [] }

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.172.1-blue)]()
+[![Version](https://img.shields.io/badge/version-0.173.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 <img src="https://raw.githubusercontent.com/Clear-Capabilities/agentic-security/main/docs/brand/patch-bug-scene.svg" align="right" width="220" alt="Patch the mascot side-eyeing a bug on a monitor — agentic-security's signature scene">
@@ -195,6 +195,8 @@ New here? Start with the **[15-minute quickstart](docs/guides/quickstart.md)**, 
 **AppSec** — set the gate, read the evidence
 - [Scan health](docs/walkthroughs/scan-health.md) — what `scanHealth` measures, and why one failing analyzer can't hide another's findings
 - [Assurance modes](docs/walkthroughs/assurance-modes.md) — `advisory` / `standard` / `strict`, real captured output
+- [Release assurance](docs/guides/release-assurance.md) — a signed release package, a deterministic `not_deployable` / `needs_review` / `deployable` verdict, `release-view`, offline verification
+- [Engineering excellence evidence](docs/engineering-excellence/README.md) — measured results, the end-to-end demo, and what is not proven
 - [Architecture: the finding lifecycle](docs/architecture/finding-lifecycle.md) — the real module pipeline, detector to report
 
 **Privacy** — trace where sensitive data actually goes

@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-h95v-h523-3mw8  (whole repo)  47 source file(s)
+[err]   ✓ GHSA-hc36-c89j-5f4j  (whole repo)  260 source file(s)
+[err]   ✓ GHSA-hcm8-x79p-wx2w  (whole repo)  25177 source file(s)
+[err]   ✓ GHSA-hf3j-86p7-mfw8  packages  396 source file(s)
+[err]   ✓ GHSA-hgv7-v322-mmgr  packages/kit/src  278 source file(s)
+[err]   ✓ GHSA-hh9p-6wh2-4mfc  (whole repo)  143 source file(s)
+[err]   ✓ GHSA-hhmc-q9hp-r662  system/HTTP  33 source file(s)
+[err]   ✓ GHSA-hp36-v28f-w3r4  (whole repo)  4 source file(s)
+[err]   ✓ GHSA-hp3v-mfqw-h74c  packages/integrations/netlify  58 source file(s)
+[err]   ✓ GHSA-hpcc-26xq-25fv  (whole repo)  3531 source file(s)
+[err]   ✓ GHSA-hq9q-27g5-qwpj  src/Kiota.Builder  395 source file(s)
+[err]   ✓ GHSA-hr7p-wg7r-hg9m  src/core  879 source file(s)
+[err]   ✓ GHSA-j5f8-grm9-p9fc  (whole repo)  215 source file(s)
+[err]   ✓ GHSA-j8qw-6jw8-r297  (whole repo)  80 source file(s)
+[err]   ✓ GHSA-jfm3-95jq-q3rf  (whole repo)  300 source file(s)
+[err]   ✓ GHSA-jjhx-jhvp-74wq  actionpack  334 source file(s)
+[err]   ✓ GHSA-jm28-2wcr-qf3h  (whole repo)  210 source file(s)
+[err]   ✓ GHSA-jm78-9fvv-mhgr  (whole repo)  143 source file(s)
+[err]   ✓ GHSA-jpcw-4wr7-c3vq  (whole repo)  277 source file(s)
+[err]   ✓ GHSA-jqwh-526h-c92j  src/Kiota.Builder  395 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 85s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

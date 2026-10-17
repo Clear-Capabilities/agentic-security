@@ -19,6 +19,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadSplits } from './splits.mjs';
+import { scorePopulation, headline } from './scorer.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = () => path.join(HERE, process.argv.includes('--deep') ? 'RESULT-deep.json' : 'RESULT.json');
@@ -194,7 +196,7 @@ function main() {
     perEntry: rows,
     ...agg,
     heldOut: {
-      meaning: 'never tune against these; scored separately (T0.7)',
+      meaning: 'LEGACY per-id slice, DEMOTED to development use (it splits repositories across both sides; see splits.json legacyHoldout). Never quoted as held-out.',
       entries: held.length,
       localized: score(held, LOCAL),
     },
@@ -203,6 +205,12 @@ function main() {
       localized: score(rows.filter((r) => !r.heldOut), LOCAL),
     },
   };
+  // complete denominator accounting over the WHOLE manifest, from the merged rows (scorer.mjs)
+  const manifestEntries = JSON.parse(fs.readFileSync(path.join(HERE, 'manifest.json'), 'utf8')).entries;
+  const splits = loadSplits();
+  report.splits = splits ? { protocolHash: splits.protocolHash, counts: splits.counts } : null;
+  report.scoring = scorePopulation({ rows, unscored: unscored.map((u) => (typeof u === 'string' ? { id: u, reason: 'unscored' } : u)), manifestEntries, splits, protocolHash: splits ? splits.protocolHash : undefined });
+  report.headline = headline(report.scoring);
   fs.writeFileSync(OUT(), JSON.stringify(report, null, 2) + '\n');
 
   const pc = (r) => (r.value === null ? 'n/a' : `${(r.value * 100).toFixed(2)}%`);

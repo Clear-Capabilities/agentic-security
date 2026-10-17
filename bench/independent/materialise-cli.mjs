@@ -7,6 +7,13 @@ import { materialiseEntry } from './materialise.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const man = JSON.parse(fs.readFileSync(path.join(HERE, 'manifest.json'), 'utf8'));
+// --selection=<file> / --offset=N / --limit=M restrict which entries are materialised (same meaning as in runner.mjs).
+const arg = (k) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1];
+if (arg('selection')) {
+  const want = new Set(JSON.parse(fs.readFileSync(arg('selection'), 'utf8')).ids);
+  man.entries = man.entries.filter((e) => want.has(e.id));
+}
+if (arg('offset') || arg('limit')) man.entries = man.entries.slice(Number(arg('offset') || 0), arg('limit') ? Number(arg('offset') || 0) + Number(arg('limit')) : undefined);
 
 let ok = 0, failed = 0, exceeded = 0;
 const t0 = Date.now();

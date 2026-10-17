@@ -1,0 +1,574 @@
+{
+  "schema": "agentic-security/dci-maturity",
+  "version": 1,
+  "dimensions": [
+    "entry-point",
+    "sensitive-operation",
+    "authentication",
+    "authorization-role",
+    "ownership",
+    "tenant-scope"
+  ],
+  "languages": {
+    "javascript": {
+      "cells": {
+        "entry-point": "detected",
+        "sensitive-operation": "detected",
+        "authentication": "detected",
+        "authorization-role": "detected",
+        "ownership": "detected",
+        "tenant-scope": "detected"
+      },
+      "detail": {
+        "routes": {
+          "/open": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "not_present",
+              "authorization-role": "not_present",
+              "ownership": "not_present"
+            }
+          },
+          "/auth": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "not_present"
+            }
+          },
+          "/role": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authorization-role",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "not_present",
+              "authorization-role": "present",
+              "ownership": "not_present"
+            }
+          },
+          "/own": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "ownership",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "present"
+            }
+          },
+          "/tenant": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "ownership",
+              "sensitive:data-read",
+              "tenant-scope"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "present"
+            }
+          }
+        },
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "typescript": {
+      "cells": {
+        "entry-point": "detected",
+        "sensitive-operation": "detected",
+        "authentication": "detected",
+        "authorization-role": "detected",
+        "ownership": "detected",
+        "tenant-scope": "detected"
+      },
+      "detail": {
+        "routes": {
+          "/open": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "not_present",
+              "authorization-role": "not_present",
+              "ownership": "not_present"
+            }
+          },
+          "/auth": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "not_present"
+            }
+          },
+          "/role": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authorization-role",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "not_present",
+              "authorization-role": "present",
+              "ownership": "not_present"
+            }
+          },
+          "/own": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "ownership",
+              "sensitive:data-read"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "present"
+            }
+          },
+          "/tenant": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication",
+              "ownership",
+              "sensitive:data-read",
+              "tenant-scope"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_present",
+              "ownership": "present"
+            }
+          }
+        },
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "python-flask": {
+      "cells": {
+        "entry-point": "detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "detected",
+        "authorization-role": "detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {
+          "/open": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/auth": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/role": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authorization-role"
+            ],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "present",
+              "ownership": "not_seen"
+            }
+          },
+          "/own": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/tenant": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [
+              "authentication"
+            ],
+            "protection": {
+              "authentication": "present",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          }
+        },
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "python-fastapi": {
+      "cells": {
+        "entry-point": "detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {
+          "/open": {
+            "disposition": "resolved",
+            "integrity": "complete",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/auth": {
+            "disposition": "partially_resolved",
+            "integrity": "partial",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/role": {
+            "disposition": "partially_resolved",
+            "integrity": "partial",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/own": {
+            "disposition": "partially_resolved",
+            "integrity": "partial",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          },
+          "/tenant": {
+            "disposition": "partially_resolved",
+            "integrity": "partial",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_seen",
+              "authorization-role": "not_seen",
+              "ownership": "not_seen"
+            }
+          }
+        },
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "java-spring": {
+      "cells": {
+        "entry-point": "not-detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {},
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "go": {
+      "cells": {
+        "entry-point": "not-detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {},
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "csharp-aspnet": {
+      "cells": {
+        "entry-point": "not-detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {},
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "ruby-rails": {
+      "cells": {
+        "entry-point": "not-detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {},
+        "controlsOnUnguardedRoute": []
+      }
+    },
+    "php-laravel": {
+      "cells": {
+        "entry-point": "detected",
+        "sensitive-operation": "not-detected",
+        "authentication": "not-detected",
+        "authorization-role": "not-detected",
+        "ownership": "not-detected",
+        "tenant-scope": "not-detected"
+      },
+      "detail": {
+        "routes": {
+          "/open": {
+            "disposition": "unresolved",
+            "integrity": "unavailable",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_resolved",
+              "authorization-role": "not_resolved",
+              "ownership": "not_resolved"
+            }
+          },
+          "/auth": {
+            "disposition": "unresolved",
+            "integrity": "unavailable",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_resolved",
+              "authorization-role": "not_resolved",
+              "ownership": "not_resolved"
+            }
+          },
+          "/role": {
+            "disposition": "unresolved",
+            "integrity": "unavailable",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_resolved",
+              "authorization-role": "not_resolved",
+              "ownership": "not_resolved"
+            }
+          },
+          "/own": {
+            "disposition": "unresolved",
+            "integrity": "unavailable",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_resolved",
+              "authorization-role": "not_resolved",
+              "ownership": "not_resolved"
+            }
+          },
+          "/tenant": {
+            "disposition": "unresolved",
+            "integrity": "unavailable",
+            "kinds": [],
+            "protection": {
+              "authentication": "not_resolved",
+              "authorization-role": "not_resolved",
+              "ownership": "not_resolved"
+            }
+          }
+        },
+        "controlsOnUnguardedRoute": []
+      }
+    }
+  },
+  "absent": {
+    "workflow-state-check": {
+      "state": "absent",
+      "factKindsSeen": [
+        "data-read",
+        "data-write"
+      ],
+      "lookedFor": [
+        "workflow",
+        "state-transition",
+        "state",
+        "status-check"
+      ]
+    },
+    "transaction-integrity": {
+      "state": "absent",
+      "factKindsSeen": [
+        "data-read",
+        "data-write"
+      ],
+      "lookedFor": [
+        "transaction",
+        "transaction-integrity",
+        "atomicity"
+      ]
+    }
+  },
+  "questionPacks": [
+    {
+      "pack": "authz-idor",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "authz-function",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "cross-route-consistency",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "transaction-integrity",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "external-failure",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "sensitive-audit",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    },
+    {
+      "pack": "business-invariant",
+      "status": "experimental",
+      "evidenceFiles": [
+        "test/context-intelligence/review-queue.test.js",
+        "test/context-intelligence/queue-diff.test.js"
+      ]
+    }
+  ],
+  "buildCapabilities": [
+    {
+      "language": "javascript/typescript",
+      "kind": "http",
+      "status": "verified"
+    },
+    {
+      "language": "python",
+      "kind": "http",
+      "status": "experimental"
+    },
+    {
+      "language": "haskell",
+      "kind": "http",
+      "status": "verified"
+    },
+    {
+      "language": "php",
+      "kind": "http",
+      "status": "experimental"
+    },
+    {
+      "language": "java/kotlin/c#/go/ruby/rust",
+      "kind": "http",
+      "status": "unsupported"
+    },
+    {
+      "language": "any with a recognised surface",
+      "kind": "webhook/queue/cron/upload/cli",
+      "status": "experimental"
+    },
+    {
+      "language": "haskell",
+      "kind": "compiler metadata import",
+      "status": "experimental"
+    },
+    {
+      "language": "any",
+      "kind": "compiler metadata build",
+      "status": "blocked"
+    },
+    {
+      "language": "other semantic sources (TypeScript compiler API, Roslyn, go/packages, language servers)",
+      "kind": "compiler metadata import",
+      "status": "unsupported"
+    },
+    {
+      "language": "any",
+      "kind": "provider batch API",
+      "status": "blocked"
+    }
+  ]
+}

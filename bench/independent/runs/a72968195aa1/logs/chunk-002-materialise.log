@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-4g3v-8h47-v7g6  packages/astro/src  565 source file(s)
+[err]   ✓ GHSA-4h97-p9wq-chqj  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-4hf8-5mjm-rfgq  (whole repo)  7 source file(s)
+[err]   ✓ GHSA-4j8x-x6v7-w9rq  packages/components/src  40 source file(s)
+[err]   ✓ GHSA-4j9m-h44m-2hv8  src/Configuration  171 source file(s)
+[err]   ✓ GHSA-4jc5-g844-4x33  (whole repo)  43 source file(s)
+[err]   ✓ GHSA-4jwf-m4wg-8p66  src/Kiota.Builder  396 source file(s)
+[err]   ✓ GHSA-4rj6-vrwv-wr8m  src/Kiota.Builder  395 source file(s)
+[err]   ✓ GHSA-4vmm-5qvc-w5p7  application/controllers  53 source file(s)
+[err]   ✓ GHSA-4vv7-jj25-4gh6  src  463 source file(s)
+[err]   ✓ GHSA-4w3q-qpfq-v992  apollo-configservice  70 source file(s)
+[err]   ✓ GHSA-4x76-22x2-rx8v  packages/core  364 source file(s)
+[err]   ✓ GHSA-4xfr-4p46-gc6p  cms  607 source file(s)
+[err]   ✓ GHSA-52fh-8v99-63c2  packages/components/src  40 source file(s)
+[err]   ✓ GHSA-52jp-gj8w-j6xh  (whole repo)  113 source file(s)
+[err]   ✓ GHSA-539m-9xh6-q6rr  (whole repo)  142 source file(s)
+[err]   ✓ GHSA-53g2-mvcc-q9x3  (whole repo)  216 source file(s)
+[err]   ✓ GHSA-53p3-c7vp-4mcc  (whole repo)  216 source file(s)
+[err]   ✓ GHSA-5624-2pmv-jx46  apps  153 source file(s)
+[err]   ✓ GHSA-579v-mp3v-rrw5  (whole repo)  64 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 68s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

@@ -128,7 +128,6 @@ const ALLOWLIST = new Set([
   'posture/federated-learning.js::pullAggregatedPrior',
   'posture/realtime-cve-monitor.js::deliverAlert',
   'posture/realtime-cve-monitor.js::pollOsv',
-  'posture/runtime-correlation.js::findingObservedInRuntime',
   'posture/runtime-correlation.js::loadTrace',
   'posture/sbom-diff.js::loadPreviousSnapshot',
   'posture/triage.js::exportTriageMetrics',

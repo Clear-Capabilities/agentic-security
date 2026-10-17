@@ -1,0 +1,28 @@
+[err]   ✓ GHSA-225x-3jhx-wh4q  src/Http  212 source file(s)
+[err]   ✓ GHSA-23hp-3jrh-7fpw  (whole repo)  73 source file(s)
+[err]   ✓ GHSA-242p-4v39-2v8g  (whole repo)  58 source file(s)
+[err]   ✓ GHSA-248r-7h7q-cr24  (whole repo)  52 source file(s)
+[err]   ✓ GHSA-225x-3jhx-wh4q  src/Http  212 source file(s)
+[err]   ✓ GHSA-23hp-3jrh-7fpw  (whole repo)  73 source file(s)
+[err]   ✓ GHSA-242p-4v39-2v8g  (whole repo)  58 source file(s)
+[err]   ✓ GHSA-248r-7h7q-cr24  (whole repo)  52 source file(s)
+[err]   ✓ GHSA-26gq-p25f-99cp  (whole repo)  369 source file(s)
+[err]   ✓ GHSA-26w5-6g95-gj28  server  377 source file(s)
+[err]   ✓ GHSA-28f5-38xr-jh2w  src/main/java/io/appium/java_client/remote  48 source file(s)
+[err]   ✓ GHSA-28gm-jrmw-xx93  src/SIPSorcery  265 source file(s)
+[err]   ✓ GHSA-2956-977x-2w3r  src/core  879 source file(s)
+[err]   ✓ GHSA-29g5-m8v7-v564  (whole repo)  51 source file(s)
+[err]   ✓ GHSA-29rf-f4vv-pvq6  (whole repo)  990 source file(s)
+[err]   ✓ GHSA-2c47-m757-32g6  (whole repo)  8 source file(s)
+[err]   ✓ GHSA-2cp2-2r3c-7p7r  hydra  73 source file(s)
+[err]   ✓ GHSA-2hv5-4h3g-4hjv  extensions/line  72 source file(s)
+[err]   ✓ GHSA-2j2x-hqr9-3h42  (whole repo)  295 source file(s)
+[err]   ✓ GHSA-2jc5-xhx8-qj6h  (whole repo)  36 source file(s)
+[err]   ✓ GHSA-2m96-52r3-2f3g  (whole repo)  22 source file(s)
+[err]   ✓ GHSA-2mhj-fhvg-v428  models/DataObject  260 source file(s)
+[err]   ✓ GHSA-2mrg-gjxq-2gvr  src/PhpSpreadsheet  531 source file(s)
+[err]   ✓ GHSA-2qj4-mmr9-4v2f  (whole repo)  3557 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 84s
+[err] 4 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

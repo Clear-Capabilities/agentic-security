@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-fgjj-px3w-67xx  pkg/provider  247 source file(s)
+[err]   ✓ GHSA-fh2f-xfxc-q9cc  (whole repo)  48 source file(s)
+[err]   ✓ GHSA-fm29-4mq3-phg6  modules/backend/behaviors  69 source file(s)
+[err]   ✓ GHSA-fmx4-26r3-wxpf  (whole repo)  30 source file(s)
+[err]   ✓ GHSA-fq3f-m5qm-99f5  instrumentation/rmi  18 source file(s)
+[err]   ✓ GHSA-frr5-j3mh-h9ch  extensions/openshell  12 source file(s)
+[err]   ✓ GHSA-fv2f-rw9f-v9cm  (whole repo)  17 source file(s)
+[err]   ✓ GHSA-fwjx-9p69-h25h  src/terminal  8 source file(s)
+[err]   ✓ GHSA-g2gp-3wwq-f4ph  (whole repo)  300 source file(s)
+[err]   ✓ GHSA-g35j-m5xg-vh3q  (whole repo)  25 source file(s)
+[err]   ✓ GHSA-g65v-27r3-5p6m  (whole repo)  10 source file(s)
+[err]   ✓ GHSA-g7p5-89mh-248h  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-g9j2-8w95-3vwv  pkg  190 source file(s)
+[err]   ✓ GHSA-g9jg-w8vm-g96v  (whole repo)  216 source file(s)
+[err]   ✓ GHSA-ggxm-pgc9-g7fp  (whole repo)  196 source file(s)
+[err]   ✓ GHSA-gm37-52c6-37mw  (whole repo)  99 source file(s)
+[err]   ✓ GHSA-gwfq-86j8-7qhv  fs  237 source file(s)
+[err]   ✓ GHSA-h4mf-4v27-hggj  (whole repo)  1162 source file(s)
+[err]   ✓ GHSA-h4pc-58cc-hc95  apollo-configservice  70 source file(s)
+[err]   ✓ GHSA-h6gj-6jjq-h8g9  (whole repo)  328 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 69s
+[err] 1 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

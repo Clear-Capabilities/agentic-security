@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "status.schema.json",
+  "title": "Engineering Excellence program status",
+  "description": "Strict schema for status.json. Task states are implementation states, never benchmark verdicts. A task reaches done or already_satisfied only through evidence the store itself validated.",
+  "type": "object",
+  "required": ["schemaVersion", "program", "createdAt", "updatedAt", "revision", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "program": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "minLength": 20 },
+    "updatedAt": { "type": "string", "minLength": 20 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "checkout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "dirty": { "type": ["boolean", "null"] },
+        "capturedAt": { "type": "string" }
+      }
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/task" }
+    }
+  },
+  "definitions": {
+    "task": {
+      "type": "object",
+      "required": ["state", "attempts"],
+      "additionalProperties": false,
+      "properties": {
+        "state": { "enum": ["pending", "in_progress", "done", "already_satisfied", "blocked", "failed"] },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "startedAt": { "type": ["string", "null"] },
+        "completedAt": { "type": ["string", "null"] },
+        "heartbeatAt": { "type": ["string", "null"] },
+        "activeProcess": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "pid": { "type": "integer" },
+            "command": { "type": "string" },
+            "startedAt": { "type": "string" },
+            "timeoutMs": { "type": "integer" }
+          }
+        },
+        "exitCode": { "type": ["integer", "null"] },
+        "commit": { "type": ["string", "null"] },
+        "blocker": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "type": "string", "minLength": 1 },
+            "nextAction": { "type": "string" },
+            "at": { "type": "string" },
+            "kind": { "enum": ["external", "failed_repairs", "timeout", "dependency", "policy", "interrupted"] }
+          }
+        },
+        "failure": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "type": "string", "minLength": 1 },
+            "at": { "type": "string" }
+          }
+        },
+        "commands": { "type": "array", "items": { "$ref": "#/definitions/commandRecord" } },
+        "evidence": { "type": ["object", "null"] },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "commandRecord": {
+      "type": "object",
+      "required": ["id", "argv", "cwd", "kind", "startedAt", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "argv": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "cwd": { "type": "string" },
+        "kind": { "enum": ["test", "build", "bench", "other"] },
+        "startedAt": { "type": "string" },
+        "endedAt": { "type": ["string", "null"] },
+        "timeoutMs": { "type": "integer" },
+        "outcome": { "enum": ["running", "exited", "signaled", "timeout-wall", "timeout-idle", "resource-limit", "spawn-failed", "cancelled"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "durationMs": { "type": ["integer", "null"] },
+        "log": { "type": ["string", "null"] },
+        "logSha256": { "type": ["string", "null"] },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "envKeys": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

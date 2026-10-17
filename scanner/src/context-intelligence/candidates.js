@@ -101,7 +101,8 @@ export async function adjudicate(candidates, opts = {}) {
         origin: 'context-intelligence', questionPack: c.questionPack, witnesses: c.witnesses, witnessCount: c.witnesses.length,
         sourceSpanEvidence: c.sourceSpanEvidence, scopeIntegrity: c.scopeIntegrity, reviewStatus: c.reviewStatus,
         uncertainties: c.uncertainties, recommendedValidation: c.recommendedValidation,
-        note: 'A model hypothesis checked for citations, not a proof. Severity comes from the confirmation tier only.',
+        ...(c.deterministic ? { deterministic: c.deterministic } : {}),
+        note: c.deterministic ? 'Derived from the code analysis and a deterministic counterexample attempt; no model produced this. Severity comes from the confirmation tier only.' : 'A model hypothesis checked for citations, not a proof. Severity comes from the confirmation tier only.',
       },
     };
   };

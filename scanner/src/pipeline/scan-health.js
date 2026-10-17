@@ -55,11 +55,22 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
   if (filesTimedOut > 0) {
     conditions.push(`${filesTimedOut} file(s) exceeded the per-file analysis timeout`);
   }
+  // A file the engine does not read at all (over the size limit, or too dense to be source: minified or generated) is a file whose problems nobody looked for.
+  // It used to be counted in `files.skipped` and nowhere else, so a scan that read none of a repository's largest files still said `complete`. An empty file is
+  // also counted as skipped, but there is nothing in it to miss, so it is not a condition.
+  const unanalysed = (Number(scanMeta?.filesOversizeSkipped) || 0) + (Number(scanMeta?.filesDenseSkipped) || 0);
+  if (unanalysed > 0) {
+    conditions.push(`${unanalysed} file(s) were not analysed because they are over the size limit or too dense to be source (minified or generated)`);
+  }
   if (engineErrors?.cppDataflowParseErrors > 0) {
     conditions.push(`${engineErrors.cppDataflowParseErrors} C/C++ dataflow parse error(s)`);
   }
   if (deepStatus?.failure) {
     conditions.push(`deep analysis (IR-taint) threw and fell back to pattern-only results: ${deepStatus.failure}`);
+  }
+  if (Array.isArray(deepStatus?.incomplete) && deepStatus.incomplete.length) {
+    // E2-05: the deep analysis ran but stopped short somewhere. The result is less complete than it looks, so it is a condition, not a footnote.
+    conditions.push(`deep analysis stopped short (analysis_incomplete): ${deepStatus.incomplete.map((x) => `${x.reason} x${x.count}`).join(', ')}`);
   }
   if (deepStatus?.requested && !deepStatus.enabled) {
     conditions.push(`deep analysis was requested but did not run: ${deepStatus.reason || 'unknown reason'}`);
@@ -111,6 +122,8 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
       expected: scanMeta?.checkpoint?.total ?? null,
       scanned: scanMeta?.filesScanned ?? null,
       skipped: (Number(scanMeta?.filesSkipped) || 0) + (Number(scanMeta?.filesDenseSkipped) || 0),
+      // skipped files that had something in them to miss: over the size limit, or too dense to be source. Empty files are in `skipped` and not here.
+      unanalysed,
       timedOut: filesTimedOut,
     },
     analyzers: analyzerCoverage || null,
@@ -122,6 +135,7 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           ciOverrideAllowed: !!deepStatus.ciOverrideAllowed,
           reason: deepStatus.reason ?? null,
           failure: deepStatus.failure ?? null,
+          ...(Array.isArray(deepStatus.incomplete) && deepStatus.incomplete.length ? { incomplete: deepStatus.incomplete } : {}),
         }
       : null,
     lineageAnalysis: lineageStatus

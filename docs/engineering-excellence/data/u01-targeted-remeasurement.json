@@ -1,0 +1,87 @@
+{
+  "schema": "agentic-security/targeted-remeasurement@1",
+  "change": "ruby path-join rule: a File.join returned from a path-named method whose last component is the method's own parameter now counts as reaching the filesystem",
+  "scope": "Only 3 entries were re-run. The rule was run over all 31251 Ruby files of the cached independent population before and after the change: it differs on 5 findings in these 3 entries and on none anywhere else, so no other entry can move because of it.",
+  "against": {
+    "runId": "a72968195aa1",
+    "note": "the baseline row is from the pinned baseline run (commit 2c0f0d13); the now row is this working tree, which is later. Other drift since the baseline cannot be separated from this change except by the per-file comparison above."
+  },
+  "engineVersion": "0.172.1",
+  "measuredAt": "2026-10-16",
+  "rows": [
+    {
+      "id": "GHSA-cf3w-g86h-35x4",
+      "language": "ruby",
+      "cwe": "CWE-74",
+      "baseline": {
+        "tpLocal": 0,
+        "fpLocal": 0,
+        "fnLocal": 1,
+        "tnLocal": 1,
+        "preFindings": 8,
+        "postFindings": 8
+      },
+      "now": {
+        "tpLocal": 0,
+        "fpLocal": 0,
+        "fnLocal": 1,
+        "tnLocal": 1,
+        "preFindings": 9,
+        "postFindings": 9
+      }
+    },
+    {
+      "id": "GHSA-cr5q-6q9f-rq6q",
+      "language": "ruby",
+      "cwe": "CWE-377",
+      "baseline": {
+        "tpLocal": 0,
+        "fpLocal": 0,
+        "fnLocal": 1,
+        "tnLocal": 1,
+        "preFindings": 720,
+        "postFindings": 720
+      },
+      "now": {
+        "tpLocal": 0,
+        "fpLocal": 0,
+        "fnLocal": 1,
+        "tnLocal": 1,
+        "preFindings": 721,
+        "postFindings": 721
+      }
+    },
+    {
+      "id": "GHSA-pmwx-rm49-xv39",
+      "language": "ruby",
+      "cwe": "CWE-22",
+      "baseline": {
+        "tpLocal": 0,
+        "fpLocal": 0,
+        "fnLocal": 1,
+        "tnLocal": 1,
+        "preFindings": 160,
+        "postFindings": 160
+      },
+      "now": {
+        "tpLocal": 1,
+        "fpLocal": 0,
+        "fnLocal": 0,
+        "tnLocal": 1,
+        "preFindings": 161,
+        "postFindings": 160
+      }
+    }
+  ],
+  "effectOnBaselineTotals": {
+    "localizedTruePositives": {
+      "before": 6,
+      "after": 7
+    },
+    "localizedFalsePositives": {
+      "before": 13,
+      "after": 13
+    }
+  },
+  "caveat": "This is a targeted re-measurement, not a new baseline run. The pinned baseline is unchanged; a full re-run takes about nine hours."
+}

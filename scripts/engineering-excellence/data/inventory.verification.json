@@ -1,0 +1,1127 @@
+{
+  "schemaVersion": 1,
+  "results": {
+    "cli-scan": {
+      "capability": "cli-scan",
+      "files": [
+        "scanner/test/smoke.test.js",
+        "scanner/test/backward-default.test.js",
+        "scanner/test/ci-parity.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/smoke.test.js",
+        "test/backward-default.test.js",
+        "test/ci-parity.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 23675,
+      "counts": {
+        "tests": 37,
+        "pass": 37,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-cli-scan.log",
+      "logSha256": "38cfa139bfde5291b5fa31349b44006c5999ad2f94fb7110266c71c7aee88255",
+      "ranAt": "2026-10-17T00:28:09.453Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": false,
+      "version": "0.173.0"
+    },
+    "sast-detectors": {
+      "capability": "sast-detectors",
+      "files": [
+        "scanner/test/sibling-guard.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/sibling-guard.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 599,
+      "counts": {
+        "tests": 11,
+        "pass": 11,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-sast-detectors.log",
+      "logSha256": "d27589a4c9112f684e5ea3e70d3b4366bfedea532cc9777cffd8010699710570",
+      "ranAt": "2026-10-17T00:28:10.237Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "ir-layer": {
+      "capability": "ir-layer",
+      "files": [
+        "scanner/test/closure-capture.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/closure-capture.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 141,
+      "counts": {
+        "tests": 12,
+        "pass": 12,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-ir-layer.log",
+      "logSha256": "09ecac41b4dc976d766c9bd24015fe5618a6ccda582c9c4658e2ba45fd8fb17e",
+      "ranAt": "2026-10-17T00:28:10.596Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "taint-engine": {
+      "capability": "taint-engine",
+      "files": [
+        "scanner/test/interproc-k2.test.js",
+        "scanner/test/collection-taint.test.js",
+        "scanner/test/csharp-cross-file.test.js",
+        "scanner/test/java-structural-cross-file.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/interproc-k2.test.js",
+        "test/collection-taint.test.js",
+        "test/csharp-cross-file.test.js",
+        "test/java-structural-cross-file.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 908,
+      "counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-taint-engine.log",
+      "logSha256": "c349135b03e0bc71f90bb79ccbc44c47701479cb39abf3c14b5d012749847a6d",
+      "ranAt": "2026-10-17T00:28:11.687Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "guard-recognition": {
+      "capability": "guard-recognition",
+      "files": [
+        "scanner/test/guard-recognition.test.js",
+        "scanner/test/guard-window-identifier-correlation.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/guard-recognition.test.js",
+        "test/guard-window-identifier-correlation.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 735,
+      "counts": {
+        "tests": 10,
+        "pass": 10,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-guard-recognition.log",
+      "logSha256": "c72721ef991c9102142037ee336149848bc09d449564f5c5f89ca958ba933c22",
+      "ranAt": "2026-10-17T00:28:12.638Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "suppression-ledger": {
+      "capability": "suppression-ledger",
+      "files": [
+        "scanner/test/suppression-visibility.test.js",
+        "scanner/test/suppression-exceptions.test.js",
+        "scanner/test/ignore-pragma.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/suppression-visibility.test.js",
+        "test/suppression-exceptions.test.js",
+        "test/ignore-pragma.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 2333,
+      "counts": {
+        "tests": 30,
+        "pass": 30,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-suppression-ledger.log",
+      "logSha256": "592eb62348eb73b4617a603d3b24128d92fecfb45b4c1d7ccc3d6c1953fb3045",
+      "ranAt": "2026-10-17T00:28:15.186Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "scan-health": {
+      "capability": "scan-health",
+      "files": [
+        "scanner/test/scan-health.test.js",
+        "scanner/test/assurance-mode.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/scan-health.test.js",
+        "test/assurance-mode.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 3646,
+      "counts": {
+        "tests": 55,
+        "pass": 55,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-scan-health.log",
+      "logSha256": "59bc7dbbf2d5ac0d92c249a630f947d6d404f4bda82957c34f35f9826065084a",
+      "ranAt": "2026-10-17T00:28:19.054Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "analyzer-isolation": {
+      "capability": "analyzer-isolation",
+      "files": [
+        "scanner/test/analyzer-supervisor.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/analyzer-supervisor.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 1506,
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-analyzer-isolation.log",
+      "logSha256": "35b773d95e1e5b50403b5bd3c3fbf7755221b7f31ea77417f73061ad79837fe0",
+      "ranAt": "2026-10-17T00:28:20.742Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "incremental-cache": {
+      "capability": "incremental-cache",
+      "files": [
+        "scanner/test/incremental-cache.test.js",
+        "scanner/test/incremental-parity.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/incremental-cache.test.js",
+        "test/incremental-parity.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 981,
+      "counts": {
+        "tests": 14,
+        "pass": 14,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-incremental-cache.log",
+      "logSha256": "e9a1326fecba756af36bf8ed7e492a63012d044b45b6ea67c27bb831325f8a5b",
+      "ranAt": "2026-10-17T00:28:21.906Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "determinism": {
+      "capability": "determinism",
+      "files": [
+        "scanner/test/determinism-cross-machine.test.js",
+        "scanner/test/format-determinism.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/determinism-cross-machine.test.js",
+        "test/format-determinism.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 55628,
+      "counts": {
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-determinism.log",
+      "logSha256": "ddf328e03144b1beb7a28cf73a52395a5293056c816cfef36679005ebcdd12bf",
+      "ranAt": "2026-10-17T00:29:17.755Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "fix-synthesis": {
+      "capability": "fix-synthesis",
+      "files": [
+        "scanner/test/fix-verify-loop.test.js",
+        "scanner/test/fix-verify-tests.test.js",
+        "scanner/test/fix-honesty-gate.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/fix-verify-loop.test.js",
+        "test/fix-verify-tests.test.js",
+        "test/fix-honesty-gate.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 3291,
+      "counts": {
+        "tests": 58,
+        "pass": 58,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-fix-synthesis.log",
+      "logSha256": "dbf01ce78e4ceafae59cac6529866ef390afba6f02a24d4e4fdf7b034e841795",
+      "ranAt": "2026-10-17T00:29:21.266Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "apply-fix-service": {
+      "capability": "apply-fix-service",
+      "files": [
+        "scanner/test/mcp-apply-fix-multifile.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/mcp-apply-fix-multifile.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 687,
+      "counts": {
+        "tests": 16,
+        "pass": 16,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-apply-fix-service.log",
+      "logSha256": "15a38e71f262c4a39f1250dc7cfa96e075070cd7813e97208574fdd055f20fd4",
+      "ranAt": "2026-10-17T00:29:22.173Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "exploit-proof": {
+      "capability": "exploit-proof",
+      "files": [
+        "scanner/test/execution-proof.test.js",
+        "scanner/test/smt-path-feasibility.test.js",
+        "scanner/test/symbolic-exec-proof.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/execution-proof.test.js",
+        "test/smt-path-feasibility.test.js",
+        "test/symbolic-exec-proof.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 1942,
+      "counts": {
+        "tests": 43,
+        "pass": 43,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-exploit-proof.log",
+      "logSha256": "5a63fc14288b93afd9eb3b2e78db8a4c70f3afd8ae97728d512085a89db8c6e1",
+      "ranAt": "2026-10-17T00:29:24.332Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "sandbox": {
+      "capability": "sandbox",
+      "files": [
+        "scanner/test/sandbox.test.js",
+        "scanner/test/sandbox-escape.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/sandbox.test.js",
+        "test/sandbox-escape.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 8483,
+      "counts": {
+        "tests": 44,
+        "pass": 44,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-sandbox.log",
+      "logSha256": "bb360a6fb1b05efeba2427a0860f06f039281cca4844fe4154149f4450a6cb64",
+      "ranAt": "2026-10-17T00:29:33.031Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "dci": {
+      "capability": "dci",
+      "files": [
+        "scanner/test/context-intelligence/build-js.test.js",
+        "scanner/test/context-intelligence/review-queue.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/context-intelligence/build-js.test.js",
+        "test/context-intelligence/review-queue.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 952,
+      "counts": {
+        "tests": 13,
+        "pass": 13,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-dci.log",
+      "logSha256": "1a78ce4eecaa6ee1032687031f598c557614f46dadca1afaa0b4e8f67a0b291b",
+      "ranAt": "2026-10-17T00:29:34.206Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "llm-discovery": {
+      "capability": "llm-discovery",
+      "files": [
+        "scanner/test/discovery-hunter.test.js",
+        "scanner/test/discovery-confirm.test.js",
+        "scanner/test/discovery-disprove.test.js",
+        "scanner/test/discovery-judge.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/discovery-hunter.test.js",
+        "test/discovery-confirm.test.js",
+        "test/discovery-disprove.test.js",
+        "test/discovery-judge.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 203,
+      "counts": {
+        "tests": 39,
+        "pass": 39,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-discovery.log",
+      "logSha256": "c1ba88e34bf744f3d129ce4ecf8b86ba78115db3b621df5d8f5aaa1f6765de6f",
+      "ranAt": "2026-10-17T00:29:34.625Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "business-invariants": {
+      "capability": "business-invariants",
+      "files": [
+        "scanner/test/invariants/invariant-lifecycle.test.js",
+        "scanner/test/invariants/business-coverage.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/invariants/invariant-lifecycle.test.js",
+        "test/invariants/business-coverage.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 4254,
+      "counts": {
+        "tests": 34,
+        "pass": 34,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-business-invariants.log",
+      "logSha256": "c171dcbb65dd976f32f4960ab7baf95383f770ad0cc26bab99fa70e587a560a0",
+      "ranAt": "2026-10-17T00:29:39.059Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "egress-policy": {
+      "capability": "egress-policy",
+      "files": [
+        "scanner/test/egress-policy.test.js",
+        "scanner/test/egress-policy-integration.test.js",
+        "scanner/test/egress-audit.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/egress-policy.test.js",
+        "test/egress-policy-integration.test.js",
+        "test/egress-audit.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 202,
+      "counts": {
+        "tests": 34,
+        "pass": 34,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-egress-policy.log",
+      "logSha256": "0122639f85c7fa1ef05ef4bbe78d5c921f50089a5a196fd7942dc9676ee8f71d",
+      "ranAt": "2026-10-17T00:29:39.478Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "llm-validator": {
+      "capability": "llm-validator",
+      "files": [
+        "scanner/test/llm-validator-consistency.test.js",
+        "scanner/test/cost-ceiling.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/llm-validator-consistency.test.js",
+        "test/cost-ceiling.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 165,
+      "counts": {
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-llm-validator.log",
+      "logSha256": "f08431059202576aaed6d46023b6a069b64db821fc1c5aac54428be07d893847",
+      "ranAt": "2026-10-17T00:29:39.859Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "runtime-correlation": {
+      "capability": "runtime-correlation",
+      "files": [
+        "scanner/test/container-runtime.test.js",
+        "scanner/test/posture/assurance-contracts.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/container-runtime.test.js",
+        "test/posture/assurance-contracts.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 155,
+      "counts": {
+        "tests": 29,
+        "pass": 29,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-runtime-correlation.log",
+      "logSha256": "ec5eb6c531201060c9e621173b9d75354721481f631bd70df2bae33da634491c",
+      "ranAt": "2026-10-17T00:29:40.228Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "dataflow-explorer": {
+      "capability": "dataflow-explorer",
+      "files": [
+        "scanner/test/lineage-scan-wiring.test.js",
+        "scanner/test/lineage-artifact-write.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/lineage-scan-wiring.test.js",
+        "test/lineage-artifact-write.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 1265,
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-dataflow-explorer.log",
+      "logSha256": "1ee195019d976b824cd65db23ce79f59bac3d0136a64fb2dfdfd849e54fe0259",
+      "ranAt": "2026-10-17T00:29:41.673Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "fleet": {
+      "capability": "fleet",
+      "files": [
+        "scanner/test/fleet.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/fleet.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 207,
+      "counts": {
+        "tests": 49,
+        "pass": 49,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-fleet.log",
+      "logSha256": "4829c42fd7258ea652c1dad021790d8ab8512489f5c447c067e8997188b3bb6b",
+      "ranAt": "2026-10-17T00:29:42.098Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "artifact-provenance": {
+      "capability": "artifact-provenance",
+      "files": [
+        "scanner/test/vex.test.js",
+        "scanner/test/image-packages.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/vex.test.js",
+        "test/image-packages.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 515,
+      "counts": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-artifact-provenance.log",
+      "logSha256": "7c94f3a84b3877e6617393a8b2d550d5bc3f2d0ec364f62a4ff66ee17beeb383",
+      "ranAt": "2026-10-17T00:29:42.830Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "finding-provenance": {
+      "capability": "finding-provenance",
+      "files": [
+        "scanner/test/provenance.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/provenance.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 137,
+      "counts": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-finding-provenance.log",
+      "logSha256": "40a3ba4f858f4b9d31fbc0c59eff897f056f743b09f0d40297724872ddf3b6ec",
+      "ranAt": "2026-10-17T00:29:43.150Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "signed-evidence": {
+      "capability": "signed-evidence",
+      "files": [
+        "scanner/test/evidence-bundle.test.js",
+        "scanner/test/verify-attestation-cli.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/evidence-bundle.test.js",
+        "test/verify-attestation-cli.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 3519,
+      "counts": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-signed-evidence.log",
+      "logSha256": "ab532ec40e9748a2fd7275c60a75b0e59bce80cad5296ba117a0cc00775c8f86",
+      "ranAt": "2026-10-17T00:29:46.848Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "oscal": {
+      "capability": "oscal",
+      "files": [
+        "scanner/test/oscal-conformance.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/oscal-conformance.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 522,
+      "counts": {
+        "tests": 15,
+        "pass": 15,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-oscal.log",
+      "logSha256": "0f1e5b3e7b3d95e9657b54786e5b187e148c072c73ca3a7d1f00134b48b48905",
+      "ranAt": "2026-10-17T00:29:47.589Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "compliance-mapping": {
+      "capability": "compliance-mapping",
+      "files": [
+        "scanner/test/compliance-mapping-liveness.test.js",
+        "scanner/test/compliance-evidence-binding.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/compliance-mapping-liveness.test.js",
+        "test/compliance-evidence-binding.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 241,
+      "counts": {
+        "tests": 34,
+        "pass": 34,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-compliance-mapping.log",
+      "logSha256": "c2fafee394275c1eb99b06930701cd4ef36d023468944671bd16e697682d926f",
+      "ranAt": "2026-10-17T00:29:48.012Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "privacy-controls": {
+      "capability": "privacy-controls",
+      "files": [
+        "scanner/test/retention-policy.test.js",
+        "scanner/test/legal-hold.test.js",
+        "scanner/test/privacy-governance.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/retention-policy.test.js",
+        "test/legal-hold.test.js",
+        "test/privacy-governance.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 4485,
+      "counts": {
+        "tests": 50,
+        "pass": 50,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-privacy-controls.log",
+      "logSha256": "eb0a4edf18d67330678195c28661e7da86c70c81e3116acb7ae09dd9cf8c2c33",
+      "ranAt": "2026-10-17T00:29:52.716Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "mcp-server": {
+      "capability": "mcp-server",
+      "files": [
+        "scanner/test/mcp-audit.test.js",
+        "scanner/test/mcp-dataflow-tools.test.js",
+        "scanner/test/agent-mcp-tools.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/mcp-audit.test.js",
+        "test/mcp-dataflow-tools.test.js",
+        "test/agent-mcp-tools.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 2423,
+      "counts": {
+        "tests": 37,
+        "pass": 37,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-mcp-server.log",
+      "logSha256": "353c8f0d20fc17c72fc8a222274d1857837a5be5ef6ca18d55ca14b224b3251a",
+      "ranAt": "2026-10-17T00:29:55.356Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "lsp-server": {
+      "capability": "lsp-server",
+      "files": [
+        "scanner/test/lsp-server.test.js",
+        "scanner/test/lsp-protocol-smoke.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/lsp-server.test.js",
+        "test/lsp-protocol-smoke.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 3044,
+      "counts": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-lsp-server.log",
+      "logSha256": "b6c4c1aee42a643be83153a80eac13f1c9f658480d3b38bb5ef8e82bc3248a82",
+      "ranAt": "2026-10-17T00:29:58.582Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "language-support": {
+      "capability": "language-support",
+      "files": [
+        "scanner/test/language/capability-ledger.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/language/capability-ledger.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 205,
+      "counts": {
+        "tests": 14,
+        "pass": 14,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-language-support.log",
+      "logSha256": "2e40a2456167a2c6cbfc529a5efaa9ec5c08fde60c124dfb8b58fe7ceb0a754d",
+      "ranAt": "2026-10-17T00:29:59.004Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "scorecard": {
+      "capability": "scorecard",
+      "files": [
+        "scanner/test/scorecard.test.js",
+        "scanner/test/scorecard-gate.test.js",
+        "scanner/test/accuracy-scorecard.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/scorecard.test.js",
+        "test/scorecard-gate.test.js",
+        "test/accuracy-scorecard.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 548,
+      "counts": {
+        "tests": 63,
+        "pass": 63,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-scorecard.log",
+      "logSha256": "1f083ef2b6e623c7e25aee5467cf31c5857f9ead913d2443492622b27aa144ea",
+      "ranAt": "2026-10-17T00:29:59.766Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "evaluation-holdout": {
+      "capability": "evaluation-holdout",
+      "files": [
+        "scanner/test/holdout-eval.test.js",
+        "scanner/test/sard-independent-holdout.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/holdout-eval.test.js",
+        "test/sard-independent-holdout.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 511,
+      "counts": {
+        "tests": 16,
+        "pass": 16,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-evaluation-holdout.log",
+      "logSha256": "e08942768e8e64b61bfa5b8ff8aadb898d23eee9a02814efef518709c5ed7c8a",
+      "ranAt": "2026-10-17T00:30:00.458Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "loop-engineering": {
+      "capability": "loop-engineering",
+      "files": [
+        "scripts/loop-engineering/test/loop-manifest.test.js",
+        "scripts/loop-engineering/test/loop-watchdog.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "../scripts/loop-engineering/test/loop-manifest.test.js",
+        "../scripts/loop-engineering/test/loop-watchdog.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 20364,
+      "counts": {
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-loop-engineering.log",
+      "logSha256": "511025c92863e4fc89b7b7d9e3f4756454ff81f1533f692a17102a908e69d09c",
+      "ranAt": "2026-10-17T00:30:21.004Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "engineering-excellence-tracker": {
+      "capability": "engineering-excellence-tracker",
+      "files": [
+        "scanner/test/engineering-excellence/e0-04-task-manifest.test.js",
+        "scanner/test/engineering-excellence/e0-05-status-runner.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/engineering-excellence/e0-04-task-manifest.test.js",
+        "test/engineering-excellence/e0-05-status-runner.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 13133,
+      "counts": {
+        "tests": 31,
+        "pass": 31,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-engineering-excellence-tracker.log",
+      "logSha256": "9fad229fe3a80ae083928d84741fa76c002a3b5204b562fcc11e66a1502e9335",
+      "ranAt": "2026-10-17T00:30:34.352Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "proof-fabric": {
+      "capability": "proof-fabric",
+      "files": [
+        "scanner/test/proof-fabric/core.test.js",
+        "scanner/test/proof-fabric/fix-store-runner.test.js",
+        "scanner/test/proof-fabric/fixtures.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/proof-fabric/core.test.js",
+        "test/proof-fabric/fix-store-runner.test.js",
+        "test/proof-fabric/fixtures.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 12821,
+      "counts": {
+        "tests": 39,
+        "pass": 39,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-proof-fabric.log",
+      "logSha256": "125a0538e6341feaad494f9ed992db7c3015fc5d3b935bfde0e60d76fe828e2c",
+      "ranAt": "2026-10-17T00:30:47.388Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    },
+    "assurance-contracts": {
+      "capability": "assurance-contracts",
+      "files": [
+        "scanner/test/posture/assurance-contracts.test.js",
+        "scanner/test/posture/assurance-baseline.test.js",
+        "scanner/test/posture/assurance-config.test.js"
+      ],
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=2",
+        "test/posture/assurance-contracts.test.js",
+        "test/posture/assurance-baseline.test.js",
+        "test/posture/assurance-config.test.js"
+      ],
+      "cwd": "scanner",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 4819,
+      "counts": {
+        "tests": 50,
+        "pass": 50,
+        "fail": 0,
+        "skipped": 0
+      },
+      "log": "scripts/engineering-excellence/logs/E0-01/inventory-assurance-contracts.log",
+      "logSha256": "43e19c9e23b9b22809174c9933676d7b9574233beb3a4dfc3777499a37694386",
+      "ranAt": "2026-10-17T00:30:52.423Z",
+      "commit": "ddf5504ba171c07ce8ef89443f05d30d2766b15b",
+      "worktreeDirty": true,
+      "version": "0.173.0"
+    }
+  }
+}

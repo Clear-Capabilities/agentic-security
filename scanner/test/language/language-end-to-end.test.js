@@ -638,6 +638,21 @@ MATRIX['CAP-116'] = {
   },
 };
 
+// CAP-121 and CAP-122 (E8-04): the release package and the engineering-excellence index. Both are language-agnostic: the package carries whatever findings and scan
+// health a scan produced, and the index describes measurement records, so neither has ecosystem-specific CLI behavior to execute.
+MATRIX['CAP-121'] = {
+  na: {
+    reason: 'the release package and its verdict are computed from scan evidence of any language; the code has no Haskell or Nix branch, so there is no ecosystem-specific CLI behavior to execute here.',
+    behavior: 'A scan of a Haskell or Nix project produces findings and scan health like any other; a package assembled from them gets the same verdict rules, and release-view renders it the same way.',
+  },
+};
+MATRIX['CAP-122'] = {
+  na: {
+    reason: 'the engineering-excellence index is a set of measurement records and links; it adds no scanning capability, so there is nothing to execute per ecosystem.',
+    behavior: 'The records it links (baseline, performance, the end-to-end demo) are produced by scripts that run on any checkout, independent of the ecosystem being scanned.',
+  },
+};
+
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
   for (const eco of ['haskell', 'nix']) {

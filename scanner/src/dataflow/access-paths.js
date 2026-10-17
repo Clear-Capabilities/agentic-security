@@ -67,6 +67,17 @@ export function pathIsCoveredByPrefix(path, prefix) {
  * - `set = {"x.z"}` does NOT cover "x.y"  ✗
  * - `set = {"x.y.z"}` does NOT cover "x.y"  ✗ (we don't propagate UP)
  */
+/**
+ * True iff some path in `set` lies STRICTLY BELOW `path` (`o.cmd` is below `o`). Reading `o` as a whole value (passing it to a function, serialising
+ * it) reads every field, so a tainted field taints the whole read; reading `o.safe` does not, because `o.cmd` is not below `o.safe`.
+ */
+export function hasTaintedDescendant(set, path) {
+  if (!set || typeof path !== 'string') return false;
+  const prefix = `${path}.`;
+  for (const p of set) if (typeof p === 'string' && p.startsWith(prefix)) return true;
+  return false;
+}
+
 export function isCoveredBy(set, path) {
   if (!set || typeof path !== 'string') return false;
   if (set.has(path)) return true;

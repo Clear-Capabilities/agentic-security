@@ -266,3 +266,8 @@ down enterprise runners sometimes don't. Targets for retirement:
   every fallback to the regex parser is now also a silent loss of Python
   interprocedural analysis, not just the older, vaguer "some constructs get
   dropped" cost.
+
+## Semantic graph (`semantic-graph.js`, engineering-excellence E2-01)
+
+An additive, typed, versioned view over this IR: `Symbol`, `CallSite`, `Allocation`, `FieldAccess`, `ValueOrigin`, plus the schema-only lists `ServiceBoundary`, `StorageEdge`, `Sanitizer`, `Guard`. Ids are content-derived and never include a line, so a blank line above a function moves no id. It reads the CFG (the one structure every language's IR shares; `writes` exists for JavaScript only). Nothing on the scan path imports it, so findings and `chain[]` cannot change; a test pins that. Columns are `null` (the IR has lines only) and say `locationPrecision: "line"`. Contract and the measured per-language construct matrix: `docs/engineering-excellence/IR_CONTRACT.md` (regenerate with `node scripts/engineering-excellence/ir-matrix.mjs`). Do not add a `site` field: IR site ids come from a process-global counter and are not stable across builds.
+

@@ -351,6 +351,8 @@ async function cmdReview(root, args, format) {
         maxCalls: num(flag(args, 'max-calls')) || config.review.maxCalls,
         maxWallSeconds: num(flag(args, 'max-wall-seconds')) || config.review.maxWallSeconds,
         maxTokensPerJob: config.review.maxTokensPerJob,
+        maxTokensPerRepo: config.review.maxTokensPerRepo,
+        anonymizePrompts: config.review.anonymizePrompts,
         maxRetries: config.review.maxRetries,
         jobTimeoutMs: (num(flag(args, 'job-timeout-seconds')) || 120) * 1000,
         maxCostUsd: num(flag(args, 'max-cost-usd')) ?? config.review.maxCostUsd,

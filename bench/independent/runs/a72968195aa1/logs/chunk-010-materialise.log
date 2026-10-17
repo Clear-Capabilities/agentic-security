@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-pmwx-rm49-xv39  (whole repo)  140 source file(s)
+[err]   ✓ GHSA-pp92-crg2-gfv9  (whole repo)  41 source file(s)
+[err]   ✓ GHSA-pqh8-p93p-2rx7  (whole repo)  73 source file(s)
+[err]   ✓ GHSA-prg7-hcfm-mfcr  (whole repo)  38 source file(s)
+[err]   ✓ GHSA-prjp-h48f-jgf6  actiontext  96 source file(s)
+[err]   ✓ GHSA-pwgv-4x5q-6m9f  (whole repo)  36 source file(s)
+[err]   ✓ GHSA-pxmc-2ffp-8j67  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-q6hh-gp44-4hcm  (whole repo)  134 source file(s)
+[err]   ✓ GHSA-q8qp-cvcw-x6jj  (whole repo)  215 source file(s)
+[err]   ✓ GHSA-qcxp-gm7m-4j5v  extensions  13473 source file(s)
+[err]   ✓ GHSA-qf5v-m7p4-95rp  pkg  488 source file(s)
+[err]   ✓ GHSA-qf9q-q4hh-qph3  (whole repo)  110 source file(s)
+[err]   ✓ GHSA-qgx9-6px9-7p75  src/gateway  539 source file(s)
+[err]   ✓ GHSA-qh8c-7588-qfrv  src/Http  212 source file(s)
+[err]   ✓ GHSA-qhr7-v3xp-vw9m  src/Http  212 source file(s)
+[err]   ✓ GHSA-qm77-8qjp-4vcm  extensions/slack  182 source file(s)
+[err]   ✓ GHSA-qmcq-xw74-w667  (whole repo)  87 source file(s)
+[err]   ✓ GHSA-qq9q-x9w4-chhj  pkg/provider  257 source file(s)
+[err]   ✓ GHSA-qv62-xfj6-32xm  (whole repo)  297 source file(s)
+[err]   ✓ GHSA-qvc3-6q9x-95pj  components/camel-keycloak  38 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 97s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

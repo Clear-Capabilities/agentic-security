@@ -204,6 +204,15 @@ export const CHECKS = [
       'drift (fix the regression, or re-baseline only if the change is intended).',
   },
   {
+    // E3-08: the fix-verification benchmark. A patch pipeline that starts accepting fake-but-green fixes, or rejecting real ones it used to
+    // accept, fails here. ~12s; reads the scanner and the fix modules, so it keeps the default (whole-tree) cache key.
+    id: 'fix-verification-gate',
+    title: 'Fix verification benchmark matches its baseline (no new unsafe fix accepted)',
+    npmScript: 'bench:fix-verify:check',
+    remedy: 'Run `npm run bench:fix-verify:check` in scanner/ — a fake-but-green fix is now accepted, or a real fix is now refused. ' +
+      'If the change is deliberate, re-baseline with `node bench/fix-verification/runner.mjs --update-baseline` and regenerate the doc with --write-doc.',
+  },
+  {
     id: 'layer-recall-gate',
     title: 'Per-layer, per-language taint recall baseline holds',
     npmScript: 'bench:layer-recall:check',

@@ -144,6 +144,7 @@ export const ARTIFACT_REGISTRY = [
   { name: 'findings.csv', kind: 'file', classification: 'generated', retentionClass: 'scan' },
   { name: 'llm-cache', kind: 'dir', classification: 'generated', retentionClass: 'cache' },
   { name: 'fix-history', kind: 'dir', classification: 'generated', retentionClass: 'backup' },
+  { name: 'fix-batches', kind: 'dir', classification: 'generated', retentionClass: 'backup' },
   { name: 'verifier-runs', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'src/posture/verifier.js (recordVerifierRun)', note: 'Adversarial premortem Q1 (2026-09-07): one JSON record per `agentic-security verify` run, added so module:verifier (nist-800-171-r3.json 03.12.01, nist-csf-2.json RC.RP) has a real artifact to check for instead of a name in the ARTIFACT table nothing ever wrote.' },
   { name: 'fix-plans', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
   // The following were confirmed missing from the old hardcoded WIPE/
@@ -172,6 +173,8 @@ export const ARTIFACT_REGISTRY = [
   { name: 'compliance', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'posture/auditor-walkthrough.js' },
   { name: 'attestations', kind: 'dir', classification: 'generated', retentionClass: 'evidence', source: 'posture/evidence-bundle.js' },
   { name: 'auditor-walkthroughs', kind: 'dir', classification: 'generated', retentionClass: 'evidence' },
+  { name: 'compliance-applicability.json', kind: 'file', classification: 'operator-config', note: 'operator declarations that a framework control does not apply ({ <framework id>: { <control id>: { reason, declaredBy } } }); read by `compliance --report <framework> --truth`. The tool never infers non-applicability.' },
+  { name: 'analysis-cache.jsonl', kind: 'file', classification: 'generated', retentionClass: 'cache', confidential: true, source: 'posture/scan-checkpoint.js (openCheckpoint persistent mode), engine.js', note: 'Opt-in (AGENTIC_SECURITY_ANALYSIS_CACHE=1) cross-scan cache of per-file detector results. Each record is authenticated with the install key, so a cache carried in from elsewhere is discarded. It holds findings with source excerpts, so it is treated like the source tree.' },
   { name: 'incremental', kind: 'dir', classification: 'generated', retentionClass: 'cache', source: 'dataflow/incremental.js (cache)' },
   { name: 'model-rescan', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
   { name: 'sca-upgrade-history', kind: 'dir', classification: 'generated', retentionClass: 'scan' },
@@ -279,6 +282,8 @@ export const ARTIFACT_REGISTRY = [
   // retention cannot reach it. Operator-config, not generated: these are
   // hand-supplied eBPF/APM trace exports the scanner only ever reads.
   { name: 'runtime-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'eBPF/APM runtime trace consumed by posture/runtime-correlation.js\'s own trace loader (deliberately not named by its literal export here — no-dead-modules.test.js scans note strings too, and naming it would make it look, wrongly, like a real call site) — operator-supplied, never scanner-written; $AGENTIC_SECURITY_RUNTIME_TRACE_PATH overrides the location entirely' },
+  { name: 'runtime-policy.json', kind: 'file', classification: 'operator-config', note: 'opt-in policy for runtime observation ingestion (collect, kinds, retentionDays, sampleRate); read by posture/runtime-trace-ingest.js' },
+  { name: 'runtime-trace.meta.json', kind: 'file', classification: 'generated', retentionClass: 'evidence', note: 'ingestion record beside runtime-trace.jsonl: declared sampling, retention, counts of dropped and rejected fields (counts only, never values)' },
   { name: 'runtime.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
   { name: 'ebpf-trace.jsonl', kind: 'file', classification: 'operator-config', note: 'alternate filename for runtime-trace.jsonl — see posture/runtime-correlation.js\'s DEFAULT_TRACE_NAMES' },
 ];

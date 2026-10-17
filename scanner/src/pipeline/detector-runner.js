@@ -41,11 +41,18 @@
  * @param {() => any} fn - the detector call itself, e.g. `() => scanXxx(file, cc)`
  * @returns {any} fn()'s return value, or undefined if it threw
  */
+// E6-01: an optional sink for per-detector timing. Unset (the default), runDetector does exactly what it did before; set by a scan for its duration.
+let _timingSink = null;
+export function setDetectorTimingSink(fn) { _timingSink = typeof fn === 'function' ? fn : null; }
+
 export function runDetector(detectorErrors, file, analyzer, fn) {
+  const t0 = _timingSink ? process.hrtime.bigint() : 0n;
   try {
     return fn();
   } catch (e) {
     detectorErrors.push({ file, analyzer, err: String((e && e.message) || e) });
     return undefined;
+  } finally {
+    if (_timingSink) _timingSink(analyzer, Number(process.hrtime.bigint() - t0) / 1e6);
   }
 }

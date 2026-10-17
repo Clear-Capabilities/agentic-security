@@ -1,0 +1,895 @@
+{
+  "schemaVersion": 1,
+  "note": "Curated map from a capability to the source that implements it and the executable tests that exercise it. The inventory checker fails when a listed path does not exist, when a capability has no source, or when a maturity claim is not backed by a recorded test run. `partial` states the gap against the Engineering Excellence PRD in plain words; it is never used to dress up a missing feature.",
+  "capabilities": [
+    {
+      "id": "cli-scan",
+      "name": "Scan command and engine",
+      "epics": [
+        "E0",
+        "E6"
+      ],
+      "source": [
+        "scanner/bin/agentic-security.js",
+        "scanner/src/runScan.js",
+        "scanner/src/engine.js"
+      ],
+      "scopes": [
+        "smoke"
+      ],
+      "tests": [
+        "scanner/test/smoke.test.js",
+        "scanner/test/backward-default.test.js",
+        "scanner/test/ci-parity.test.js"
+      ],
+      "docs": [
+        "docs/guides/scanning.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "sast-detectors",
+      "name": "SAST detector modules",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/sast"
+      ],
+      "scopes": [
+        "sast"
+      ],
+      "tests": [
+        "scanner/test/sibling-guard.test.js"
+      ],
+      "docs": [
+        "scanner/src/sast/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "ir-layer",
+      "name": "Layer-1 IR (JS/TS, Python, Java, tree-sitter languages)",
+      "epics": [
+        "E2",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/ir"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/closure-capture.test.js"
+      ],
+      "docs": [
+        "scanner/src/ir/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "taint-engine",
+      "name": "Layer-2 taint engine (k=1 monovariant return-taint, k=2 summaries)",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/dataflow"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/interproc-k2.test.js",
+        "scanner/test/collection-taint.test.js",
+        "scanner/test/csharp-cross-file.test.js",
+        "scanner/test/java-structural-cross-file.test.js"
+      ],
+      "docs": [
+        "scanner/src/dataflow/CLAUDE.md"
+      ],
+      "partial": "context sensitivity is limited (k=1/k=2); heap, alias and closure modelling is partial and is the subject of E2-03"
+    },
+    {
+      "id": "guard-recognition",
+      "name": "Guard and sanitizer recognition",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/dataflow/guard-dominance.js",
+        "scanner/src/dataflow/sanitizer-gate.js",
+        "scanner/src/dataflow/sanitizer-proof.js",
+        "scanner/src/sast/sibling-guard.js"
+      ],
+      "scopes": [
+        "dataflow",
+        "sast"
+      ],
+      "tests": [
+        "scanner/test/guard-recognition.test.js",
+        "scanner/test/guard-window-identifier-correlation.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "suppression-ledger",
+      "name": "Suppression pragmas and their visible ledger",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/posture/suppressions.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/suppression-visibility.test.js",
+        "scanner/test/suppression-exceptions.test.js",
+        "scanner/test/ignore-pragma.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "scan-health",
+      "name": "scanHealth and assurance modes",
+      "epics": [
+        "E0",
+        "E6",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/pipeline/scan-health.js",
+        "scanner/src/pipeline/assurance-mode.js",
+        "scanner/src/pipeline/coverage-ledger.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/scan-health.test.js",
+        "scanner/test/assurance-mode.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "analyzer-isolation",
+      "name": "Supervised analyzer workers",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scanner/src/pipeline/analyzer-supervisor.js",
+        "scanner/src/pipeline/analyzer-worker.js",
+        "scanner/src/pipeline/detector-runner.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/analyzer-supervisor.test.js"
+      ],
+      "docs": [],
+      "partial": "isolation covers analyzers run through the supervisor; RAM and CPU caps are not enforced per worker (E6-05)"
+    },
+    {
+      "id": "incremental-cache",
+      "name": "Incremental analysis cache",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scanner/src/dataflow/incremental.js",
+        "scanner/src/dataflow/k2-summary-cache.js"
+      ],
+      "scopes": [
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/incremental-cache.test.js",
+        "scanner/test/incremental-parity.test.js"
+      ],
+      "docs": [],
+      "partial": "cache keys cover content and tool version; transitive-dependency and feed-freshness invalidation is the subject of E6-04"
+    },
+    {
+      "id": "determinism",
+      "name": "Deterministic output",
+      "epics": [
+        "E6"
+      ],
+      "source": [
+        "scripts/determinism-compare.mjs"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/determinism-cross-machine.test.js",
+        "scanner/test/format-determinism.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "fix-synthesis",
+      "name": "Fix synthesis, verification loop and honesty gate",
+      "epics": [
+        "E3"
+      ],
+      "source": [
+        "scanner/src/posture/fix-verify.js",
+        "scanner/src/posture/fix-verify-loop.js",
+        "scanner/src/posture/fix-honesty-gate.js",
+        "scanner/src/posture/deterministic-fix.js"
+      ],
+      "scopes": [
+        "verification",
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/fix-verify-loop.test.js",
+        "scanner/test/fix-verify-tests.test.js",
+        "scanner/test/fix-honesty-gate.test.js"
+      ],
+      "docs": [
+        "docs/guides/fixing-vulnerabilities.md"
+      ],
+      "partial": "several patch routes (CLI fix, MCP apply_fix, autopilot) exist; whether they share one verification contract is E3-01"
+    },
+    {
+      "id": "apply-fix-service",
+      "name": "Apply-fix service and approvers",
+      "epics": [
+        "E3"
+      ],
+      "source": [
+        "scanner/src/fix/apply-fix-service.js",
+        "scanner/src/fix/approver-registry.js"
+      ],
+      "scopes": [
+        "verification",
+        "mcp"
+      ],
+      "tests": [
+        "scanner/test/mcp-apply-fix-multifile.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "exploit-proof",
+      "name": "Exploit proof (symbolic path feasibility, execution proof, proof tiers)",
+      "epics": [
+        "E3",
+        "E4"
+      ],
+      "source": [
+        "scanner/src/dataflow/exploit-prover.js",
+        "scanner/src/dataflow/symbolic-exec.js",
+        "scanner/src/posture/execution-proof.js",
+        "scanner/src/posture/proof-tier.js",
+        "scanner/src/posture/prove-findings.js"
+      ],
+      "scopes": [
+        "verification",
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/execution-proof.test.js",
+        "scanner/test/smt-path-feasibility.test.js",
+        "scanner/test/symbolic-exec-proof.test.js"
+      ],
+      "docs": [
+        "docs/guides/exploit-proof-fabric.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "sandbox",
+      "name": "Sandboxed execution and capability enforcement",
+      "epics": [
+        "E3",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/sandbox",
+        "scanner/src/capabilities"
+      ],
+      "scopes": [
+        "capabilities"
+      ],
+      "tests": [
+        "scanner/test/sandbox.test.js",
+        "scanner/test/sandbox-escape.test.js"
+      ],
+      "docs": [
+        "scanner/src/capabilities/CLAUDE.md",
+        "scanner/src/sandbox/CLAUDE.md"
+      ],
+      "partial": "enforced mode is advertised for Linux only and Linux is partially verified; macOS runs are host-proved"
+    },
+    {
+      "id": "dci",
+      "name": "Deterministic Context Intelligence (context command)",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/context-intelligence"
+      ],
+      "scopes": [
+        "discovery"
+      ],
+      "tests": [
+        "scanner/test/context-intelligence/build-js.test.js",
+        "scanner/test/context-intelligence/review-queue.test.js"
+      ],
+      "docs": [
+        "docs/guides/context-intelligence.md",
+        "docs/architecture/context-intelligence.md",
+        "scanner/src/context-intelligence/CLAUDE.md"
+      ],
+      "partial": "evaluation is synthetic with a scripted reader; no real adjudicated holdout exists, so review quality is unmeasured"
+    },
+    {
+      "id": "llm-discovery",
+      "name": "LLM candidate discovery (hunt) with deterministic gating",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/discovery"
+      ],
+      "scopes": [
+        "discovery"
+      ],
+      "tests": [
+        "scanner/test/discovery-hunter.test.js",
+        "scanner/test/discovery-confirm.test.js",
+        "scanner/test/discovery-disprove.test.js",
+        "scanner/test/discovery-judge.test.js"
+      ],
+      "docs": [
+        "scanner/src/discovery/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "business-invariants",
+      "name": "Business-logic invariants",
+      "epics": [
+        "E4"
+      ],
+      "source": [
+        "scanner/src/posture/invariants"
+      ],
+      "scopes": [
+        "invariants"
+      ],
+      "tests": [
+        "scanner/test/invariants/invariant-lifecycle.test.js",
+        "scanner/test/invariants/business-coverage.test.js"
+      ],
+      "docs": [
+        "docs/guides/business-logic-invariants.md"
+      ],
+      "partial": "invariants are declared and checked on the existing evidence; first-class machine-checkable invariants with cross-route propagation are E4-02 and E4-03"
+    },
+    {
+      "id": "egress-policy",
+      "name": "Model egress policy, redaction and offline mode",
+      "epics": [
+        "E4",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/egress"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/egress-policy.test.js",
+        "scanner/test/egress-policy-integration.test.js",
+        "scanner/test/egress-audit.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "llm-validator",
+      "name": "Layer-3 LLM validator",
+      "epics": [
+        "E4",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/llm-validator"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/llm-validator-consistency.test.js",
+        "scanner/test/cost-ceiling.test.js"
+      ],
+      "docs": [],
+      "partial": "default-on only when an endpoint is configured"
+    },
+    {
+      "id": "runtime-correlation",
+      "name": "Runtime observation and correlation",
+      "epics": [
+        "E5"
+      ],
+      "source": [
+        "scanner/src/lineage/runtime-observation.js",
+        "scanner/src/lineage/runtime-assurance.js",
+        "scanner/src/posture/runtime-correlation.js"
+      ],
+      "scopes": [
+        "lineage",
+        "deployment"
+      ],
+      "tests": [
+        "scanner/test/container-runtime.test.js",
+        "scanner/test/posture/assurance-contracts.test.js"
+      ],
+      "docs": [
+        "docs/guides/runtime-twin.md"
+      ],
+      "partial": "identity binding of observations to a deployed build digest is E5-02"
+    },
+    {
+      "id": "dataflow-explorer",
+      "name": "Data Flow Explorer graph and local server",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/lineage",
+        "scanner/src/server"
+      ],
+      "scopes": [
+        "lineage",
+        "server"
+      ],
+      "tests": [
+        "scanner/test/lineage-scan-wiring.test.js",
+        "scanner/test/lineage-artifact-write.test.js"
+      ],
+      "docs": [
+        "docs/guides/data-flow-explorer.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "fleet",
+      "name": "Fleet scanning and cross-repository graph",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/fleet",
+        "scanner/src/posture/fleet.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/fleet.test.js"
+      ],
+      "docs": [
+        "docs/guides/fleet.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "artifact-provenance",
+      "name": "Source-to-artifact security and provenance (image scan, VEX)",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/artifact"
+      ],
+      "scopes": [
+        "deployment"
+      ],
+      "tests": [
+        "scanner/test/vex.test.js",
+        "scanner/test/image-packages.test.js"
+      ],
+      "docs": [
+        "docs/guides/artifact-provenance.md",
+        "scanner/src/artifact/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "finding-provenance",
+      "name": "Finding provenance (introducing commit)",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/provenance"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/provenance.test.js"
+      ],
+      "docs": [
+        "docs/guides/finding-provenance.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "signed-evidence",
+      "name": "Signed finding evidence bundles and attestation",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/evidence-bundle.js",
+        "scanner/src/posture/attestation.js",
+        "scanner/src/posture/provenance-evidence-bundle.js"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/evidence-bundle.test.js",
+        "scanner/test/verify-attestation-cli.test.js"
+      ],
+      "docs": [],
+      "partial": "bundles are per finding; a release-level package is E7-03"
+    },
+    {
+      "id": "oscal",
+      "name": "OSCAL emission and compliance truth",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/report/oscal.js"
+      ],
+      "scopes": [
+        "report"
+      ],
+      "tests": [
+        "scanner/test/oscal-conformance.test.js"
+      ],
+      "docs": [
+        "docs/OSCAL.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "compliance-mapping",
+      "name": "Compliance framework mapping",
+      "epics": [
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture"
+      ],
+      "scopes": [
+        "posture"
+      ],
+      "tests": [
+        "scanner/test/compliance-mapping-liveness.test.js",
+        "scanner/test/compliance-evidence-binding.test.js"
+      ],
+      "docs": [
+        "docs/guides/compliance.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "privacy-controls",
+      "name": "Privacy analysis, retention and legal hold",
+      "epics": [
+        "E5",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/privacy",
+        "scanner/src/posture/retention-policy.js",
+        "scanner/src/posture/legal-hold.js",
+        "scanner/src/dataflow/privacy-governance.js"
+      ],
+      "scopes": [
+        "posture",
+        "dataflow"
+      ],
+      "tests": [
+        "scanner/test/retention-policy.test.js",
+        "scanner/test/legal-hold.test.js",
+        "scanner/test/privacy-governance.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "mcp-server",
+      "name": "MCP server (17 tools, 2 write)",
+      "epics": [
+        "E3",
+        "E6"
+      ],
+      "source": [
+        "scanner/src/mcp"
+      ],
+      "scopes": [
+        "mcp"
+      ],
+      "tests": [
+        "scanner/test/mcp-audit.test.js",
+        "scanner/test/mcp-dataflow-tools.test.js",
+        "scanner/test/agent-mcp-tools.test.js"
+      ],
+      "docs": [
+        "scanner/src/mcp/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "lsp-server",
+      "name": "LSP server",
+      "epics": [
+        "E8"
+      ],
+      "source": [
+        "scanner/src/lsp"
+      ],
+      "scopes": [],
+      "tests": [
+        "scanner/test/lsp-server.test.js",
+        "scanner/test/lsp-protocol-smoke.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "language-support",
+      "name": "Haskell and Nix language support registry",
+      "epics": [
+        "E2"
+      ],
+      "source": [
+        "scanner/src/language"
+      ],
+      "scopes": [
+        "haskell",
+        "nix",
+        "language"
+      ],
+      "tests": [
+        "scanner/test/language/capability-ledger.test.js"
+      ],
+      "docs": [
+        "docs/language-support.md",
+        "scanner/src/language/CLAUDE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "scorecard",
+      "name": "Accuracy scorecard generation",
+      "epics": [
+        "E1",
+        "E8"
+      ],
+      "source": [
+        "scripts/scorecard.mjs",
+        "scripts/scorecard-check.mjs",
+        "scanner/src/posture/accuracy-scorecard.js"
+      ],
+      "scopes": [
+        "evaluation"
+      ],
+      "tests": [
+        "scanner/test/scorecard.test.js",
+        "scanner/test/scorecard-gate.test.js",
+        "scanner/test/accuracy-scorecard.test.js"
+      ],
+      "docs": [
+        "docs/SCORECARD.md",
+        "docs/METRICS.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "evaluation-holdout",
+      "name": "Held-out evaluation tooling",
+      "epics": [
+        "E1"
+      ],
+      "source": [
+        "scanner/src/posture/holdout-eval.js",
+        "scripts/independent-population-gate.mjs"
+      ],
+      "scopes": [
+        "evaluation"
+      ],
+      "tests": [
+        "scanner/test/holdout-eval.test.js",
+        "scanner/test/sard-independent-holdout.test.js"
+      ],
+      "docs": [
+        "docs/INDEPENDENT_POPULATION_ROOT_CAUSE.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "loop-engineering",
+      "name": "Supervised implementation loop tooling",
+      "epics": [
+        "E0"
+      ],
+      "source": [
+        "scripts/loop-engineering"
+      ],
+      "scopes": [],
+      "tests": [
+        "scripts/loop-engineering/test/loop-manifest.test.js",
+        "scripts/loop-engineering/test/loop-watchdog.test.js"
+      ],
+      "docs": [
+        "docs/guides/loop-engineering.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "engineering-excellence-tracker",
+      "name": "Engineering Excellence status tracker (this program)",
+      "epics": [
+        "E0"
+      ],
+      "source": [
+        "scripts/engineering-excellence"
+      ],
+      "scopes": [
+        "engineering-excellence"
+      ],
+      "tests": [
+        "scanner/test/engineering-excellence/e0-04-task-manifest.test.js",
+        "scanner/test/engineering-excellence/e0-05-status-runner.test.js"
+      ],
+      "docs": [],
+      "partial": null
+    },
+    {
+      "id": "proof-fabric",
+      "name": "Exploit proof fabric (hypothesis states, oracles, reproducer, fix proof)",
+      "epics": [
+        "E3",
+        "E4"
+      ],
+      "source": [
+        "scanner/src/posture/proof-fabric"
+      ],
+      "scopes": [
+        "verification"
+      ],
+      "tests": [
+        "scanner/test/proof-fabric/core.test.js",
+        "scanner/test/proof-fabric/fix-store-runner.test.js",
+        "scanner/test/proof-fabric/fixtures.test.js"
+      ],
+      "docs": [
+        "docs/guides/exploit-proof-fabric.md"
+      ],
+      "partial": null
+    },
+    {
+      "id": "assurance-contracts",
+      "name": "Assurance evidence contracts (verification record, identities, baseline inventory, rollout and rollback)",
+      "epics": [
+        "E3",
+        "E7"
+      ],
+      "source": [
+        "scanner/src/posture/assurance"
+      ],
+      "scopes": [
+        "verification"
+      ],
+      "tests": [
+        "scanner/test/posture/assurance-contracts.test.js",
+        "scanner/test/posture/assurance-baseline.test.js",
+        "scanner/test/posture/assurance-config.test.js"
+      ],
+      "docs": [
+        "docs/guides/assurance-scope-and-contracts.md",
+        "docs/guides/assurance-rollout-and-rollback.md"
+      ],
+      "partial": "the verification record is a hypothesis-level contract; a patch-level FixVerificationRecord that unifies every patch route is what E3-02 and E3-03 must establish or confirm"
+    }
+  ],
+  "absent": [
+    {
+      "id": "realcode-bench",
+      "name": "bench:realcode:report and bench:realcode:check (E1-07)",
+      "terms": [
+        "realcode",
+        "bench:realcode"
+      ],
+      "note": "no script of that name exists; the independent gate is scripts/independent-population-gate.mjs"
+    },
+    {
+      "id": "scan-measurement-identity",
+      "name": "ScanMeasurementIdentity record (E0-02, E1-04)",
+      "terms": [
+        "ScanMeasurementIdentity",
+        "measurementValid",
+        "untrusted_for_release"
+      ],
+      "note": "baseline-inventory.js captures part of this; no measurement-validity flag exists"
+    },
+    {
+      "id": "service-boundary-ir",
+      "name": "ServiceBoundary and StorageEdge IR entities (E2-01, E2-07)",
+      "terms": [
+        "ServiceBoundary",
+        "StorageEdge"
+      ],
+      "note": "cross-service edges are not modelled in the taint IR"
+    },
+    {
+      "id": "semantic-evidence-edge",
+      "name": "SemanticEvidenceEdge with observed/inferred/unknown confidence (E2-01, E5-04)",
+      "terms": [
+        "SemanticEvidenceEdge"
+      ],
+      "note": "lineage graph carries protection and classification, not an origin/confidence edge triple"
+    },
+    {
+      "id": "analysis-incomplete-state",
+      "name": "analysis_incomplete marker on budget exhaustion (E2-05)",
+      "terms": [
+        "analysis_incomplete"
+      ],
+      "note": "budget exhaustion is reported through scanHealth, not a per-finding marker"
+    },
+    {
+      "id": "insufficient-population-verdict",
+      "name": "insufficient_population verdict state (PRD 3.1, E1-03)",
+      "terms": [
+        "insufficient_population",
+        "insufficient-population"
+      ],
+      "note": "the hyphenated form is used by the evaluation gates (scanner/src/posture/evaluation/gates.js, four statuses: pass, fail, insufficient-population, unmeasured). The PRD's eight-state taxonomy is not used everywhere; mapping it is E1-03."
+    },
+    {
+      "id": "build-digest-binding",
+      "name": "Runtime observations bound to a deployed build digest (E5-02)",
+      "terms": [
+        "buildDigest",
+        "deploymentDigest"
+      ],
+      "note": "image digests exist in artifact provenance; runtime records do not carry one"
+    },
+    {
+      "id": "release-assurance-package",
+      "name": "Signed release-level assurance package (E7-03)",
+      "terms": [
+        "AssuranceEvidenceRef",
+        "releaseAssurancePackage"
+      ],
+      "note": "finding-level bundles and portfolio bundles exist; a release package with an offline verifier does not"
+    }
+  ]
+}

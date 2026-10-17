@@ -36,6 +36,8 @@ import * as readline from 'node:readline';
 import { createReadStream } from 'node:fs';
 
 import { statePath } from './state-dir.js';
+import { loadTraceMeta } from './runtime-trace-ingest.js';
+import { linkObservationToSnapshot, normalizeIdentity } from '../lineage/deployment-identity.js';
 const DEFAULT_TRACE_NAMES = ['runtime-trace.jsonl', 'runtime.jsonl', 'ebpf-trace.jsonl'];
 const DEFAULT_OBSERVATION_WINDOW_DAYS = 30;
 
@@ -55,7 +57,12 @@ export async function loadTrace(scanRoot, opts = {}) {
     fileLinesObserved: new Map(), // file → Set<line>
     syscallsObserved: new Set(),
     recordCount: 0,
+    // E5-02: with a snapshot identity, each record is compared with it. A record from a different build is dropped and counted; one that carries no
+    // comparable identity is kept as unattested; one that matches is counted as matched.
+    recordsMatched: 0, recordsUnattested: 0, recordsMismatched: 0,
   };
+  trace.meta = loadTraceMeta(chosen);
+  const snap = opts.snapshotIdentity ? normalizeIdentity(opts.snapshotIdentity) : null;
   const window = (opts.windowDays || DEFAULT_OBSERVATION_WINDOW_DAYS) * 86400_000;
   const now = Date.now();
   const stream = createReadStream(chosen, { encoding: 'utf8' });
@@ -68,6 +75,11 @@ export async function loadTrace(scanRoot, opts = {}) {
       const tsMs = Date.parse(r.ts);
       if (Number.isFinite(tsMs) && now - tsMs > window) continue;
     }
+    if (snap) {
+      const link = linkObservationToSnapshot({ commit: r.commit, buildHash: r.buildHash, imageDigest: r.imageDigest, sbomRef: r.sbomRef, environment: r.environment }, snap);
+      if (link.state === 'mismatched') { trace.recordsMismatched++; continue; }
+      if (link.state === 'matched') trace.recordsMatched++; else trace.recordsUnattested++;
+    } else trace.recordsUnattested++;
     trace.recordCount++;
     switch (r.kind) {
       case 'function-call':
@@ -138,38 +150,72 @@ export function findingObservedInRuntime(finding, trace) {
 }
 
 /**
- * Annotate all findings with runtimeObserved + demote unobserved findings.
- * Demotion: critical → high, high → medium, medium → low.
+ * Annotate every finding with what the runtime trace says about it, and say what that does NOT mean.
  *
- * Findings classified as unknown are left alone (no demotion). This is
- * the principled position — absence of observation in a partial trace
- * is not evidence of dead code.
+ * `runtimeObserved` keeps its three values (true, false, 'unknown'); `runtimeEvidence` states them in words:
+ *   observed               a function, line or route on the finding's path appears in the trace
+ *   not_observed_in_window nothing on its path appears in the window. This is a statement about the window and the instrumentation, NOT a statement
+ *                          that the code is unreachable or safe: low traffic, a rare path, an uninstrumented file and an incomplete window all look
+ *                          the same from here
+ *   unknown                no trace, or the file appears with no matching line
+ *
+ * SEVERITY IS NOT CHANGED BY DEFAULT. This module used to lower the severity of every unobserved finding one tier. Absence of observation cannot
+ * justify that (and the lineage observation path never did), so demotion is now an explicit, opt-in policy: `opts.demote === true` or
+ * AGENTIC_SECURITY_RUNTIME_DEMOTE=1. Even then it needs cited evidence: the trace must hold at least `minRecords` records, the finding must be rooted in a
+ * route, and that route must be absent from a trace that does hold route hits (traffic reached the service and did not reach this route). A finding that
+ * fails any condition is left as it is.
+ * A demoted finding records the evidence under `_runtimeDemotionEvidence`; a finding is never removed.
  */
 export async function annotateRuntimeCorrelation(scanRoot, findings, opts = {}) {
-  if (!Array.isArray(findings)) return { observed: 0, dead: 0, unknown: 0 };
+  if (!Array.isArray(findings)) return { observed: 0, dead: 0, unknown: 0, demoted: 0 };
   const trace = await loadTrace(scanRoot, opts);
-  if (!trace) {
-    for (const f of findings) f.runtimeObserved = 'unknown';
-    return { observed: 0, dead: 0, unknown: findings.length, trace: null };
+  const windowDays = opts.windowDays || DEFAULT_OBSERVATION_WINDOW_DAYS;
+  if (!trace || trace.recordCount === 0) {
+    // no file, or nothing usable in it (empty, outside the window, or every record from another build): there is nothing to compare a finding with
+    const basis = !trace ? 'no runtime trace was available' : (trace.recordsMismatched > 0 ? `all ${trace.recordsMismatched} usable record(s) came from a different build` : 'the trace holds no records inside the window');
+    for (const f of findings) { f.runtimeObserved = 'unknown'; f.runtimeEvidence = { state: 'unknown', basis, windowDays, recordCount: 0, ...(trace ? { recordsMismatched: trace.recordsMismatched } : {}) }; }
+    return { observed: 0, dead: 0, unknown: findings.length, demoted: 0, trace: trace ? { recordCount: 0, path: trace.path, recordsMismatched: trace.recordsMismatched } : null };
   }
-  let observed = 0, dead = 0, unknown = 0;
+  const demote = opts.demote === true || process.env.AGENTIC_SECURITY_RUNTIME_DEMOTE === '1';
+  const minRecords = Number.isInteger(opts.minRecords) ? opts.minRecords : 100;
+  let observed = 0, dead = 0, unknown = 0, demoted = 0;
   const demoteLadder = { critical: 'high', high: 'medium', medium: 'low', low: 'info' };
   for (const f of findings) {
-    const v = findingObservedInRuntime(f, trace);
+    let v = findingObservedInRuntime(f, trace);
+    // E5-03: a trace ingested with sampling below 1, or with no declared sampling, cannot show that something did NOT run. Absence becomes unknown.
+    if (v === false && trace.meta && trace.meta.sampleRate !== 1) v = 'unknown';
     f.runtimeObserved = v;
+    const file = f.file || (f.sink && f.sink.file);
+    f.runtimeEvidence = v === true ? { state: 'observed', basis: 'a function, line or route on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, corroboration: (opts.snapshotIdentity && trace.recordsMatched > 0 && trace.recordsUnattested === 0) ? 'corroborated' : 'unattested', recordsMismatched: trace.recordsMismatched }
+      : v === false ? { state: 'not_observed_in_window', basis: 'nothing on the finding\'s path is in the trace', windowDays, recordCount: trace.recordCount, meaning: 'absence of observation is not evidence that the code is unreachable or safe' }
+      : { state: 'unknown', basis: 'the trace cannot say (the file appears but no line on the path matches, or there is no trace)', windowDays, recordCount: trace.recordCount };
+    f.runtimeEvidence.sampling = samplingOf(trace);
     if (v === true) observed++;
     else if (v === false) {
       dead++;
-      // Demote one tier — the finding is real but unobserved in 30 days
-      // of production traffic, so it's not P0.
       const next = demoteLadder[f.severity];
-      if (next) {
+      // The cited evidence is TRAFFIC ON THE FINDING'S OWN ROUTE'S NEIGHBOURS: the finding is rooted in a route, the trace holds route hits, and this
+      // route is not among them. A finding with no route, or a trace with no route hits, has nothing to cite and is left alone.
+      const routePath = f._inRoute && f._inRoute.path;
+      const routeEvidence = !!(routePath && trace.routesObserved.size > 0 && !trace.routesObserved.has(routePath));
+      if (demote && next && routeEvidence && trace.recordCount >= minRecords) {
         f._runtimeDemoted = f.severity;
+        f._runtimeDemotionEvidence = { policy: 'opt-in runtime demotion', basis: 'route-rooted finding whose route was not hit while other routes were', route: routePath, routesObserved: trace.routesObserved.size, recordCount: trace.recordCount, minRecords, windowDays, tracePath: trace.path };
         f.severity = next;
+        demoted++;
       }
     } else unknown++;
   }
-  return { observed, dead, unknown, trace: { recordCount: trace.recordCount, path: trace.path } };
+  return { observed, dead, unknown, demoted, trace: { recordCount: trace.recordCount, path: trace.path } };
+}
+
+/** How completely the trace sees the service: 'complete', 'sampled' (with the rate), or 'undisclosed'. */
+export function samplingOf(trace) {
+  const m = trace && trace.meta;
+  if (!m) return { state: 'undisclosed', basis: 'the trace came with no ingestion record, so how much traffic it samples is not known' };
+  if (m.sampleRate === 1) return { state: 'complete', rate: 1 };
+  if (typeof m.sampleRate === 'number') return { state: 'sampled', rate: m.sampleRate, basis: 'not observed cannot be concluded from a sampled trace' };
+  return { state: 'undisclosed', basis: 'the collector did not declare a sampling rate' };
 }
 
 export const _internals = { DEFAULT_TRACE_NAMES, DEFAULT_OBSERVATION_WINDOW_DAYS };

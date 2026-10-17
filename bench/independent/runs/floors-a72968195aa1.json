@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "kind": "agentic-security/realcode-floors",
+  "derivedFrom": {
+    "runId": "a72968195aa1",
+    "engineVersion": "0.172.0",
+    "commit": "2c0f0d13c6085580f920452a9866db5aae1dcc29",
+    "bundleSha256": "e7ecb2875e67c227bbc9a9643742632dbf486accded83c1ada02043d1c5307d1",
+    "measurementValid": true,
+    "measuredAt": "2026-10-16T17:28:34.519Z"
+  },
+  "rule": "floor = lower bound of the 95% Wilson interval on the baseline localized recall and precision, per language with at least the declared minimum of scored entries",
+  "minEntriesForComparison": 30,
+  "maxUnhealthyShare": 0.1,
+  "approvedAt": "2026-10-16T17:28:48.148Z",
+  "approvedBy": null,
+  "reason": "First measured independent baseline of the engine at commit 2c0f0d13: 278 of 283 entries scored, 5 timed out; localized F1 0.040 (95% interval 0.013 to 0.075). Floors record this starting point, not a target.",
+  "languages": {
+    "csharp": {
+      "entries": 14,
+      "status": "insufficient_population",
+      "note": "no floor: too few scored entries at baseline"
+    },
+    "go": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0.004426831453704344,
+      "precisionFloor": 0.06149194402093078,
+      "baseline": {
+        "recall": 0.025,
+        "precision": 0.3333333333333333,
+        "f1": 0.046511627906976744
+      }
+    },
+    "java": {
+      "entries": 22,
+      "status": "insufficient_population",
+      "note": "no floor: too few scored entries at baseline"
+    },
+    "javascript": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0.004426831453704344,
+      "precisionFloor": 0.04558726029536886,
+      "baseline": {
+        "recall": 0.025,
+        "precision": 0.25,
+        "f1": 0.045454545454545456
+      }
+    },
+    "kotlin": {
+      "entries": 2,
+      "status": "insufficient_population",
+      "note": "no floor: too few scored entries at baseline"
+    },
+    "php": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0,
+      "precisionFloor": null,
+      "baseline": {
+        "recall": 0,
+        "precision": null,
+        "f1": 0
+      }
+    },
+    "python": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0.004426831453704344,
+      "precisionFloor": 0.04558726029536886,
+      "baseline": {
+        "recall": 0.025,
+        "precision": 0.25,
+        "f1": 0.045454545454545456
+      }
+    },
+    "ruby": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0.01382066726155863,
+      "precisionFloor": 0.11762077314099711,
+      "baseline": {
+        "recall": 0.05,
+        "precision": 0.4,
+        "f1": 0.08888888888888889
+      }
+    },
+    "typescript": {
+      "entries": 40,
+      "status": "floor",
+      "recallFloor": 0,
+      "precisionFloor": null,
+      "baseline": {
+        "recall": 0,
+        "precision": null,
+        "f1": 0
+      }
+    }
+  }
+}

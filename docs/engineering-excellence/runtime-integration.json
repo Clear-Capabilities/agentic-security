@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "note": "How runtime observations, the static graphs, dependency reachability, service topology, Git provenance and artifact attestations currently connect. Every `symbol` must occur in its `file` (a test checks it). `carries` and `missing` use one vocabulary: commit, buildHash, imageDigest, sbomRef, environment, service, routeId, functionSymbol, fileSpan, window. Written from reading the code at the commit named in baseline.json.",
+  "identityVocabulary": [
+    "commit",
+    "buildHash",
+    "imageDigest",
+    "sbomRef",
+    "environment",
+    "service",
+    "routeId",
+    "functionSymbol",
+    "fileSpan",
+    "window"
+  ],
+  "areas": [
+    {
+      "id": "runtime-lineage",
+      "title": "Runtime observation import (lineage)",
+      "entryPoints": [
+        {
+          "file": "scanner/src/lineage/observation-adapters.js",
+          "symbols": [
+            "parseNativeJsonlObservations",
+            "parseOtelJsonObservations",
+            "parseEnvoyAccessLogObservations",
+            "parseK8sAuditLogObservations",
+            "parseHttpAccessLogObservations",
+            "adapterFor"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/observation-correlation.js",
+          "symbols": [
+            "matchObservationToGraph",
+            "correlateObservations"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/observation-store.js",
+          "symbols": [
+            "validateObservationImport",
+            "persistObservationImport",
+            "loadObservationImports",
+            "deleteObservationImport"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/runtime-observation.js",
+          "symbols": [
+            "validateRuntimeObservation"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/runtime-assurance.js",
+          "symbols": [
+            "computeRuntimeAssurance"
+          ]
+        }
+      ],
+      "carries": [
+        "environment",
+        "window"
+      ],
+      "missing": [
+        "commit",
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "service",
+        "routeId",
+        "functionSymbol",
+        "fileSpan"
+      ],
+      "optionalAttributes": [
+        "service.name",
+        "service.version",
+        "service.instance.id"
+      ],
+      "matching": "a three-rung ladder to category-level graph nodes: destination literal (high), store table (medium), queue topic (exact); several nodes is ambiguous",
+      "evidenceLevel": "category-level graph node or flow; not function-level",
+      "notObserved": "reported as not_observed_in_window per flow; never changes severity, never marks anything unreachable",
+      "retention": "closed-world attribute allowlist, payload-shaped fields rejected, counts banded; retention.expiresAt is validated but not enforced"
+    },
+    {
+      "id": "runtime-ebpf-trace",
+      "title": "Runtime trace correlation (older eBPF path)",
+      "entryPoints": [
+        {
+          "file": "scanner/src/posture/runtime-correlation.js",
+          "symbols": [
+            "loadTrace",
+            "findingObservedInRuntime",
+            "annotateRuntimeCorrelation"
+          ]
+        }
+      ],
+      "carries": [
+        "functionSymbol",
+        "fileSpan",
+        "routeId",
+        "window"
+      ],
+      "missing": [
+        "commit",
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment",
+        "service"
+      ],
+      "matching": "exact qid, then file plus line within two lines, then route path (substring when route-rooted)",
+      "evidenceLevel": "function and line",
+      "notObserved": "runtimeObserved false and runtimeEvidence not_observed_in_window; severity is NOT changed unless the opt-in demotion policy is on and cites evidence",
+      "retention": "30-day record window only; host is parsed and discarded; no redaction"
+    },
+    {
+      "id": "static-graph",
+      "title": "Static data-flow graph",
+      "entryPoints": [
+        {
+          "file": "scanner/src/lineage/graph-builder.js",
+          "symbols": [
+            "buildDataFlowGraph"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/graph-snapshot.js",
+          "symbols": [
+            "buildGraphSnapshot",
+            "persistGraphSnapshot",
+            "loadSnapshot"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/ids.js",
+          "symbols": [
+            "nodeId",
+            "edgeId",
+            "flowId"
+          ]
+        }
+      ],
+      "carries": [
+        "commit"
+      ],
+      "missing": [
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment",
+        "service",
+        "routeId",
+        "functionSymbol",
+        "fileSpan",
+        "window"
+      ],
+      "matching": "node ids are 12-hex hashes of (repository, subtype, coverage, externality): stable across commits because no commit, file or line enters them; only graphId embeds the commit",
+      "evidenceLevel": "registry-level nodes; a node has no location and several sites collapse onto one node",
+      "notObserved": "not applicable",
+      "retention": "snapshots keyed by git HEAD"
+    },
+    {
+      "id": "dependency-reachability",
+      "title": "Dependency reachability",
+      "entryPoints": [
+        {
+          "file": "scanner/src/sca/import-reachability.js",
+          "symbols": [
+            "augmentReachabilityViaImports",
+            "findImportAwareCallSites"
+          ]
+        },
+        {
+          "file": "scanner/src/posture/reachability-filter.js",
+          "symbols": [
+            "demoteUnreachable"
+          ]
+        }
+      ],
+      "carries": [
+        "fileSpan"
+      ],
+      "missing": [
+        "commit",
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment",
+        "service",
+        "routeId",
+        "functionSymbol",
+        "window"
+      ],
+      "matching": "static, by vulnerable function name and import; unit is (package, function)",
+      "evidenceLevel": "function (call sites {pkg, fn, file, line})",
+      "notObserved": "no runtime input; inconclusive static results are unknown, not unreachable",
+      "retention": "none"
+    },
+    {
+      "id": "service-topology",
+      "title": "Service topology",
+      "entryPoints": [
+        {
+          "file": "scanner/src/dataflow/service-edges.js",
+          "symbols": [
+            "buildServiceEdges",
+            "traceFrom",
+            "extractFacts"
+          ]
+        },
+        {
+          "file": "scanner/src/dataflow/cross-service-taint.js",
+          "symbols": [
+            "loadServiceGraph",
+            "annotateCrossServiceFindings"
+          ]
+        },
+        {
+          "file": "scanner/src/dataflow/cross-repo.js",
+          "symbols": [
+            "buildFederatedGraph",
+            "federatedFindings"
+          ]
+        },
+        {
+          "file": "scanner/src/lineage/cross-repo-link.js",
+          "symbols": [
+            "validateCrossRepoLink"
+          ]
+        },
+        {
+          "file": "scanner/src/posture/fleet.js",
+          "symbols": [
+            "runFleet",
+            "rollupFleet"
+          ]
+        }
+      ],
+      "carries": [
+        "service",
+        "routeId",
+        "fileSpan"
+      ],
+      "missing": [
+        "commit",
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment",
+        "functionSymbol",
+        "window"
+      ],
+      "matching": "declared service names and hosts (service-edges); package name or directory basename (cross-service-taint); manifest names (fleet)",
+      "evidenceLevel": "route, topic or table; edge evidence is observed, inferred or unknown",
+      "notObserved": "not applicable",
+      "retention": "none"
+    },
+    {
+      "id": "git-provenance",
+      "title": "Git finding provenance",
+      "entryPoints": [
+        {
+          "file": "scanner/src/posture/provenance/coordinator.js",
+          "symbols": [
+            "annotateGitProvenance"
+          ]
+        }
+      ],
+      "carries": [
+        "commit",
+        "fileSpan",
+        "window"
+      ],
+      "missing": [
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment",
+        "service",
+        "routeId",
+        "functionSymbol"
+      ],
+      "matching": "line-level blame to the commit that introduced the finding",
+      "evidenceLevel": "finding line",
+      "notObserved": "not applicable",
+      "retention": "cache keyed on HEAD; raw record on disk (mode 0700), redacted at presentation"
+    },
+    {
+      "id": "artifact-attestation",
+      "title": "Artifact attestations",
+      "entryPoints": [
+        {
+          "file": "scanner/src/artifact/image-archive.js",
+          "symbols": [
+            "parseImageArchive"
+          ]
+        },
+        {
+          "file": "scanner/src/artifact/inventory.js",
+          "symbols": [
+            "buildImageInventory"
+          ]
+        },
+        {
+          "file": "scanner/src/artifact/signature.js",
+          "symbols": [
+            "verifyImageSignature",
+            "verifyProvenanceAttestation"
+          ]
+        },
+        {
+          "file": "scanner/src/artifact/provenance-graph.js",
+          "symbols": [
+            "buildArtifactProvenanceGraph",
+            "traceArtifactProvenanceGraph"
+          ]
+        },
+        {
+          "file": "scanner/src/artifact/mismatch.js",
+          "symbols": [
+            "detectSourceArtifactMismatch"
+          ]
+        }
+      ],
+      "carries": [
+        "commit",
+        "buildHash",
+        "imageDigest",
+        "sbomRef",
+        "environment"
+      ],
+      "missing": [
+        "service",
+        "routeId",
+        "functionSymbol",
+        "fileSpan",
+        "window"
+      ],
+      "matching": "commit only through the org.opencontainers.image.revision label; deployment is operator-declared and its digest is compared with the image; mismatch is keyed on advisory id and package presence",
+      "evidenceLevel": "package or advisory; SAST and secret findings have no link to an artifact",
+      "notObserved": "not applicable",
+      "retention": "scans stored per digest under the state directory; tar input only"
+    }
+  ],
+  "sourceOfTruth": [
+    {
+      "question": "Was this code path observed running?",
+      "canonical": "scanner/src/lineage/observation-correlation.js (flow level) and scanner/src/posture/runtime-correlation.js (function level), reported as separate evidence, never merged into one verdict",
+      "rule": "absence of observation is never evidence of unreachability or safety"
+    },
+    {
+      "question": "Does a finding's severity depend on runtime observation?",
+      "canonical": "no, by default",
+      "rule": "demotion is an opt-in policy that cites evidence (record count, file observed); it never removes a finding"
+    },
+    {
+      "question": "Which build is this observation about?",
+      "canonical": "an observation must carry commit, build hash or image digest (E5-02); until it does, it cannot be labelled as corroborating a static finding",
+      "rule": "a mismatched or unknown build is unknown, not corroborated"
+    },
+    {
+      "question": "Which service is this?",
+      "canonical": "the declared service name and hosts in the service map (dataflow/service-edges.js input); fleet manifest names and runtime service.name must match a declared name or host, otherwise the link is unknown",
+      "rule": "no link from a basename or a package name alone"
+    },
+    {
+      "question": "Which commit is the static graph?",
+      "canonical": "the git HEAD recorded by graph-snapshot.js; graphId embeds a commit only when the caller supplies one, so they can disagree and graphId is not used as the commit of record",
+      "rule": "compare commits, not graph ids"
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "C1",
+      "status": "resolved",
+      "resolvedIn": "E5-01",
+      "summary": "posture/runtime-correlation.js lowered the severity of every finding not seen in the trace, while the lineage observation path never demotes and the reachability filter says unknown, not unreachable. Absence of observation was being read as dead code.",
+      "resolution": "annotateRuntimeCorrelation no longer changes severity by default. It records runtimeEvidence in words. Demotion is opt-in (opts.demote or AGENTIC_SECURITY_RUNTIME_DEMOTE=1), needs a minimum record count and route-level traffic evidence (a route-rooted finding whose route was not hit while other routes were), and records the evidence it relied on."
+    },
+    {
+      "id": "C2",
+      "status": "resolved",
+      "resolvedIn": "E5-01",
+      "summary": "A finding in a file that was never instrumented came back runtimeObserved false and was demoted the same as one in a traced file.",
+      "resolution": "the demotion condition now requires route-level traffic evidence; a finding in an uninstrumented file or without a route is left alone."
+    },
+    {
+      "id": "C3",
+      "status": "decided",
+      "closedBy": "E5-02",
+      "summary": "Neither runtime path carries commit, build hash or image digest, and lineage node ids are not commit-keyed, so an observation taken on one build matches another build's graph as if identical.",
+      "resolution": "decided: an observation needs a build identity to count as corroboration; E5-02 adds it and rejects mismatches."
+    },
+    {
+      "id": "C4",
+      "status": "decided",
+      "closedBy": "E5-02",
+      "summary": "No join between a runtime observation's environment and the artifact graph's deployment node; graphId's commit and graph-snapshot's HEAD can disagree.",
+      "resolution": "decided: the artifact deployment record (declared digest, environment) is the join key; the commit of record is the snapshot HEAD."
+    },
+    {
+      "id": "C5",
+      "status": "decided",
+      "closedBy": "E5-03",
+      "summary": "retention.expiresAt on an observation import is validated and never enforced; expired imports still feed correlation and assurance.",
+      "resolution": "decided: expiry is enforced at read time (E5-03)."
+    },
+    {
+      "id": "C6",
+      "status": "decided",
+      "closedBy": "E5-04",
+      "summary": "The eBPF path is function and line level, the lineage path is category level, and no mapping exists between them.",
+      "resolution": "decided: they stay separate evidence; E5-04 maps both onto the semantic graph's qualified symbols and spans and states each edge as statically_inferred, runtime_observed, both, conflicted or unknown."
+    },
+    {
+      "id": "C7",
+      "status": "decided",
+      "closedBy": "E5-04",
+      "summary": "Service identity differs per module: declared names (service-edges), package name or basename (cross-service-taint), manifest names (fleet), service.name attribute (runtime).",
+      "resolution": "decided: the declared service map is canonical (see sourceOfTruth); the others must resolve to it."
+    },
+    {
+      "id": "C8",
+      "status": "resolved",
+      "resolvedIn": "E5-01",
+      "summary": "annotateCrossServiceFindings can raise severity on a static edge and annotateRuntimeCorrelation could lower it, so annotator order decided the final severity.",
+      "resolution": "with demotion off by default the two no longer fight; with it on, the demotion records its evidence and the order is the engine's fixed annotator order."
+    }
+  ],
+  "unknowns": [
+    "whether the CLI passes opts.commit to buildDataFlowGraph (graphId may therefore read 'uncommitted')",
+    "whether anything outside engine.js reads runtimeObserved or _runtimeDemoted",
+    "where lineage/deployment/ fits the digest story"
+  ]
+}

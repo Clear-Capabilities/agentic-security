@@ -1,0 +1,57 @@
+{
+  "schema": "agentic-security/parse-reuse-measurement@1",
+  "corpus": {
+    "dir": "scanner/src/sast",
+    "files": 122,
+    "chars": 1327372
+  },
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "memoryGb": 16,
+    "node": "v24.20.0"
+  },
+  "runsPerArm": 5,
+  "order": "alternating, memo-on first on even runs",
+  "memoOn": {
+    "cpuMs": {
+      "median": 3413,
+      "min": 3072,
+      "max": 3517
+    },
+    "wallMs": {
+      "median": 2935,
+      "min": 2831,
+      "max": 3009
+    },
+    "memoStats": {
+      "version": "blankComments@1",
+      "entries": 64,
+      "chars": 1229686,
+      "hits": 3543,
+      "misses": 981,
+      "skipped": 0
+    }
+  },
+  "memoOff": {
+    "cpuMs": {
+      "median": 3430,
+      "min": 3331,
+      "max": 3861
+    },
+    "wallMs": {
+      "median": 3154,
+      "min": 3037,
+      "max": 3320
+    }
+  },
+  "cpuReductionPct": 0.5,
+  "wallReductionPct": 6.9,
+  "peakRssMb": 732,
+  "canonicalFindingsIdentical": true,
+  "digest": "1229f9019d7f589837ee13b13cec0ac37e4547dd5a4582c388f9f34f4ad1c4ab",
+  "caveats": [
+    "wall and CPU times were measured on a machine that was also running other work; the alternating order and the medians reduce but do not remove that",
+    "peak RSS is the process high-water mark across both arms, not a per-arm figure"
+  ]
+}

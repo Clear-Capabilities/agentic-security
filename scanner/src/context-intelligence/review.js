@@ -138,10 +138,67 @@ export function checkEgressForFiles(files, { scanRoot, model }) {
   // other endpoint needs --allow-remote (or review.allowRemote), on top of the egress policy below, never instead of it.
   if (model.remote && !model.remoteApproved) return { allowed: false, reason: 'remote-endpoint-not-approved (pass --allow-remote or set review.allowRemote after reviewing the egress policy)', file: files[0] || null, evaluated: false };
   for (const file of files) {
-    const d = evaluateEgress({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file });
-    if (!d.allowed) return { allowed: false, reason: d.reason, file, evaluated: true };
+    // Fail closed. A policy check that throws (a corrupt policy file, an unreadable path, a bug) is not an allow: the answer is "deny", with the
+    // reason, and nothing is sent. This is the only place that decides whether a prompt may leave the machine.
+    let d;
+    try { d = evaluateEgress({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file }); }
+    catch (err) { return { allowed: false, reason: `egress-policy-error: ${String((err && err.message) || err).slice(0, 120)}`, file, evaluated: true, failedClosed: true }; }
+    if (!d || d.allowed !== true) return { allowed: false, reason: (d && d.reason) || 'egress-policy-returned-no-decision', file, evaluated: true, ...(d ? {} : { failedClosed: true }) };
   }
   return { allowed: true, evaluated: true };
+}
+
+// ---- model output hygiene -------------------------------------------------------------------------------------
+
+/**
+ * A model's text is untrusted. It can carry a command for a human or a script to run ("run curl ... | sh to confirm"). Nothing here executes model text, but
+ * these strings reach reports, tickets and fix suggestions that people copy from, so shell-looking content is removed and counted, never passed on.
+ */
+const FENCE = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
+const CMD_WORD = '(?:curl|wget|bash|sh|zsh|sudo|su|rm|chmod|chown|nc|ncat|netcat|python3?|node|perl|ruby|php|powershell|pwsh|cmd(?:\\.exe)?|eval|exec|scp|ssh|dd|mkfs|kill|pkill|git\\s+push|npm\\s+(?:i|install|publish)|pip3?\\s+install|docker\\s+run)';
+const INLINE_CMD = new RegExp('`[^`\\n]*\\b' + CMD_WORD + '\\b[^`\\n]*`|\\$\\([^)]*\\)|\\b(?:curl|wget)\\s+[^\\s]+[^\\n]*\\|\\s*(?:sh|bash)\\b|(?:^|\\n)\\s*(?:\\$|#)\\s+' + CMD_WORD + '\\b[^\\n]*', 'gi');
+export function stripUntrustedCommands(text) {
+  if (typeof text !== 'string' || !text) return { text: text ?? '', stripped: 0 };
+  let n = 0;
+  let out = text.replace(FENCE, () => { n++; return '[command block removed]'; });
+  out = out.replace(INLINE_CMD, () => { n++; return '[command removed]'; });
+  return { text: out, stripped: n };
+}
+function sanitizeReviewStrings(review) {
+  let total = 0;
+  const walk = (v, key) => {
+    if (typeof v === 'string') {
+      if (['promptHash', 'responseHash', 'contextHash', 'entrypointId', 'file', 'role', 'kind', 'conclusion', 'likelihood', 'questionPack', 'status'].includes(key)) return v;
+      const r = stripUntrustedCommands(v); total += r.stripped; return r.text;
+    }
+    if (Array.isArray(v)) return v.map((x) => walk(x, key));
+    if (v && typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = walk(x, k); return o; }
+    return v;
+  };
+  const out = walk(review, '');
+  if (total) out.untrustedCommandsStripped = total;
+  return out;
+}
+
+/** Where a suggestion came from and what checked it. Attached to every review so a reader never mistakes a model's words for a finding. */
+function provenanceOf(model, promptHash) {
+  let host = null; try { host = model.endpoint ? new URL(model.endpoint).hostname : null; } catch { host = null; }
+  const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  return { producer: 'model', provider: model.provider ?? null, model: model.model ?? null, endpointClass: !model.endpoint ? 'none' : loopback ? 'loopback' : 'remote', promptHash, checkedBy: 'deterministic-citation-verifier', promotedToFinding: false };
+}
+
+// ---- prompt anonymization ---------------------------------------------------------------------------------------
+
+/** Replace each real file path with a stable pseudonym (`f_<hash>.<ext>`). The mapping stays in memory; only the pseudonyms leave. */
+export function pseudonymizer(files) {
+  const toPseudo = new Map(); const toReal = new Map();
+  for (const f of [...new Set(files)].sort()) {
+    const ext = (/\.[A-Za-z0-9]{1,6}$/.exec(f) || [''])[0];
+    const p = `f_${sha256(f).slice(0, 10)}${ext}`;
+    toPseudo.set(f, p); toReal.set(p, f);
+  }
+  const swap = (text, map) => { let t = text; for (const [a, b] of [...map].sort((x, y) => y[0].length - x[0].length)) t = t.split(a).join(b); return t; };
+  return { toPseudo: (t) => swap(t, toPseudo), toReal: (t) => swap(t, toReal), size: toPseudo.size };
 }
 
 // ---- response parsing and verification ------------------------------------------------------------------------
@@ -352,7 +409,12 @@ export async function runReviewOnce({ pack, entrypoints, manifests, packageIndex
   const badRedact = redacted.find(r => !r.ok);
   if (badRedact) return { state: 'skipped_by_policy', reason: `redaction refused: ${badRedact.reason}` };
 
-  const { prompt, promptHash } = buildReviewPrompt({ pack, entrypoints, packageTexts: redacted.map(r => r.text), contextHash: manifests[0].contextHash });
+  // Policy-driven anonymization: file paths are replaced by pseudonyms before the prompt is built, and mapped back in the answer before its citations
+  // are checked against the real snapshot. The model never sees a real path, and what is hashed is what was sent.
+  const anon = limits.anonymizePrompts ? pseudonymizer(files) : null;
+  const sendTexts = anon ? redacted.map(r => anon.toPseudo(r.text)) : redacted.map(r => r.text);
+  const sendEntrypoints = anon ? entrypoints.map(e => JSON.parse(anon.toPseudo(JSON.stringify(e)))) : entrypoints;
+  const { prompt, promptHash } = buildReviewPrompt({ pack, entrypoints: sendEntrypoints, packageTexts: sendTexts, contextHash: manifests[0].contextHash });
   const est = estimateTokens(prompt);
   if (est.tokens > limits.maxTokensPerJob) return { state: 'skipped_by_policy', reason: `prompt is about ${est.tokens} tokens, over the ${limits.maxTokensPerJob} per-job limit` };
 
@@ -364,7 +426,9 @@ export async function runReviewOnce({ pack, entrypoints, manifests, packageIndex
     return { state: 'failed', reason: `model call failed: ${String((err && err.message) || err).slice(0, 160)}`, retryable: isRetryableError(err) };
   }
   const usage = { inputTokensEstimated: est.tokens, outputTokensEstimated: Math.ceil(String(raw || '').length / 4), source: 'estimate', redactions: redacted.reduce((n, r) => n + r.redactions, 0) };
-  const review = verifyReview({ raw, pack, entrypoints, manifests, packageIndexes, fileContents, promptHash });
+  const rawReal = anon && typeof raw === 'string' ? anon.toReal(raw) : raw;
+  const review0 = verifyReview({ raw: rawReal, pack, entrypoints, manifests, packageIndexes, fileContents, promptHash });
+  const review = { ...sanitizeReviewStrings(review0), modelProvenance: provenanceOf(model, promptHash), ...(anon ? { promptAnonymized: true } : {}) };
   if (review.status === 'declined') return { state: 'partial', reason: `answer declined: ${review.declineReasons.join(',')}`, review, usage };
   return { state: 'succeeded', reason: null, review, usage };
 }

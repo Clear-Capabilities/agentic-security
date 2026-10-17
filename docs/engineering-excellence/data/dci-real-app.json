@@ -1,0 +1,680 @@
+{
+  "schema": "agentic-security/dci-real-app@1",
+  "labelledBy": "the author of the cases, not an independent reviewer; no case is from an upstream advisory; all are synthetic",
+  "cases": 21,
+  "routes": 39,
+  "overall": {
+    "tp": 9,
+    "fp": 2,
+    "fn": 0,
+    "tn": 20,
+    "unresolved": 8,
+    "routes": 39,
+    "precision": 0.8182,
+    "recall": 1,
+    "precisionOf": 11,
+    "recallOf": 9
+  },
+  "byStack": {
+    "express": {
+      "tp": 9,
+      "fp": 2,
+      "fn": 0,
+      "tn": 16,
+      "unresolved": 2,
+      "routes": 29,
+      "precision": 0.8182,
+      "recall": 1,
+      "precisionOf": 11,
+      "recallOf": 9
+    },
+    "flask": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "unresolved": 6,
+      "routes": 10,
+      "precision": null,
+      "recall": null,
+      "precisionOf": 0,
+      "recallOf": 0
+    }
+  },
+  "byFamily": {
+    "function-level-authorization": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "tn": 4,
+      "unresolved": 1,
+      "routes": 6,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 1,
+      "recallOf": 1
+    },
+    "indirect-ownership": {
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "tn": 0,
+      "unresolved": 0,
+      "routes": 2,
+      "precision": 0.5,
+      "recall": 1,
+      "precisionOf": 2,
+      "recallOf": 1
+    },
+    "missing-middleware": {
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "tn": 8,
+      "unresolved": 3,
+      "routes": 13,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 2,
+      "recallOf": 2
+    },
+    "multi-tenant": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "tn": 3,
+      "unresolved": 0,
+      "routes": 4,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 1,
+      "recallOf": 1
+    },
+    "ownership": {
+      "tp": 4,
+      "fp": 1,
+      "fn": 0,
+      "tn": 5,
+      "unresolved": 4,
+      "routes": 14,
+      "precision": 0.8,
+      "recall": 1,
+      "precisionOf": 5,
+      "recallOf": 4
+    }
+  },
+  "byNonObvious": {
+    "false": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "tn": 17,
+      "unresolved": 6,
+      "routes": 28,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 5,
+      "recallOf": 5
+    },
+    "true": {
+      "tp": 4,
+      "fp": 2,
+      "fn": 0,
+      "tn": 3,
+      "unresolved": 2,
+      "routes": 11,
+      "precision": 0.6667,
+      "recall": 1,
+      "precisionOf": 6,
+      "recallOf": 4
+    }
+  },
+  "perCase": [
+    {
+      "id": "js-mw-1",
+      "stack": "express",
+      "family": "missing-middleware",
+      "nonObvious": false,
+      "why": "the delete route has no authentication middleware",
+      "rows": [
+        {
+          "route": "GET /account/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /account/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-mw-2",
+      "stack": "express",
+      "family": "missing-middleware",
+      "nonObvious": false,
+      "why": "fixed twin of js-mw-1",
+      "rows": [
+        {
+          "route": "GET /account/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /account/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-mw-3",
+      "stack": "express",
+      "family": "missing-middleware",
+      "nonObvious": true,
+      "why": "authentication is applied once for the whole prefix before the routes, so the routes carry no per-route middleware but are protected",
+      "rows": [
+        {
+          "route": "GET /account/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /account/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-mw-4",
+      "stack": "express",
+      "family": "missing-middleware",
+      "nonObvious": true,
+      "why": "the authentication middleware is registered AFTER the route, so it never runs for it",
+      "rows": [
+        {
+          "route": "GET /account/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-mw-5",
+      "stack": "express",
+      "family": "missing-middleware",
+      "nonObvious": true,
+      "why": "router-level authentication; the health route is public by design and carries no data",
+      "rows": [
+        {
+          "route": "GET /api/orders/:id",
+          "label": "safe",
+          "verdict": "not_found",
+          "outcome": "unresolved"
+        },
+        {
+          "route": "GET /api/health",
+          "label": "safe",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-own-1",
+      "stack": "express",
+      "family": "ownership",
+      "nonObvious": false,
+      "why": "read is scoped to the owner, update and delete are not",
+      "rows": [
+        {
+          "route": "GET /notes/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "PUT /notes/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        },
+        {
+          "route": "DELETE /notes/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-own-2",
+      "stack": "express",
+      "family": "ownership",
+      "nonObvious": false,
+      "why": "fixed twin of js-own-1",
+      "rows": [
+        {
+          "route": "GET /notes/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "PUT /notes/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /notes/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-own-3",
+      "stack": "express",
+      "family": "ownership",
+      "nonObvious": true,
+      "why": "the record is loaded unscoped, then the owner is checked and the request refused BEFORE the write: a check in code, not in the query",
+      "rows": [
+        {
+          "route": "PUT /notes/:id",
+          "label": "safe",
+          "verdict": "violated",
+          "outcome": "fp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-own-4",
+      "stack": "express",
+      "family": "ownership",
+      "nonObvious": true,
+      "why": "the owner check runs AFTER the write; the update has already happened when the 403 is sent",
+      "rows": [
+        {
+          "route": "PUT /notes/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-own-5",
+      "stack": "express",
+      "family": "ownership",
+      "nonObvious": true,
+      "why": "the note is owner scoped but its comments are fetched by note id alone: a control for a different resource",
+      "rows": [
+        {
+          "route": "GET /notes/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "GET /notes/:id/comments",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-ind-1",
+      "stack": "express",
+      "family": "indirect-ownership",
+      "nonObvious": true,
+      "why": "ownership is established through the parent project before the delete",
+      "rows": [
+        {
+          "route": "DELETE /tasks/:id",
+          "label": "safe",
+          "verdict": "violated",
+          "outcome": "fp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-ind-2",
+      "stack": "express",
+      "family": "indirect-ownership",
+      "nonObvious": true,
+      "why": "vulnerable twin of js-ind-1: any signed-in user can delete any task",
+      "rows": [
+        {
+          "route": "DELETE /tasks/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-ten-1",
+      "stack": "express",
+      "family": "multi-tenant",
+      "nonObvious": false,
+      "why": "the invoice is tenant scoped, its lines are fetched without the tenant",
+      "rows": [
+        {
+          "route": "GET /invoices/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "GET /invoices/:id/lines",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-ten-2",
+      "stack": "express",
+      "family": "multi-tenant",
+      "nonObvious": false,
+      "why": "fixed twin of js-ten-1",
+      "rows": [
+        {
+          "route": "GET /invoices/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "GET /invoices/:id/lines",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-role-1",
+      "stack": "express",
+      "family": "function-level-authorization",
+      "nonObvious": false,
+      "why": "signed in is not enough to delete users: the role check is missing on one admin route",
+      "rows": [
+        {
+          "route": "GET /admin/users",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /admin/users/:id",
+          "label": "vulnerable",
+          "verdict": "violated",
+          "outcome": "tp"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "js-role-2",
+      "stack": "express",
+      "family": "function-level-authorization",
+      "nonObvious": false,
+      "why": "fixed twin of js-role-1",
+      "rows": [
+        {
+          "route": "GET /admin/users",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /admin/users/:id",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "py-mw-1",
+      "stack": "flask",
+      "family": "missing-middleware",
+      "nonObvious": false,
+      "why": "the delete view has no login_required",
+      "rows": [
+        {
+          "route": "GET /account/<int:id>",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /account/<int:id>",
+          "label": "vulnerable",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "py-mw-2",
+      "stack": "flask",
+      "family": "missing-middleware",
+      "nonObvious": false,
+      "why": "fixed twin of py-mw-1",
+      "rows": [
+        {
+          "route": "GET /account/<int:id>",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /account/<int:id>",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "py-role-1",
+      "stack": "flask",
+      "family": "function-level-authorization",
+      "nonObvious": false,
+      "why": "delete lacks the role check",
+      "rows": [
+        {
+          "route": "GET /admin/users",
+          "label": "safe",
+          "verdict": "satisfied",
+          "outcome": "tn"
+        },
+        {
+          "route": "DELETE /admin/users/<int:id>",
+          "label": "vulnerable",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "py-own-1",
+      "stack": "flask",
+      "family": "ownership",
+      "nonObvious": false,
+      "why": "read is owner scoped, update loads by id alone",
+      "rows": [
+        {
+          "route": "GET /notes/<int:id>",
+          "label": "safe",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        },
+        {
+          "route": "PUT /notes/<int:id>",
+          "label": "vulnerable",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        }
+      ],
+      "unlabelledRoutes": []
+    },
+    {
+      "id": "py-own-2",
+      "stack": "flask",
+      "family": "ownership",
+      "nonObvious": false,
+      "why": "fixed twin of py-own-1",
+      "rows": [
+        {
+          "route": "GET /notes/<int:id>",
+          "label": "safe",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        },
+        {
+          "route": "PUT /notes/<int:id>",
+          "label": "safe",
+          "verdict": "not_applicable",
+          "outcome": "unresolved"
+        }
+      ],
+      "unlabelledRoutes": []
+    }
+  ],
+  "misses": [
+    {
+      "case": "js-mw-5",
+      "stack": "express",
+      "family": "missing-middleware",
+      "route": "GET /api/orders/:id",
+      "label": "safe",
+      "verdict": "not_found",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "js-mw-5",
+      "stack": "express",
+      "family": "missing-middleware",
+      "route": "GET /api/health",
+      "label": "safe",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "js-own-3",
+      "stack": "express",
+      "family": "ownership",
+      "route": "PUT /notes/:id",
+      "label": "safe",
+      "verdict": "violated",
+      "outcome": "fp"
+    },
+    {
+      "case": "js-ind-1",
+      "stack": "express",
+      "family": "indirect-ownership",
+      "route": "DELETE /tasks/:id",
+      "label": "safe",
+      "verdict": "violated",
+      "outcome": "fp"
+    },
+    {
+      "case": "py-mw-1",
+      "stack": "flask",
+      "family": "missing-middleware",
+      "route": "DELETE /account/<int:id>",
+      "label": "vulnerable",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "py-role-1",
+      "stack": "flask",
+      "family": "function-level-authorization",
+      "route": "DELETE /admin/users/<int:id>",
+      "label": "vulnerable",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "py-own-1",
+      "stack": "flask",
+      "family": "ownership",
+      "route": "GET /notes/<int:id>",
+      "label": "safe",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "py-own-1",
+      "stack": "flask",
+      "family": "ownership",
+      "route": "PUT /notes/<int:id>",
+      "label": "vulnerable",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "py-own-2",
+      "stack": "flask",
+      "family": "ownership",
+      "route": "GET /notes/<int:id>",
+      "label": "safe",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    },
+    {
+      "case": "py-own-2",
+      "stack": "flask",
+      "family": "ownership",
+      "route": "PUT /notes/<int:id>",
+      "label": "safe",
+      "verdict": "not_applicable",
+      "outcome": "unresolved"
+    }
+  ],
+  "notRepresentable": [
+    {
+      "family": "state-machine-bypass",
+      "reason": "the context analysis has no extractor for workflow order or state transitions (the E4-01 audit marks workflow-state-check absent); a case could only be answered by a model-assisted pack, which has no measured accuracy"
+    },
+    {
+      "family": "race-toctou",
+      "reason": "a check-then-act race is a property of interleavings, not of one handler's text; no deterministic fact or invariant expresses it"
+    }
+  ]
+}

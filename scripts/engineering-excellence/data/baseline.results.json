@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "cve-replay": {
+      "id": "cve-replay",
+      "label": "Curated CVE replay regression net",
+      "kind": "regression",
+      "command": "npm run bench:cve-replay:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 118878,
+      "peakRssKb": 447712,
+      "reason": null,
+      "summaryTail": "  · [capability] rs-sqli-format-shape: pre:TP post:TN (403ms)\n  · [capability] tf-open-ingress-shape: pre:TP post:TN (451ms)\n  · [deep] cpp-interproc-cmdi-shape: pre:TP post:TN (437ms)\n  · [deep] js-assign-sink-cmdi-shape: pre:TP post:TN (442ms)\n  · [deep] js-interproc-cmdi-shape: pre:TP post:TN (492ms)\n  · [deep] js-interproc-sqli-shape: pre:TP post:TN (364ms)\n  · [deep] kt-trailing-lambda-pathtraversal-shape: pre:TP post:TN (429ms)\n  · [deep] php-superglobal-cmdi-shape: pre:TP post:TN (624ms)\n  · [deep] py-interproc-cmdi-shape: pre:TP post:TN (626ms)\n  · [deep] rs-interproc-sqli-shape: pre:TP post:TN (424ms)\n  · [deep] rs-path-traversal-shape: pre:TP post:TN (405ms)\n  · [deep] rs-ssrf-shape: pre:TP post:TN (410ms)\nCorpus baseline check:\n  ✓ no drift — 220/220 baselined entries still pass",
+      "log": "scripts/engineering-excellence/logs/E0-02/cve-replay.log",
+      "logSha256": "a4b4a311bd5042c676fd729e22c5a6b3fc30426e3068c27524c055f715735d8a",
+      "ranAt": "2026-10-16T12:55:54.555Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "mutation": {
+      "id": "mutation",
+      "label": "Metamorphic and adversarial mutation gate",
+      "kind": "regression",
+      "command": "npm run bench:mutation:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 2656,
+      "peakRssKb": 363712,
+      "reason": null,
+      "summaryTail": "rs-sqli-format-baseline                baseline      detection      true       false       true       PASS\nrs-sqli-bind-adversarial               adversarial   detection      false      false       false      PASS\nrx-exec-baseline-child-process         baseline      detection      true       false       true       PASS\nrx-exec-metamorphic-member-form        metamorphic   detection      true       false       true       PASS\nrx-exec-metamorphic-unresolved-receiver metamorphic   detection      true       false       true       PASS\nrx-exec-metamorphic-rebound-name       metamorphic   detection      true       false       true       PASS\nrx-exec-adversarial-module-const       adversarial   detection      false      false       false      PASS\nrx-exec-adversarial-inline-literal     adversarial   detection      false      false       false      PASS\nrx-exec-adversarial-new-regexp         adversarial   detection      false      false       false      PASS\n------------------------------------------------------------------------------------------------------------\nmetamorphic (verdict must HOLD): 19/19\nadversarial (verdict must FLIP): 22/22\nverdict-flip correctness       : 41/41\n✓ every mutant verdict correct",
+      "log": "scripts/engineering-excellence/logs/E0-02/mutation.log",
+      "logSha256": "4b9808281660c42ccb7cf7d0fa323934e8a592378a7db1eea624580d227df33e",
+      "ranAt": "2026-10-16T12:55:57.625Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "protection-verdict": {
+      "id": "protection-verdict",
+      "label": "Protection verdict gate",
+      "kind": "regression",
+      "command": "npm run bench:protection-verdict:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 344,
+      "peakRssKb": 704,
+      "reason": null,
+      "summaryTail": "transit-metamorphic-reformat               metamorphic   transit    protected            protected            PASS\nadversarial-transit-http-scheme            adversarial   transit    unprotected          unprotected          PASS\nadversarial-transit-tls-verify-disabled    adversarial   transit    unprotected          unprotected          PASS\natrest-baseline-encrypt-then-store         baseline      atRest     protected            protected            PASS\natrest-metamorphic-rename                  metamorphic   atRest     protected            protected            PASS\natrest-metamorphic-reformat                metamorphic   atRest     protected            protected            PASS\nadversarial-atrest-no-encryption           adversarial   atRest     not_assessed         not_assessed         PASS\nadversarial-atrest-encrypt-not-on-path     adversarial   atRest     not_assessed         not_assessed         PASS\n----------------------------------------------------------------------------------------------------------------\nmetamorphic (verdict must HOLD at protected)   : 4/4\nadversarial (verdict must NOT read protected)  : 4/4\nverdict-flip correctness (transit)              : 4/4\nverdict-flip correctness (atRest)                : 4/4\n✓ every transit/atRest protection verdict correct — no false-protected cases found",
+      "log": "scripts/engineering-excellence/logs/E0-02/protection-verdict.log",
+      "logSha256": "4d1dead5a53bde50fb325191349a71c0a95475302e609f3a04a7c42a5059510a",
+      "ranAt": "2026-10-16T12:55:58.430Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "layer-recall": {
+      "id": "layer-recall",
+      "label": "Per-layer recall (curated corpus)",
+      "kind": "regression",
+      "command": "npm run bench:layer-recall:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 109319,
+      "peakRssKb": 438656,
+      "reason": null,
+      "summaryTail": "  ⚠ languages with ZERO taint-layer recall: json, terraform\n    These pass the corpus gate on other layers. The taint engine does not see them.\nTaint-shaped subset only (deep/ tier — provably invisible without deep mode)\nlanguage  entries  IR-TAINT     \n--------------------------------\nc/c++     1        1 (100%)     \njs/ts     3        3 (100%)     \nkotlin    1        1 (100%)     \nphp       1        1 (100%)     \npython    1        1 (100%)     \nrust      3        3 (100%)     \n  languages with NO deep-tier entry yet: c#, go, java, json, ruby, terraform\n  (not zero recall — simply not measured on the taint-shaped subset)\n✓ taint-layer recall matches the baseline exactly (no regression, no unrecorded gain)",
+      "log": "scripts/engineering-excellence/logs/E0-02/layer-recall.log",
+      "logSha256": "91caab0a3db5260509cf703afc05302f785c4469c74f4080f06279a70f473b3c",
+      "ranAt": "2026-10-16T12:57:48.147Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "provenance-accuracy": {
+      "id": "provenance-accuracy",
+      "label": "Finding provenance accuracy",
+      "kind": "regression",
+      "command": "npm run bench:provenance-accuracy:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 5274,
+      "peakRssKb": 476064,
+      "reason": null,
+      "summaryTail": "guard-removal               PRD Scenario B — guard removal                PASS\nmerge                       PRD Scenario D — merge                        PASS\nmulti-touch-same-line       Edge case — several touches to one line bef…  PASS\npath-traversal-direct       PRD Scenario A shape — direct introduction …  PASS\nreintroduction              PRD Scenario E — reintroduction               PASS\nrename                      PRD Scenario C — rename                       FAIL\n    {\"expectedCommit\":\"1b2682889c28b2b5f4a3875913a419c353d290a8\",\"gotStatus\":\"partial\",\"gotCommit\":null}\nroot-commit-no-parent       Edge case — vulnerable line in the true rep…  PASS\nshallow-clone-partial       PRD Scenario F — shallow clone                PASS\nuncommitted-change          PRD Scenario G — uncommitted change           PASS\n------------------------------------------------------------------------------------\n  known-origin accuracy: 12/13 scoreable fixtures matched their documented ground truth\n✓ known-origin accuracy matches or exceeds the baseline (12/13, baseline 12/13)\n  scoring code-injection-eval-direct...\r  scoring command-injection-direct...\r  scoring direct-introduction...\r  scoring direct-sca-version-bump...\r  scoring guard-removal...\r  scoring merge...\r  scoring multi-touch-same-line...\r  scoring path-traversal-direct...\r  scoring reintroduction...\r  scoring rename...\r  scoring root-commit-no-parent...\r  scoring shallow-clone-partial...\r  scoring uncommitted-change...\r                                                            \r",
+      "log": "scripts/engineering-excellence/logs/E0-02/provenance-accuracy.log",
+      "logSha256": "e3348dd49f308da13bc2070931edb1561e230ef1b4e1704492d078f212257021",
+      "ranAt": "2026-10-16T12:57:53.836Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "self-scan": {
+      "id": "self-scan",
+      "label": "Self-scan precision baseline",
+      "kind": "regression",
+      "command": "npm run bench:self-scan:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 110286,
+      "peakRssKb": 3101408,
+      "reason": null,
+      "summaryTail": "> @clear-capabilities/agentic-security-scanner@0.172.0 bench:self-scan:check\n> node ../bench/self-scan/check.mjs\nSelf-scan precision gate:\n  hooks: baseline=21 now=21\n  scanner/src: baseline=665 now=665\n  scripts: baseline=56 now=56\n  polyglot: baseline=0 now=0\n✓ no drift — per-file counts match BASELINE.json exactly",
+      "log": "scripts/engineering-excellence/logs/E0-02/self-scan.log",
+      "logSha256": "980be9768f1576f1a195c2dc227c32ca9800d9cb2ed45e410dd5b343a437abac",
+      "ranAt": "2026-10-16T12:59:44.560Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    },
+    "independent-gate": {
+      "id": "independent-gate",
+      "label": "Independent-population floor check (reads archived results; does not re-measure)",
+      "kind": "archived-floor",
+      "command": "npm run bench:independent:gate:check",
+      "cwd": "scanner",
+      "status": "passed",
+      "outcome": "exited",
+      "exitCode": 0,
+      "durationMs": 194,
+      "peakRssKb": 880,
+      "reason": null,
+      "summaryTail": "> @clear-capabilities/agentic-security-scanner@0.172.0 bench:independent:gate:check\n> node ../scripts/independent-population-gate.mjs\n✓ advisory-local precision/recall/F1 (overall + 9 language floor(s)) held at or above the committed baseline.",
+      "log": "scripts/engineering-excellence/logs/E0-02/independent-gate.log",
+      "logSha256": "26cf06933acbdb625a5541b7a9ad7b676577ed9e65dd006d9bf3355e7cc0bb23",
+      "ranAt": "2026-10-16T12:59:45.160Z",
+      "sourceCommit": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+      "measurementValid": true,
+      "invalidReasons": [],
+      "measuredIn": {
+        "detachedWorktreeOf": "3e6727f94caecd7cc28867c7cf39e17d2b3bed77",
+        "linkedFromSourceCheckout": [
+          "scanner/node_modules",
+          "scanner/vendor"
+        ]
+      }
+    }
+  }
+}

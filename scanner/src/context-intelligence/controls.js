@@ -139,6 +139,51 @@ function clip(s) { return s.trim().slice(0, 160); }
  *   lines   the FILE's lines (0-based array)
  * Returns [{ symbolId, line, category:'control'|'sensitive', kind, subkind, evidence, basis, rejectionSeen, text }]
  */
+/**
+ * Blank the comments (and Python docstrings) of a source file, keeping every character position and newline, so line numbers do not move.
+ * The analysis looks for calls and comparisons in code; a comment that SAYS `ownerId: req.user.id` or `requireUser(req)` is prose, and prose is the
+ * easiest thing for a hostile or merely careless author to write. Strings are left alone (the principal and SQL rules already read around them).
+ */
+export function blankComments(text, file = '') {
+  const src = String(text || '');
+  const hash = /\.(?:py|rb|sh|php|pl|r)$/i.test(file);
+  const dashes = /\.l?hs$/i.test(file);
+  const cLike = !dashes && !/\.(?:py|rb|sh|pl|r)$/i.test(file);
+  const out = src.split('');
+  const n = src.length;
+  let i = 0;
+  const blank = (a, b) => { for (let k = a; k < b && k < n; k++) if (out[k] !== '\n') out[k] = ' '; };
+  while (i < n) {
+    const c = src[i]; const d = src[i + 1];
+    if (c === '"' || c === "'" || c === '`') {
+      if (/\.py$/i.test(file) && src.startsWith(c.repeat(3), i)) {
+        const end = src.indexOf(c.repeat(3), i + 3); const stop = end < 0 ? n : end + 3;
+        blank(i, stop); i = stop; continue;           // a docstring or triple-quoted block is prose
+      }
+      let j = i + 1;
+      while (j < n && src[j] !== c && !(src[j] === '\n' && c !== '`')) { if (src[j] === '\\') j++; j++; }
+      i = j + 1; continue;
+    }
+    if (cLike && c === '/' && d === '*') { const end = src.indexOf('*/', i + 2); const stop = end < 0 ? n : end + 2; blank(i, stop); i = stop; continue; }
+    if (cLike && c === '/' && d === '/' && (i === 0 || /[\s;,)}{\]]/.test(src[i - 1]))) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (hash && c === '#' && !(file.endsWith('.php') && d === '[')) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (dashes && c === '-' && d === '-' && !/[!#$%&*+./<=>?@\\^|~:]/.test(src[i + 2] || ' ')) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (dashes && c === '{' && d === '-') { const end = src.indexOf('-}', i + 2); const stop = end < 0 ? n : end + 2; blank(i, stop); i = stop; continue; }
+    i++;
+  }
+  return out.join('');
+}
+
+function bodyAfterSignature(raw) {
+  const arrow = raw.indexOf('=>');
+  let rest = null;
+  if (arrow >= 0) rest = raw.slice(arrow + 2);
+  else { const m = /\)\s*\{(.*)$/.exec(raw); if (m) rest = m[1]; }
+  if (rest === null) return '';
+  const brace = /^\s*\{(.*)$/.exec(rest);
+  return brace ? brace[1] : rest;
+}
+
 export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
   const out = [];
   const seen = new Set();
@@ -171,7 +216,10 @@ export function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
     const calls = [];
     const re = /([A-Za-z_$][\w$]*(?:(?:\.|::)[A-Za-z_$][\w$]*)*)\s*\(/g;
     let m;
-    if (!isDeclLine) { while ((m = re.exec(raw))) calls.push(m[1]); }
+    // A one-line handler (`app.get('/x', guard, async (req, res) => { res.json(await db.docs.findOne({ id })); })`) is its own declaration
+    // line, so skipping the whole line also skipped its body. Only the SIGNATURE is skipped: the calls after the arrow or the opening brace count.
+    const scanText = isDeclLine ? bodyAfterSignature(raw) : raw;
+    while ((m = re.exec(scanText))) calls.push(m[1]);
     if (haskell && !isDeclLine) {
       const hre = /\b([A-Z][\w.]*\.[a-z][\w']*|[a-z][\w']*)\b/g;
       while ((m = hre.exec(raw))) if (AUTH_NAME.test(m[1]) || HS_SENSITIVE.test(m[1])) calls.push(m[1]);

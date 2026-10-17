@@ -442,7 +442,45 @@ export function complianceRowsFromPrivacy(assessment) {
   }));
 }
 
+/**
+ * Adapter for `posture/compliance-truth.js#assessFrameworkTruth`: six states, of which only `assessed_satisfied` and `assessed_not_satisfied` become OSCAL
+ * findings. Every other state becomes an observation with its own remark, so an incomplete, unverifiable or human-owned control never carries a verdict.
+ */
+const TRUTH_DECISION = Object.freeze({
+  assessed_satisfied: 'satisfied',
+  assessed_not_satisfied: 'not-satisfied',
+  not_assessed: 'unassessed',
+  not_applicable: 'unassessed',
+  requires_human_review: 'unassessed',
+  insufficient_evidence: 'unassessed',
+});
+
+export function complianceRowsFromTruth(assessment) {
+  return ((assessment && assessment.controls) || []).map(c => ({
+    id: c.id,
+    title: c.title || '',
+    decision: TRUTH_DECISION[c.state] || 'unassessed',
+    statusLabel: c.state,
+    known: Object.prototype.hasOwnProperty.call(TRUTH_DECISION, c.state),
+    observations: [...(c.reasons || []), ...(c.observations || [])],
+    props: [
+      _prop('truth-state', c.state),
+      ...(c.codeTestable ? [_prop('code-testable', c.codeTestable)] : []),
+      ...(c.evaluatorStatus ? [_prop('evaluator-status', c.evaluatorStatus)] : []),
+    ],
+  }));
+}
+
 const UNASSESSED_REMARK = {
+  not_assessed:
+    'Not assessed: nothing examined this control. The publisher rates it checkable by code but this tool has no check for it, or the evaluator reported a status this model does not recognise. '
+    + 'This is a gap in the tool, not a finding about the system.',
+  not_applicable:
+    'Declared not applicable by a named person with a reason. The tool never infers this; the declaration is on the observation.',
+  requires_human_review:
+    'Requires human review: the control needs judgement or organisational evidence the scanner cannot supply. Automated signals that cleared are context, not a verdict.',
+  insufficient_evidence:
+    'Insufficient evidence: signals exist for this control but cannot carry a verdict (an incomplete scan, an unverifiable mapping or weak evidence). No satisfied or not-satisfied claim is made.',
   unrecognised:
     'Not assessed: the evaluator reported a status this exporter does not recognise, so no satisfied/'
     + 'not-satisfied claim is made. The raw status is on the assessment-status property. This is a defect '

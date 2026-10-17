@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-jr4p-4xjh-fwvw  app  873 source file(s)
+[err]   ✓ GHSA-jwjp-4649-v8jp  src/SIPSorcery  269 source file(s)
+[err]   ✓ GHSA-jxpj-9j24-w337  apollo-portal  346 source file(s)
+[err]   ✓ GHSA-m2hg-wjq3-28wq  (whole repo)  3 source file(s)
+[err]   ✓ GHSA-m34r-v34r-rf9q  src  58 source file(s)
+[err]   ✓ GHSA-m5q2-4fm3-vfqp  (whole repo)  58 source file(s)
+[err]   ✓ GHSA-m7jc-g4rc-jmvh  modules/backend/widgets  126 source file(s)
+[err]   ✓ GHSA-mf69-r24q-ghhr  src/pairing  9 source file(s)
+[err]   ✓ GHSA-mfx4-hv73-q22v  (whole repo)  168 source file(s)
+[err]   ✓ GHSA-mhwj-73qx-jqxm  (whole repo)  2 source file(s)
+[err]   ✓ GHSA-mmfr-pmjx-hw9w  (whole repo)  268 source file(s)
+[err]   ✓ GHSA-mpmw-f6h6-3g26  modules/backend/controllers  36 source file(s)
+[err]   ✓ GHSA-mqjf-5f49-2fjh  modules/plugin/jdbc/jdbc-postgis  162 source file(s)
+[err]   ✓ GHSA-p279-2cqp-84jg  opendj-server-legacy/src/main/java/org/opends/server/extensions  109 source file(s)
+[err]   ✓ GHSA-p28p-j94q-pg32  core  1503 source file(s)
+[err]   ✓ GHSA-p33q-4h4m-j994  (whole repo)  49 source file(s)
+[err]   ✓ GHSA-p538-c434-8v24  (whole repo)  91 source file(s)
+[err]   ✓ GHSA-p849-8hwh-84j9  packages/plugins/@nocobase/plugin-notification-in-app-message  45 source file(s)
+[err]   ✓ GHSA-pfvm-w89x-94jw  src/SIPSorcery  269 source file(s)
+[err]   ✓ GHSA-pgwh-4jj4-qm8v  src/core/modules/atomic  500 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 148s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

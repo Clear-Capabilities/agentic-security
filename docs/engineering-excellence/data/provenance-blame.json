@@ -1,0 +1,34 @@
+{
+  "schema": "agentic-security/provenance-blame-measurement@1",
+  "target": "scanner/src/sast",
+  "runsPerArm": 2,
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "loadAverage1m": 4.32421875
+  },
+  "cacheOff": {
+    "gitProcessesMedian": 423,
+    "blameProcesses": 109,
+    "provenanceStageMsMedian": 8775,
+    "statuses": {
+      "complete": 21,
+      "partial": 2
+    },
+    "findings": 23
+  },
+  "cacheOn": {
+    "gitProcessesMedian": 390,
+    "blameProcesses": 76,
+    "provenanceStageMsMedian": 7757,
+    "statuses": {
+      "complete": 21,
+      "partial": 2
+    },
+    "findings": 23
+  },
+  "statusesIdentical": true,
+  "note": "budget set to 20 minutes so it does not decide the result; machine was shared with other work, see loadAverage1m",
+  "blameProcessReductionPct": 30.3,
+  "provenanceStageReductionPct": 11.6
+}

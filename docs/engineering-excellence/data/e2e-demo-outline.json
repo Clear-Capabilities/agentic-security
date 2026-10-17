@@ -1,0 +1,109 @@
+{
+  "schema": "agentic-security/e2e-demo-outline@1",
+  "networkAttempts": 0,
+  "steps": [
+    {
+      "id": "start",
+      "summary": "copied examples/assurance-demo (10 files) to a scratch directory; offline mode on; every attempt to open a network connection is refused and counted"
+    },
+    {
+      "id": "scan",
+      "summary": "9 findings (8 medium or above); scan health complete"
+    },
+    {
+      "id": "triage",
+      "summary": "4 of 4 expected true positives were reported; 1 of 3 expected false positives were reported and marked by the reviewer; 3 reported finding(s) have no recorded decision"
+    },
+    {
+      "id": "validate",
+      "summary": "3 candidate(s) from cross-route consistency and the tenant invariant; 3 became findings, 1 of them proven by an executed attacker request; 0 refuted. SQL injection and command injection stay taint findings: nothing was executed for them"
+    },
+    {
+      "id": "patch",
+      "summary": "3 candidate patches applied to scratch copies (2 correct, 1 false fix)"
+    },
+    {
+      "id": "verify",
+      "summary": "2 of 3 patches fully verified; the false fix passed the security re-analysis and the attack replay and was refused on behaviour (owner-can-update-own-note)"
+    },
+    {
+      "id": "sca",
+      "summary": "2 vulnerable dependencies from the local advisory data; 1 reached by a call to the advisory's function, 1 imported but not reached"
+    },
+    {
+      "id": "runtime",
+      "summary": "collection is off until a policy file switches it on (first attempt: refused); after opt-in 2 records were ingested; /search is corroborated by the released build, the /notes/:id records came from an older build and corroborate nothing"
+    },
+    {
+      "id": "sign",
+      "summary": "release package with 10 evidence records signed with a throwaway Ed25519 key; the verdict computed from its own contents is not_deployable"
+    },
+    {
+      "id": "verify-offline",
+      "summary": "the independent verifier accepted the package (exit 0); a copy with one finding's severity lowered was rejected (exit 1); the stated verdict matches the one recomputed from the contents"
+    }
+  ],
+  "verdict": "not_deployable",
+  "blockerCodes": [
+    "OPEN_HIGH_FINDING",
+    "OPEN_HIGH_FINDING"
+  ],
+  "unknownCodes": [
+    "CONTEXT_SIGNAL_UNSETTLED",
+    "RUNTIME_BUILD_MISMATCH"
+  ],
+  "triage": [
+    [
+      "sqli-search",
+      true
+    ],
+    [
+      "sqli-report-constant",
+      true
+    ],
+    [
+      "sqli-lookup-bound",
+      false
+    ],
+    [
+      "command-convert",
+      true
+    ],
+    [
+      "command-probe-list",
+      false
+    ],
+    [
+      "idor-notes-put",
+      true
+    ],
+    [
+      "tenant-invoice-lines",
+      true
+    ]
+  ],
+  "verified": [
+    [
+      "notes-owner-scope",
+      true
+    ],
+    [
+      "notes-deny-all",
+      false
+    ],
+    [
+      "invoice-lines-tenant-scope",
+      true
+    ]
+  ],
+  "sca": [
+    [
+      "acme-xml-lite",
+      true
+    ],
+    [
+      "acme-img-tools",
+      false
+    ]
+  ]
+}

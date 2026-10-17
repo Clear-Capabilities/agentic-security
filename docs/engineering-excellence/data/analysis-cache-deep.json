@@ -1,0 +1,73 @@
+{
+  "schema": "agentic-security/analysis-cache-measurement@1",
+  "corpus": {
+    "dir": "scanner/src/sast",
+    "files": 122,
+    "chars": 1327372,
+    "deepAnalysis": true
+  },
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "memoryGb": 16,
+    "node": "v24.20.0"
+  },
+  "runsPerArm": 5,
+  "arms": {
+    "cold": {
+      "wallMs": {
+        "median": 2820,
+        "min": 2613,
+        "max": 3127
+      },
+      "cpuMs": {
+        "median": 3150
+      },
+      "resumedFiles": 0
+    },
+    "warmUnchanged": {
+      "wallMs": {
+        "median": 2013,
+        "min": 1837,
+        "max": 2188
+      },
+      "cpuMs": {
+        "median": 2464
+      },
+      "resumedFiles": 118
+    },
+    "warmOneFileChanged": {
+      "wallMs": {
+        "median": 2001,
+        "min": 1988,
+        "max": 2018
+      },
+      "cpuMs": {
+        "median": 2453
+      },
+      "resumedFiles": 117
+    },
+    "warmTenFilesChanged": {
+      "wallMs": {
+        "median": 2020,
+        "min": 1976,
+        "max": 2188
+      },
+      "cpuMs": {
+        "median": 2407
+      },
+      "resumedFiles": 109
+    }
+  },
+  "wallReductionPct": {
+    "warmUnchanged": 28.6,
+    "warmOneFileChanged": 29,
+    "warmTenFilesChanged": 28.4
+  },
+  "warmEqualsColdForTheSameTree": true,
+  "caveats": [
+    "measured on a machine that was also running other work",
+    "only the per-file detector stage is cached; cross-file passes, deep analysis and annotation run on every scan, which bounds the gain",
+    "each arm is compared with a cold scan of the same tree, and the canonical findings were checked equal"
+  ]
+}

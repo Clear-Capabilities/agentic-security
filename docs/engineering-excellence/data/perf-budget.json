@@ -1,0 +1,366 @@
+{
+  "schema": "agentic-security/perf-budget@1",
+  "measuredAt": "2026-10-16T21:21:41.238Z",
+  "hardware": {
+    "os": "darwin 27.0.0 arm64",
+    "cpus": 8,
+    "cpuModel": "Apple M2",
+    "memoryGb": 16,
+    "node": "v24.20.0",
+    "loadAverage1mAtStart": 2.58
+  },
+  "budgetRule": "Wall budget = 1.5 x the observed P95, peak RSS budget = 1.5 x the observed maximum, rounded up to a whole second and 50 MB. The rule was fixed before the numbers were seen. The headroom absorbs machine noise; it is a regression tripwire for the machine that measured it, not a service level, and N is small (3 to 7), so a P95 is close to the maximum.",
+  "classes": [
+    {
+      "id": "small",
+      "dir": "examples/assurance-demo",
+      "note": "the end-to-end demo project (3 source files, two languages)",
+      "samples": [
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 235,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 208,
+          "maxRssMb": 217,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 236,
+          "cpuMs": 208,
+          "maxRssMb": 218,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 236,
+          "cpuMs": 210,
+          "maxRssMb": 215,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 230,
+          "cpuMs": 200,
+          "maxRssMb": 217,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 3,
+          "wallMs": 234,
+          "cpuMs": 209,
+          "maxRssMb": 217,
+          "findings": 9,
+          "health": "complete",
+          "conditions": []
+        }
+      ],
+      "summary": {
+        "n": 7,
+        "ok": 7,
+        "errors": 0,
+        "notComplete": 0,
+        "files": 3,
+        "wallMs": {
+          "p50": 234,
+          "p95": 236,
+          "min": 230,
+          "max": 236
+        },
+        "cpuMs": {
+          "p50": 209
+        },
+        "maxRssMb": {
+          "p50": 217,
+          "max": 218
+        },
+        "findings": [
+          9
+        ]
+      },
+      "budget": {
+        "wallMsP95": 1000,
+        "maxRssMb": 350
+      },
+      "verdict": {
+        "green": true,
+        "problems": []
+      }
+    },
+    {
+      "id": "medium",
+      "dir": "scanner/src/sast",
+      "note": "a module of this repository (about 120 source files, 1.3 MB)",
+      "samples": [
+        {
+          "ok": true,
+          "files": 122,
+          "wallMs": 2975,
+          "cpuMs": 4156,
+          "maxRssMb": 546,
+          "findings": 22,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 122,
+          "wallMs": 3002,
+          "cpuMs": 4208,
+          "maxRssMb": 558,
+          "findings": 22,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 122,
+          "wallMs": 2982,
+          "cpuMs": 4177,
+          "maxRssMb": 563,
+          "findings": 22,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 122,
+          "wallMs": 2975,
+          "cpuMs": 4174,
+          "maxRssMb": 555,
+          "findings": 22,
+          "health": "complete",
+          "conditions": []
+        },
+        {
+          "ok": true,
+          "files": 122,
+          "wallMs": 2977,
+          "cpuMs": 4146,
+          "maxRssMb": 548,
+          "findings": 22,
+          "health": "complete",
+          "conditions": []
+        }
+      ],
+      "summary": {
+        "n": 5,
+        "ok": 5,
+        "errors": 0,
+        "notComplete": 0,
+        "files": 122,
+        "wallMs": {
+          "p50": 2977,
+          "p95": 3002,
+          "min": 2975,
+          "max": 3002
+        },
+        "cpuMs": {
+          "p50": 4174
+        },
+        "maxRssMb": {
+          "p50": 555,
+          "max": 563
+        },
+        "findings": [
+          22
+        ]
+      },
+      "budget": {
+        "wallMsP95": 5000,
+        "maxRssMb": 850
+      },
+      "verdict": {
+        "green": true,
+        "problems": []
+      }
+    },
+    {
+      "id": "large",
+      "dir": "scanner/src",
+      "note": "the scanner source tree (about 830 source files)",
+      "samples": [
+        {
+          "ok": true,
+          "files": 829,
+          "wallMs": 25564,
+          "cpuMs": 32136,
+          "maxRssMb": 1232,
+          "findings": 464,
+          "health": "partial",
+          "conditions": [
+            "deep analysis stopped short (analysis_incomplete): function-limit x1, summary-budget x1"
+          ]
+        },
+        {
+          "ok": true,
+          "files": 829,
+          "wallMs": 25850,
+          "cpuMs": 32450,
+          "maxRssMb": 1112,
+          "findings": 464,
+          "health": "partial",
+          "conditions": [
+            "deep analysis stopped short (analysis_incomplete): function-limit x1, summary-budget x1"
+          ]
+        },
+        {
+          "ok": true,
+          "files": 829,
+          "wallMs": 25625,
+          "cpuMs": 32255,
+          "maxRssMb": 1232,
+          "findings": 464,
+          "health": "partial",
+          "conditions": [
+            "deep analysis stopped short (analysis_incomplete): function-limit x1, summary-budget x1"
+          ]
+        }
+      ],
+      "summary": {
+        "n": 3,
+        "ok": 3,
+        "errors": 0,
+        "notComplete": 3,
+        "files": 829,
+        "wallMs": {
+          "p50": 25625,
+          "p95": 25850,
+          "min": 25564,
+          "max": 25850
+        },
+        "cpuMs": {
+          "p50": 32255
+        },
+        "maxRssMb": {
+          "p50": 1232,
+          "max": 1232
+        },
+        "findings": [
+          464
+        ]
+      },
+      "budget": {
+        "wallMsP95": 39000,
+        "maxRssMb": 1850
+      },
+      "verdict": {
+        "green": false,
+        "problems": [
+          "3 of 3 runs finished with a scan health other than complete"
+        ]
+      }
+    }
+  ],
+  "warm": {
+    "schema": "agentic-security/analysis-cache-measurement@1",
+    "corpus": {
+      "dir": "scanner/src/sast",
+      "files": 122,
+      "chars": 1327372,
+      "deepAnalysis": false
+    },
+    "hardware": {
+      "os": "darwin 27.0.0 arm64",
+      "cpus": 8,
+      "memoryGb": 16,
+      "node": "v24.20.0"
+    },
+    "runsPerArm": 5,
+    "arms": {
+      "cold": {
+        "wallMs": {
+          "median": 1685,
+          "min": 1645,
+          "max": 1869
+        },
+        "cpuMs": {
+          "median": 1899
+        },
+        "resumedFiles": 0
+      },
+      "warmUnchanged": {
+        "wallMs": {
+          "median": 925,
+          "min": 889,
+          "max": 978
+        },
+        "cpuMs": {
+          "median": 1014
+        },
+        "resumedFiles": 118
+      },
+      "warmOneFileChanged": {
+        "wallMs": {
+          "median": 982,
+          "min": 921,
+          "max": 1016
+        },
+        "cpuMs": {
+          "median": 1050
+        },
+        "resumedFiles": 117
+      },
+      "warmTenFilesChanged": {
+        "wallMs": {
+          "median": 1081,
+          "min": 987,
+          "max": 1126
+        },
+        "cpuMs": {
+          "median": 1244
+        },
+        "resumedFiles": 109
+      }
+    },
+    "wallReductionPct": {
+      "warmUnchanged": 45.1,
+      "warmOneFileChanged": 41.7,
+      "warmTenFilesChanged": 35.8
+    },
+    "warmEqualsColdForTheSameTree": true,
+    "caveats": [
+      "measured on a machine that was also running other work",
+      "only the per-file detector stage is cached; cross-file passes, deep analysis and annotation run on every scan, which bounds the gain",
+      "each arm is compared with a cold scan of the same tree, and the canonical findings were checked equal"
+    ]
+  },
+  "limits": [
+    "N is 3 to 7 per class, so P95 is effectively the slowest sample; it describes this machine on this day, not a population.",
+    "Corpora are this repository's own code and fixtures, JavaScript heavy; a Java or monorepo-scale project (the baseline run needed 779 s for apache/camel) is far outside these classes and is covered by the timeout reproduction, not by these budgets.",
+    "Each sample scans a COPY of the corpus in the OS temp folder, with the scan root set and no git history, so history-dependent steps (finding provenance, blame) do not run; an earlier version scanned in place and was several times slower, which is why the first draft of this report is not comparable. Wall time can exceed CPU time when the scan waits on a child process.",
+    "Findings counts are shown to prove every sample did the same work; a changed count would invalidate a comparison."
+  ]
+}
