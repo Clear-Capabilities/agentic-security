@@ -972,10 +972,15 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
 
   // Only the three slow, inputs-determined gates. Everything else is either
   // sub-second or inspects live state that is not in the key.
-  const CACHEABLE = new Set(['test-suite', 'corpus-gate', 'self-scan-gate']);
+  // The benches below run the SAME npm script in the pre-push gate, so a pass recorded there for this exact tree
+  // (same key: commit, tree, bundle, Node and python versions, environment) is reused instead of re-derived. The
+  // timing benches (ttff, memory, provenance overhead) and the release closure are deliberately NOT here: they measure
+  // this machine now, and the closure binds to the exact commit being tagged.
+  const CACHEABLE = new Set(['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate']);
   const cachedProvenance = new Map();
 
   const results = new Map();
+  const durations = new Map();
   const evaluate = (id, realFn) => {
     if (!planned.has(id)) return;
     const fn = overrides[id] || realFn;
@@ -1000,6 +1005,7 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
         by: 'release-check', durationMs: Date.now() - startedCheck,
       }, { signer: cacheSigner });
     }
+    durations.set(id, Date.now() - startedCheck);
     results.set(id, r);
   };
 
@@ -1132,7 +1138,8 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
       out.write(`SKIP  ${check.title}  (--fast)\n`);
       continue;
     }
-    out.write(`${r.ok ? 'PASS' : 'FAIL'}  ${check.title}\n`);
+    const took = durations.get(check.id);
+    out.write(`${r.ok ? 'PASS' : 'FAIL'}  ${check.title}${took >= 5000 ? `  (${Math.round(took / 1000)}s)` : ''}\n`);
     // A reused verdict always says so. Skipping work silently would make a
     // green gate indistinguishable from a gate that never ran.
     if (cachedProvenance.has(check.id)) out.write(`      ↳ ${cachedProvenance.get(check.id)}\n`);

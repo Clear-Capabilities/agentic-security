@@ -777,3 +777,15 @@ test('cache wiring: with NO injected bundle or python, the real facts are read a
   const k = ctx.keyFor(FAKE);
   assert.ok(k && /^[0-9a-f]{64}$/.test(k.key), 'a key must be producible from the real bundle and python');
 });
+
+test('summarize shows how long a check that actually ran took, and stays quiet for fast or reused checks', () => {
+  const pass = { ok: true, errors: [], warnings: [] };
+  const s = summarize([
+    { id: 'a', title: 'Slow check', result: pass, ms: 125000 },
+    { id: 'b', title: 'Quick check', result: pass, ms: 40 },
+    { id: 'c', title: 'Reused check', result: pass },
+  ]);
+  assert.ok(s.lines.includes('PASS  Slow check  (125s)'), s.lines.join('|'));
+  assert.ok(s.lines.includes('PASS  Quick check'));
+  assert.ok(s.lines.includes('PASS  Reused check'));
+});

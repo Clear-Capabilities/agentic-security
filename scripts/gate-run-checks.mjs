@@ -78,7 +78,7 @@ export async function executeChecks({ checks, runCheck, scoped = null, legacy = 
     // 3. Record passes sequentially (one writer: the cache file is a single signed document).
     for (const o of outcomes) {
       const { check, keyInfo } = o.p;
-      entries.push({ ...check, result: o.result, ...(o.cached ? { cached: o.cached } : {}) });
+      entries.push({ ...check, result: o.result, ...(o.cached ? { cached: o.cached } : {}), ...(o.ran ? { ms: o.ms } : {}) });
       if (!o.ran || !o.result.ok || !check.npmScript) continue;
       if (scoped && keyInfo) {
         const after = scoped.keyFor(check);
