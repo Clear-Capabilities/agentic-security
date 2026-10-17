@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-qvqr-5cv7-wh35  (whole repo)  73 source file(s)
+[err]   ✓ GHSA-r2v3-8gwf-7ghm  (whole repo)  23 source file(s)
+[err]   ✓ GHSA-r5vv-ff45-prp2  src  59 source file(s)
+[err]   ✓ GHSA-r9r3-g9fp-3q4q  app/Http  182 source file(s)
+[err]   ✓ GHSA-rg4h-fpcp-2qm8  src/Kiota.Builder  395 source file(s)
+[err]   ✓ GHSA-rjg7-r26h-cfp2  app  873 source file(s)
+[err]   ✓ GHSA-rm43-82j9-r4mj  (whole repo)  268 source file(s)
+[err]   ✓ GHSA-rmxw-pq4x-3fvh  (whole repo)  136 source file(s)
+[err]   ✓ GHSA-rr89-w3h9-m66j  (whole repo)  136 source file(s)
+[err]   ✓ GHSA-rvmm-v933-jgxq  src/controllers  51 source file(s)
+[err]   ✓ GHSA-rx7j-mw4c-76g9  (whole repo)  110 source file(s)
+[err]   ✓ GHSA-rxrh-4j9h-xgg9  src/Configuration  171 source file(s)
+[err]   ✓ GHSA-v46j-h43h-rwrm  app  150 source file(s)
+[err]   ✓ GHSA-v529-vhwc-wfc5  openc3  1002 source file(s)
+[err]   ✓ GHSA-v5rc-cpwc-cfpr  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-v6mx-mf47-r5wg  (whole repo)  55 source file(s)
+[err]   ✓ GHSA-v8fg-2rw7-q452  src  144 source file(s)
+[err]   ✓ GHSA-v8j2-5f9p-fmh4  extensions/webhooks  8 source file(s)
+[err]   ✓ GHSA-vchh-r53j-8mpw  pkg/apis  16 source file(s)
+[err]   ✓ GHSA-vgp4-2fc4-qff2  modules/backend/models  12 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 109s
+[err] 2 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-2rr5-8q37-2w7h  (whole repo)  249 source file(s)
+[err]   ✓ GHSA-3277-h8g9-qj5f  modules/backend  474 source file(s)
+[err]   ✓ GHSA-32h4-44jj-c5vx  services/src/main/java/org/keycloak/services  392 source file(s)
+[err]   ✓ GHSA-3496-9g83-7v6x  (whole repo)  37 source file(s)
+[err]   ✓ GHSA-34pj-2622-jvxq  packages  961 source file(s)
+[err]   ✓ GHSA-35p6-xmwp-9g52  lib  111 source file(s)
+[err]   ✓ GHSA-382c-vx95-w3p5  (whole repo)  293 source file(s)
+[err]   ✓ GHSA-386q-5hp3-95m9  src  58 source file(s)
+[err]   ✓ GHSA-39pv-4j6c-2g6v  packages/common  186 source file(s)
+[err]   ✓ GHSA-3f7w-8rr8-f37f  (whole repo)  142 source file(s)
+[err]   ✓ GHSA-3hgv-jr5j-cg9x  app/Http  182 source file(s)
+[err]   ✓ GHSA-3hrf-2gc2-mx32  src/Kiota.Builder  395 source file(s)
+[err]   ✓ GHSA-3r53-75j5-3g7j  ui/src  371 source file(s)
+[err]   ✓ GHSA-3x6r-wxxg-53vv  backend/webdav  12 source file(s)
+[err]   ✓ GHSA-4249-gjr8-jpq3  (whole repo)  48 source file(s)
+[err]   ✓ GHSA-42cj-99w8-cp2p  (whole repo)  1251 source file(s)
+[err]   ✓ GHSA-45ph-gxxr-gwgw  xwiki-platform-core/xwiki-platform-livedata  165 source file(s)
+[err]   ✓ GHSA-45pq-889g-fcgh  cmd  251 source file(s)
+[err]   ✓ GHSA-47pj-3jcm-6whg  libs  452 source file(s)
+[err]   ✓ GHSA-49h3-cwhj-4737  (whole repo)  460 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 100s
+[err] 5 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

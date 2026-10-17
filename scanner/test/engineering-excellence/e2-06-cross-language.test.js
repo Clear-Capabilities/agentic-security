@@ -6,6 +6,9 @@ import assert from 'node:assert/strict';
 import { runFullScan } from '../../src/engine.js';
 import { setStateWritesEnabled } from '../../src/posture/state-dir.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 setStateWritesEnabled(false);
 const scan = async (file, code) => (await runFullScan({ fileContents: { [file]: code }, scanRoot: null, deep: true })).findings.filter((f) => f.file === file && f.severity !== 'info' && !/x-powered-by|Missing/i.test(f.vuln || ''));
 const has = (fs, re) => fs.some((f) => re.test(f.vuln));

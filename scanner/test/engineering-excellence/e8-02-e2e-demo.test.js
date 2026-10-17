@@ -7,6 +7,9 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const DEMO = path.join(ROOT, 'scripts/engineering-excellence/e2e-demo.mjs');
 const VERIFY = path.join(ROOT, 'scripts/verify-release-package.mjs');

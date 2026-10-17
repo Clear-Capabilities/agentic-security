@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-wmjg-vqhv-q5p5  (whole repo)  332 source file(s)
+[err]   ✓ GHSA-wvh6-f5jh-8gw4  (whole repo)  80 source file(s)
+[err]   ✓ GHSA-wvpp-8hx9-p66j  (whole repo)  143 source file(s)
+[err]   ✓ GHSA-wxhm-2mq7-7697  runtime  833 source file(s)
+[err]   ✓ GHSA-wxw3-q3m9-c3jr  packages/better-auth  353 source file(s)
+[err]   ✓ GHSA-x36r-4347-pm5x  (whole repo)  132 source file(s)
+[err]   ✓ GHSA-x3g7-qrwc-f6c5  (whole repo)  134 source file(s)
+[err]   ✓ GHSA-x426-x7cc-3fpc  (whole repo)  7 source file(s)
+[err]   ✓ GHSA-x487-866m-p8hr  (whole repo)  316 source file(s)
+[err]   ✓ GHSA-x677-9fxg-v5c5  (whole repo)  656 source file(s)
+[err]   ✓ GHSA-x6p3-76f2-xxvh  (whole repo)  33 source file(s)
+[err]   ✓ GHSA-x768-8642-mmq9  (whole repo)  316 source file(s)
+[err]   ✓ GHSA-xc5w-4v5w-7x65  (whole repo)  210 source file(s)
+[err]   ✓ GHSA-xg2h-5xr2-29jw  src/Kiota.Builder  395 source file(s)
+[err]   ✓ GHSA-xh5m-36r6-47m3  src/PhpSpreadsheet  531 source file(s)
+[err]   ✓ GHSA-xj53-j257-hxvg  manager  130 source file(s)
+[err]   ✓ GHSA-xpmj-wjcp-6pww  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-xpr4-8vp6-c87j  (whole repo)  366 source file(s)
+[err]   ✓ GHSA-xqr9-4wvv-gvch  manager  130 source file(s)
+[err]   ✓ GHSA-xrhx-7g5j-rcj5  (whole repo)  363 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 144s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

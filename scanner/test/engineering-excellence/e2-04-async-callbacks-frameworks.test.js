@@ -8,6 +8,9 @@ import { cleanup } from './helpers.js';
 import { runScan } from '../../src/runScan.js';
 import { buildProjectIR } from '../../src/ir/index.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const H = "const { exec } = require('child_process');\nconst express = require('express');\nconst app = express();\n";
 async function cmdi(src) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ee-e2d-'));

@@ -13,6 +13,9 @@ import { buildSnapshotRef } from '../../src/posture/assurance/evidence-registry.
 import { MANDATORY_KINDS, buildReleasePackage, signReleasePackage, signedBytes } from '../../src/posture/assurance/release-package.js';
 import { verifyReleasePackage, MINIMUM_KINDS } from '../../src/posture/assurance/release-package-verify.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const VERIFIER = path.join(ROOT, 'scripts', 'verify-release-package.mjs');
 const { samples, finding } = await buildSamples();

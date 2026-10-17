@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-c2j3-45gr-mqc4  (whole repo)  34 source file(s)
+[err]   ✓ GHSA-c2w2-prh8-qm98  (whole repo)  32 source file(s)
+[err]   ✓ GHSA-c32j-vqhx-rx3x  (whole repo)  86 source file(s)
+[err]   ✓ GHSA-c4gh-rv8h-q9vw  runtime/typescript  225 source file(s)
+[err]   ✓ GHSA-cf3w-g86h-35x4  (whole repo)  89 source file(s)
+[err]   ✓ GHSA-cgfv-jrfp-2r7v  manager  130 source file(s)
+[err]   ✓ GHSA-ch52-px8q-f22j  ghost/core/core/server/lib  17 source file(s)
+[err]   ✓ GHSA-cmxg-94mg-jq94  packages/utils  24 source file(s)
+[err]   ✓ GHSA-cr5q-6q9f-rq6q  (whole repo)  3065 source file(s)
+[err]   ✓ GHSA-crjr-9rc5-ghw8  (whole repo)  250 source file(s)
+[err]   ✓ GHSA-cw28-63x4-37c3  extensions/voice-call  85 source file(s)
+[err]   ✓ GHSA-cwj3-vqpp-pmxr  src/agents/tools  118 source file(s)
+[err]   ✓ GHSA-cxjq-mrr5-89rv  pkg/middlewares  98 source file(s)
+[err]   ✓ GHSA-cxwf-qc32-375f  (whole repo)  309 source file(s)
+[err]   ✓ GHSA-f27w-vcwj-c954  (whole repo)  11 source file(s)
+[err]   ✓ GHSA-f3cj-j4f6-wq85  (whole repo)  3410 source file(s)
+[err]   ✓ GHSA-f3qq-49m6-rw8f  (whole repo)  393 source file(s)
+[err]   ✓ GHSA-f5fm-9jmp-c88r  src/gateway  441 source file(s)
+[err]   ✓ GHSA-f5vj-f2hx-8m93  (whole repo)  338 source file(s)
+[err]   ✓ GHSA-f7g3-2cg6-f5hj  (whole repo)  25177 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 145s
+[err] 4 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

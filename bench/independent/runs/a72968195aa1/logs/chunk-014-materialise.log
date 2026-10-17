@@ -1,0 +1,5 @@
+[err]   ✓ GHSA-xvg2-cgv6-6h7v  (whole repo)  24 source file(s)
+[err]   ✓ GHSA-xx22-p4ch-683r  (whole repo)  63 source file(s)
+[err]   ✓ GHSA-xxpx-f366-4xpq  src/elements  102 source file(s)
+[err] 
+[err] materialised 3, failed 0, of 3 — 9s

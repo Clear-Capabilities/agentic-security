@@ -11,6 +11,9 @@ import { analysisLimits } from '../../src/dataflow/analysis-limits.js';
 import { buildSemanticGraph, validateGraph } from '../../src/ir/semantic-graph.js';
 import { hasTaintedDescendant, isCoveredBy } from '../../src/dataflow/access-paths.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const H = "const { exec } = require('child_process');\nexports.h = (req, res) => {\n";
 const T = '\n};\n';
 async function cmdi(src, file = 'a.js') {

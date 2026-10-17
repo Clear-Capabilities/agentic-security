@@ -421,7 +421,8 @@ async function adjudicate(candidates, opts = {}) {
         origin: 'context-intelligence', questionPack: c.questionPack, witnesses: c.witnesses, witnessCount: c.witnesses.length,
         sourceSpanEvidence: c.sourceSpanEvidence, scopeIntegrity: c.scopeIntegrity, reviewStatus: c.reviewStatus,
         uncertainties: c.uncertainties, recommendedValidation: c.recommendedValidation,
-        note: 'A model hypothesis checked for citations, not a proof. Severity comes from the confirmation tier only.',
+        ...(c.deterministic ? { deterministic: c.deterministic } : {}),
+        note: c.deterministic ? 'Derived from the code analysis and a deterministic counterexample attempt; no model produced this. Severity comes from the confirmation tier only.' : 'A model hypothesis checked for citations, not a proof. Severity comes from the confirmation tier only.',
       },
     };
   };
@@ -774,7 +775,8 @@ const BUILD = [
   { language: 'javascript/typescript', kind: 'http', frameworks: 'Express-style call registration (get/post/put/patch/delete/all, router.use, app.use)', status: 'verified', evidence: [T('build-js.test.js')], limits: 'Router mounts in another file and middleware factories are not followed (reported as router-mount-not-resolved); destructured and named imports are followed, re-exports and tsconfig path aliases are not.' },
   { language: 'python', kind: 'http', frameworks: 'decorator registration (Flask/FastAPI-style @app.route / @router.get), FastAPI Depends()/Security() guards', status: 'experimental', evidence: [T('build-python-haskell.test.js'), T('frameworks.test.js')], limits: 'Decorator guards are read from the decorator lines and Depends() guards from the signature (only dependencies named like an auth or user provider bind the principal); framework-level before_request hooks and Django URL conf are not modelled.' },
   { language: 'haskell', kind: 'http', frameworks: 'Scotty, WAI, Servant, Yesod (through the existing web model)', status: 'verified', evidence: [T('build-python-haskell.test.js'), T('frameworks.test.js')], limits: 'Static source analysis; the existing web model decides what a route is. Dynamic routes are reported unresolved.' },
-  { language: 'java/kotlin/c#/go/php/ruby/rust', kind: 'http', frameworks: 'whatever the engine route scan recognises', status: 'unsupported', evidence: [], limits: 'No fixture proves this, so it is listed as unsupported even though some routes may resolve: Handlers are resolved only for decorator/annotation-style registration; no dedicated fixtures here.' },
+  { language: 'php', kind: 'http', frameworks: 'Laravel Route:: registration (the entry point only)', status: 'experimental', evidence: ['test/engineering-excellence/e4-01-dci-audit.test.js'], limits: 'Measured by the E4-01 audit on one fixture: the routes resolve, but no control or sensitive operation was extracted from the handlers.' },
+  { language: 'java/kotlin/c#/go/ruby/rust', kind: 'http', frameworks: 'whatever the engine route scan recognises', status: 'unsupported', evidence: [], limits: 'Measured by the E4-01 audit (docs/engineering-excellence/DCI_MATURITY.md) on one fixture per language (Spring, net/http, ASP.NET, Rails): no entry point was found, so no bundle is built.' },
   { language: 'any with a recognised surface', kind: 'webhook/queue/cron/upload/cli', frameworks: 'existing entry-point inventory', status: 'experimental', evidence: [T('build-js.test.js')], limits: 'Handler is the enclosing declaration of the surface; no framework wiring beyond that.' },
   { language: 'haskell', kind: 'compiler metadata import', frameworks: 'hie-export/1 JSON export of GHC declarations and references', status: 'experimental', evidence: [T('hie-adapter.test.js')], limits: 'Reads an export; never runs GHC or hiedb. The export is validated against the source snapshot. No export produced by a real GHC run is checked in.' },
   { language: 'any', kind: 'compiler metadata build', frameworks: 'automatic metadata generation', status: 'blocked', evidence: [], limits: 'Running a compiler on untrusted source needs a sandbox proof this build does not have (Template Haskell, custom Setup and plugins run code).' },
@@ -1146,6 +1148,8 @@ async function cmdReview(root, args, format) {
         maxCalls: num(flag(args, 'max-calls')) || config.review.maxCalls,
         maxWallSeconds: num(flag(args, 'max-wall-seconds')) || config.review.maxWallSeconds,
         maxTokensPerJob: config.review.maxTokensPerJob,
+        maxTokensPerRepo: config.review.maxTokensPerRepo,
+        anonymizePrompts: config.review.anonymizePrompts,
         maxRetries: config.review.maxRetries,
         jobTimeoutMs: (num(flag(args, 'job-timeout-seconds')) || 120) * 1000,
         maxCostUsd: num(flag(args, 'max-cost-usd')) ?? config.review.maxCostUsd,
@@ -1258,7 +1262,7 @@ const DEFAULT_CONFIG = Object.freeze({
   maxFiles: 3000,
   semanticMetadata: { mode: 'off', haskellHieDir: null },
   context: { profile: 'standard', maxTokens: null, pruneLowValue: true, maxSymbols: 60, maxDepth: 12 },
-  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3 },
+  review: { enabled: false, allowRemote: false, questionPacks: ['authz-idor'], concurrency: 2, maxCalls: 100, maxWallSeconds: 900, maxCostUsd: null, maxTokensPerJob: 40000, maxRetries: 3, maxTokensPerRepo: null, anonymizePrompts: false },
   replay: { contentAddressed: true, retention: 'inherit' },
 });
 
@@ -1307,6 +1311,8 @@ function normalizeConfig(raw) {
       maxCostUsd: Number.isFinite(rv.maxCostUsd) && rv.maxCostUsd >= 0 ? rv.maxCostUsd : null,
       maxTokensPerJob: clamp(rv.maxTokensPerJob, 1000, 400000, d.review.maxTokensPerJob),
       maxRetries: clamp(rv.maxRetries, 0, 3, d.review.maxRetries),
+      maxTokensPerRepo: Number.isFinite(rv.maxTokensPerRepo) && rv.maxTokensPerRepo >= 1000 ? Math.trunc(rv.maxTokensPerRepo) : null,
+      anonymizePrompts: rv.anonymizePrompts === true,
     },
     replay: { contentAddressed: rp.contentAddressed !== false, retention: typeof rp.retention === 'string' ? rp.retention : 'inherit' },
   };
@@ -1333,6 +1339,7 @@ function loadConfig(root) {
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   $E: () => (/* binding */ blankComments),
 /* harmony export */   TM: () => (/* binding */ looksLikeTelemetry),
 /* harmony export */   gs: () => (/* binding */ signatureText),
 /* harmony export */   kl: () => (/* binding */ analyzeSymbolText),
@@ -1480,6 +1487,51 @@ function clip(s) { return s.trim().slice(0, 160); }
  *   lines   the FILE's lines (0-based array)
  * Returns [{ symbolId, line, category:'control'|'sensitive', kind, subkind, evidence, basis, rejectionSeen, text }]
  */
+/**
+ * Blank the comments (and Python docstrings) of a source file, keeping every character position and newline, so line numbers do not move.
+ * The analysis looks for calls and comparisons in code; a comment that SAYS `ownerId: req.user.id` or `requireUser(req)` is prose, and prose is the
+ * easiest thing for a hostile or merely careless author to write. Strings are left alone (the principal and SQL rules already read around them).
+ */
+function blankComments(text, file = '') {
+  const src = String(text || '');
+  const hash = /\.(?:py|rb|sh|php|pl|r)$/i.test(file);
+  const dashes = /\.l?hs$/i.test(file);
+  const cLike = !dashes && !/\.(?:py|rb|sh|pl|r)$/i.test(file);
+  const out = src.split('');
+  const n = src.length;
+  let i = 0;
+  const blank = (a, b) => { for (let k = a; k < b && k < n; k++) if (out[k] !== '\n') out[k] = ' '; };
+  while (i < n) {
+    const c = src[i]; const d = src[i + 1];
+    if (c === '"' || c === "'" || c === '`') {
+      if (/\.py$/i.test(file) && src.startsWith(c.repeat(3), i)) {
+        const end = src.indexOf(c.repeat(3), i + 3); const stop = end < 0 ? n : end + 3;
+        blank(i, stop); i = stop; continue;           // a docstring or triple-quoted block is prose
+      }
+      let j = i + 1;
+      while (j < n && src[j] !== c && !(src[j] === '\n' && c !== '`')) { if (src[j] === '\\') j++; j++; }
+      i = j + 1; continue;
+    }
+    if (cLike && c === '/' && d === '*') { const end = src.indexOf('*/', i + 2); const stop = end < 0 ? n : end + 2; blank(i, stop); i = stop; continue; }
+    if (cLike && c === '/' && d === '/' && (i === 0 || /[\s;,)}{\]]/.test(src[i - 1]))) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (hash && c === '#' && !(file.endsWith('.php') && d === '[')) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (dashes && c === '-' && d === '-' && !/[!#$%&*+./<=>?@\\^|~:]/.test(src[i + 2] || ' ')) { let j = src.indexOf('\n', i); if (j < 0) j = n; blank(i, j); i = j; continue; }
+    if (dashes && c === '{' && d === '-') { const end = src.indexOf('-}', i + 2); const stop = end < 0 ? n : end + 2; blank(i, stop); i = stop; continue; }
+    i++;
+  }
+  return out.join('');
+}
+
+function bodyAfterSignature(raw) {
+  const arrow = raw.indexOf('=>');
+  let rest = null;
+  if (arrow >= 0) rest = raw.slice(arrow + 2);
+  else { const m = /\)\s*\{(.*)$/.exec(raw); if (m) rest = m[1]; }
+  if (rest === null) return '';
+  const brace = /^\s*\{(.*)$/.exec(rest);
+  return brace ? brace[1] : rest;
+}
+
 function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
   const out = [];
   const seen = new Set();
@@ -1512,7 +1564,10 @@ function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
     const calls = [];
     const re = /([A-Za-z_$][\w$]*(?:(?:\.|::)[A-Za-z_$][\w$]*)*)\s*\(/g;
     let m;
-    if (!isDeclLine) { while ((m = re.exec(raw))) calls.push(m[1]); }
+    // A one-line handler (`app.get('/x', guard, async (req, res) => { res.json(await db.docs.findOne({ id })); })`) is its own declaration
+    // line, so skipping the whole line also skipped its body. Only the SIGNATURE is skipped: the calls after the arrow or the opening brace count.
+    const scanText = isDeclLine ? bodyAfterSignature(raw) : raw;
+    while ((m = re.exec(scanText))) calls.push(m[1]);
     if (haskell && !isDeclLine) {
       const hre = /\b([A-Z][\w.]*\.[a-z][\w']*|[a-z][\w']*)\b/g;
       while ((m = hre.exec(raw))) if (AUTH_NAME.test(m[1]) || HS_SENSITIVE.test(m[1])) calls.push(m[1]);
@@ -3021,6 +3076,8 @@ async function runQueue(jobs, ctx) {
     maxCalls: Math.min(HARD_LIMITS.maxCalls, Math.max(1, ctx.limits.maxCalls || 100)),
     maxWallMs: Math.min(HARD_LIMITS.maxWallSeconds, Math.max(1, ctx.limits.maxWallSeconds || 900)) * 1000,
     maxTokensPerJob: ctx.limits.maxTokensPerJob || 40000,
+    maxTokensPerRepo: Number.isFinite(ctx.limits.maxTokensPerRepo) ? ctx.limits.maxTokensPerRepo : null,
+    anonymizePrompts: ctx.limits.anonymizePrompts === true,
     maxRetries: Math.min(HARD_LIMITS.maxRetries, Math.max(0, ctx.limits.maxRetries ?? 3)),
     jobTimeoutMs: ctx.limits.jobTimeoutMs || 120000,
     maxCostUsd: Number.isFinite(ctx.limits.maxCostUsd) ? ctx.limits.maxCostUsd : null,
@@ -3034,6 +3091,7 @@ async function runQueue(jobs, ctx) {
   const results = new Map();
   let calls = 0;
   let estCost = 0;
+  let tokensUsed = 0;
   let cooldownUntil = 0;
   let budgetStop = null;
   let persistChain = Promise.resolve();
@@ -3083,6 +3141,7 @@ async function runQueue(jobs, ctx) {
     if (ctx.signal && ctx.signal.aborted) return 'cancelled';
     if (now() - started >= L.maxWallMs) return 'budget-exhausted:wall-time';
     if (calls >= L.maxCalls) return 'budget-exhausted:max-calls';
+    if (L.maxTokensPerRepo !== null && tokensUsed >= L.maxTokensPerRepo) return 'budget-exhausted:max-tokens-per-repo';
     if (L.maxCostUsd !== null && L.costPerCallUsd !== null && estCost + L.costPerCallUsd > L.maxCostUsd) return 'budget-exhausted:max-cost';
     return null;
   };
@@ -3106,8 +3165,9 @@ async function runQueue(jobs, ctx) {
       state.jobs[job.key] = { state: 'running', reason: null, attempts, label: job.label };
       const out = await (0,_review_js__WEBPACK_IMPORTED_MODULE_2__/* .runReviewOnce */ .z6)({
         pack: loadedJob.pack, entrypoints: loadedJob.entrypoints, manifests: loadedJob.manifests, packageIndexes: job.packageIndexes, packageTexts: loadedJob.packageTexts,
-        fileContents: ctx.fileContents, scanRoot: ctx.root, invoker: ctx.invoker, model: ctx.model, limits: { maxTokensPerJob: L.maxTokensPerJob, jobTimeoutMs: L.jobTimeoutMs },
+        fileContents: ctx.fileContents, scanRoot: ctx.root, invoker: ctx.invoker, model: ctx.model, limits: { maxTokensPerJob: L.maxTokensPerJob, jobTimeoutMs: L.jobTimeoutMs, anonymizePrompts: L.anonymizePrompts },
       });
+      if (out.usage) tokensUsed += (out.usage.inputTokensEstimated || 0) + (out.usage.outputTokensEstimated || 0);
       if (out.state === 'skipped_by_policy') calls--; // nothing was sent
       if (out.state === 'failed' && out.retryable && attempts <= L.maxRetries) {
         // exponential backoff with jitter; the shared cooldown slows every worker, which is what a 429 storm needs
@@ -3284,7 +3344,7 @@ function reachFrom({ graph, fileContents, entrypoint, limits = {} }) {
   const lim = { ...DEFAULT_LIMITS, ...limits };
   const { byId, edgesFrom } = indexGraph(graph);
   const linesCache = new Map();
-  const linesOf = (f) => { if (!linesCache.has(f)) linesCache.set(f, (fileContents[f] || '').split('\n')); return linesCache.get(f); };
+  const linesOf = (f) => { if (!linesCache.has(f)) linesCache.set(f, (0,_controls_js__WEBPACK_IMPORTED_MODULE_0__/* .blankComments */ .$E)(fileContents[f] || '', f).split('\n')); return linesCache.get(f); };
 
   const visited = [];
   const seen = new Set();
@@ -3450,7 +3510,7 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
 /* harmony export */   sj: () => (/* binding */ verifyReview),
 /* harmony export */   z6: () => (/* binding */ runReviewOnce)
 /* harmony export */ });
-/* unused harmony exports CONCLUSIONS, LIKELIHOODS, isLoopbackEndpoint, claimGrounded, resolveCitation, isRetryableError */
+/* unused harmony exports CONCLUSIONS, LIKELIHOODS, isLoopbackEndpoint, stripUntrustedCommands, pseudonymizer, claimGrounded, resolveCitation, isRetryableError */
 /* harmony import */ var _util_untrusted_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(17097);
 /* harmony import */ var _egress_redact_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(11723);
 /* harmony import */ var _egress_policy_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(45712);
@@ -3599,10 +3659,67 @@ function checkEgressForFiles(files, { scanRoot, model }) {
   // other endpoint needs --allow-remote (or review.allowRemote), on top of the egress policy below, never instead of it.
   if (model.remote && !model.remoteApproved) return { allowed: false, reason: 'remote-endpoint-not-approved (pass --allow-remote or set review.allowRemote after reviewing the egress policy)', file: files[0] || null, evaluated: false };
   for (const file of files) {
-    const d = (0,_egress_policy_js__WEBPACK_IMPORTED_MODULE_2__/* .evaluateEgress */ .nn)({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file });
-    if (!d.allowed) return { allowed: false, reason: d.reason, file, evaluated: true };
+    // Fail closed. A policy check that throws (a corrupt policy file, an unreadable path, a bug) is not an allow: the answer is "deny", with the
+    // reason, and nothing is sent. This is the only place that decides whether a prompt may leave the machine.
+    let d;
+    try { d = (0,_egress_policy_js__WEBPACK_IMPORTED_MODULE_2__/* .evaluateEgress */ .nn)({ scanRoot, purpose: 'context-review', endpoint: model.endpoint, provider: model.provider, model: model.model, path: file }); }
+    catch (err) { return { allowed: false, reason: `egress-policy-error: ${String((err && err.message) || err).slice(0, 120)}`, file, evaluated: true, failedClosed: true }; }
+    if (!d || d.allowed !== true) return { allowed: false, reason: (d && d.reason) || 'egress-policy-returned-no-decision', file, evaluated: true, ...(d ? {} : { failedClosed: true }) };
   }
   return { allowed: true, evaluated: true };
+}
+
+// ---- model output hygiene -------------------------------------------------------------------------------------
+
+/**
+ * A model's text is untrusted. It can carry a command for a human or a script to run ("run curl ... | sh to confirm"). Nothing here executes model text, but
+ * these strings reach reports, tickets and fix suggestions that people copy from, so shell-looking content is removed and counted, never passed on.
+ */
+const FENCE = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
+const CMD_WORD = '(?:curl|wget|bash|sh|zsh|sudo|su|rm|chmod|chown|nc|ncat|netcat|python3?|node|perl|ruby|php|powershell|pwsh|cmd(?:\\.exe)?|eval|exec|scp|ssh|dd|mkfs|kill|pkill|git\\s+push|npm\\s+(?:i|install|publish)|pip3?\\s+install|docker\\s+run)';
+const INLINE_CMD = new RegExp('`[^`\\n]*\\b' + CMD_WORD + '\\b[^`\\n]*`|\\$\\([^)]*\\)|\\b(?:curl|wget)\\s+[^\\s]+[^\\n]*\\|\\s*(?:sh|bash)\\b|(?:^|\\n)\\s*(?:\\$|#)\\s+' + CMD_WORD + '\\b[^\\n]*', 'gi');
+function stripUntrustedCommands(text) {
+  if (typeof text !== 'string' || !text) return { text: text ?? '', stripped: 0 };
+  let n = 0;
+  let out = text.replace(FENCE, () => { n++; return '[command block removed]'; });
+  out = out.replace(INLINE_CMD, () => { n++; return '[command removed]'; });
+  return { text: out, stripped: n };
+}
+function sanitizeReviewStrings(review) {
+  let total = 0;
+  const walk = (v, key) => {
+    if (typeof v === 'string') {
+      if (['promptHash', 'responseHash', 'contextHash', 'entrypointId', 'file', 'role', 'kind', 'conclusion', 'likelihood', 'questionPack', 'status'].includes(key)) return v;
+      const r = stripUntrustedCommands(v); total += r.stripped; return r.text;
+    }
+    if (Array.isArray(v)) return v.map((x) => walk(x, key));
+    if (v && typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = walk(x, k); return o; }
+    return v;
+  };
+  const out = walk(review, '');
+  if (total) out.untrustedCommandsStripped = total;
+  return out;
+}
+
+/** Where a suggestion came from and what checked it. Attached to every review so a reader never mistakes a model's words for a finding. */
+function provenanceOf(model, promptHash) {
+  let host = null; try { host = model.endpoint ? new URL(model.endpoint).hostname : null; } catch { host = null; }
+  const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  return { producer: 'model', provider: model.provider ?? null, model: model.model ?? null, endpointClass: !model.endpoint ? 'none' : loopback ? 'loopback' : 'remote', promptHash, checkedBy: 'deterministic-citation-verifier', promotedToFinding: false };
+}
+
+// ---- prompt anonymization ---------------------------------------------------------------------------------------
+
+/** Replace each real file path with a stable pseudonym (`f_<hash>.<ext>`). The mapping stays in memory; only the pseudonyms leave. */
+function pseudonymizer(files) {
+  const toPseudo = new Map(); const toReal = new Map();
+  for (const f of [...new Set(files)].sort()) {
+    const ext = (/\.[A-Za-z0-9]{1,6}$/.exec(f) || [''])[0];
+    const p = `f_${(0,_canonical_js__WEBPACK_IMPORTED_MODULE_5__/* .sha256 */ .sc)(f).slice(0, 10)}${ext}`;
+    toPseudo.set(f, p); toReal.set(p, f);
+  }
+  const swap = (text, map) => { let t = text; for (const [a, b] of [...map].sort((x, y) => y[0].length - x[0].length)) t = t.split(a).join(b); return t; };
+  return { toPseudo: (t) => swap(t, toPseudo), toReal: (t) => swap(t, toReal), size: toPseudo.size };
 }
 
 // ---- response parsing and verification ------------------------------------------------------------------------
@@ -3813,7 +3930,12 @@ async function runReviewOnce({ pack, entrypoints, manifests, packageIndexes, pac
   const badRedact = redacted.find(r => !r.ok);
   if (badRedact) return { state: 'skipped_by_policy', reason: `redaction refused: ${badRedact.reason}` };
 
-  const { prompt, promptHash } = buildReviewPrompt({ pack, entrypoints, packageTexts: redacted.map(r => r.text), contextHash: manifests[0].contextHash });
+  // Policy-driven anonymization: file paths are replaced by pseudonyms before the prompt is built, and mapped back in the answer before its citations
+  // are checked against the real snapshot. The model never sees a real path, and what is hashed is what was sent.
+  const anon = limits.anonymizePrompts ? pseudonymizer(files) : null;
+  const sendTexts = anon ? redacted.map(r => anon.toPseudo(r.text)) : redacted.map(r => r.text);
+  const sendEntrypoints = anon ? entrypoints.map(e => JSON.parse(anon.toPseudo(JSON.stringify(e)))) : entrypoints;
+  const { prompt, promptHash } = buildReviewPrompt({ pack, entrypoints: sendEntrypoints, packageTexts: sendTexts, contextHash: manifests[0].contextHash });
   const est = (0,_packer_js__WEBPACK_IMPORTED_MODULE_6__/* .estimateTokens */ .bP)(prompt);
   if (est.tokens > limits.maxTokensPerJob) return { state: 'skipped_by_policy', reason: `prompt is about ${est.tokens} tokens, over the ${limits.maxTokensPerJob} per-job limit` };
 
@@ -3825,7 +3947,9 @@ async function runReviewOnce({ pack, entrypoints, manifests, packageIndexes, pac
     return { state: 'failed', reason: `model call failed: ${String((err && err.message) || err).slice(0, 160)}`, retryable: isRetryableError(err) };
   }
   const usage = { inputTokensEstimated: est.tokens, outputTokensEstimated: Math.ceil(String(raw || '').length / 4), source: 'estimate', redactions: redacted.reduce((n, r) => n + r.redactions, 0) };
-  const review = verifyReview({ raw, pack, entrypoints, manifests, packageIndexes, fileContents, promptHash });
+  const rawReal = anon && typeof raw === 'string' ? anon.toReal(raw) : raw;
+  const review0 = verifyReview({ raw: rawReal, pack, entrypoints, manifests, packageIndexes, fileContents, promptHash });
+  const review = { ...sanitizeReviewStrings(review0), modelProvenance: provenanceOf(model, promptHash), ...(anon ? { promptAnonymized: true } : {}) };
   if (review.status === 'declined') return { state: 'partial', reason: `answer declined: ${review.declineReasons.join(',')}`, review, usage };
   return { state: 'succeeded', reason: null, review, usage };
 }

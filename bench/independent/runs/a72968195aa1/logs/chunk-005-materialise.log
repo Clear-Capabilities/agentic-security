@@ -1,0 +1,48 @@
+[err]   ✓ GHSA-8hm4-r66f-29wr  application/controllers  56 source file(s)
+[err]   ✓ GHSA-8jr4-6r33-phwm  src  202 source file(s)
+[err]   ✓ GHSA-8m8r-38jm-f355  src  58 source file(s)
+[err]   ✓ GHSA-8pf2-vj79-4wxg  extensions/msteams  122 source file(s)
+[err]   ✓ GHSA-8r6m-32jq-jx6q  (whole repo)  83 source file(s)
+[err]   ✓ GHSA-9299-c6m4-mjhc  jetty-server  264 source file(s)
+[err]   ✓ GHSA-93qh-5269-9wcf  src  1644 source file(s)
+[err]   ✓ GHSA-93rg-2xm5-2p9v  (whole repo)  12406 source file(s)
+[err]   ✓ GHSA-944x-pm95-3jpr  ghost/core/core/server/api  185 source file(s)
+[err]   ✓ GHSA-945v-v9p3-v5xw  backend  391 source file(s)
+[err]   ✓ GHSA-95px-34x5-p37h  (whole repo)  316 source file(s)
+[err]   ✓ GHSA-977c-63xq-cgw3  (whole repo)  641 source file(s)
+[err]   ✓ GHSA-97r8-rf7q-wmjw  src/lib/services/contents  176 source file(s)
+[err]   ✓ GHSA-98pp-vccm-qm25  redaxo/src/addons  302 source file(s)
+[err]   ✓ GHSA-996f-334j-67g7  application  868 source file(s)
+[err]   ✓ GHSA-9g8x-92q2-p28f  (whole repo)  64 source file(s)
+[err]   ✓ GHSA-9hfr-gw99-8rhx  (whole repo)  260 source file(s)
+[err]   ✓ GHSA-9rj7-rf2p-w77r  (whole repo)  143 source file(s)
+[err]   ✓ GHSA-9rjg-x2p2-h68h  src/Serializer  20 source file(s)
+[err]   ✓ GHSA-9w99-78rj-hmxq  (whole repo)  6807 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 103s
+[err] 5 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.
+[err]   ✓ GHSA-8hm4-r66f-29wr  application/controllers  56 source file(s)
+[err]   ✓ GHSA-8jr4-6r33-phwm  src  202 source file(s)
+[err]   ✓ GHSA-8m8r-38jm-f355  src  58 source file(s)
+[err]   ✓ GHSA-8pf2-vj79-4wxg  extensions/msteams  122 source file(s)
+[err]   ✓ GHSA-8r6m-32jq-jx6q  (whole repo)  83 source file(s)
+[err]   ✓ GHSA-9299-c6m4-mjhc  jetty-server  264 source file(s)
+[err]   ✓ GHSA-93qh-5269-9wcf  src  1644 source file(s)
+[err]   ✓ GHSA-93rg-2xm5-2p9v  (whole repo)  12406 source file(s)
+[err]   ✓ GHSA-944x-pm95-3jpr  ghost/core/core/server/api  185 source file(s)
+[err]   ✓ GHSA-945v-v9p3-v5xw  backend  391 source file(s)
+[err]   ✓ GHSA-95px-34x5-p37h  (whole repo)  316 source file(s)
+[err]   ✓ GHSA-977c-63xq-cgw3  (whole repo)  641 source file(s)
+[err]   ✓ GHSA-97r8-rf7q-wmjw  src/lib/services/contents  176 source file(s)
+[err]   ✓ GHSA-98pp-vccm-qm25  redaxo/src/addons  302 source file(s)
+[err]   ✓ GHSA-996f-334j-67g7  application  868 source file(s)
+[err]   ✓ GHSA-9g8x-92q2-p28f  (whole repo)  64 source file(s)
+[err]   ✓ GHSA-9hfr-gw99-8rhx  (whole repo)  260 source file(s)
+[err]   ✓ GHSA-9rj7-rf2p-w77r  (whole repo)  143 source file(s)
+[err]   ✓ GHSA-9rjg-x2p2-h68h  src/Serializer  20 source file(s)
+[err]   ✓ GHSA-9w99-78rj-hmxq  (whole repo)  6807 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 122s
+[err] 5 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

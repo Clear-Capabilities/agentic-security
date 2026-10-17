@@ -12,6 +12,9 @@ import { ATTRIBUTION_CATEGORIES, ATTRIBUTION_TARGET, MIN_ELIGIBLE_FOR_RATE, attr
 import { clearBlameCache } from '../../src/posture/provenance/git-evidence.js';
 import { createGitFixture } from '../helpers/build-git-fixture.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 setStateWritesEnabled(false);
 const SAFE = "const express = require('express');\nconst app = express();\napp.get('/', (req, res) => res.send('ok'));\n";
 const RUN = "const { exec } = require('child_process');\napp.get('/run', (req, res) => { exec('ls ' + req.query.d); res.end(); });\n";

@@ -12,6 +12,9 @@ import {
 import { digestOf } from '../../src/posture/assurance/identity.js';
 import { migrateRecord, toLegacyVerificationView } from '../../src/posture/assurance/migrations.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const C = 'a'.repeat(40);
 const { samples, notExercised, finding } = await buildSamples();

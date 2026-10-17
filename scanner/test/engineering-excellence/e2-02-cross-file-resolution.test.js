@@ -9,6 +9,9 @@ import { runScan } from '../../src/runScan.js';
 import { buildProjectIR, buildProjectIRAsync } from '../../src/ir/index.js';
 import { MAX_HOPS, buildModuleIndex, extractJsFacts, extractPyFacts } from '../../src/ir/module-resolver.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const UTIL_VULN = "const { exec } = require('child_process');\nexports.exec = (c) => exec('sh -c ' + c);\n";
 const UTIL_SAFE = "const { execFile } = require('child_process');\nexports.exec = (c) => execFile('sh', ['-c', 'true', String(c)]);\n";
 const SERVICE = "const util = require('./util');\nexports.run = (c) => util.exec(c);\n";

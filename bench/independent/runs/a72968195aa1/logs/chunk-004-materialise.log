@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-77vg-94rm-hx3p  (whole repo)  16 source file(s)
+[err]   ✓ GHSA-794g-x443-36f7  (whole repo)  8566 source file(s)
+[err]   ✓ GHSA-7hrg-5w46-5r2x  extensions/slack  182 source file(s)
+[err]   ✓ GHSA-7mpf-4465-7fc2  modules/backend/widgets  127 source file(s)
+[err]   ✓ GHSA-7p4m-qxvv-g567  backend/local  31 source file(s)
+[err]   ✓ GHSA-7v5m-pr3q-6453  packages/coding-agent  388 source file(s)
+[err]   ✓ GHSA-7v6w-c3f4-9wpq  agent/src/main/java/org/openremote/agent/protocol/knx  6 source file(s)
+[err]   ✓ GHSA-7vh7-fw88-wj87  (whole repo)  30 source file(s)
+[err]   ✓ GHSA-7vxr-6cxg-j3x8  (whole repo)  62 source file(s)
+[err]   ✓ GHSA-7x2p-4jvh-6384  (whole repo)  80 source file(s)
+[err]   ✓ GHSA-8359-h9fx-j6v9  src  59 source file(s)
+[err]   ✓ GHSA-83w8-p2f5-377r  (whole repo)  15 source file(s)
+[err]   ✓ GHSA-866w-xmhq-wj7x  packages/kit/src  310 source file(s)
+[err]   ✓ GHSA-87fv-vqqr-m4jr  weed  2030 source file(s)
+[err]   ✓ GHSA-87mf-gv2c-c62c  (whole repo)  3 source file(s)
+[err]   ✓ GHSA-87x5-vmc3-756j  vllm  1965 source file(s)
+[err]   ✓ GHSA-8832-4mm5-x2r6  (whole repo)  120 source file(s)
+[err]   ✓ GHSA-8877-prq4-9xfw  actionpack  319 source file(s)
+[err]   ✓ GHSA-8c48-q9wj-3w37  backend/ftp  3 source file(s)
+[err]   ✓ GHSA-8h25-q488-4hxw  (whole repo)  329 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 139s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.

@@ -11,6 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { EVIL_RULE, SENTINELS, buildHostileRepo } from './fixtures/hostile-repo.mjs';
 import { validateOne } from '../../src/llm-validator/index.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PRELOAD = path.join(HERE, 'fixtures', 'containment-preload.mjs');
 const BIN = path.join(HERE, '..', '..', 'bin', 'agentic-security.js');
@@ -69,7 +72,7 @@ test('the same repository with deep analysis: the same containment', () => {
 test('the hostile files are really scanned (the containment is not the result of skipping them) and the injection text produces no instruction-following', () => {
   const h = hostile();
   try {
-    const o = observe(['scan', h.root, '--no-network', '--format', 'json'], h.root);
+    const o = observe(['scan', h.root, '--no-network', '--format', 'json'], h.root, { AGENTIC_SECURITY_DEEP: '1' });
     assert.ok(o.events.some((e) => e.t === 'spawn' && e.args.includes('blame') && e.args.some((a) => /HOSTILE|\$\(|`/.test(a))), 'git blame ran on a file whose name is shell syntax');
     assert.ok(fs.existsSync(path.join(h.root, '.agentic-security')), 'state was written to the project directory');
     assert.equal(fs.existsSync(path.join(os.homedir(), '.ssh', 'authorized_keys_hostile')), false);

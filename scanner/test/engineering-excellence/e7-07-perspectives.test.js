@@ -14,6 +14,9 @@ import { verifyReleasePackage } from '../../src/posture/assurance/release-packag
 import { buildCanonicalFindings, buildViews, renderHtml, renderText } from '../../src/report/perspectives.js';
 import { rankFleetExposure } from '../../src/posture/fleet/exposure-ranking.js';
 
+// Deep analysis is off under CI unless asked for (engine.js); these tests need the deep layer, so a hosted runner must not change what they measure.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const BIN = path.join(ROOT, 'scanner', 'bin', 'agentic-security.js');
 const { samples, finding } = await buildSamples();

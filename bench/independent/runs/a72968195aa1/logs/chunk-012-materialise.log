@@ -1,0 +1,24 @@
+[err]   ✓ GHSA-vh45-f885-3848  (whole repo)  13 source file(s)
+[err]   ✓ GHSA-vmv7-4m6c-3cg5  packages/components/src  40 source file(s)
+[err]   ✓ GHSA-vr8q-g5c7-m54m  (whole repo)  235 source file(s)
+[err]   ✓ GHSA-vvp7-h4fj-m28w  (whole repo)  297 source file(s)
+[err]   ✓ GHSA-vx6p-q4gj-x6xx  (whole repo)  297 source file(s)
+[err]   ✓ GHSA-vx7x-vcc2-c44g  src  59 source file(s)
+[err]   ✓ GHSA-vxxm-wwqh-mh47  core/security  157 source file(s)
+[err]   ✓ GHSA-w27m-rmmf-g5w4  (whole repo)  366 source file(s)
+[err]   ✓ GHSA-w3cp-g2pf-65wh  (whole repo)  94 source file(s)
+[err]   ✓ GHSA-w626-296m-8f85  src/agents  1365 source file(s)
+[err]   ✓ GHSA-w62v-xxxg-mg59  (whole repo)  363 source file(s)
+[err]   ✓ GHSA-w62w-66v9-vvgv  weed/s3api  336 source file(s)
+[err]   ✓ GHSA-w8x7-h2px-xmq8  service  41 source file(s)
+[err]   ✓ GHSA-wchh-9x6h-7f6p  (whole repo)  69 source file(s)
+[err]   ✓ GHSA-wf43-fpp3-cf65  packages  961 source file(s)
+[err]   ✓ GHSA-wg23-69c2-gjc8  src  1541 source file(s)
+[err]   ✓ GHSA-wg2q-39h6-66x9  (whole repo)  152 source file(s)
+[err]   ✓ GHSA-whmm-qj9r-wvr2  proto  24 source file(s)
+[err]   ✓ GHSA-wjv6-jcfj-mf9r  src  58 source file(s)
+[err]   ✓ GHSA-wm3w-8rrp-j577  (whole repo)  47 source file(s)
+[err] 
+[err] materialised 20, failed 0, of 20 — 107s
+[err] 3 entr(y|ies) EXCEEDED the file cap: the changed file sits at the repository
+[err] root, so there is no narrower directory and the scope is the whole repository.
