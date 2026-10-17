@@ -62,8 +62,8 @@ export function build() {
   const demo = json('docs/engineering-excellence/data/e2e-demo/release-package.json');
   L.push('## 8. Evidence coverage', '', `Before: evidence existed as separate files with no shared contract. After: ${ev.kinds.length} registered evidence kinds, each with a schema, an identity rule and a snapshot rule (\`EVIDENCE_CONTRACTS.md\`); the end-to-end demo's signed package carries ${[...new Set(demo.evidence.map((e) => e.ref.kind))].length} of them (${[...new Set(demo.evidence.map((e) => e.ref.kind))].sort().join(', ')}). The remaining kinds are registered and tested but not produced by the demo.`, '');
 
-  const base = json('docs/engineering-excellence/data/base-measurements.json'); const bundleBefore = base.bundleBytes; const bundleAfter = fs.statSync(path.join(ROOT, 'scanner/dist/agentic-security.mjs')).size;
-  const mBefore = base.publishedPackageFiles; const mAfter = json('scanner/expected-package-manifest.json').fileCount.expected;
+  const baseSizes = json('docs/engineering-excellence/data/base-measurements.json'); const bundleBefore = baseSizes.bundleBytes; const bundleAfter = fs.statSync(path.join(ROOT, 'scanner/dist/agentic-security.mjs')).size;
+  const mBefore = baseSizes.publishedPackageFiles; const mAfter = json('scanner/expected-package-manifest.json').fileCount.expected;
   L.push('## 9. Regressions and costs, plainly', '', '| Area | Change |', '|---|---|',
     `| Bundle size | ${(bundleBefore / 1e6).toFixed(2)} MB to ${(bundleAfter / 1e6).toFixed(2)} MB (+${((bundleAfter / bundleBefore - 1) * 100).toFixed(1)}%) |`, `| Published package files | ${mBefore} to ${mAfter} (+${mAfter - mBefore}) |`,
     '| Scan health | A scan that skipped a file for size or density is now `partial`, where it used to say `complete`. Strict assurance fails such scans. Repositories with minified bundles or large data files will see it. |',
