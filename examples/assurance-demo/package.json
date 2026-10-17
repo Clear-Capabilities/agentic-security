@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "express": "4.18.2",
+    "express": "4.22.0",
     "acme-xml-lite": "1.2.0",
     "acme-img-tools": "2.0.1"
   }
