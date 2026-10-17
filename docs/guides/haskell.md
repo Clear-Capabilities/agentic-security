@@ -87,19 +87,21 @@ after the session). When one flaw reaches two nested sinks on a line (`readCreat
 (`strictRequestBody`) is CWE-770, the same class as the other unbounded-read rules.
 
 <!-- generated:hs-models:start -->
-The model registry (`scanner/src/language/haskell-models.js`) holds 91 sources, 165 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
+The model registry (`scanner/src/language/haskell-models.js`) holds 146 sources, 258 sinks and 27 sanitizers. Every entry names an import-qualified function, so a function of your own with the same name never matches.
 
 | Sink family | CWE | APIs modelled | Examples |
 | --- | --- | --- | --- |
-| `cmd` | CWE-78 | 13 | `System.Process.Typed.shell`, `System.Process.callCommand`, `System.Process.callProcess`, ... |
-| `cmd` | CWE-88 | 5 | `System.Process.callProcess`, `System.Process.proc`, `System.Process.readProcess`, ... |
+| `cmd` | CWE-78 | 39 | `Shelly.Lifted.bash`, `Shelly.Lifted.bashPipeFail`, `Shelly.Lifted.bash_`, ... |
+| `cmd` | CWE-88 | 16 | `Shelly.Lifted.run`, `Shelly.Lifted.runFoldLines`, `Shelly.Lifted.run_`, ... |
+| `code` | CWE-94 | 3 | `Language.Haskell.Interpreter.eval`, `Language.Haskell.Interpreter.interpret`, `Language.Haskell.Interpreter.runStmt` |
 | `llm-prompt` | CWE-1427 | 5 | `Network.HTTP.Conduit.setRequestBodyJSON`, `Network.HTTP.Conduit.setRequestBodyLBS`, `Network.HTTP.Simple.setRequestBodyJSON`, ... |
-| `path` | CWE-22 | 39 | `Data.ByteString.Lazy.appendFile`, `Data.ByteString.Lazy.readFile`, `Data.ByteString.Lazy.writeFile`, ... |
-| `sql` | CWE-89 | 28 | `Database.MySQL.Simple.execute`, `Database.MySQL.Simple.executeMany`, `Database.MySQL.Simple.execute_`, ... |
-| `url` | CWE-918 | 52 | `Network.HTTP.Client.httpLbs`, `Network.HTTP.Client.httpNoBody`, `Network.HTTP.Client.parseRequest`, ... |
+| `path` | CWE-22 | 54 | `Data.ByteString.Char8.appendFile`, `Data.ByteString.Char8.readFile`, `Data.ByteString.Char8.writeFile`, ... |
+| `redirect` | CWE-601 | 13 | `Happstack.Server.movedPermanently`, `Happstack.Server.seeOther`, `Happstack.Server.tempRedirect`, ... |
+| `sql` | CWE-89 | 47 | `Database.HDBC.prepare`, `Database.HDBC.quickQuery`, `Database.HDBC.quickQuery'`, ... |
+| `url` | CWE-918 | 58 | `Network.HTTP.Client.httpLbs`, `Network.HTTP.Client.httpNoBody`, `Network.HTTP.Client.parseRequest`, ... |
 | `xss` | CWE-79 | 23 | `Data.Text.IO.putStr`, `Data.Text.IO.putStrLn`, `Lucid.Base.toHtmlRaw`, ... |
 
-Source provenances: cli (1), env (3), file-read (5), header (8), http-body (10), network (2), stdin (22), url-param (40).
+Source provenances: cli (1), env (3), file-read (8), header (11), http-body (28), network (7), stdin (22), url-param (66).
 
 Sanitizer effects: * (10), other (1), path (4), xss (12).
 <!-- generated:hs-models:end -->

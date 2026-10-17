@@ -49,6 +49,23 @@ export const HS_PACKAGES = Object.freeze({
   random: { modules: ['System.Random'], tested: ['1.2'] },
   hxt: { modules: ['Text.XML.HXT.Core'], tested: ['9.3'] },
   bytestring: { modules: ['Data.ByteString', 'Data.ByteString.Char8', 'Data.ByteString.Lazy'], tested: ['0.11', '0.12'] },
+  // Written from each library's documented API and checked only against the development cases in test/haskell/haskell-models-extended.test.js, which are
+  // plain source scans: no GHC build against these packages was run, so `tested` is empty and `modelStatus` reports every version as untested.
+  process_legacy: { modules: ['System.Cmd'], tested: [] },
+  turtle: { modules: ['Turtle'], tested: [] },
+  shelly: { modules: ['Shelly', 'Shelly.Lifted'], tested: [] },
+  hint: { modules: ['Language.Haskell.Interpreter'], tested: [] },
+  HDBC: { modules: ['Database.HDBC'], tested: [] },
+  'direct-sqlite': { modules: ['Database.SQLite3'], tested: [] },
+  'postgresql-libpq': { modules: ['Database.PostgreSQL.LibPQ'], tested: [] },
+  'persistent-backends': { modules: ['Database.Persist.Postgresql', 'Database.Persist.Sqlite', 'Database.Persist.MySQL', 'Database.Persist'], tested: [] },
+  req: { modules: ['Network.HTTP.Req'], tested: [] },
+  HTTP: { modules: ['Network.HTTP'], tested: [] },
+  snap: { modules: ['Snap.Core', 'Snap'], tested: [] },
+  Spock: { modules: ['Web.Spock', 'Web.Spock.Core'], tested: [] },
+  happstack: { modules: ['Happstack.Server', 'Happstack.Server.Internal.Types'], tested: [] },
+  network: { modules: ['Network.Socket.ByteString', 'Network.Socket.ByteString.Lazy'], tested: [] },
+  unix: { modules: ['System.Posix.Files'], tested: [] },
 });
 
 // ── sources ─────────────────────────────────────────────────────────────────
@@ -85,6 +102,30 @@ src('Yesod', ['lookupGetParam', 'lookupGetParams', 'lookupPostParam', 'lookupPos
 // HTTP responses are untrusted data too when they come back from a remote service the app calls
 src('Network.HTTP.Simple', ['getResponseBody'], 'network', 'remote HTTP response', { package: 'http-conduit' });
 src('Network.HTTP.Client', ['responseBody'], 'network', 'remote HTTP response', { package: 'http-client' });
+// More file readers, and more web frameworks. Each reads a value the client (or the file's author) controls.
+src('Data.ByteString.Char8', ['readFile'], 'file-read', 'file content', { package: 'bytestring' });
+src('Data.ByteString.Lazy.Char8', ['readFile'], 'file-read', 'file content', { package: 'bytestring' });
+src('Data.Text.Lazy.IO', ['readFile'], 'file-read', 'file content', { package: 'text' });
+src('Network.Socket.ByteString', ['recv', 'recvFrom'], 'network', 'bytes read from a socket', { package: 'network' });
+src('Network.Socket.ByteString.Lazy', ['recv', 'getContents'], 'network', 'bytes read from a socket', { package: 'network' });
+src('Network.HTTP', ['getResponseBody'], 'network', 'remote HTTP response', { package: 'HTTP' });
+// Snap
+src('Snap.Core', ['getParam', 'getPostParam', 'getQueryParam', 'getParams', 'getPostParams', 'getQueryParams'], 'url-param', 'snap request parameter', { package: 'snap', framework: 'snap' });
+src('Snap.Core', ['readRequestBody', 'getRequestBody'], 'http-body', 'snap request body', { package: 'snap', framework: 'snap' });
+src('Snap', ['getParam', 'getPostParam', 'getQueryParam', 'getParams', 'getPostParams', 'getQueryParams'], 'url-param', 'snap request parameter', { package: 'snap', framework: 'snap' });
+// Spock
+src('Web.Spock', ['param', "param'", 'params'], 'url-param', 'spock request parameter', { package: 'Spock', framework: 'spock' });
+src('Web.Spock', ['header', 'cookie', 'cookies'], 'header', 'spock request header or cookie', { package: 'Spock', framework: 'spock' });
+src('Web.Spock', ['body', 'jsonBody', "jsonBody'", 'files'], 'http-body', 'spock request body', { package: 'Spock', framework: 'spock' });
+src('Web.Spock.Core', ['param', "param'", 'params'], 'url-param', 'spock request parameter', { package: 'Spock', framework: 'spock' });
+// Happstack
+src('Happstack.Server', ['look', 'lookText', "lookText'", 'lookBS', 'lookRead', 'lookPairs', 'lookPairsBS', 'lookCookieValue'], 'url-param', 'happstack request input', { package: 'happstack', framework: 'happstack' });
+// Yesod: the whole request value and its body
+src('Yesod.Core', ['getRequest', 'rawRequestBody', 'runRequestBody', 'lookupFile', 'lookupFiles'], 'http-body', 'yesod request', { package: 'yesod', framework: 'yesod' });
+src('Yesod', ['getRequest', 'rawRequestBody', 'runRequestBody', 'lookupFile', 'lookupFiles'], 'http-body', 'yesod request', { package: 'yesod', framework: 'yesod' });
+// Scotty: the underlying WAI request
+src('Web.Scotty', ['request'], 'http-body', 'scotty WAI request', { package: 'scotty', framework: 'scotty' });
+src('Web.Scotty.Trans', ['request'], 'http-body', 'scotty WAI request', { package: 'scotty', framework: 'scotty' });
 
 // ── sinks ───────────────────────────────────────────────────────────────────
 // family: the taint family the existing engine already uses (cmd | sql | path | url | xss)
@@ -160,6 +201,52 @@ const XSS_TEXT = { ...XSS, severity: 'medium', htmlSkeleton: true, vuln: 'Cross-
 sink('Prelude', ['putStrLn', 'putStr'], XSS_TEXT);
 sink('System.IO', ['putStrLn', 'putStr'], XSS_TEXT);
 sink('Data.Text.IO', ['putStrLn', 'putStr'], { ...XSS_TEXT, package: 'text' });
+
+// ── more sinks (written from the libraries' documented behaviour) ───────────────────────────────────────────────────────
+// CWE-78. The legacy System.Cmd module, Turtle and Shelly. A shell string is parsed by /bin/sh; a program name is not, but a tainted one is arbitrary execution.
+sink('System.Cmd', ['system'], { family: 'cmd', cwe: 'CWE-78', severity: 'critical', argIndex: 0, shell: true, package: 'process_legacy', vuln: 'OS Command Injection (shell string)', remediation: 'Do not build a shell command from input. Use `proc`/`callProcess` with a fixed program and pass each value as its own argument.' });
+sink('System.Cmd', ['rawSystem'], { family: 'cmd', cwe: 'CWE-78', severity: 'high', argIndex: 0, shell: false, package: 'process_legacy', vuln: 'OS Command Injection (program name)', remediation: 'Use a fixed program name; never take it from input.' });
+sink('System.Cmd', ['rawSystem'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'process_legacy', vuln: 'Argument Injection (process arguments)', remediation: 'Validate each argument against an allow-list, and put `--` before values that could start with a dash.' });
+sink('Turtle', ['shell', 'inshell', 'shells', 'inshells'], { family: 'cmd', cwe: 'CWE-78', severity: 'critical', argIndex: 0, shell: true, package: 'turtle', vuln: 'OS Command Injection (Turtle shell command)', remediation: 'Use `proc`/`procs` with a fixed program and a list of arguments, not a shell string built from input.' });
+sink('Turtle', ['proc', 'procs', 'inproc', 'inprocs'], { family: 'cmd', cwe: 'CWE-78', severity: 'high', argIndex: 0, shell: false, package: 'turtle', vuln: 'OS Command Injection (program name)', remediation: 'Use a fixed program name; never take it from input.' });
+sink('Turtle', ['proc', 'procs', 'inproc', 'inprocs'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'turtle', vuln: 'Argument Injection (process arguments)', remediation: 'Validate each argument against an allow-list, and put `--` before values that could start with a dash.' });
+for (const mod of ['Shelly', 'Shelly.Lifted']) {
+  sink(mod, ['run', 'run_', 'runFoldLines', 'command', 'command_'], { family: 'cmd', cwe: 'CWE-78', severity: 'high', argIndex: 0, shell: false, package: 'shelly', vuln: 'OS Command Injection (program name)', remediation: 'Use a fixed program name; never take it from input.' });
+  sink(mod, ['run', 'run_', 'runFoldLines'], { family: 'cmd', cwe: 'CWE-88', severity: 'medium', argIndex: 1, shell: false, argv: true, package: 'shelly', vuln: 'Argument Injection (process arguments)', remediation: 'Validate each argument against an allow-list, and put `--` before values that could start with a dash.' });
+  sink(mod, ['bash', 'bash_', 'bashPipeFail'], { family: 'cmd', cwe: 'CWE-78', severity: 'critical', argIndex: 0, shell: true, package: 'shelly', vuln: 'OS Command Injection (bash script text)', remediation: 'Do not build a script from input. Call the program directly with `run` and a list of arguments.' });
+}
+
+// CWE-94. Evaluating Haskell source text at run time (the hint package) runs whatever code the text holds.
+sink('Language.Haskell.Interpreter', ['interpret', 'eval', 'runStmt'], { family: 'code', cwe: 'CWE-94', severity: 'critical', argIndex: 0, package: 'hint', vuln: 'Code Injection (Haskell source evaluated at run time)', remediation: 'Do not evaluate text that came from a user. Parse the input into a closed data type and interpret that instead.' });
+
+// CWE-89. HDBC, direct-sqlite, postgresql-libpq, and the persistent backends that re-export rawSql. The query TEXT is the sink; a `?` placeholder with bound values is the safe form.
+sink('Database.HDBC', ['run', 'quickQuery', "quickQuery'", 'prepare', 'runRaw'], { ...SQL, argIndex: 1, package: 'HDBC', vuln: 'SQL Injection (HDBC query text)' });
+sink('Database.SQLite3', ['exec', 'prepare'], { ...SQL, argIndex: 1, package: 'direct-sqlite', vuln: 'SQL Injection (SQLite statement text)' });
+sink('Database.PostgreSQL.LibPQ', ['exec', 'execParams', 'prepare'], { ...SQL, argIndex: 1, package: 'postgresql-libpq', vuln: 'SQL Injection (libpq command text)' });
+for (const mod of ['Database.Persist.Postgresql', 'Database.Persist.Sqlite', 'Database.Persist.MySQL']) sink(mod, ['rawSql', 'rawExecute', 'rawQuery'], { ...SQL, argIndex: 0, package: 'persistent-backends', vuln: 'SQL Injection (raw SQL text)' });
+
+// CWE-918. Req builds a URL from typed pieces, so the HOST is the attacker-steered part; HTTP's request constructors take the URL text.
+sink('Network.HTTP.Req', ['https', 'http'], { ...SSRF, argIndex: 0, package: 'req', vuln: 'Server-Side Request Forgery (request host)' });
+sink('Network.HTTP', ['getRequest', 'postRequest', 'headRequest', 'simpleHTTP'], { ...SSRF, argIndex: 0, package: 'HTTP' });
+
+// CWE-601. Redirecting to a location taken from the request sends the user to a site the attacker names.
+const REDIRECT = { family: 'redirect', cwe: 'CWE-601', severity: 'medium', argIndex: 0, vuln: 'Open Redirect', remediation: 'Redirect only to a fixed path or to a value found in an allow-list; never to a request value as given.' };
+sink('Web.Scotty', ['redirect'], { ...REDIRECT, package: 'scotty', framework: 'scotty' });
+sink('Web.Scotty.Trans', ['redirect'], { ...REDIRECT, package: 'scotty', framework: 'scotty' });
+sink('Yesod.Core', ['redirect'], { ...REDIRECT, package: 'yesod', framework: 'yesod' });
+sink('Yesod.Core', ['redirectWith'], { ...REDIRECT, argIndex: 1, package: 'yesod', framework: 'yesod' });
+sink('Yesod', ['redirect'], { ...REDIRECT, package: 'yesod', framework: 'yesod' });
+sink('Snap.Core', ['redirect', "redirect'"], { ...REDIRECT, package: 'snap', framework: 'snap' });
+sink('Snap', ['redirect', "redirect'"], { ...REDIRECT, package: 'snap', framework: 'snap' });
+sink('Web.Spock', ['redirect'], { ...REDIRECT, package: 'Spock', framework: 'spock' });
+sink('Happstack.Server', ['seeOther', 'tempRedirect', 'movedPermanently'], { ...REDIRECT, package: 'happstack', framework: 'happstack' });
+
+// CWE-22. The same path operations through the other string types, and the POSIX file calls.
+sink('Data.ByteString.Char8', ['readFile', 'writeFile', 'appendFile'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'bytestring', vuln: 'Path Traversal', remediation: 'Confirm the canonical path stays under an allowed directory before opening it.' });
+sink('Data.ByteString.Lazy.Char8', ['readFile', 'writeFile', 'appendFile'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'bytestring', vuln: 'Path Traversal', remediation: 'Confirm the canonical path stays under an allowed directory before opening it.' });
+sink('Data.Text.Lazy.IO', ['readFile', 'writeFile', 'appendFile'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'text', vuln: 'Path Traversal', remediation: 'Confirm the canonical path stays under an allowed directory before opening it.' });
+sink('System.Posix.Files', ['removeLink', 'createSymbolicLink', 'setFileMode', 'setOwnerAndGroup', 'readSymbolicLink'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 0, package: 'unix', vuln: 'Path Traversal (file operation)', remediation: 'Confirm the canonical path stays under an allowed directory before the operation.' });
+sink('System.Posix.Files', ['rename'], { family: 'path', cwe: 'CWE-22', severity: 'high', argIndex: 'all', package: 'unix', vuln: 'Path Traversal (rename)', remediation: 'Confirm both canonical paths stay under an allowed directory.' });
 
 // ── sanitizers (context-specific; `appliesTo` is the family each one actually neutralises) ──
 const SAN = [];

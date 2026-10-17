@@ -26,7 +26,7 @@ const IS_MEMBER = /^Data\.(?:Set|HashSet|Map|Map\.Strict|HashMap\.Strict)\.membe
 const NOT_MEMBER = /^Data\.(?:Set|HashSet|Map|Map\.Strict|HashMap\.Strict)\.notMember$/;
 const CHARCLASS = new Set(['Data.Char.isAlphaNum', 'Data.Char.isAlpha', 'Data.Char.isDigit', 'Data.Char.isAscii', 'isAlphaNum', 'isAlpha', 'isDigit']);
 
-const FAMILY_BY_CWE = { 'CWE-22': 'path', 'CWE-918': 'url', 'CWE-78': 'cmd', 'CWE-88': 'cmd', 'CWE-89': 'sql', 'CWE-79': 'xss', 'CWE-1427': 'prompt' };
+const FAMILY_BY_CWE = { 'CWE-22': 'path', 'CWE-918': 'url', 'CWE-78': 'cmd', 'CWE-88': 'cmd', 'CWE-89': 'sql', 'CWE-79': 'xss', 'CWE-601': 'redirect', 'CWE-94': 'code', 'CWE-1427': 'prompt' };
 
 const isStr = (e) => e && e.kind === 'literal' && typeof e.value === 'string';
 

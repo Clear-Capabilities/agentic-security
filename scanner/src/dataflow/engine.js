@@ -1423,13 +1423,18 @@ function _sinkFindingsForCall(calleeExpr, argExprs, cat, argTaints, state, callC
 // real-world nesting. Deliberately does NOT re-check the TOP-LEVEL call
 // itself (the caller already did that via its own _matchCallCatalog +
 // _sinkFindingsForCall), so this never duplicates a finding.
+// Haskell only: a call written on its own line inside a larger expression (`get "/r" $ do ... liftIO (callCommand c)`) carries that line, while the node that
+// finally executes it sits on the line the handler starts. The sink is where the call is written. Other IRs lower nested calls differently and keep the node's line.
+const _sinkLine = (call, fallback) => (/\.(?:hs|lhs)$/i.test(_currentFile || '') && call && Number.isInteger(call.line) && call.line >= 1 ? call.line : fallback);
+
 function _nestedSinkFindings(argExprs, state, callContext, line) {
   const findings = [];
   for (const arg of (argExprs || [])) {
     if (!arg || arg.kind !== 'call') continue;
     const { cat, argTaints } = _matchCallCatalog(arg.callee, arg.args, state, callContext);
-    findings.push(..._sinkFindingsForCall(arg.callee, arg.args, cat, argTaints, state, callContext, line).findings);
-    findings.push(..._nestedSinkFindings(arg.args, state, callContext, line));
+    const at = _sinkLine(arg, line);
+    findings.push(..._sinkFindingsForCall(arg.callee, arg.args, cat, argTaints, state, callContext, at).findings);
+    findings.push(..._nestedSinkFindings(arg.args, state, callContext, at));
   }
   return findings;
 }
@@ -2023,9 +2028,10 @@ function step(node, stateIn, callContext) {
       // expression is directly a sink.
       if (node.value && node.value.kind === 'call') {
         const { cat, argTaints } = _matchCallCatalog(node.value.callee, node.value.args, state, callContext);
+        const _at = _sinkLine(node.value, node.line);
         findings.push(..._sinkFindingsForCall(
-          node.value.callee, node.value.args, cat, argTaints, state, callContext, node.line, node.value.kwargs).findings);
-        findings.push(..._nestedSinkFindings(node.value.args, state, callContext, node.line));
+          node.value.callee, node.value.args, cat, argTaints, state, callContext, _at, node.value.kwargs).findings);
+        findings.push(..._nestedSinkFindings(node.value.args, state, callContext, _at));
       } else if (node.value && node.value.kind === 'union' && /\.(?:hs|lhs)$/i.test(_currentFile || '')) {
         // Haskell: `if c then A else B` and guards return a union of the branch ACTIONS, each of which
         // runs when its branch is taken, so every branch call is a sink site in its own right. (Scoped

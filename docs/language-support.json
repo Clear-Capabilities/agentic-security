@@ -536,7 +536,22 @@
           "bytestring": [
             "0.11",
             "0.12"
-          ]
+          ],
+          "process_legacy": [],
+          "turtle": [],
+          "shelly": [],
+          "hint": [],
+          "HDBC": [],
+          "direct-sqlite": [],
+          "postgresql-libpq": [],
+          "persistent-backends": [],
+          "req": [],
+          "HTTP": [],
+          "snap": [],
+          "Spock": [],
+          "happstack": [],
+          "network": [],
+          "unix": []
         },
         "webFrameworks": {
           "scotty": [
