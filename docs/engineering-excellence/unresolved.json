@@ -1,6 +1,6 @@
 {
   "schema": "agentic-security/engineering-excellence-unresolved@1",
-  "verdict": "release_blocked",
+  "verdict": "release_ready",
   "items": [
     {
       "id": "U-01",
@@ -14,12 +14,12 @@
     },
     {
       "id": "U-02",
-      "title": "Two publish-time checks cannot pass without a push: HEAD on origin/main and hosted CI green (the dependency-currency check now passes)",
-      "priority": "P0",
-      "blocksRelease": true,
+      "title": "Publish-time checks: HEAD is on origin/main and hosted CI was green for the release (resolved, kept for the record)",
+      "priority": "P2",
+      "blocksRelease": false,
       "task": "E8-01",
-      "nextStep": "Needs the maintainer to push; then re-run npm run release:check. The local release:check otherwise passes: version, changelog, scorecard, bundle, benchmarks, release closure, dependency currency",
-      "blocking": true,
+      "nextStep": "none: PR #94 passed hosted CI and merged; the release gate passed on the exact commit",
+      "blocking": false,
       "waived": false
     },
     {
@@ -34,12 +34,12 @@
     },
     {
       "id": "U-04",
-      "title": "Branch merge was not authorised and nothing was pushed",
-      "priority": "P0",
-      "blocksRelease": true,
+      "title": "Merge and release were authorised by the maintainer and done: PR #94 merged, tag v0.173.0, npm 0.173.0 attested (resolved, kept for the record)",
+      "priority": "P2",
+      "blocksRelease": false,
       "task": "E8-06",
-      "nextStep": "Needs the maintainer's decision; the local commits on feature/engineering-excellence are ready for review",
-      "blocking": true,
+      "nextStep": "none: shipped on 2026-10-17; the hosted release workflow run 39049365591 succeeded",
+      "blocking": false,
       "waived": false
     },
     {
@@ -183,16 +183,7 @@
       "waived": false
     }
   ],
-  "blockers": [
-    {
-      "code": "UNRESOLVED_BLOCKER",
-      "message": "U-02: Two publish-time checks cannot pass without a push: HEAD on origin/main and hosted CI green (the dependency-currency check now passes)"
-    },
-    {
-      "code": "UNRESOLVED_BLOCKER",
-      "message": "U-04: Branch merge was not authorised and nothing was pushed"
-    }
-  ],
+  "blockers": [],
   "caveats": [
     "E2 exit gate partially met: One missed real-code vulnerability was recovered with a causal explanation and matched safe controls (basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39, Ruby CWE-22): measured localized true positives 6 to 7 with false positives unchanged at 13, on the entries the change can reach. That is 1 of 272 misses. The dataflow and IR work was measured on fixtures; the baseline run already contains it, so its effect on real code has no before measurement.",
     "E3 exit gate partially met: One declared gap still accepts an unsafe fix (1 of 15) and 3 of 8 safe fixes are refused; both are listed in the benchmark.",
