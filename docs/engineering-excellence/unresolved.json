@@ -14,22 +14,22 @@
     },
     {
       "id": "U-02",
-      "title": "Publish-time checks were not run: dependency currency and hosted CI",
+      "title": "Two publish-time checks cannot pass without a push: HEAD on origin/main and hosted CI green (the dependency-currency check now passes)",
       "priority": "P0",
       "blocksRelease": true,
       "task": "E8-01",
-      "nextStep": "Run npm run release:check without --fast with network access, then the tag workflow in dry-run mode",
+      "nextStep": "Needs the maintainer to push; then re-run npm run release:check. The local release:check otherwise passes: version, changelog, scorecard, bundle, benchmarks, release closure, dependency currency",
       "blocking": true,
       "waived": false
     },
     {
       "id": "U-03",
-      "title": "No version bump or changelog entry for this work",
-      "priority": "P0",
-      "blocksRelease": true,
+      "title": "Version 0.173.0 and its changelog entry exist; the local release:check passes them (kept for the record, resolved)",
+      "priority": "P2",
+      "blocksRelease": false,
       "task": "E8-06",
-      "nextStep": "Bump the version, add the changelog entry, run node scripts/sync-scanner-changelog.mjs, regenerate the scorecard for the new engine version",
-      "blocking": true,
+      "nextStep": "none: resolved by the version bump, the changelog entry and a regenerated scorecard",
+      "blocking": false,
       "waived": false
     },
     {
@@ -186,11 +186,7 @@
   "blockers": [
     {
       "code": "UNRESOLVED_BLOCKER",
-      "message": "U-02: Publish-time checks were not run: dependency currency and hosted CI"
-    },
-    {
-      "code": "UNRESOLVED_BLOCKER",
-      "message": "U-03: No version bump or changelog entry for this work"
+      "message": "U-02: Two publish-time checks cannot pass without a push: HEAD on origin/main and hosted CI green (the dependency-currency check now passes)"
     },
     {
       "code": "UNRESOLVED_BLOCKER",
