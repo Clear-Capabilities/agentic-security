@@ -54,6 +54,11 @@ export const HARDENING_RULES = Object.freeze({
   'tls-not-enforced': { family: 'tls-runtime', cwe: 'CWE-319', severity: 'medium', ruleVersion: 1, vuln: 'Virtual host explicitly serves cleartext HTTP (forceSSL = false)', why: 'forceSSL = false is a deliberate choice to keep the plain-HTTP listener open for the whole host, so credentials and session data cross the network unencrypted.', fix: 'Set `forceSSL = true` (with `enableACME = true` or a certificate) so HTTP is redirected to HTTPS.' },
   'container-privileged': { family: 'container-declaration', cwe: 'CWE-250', severity: 'high', ruleVersion: 1, vuln: 'OCI container is declared privileged or with a dangerous mount', why: '--privileged, SYS_ADMIN/ALL capabilities and the container runtime socket give the container control of the host. Image layers are NOT scanned.', fix: 'Remove --privileged and the runtime socket mount; add only the specific capability the workload needs.' },
   'container-host-network': { family: 'container-declaration', cwe: 'CWE-668', severity: 'medium', ruleVersion: 1, vuln: 'OCI container shares the host network namespace', why: 'Host networking removes network isolation, so the container can reach and bind host-local services. Image layers are NOT scanned.', fix: 'Use the default bridge and publish only the needed ports on a specific address.' },
+  'user-root-equivalent-group': { family: 'privilege-escalation', cwe: 'CWE-269', severity: 'medium', ruleVersion: 1, vuln: 'A user is a member of a group that is equivalent to root', why: 'Membership of docker or lxd lets the user start a container with the host filesystem mounted, and membership of disk gives raw read and write access to the block devices. Each is root on the machine, without sudo and without a password prompt.', fix: 'Remove the group. Use rootless containers (virtualisation.docker.rootless, podman) or run the tool through sudo with a narrow rule.' },
+  'user-uid-zero': { family: 'privilege-escalation', cwe: 'CWE-250', severity: 'high', ruleVersion: 1, vuln: 'A user other than root has user id 0', why: 'User id 0 is root: the kernel does not look at the name. A second account with uid 0 is a root login that audit logs, sudo rules and per-user controls do not treat as root.', fix: 'Remove the uid assignment so the account gets a normal id, or use sudo for the cases that need root.' },
+  'getty-autologin': { family: 'login-access', cwe: 'CWE-306', severity: 'high', ruleVersion: 1, vuln: 'The console logs a user in without a password', why: 'services.getty.autologinUser starts a session on every virtual console with no authentication. For root that is a root shell for anyone with the keyboard, a serial line or a hypervisor console.', fix: 'Remove services.getty.autologinUser. Keep autologin to throwaway virtual machines and tests.' },
+  'display-autologin': { family: 'login-access', cwe: 'CWE-306', severity: 'low', ruleVersion: 1, vuln: 'The display manager logs a user in without a password', why: 'Automatic login skips authentication at the graphical login, so anyone who can power the machine on gets the session. Disk encryption is the only remaining barrier.', fix: 'Disable autoLogin, or keep it only where physical access is controlled and the disk is encrypted.' },
+  'pam-null-password': { family: 'login-access', cwe: 'CWE-258', severity: 'high', ruleVersion: 1, vuln: 'A PAM service accepts accounts with an empty password', why: 'allowNullPassword lets an account with no password log in through this service with an empty answer, which turns every passwordless account into an open login.', fix: 'Remove allowNullPassword (it defaults to false) and give every account a password hash or a key.' },
 });
 
 /** Which rules explain each privileged entry-point kind (reconciliation join). */
@@ -368,6 +373,41 @@ export function analyzeNixosHardening(opts, extra = {}) {
     }
   }
 
+  // ── accounts and console login ──
+  // Root-equivalent groups: each of these gives the member control of the host without sudo.
+  const ROOT_EQUIVALENT_GROUPS = new Map([['docker', 'start a container with the host root mounted'], ['lxd', 'start a privileged container with the host root mounted'], ['disk', 'read and write the raw block devices']]);
+  for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^users\.users\.[^.]+\.extraGroups$/.test(x.path))) {
+    const name = o.path.split('.')[2];
+    if (name === 'root') continue;
+    const v = view(note(o, 'accounts'));
+    const items = v.state === 'known' ? asList(v.value) : v.state === 'conditional' ? asList(v.definiteItems) : [];
+    const bad = items.filter((g) => typeof g === 'string' && ROOT_EQUIVALENT_GROUPS.has(g));
+    if (bad.length) addFinding('user-root-equivalent-group', { anchor: anchorOf(o), scope: `users.users.${name}`, state: v.state === 'conditional' ? 'conditional' : 'active', uncertain: !v.definite, evidence: [evidenceOf(o)], extra: { groups: bad, effect: bad.map((g) => `${g}: ${ROOT_EQUIVALENT_GROUPS.get(g)}`) } });
+  }
+  for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^users\.users\.[^.]+\.uid$/.test(x.path))) {
+    const name = o.path.split('.')[2];
+    if (name === 'root') continue;
+    const j = judge(note(o, 'accounts'), (x) => x === 0);
+    if (j === 'yes' || j === 'conditional') addFinding('user-uid-zero', { anchor: anchorOf(o), scope: `users.users.${name}`, state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(o).definite, evidence: [evidenceOf(o)] });
+  }
+  const gettyRes = note(nixos('services.getty.autologinUser'), 'login');
+  const gettyV = view(gettyRes);
+  if (gettyV.state === 'known' && typeof gettyV.value === 'string' && gettyV.value) {
+    addFinding('getty-autologin', { severity: gettyV.value === 'root' ? 'high' : 'low', anchor: anchorOf(gettyRes), scope: 'services.getty.autologinUser', state: 'active', uncertain: !gettyV.definite, evidence: [evidenceOf(gettyRes)], extra: { user: gettyV.value } });
+  }
+  for (const base of ['services.displayManager.autoLogin', 'services.xserver.displayManager.autoLogin']) {
+    const en = note(nixos(`${base}.enable`), 'login');
+    const j = judge(en, (x) => x === true);
+    if (j === 'yes' || j === 'conditional') {
+      const userV = view(nixos(`${base}.user`));
+      addFinding('display-autologin', { severity: userV.state === 'known' && userV.value === 'root' ? 'high' : 'low', anchor: anchorOf(en), scope: base, state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(en).definite, evidence: [evidenceOf(en)], extra: userV.state === 'known' ? { user: userV.value } : {} });
+    }
+  }
+  for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && /^security\.pam\.services\.[^.]+\.allowNullPassword$/.test(x.path))) {
+    const j = judge(note(o, 'login'), (x) => x === true);
+    if (j === 'yes' || j === 'conditional') addFinding('pam-null-password', { anchor: anchorOf(o), scope: o.path.replace(/\.allowNullPassword$/, ''), state: j === 'conditional' ? 'conditional' : 'active', uncertain: !view(o).definite, evidence: [evidenceOf(o)] });
+  }
+
   // ── databases / listeners ──
   if (hasDefs('services.postgresql.')) {
     const enableRes = nixos('services.postgresql.enable');
@@ -396,6 +436,38 @@ export function analyzeNixosHardening(opts, extra = {}) {
     const enableRes = nixos('services.nginx.enable');
     const state = stateOf(enableRes);
     inventory.push({ kind: 'declared-service', name: 'nginx', state, listening: state === 'active' ? 'unknown' : state === 'conditional' ? 'unknown' : 'no', ports: [], ingress: 'unknown', reachability: { internet: 'unknown', reason: 'listen addresses are generated by the module and external topology is not modelled' }, evidence: [evidenceOf(enableRes)] });
+  }
+
+  // ── other services that choose their bind address ──
+  // The same decision postgresql makes above. Only an EXPLICIT wildcard (or, for redis, an explicit null, which the module defines as "every interface") is reported:
+  // an unset option keeps the module's own default, which the catalog does not record for these services and which is never guessed.
+  const WILDCARD = (x, nullIsAll) => (x === null ? nullIsAll === true : typeof x === 'string' && x.split(/[\s,]+/).filter(Boolean).some((a) => a === '*' || a === '0.0.0.0' || a === '::' || a === '[::]'));
+  const LISTENERS = [
+    { name: 'redis', pattern: /^services\.redis\.servers\.([^.]+)\.bind$/, enable: (m) => `services.redis.servers.${m[1]}.enable`, portOpt: (m) => `services.redis.servers.${m[1]}.port`, port: 6379, nullIsAll: true, scope: (m) => `services.redis.servers.${m[1]}` },
+    { name: 'mysql', pattern: /^services\.mysql\.settings\.mysqld\.(?:bind-address|bind_address)$/, enable: () => 'services.mysql.enable', port: 3306, scope: () => 'services.mysql' },
+    { name: 'mongodb', pattern: /^services\.mongodb\.bind_ip$/, enable: () => 'services.mongodb.enable', port: 27017, scope: () => 'services.mongodb' },
+    { name: 'memcached', pattern: /^services\.memcached\.listen$/, enable: () => 'services.memcached.enable', portOpt: () => 'services.memcached.port', port: 11211, scope: () => 'services.memcached' },
+    { name: 'elasticsearch', pattern: /^services\.elasticsearch\.listenAddress$/, enable: () => 'services.elasticsearch.enable', portOpt: () => 'services.elasticsearch.port', port: 9200, scope: () => 'services.elasticsearch' },
+    { name: 'grafana', pattern: /^services\.grafana\.settings\.server\.http_addr$/, enable: () => 'services.grafana.enable', port: 3000, scope: () => 'services.grafana' },
+  ];
+  for (const L of LISTENERS) {
+    for (const o of cfg.options.filter((x) => x.namespace === 'nixos' && L.pattern.test(x.path))) {
+      const m = L.pattern.exec(o.path);
+      const listenRes = note(o, 'listener');
+      const wild = judge(listenRes, (x) => WILDCARD(x, L.nullIsAll));
+      if (wild !== 'yes' && wild !== 'conditional') continue;
+      const enableRes = note(nixos(L.enable(m)), 'listener');
+      const state = stateOf(enableRes);
+      if (state !== 'active' && state !== 'conditional') continue;
+      let port = L.port;
+      if (L.portOpt) { const pv = view(nixos(L.portOpt(m))); if (pv.state === 'known' && Number.isInteger(pv.value) && pv.value > 0) port = pv.value; }
+      const ingress = ingressFor(port);
+      const scope = L.scope(m);
+      inventory.push({ kind: 'declared-service', name: L.name, state, listening: 'yes', ports: [port], ingress, reachability: { internet: 'unknown', reason: 'external network topology is not part of the configuration' }, evidence: [evidenceOf(enableRes), evidenceOf(listenRes)] });
+      const st = state === 'conditional' || wild === 'conditional' ? 'conditional' : 'active';
+      const restricted = ingress === 'firewall-closed' || ingress === 'restricted-interface';
+      addFinding('listener-all-interfaces', { severity: restricted ? 'low' : ingress === 'open-in-firewall' || ingress === 'firewall-disabled' ? 'high' : 'medium', anchor: anchorOf(listenRes), scope, state: st, uncertain: !view(listenRes).definite, evidence: [evidenceOf(listenRes), evidenceOf(enableRes)], extra: { exposure: { enabled: true, listening: 'yes', ingress, reachable: 'unknown' } }, mitigations: restricted ? [{ kind: 'restrictive-ingress', ingress }] : [] });
+    }
   }
 
   // ── TLS material and enforcement on nginx virtual hosts ──

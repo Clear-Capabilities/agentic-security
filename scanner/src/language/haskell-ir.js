@@ -761,7 +761,9 @@ class FnLowerer {
   // ── statements / control flow ──────────────────────────────────────────────
   addCallNode(expr, ln) {
     if (!expr) return;
-    if (expr.kind === 'call') this.cfg.add('call', ln, { callee: expr.callee, args: expr.args, hs: expr.hs });
+    // The call expression carries the line it was written on. The context that finally executes it (the last statement of a `do` handed to `get "/r" $`) is on an
+    // earlier line, and reporting that line would place the finding on the start of the whole handler instead of on the sink.
+    if (expr.kind === 'call') this.cfg.add('call', Number.isInteger(expr.line) && expr.line >= 1 ? expr.line : ln, { callee: expr.callee, args: expr.args, hs: expr.hs });
     else if (expr.kind !== 'literal' && expr.kind !== 'ident') this.cfg.add('assign', ln, { target: `$e${this.tmp++}`, source: expr, hs: { demand: 'executed' } });
   }
 

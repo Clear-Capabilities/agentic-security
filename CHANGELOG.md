@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.174.0 - Wider Haskell and NixOS detection, Zip Slip for Go
+
+New detection for Haskell and NixOS, and a Zip Slip rule for Go. Every addition has development cases written next to it, with renamed copies and near misses that must stay silent. They show that the entries work. They are **not an accuracy measurement**: the frozen holdout and the unseen-shapes split were not read or run, and the support registry's numbers are unchanged (it was rebuilt from the stored measurement only to list the new model packages).
+
+- **Haskell taint models.** Sources: Snap, Spock, Happstack, Yesod `getRequest`/`rawRequestBody`/`lookupFile`, Scotty `request`, socket reads, more file readers. Sinks: `System.Cmd`, Turtle and Shelly (CWE-78/88), hint `interpret` (CWE-94, new code-injection family), HDBC, direct-sqlite, libpq and the persistent backends (CWE-89), Req and HTTP (CWE-918), redirects in five frameworks (CWE-601, new open-redirect family), more path operations. The new packages list no tested versions, so the registry reports every version of them as untested; no build against those libraries was run.
+- **Haskell rules.** `hs-tls-validation-disabled` (CWE-295: `TLSSettingsSimple` with validation disabled, OpenSSL `VerifyNone`) and `hs-hardcoded-secret` (CWE-798: a constant given to `hmacSecret`, `fromSecret` or `initKey`).
+- **Fixed: Haskell sink lines.** A sink written inside a nested `do` block (the usual shape of a Scotty or Yesod handler) was reported at the line where the whole handler starts. It is now reported at the sink.
+- **NixOS rules.** `user-root-equivalent-group` (docker, lxd, disk), `user-uid-zero`, `getty-autologin` and `display-autologin`, `pam-null-password`, and the PostgreSQL bind-address decision generalised to Redis (including an explicit `null`), MySQL, MongoDB, Memcached, Elasticsearch and Grafana, with severity following the firewall. Only an explicit value is reported; an unset option keeps the module default.
+- **Zip Slip for Go.** `archive/zip` and `archive/tar` entry names that reach a file operation without a containment check in the same function. Over 23,015 Go files of the independent development split it reported nothing, so it changes no benchmark number.
+- **Behaviour change.** `docker` or `lxd` group membership on a user now produces a medium finding. It is accurate (each is root on the machine), and it will appear on many ordinary workstation configurations.
+
 ## 0.173.0 - Engineering excellence: measured accuracy, release assurance, bounded scans
 
 A programme of 67 verified tasks. The headline is a measurement, not a gain: the engine was scored for the first time on code it was not built from (278 of 283 entries, development and validation splits), and it finds little.

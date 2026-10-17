@@ -15,6 +15,8 @@ export const HS_FAMILY_BY_CWE = Object.freeze({
   'CWE-89': 'sql-injection',
   'CWE-918': 'ssrf',
   'CWE-79': 'xss',
+  'CWE-601': 'open-redirect',
+  'CWE-94': 'code-injection',
 });
 
 export const isHaskellFile = (file) => typeof file === 'string' && HS_FILE.test(file);

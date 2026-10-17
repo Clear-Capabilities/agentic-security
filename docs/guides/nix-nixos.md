@@ -134,7 +134,7 @@ Judged against the effective configuration, never raw text. Enabled, listening a
 is merely declared is not a finding, and reachability is always `unknown` (only the host firewall is modelled).
 
 <!-- generated:nix-hardening:start -->
-22 rules, judged against the effective configuration:
+27 rules, judged against the effective configuration:
 
 | Rule | Family | CWE | Severity | Finding |
 | --- | --- | --- | --- | --- |
@@ -160,6 +160,11 @@ is merely declared is not a finding, and reachability is always `unknown` (only 
 | `tls-not-enforced` | tls-runtime | CWE-319 | medium | Virtual host explicitly serves cleartext HTTP (forceSSL = false) |
 | `container-privileged` | container-declaration | CWE-250 | high | OCI container is declared privileged or with a dangerous mount |
 | `container-host-network` | container-declaration | CWE-668 | medium | OCI container shares the host network namespace |
+| `user-root-equivalent-group` | privilege-escalation | CWE-269 | medium | A user is a member of a group that is equivalent to root |
+| `user-uid-zero` | privilege-escalation | CWE-250 | high | A user other than root has user id 0 |
+| `getty-autologin` | login-access | CWE-306 | high | The console logs a user in without a password |
+| `display-autologin` | login-access | CWE-306 | low | The display manager logs a user in without a password |
+| `pam-null-password` | login-access | CWE-258 | high | A PAM service accepts accounts with an empty password |
 <!-- generated:nix-hardening:end -->
 
 **Firewall port ranges.** `networking.firewall.allowedTCPPortRanges` and `allowedUDPPortRanges` open ports exactly as the
