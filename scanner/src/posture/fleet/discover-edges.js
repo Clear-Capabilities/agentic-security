@@ -15,9 +15,10 @@
 // lead with evidence, not a fact. It is bounded in files, bytes and time.
 import fs from 'node:fs';
 import path from 'node:path';
+import { STATE_DIR_NAME } from '../state-dir.js';
 
-export const DISCOVERY_LIMITS = Object.freeze({ maxFilesPerRepo: 2000, maxFileBytes: 512 * 1024, maxTotalBytes: 64 * 1024 * 1024, maxEvidencePerEdge: 3 });
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.venv', 'venv', '__pycache__', 'target', '.agentic-security', 'coverage', '.next', 'dist-newstyle', '.stack-work']);
+const DISCOVERY_LIMITS = Object.freeze({ maxFilesPerRepo: 2000, maxFileBytes: 512 * 1024, maxTotalBytes: 64 * 1024 * 1024, maxEvidencePerEdge: 3 });
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.venv', 'venv', '__pycache__', 'target', STATE_DIR_NAME, 'coverage', '.next', 'dist-newstyle', '.stack-work']);
 const TEXT_EXT = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|java|kt|go|rb|php|cs|rs|scala|ya?ml|json|toml|properties|env|tf|conf|ini|hs|nix)$/i;
 const COMMENT = /^\s*(?:\/\/|#|\*|\/\*|--|;)/;
 const URL_RE = /\b[a-z][a-z0-9+.-]{1,12}:\/\/[^\s'"`<>)\]}]{1,300}/gi;

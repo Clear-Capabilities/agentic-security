@@ -93,13 +93,13 @@ test('the README states built images ARE scanned, by a named command', () => {
     'it must name what the command actually does, not just gesture at a feature');
 });
 
-test('the remaining image-scanning gap (daemon ref, registry ref) stays disclosed', () => {
+test('the image-scanning limits (inputs tested only against stand-ins) stay disclosed', () => {
   // Closing most of a gap is not license to go silent on what's left. A
   // limitation with no suggested path leaves the reader stuck — naming the
   // alternative (the full guide) is what turns a remaining gap into a boundary.
   const readme = fs.readFileSync(path.join(REPO, 'README.md'), 'utf8');
-  assert.match(readme, /Docker-daemon image reference|remote OCI registry reference/i,
-    'the un-implemented input shapes must stay named, not silently dropped');
+  assert.match(readme, /not a real daemon or registry/i,
+    'the engine and registry inputs were tested against stand-ins, and the README must say so rather than imply live proof');
   assert.match(readme, /docs\/guides\/artifact-provenance\.md/,
     'must point to the full guide for what is and is not supported');
 });
