@@ -85,7 +85,8 @@ test('image scan <name> --engine docker reads a local image through the engine; 
   fs.writeFileSync(f, buildDockerArchive({ config: {}, layers: [{ files: [{ name: 'app/package.json', content: JSON.stringify({ dependencies: { lodash: '4.17.21' } }) }] }] }));
   const ok = await run(dir, ['image', 'scan', 'acme/app:1', '--engine', 'docker', '--format', 'cli'], { PATH: `${ENGINE_DIR}${path.delimiter}${process.env.PATH}`, AS_FAKE_SAVE_FILE: f });
   assert.equal(ok.status, 0, ok.stderr); assert.match(ok.stdout, /Source: local docker image acme\/app:1/);
-  const missing = await run(dir, ['image', 'scan', 'acme/app:1', '--engine', 'podman'], { PATH: '/usr/bin:/bin' });
+  const emptyBin = path.join(dir, 'empty-bin'); fs.mkdirSync(emptyBin); // a PATH with no engine in it, whatever this host has installed
+  const missing = await run(dir, ['image', 'scan', 'acme/app:1', '--engine', 'podman'], { PATH: emptyBin });
   assert.equal(missing.status, 1); assert.match(missing.stderr, /not installed or not on PATH; nothing was read/);
   const inj = await run(dir, ['image', 'scan', '--evil', '--engine', 'docker']);
   assert.notEqual(inj.status, 0);
@@ -102,7 +103,8 @@ test('image verify --cosign reports the state cosign gave for THIS digest; with 
   assert.equal(v.status, 0, v.stderr); assert.equal(JSON.parse(v.stdout).signature.state, 'verified');
   const inv = await run(dir, ['image', 'verify', 'i.tar', '--cosign', '--repository', 'ghcr.io/acme/app', '--public-key', key], { ...withCosign, AS_FAKE_COSIGN_MODE: 'ok-other' });
   assert.equal(inv.status, 1); assert.equal(JSON.parse(inv.stdout).signature.state, 'invalid');
-  const none = await run(dir, ['image', 'verify', 'i.tar', '--cosign', '--repository', 'ghcr.io/acme/app', '--public-key', key], { PATH: '/usr/bin:/bin' });
+  const emptyBin2 = path.join(dir, 'empty-bin2'); fs.mkdirSync(emptyBin2);
+  const none = await run(dir, ['image', 'verify', 'i.tar', '--cosign', '--repository', 'ghcr.io/acme/app', '--public-key', key], { PATH: emptyBin2 });
   assert.equal(none.status, 0); assert.equal(JSON.parse(none.stdout).signature.state, 'unavailable');
   const norepo = await run(dir, ['image', 'verify', 'i.tar', '--cosign', '--public-key', key], withCosign);
   assert.equal(JSON.parse(norepo.stdout).signature.state, 'unavailable'); assert.match(JSON.parse(norepo.stdout).signature.reason, /--repository/);
