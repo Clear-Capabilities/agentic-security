@@ -5,7 +5,7 @@ export const modules = {
 /***/ 53948:
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-module.exports = __webpack_require__.p + "df1e8683e7eda7b2b79c.js";
+module.exports = __webpack_require__.p + "b4289e728659450b5e19.js";
 
 /***/ }),
 
@@ -609,7 +609,7 @@ const DB_FILE = node_path__WEBPACK_IMPORTED_MODULE_1__.join('fleet', 'fleet.db')
 const ROLLUP_FILE = 'fleet-rollup.json';
 const sha = (s) => (0,node_crypto__WEBPACK_IMPORTED_MODULE_2__.createHash)('sha256').update(s).digest('hex');
 
-const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
+const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] [--no-discover] [--lineage] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
 const isManifestArg = (s) => /\.ya?ml$/i.test(String(s ?? ''));
 const manifestArg = (args) => { const m = args._[2]; return m && !String(m).startsWith('--') ? m : 'fleet.yaml'; };
 const dbPath = (root) => (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, DB_FILE);
@@ -635,7 +635,7 @@ async function cmdEdges(args, root) {
   if (args.flags.json) { console.log(JSON.stringify({ discovery: g.discovery ?? null, edges }, null, 2)); return 0; }
   if (!edges.length) { console.log(args.flags.undeclared ? 'No edge was found in code that the manifest does not declare.' : 'The graph has no edges.'); }
   for (const e of edges) {
-    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal').map((x) => `${x.file}:${x.line}`);
+    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal' || x.source === 'code-boundaries').map((x) => (x.file ? `${x.file}:${x.line}` : `code boundaries: ${x.host ?? x.topic ?? x.name}`));
     console.log(`${e.from} -[${e.type}]-> ${e.to}  ${e.discovered ? 'FOUND ONLY IN CODE' : where.length ? 'declared, and seen in code' : 'declared'}${where.length ? `  (${where.join(', ')})` : ''}`);
   }
   if (g.discovery?.limitations) console.log(`\nLimits: ${g.discovery.limitations.join(' ')}`);
@@ -665,6 +665,12 @@ function entriesOf(artifacts, manifest) {
   return manifest.repositories.filter((r) => artifacts.has(r.id)).map((r) => ({ ...artifacts.get(r.id).entry, repo: r.id }));
 }
 
+/** The PRD names its commands `fleet status JOB-ID` and `fleet resume JOB-ID`; a run is a set of jobs, so a job id names the run it belongs to. */
+function runOfJob(store, id) {
+  const job = store.getJob(String(id));
+  return job ? store.getRun(job.runId) : null;
+}
+
 async function finishRun({ args, root, store, runId, manifest, manifestFile, interrupted }) {
   const { artifacts, problems } = (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .loadArtifacts */ .kZ)({ store, runId, root });
   const jobs = store.listJobs(runId);
@@ -684,14 +690,16 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
   let discovered = null; let discoveryNote = args.flags['no-discover'] ? 'skipped (--no-discover)' : null;
   if (!args.flags['no-discover']) { try { discovered = (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .discoverEdges */ .U)({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
   const split = discovered ? (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .splitDeclared */ .Z)(discovered, manifest) : null;
-  const graph = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .finalizeGraph */ .Th)((0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .buildEnterpriseGraph */ .Ws)({ manifest, dependencyGraph: dep, discovered }));
+  const lineageByRepo = new Map([...artifacts].filter(([, a]) => a.lineage).map(([id, a]) => [id, a.lineage]));
+  const graph = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .finalizeGraph */ .Th)((0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .buildEnterpriseGraph */ .Ws)({ manifest, dependencyGraph: dep, discovered, lineage: lineageByRepo.size ? lineageByRepo : null }));
   const findingsByRepo = Object.fromEntries([...artifacts].map(([id, a]) => [id, a.findings ?? []]));
-  (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
+  (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, codeBoundaries: lineageByRepo.size ? { repositories: lineageByRepo.size, undeclaredDataClasses: Object.fromEntries(graph.nodes.filter((n) => n.discoveredDataClasses?.length).map((n) => [n.id, n.discoveredDataClasses])) } : { note: args.flags.lineage ? 'no repository returned a Code Boundaries graph' : 'not requested (--lineage)' }, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
 
   if (args.flags.json) console.log(JSON.stringify({ runId, health, rollup }, null, 2));
   else {
     console.log((0,_fleet_js__WEBPACK_IMPORTED_MODULE_5__/* .renderFleetSummary */ .LL)(rollup));
     console.log(`\nRun: ${runId}\n${(0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .renderOrgHealth */ .Vp)(health)}`);
+    if (lineageByRepo.size) { const und = graph.nodes.filter((n) => n.discoveredDataClasses?.length); console.log(`\nCode Boundaries: ${lineageByRepo.size} repositor${lineageByRepo.size === 1 ? 'y' : 'ies'} contributed a data flow graph.${und.length ? ` Data classes found in code but not declared: ${und.map((n) => `${n.id} (${n.discoveredDataClasses.join(', ')})`).join('; ')}.` : ' No undeclared data class was found.'}`); }
     if (split) console.log(`\nEdges found in code: ${split.undeclared.length} not in the manifest, ${split.confirmed.length} matching a declared edge. ${split.undeclared.length ? 'List them with: agentic-security fleet edges --undeclared' : ''}`.trimEnd());
     else if (discoveryNote) console.log(`\nEdge discovery ${discoveryNote}.`);
     if (interrupted) console.log(`\nInterrupted. Continue with: agentic-security fleet resume ${runId}`);
@@ -703,7 +711,9 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
 async function runAll({ args, root, store, runId, manifest, manifestFile }) {
   const ac = new AbortController(); const onSig = () => ac.abort(); process.once('SIGINT', onSig); process.once('SIGTERM', onSig);
   try {
-    await (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .runJobs */ .Ag)({ manifest, store, runId, root, scan: _job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .childScan */ .IT, signal: ac.signal, useCache: !args.flags['no-cache'], onEvent: (e) => {
+    // Code Boundaries are requested at scan time and remembered on the run, so a resume does the same thing the scan would have
+    const lineage = !!args.flags.lineage || !!store.getRun(runId)?.meta?.lineage;
+    await (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .runJobs */ .Ag)({ manifest, store, runId, root, scan: _job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .childScan */ .IT, scanOptions: { lineage }, signal: ac.signal, useCache: !args.flags['no-cache'], onEvent: (e) => {
       if (args.flags.json) return;
       if (e.type === 'done') console.error(`[fleet] done: ${e.repo}${e.cached ? ' (cached)' : ''}${e.status === 'partial' ? ' (partial)' : ''}`);
       else if (e.type === 'failed') console.error(`[fleet] ${e.timedOut ? 'TIMED OUT' : 'FAILED'}: ${e.repo} (${e.error})${e.next === 'queued' ? ', will retry' : ''}`);
@@ -725,7 +735,7 @@ async function cmdScan(args, root) {
   try {
     const manifestHash = sha(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(manifestFile));
     console.error(`[fleet] planning ${manifest.repositories.length} repository(ies) for ${manifest.organization} (${manifest.workers} worker(s), ${manifest.retries} retr${manifest.retries === 1 ? 'y' : 'ies'}, ${Math.round(manifest.perRepoTimeoutMs / 1000)}s per repository)...`);
-    const plan = (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .planRun */ .nY)({ manifest, manifestHash, store, meta: { manifestFile } });
+    const plan = (0,_job_runner_js__WEBPACK_IMPORTED_MODULE_8__/* .planRun */ .nY)({ manifest, manifestHash, store, config: args.flags.lineage ? { lineage: true } : {}, meta: { manifestFile, lineage: !!args.flags.lineage } });
     return await runAll({ args, root, store, runId: plan.runId, manifest, manifestFile });
   } finally { store.close(); }
 }
@@ -742,7 +752,7 @@ async function cmdResume(args, root) {
       const hash = sha(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(root, target)));
       run = store.listRuns().find((r) => r.manifestHash === hash && store.listJobs(r.runId).some((j) => ['queued', 'leased'].includes(j.status)));
       if (!run) { console.error('Nothing to resume for that manifest: no run of it has unfinished work. Use `fleet resume <run-id> --retry-failed` to retry failed repositories.'); return 4; }
-    } else run = store.getRun(target);
+    } else run = store.getRun(target) ?? runOfJob(store, target);
     if (!run) { console.error(`No run ${target}. Runs: ${store.listRuns().slice(0, 5).map((r) => r.runId).join(', ') || 'none'}`); return 4; }
     const full = store.getRun(run.runId);
     const manifestFile = node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(root, args.flags.manifest ?? full.meta?.manifestFile ?? (isManifestArg(target) ? target : 'fleet.yaml'));
@@ -774,14 +784,15 @@ async function cmdStatus(args, root) {
   const store = await (0,_job_store_js__WEBPACK_IMPORTED_MODULE_7__/* .createSqliteJobStore */ .J6)({ file: dbFile });
   try {
     const arg = args._[2];
-    const run = arg && !isManifestArg(arg) ? store.getRun(String(arg)) : store.listRuns()[0] && store.getRun(store.listRuns()[0].runId);
-    if (!run) { console.error(arg && !isManifestArg(arg) ? `No run ${arg}.` : 'No fleet run exists yet.'); return 4; }
+    const run = arg && !isManifestArg(arg) ? (store.getRun(String(arg)) ?? runOfJob(store, String(arg))) : store.listRuns()[0] && store.getRun(store.listRuns()[0].runId);
+    if (!run) { console.error(arg && !isManifestArg(arg) ? `No run or job ${arg}.` : 'No fleet run exists yet.'); return 4; }
+    if (arg && !isManifestArg(arg) && String(arg) !== run.runId) console.error(`Job ${arg} belongs to run ${run.runId}.`);
     const meta = run.meta ?? {};
     const manifest = (0,_fleet_manifest_js__WEBPACK_IMPORTED_MODULE_3__/* .loadFleetManifest */ .Cb)(node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(root, meta.manifestFile ?? 'fleet.yaml'));
     const jobs = store.listJobs(run.runId);
     const m = manifest.ok ? manifest.manifest : { repositories: jobs.map((j) => ({ id: j.repoId, required: j.required })) };
     const health = (0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .computeOrgHealth */ .WB)({ manifest: m, jobs });
-    if (args.flags.json) { console.log(JSON.stringify({ runId: run.runId, health, jobs: jobs.map((j) => ({ repo: j.repoId, status: j.status, attempts: j.attempts, worker: j.worker, leaseExpiresAt: j.leaseExpiresAt, error: j.error })) }, null, 2)); return 0; }
+    if (args.flags.json) { console.log(JSON.stringify({ runId: run.runId, health, jobs: jobs.map((j) => ({ jobId: j.jobId, repo: j.repoId, status: j.status, attempts: j.attempts, worker: j.worker, leaseExpiresAt: j.leaseExpiresAt, error: j.error })) }, null, 2)); return 0; }
     console.log(`Run: ${run.runId} (${run.organization})\n${(0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .renderOrgHealth */ .Vp)(health)}`);
     const live = jobs.filter((j) => j.status === 'leased');
     if (live.length) console.log(`\nIn progress: ${live.map((j) => `${j.repoId} (attempt ${j.attempts}, lease until ${new Date(j.leaseExpiresAt).toISOString()})`).join(', ')}`);
@@ -850,6 +861,7 @@ async function cmdQuery(args, root) {
     for (const p of res.paths) {
       console.log(p.nodes.map((n) => (n === _enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .INTERNET */ .aw ? 'Internet' : n)).join(' -> '));
       if (p.discoveredEdges?.length) console.log(`    rests on edge(s) found only in code, not declared: ${p.discoveredEdges.join(', ')}`);
+      if (p.discoveredDataClassNodes?.length) console.log(`    reaches ${toClass} data only because the code shows it, not the manifest: ${p.discoveredDataClassNodes.join(', ')}`);
       if (p.involving.length) console.log(`    involves vulnerable code: ${p.involving.map((n) => `${n} (${involving.why.get(n)})`).join(', ')}`);
     }
     if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest, plus any marked above as found only in code.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);
@@ -1064,7 +1076,7 @@ const AUTH_CWES = new Set(['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863'
 const edgeId = (type, from, to) => `edge:${type}:${from}:${to}`;
 const hash = (v) => (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(JSON.stringify(v)).digest('hex');
 
-function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null }) {
+function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null, lineage = null }) {
   const nodes = new Map();
   const edges = new Map();
   const addNode = (n) => nodes.set(n.id, n);
@@ -1092,7 +1104,48 @@ function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null }) 
   // Edges found in the code. They share an id with a declared edge of the same type and endpoints, so the evidence list shows both; an
   // edge with ONLY discovered evidence is marked `discovered: true` so a query can say it rests on a code literal, not on a declaration.
   for (const d of discovered?.edges ?? []) for (const evidence of d.evidence) addEdge(d.type, d.from, d.to, evidence, true);
-  for (const e of edges.values()) e.discovered = e.evidence.every((x) => x.source === 'discovered-code-literal');
+  // Code Boundaries (each repository's own data flow graph, summarized): data classes the code handles, and destinations it sends to.
+  // These add to what the manifest declared and never replace it; a class the manifest did not declare is listed on the node so a path
+  // that exists only because of it can say so.
+  const aliasesOf = new Map([...manifest.repositories, ...(manifest.resources ?? [])].map((n) => [n.id, [n.id, ...(n.aliases ?? [])].map((a) => String(a).toLowerCase())]));
+  for (const [repoId, sum] of lineage ?? []) {
+    const node = nodes.get(repoId);
+    if (!node || !sum) continue;
+    const declared = new Set(node.dataClasses);
+    const found = (sum.dataClasses ?? []).filter((c) => !declared.has(c));
+    node.dataClasses = [...declared, ...found];
+    node.discoveredDataClasses = found;
+    const cb = (extra) => ({ source: 'code-boundaries', repo: repoId, declared: false, file: null, ...extra });
+    for (const d of sum.externalDestinations ?? []) {
+      if (!d.host) continue;
+      const first = d.host.split('.')[0];
+      for (const [target, names] of aliasesOf) {
+        if (target === repoId || !(names.includes(d.host) || names.includes(first))) continue;
+        const tn = nodes.get(target);
+        addEdge(tn?.type === 'external-provider' ? 'uses-provider' : 'calls', repoId, target, cb({ host: d.host, nodeKind: 'external' }), true);
+      }
+    }
+    for (const q of sum.queues ?? []) {
+      for (const [target, names] of aliasesOf) {
+        const tn = nodes.get(target);
+        if (tn?.type !== 'queue' || !names.includes(String(q.topic).toLowerCase())) continue;
+        if (q.operation === 'consume') addEdge('consumes', target, repoId, cb({ topic: q.topic }), true); else addEdge('produces', repoId, target, cb({ topic: q.topic }), true);
+      }
+    }
+    for (const st of sum.stores ?? []) {
+      for (const key of [st.host, st.database]) {
+        if (!key) continue;
+        const k = String(key).toLowerCase();
+        for (const [target, names] of aliasesOf) {
+          const tn = nodes.get(target);
+          if (tn?.type !== 'database' || !(names.includes(k) || names.includes(k.split('.')[0]))) continue;
+          addEdge('connects-to', repoId, target, cb({ store: st.subtype, name: key }), true);
+        }
+      }
+    }
+  }
+  const FOUND_IN_CODE = new Set(['discovered-code-literal', 'code-boundaries']);
+  for (const e of edges.values()) e.discovered = e.evidence.every((x) => FOUND_IN_CODE.has(x.source));
   return { schema: ENTERPRISE_GRAPH_SCHEMA, version: 1, organization: manifest.organization, nodes: [...nodes.values()], edges: [...edges.values()], digest: null };
 }
 
@@ -1139,7 +1192,7 @@ function attackPaths({ graph, toDataClass, from = INTERNET, involving = null, ma
     if (results.length >= maxPaths) { truncated = true; return; }
     if (targets.has(id) && nodePath.length > 1) {
       const inv = involving ? nodePath.filter((n) => involving.all.has(n)) : [];
-      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
+      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), discoveredDataClassNodes: nodePath.filter((n) => (nodeOf(graph, n)?.discoveredDataClasses ?? []).includes(toDataClass)), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
     }
     if (nodePath.length > maxDepth) { truncated = true; return; }
     for (const e of out.get(id) ?? []) if (!nodePath.includes(e.to)) walk(e.to, [...nodePath, e.to], [...edgePath, e]);
@@ -1540,8 +1593,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DEFAULTS = Object.freeze({ leaseMs: 30_000, heartbeatMs: 10_000, retryDelayMs: 2_000, pollMs: 100 });
 
 /** The default scan: one supervised child process per repository. Throws `{code: 'TIMEOUT'|'ERROR', message}`. */
-async function childScan(repoPath, { timeoutMs, signal }) {
-  const r = await (0,_sandbox_supervise_js__WEBPACK_IMPORTED_MODULE_5__/* .superviseSpawn */ .u)(process.execPath, [SCAN_CHILD, repoPath], { cwd: repoPath, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1' }, timeoutMs, signal, maxOutputBytes: 96 * 1024 * 1024 });
+async function childScan(repoPath, { timeoutMs, signal, lineage = false }) {
+  const r = await (0,_sandbox_supervise_js__WEBPACK_IMPORTED_MODULE_5__/* .superviseSpawn */ .u)(process.execPath, [SCAN_CHILD, repoPath], { cwd: repoPath, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1', ...(lineage ? { AGENTIC_SECURITY_LINEAGE_DEEP: '1' } : {}) }, timeoutMs, signal, maxOutputBytes: 96 * 1024 * 1024 });
   const fail = (code, message) => Object.assign(new Error(message), { code });
   if (r.timedOut) throw fail('TIMEOUT', `no result within ${Math.round(timeoutMs / 1000)}s`);
   if (r.cancelled) throw fail('CANCELLED', 'cancelled');
@@ -1584,7 +1637,7 @@ function planRun({ manifest, manifestHash, store, runId = null, config = {}, now
  * Run (or continue) a planned run until no job is queued or leased by a live worker. Returns when the work is done, the signal
  * aborts, or `maxWaitMs` passes with only other workers' leases outstanding.
  */
-async function runJobs({ manifest, store, runId, root, scan = childScan, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
+async function runJobs({ manifest, store, runId, root, scan = childScan, scanOptions = {}, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
   const repoById = new Map(manifest.repositories.map((r) => [r.id, r]));
   const cacheD = cacheDir ?? (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, 'fleet', 'cache');
   const artD = artifactDir ?? (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, 'fleet', 'artifacts', runId);
@@ -1617,7 +1670,7 @@ async function runJobs({ manifest, store, runId, root, scan = childScan, workers
       onEvent({ type: 'start', repo: job.repoId, attempt: job.attempts });
       const cached = useCache ? (0,_scan_cache_js__WEBPACK_IMPORTED_MODULE_7__/* .readCache */ .xe)(cacheD, job.cacheKey) : null;
       if (cached) {
-        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, cached: true });
+        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true });
         const status = cached.entry?.scanHealth && cached.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
         if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, artifact: node_path__WEBPACK_IMPORTED_MODULE_2__.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
         continue;
@@ -1628,15 +1681,15 @@ async function runJobs({ manifest, store, runId, root, scan = childScan, workers
       let lost = false;
       const hb = setInterval(() => { if (!store.heartbeat(job.jobId, job.epoch, { now: now(), leaseMs })) { lost = true; ac.abort(); } }, heartbeatMs);
       try {
-        const out = await scan(repo.path, { timeoutMs: job.timeoutMs, signal: ac.signal });
+        const out = await scan(repo.path, { timeoutMs: job.timeoutMs, signal: ac.signal, ...scanOptions });
         clearInterval(hb);
         if (lost) { onEvent({ type: 'fenced', repo: job.repoId }); continue; }
         if (!out?.entry) throw Object.assign(new Error('the scan returned no entry'), { code: 'ERROR' });
         if (out.entry.ok === false) throw Object.assign(new Error(out.entry.error || 'the scan failed'), { code: 'ERROR' });
-        const a = writeArtifact(job, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated });
+        const a = writeArtifact(job, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated, lineage: out.lineage ?? null });
         const status = out.entry.scanHealth && out.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
         if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: out.entry.total ?? null, cached: false, artifact: node_path__WEBPACK_IMPORTED_MODULE_2__.basename(a.file) }, now: now() })) {
-          if (useCache && status === 'succeeded') (0,_scan_cache_js__WEBPACK_IMPORTED_MODULE_7__/* .writeCache */ .aR)(cacheD, job.cacheKey, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated });
+          if (useCache && status === 'succeeded') (0,_scan_cache_js__WEBPACK_IMPORTED_MODULE_7__/* .writeCache */ .aR)(cacheD, job.cacheKey, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated, lineage: out.lineage ?? null });
           onEvent({ type: 'done', repo: job.repoId, cached: false, status });
         } else onEvent({ type: 'fenced', repo: job.repoId });
       } catch (e) {
@@ -1816,6 +1869,71 @@ async function createSqliteJobStore({ file }) {
     listJobs: (runId) => q('SELECT * FROM fleet_jobs WHERE run_id = ? ORDER BY repo_id', runId).map(jobOf),
     getJob: (jobId) => jobOf(one('SELECT * FROM fleet_jobs WHERE job_id = ?', jobId)),
     close() { try { db.close(); } catch { /* already closed */ } },
+  };
+}
+
+
+/***/ }),
+
+/***/ 81010:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   h: () => (/* binding */ summarizeLineage)
+/* harmony export */ });
+// A bounded summary of one repository's Code Boundaries graph (the Data Flow Explorer's `DataFlowGraph v1`), for the enterprise graph
+// (PRD 4: "federate Code Boundaries across repositories"). The whole graph is not copied: a fleet of hundreds of repositories does not
+// need each node, only what crosses a repository boundary or changes what the organization knows about it:
+//   * the data classes that appear in the code (so a repository holding payment data is known to, even if the manifest forgot to say);
+//   * the external destinations the code sends data to, by host;
+//   * the queue topics it publishes to or consumes from;
+//   * the stores it touches, by host/database/table name;
+//   * counts, including flows that carry sensitive classes across a trust boundary.
+// Pure; hostile input (the graph came out of a scan of someone's code), so every string is bounded and shape-checked.
+const MAX_ITEMS = 64;
+const SENSITIVE = new Set(['pii', 'phi', 'pci', 'fin', 'credentials']);
+const arr = (v) => (Array.isArray(v) ? v : []);
+const clean = (v, max = 120) => (typeof v === 'string' && v.length > 0 && v.length <= max && !/[\s\u0000-\u001f]/.test(v) ? v : null);
+
+function hostOf(literal) {
+  if (typeof literal !== 'string') return null;
+  try { const h = new URL(literal).hostname.toLowerCase(); return clean(h, 253); } catch { /* not a URL */ }
+  const bare = literal.toLowerCase().replace(/:\d+$/, '');
+  return /^[a-z0-9][a-z0-9.-]{0,252}$/.test(bare) ? bare : null;
+}
+
+function summarizeLineage(graph) {
+  if (!graph || typeof graph !== 'object') return null;
+  const classes = new Set();
+  for (const d of arr(graph.dataElements)) for (const c of arr(d?.dataClasses)) { if (typeof c !== 'string') continue; const l = clean(c.toLowerCase(), 31); if (l && /^[a-z][a-z0-9-]*$/.test(l)) classes.add(l); }
+  const ext = new Map(); const queues = new Map(); const stores = new Map();
+  for (const n of arr(graph.nodes)) {
+    if (!n || typeof n !== 'object') continue;
+    if (n.kind === 'external') {
+      const host = hostOf(n.destination?.literalValue);
+      const key = `${n.subtype ?? 'external'}|${host ?? ''}`;
+      if (!ext.has(key) && ext.size < MAX_ITEMS) ext.set(key, { subtype: clean(n.subtype, 60) ?? 'external', host });
+    } else if (n.kind === 'queue') {
+      const topic = clean(n.queueDetail?.topic, 120); const op = n.queueDetail?.operation === 'consume' || n.queueDetail?.operation === 'receive' ? 'consume' : 'publish';
+      if (topic && queues.size < MAX_ITEMS) queues.set(`${topic}|${op}`, { topic, operation: op });
+    } else if (n.kind === 'store') {
+      const d = n.storeDetail ?? {};
+      const item = { subtype: clean(n.subtype, 60) ?? 'store', host: hostOf(d.host), database: clean(d.database, 120), table: clean(d.table, 120) };
+      const key = JSON.stringify(item);
+      if (stores.size < MAX_ITEMS) stores.set(key, item);
+    }
+  }
+  const edges = arr(graph.edges);
+  const crossing = new Set(edges.filter((e) => arr(e?.boundaryCrossings).length).map((e) => e.id));
+  const dataById = new Map(arr(graph.dataElements).map((d) => [d?.id, d]));
+  const sensitiveCrossing = arr(graph.flows).filter((f) => arr(f?.edgeIds).some((id) => crossing.has(id)) && arr(f?.dataElementIds).some((id) => arr(dataById.get(id)?.dataClasses).some((c) => SENSITIVE.has(String(c).toLowerCase())))).length;
+  return {
+    schema: 'agentic-security/fleet-lineage-summary', version: 1,
+    dataClasses: [...classes].sort().slice(0, MAX_ITEMS),
+    externalDestinations: [...ext.values()],
+    queues: [...queues.values()],
+    stores: [...stores.values()],
+    counts: { nodes: arr(graph.nodes).length, edges: edges.length, flows: arr(graph.flows).length, boundaryCrossingEdges: crossing.size, sensitiveFlowsCrossingBoundary: sensitiveCrossing },
   };
 }
 
@@ -2033,6 +2151,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony export */ });
 /* harmony import */ var _fleet_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(80313);
 /* harmony import */ var _runScan_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45950);
+/* harmony import */ var _lineage_summary_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(81010);
 var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_runScan_js__WEBPACK_IMPORTED_MODULE_1__]);
 _runScan_js__WEBPACK_IMPORTED_MODULE_1__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // Child-process entry for ONE repository's scan inside a fleet run (PRD 4, requirement 4: one hung repository must not stop the
@@ -2043,6 +2162,7 @@ _runScan_js__WEBPACK_IMPORTED_MODULE_1__ = (__webpack_async_dependencies__.then 
 // from CODEOWNERS, scan health, policy drift, provenance debt) is exactly what a fleet entry has always been, and prints that entry
 // plus a slim copy of the findings between markers. Scan state writes are disabled (`AGENTIC_SECURITY_NO_STATE=1`, set by the
 // controller): scanning a repository for the fleet must not change that repository.
+
 
 
 
@@ -2058,7 +2178,9 @@ async function main(repoPath) {
   const entry = res.results?.[0];
   if (!entry) throw new Error('the scan produced no entry');
   const findings = (captured?.findings ?? []).slice(0, MAX_FINDINGS).map(slim);
-  process.stdout.write(`${BEGIN}${JSON.stringify({ entry, findings, findingsTruncated: (captured?.findings?.length ?? 0) > MAX_FINDINGS })}${END}`);
+  // the Code Boundaries graph exists only when the controller asked for it (AGENTIC_SECURITY_LINEAGE_DEEP=1); it is summarized, never copied whole
+  const lineage = process.env.AGENTIC_SECURITY_LINEAGE_DEEP === '1' ? (0,_lineage_summary_js__WEBPACK_IMPORTED_MODULE_2__/* .summarizeLineage */ .h)(captured?.lineageGraph) : null;
+  process.stdout.write(`${BEGIN}${JSON.stringify({ entry, findings, findingsTruncated: (captured?.findings?.length ?? 0) > MAX_FINDINGS, lineage })}${END}`);
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {

@@ -11,7 +11,7 @@ export const modules = {
 /* harmony export */ });
 /* harmony import */ var _mutation_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(85127);
 /* harmony import */ var _ir_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(87539);
-/* harmony import */ var _custom_rules_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(9049);
+/* harmony import */ var _custom_rules_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(69400);
 // Automatic corpus creation and scoring for ONE candidate rule.
 //
 // Positive corpus: the original vulnerable snippet plus its generated sibling variants (mutation.js).
@@ -25,15 +25,11 @@ export const modules = {
 
 
 
+/** The rule exactly as the scanner would load it: through the loader's own normalizer, not a second implementation. */
 function toRuntimeRule(ir) {
   const { ok, doc, errs } = (0,_ir_js__WEBPACK_IMPORTED_MODULE_1__/* .compileToCustomRule */ .Mo)(ir);
   if (!ok) throw new Error(`cannot build corpus for an invalid rule IR: ${errs.join('; ')}`);
-  const regexes = doc.match.allOf ? doc.match.allOf.map((p) => new RegExp(p, 'g')) : [new RegExp(doc.match.pattern, 'g')];
-  return {
-    id: doc.id, title: doc.title, severity: doc.severity, cwe: doc.cwe, languages: doc.languages, message: doc.message,
-    regexes, requireAll: !!doc.match.allOf, windowLines: doc.match.window ?? 5,
-    notMatch: doc.match.notMatch ? new RegExp(doc.match.notMatch) : null,
-  };
+  return (0,_custom_rules_js__WEBPACK_IMPORTED_MODULE_2__/* .normalizeCustomRule */ .Lj)(doc);
 }
 
 const EXT = { javascript: 'x.js', typescript: 'x.ts', python: 'x.py', go: 'x.go', ruby: 'x.rb', java: 'x.java', rust: 'x.rs', csharp: 'x.cs', php: 'x.php', any: 'x.txt' };
@@ -96,14 +92,26 @@ function scoreRule(ir, corpus) {
 /* harmony export */   pc: () => (/* binding */ draftRuleIR)
 /* harmony export */ });
 /* harmony import */ var _proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(37055);
+/* harmony import */ var _custom_rules_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(69400);
 // Rule intermediate representation: compiles DOWN into the existing pattern-rule engine
 // (`../custom-rules.js`), never a parallel matcher. "Compile" here means "emit a
 // custom-rules.js-compatible document" — detection at runtime is 100% the already-proven
 // regex/allOf/notMatch/window engine; this module only adds PROVENANCE metadata around it.
 //
 // A rule's match semantics are deliberately the same closed vocabulary custom-rules.js
-// already supports (pattern | allOf+window | notMatch) — no new matching primitive is
-// introduced, so a promoted rule is exactly as auditable as a hand-written one.
+// already supports (pattern | allOf+window | notMatch, plus the structural fields below): no
+// separate matching engine is introduced, so a promoted rule is exactly as auditable as a hand-written one.
+//
+// The structural fields are REAL, not annotations: each is a regular expression and each compiles to a constraint the
+// runtime matcher enforces.
+//   source, propagator, sink   together they become a windowed co-occurrence (allOf) anchored on the SINK; a sink alone is the pattern
+//   sanitizer, dominatingGuard a hit is dropped when either matches within `guardWindow` lines before (or on) it
+//   frameworkConstraint        a file-level precondition (the file must contain it, wherever it is)
+//   exclusions                 a hit is dropped when its own line matches one
+//   languages                  the rule only runs on files of those languages
+// An explicit `match` always wins over a derived one. An AST pattern is NOT a field: the existing engine has no AST matcher for rules to
+// compile to, and a field the matcher ignored would be the old mistake (an annotation that looks like a constraint).
+
 
 
 const RULE_IR_SCHEMA = 'agentic-security/rule-ir';
@@ -126,8 +134,9 @@ function validateRuleIR(ir) {
   if (!isStr(ir.family)) errs.push('family required');
   if (!Array.isArray(ir.languages) || !ir.languages.length || !ir.languages.every((l) => VALID_LANGS.has(l))) errs.push('languages must be a non-empty array from the supported set');
   const m = ir.match;
-  if (!m || typeof m !== 'object') errs.push('match required');
-  else {
+  if (m == null && !isStr(ir.sink)) errs.push('match required (or at least a sink, from which one is derived)');
+  else if (m != null && typeof m !== 'object') errs.push('match must be an object');
+  else if (m) {
     const hasPattern = isStr(m.pattern);
     const hasAllOf = Array.isArray(m.allOf) && m.allOf.length > 0 && m.allOf.every(isStr);
     if (!hasPattern && !hasAllOf) errs.push('match needs a pattern or a non-empty allOf');
@@ -137,12 +146,20 @@ function validateRuleIR(ir) {
       try { new RegExp(re); } catch { errs.push(`invalid regex: ${re}`); }
     }
   }
-  // Declarative-only hint fields (sink/source/propagator/sanitizer/dominatingGuard/frameworkConstraint): free text,
-  // never executable, carried for provenance/review only and NOT consulted by the matcher.
+  // Structural fields: each is a regular expression the matcher enforces (see the header). Free text is rejected, so a field can
+  // never look like a constraint while being ignored.
   for (const k of ['sink', 'source', 'propagator', 'sanitizer', 'dominatingGuard', 'frameworkConstraint']) {
-    if (ir[k] != null && !isStr(ir[k])) errs.push(`${k} must be a string when present`);
+    if (ir[k] == null) continue;
+    if (!isStr(ir[k])) { errs.push(`${k} must be a regular-expression string when present`); continue; }
+    try { new RegExp(ir[k]); } catch { errs.push(`${k} is not a valid regular expression`); }
   }
-  if (ir.exclusions != null && !(Array.isArray(ir.exclusions) && ir.exclusions.every(isStr))) errs.push('exclusions must be an array of strings');
+  if ((ir.source || ir.propagator) && !ir.sink && !ir.match) errs.push('a source or propagator needs a sink');
+  if (ir.window != null && !(Number.isInteger(ir.window) && ir.window > 0 && ir.window <= 200)) errs.push('window must be an integer in 1..200');
+  if (ir.guardWindow != null && !(Number.isInteger(ir.guardWindow) && ir.guardWindow > 0 && ir.guardWindow <= 200)) errs.push('guardWindow must be an integer in 1..200');
+  if (ir.exclusions != null) {
+    if (!(Array.isArray(ir.exclusions) && ir.exclusions.every(isStr))) errs.push('exclusions must be an array of regular-expression strings');
+    else for (const re of ir.exclusions) { try { new RegExp(re); } catch { errs.push(`invalid exclusion regex: ${re}`); } }
+  }
   if (!ir.provenance || typeof ir.provenance !== 'object') errs.push('provenance required');
   else {
     if (!isStr(ir.provenance.originatingFindingId)) errs.push('provenance.originatingFindingId required');
@@ -172,15 +189,38 @@ function draftRuleIR({ id, title, severity, cwe, family, languages, match, remed
 function compileToCustomRule(ir) {
   const errs = validateRuleIR(ir);
   if (errs.length) return { ok: false, errs };
+  const alt = (...parts) => { const p = parts.filter(isStr); return p.length ? p.map((x) => `(?:${x})`).join('|') : null; };
+  // the base match: explicit wins; otherwise source -> propagator -> sink as a windowed co-occurrence, or a sink alone
+  let base = ir.match;
+  if (!base) {
+    // the SINK leads: the matcher anchors on the first pattern, and the finding, the guard window and the line exclusions all belong at
+    // the sink, where the flaw manifests. The window is symmetric, so the order of the others does not affect co-occurrence.
+    const chain = [ir.sink, ir.propagator, ir.source].filter(isStr);
+    base = chain.length > 1 ? { allOf: chain, window: ir.window ?? 8 } : { pattern: ir.sink };
+  }
+  const guard = alt(ir.sanitizer, ir.dominatingGuard);
   const doc = {
     id: `rule-compiler/${ir.id}`,
     title: ir.title,
     severity: ir.severity,
     cwe: ir.cwe,
     languages: ir.languages,
-    match: { ...(ir.match.pattern ? { pattern: ir.match.pattern } : {}), ...(ir.match.allOf ? { allOf: ir.match.allOf, window: ir.match.window ?? 5 } : {}), ...(ir.match.notMatch ? { notMatch: ir.match.notMatch } : {}) },
+    match: {
+      ...(base.pattern ? { pattern: base.pattern } : {}),
+      ...(base.allOf ? { allOf: base.allOf, window: base.window ?? 5 } : {}),
+      ...(base.notMatch ? { notMatch: base.notMatch } : {}),
+      ...(isStr(ir.frameworkConstraint) ? { fileRequires: [ir.frameworkConstraint] } : {}),
+      ...(guard ? { guardedBy: guard, guardWindow: ir.guardWindow ?? base.window ?? 5 } : {}),
+      ...(Array.isArray(ir.exclusions) && ir.exclusions.length ? { excludeLine: ir.exclusions } : {}),
+    },
     message: ir.remediation || `${ir.title} (${ir.cwe}, compiled from ${ir.provenance.originatingFindingId})`,
   };
+  // The loader has its own safety checks (nested quantifiers and so on). A rule it would refuse must not be reported as compiled,
+  // or it would score well here and silently never fire in a scan.
+  const origError = console.error; let loaderSaid = '';
+  console.error = (...a) => { loaderSaid = a.join(' '); };
+  let normalized; try { normalized = (0,_custom_rules_js__WEBPACK_IMPORTED_MODULE_1__/* .normalizeCustomRule */ .Lj)(doc); } finally { console.error = origError; }
+  if (!normalized) return { ok: false, errs: [`the scanner's rule loader would reject this rule${loaderSaid ? `: ${loaderSaid.replace(/^agentic-security:\s*/, '').slice(0, 160)}` : ''}`] };
   return { ok: true, doc };
 }
 
@@ -482,7 +522,7 @@ function proposeCandidates({ vulnerableCode, patchedCode = null }) {
   const vuln = onlyIn(vulnerableCode, patchedCode);
   const lines = vuln.length ? vuln : String(vulnerableCode).split('\n').filter(meaningful).map((l) => l.trim()).filter((l) => callNames(l).length);
   const out = []; const seen = new Set();
-  const add = (strategy, match) => { const k = JSON.stringify(match); if (!seen.has(k)) { seen.add(k); out.push({ strategy, match }); } };
+  const add = (strategy, match, structure = null) => { const k = JSON.stringify([match, structure]); if (!seen.has(k)) { seen.add(k); out.push({ strategy, ...(match ? { match } : {}), ...(structure ? { structure } : {}) }); } };
   for (const l of lines.slice(0, 3)) add('line-shape', { pattern: generalizeLine(l) });
   for (const l of lines.slice(0, 3)) {
     const sink = sinkOf(l);
@@ -491,6 +531,9 @@ function proposeCandidates({ vulnerableCode, patchedCode = null }) {
   const sink = lines.map(sinkOf).find(Boolean);
   const src = SOURCES.find((s) => new RegExp(s).test(vulnerableCode));
   if (sink && src) add('source-and-sink', { allOf: [`${esc(sink)}\\s*\\(`, src], window: 6 });
+  // the same evidence as an explicit structure: a source and a sink the matcher enforces, so a sanitizer found in the patched code can
+  // later be added as a LOCAL guard (dropping one hit) instead of a file-level exclusion (silencing the whole file)
+  if (sink && src) add('structural', null, { source: src, sink: `${esc(sink)}\\s*\\(`, window: 6 });
   if (sink) add('sink-call', { pattern: `${esc(sink)}\\s*\\(` });
   return out;
 }
@@ -524,31 +567,33 @@ function synthesizeCandidate({ base, corpusSpec, proposed = null, maxAttempts = 
   for (const p of proposeCandidates({ vulnerableCode: corpusSpec.originalCode, patchedCode: corpusSpec.patchedCode })) queue.push(p);
   const names = safeNames({ vulnerableCode: corpusSpec.originalCode, patchedCode: corpusSpec.patchedCode });
   const attempts = []; const tried = new Set();
-  const tryOne = (strategy, match) => {
-    const key = JSON.stringify(match);
+  const tryOne = (strategy, match, structure = null) => {
+    const key = JSON.stringify([match, structure]);
     if (tried.has(key) || attempts.length >= cap) return null;
     tried.add(key);
-    const ir = (0,_ir_js__WEBPACK_IMPORTED_MODULE_0__/* .draftRuleIR */ .pc)({ ...base, match });
+    const ir = (0,_ir_js__WEBPACK_IMPORTED_MODULE_0__/* .draftRuleIR */ .pc)({ ...base, ...(match ? { match } : {}), ...(structure ?? {}) });
     const errs = (0,_ir_js__WEBPACK_IMPORTED_MODULE_0__/* .validateRuleIR */ .g)(ir);
-    if (errs.length) { attempts.push({ n: attempts.length + 1, strategy, match, valid: false, errors: errs, pass: false, reasons: errs }); return null; }
+    if (errs.length) { attempts.push({ n: attempts.length + 1, strategy, match: match ?? null, structure, valid: false, errors: errs, pass: false, reasons: errs }); return null; }
     const corpus = (0,_corpus_js__WEBPACK_IMPORTED_MODULE_1__/* .buildCorpus */ .F)(ir, corpusSpec);
     const ev = (0,_promotion_js__WEBPACK_IMPORTED_MODULE_2__/* .evaluateRule */ .kx)(ir, corpus, thresholds);
-    const rec = { n: attempts.length + 1, strategy, match, valid: true, pass: ev.pass && leakageOk, reasons: ev.reasons, score: summary(ev.score), ir, corpusSizes: { positives: corpus.positives.length, negatives: corpus.negatives.length } };
+    const rec = { n: attempts.length + 1, strategy, match: match ?? null, structure, valid: true, pass: ev.pass && leakageOk, reasons: ev.reasons, score: summary(ev.score), ir, corpusSizes: { positives: corpus.positives.length, negatives: corpus.negatives.length } };
     attempts.push(rec);
     return { rec, ev };
   };
   for (let qi = 0; qi < queue.length && attempts.length < cap; qi++) {
-    const first = tryOne(queue[qi].strategy, queue[qi].match);
+    const q = queue[qi];
+    const first = tryOne(q.strategy, q.match, q.structure);
     if (!first) continue;
     if (first.rec.pass) break;
     // revise from the failure: a negative that fired means the safe version is not excluded yet
     const fired = first.ev.score.negatives.filter((n) => n.fired);
     const rx = safeRegex(names);
-    if (fired.length && rx && !queue[qi].match.notMatch) { const r = tryOne(`${queue[qi].strategy}+exclude-safe`, { ...queue[qi].match, notMatch: rx }); if (r?.rec.pass) break; }
+    if (fired.length && rx && q.structure && !q.structure.sanitizer) { const r = tryOne(`${q.strategy}+sanitizer`, null, { ...q.structure, sanitizer: rx }); if (r?.rec.pass) break; }
+    else if (fired.length && rx && q.match && !q.match.notMatch) { const r = tryOne(`${q.strategy}+exclude-safe`, { ...q.match, notMatch: rx }); if (r?.rec.pass) break; }
   }
   const valid = attempts.filter((a) => a.valid);
   const best = valid.length ? [...valid].sort((a, b) => quality({ pass: b.pass, score: b.score }) - quality({ pass: a.pass, score: a.score }))[0] : null;
-  return { attempts: attempts.map(({ ir, ...rest }) => rest), best: best ? { strategy: best.strategy, match: best.match, pass: best.pass, score: best.score, reasons: best.reasons } : null, exhausted: !attempts.some((a) => a.pass) };
+  return { attempts: attempts.map(({ ir, ...rest }) => rest), best: best ? { strategy: best.strategy, match: best.match, structure: best.structure, pass: best.pass, score: best.score, reasons: best.reasons } : null, exhausted: !attempts.some((a) => a.pass) };
 }
 
 

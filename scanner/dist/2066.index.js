@@ -298,7 +298,8 @@ const P = new Proxy({}, { get: (_t, k) => (k === Symbol.toPrimitive ? () => payl
 const res = new Proxy(function () {}, { get: () => res, apply: () => res });
 const fn = ${pick};
 if (typeof fn !== 'function') { console.error('the exported value is not a function'); process.exit(3); }
-try { await Promise.race([Promise.resolve(fn(${args.join(', ')})), new Promise((r) => setTimeout(r, 5000))]); } catch (e) { console.error('target threw:', String(e && e.message).slice(0, 200)); }
+let timer; try { await Promise.race([Promise.resolve(fn(${args.join(', ')})), new Promise((r) => { timer = setTimeout(r, 5000); })]); } catch (e) { console.error('target threw:', String(e && e.message).slice(0, 200)); }
+clearTimeout(timer);
 `;
 }
 
