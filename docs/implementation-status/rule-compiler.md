@@ -1,6 +1,9 @@
 # Implementation status: Self-Learning Finding-to-Rule Compiler (PRD 3)
 
-**Percent complete:** the deterministic promotion half (requirements #2, #5, #6, #7, #8 of the PRD) is done and
+**Percent complete (updated):** all eight P0 requirements are implemented and tested; the follow-up list below closes the gaps this
+page first disclosed. Original summary, kept for the record:
+
+**Percent complete (original):** the deterministic promotion half (requirements #2, #5, #6, #7, #8 of the PRD) is done and
 tested end to end, including the killer scenario. #1 (eligibility) is done. #3 (automatic corpus creation) is done
 for the positive/patched/nearby-clean/protected-variant shapes the PRD names. #4 (mutation engine) is implemented
 with three of the seven listed mutator kinds (variable rename, wrapper, indirection); the other four (equivalent
@@ -51,17 +54,26 @@ custody.test.js`'s `[QA-002.AC03] static isolation` test exists specifically to 
 anything outside `posture/evaluation/` (it guards the sealed-label trust boundary). Reusing it was the wrong kind
 of reuse; `promotion.js` now has its own small, independent leakage check instead.
 
-**Not done:**
-- No automatic pattern-proposal step (a model is expected to supply the candidate regex via `--spec`; nothing
-  here calls a model).
-- Four of seven listed mutator kinds are not implemented (equivalent-API substitution, statement reordering,
-  alternate-sanitizer variants, framework-specific variants).
-- No MCP tool surface (`labs synthesize-rule FINDING-ID` from the PRD's own CLI example was deliberately NOT used
-  — that name is already taken by the unrelated, pre-existing LLM-assisted detector-spec-extraction script; see
-  [the rule-compiler guide](../guides/rule-compiler.md)'s disambiguation table).
-- No "benchmark leakage = 0" integration with a real, external benchmark corpus — the leakage check is a pure
-  text-pattern guard (advisory ids + a caller-supplied benchmark-name list), not connected to any actual benchmark
-  population.
+**Closed in the follow-up (PRD 3 gap closure):**
+- All seven listed mutators now exist (variable rename, wrapper, indirection, equivalent API, statement reordering, alternate
+  sanitizer, framework variant), and the SAFE side (nearby-clean and protected variants) is mutated as well, so a rule keyed to one
+  sanitizer's name fails its protected sibling — `mutation.js`, `corpus.js`, `test/rule-compiler/synthesis.test.js`.
+- Automatic pattern proposal and the bounded synthesis loop (propose, compile, positives, negatives, mutation, score, revise,
+  repeat, emit a candidate) — `proposal.js`, deterministic, no model call; a model's own proposal is tried first when supplied.
+- `labs synthesize-rule <finding-id>` is now the PRD's literal command (it is `rules synthesize`); the older slash-command mode
+  `/labs --synthesize-rule` is a different feature and is unchanged.
+- Anti-cheating check widened to the PRD's list: benchmark names, advisory ids, vulnerability comments, CWE-bearing and answer-key
+  file names; fails closed before anything is written — `promotion.js`, CLI test.
+- Provenance record per rule (`provenance.json`): originating finding and commit, evidence state, generating model, prompt
+  version, positive and negative corpus hashes, benchmark results, mutator coverage, rule hash and version, promotion event.
+- `rules cost <rule-id>`: the business metric (first discovery cost against later deterministic detections at $0 of model spend).
+- `rules evaluate` defaults to the corpus the rule was synthesized on.
+
+**Still not done:**
+- Four of the earlier gaps are closed; what remains is: no MCP tool surface for synthesis; the anti-cheating check is a pattern
+  check on the synthesis material, not a connection to a real benchmark population; a proposal is a regular expression over text
+  (no AST or data-flow rule); the mutator tables are small and conservative by design; the later-detection count in `rules cost`
+  reads the last scan only.
 
 **Blockers:** none structural.
 

@@ -156,7 +156,7 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\'"`])\/\/.*$/gm, '$1');
 const GROUND_TRUTH = /['"`][^'"`\n]*(bench\/(independent|cve-replay|sard|holdout-independent|independent-eval|mutation|proof-corpus)|adjudicated-labels|corpus-baseline|splits\.json|sealed-ledger|RESULT\.json)[^'"`\n]*['"`]/;
 // evaluation, scorecard and inventory tooling name these files on purpose; the scanning path must not
-export const ALLOWED_GROUND_TRUTH_REFERENCES = ['posture/accuracy-scorecard.js', 'posture/assurance/baseline-inventory.js', 'posture/corpus-enroll.js', 'posture/evaluation/custody.js', 'posture/evaluation/release-gate.js'];
+export const ALLOWED_GROUND_TRUTH_REFERENCES = ['posture/accuracy-scorecard.js', 'posture/assurance/baseline-inventory.js', 'posture/corpus-enroll.js', 'posture/evaluation/custody.js', 'posture/evaluation/release-gate.js', 'posture/rule-compiler/promotion.js'];
 
 test('no module on the scanning path names a benchmark root, a label file or an answer key', () => {
   const offenders = [];

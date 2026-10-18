@@ -41,6 +41,22 @@ export function loadIR(scanRoot, id) {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
 }
 
+function saveJson(scanRoot, id, name, doc) {
+  if (!ensureStateDir(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  const f = path.join(ruleDir(scanRoot, id), name);
+  return { ok: safeWriteState(f, JSON.stringify(doc, null, 2)), file: f };
+}
+function loadJson(scanRoot, id, name) { try { return JSON.parse(fs.readFileSync(path.join(ruleDir(scanRoot, id), name), 'utf8')); } catch { return null; } }
+/** The corpus a rule was synthesized on, kept so `rules evaluate <id>` needs no flag and the evidence is the same corpus. */
+export const saveCorpus = (r, id, spec) => saveJson(r, id, 'corpus.json', spec);
+export const loadCorpus = (r, id) => loadJson(r, id, 'corpus.json');
+/** Every synthesis attempt: strategy, match, score and why it did not pass. */
+export const saveSynthesis = (r, id, syn) => saveJson(r, id, 'synthesis.json', syn);
+export const loadSynthesis = (r, id) => loadJson(r, id, 'synthesis.json');
+/** The rule's provenance record (PRD 3 requirement 7). */
+export const saveProvenance = (r, id, doc) => saveJson(r, id, 'provenance.json', doc);
+export const loadProvenance = (r, id) => loadJson(r, id, 'provenance.json');
+
 export function saveEvaluation(scanRoot, id, evaluation) {
   if (!ensureStateDir(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = path.join(ruleDir(scanRoot, id), 'evaluation.json');

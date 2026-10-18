@@ -31,10 +31,27 @@ architecture rather than creating parallel systems"), every item below was exten
 ## Deliberately NOT done (disclosed, not silently dropped)
 
 - **Data Flow Explorer HTTP server / visual UI wiring** — `scanner/src/server/CLAUDE.md`'s own "What this does NOT do" section already lists `runtime/` among the Milestone 4/5 decision-intelligence endpoints deferred for the read-only S1 server (alongside `stories/`, `scenarios/`, `obligations/`, etc. — none of which have been wired in either). Bolting on an under-reviewed new HTTP endpoint here, without the same scoping-doc-plus-dedicated-test-suite rigor every other endpoint in that file got, would be a real regression in that package's own security discipline. `agentic-security explore . --runtime` is **not implemented**; the `runtime status`/`twin`/`query` CLI surface is the real, working way to read this data today. `frontend/` gets no changes.
-- **Authenticated identity in the schema** — PRD 2 names it, but `runtime-observation.js`'s closed-world contract deliberately omits any identity field as a payload-smuggling risk (an identity value is exactly the kind of thing that looks like metadata but carries PII). Not added.
-- **Route / function-symbol matching rungs** — the existing 3-rung ladder (destination_literal/store_table/queue_topic) is unchanged. Extending its precedence/ambiguity semantics with a 4th/5th rung needs its own dedicated adversarial review, matching every other increment in `observation-correlation.js`'s own history — not attempted here.
-- **`RUNTIME_BLOCKED`/`RUNTIME_POLICY_VIOLATION`/`RUNTIME_EXPLOIT_CORRELATED` edge states** — PRD 2 names 6 edge states; the existing 3-valued `OBSERVATION_LAYERS` is unchanged. `network.securityDecision` records the raw allow/deny fact at the observation level without changing the per-flow layer model — a future increment could build the 3 additional layer values on top of it.
-- **3 of PRD 2's own named example queries are architecturally unanswerable** with this contract and are reported as such by `runtime query --list` / a direct query attempt, never silently omitted: `runtime-flows-absent-from-static` (needs a config-declared/auto-correlated edge mechanism — M5 7a / M2 F2-F3, both out of scope everywhere in this codebase), `vulnerable-functions-in-production` (needs function/symbol-level telemetry this adapter set doesn't carry), `identities-using-risky-paths` (no identity field, per the point above).
+- **Closed in this increment:** authenticated identity as a keyed-hash token (`identity.token`, `lineage/identity-token.js`; off unless
+  `--record-identity-tokens`; the raw identity is in no persisted file), the six edge states (`lineage/runtime-edge-states.js`,
+  `runtime edges`), and two more queries (`runtime-flows-absent-from-static`, `identities-using-risky-paths`).
+- **Identity tokens are pseudonyms, not anonymity.** Whoever holds the install key and a candidate username can confirm a match; tokens
+  from two installs do not match. Identity is read from three fields only (K8s audit `user.username`, access-log `user`/`remote_user`/
+  `authenticated_user`, OTel `enduser.id`); Envoy has no standard field and carries none.
+- **`RUNTIME_EXPLOIT_CORRELATED` needs operator-supplied evidence** (`--exploit-evidence file.json`, entries naming exactly one edge, flow
+  or node). Nothing derives it automatically from a proof or a DnR hunt record, because those records name findings, not graph edges.
+  Observation alone never sets it, and a denied-only edge cannot carry it.
+- **`runtime-flows-absent-from-static` lists CANDIDATES.** An unmatched observation may be a path static analysis missed or a mapping the
+  matcher is too weak to make. It is a lead, not a verdict.
+- **Function and route matching live at the finding layer, not as new rungs in the graph ladder.** The graph is destination-shaped
+  (nodes carry no route or function symbol), so adding rungs there would mean changing the signed `DataFlowGraph v1` contract. The
+  existing `posture/runtime-correlation.js` already matches findings to function, line and route evidence in a runtime trace;
+  `runtime query vulnerable-functions-in-production` evaluates the scan's findings against the trace on disk with that matcher. Its
+  limits are that matcher's: a trace without declared full sampling cannot show that something did NOT run (absence becomes unknown),
+  and a finding with no line or route on its path can only ever be `unknown`.
+- **The Explorer views are one static, script-free page, not a route on the local explore server.** `explore . --runtime` (or
+  `runtime explore`) writes `.agentic-security/runtime-explorer.html` with the five PRD views, a path view per flow with a state per
+  hop, and expandable static+runtime evidence per edge. The hardened loopback server still serves only the signed static graph;
+  widening it is a separate security decision. The page is a snapshot, not live.
 
 ## Verification
 

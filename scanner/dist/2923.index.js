@@ -316,6 +316,16 @@ function _splitHostPort(v) {
   return { host: _safeIdentifierOrNull(host), port };
 }
 
+// Identity is recorded ONLY as a keyed-hash token, and only when the importer supplied the tokenizer (`context.tokenizeIdentity`).
+// This module stays zero-import and holds no key: with no tokenizer, identity is dropped, never stored raw and never hashed without a
+// key (an unkeyed hash of a username is reversible by guessing). A raw value that is not a plausible identity string is dropped too.
+function _identityToken(context, raw) {
+  if (typeof context?.tokenizeIdentity !== 'function') return null;
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 256 || /[\u0000-\u001f]/.test(raw)) return null;
+  const t = context.tokenizeIdentity(raw);
+  return typeof t === 'string' && /^idt_[0-9a-f]{16}$/.test(t) ? t : null;
+}
+
 function _draftBase(context, environmentOverride) {
   const { version, adapter, source, environment, windowStart, windowEnd, importedAt, retention } = context;
   return {
@@ -409,6 +419,7 @@ function parseOtelJsonObservations(text, context) {
         if (storeService) attributes['destination.service'] = storeService;
 
         if (Object.keys(attributes).length === 0) continue; // nothing safe to report for this span
+        { const idt = _identityToken(context, a['enduser.id']); if (idt) attributes['identity.token'] = idt; }
 
         const at = _isoFromUnixNano(span.startTimeUnixNano) ?? context.windowStart;
         drafts.push({
@@ -558,6 +569,7 @@ function parseK8sAuditLogObservations(text, context) {
     }
 
     if (Object.keys(attributes).length === 0) continue;
+    { const idt = _identityToken(context, _isPlainObject(record.user) ? record.user.username : undefined); if (idt) attributes['identity.token'] = idt; }
 
     const observedAt = typeof record.requestReceivedTimestamp === 'string' && Number.isFinite(Date.parse(record.requestReceivedTimestamp))
       ? record.requestReceivedTimestamp
@@ -621,6 +633,7 @@ function parseHttpAccessLogObservations(text, context) {
     if (scheme) attributes['destination.scheme'] = scheme;
 
     if (Object.keys(attributes).length === 0) continue;
+    { const idt = _identityToken(context, record.user ?? record.remote_user ?? record.authenticated_user); if (idt) attributes['identity.token'] = idt; }
 
     const ts = record.timestamp ?? record.time;
     const observedAt = typeof ts === 'string' && Number.isFinite(Date.parse(ts)) ? ts : context.windowStart;

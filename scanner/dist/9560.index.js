@@ -1,5 +1,5 @@
 export const id = 9560;
-export const ids = [9560,8218,9390,8752];
+export const ids = [9560,8218,5099,9390,8752];
 export const modules = {
 
 /***/ 99405:
@@ -162,6 +162,8 @@ const TOOL_CAPABILITIES = Object.freeze({
   portfolio_progress: read('builds a read-only progress view from a portfolio store, ledger and optional inputs, confined to the session root'),
   apply_fix: mutating('writes verified patches into the project'),
   verify_fix: mutating('runs the project linter and tests and appends fix metrics'),
+  prove_finding: mutating('runs a reproducer in the confined proof environment and writes a proof record'),
+  prove_fix: mutating('replays the original exploit against a copy of the patched sources and runs the project tests; writes nothing to the project'),
   append_scratchpad: mutating('writes under the agent scratchpad'),
   append_agents_memory: mutating('appends to the continual-learning file'),
   synthesize_sca_upgrade: external('runs a package manager dry-run, which may reach a registry'),
@@ -2609,6 +2611,160 @@ function makePortfolioTools({ confine, META }) {
 
 /***/ }),
 
+/***/ 52197:
+/***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependencies__, __webpack_async_result__) => { try {
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   c: () => (/* binding */ makeProofTools)
+/* harmony export */ });
+/* harmony import */ var _posture_proof_fabric_orchestrator_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3740);
+/* harmony import */ var _posture_proof_fabric_fix_proof_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(818);
+/* harmony import */ var _posture_proof_fabric_cli_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(92066);
+/* harmony import */ var _posture_proof_fabric_store_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(62199);
+/* harmony import */ var _posture_proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(37055);
+/* harmony import */ var _posture_proof_fabric_siblings_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(25099);
+/* harmony import */ var _posture_fix_verify_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(27838);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_posture_fix_verify_js__WEBPACK_IMPORTED_MODULE_6__]);
+_posture_fix_verify_js__WEBPACK_IMPORTED_MODULE_6__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
+// proof-tools.js: the MCP surface for execution-backed exploit proof (PRD 1).
+//
+// Two tools, both of which RUN CODE in the proof fabric's confined environment, so both are classified `mutating` and both require
+// `confirm: true`:
+//   prove_finding   execute a reproducer (supplied, stored, or generated from the finding) and report the evidence state
+//   prove_fix       overlay a patch on a COPY of the sources, replay the original exploit against it, run the static verification,
+//                   and search for sibling exposures; the patch is never written to the project
+//
+// Guarantees, each with a test:
+//   - nothing runs without `confirm: true`, without a verified (HMAC-checked) last scan, or for a shadow finding;
+//   - a reproducer an agent supplies is validated as untrusted input (closed schema, argv only, bounded files, safe paths) before
+//     it reaches the runner, and it runs under the same sandbox, limits, network policy and 3-of-3 plus independent replay as any other;
+//   - patch paths are confined to the session root and the reserved write paths are refused, though nothing is written;
+//   - the result carries evidence STATE and counts, never the target's output, and is scrubbed before it is returned;
+//   - a model decides nothing: the oracle does.
+// The factory shape (rather than importing helpers from tools.js) avoids a cycle between this file and the registry.
+
+
+
+
+
+
+
+
+const MAX_RESPONSE_BYTES = 200_000;
+
+function makeProofTools({ confine, META, readLastScanVerified, findById, isReservedWritePath, redactString }) {
+  const refuse = (reason, extra = {}) => ({ _meta: META, ok: false, reason, ...extra });
+
+  async function load(args, ctx) {
+    if (args.confirm !== true) return { error: refuse('this tool executes code in the proof environment and requires confirm: true.') };
+    const { scan, status } = readLastScanVerified(ctx.sessionRoot, { allowUnsigned: false });
+    if (!scan) return { error: refuse(`last-scan.json failed integrity check: ${status}. Run a fresh scan.`) };
+    const finding = findById(scan, args.finding_id);
+    if (!finding) return { error: refuse(`Finding not found: ${args.finding_id}`) };
+    if (finding._shadow === true) return { error: refuse('shadow findings cannot be proven') };
+    let reproducer = null; let generated = null;
+    if (args.reproducer) {
+      const errs = (0,_posture_proof_fabric_reproducer_js__WEBPACK_IMPORTED_MODULE_4__/* .validateReproducer */ .mC)(args.reproducer);
+      if (errs.length) return { error: refuse(`the reproducer is not acceptable: ${errs.slice(0, 5).join('; ')}`) };
+      reproducer = args.reproducer;
+    } else {
+      const r = (0,_posture_proof_fabric_cli_js__WEBPACK_IMPORTED_MODULE_2__.resolveReproducer)(ctx.sessionRoot, finding, null);
+      if (!r.reproducer) return { error: refuse(`no reproducer was supplied or stored, and none could be generated: ${r.reason}`) };
+      reproducer = r.reproducer; generated = r.generated;
+    }
+    return { scan, finding, reproducer, generated };
+  }
+
+  const finish = (obj) => {
+    const safe = (0,_posture_proof_fabric_store_js__WEBPACK_IMPORTED_MODULE_3__.scrubDeep)(obj);
+    const text = redactString(JSON.stringify(safe));
+    if (text.length > MAX_RESPONSE_BYTES) return refuse('the result is too large for one response');
+    return { _meta: META, ...JSON.parse(text) };
+  };
+
+  const prove_finding = {
+    name: 'prove_finding',
+    description: 'Execute a reproducer for a finding in the confined proof environment and report its evidence state (CANDIDATE ... EXPLOIT_CONFIRMED). The reproducer is supplied, stored, or generated from the finding; EXPLOIT_CONFIRMED needs 3 of 3 reproductions and an independent replay, decided by a deterministic oracle, never by a model. Runs code: requires confirm: true. Returns state and counts, never the target\'s output.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        finding_id: { type: 'string', minLength: 1, maxLength: 256 },
+        confirm: { type: 'boolean' },
+        reproducer: { type: 'object' },
+        attempts: { type: 'integer', minimum: 1, maximum: 10 },
+        required: { type: 'integer', minimum: 1, maximum: 10 },
+        require_container: { type: 'boolean' },
+      },
+      required: ['finding_id', 'confirm'],
+    },
+    async handler(args, ctx) {
+      const l = await load(args, ctx);
+      if (l.error) return l.error;
+      const policy = {};
+      if (args.attempts) policy.attempts = args.attempts;
+      if (args.required) policy.required = Math.min(args.required, args.attempts ?? 10);
+      if (args.require_container) policy.requireContainer = true;
+      let result;
+      try { result = await (0,_posture_proof_fabric_orchestrator_js__WEBPACK_IMPORTED_MODULE_0__/* .proveFinding */ .kO)({ finding: l.finding, reproducer: l.reproducer, policy, sourceRoot: ctx.sessionRoot }); } catch (e) { return refuse(`the proof could not run: ${String(e.message).slice(0, 200)}`); }
+      const saved = (0,_posture_proof_fabric_store_js__WEBPACK_IMPORTED_MODULE_3__.saveProof)(ctx.sessionRoot, { ...result, reproducer: l.reproducer, ...(l.generated ? { generatedFrom: l.generated } : {}) });
+      return finish({
+        ok: true, findingId: result.findingId, state: result.state, outcome: result.outcome, oracle: result.oracle, completeness: result.completeness,
+        attempts: result.attempts, independentReplay: result.independentReplay?.status ?? 'not-run', environment: result.environment ? { mode: result.environment.mode, assurance: result.environment.assurance } : null,
+        degradation: result.degradation, durationMs: result.timing?.proofMs ?? null, generated: l.generated, stored: saved.ok,
+        note: 'Not reproduced is not proof of safety.',
+      });
+    },
+  };
+
+  const prove_fix = {
+    name: 'prove_fix',
+    description: 'Check a proposed patch against the original exploit: confirm the exploit before the patch, overlay the patch on a COPY of the sources, replay the exploit, run the static verification, and search for sibling exposures. Reports FIX_VERIFIED only when the exploit is blocked in every replay and nothing was skipped. Nothing is written to the project. Runs code (and the project tests): requires confirm: true.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        finding_id: { type: 'string', minLength: 1, maxLength: 256 },
+        confirm: { type: 'boolean' },
+        patch: { type: 'object', additionalProperties: { type: 'string', maxLength: 500_000 }, minProperties: 1, maxProperties: 8 },
+        reproducer: { type: 'object' },
+      },
+      required: ['finding_id', 'confirm', 'patch'],
+    },
+    async handler(args, ctx) {
+      const l = await load(args, ctx);
+      if (l.error) return l.error;
+      const files = {};
+      for (const [rel, content] of Object.entries(args.patch)) {
+        let abs;
+        try { abs = confine(ctx.sessionRoot, rel, 'patch key'); } catch (e) { return refuse(`path-escape refused: ${String(e.message).replace(ctx.sessionRoot, '<root>')}`); }
+        if (isReservedWritePath(ctx.sessionRoot, abs)) return refuse(`reserved path refused: ${rel}`);
+        files[rel] = String(content);
+      }
+      let staticVerification = null;
+      try { staticVerification = l.finding.stableId ? await (0,_posture_fix_verify_js__WEBPACK_IMPORTED_MODULE_6__.verifyFix)({ scanRoot: ctx.sessionRoot, originalFindingStableId: l.finding.stableId, files, recordMetrics: false }) : null; } catch { staticVerification = null; }
+      const sib = (0,_posture_proof_fabric_siblings_js__WEBPACK_IMPORTED_MODULE_5__.findSiblings)({ root: ctx.sessionRoot, finding: l.finding, scanFindings: l.scan.findings || [] });
+      let fp;
+      try {
+        fp = await (0,_posture_proof_fabric_fix_proof_js__WEBPACK_IMPORTED_MODULE_1__.verifyFixWithProof)({ finding: l.finding, reproducer: l.reproducer, files, scanRoot: ctx.sessionRoot, staticVerification, siblings: sib.siblings.map((x) => ({ file: x.file, line: x.line, source: x.source })), siblingSearchTruncated: sib.truncated });
+      } catch (e) { return refuse(`the fix proof could not run: ${String(e.message).slice(0, 200)}`); }
+      return finish({
+        ok: true, findingId: fp.findingId, state: fp.state, verified: fp.verified, completeness: fp.completeness, degradedLegs: fp.degradedLegs ?? [], legs: fp.legs,
+        reason: fp.reason ?? null, incompleteStep: fp.incompleteStep ?? null, siblings: sib.siblings.slice(0, 20), siblingSearchTruncated: sib.truncated, report: (0,_posture_proof_fabric_fix_proof_js__WEBPACK_IMPORTED_MODULE_1__.formatFixProof)(fp), generated: l.generated,
+        note: 'The patch was not written. Apply it with apply_fix once it is verified.',
+      });
+    },
+  };
+
+  return { prove_finding, prove_fix };
+}
+
+__webpack_async_result__();
+} catch(e) { __webpack_async_result__(e); } });
+
+/***/ }),
+
 /***/ 27438:
 /***/ ((__webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -2674,7 +2830,7 @@ const TOOLS_BY_NAME = Object.fromEntries(_tools_js__WEBPACK_IMPORTED_MODULE_4__/
 function _codeFingerprint() {
   try {
     const here = node_path__WEBPACK_IMPORTED_MODULE_2__.dirname((0,node_url__WEBPACK_IMPORTED_MODULE_3__.fileURLToPath)(import.meta.url));
-    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'invariant-tools.js', 'portfolio-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
+    const files = ['server.js', 'tools.js', 'dataflow-tools.js', 'invariant-tools.js', 'portfolio-tools.js', 'proof-tools.js', 'stdio.js', 'audit.js', 'validate.js', 'redact.js'];
     const h = node_crypto__WEBPACK_IMPORTED_MODULE_1__.createHash('sha256');
     for (const f of files) {
       try { h.update(f); h.update(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(node_path__WEBPACK_IMPORTED_MODULE_2__.join(here, f))); } catch {}
@@ -2931,7 +3087,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _posture_integrity_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(71130);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(31174);
 /* harmony import */ var _posture_cache_economics_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(58752);
-/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(83468);
+/* harmony import */ var _redact_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(83468);
 /* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(75917);
 /* harmony import */ var _posture_verification_projection_js__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(51864);
 /* harmony import */ var _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(2046);
@@ -2940,10 +3096,11 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(20095);
 /* harmony import */ var _invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(82407);
 /* harmony import */ var _portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(99027);
-/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(79907);
-/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(71364);
-var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__]);
-([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
+/* harmony import */ var _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(52197);
+/* harmony import */ var _posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(79907);
+/* harmony import */ var _posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(71364);
+var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__]);
+([_fix_apply_fix_service_js__WEBPACK_IMPORTED_MODULE_5__, _report_index_js__WEBPACK_IMPORTED_MODULE_12__, _fix_verify_patch_js__WEBPACK_IMPORTED_MODULE_14__, _proof_tools_js__WEBPACK_IMPORTED_MODULE_20__] = __webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__);
 // MCP tool implementations — PRD Feature 2, hardened against the OWASP MCP
 // Top 10 (see ./redact.js, ./audit.js, ./server.js for sibling controls).
 //
@@ -2979,6 +3136,7 @@ var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_fix
 // Git-origin provenance (Finding Provenance M0/M1). Distinct from
 // `finding.provenance` (AI-authorship) and from an SCA entry's `provenance`
 // (Sigstore/SLSA attestation) — see report/index.js's import comment.
+
 
 
 
@@ -3390,7 +3548,7 @@ const scan_diff = {
     // scanning), left as-is rather than silently claimed fixed here.
     const findings = (0,_report_index_js__WEBPACK_IMPORTED_MODULE_12__.normalizeFindings)(result.scan)
       .filter(f => wantSet.has(String(f.file || '').replace(/\\/g, '/')) && (sevRank[f.severity] ?? 0) >= min)
-      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
+      .map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
         id: f.id, severity: f.severity, file: f.file, line: f.line,
         title: f.vuln, cwe: f.cwe,
         description: f.description, remediation: f.remediation,
@@ -3453,7 +3611,7 @@ const query_taint = {
       const hay = [f.description, f.title, f.vuln, f.snippet, JSON.stringify(f.trace || '')].join(' ').toLowerCase();
       return hay.includes(srcL) && hay.includes(sinkL);
     });
-    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
+    const page = all.slice(off, off + lim).map(f => (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, description: f.description,
       trace: f.trace || null,
@@ -3491,7 +3649,7 @@ const explain_finding = {
     if (!scan) throw new Error(`No usable scan state (${status}).`);
     const f = _findById(scan, finding_id);
     if (!f) throw new Error(`Finding not found: ${finding_id}`);
-    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactFinding */ .lE)({
+    const redacted = (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactFinding */ .lE)({
       id: f.id, severity: f.severity, file: f.file, line: f.line,
       title: f.title || f.vuln, cwe: f.cwe,
       description: f.description, remediation: f.remediation,
@@ -3636,7 +3794,7 @@ const _scrubRoot = (sessionRoot, text) => {
   const roots = new Set([node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot)]);
   try { roots.add(node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_2__.resolve(sessionRoot))); } catch { /* root vanished: the plain path is still scrubbed */ }
   for (const r of roots) out = out.split(r).join('<root>');
-  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(out);
+  return (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(out);
 };
 const _gateSummary = (g) => (g ? {
   path: g.path ? g.path.ok : undefined, syntax: g.syntax ? g.syntax.ok : undefined,
@@ -4061,7 +4219,7 @@ const verify_fix = {
         _meta: META,
         ok: r.ok,
         rescan: { ok: r.rescan.ok, reason: r.rescan.reason, introduced: r.rescan.introduced || [] },
-        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
+        lint: { runner: r.lint.runner, ok: r.lint.ok, skipped: r.lint.skipped || false, output: (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(r.lint.output || '').slice(0, 1500) },
         // verifyFix computes five legs, not two — tests/honesty/poc were
         // being silently dropped here, leaving an agent with no structured
         // way to see WHY verification failed when the failure was in one
@@ -4072,7 +4230,7 @@ const verify_fix = {
         // it can echo proof-harness detail derived from scanned source.
         tests: r.tests,
         honesty: r.honesty,
-        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
+        poc: r.poc ? { ...r.poc, reason: r.poc.reason ? (0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(r.poc.reason) : r.poc.reason } : r.poc,
         summary: r.summary,
         // X-201: the one version-1 verification record (additive). It states what was actually established, e.g.
         // `not-run` when no exploit oracle executed against the patch, never a bare pass/fail.
@@ -4421,7 +4579,7 @@ const append_agents_memory = {
     required: ['agent', 'body'],
   },
   async handler({ agent, body }, ctx) {
-    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
+    const r = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__/* .appendAgentsMemory */ .eu)(ctx.sessionRoot, { agent, body });
     return { _meta: META, ...r };
   },
 };
@@ -4437,7 +4595,7 @@ const read_agents_memory = {
     },
   },
   async handler({ full }, ctx) {
-    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_21__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
+    const body = (0,_posture_agents_memory_js__WEBPACK_IMPORTED_MODULE_22__/* .readAgentsMemory */ .ox)(ctx.sessionRoot);
     if (!body) return { _meta: META, present: false };
     if (full) return { _meta: META, present: true, length: body.length, content: body };
     // Tail-only — same logic as summarizeForSession but inlined to avoid a
@@ -4481,7 +4639,7 @@ const query_triage_memory = {
     // they landed in, rather than hardcoding a field allowlist that could
     // miss one.
     let results;
-    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { results = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { results = raw; }
     return {
       _meta: META,
@@ -4517,7 +4675,7 @@ const query_findings_memory = {
     // whole-structure redactString round-trip is applied rather than a
     // per-field allowlist that could miss one of the four shapes.
     let body;
-    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_20__/* .redactString */ .rd)(JSON.stringify(raw))); }
+    try { body = JSON.parse((0,_redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd)(JSON.stringify(raw))); }
     catch { body = raw; }
     return { _meta: META, ...body };
   },
@@ -4539,7 +4697,7 @@ const lookup_cve = {
     required: ['cve'],
   },
   async handler({ cve }, _ctx) {
-    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_22__/* .lookupCve */ .x)(cve);
+    const r = (0,_posture_cve_lookup_js__WEBPACK_IMPORTED_MODULE_23__/* .lookupCve */ .x)(cve);
     return { _meta: META, ...r };
   },
 };
@@ -4647,9 +4805,10 @@ const apply_sca_upgrade = {
 // X-407: read-only scenario export; the factory takes this file's confinement so the two modules do not import each other.
 const { invariant_scenario_export } = (0,_invariant_tools_js__WEBPACK_IMPORTED_MODULE_18__/* .makeInvariantTools */ ._)({ confine: _confine, META });
 // X-707: read-only portfolio progress view, same factory shape.
+const { prove_finding, prove_fix } = (0,_proof_tools_js__WEBPACK_IMPORTED_MODULE_20__/* .makeProofTools */ .c)({ confine: _confine, META, readLastScanVerified: _readLastScanVerified, findById: _findById, isReservedWritePath: _isReservedWritePath, redactString: _redact_js__WEBPACK_IMPORTED_MODULE_21__/* .redactString */ .rd });
 const { portfolio_progress } = (0,_portfolio_tools_js__WEBPACK_IMPORTED_MODULE_19__/* .makePortfolioTools */ ._)({ confine: _confine, META });
 
-const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress];
+const ALL_TOOLS = [scan_diff, query_taint, explain_finding, apply_fix, verify_fix, synthesize_fix, find_rule_module, append_scratchpad, read_scratchpad, append_agents_memory, read_agents_memory, lookup_cve, synthesize_sca_upgrade, apply_sca_upgrade, query_triage_memory, query_findings_memory, query_cache_telemetry, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_graph */ .HX, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_node */ .HI, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_edge */ .gC, _dataflow_tools_js__WEBPACK_IMPORTED_MODULE_17__/* .dataflow_get_flow */ .ri, invariant_scenario_export, portfolio_progress, prove_finding, prove_fix];
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } });
@@ -5380,6 +5539,186 @@ function synthesizeDeterministicPatch(finding, fileContent) {
     } catch { /* a single rule failing must never break synthesis */ }
   }
   return null;
+}
+
+
+/***/ }),
+
+/***/ 818:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   formatFixProof: () => (/* binding */ formatFixProof),
+/* harmony export */   verifyFixWithProof: () => (/* binding */ verifyFixWithProof)
+/* harmony export */ });
+/* harmony import */ var _states_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(12090);
+/* harmony import */ var _orchestrator_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3740);
+/* harmony import */ var _runner_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(23081);
+/* harmony import */ var _reproducer_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37055);
+// Verified remediation, extended with exploit replay. This EXTENDS the fix-verify vocabulary (`verifiedFull`,
+// `degradedLegs`); it does not define a competing meaning of "verified".
+//
+//   1. pre-patch: the original exploit must be EXPLOIT_CONFIRMED (3/3 + independent replay) on the unpatched code;
+//   2. the candidate patch is overlaid on the imported sources and the SAME exploit is replayed;
+//   3. the patched replay must COMPLETE in every attempt and the oracle must not fire in any: BLOCKED.
+//      An attempt that did not complete (timeout, build failure, no environment) is inconclusive, never "blocked";
+//   4. static legs (re-scan, lint, tests, honesty) come from `verifyFix`, passed in so they are not re-implemented;
+//   5. FIX_VERIFIED only when 1-4 hold and the static verification had no degraded leg.
+
+
+
+
+
+async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revision = null, policy = {}, staticVerification = null, siblings = null, siblingSearchTruncated = [], signal, deps = {} } = {}) {
+  const t0 = Date.now();
+  const attemptFn = deps.attemptFn ?? _runner_js__WEBPACK_IMPORTED_MODULE_2__/* .runAttempt */ .Tm;
+  const patchHash = (0,_reproducer_js__WEBPACK_IMPORTED_MODULE_3__/* .sha256 */ .sc)((0,_reproducer_js__WEBPACK_IMPORTED_MODULE_3__/* .canonicalize */ .dw)(files || {}));
+  const legs = { prePatch: null, postPatch: null, regression: staticVerification ? { ok: !!staticVerification.ok, verifiedFull: !!staticVerification.verifiedFull } : { status: 'not-run' }, rescan: staticVerification?.rescan ?? { status: 'not-run' } };
+  const out = (extra) => ({ schema: 'agentic-security/fix-proof', version: 1, findingId: finding?.stableId ?? finding?.id ?? null, patchHash, reproducerDigest: (0,_reproducer_js__WEBPACK_IMPORTED_MODULE_3__/* .reproducerDigest */ .we)(reproducer), legs, durationMs: Date.now() - t0, ...extra });
+
+  const pre = await (0,_orchestrator_js__WEBPACK_IMPORTED_MODULE_1__/* .proveFinding */ .kO)({ finding, revision, reproducer, policy, signal, deps, sourceRoot: scanRoot });
+  legs.prePatch = { state: pre.state, outcome: pre.outcome, completeness: pre.completeness };
+  if (pre.state !== 'EXPLOIT_CONFIRMED') {
+    return out({ state: pre.state, verified: false, completeness: 'INCOMPLETE', incompleteStep: 'pre-patch-exploit', reason: `the original exploit was not confirmed before the patch (${pre.outcome}); a fix cannot be proven against an exploit that does not reproduce` });
+  }
+
+  const attempts = Math.max(1, Math.min(10, policy.attempts ?? 3));
+  const results = [];
+  for (let i = 0; i < attempts; i++) {
+    if (signal?.aborted) break;
+    results.push(await attemptFn(structuredClone(reproducer), { limits: { timeoutMs: policy.timeoutMs }, signal, sourceRoot: scanRoot, overlay: files, requireContainer: policy.requireContainer, force: policy.force }));
+  }
+  const completed = results.filter((r) => r.status === 'completed' && !r.oracle?.inconclusive);
+  const fired = completed.filter((r) => r.oracle?.fired).length;
+  legs.postPatch = { attempts: results.length, completed: completed.length, exploitSucceeded: fired, statuses: results.map((r) => r.status) };
+
+  if (fired > 0) return out({ state: 'EXPLOIT_CONFIRMED', verified: false, completeness: 'FULL', incompleteStep: 'post-patch-exploit', reason: 'the exploit still succeeds against the patched code' });
+  if (completed.length < results.length || results.length === 0) {
+    return out({ state: 'EXPLOIT_CONFIRMED', verified: false, completeness: 'INCOMPLETE', incompleteStep: 'post-patch-replay', reason: 'the patched replay did not complete in every attempt, so the patch is not shown to block the exploit' });
+  }
+  let state = (0,_states_js__WEBPACK_IMPORTED_MODULE_0__/* .advance */ .np)('EXPLOIT_CONFIRMED', 'FIX_REPLAY_BLOCKED').state;
+
+  const degraded = [];
+  if (!staticVerification) degraded.push('static-verification-not-run');
+  else {
+    if (!staticVerification.ok) return out({ state, verified: false, completeness: 'FULL', incompleteStep: 'static-verification', reason: `exploit blocked, but static verification failed: ${staticVerification.rescan?.reason || 'a leg failed'}` });
+    for (const d of staticVerification.degradedLegs || []) degraded.push(d);
+  }
+  const lowAssurance = pre.environment?.assurance === 'lower';
+  if (lowAssurance) degraded.push('lower-assurance-local-confinement');
+  const siblingCount = Array.isArray(siblings) ? siblings.length : null;
+  if (siblingCount === null) degraded.push('sibling-search-not-run');
+  else if (siblingCount > 0) degraded.push(`sibling-exposures:${siblingCount}`);
+  if (siblingCount !== null && siblingSearchTruncated?.length) degraded.push('sibling-search-incomplete');
+
+  const full = degraded.length === 0;
+  // Same split as fix-verify: `ok` (nothing that ran failed) earns FIX_VERIFIED; `completeness` says whether anything was skipped.
+  if (staticVerification && staticVerification.ok) state = (0,_states_js__WEBPACK_IMPORTED_MODULE_0__/* .advance */ .np)(state, 'FIX_VERIFIED').state;
+  return out({ state, verified: state === 'FIX_VERIFIED', completeness: full ? 'FULL' : 'DEGRADED', degradedLegs: degraded, siblings: siblings ?? null });
+}
+
+function formatFixProof(r) {
+  const L = r.legs || {};
+  return [
+    `Pre-patch exploit: ${L.prePatch?.state === 'EXPLOIT_CONFIRMED' ? 'PASS' : 'NOT CONFIRMED'}`,
+    `Post-patch exploit: ${!L.postPatch ? 'NOT RUN' : L.postPatch.exploitSucceeded > 0 ? 'STILL SUCCEEDS' : L.postPatch.completed === L.postPatch.attempts ? 'BLOCKED' : 'INCONCLUSIVE'}`,
+    `Regression tests: ${L.regression?.status === 'not-run' ? 'not run' : L.regression?.verifiedFull ? 'PASS' : L.regression?.ok ? 'PASS (degraded)' : 'FAIL'}`,
+    `Security rescan: ${L.rescan?.ok === true ? 'PASS' : L.rescan?.status === 'not-run' ? 'not run' : 'FAIL'}`,
+    `Completeness: ${r.completeness}${r.degradedLegs?.length ? ` (${r.degradedLegs.join('; ')})` : ''}`,
+    '',
+    `Evidence: ${r.state}${r.verified ? '' : ` (not verified: ${r.reason || r.incompleteStep || 'degraded'})`}`,
+  ].join('\n');
+}
+
+
+/***/ }),
+
+/***/ 25099:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   findSiblings: () => (/* binding */ findSiblings)
+/* harmony export */ });
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _rule_compiler_proposal_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(47838);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(31174);
+// Sibling-exposure search for a verified fix (PRD 1, requirement 6, step 8: "look for equivalent sibling exposures").
+//
+// A fix that closes one instance of a flaw says nothing about the same shape written somewhere else. This finds candidates two ways,
+// and reports where each came from:
+//   * `scan`       other findings from the last scan with the same weakness or title (what the engine already believes);
+//   * `structural` other places in the repository whose line has the SAME SHAPE as the vulnerable line: the vulnerable line is
+//                  generalized (call names kept, strings and other identifiers become classes) by the rule compiler's own
+//                  generalizer and searched across the source files. This finds copies the engine did not flag.
+// The result is a list of CANDIDATES for a person to look at, not a verdict that each one is exploitable. Bounded in files, bytes,
+// matches and time; a bound that is hit is reported (`truncated`), because "no siblings found" must never mean "stopped looking".
+
+
+
+
+
+const SOURCE_EXT = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|rb|php|java|kt|go|rs|cs|c|cc|cpp|h|hpp|sh|swift|scala)$/i;
+const SKIP = new Set(['.git', 'node_modules', 'dist', 'build', 'vendor', _state_dir_js__WEBPACK_IMPORTED_MODULE_3__/* .STATE_DIR_NAME */ .Ky, 'coverage', '__pycache__']);
+const SIBLING_LIMITS = Object.freeze({ maxFiles: 5000, maxFileBytes: 512 * 1024, maxMatches: 100, budgetMs: 8000 });
+
+const sameSpot = (a, b) => node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(a) === node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(b);
+
+/**
+ * @param {object} o
+ * @param {string} o.root           repository root
+ * @param {{file: string, line: number, id?: string, cwe?: string, vuln?: string}} o.finding
+ * @param {object[]} [o.scanFindings] findings from the last scan
+ * @returns {{siblings: object[], truncated: string[], pattern: string|null}}
+ */
+function findSiblings({ root, finding, scanFindings = [], limits = SIBLING_LIMITS, now = Date.now }) {
+  const out = []; const seen = new Set(); const truncated = [];
+  const add = (s) => { const k = `${s.file}:${s.line ?? ''}`; if (!seen.has(k)) { seen.add(k); out.push(s); } };
+  for (const x of scanFindings) {
+    if (!x || x.id === finding.id || x.stableId === finding.stableId && finding.stableId) continue;
+    if (x.file === finding.file && x.line === finding.line) continue;
+    if ((finding.cwe && x.cwe === finding.cwe) || (finding.vuln && x.vuln === finding.vuln)) add({ source: 'scan', file: x.file, line: x.line ?? null, id: x.id ?? null });
+  }
+  let pattern = null;
+  let line = '';
+  try {
+    const abs = node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(root, finding.file);
+    line = (node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(abs, 'utf8').split('\n')[finding.line - 1] ?? '').trim();
+  } catch { /* the flagged file is gone; only the scan-based siblings are available */ }
+  if (line.length >= 8) {
+    pattern = (0,_rule_compiler_proposal_js__WEBPACK_IMPORTED_MODULE_2__/* .generalizeLine */ .Ry)(line);
+    let rx = null;
+    try { rx = new RegExp(pattern); } catch { rx = null; }
+    if (rx) {
+      const deadline = now() + limits.budgetMs; let files = 0; let matches = 0;
+      const base = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root);
+      const walk = (dir) => {
+        if (truncated.length) return;
+        let ents = [];
+        try { ents = node_fs__WEBPACK_IMPORTED_MODULE_0__.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)); } catch { return; }
+        for (const e of ents) {
+          if (truncated.length) return;
+          if (SKIP.has(e.name) || e.isSymbolicLink()) continue;
+          const p = node_path__WEBPACK_IMPORTED_MODULE_1__.join(dir, e.name);
+          if (e.isDirectory()) { walk(p); continue; }
+          if (!e.isFile() || !SOURCE_EXT.test(e.name)) continue;
+          if (++files > limits.maxFiles) { truncated.push(`file limit (${limits.maxFiles})`); return; }
+          if (now() > deadline) { truncated.push('time budget'); return; }
+          let text; try { const st = node_fs__WEBPACK_IMPORTED_MODULE_0__.statSync(p); if (st.size > limits.maxFileBytes) continue; text = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(p, 'utf8'); } catch { continue; }
+          const lines = text.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].length > 2000 || !rx.test(lines[i].trim())) continue;
+            const rel = node_path__WEBPACK_IMPORTED_MODULE_1__.relative(base, node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(p));
+            if (sameSpot(node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(base, rel), node_path__WEBPACK_IMPORTED_MODULE_1__.resolve(base, finding.file)) && i + 1 === finding.line) continue;
+            add({ source: 'structural', file: rel, line: i + 1, text: lines[i].trim().slice(0, 160) });
+            if (++matches >= limits.maxMatches) { truncated.push(`match limit (${limits.maxMatches})`); return; }
+          }
+        }
+      };
+      walk(base);
+    }
+  }
+  return { siblings: out, truncated, pattern };
 }
 
 

@@ -1,0 +1,21 @@
+{
+  "schema": "agentic-security/reproducer",
+  "version": 1,
+  "findingId": "x",
+  "lang": "javascript",
+  "sources": {
+    "app.mjs": "app.mjs"
+  },
+  "run": [
+    "{{NODE}}",
+    "app.mjs",
+    "touch {{CANARY:command}}"
+  ],
+  "oracle": {
+    "type": "command_execution",
+    "params": {
+      "canary": "command"
+    }
+  },
+  "network": "none"
+}

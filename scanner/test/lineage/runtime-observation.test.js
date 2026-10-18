@@ -77,6 +77,8 @@ test('RO/1b: RUNTIME_ATTRIBUTE_KEYS is exactly FR-505\'s own four named metadata
     // the one security-DECISION field (PRD "Runtime-Corroborated Security
     // Twin" §P0-1), added for the K8s audit adapter
     'network.securityDecision',
+    // authenticated identity, as a keyed-hash token only (PRD 2 section 1); the grammar rejects any raw identity
+    'identity.token',
   ]);
   assert.ok(!RUNTIME_ATTRIBUTE_KEYS.includes('destination.path'), 'destination.path must no longer be an approved key');
   // Every array-valued key must itself be an approved key.
@@ -252,7 +254,7 @@ test('RO/5a: every approved attribute key validates with a scalar value', () => 
     // identifier — 'x' is not one of its legal values, so it needs its
     // own value here (proven rejected-when-wrong separately in RO/10).
     const value = RUNTIME_ARRAY_ATTRIBUTE_KEYS.includes(key) ? ['user_id', 'created_at']
-      : key === 'network.securityDecision' ? 'allowed' : 'x';
+      : key === 'network.securityDecision' ? 'allowed' : key === 'identity.token' ? 'idt_0123456789abcdef' : 'x';
     _ok(validateObservationAttributes({ [key]: value }), `approved key ${key}`);
   }
   _ok(validateObservationAttributes({ 'destination.port': 443 }), 'number');
@@ -548,4 +550,12 @@ test('RO/7b: observationImportId is prefixed, fixed-width, deterministic, and di
   assert.equal(a, observationImportId(base), 'idempotent');
   assert.notEqual(a, observationImportId({ ...base, importedAt: '2026-09-01T12:00:01.000Z' }),
     'importedAt is a per-run nonce, mirroring snapshotId\'s own capturedAt');
+});
+
+test('identity.token accepts only a keyed-hash token; a raw username, email, or an unkeyed-looking value is rejected', () => {
+  _ok(validateObservationAttributes({ 'identity.token': 'idt_0123456789abcdef' }), 'a token');
+  for (const raw of ['alice', 'alice@example.com', 'idt_short', 'idt_0123456789ABCDEF', 'idt_0123456789abcdef0', 'system:serviceaccount:ns:bot', 42, true, null]) {
+    const r = validateObservationAttributes({ 'identity.token': raw });
+    assert.equal(r.valid, false, JSON.stringify(raw));
+  }
 });

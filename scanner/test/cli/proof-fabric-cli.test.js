@@ -89,3 +89,53 @@ test('fix --require-proof refuses to apply without a reproducer; nothing is writ
   assert.match(r.stderr, /no reproducer/i);
   assert.equal(fs.readFileSync(path.join(dir, 'app.js'), 'utf8'), 'vulnerable();\n');
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Reproducers generated from the finding (no hand-written reproducer), and structural sibling search.
+
+const LIB_VULN = "const { execSync } = require('child_process');\nfunction run(name) {\n  execSync('echo ' + name, { stdio: 'ignore' });\n}\nmodule.exports = { run };\n";
+const LIB_SAFE_LINE = "  require('child_process').execFileSync('echo', [name], { stdio: 'ignore' });";
+
+function genProject(extra = {}) {
+  const dir = mkProject([{ id: 'F1', stableId: 'F1', severity: 'critical', vuln: 'command injection', cwe: 'CWE-78', file: 'lib.js', line: 3, parser: 'IR-TAINT', fix: { replaceLine: LIB_SAFE_LINE }, ...extra }], { signed: true });
+  fs.writeFileSync(path.join(dir, 'lib.js'), LIB_VULN);
+  return dir;
+}
+
+test('triage exploit --prove with no reproducer builds one from the finding, says so, and confirms it by execution', { skip: !sandboxAvailable() && 'no confinement backend on this host', timeout: 120000 }, () => {
+  const dir = genProject();
+  const r = runIn(dir, ['triage', 'exploit', 'F1', '--prove'], { timeout: 90000 });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stderr, /Generated a reproducer from the finding \(function, command-injection\)/);
+  assert.match(r.stdout, /Evidence: EXPLOIT_CONFIRMED/); assert.match(r.stdout, /Reproductions: 3\/3/);
+  const show = JSON.parse(runIn(dir, ['proof', 'show', 'F1', '--json']).stdout);
+  assert.equal(show.generatedFrom.shape, 'function'); assert.equal(show.generatedFrom.taintedParameter, 'name');
+});
+
+test('proof generate writes the reproducer without running it; a finding it cannot build one for is refused with the reason', () => {
+  const dir = genProject();
+  const out = path.join(dir, 'gen.json');
+  const g = runIn(dir, ['proof', 'generate', 'F1', '--out', out]);
+  assert.equal(g.status, 0, g.stderr);
+  assert.match(g.stdout, /Nothing was executed/);
+  const rep = JSON.parse(fs.readFileSync(out, 'utf8'));
+  assert.equal(rep.lang, 'javascript'); assert.equal(rep.findingId, 'F1'); assert.ok(rep.files['harness.mjs']);
+  assert.equal(fs.existsSync(path.join(dir, '.agentic-security', 'proofs')), false);
+  const dir2 = mkProject([{ id: 'F2', stableId: 'F2', cwe: 'CWE-89', file: 'q.js', line: 1, parser: 'IR-TAINT' }]);
+  fs.writeFileSync(path.join(dir2, 'q.js'), 'db.query("x" + y);\n');
+  const bad = runIn(dir2, ['triage', 'exploit', 'F2', '--prove']);
+  assert.equal(bad.status, 4); assert.match(bad.stderr, /none could be generated from the finding: no payload and oracle exist for CWE-89/); assert.match(bad.stderr, /Nothing was executed/);
+  assert.equal(runIn(dir2, ['proof', 'generate', 'F2']).status, 1);
+  assert.equal(runIn(dir2, ['proof', 'generate', 'NOPE']).status, 4);
+});
+
+test('fix --require-proof uses a generated reproducer, blocks the exploit with the patch, and searches for sibling exposures', { skip: !sandboxAvailable() && 'no confinement backend on this host', timeout: 180000 }, () => {
+  const dir = genProject();
+  fs.writeFileSync(path.join(dir, 'other.js'), "const { execSync } = require('child_process');\nfunction go(arg) {\n  execSync('echo ' + arg, { stdio: 'ignore' });\n}\nmodule.exports = go;\n");
+  const fix = runIn(dir, ['fix', '--finding', 'F1', '--apply', '--require-proof'], { timeout: 150000 });
+  assert.equal(fix.status, 0, fix.stdout + fix.stderr);
+  assert.match(fix.stderr, /using a reproducer generated from the finding/);
+  assert.match(fix.stdout, /Post-patch exploit: BLOCKED/); assert.match(fix.stdout, /Evidence: FIX_VERIFIED/);
+  assert.match(fix.stdout, /sibling-exposures:1/, 'the same shape in other.js is reported, so the fix is DEGRADED rather than FULL');
+  assert.match(fs.readFileSync(path.join(dir, 'lib.js'), 'utf8'), /execFileSync/);
+});

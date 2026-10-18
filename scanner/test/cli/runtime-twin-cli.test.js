@@ -163,6 +163,22 @@ test('runtime twin killer scenario: all 5 PRD fixture properties, proven against
   const q2 = run(fx.root, ['runtime', 'query', 'runtime-flows-absent-from-static', '.']);
   assert.equal(q2.status, 0, q2.stderr);
   const q2Result = JSON.parse(q2.stdout);
-  assert.equal(q2Result.supported, false, 'this named PRD query must be honestly disclosed as unsupported, never fabricated');
-  assert.ok(typeof q2Result.reason === 'string' && q2Result.reason.length > 20);
+  assert.equal(q2Result.supported, true);
+  assert.equal(q2Result.evaluated, true);
+  assert.ok(q2Result.candidates.some((c) => /unknown-shadow-service\.internal/.test(c.destination)), 'the shadow service no static node explains is listed');
+  assert.ok(!q2Result.candidates.some((c) => /OrdersQueue/.test(c.destination)), 'the refused queue publish matched a static node, so it is not "absent from static"');
+  assert.match(q2Result.note, /candidates, not proof/, 'the answer says it is candidates, never a verdict');
+
+  // ── Edge states: derived from the same overlay, never from absence ──
+  const edges = run(fx.root, ['runtime', 'edges', '.', '--environment', 'production']);
+  assert.equal(edges.status, 0, edges.stderr);
+  const e = JSON.parse(edges.stdout);
+  assert.equal(e.evaluated, true);
+  const all = Object.values(e.byEdge);
+  assert.ok(all.length > 0);
+  assert.ok(all.every((x) => x.states.length >= 1), 'every edge carries a state');
+  assert.ok(all.some((x) => x.states.includes('RUNTIME_OBSERVED')), 'the executed path is observed');
+  assert.ok(all.every((x) => !x.states.includes('RUNTIME_EXPLOIT_CORRELATED')), 'traffic alone never means an exploit');
+  assert.ok(e.limitations.some((l) => /never "unreachable"/.test(l)));
+  assert.ok(Object.values(e.byNode).some((n) => n.states.includes('RUNTIME_BLOCKED')), 'the queue publish refused by authorization is reported as blocked (PRD fixture property 5)');
 });

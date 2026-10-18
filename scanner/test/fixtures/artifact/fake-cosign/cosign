@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+// A stand-in for cosign, used only by tests. It decides its answer from AS_FAKE_COSIGN_MODE and records how it was called
+// (AS_FAKE_COSIGN_LOG) so the tests can check what the verifier passed it. It verifies nothing.
+import fs from 'node:fs';
+const argv = process.argv.slice(2);
+const keyIdx = argv.indexOf('--key');
+const rec = { argv, keyFileExistedAtCall: keyIdx >= 0 ? fs.existsSync(argv[keyIdx + 1]) : null, keyMode: keyIdx >= 0 ? (fs.statSync(argv[keyIdx + 1]).mode & 0o777).toString(8) : null, envNames: Object.keys(process.env).filter((k) => /SECRET|TOKEN|KEY|PASSWORD/i.test(k)) };
+if (process.env.AS_FAKE_COSIGN_LOG) fs.appendFileSync(process.env.AS_FAKE_COSIGN_LOG, `${JSON.stringify(rec)}\n`);
+const ref = argv[argv.length - 1]; const digest = ref.slice(ref.indexOf('@') + 1);
+const mode = process.env.AS_FAKE_COSIGN_MODE ?? 'ok-match';
+const payload = (d) => JSON.stringify([{ critical: { identity: { 'docker-reference': ref.split('@')[0] }, image: { 'docker-manifest-digest': d }, type: 'cosign container image signature' }, optional: null }]);
+if (mode === 'ok-match') { process.stdout.write(payload(digest)); process.exit(0); }
+if (mode === 'ok-other') { process.stdout.write(payload(`sha256:${'9'.repeat(64)}`)); process.exit(0); }
+if (mode === 'ok-garbage') { process.stdout.write('verified!'); process.exit(0); }
+if (mode === 'missing') { process.stderr.write('Error: no signatures found\n'); process.exit(1); }
+if (mode === 'invalid') { process.stderr.write('Error: invalid signature when validating ASN.1 encoded signature\n'); process.exit(1); }
+if (mode === 'netfail') { process.stderr.write('Error: getting Rekor: dial tcp: lookup rekor.sigstore.dev: no such host\n'); process.exit(1); }
+if (mode === 'hang') { setTimeout(() => {}, 600000); }
+else process.exit(2);

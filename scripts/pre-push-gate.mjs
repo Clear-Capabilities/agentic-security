@@ -487,7 +487,7 @@ export function summarize(entries) {
   const failed = [];
   for (const e of entries) {
     const r = e.result || {};
-    lines.push(`${r.ok ? 'PASS' : 'FAIL'}  ${e.title}`);
+    lines.push(`${r.ok ? 'PASS' : 'FAIL'}  ${e.title}${Number.isFinite(e.ms) && e.ms >= 5000 ? `  (${Math.round(e.ms / 1000)}s)` : ''}`);
     for (const w of r.warnings || []) lines.push(`      ! ${w}`);
     for (const err of r.errors || []) lines.push(`      x ${err}`);
     if (!r.ok) {

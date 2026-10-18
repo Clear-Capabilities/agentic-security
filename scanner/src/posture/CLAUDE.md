@@ -996,6 +996,29 @@ reading the cache; it does not defeat root or the same OS user. See
 `cache.js`'s own header for the full tradeoff writeup, including why
 encryption-at-rest was considered and deferred.
 
+## Detection and response: `dnr/` (PRD 7)
+
+Turns a PROVEN finding into a validated detection, hunts local historical logs for the exploit's shape, scopes the observable exposure window, and shows Find, Prove, Hunt, Fix, Verify and Detect for one finding. Entry point `dnr/cli.js` (`cmdDnr`); guide `docs/guides/detection-and-response.md`; tests `test/dnr/`, `test/cli/dnr-cli.test.js`.
+
+* **No network, no model.** Nothing in `dnr/` imports an HTTP module or the LLM/egress layers (a test pins it). Production logs stay on the machine, so the model-egress policy has nothing to gate here. Do not add a model call to "improve" a detection: the point is that every fact has a source.
+* **The IR is closed-world** (`detection-ir.js`, `attack-facts.js`). There is no field for an attacker address, domain, file hash or user agent, and `validateDetectionIR` refuses unknown keys. Request facts come from the optional `attack` block on the reproducer, which the proof runner never reads. A missing fact is `null` plus a stated limitation, never a guess.
+* **One evaluator** (`matchers.js` `evaluateEvent`) serves validation, hunting and the descriptions of the rendered rules. A rule that validates is the rule that searches. Keep it that way: a second matcher would let a tested rule and a shipped rule drift apart.
+* **A negative needs evidence** (`hunt.js`). `NOT_OBSERVED` is returned only when the logs parsed cleanly, carried every field the detection needs, were read to the end, and had timestamps. Anything less is `INCONCLUSIVE`. `notExploitedClaim` is always `false`. The exit code per verdict differs so automation cannot read an unanswered question as clean.
+* **Bounded reads** (`log-reader.js`): file count, depth, file size, total size, line length, line count, wall clock, abort signal; symlinks and compressed files are skipped and reported. Every limit hit is disclosed and blocks a `NOT_OBSERVED`.
+* **Redaction before persistence or display** (`redact.js`), on top of the proof store's secret scrubber. Records live under `.agentic-security/dnr/` (registered in `artifact-registry.js`, evidence class, encrypted by policy, tamper-evident).
+* **Names:** a detection is not a finding rule. `rule-compiler/` promotes DETECTION rules for the scanner; `dnr/` produces RESPONSE rules for a SIEM, a WAF or a log search. Do not merge them.
+
+## Eval Lab and the policy router: `evaluation/lab/`, `routing/policy-router.js` (PRD 6)
+
+Measures a deterministic baseline and model arms, and routes tasks from the measurements. Entry points `evaluation/lab/cli.js` (`cmdEval`, `cmdModelsLab`) and `routing/policy-router.js`; guide `docs/guides/eval-lab.md`; tests `test/eval-lab/`, `test/cli/eval-lab-cli.test.js`.
+
+* **Lives inside `evaluation/` on purpose.** It reuses the custody audit (`auditWorkspace`, `protectedTermsFrom`, `guardPrompt`) and `defaultScanFn`. The isolation test keeps the custody, label, runner, score, gates and protocol modules unreachable from outside `evaluation/`, so the lab's CLI is the only door and it imports nothing the engine imports back. Do not move the lab out to "tidy" it.
+* **Mechanical evidence decides.** The lab never believes an arm's claim that a PoC works or a patch holds: it executes the reproducer (`proveFinding`) and replays the exploit against the patch (`verifyFixWithProof`). An attempt that does not complete is recorded and scored as a no-result (a miss for a positive, `unscored` for a negative), never dropped.
+* **Labels never reach an arm.** Labels live only in the manifest; workspaces are staged under neutral names, neutralized (`neutralize.js`) and audited, and every request is guarded. A hit quarantines the entry and marks the run incomplete. Dataset `leakagePolicy.mode` accepts only `enforce`.
+* **No provider client.** Models attach through the `command` adapter (request in a file, answer on stdout, scrubbed env, timeout, whole-tree cleanup). A non-local arm is checked against `evaluateEgress` before it runs and there is no fallback between arms. Do not add a direct HTTP client here.
+* **The router is the policy layer, `routing/decide.js` is the calibrated one.** `policy-router.js` selects from measured scoreboard entries (quality, median cost, median latency, run count) under four policies; `decide.js` keeps quality LOWER bounds on held-out outcomes per stratum. They do not call each other. The router refuses to guess: too few runs, unknown cost under a cost policy, an egress denial or a dataset mismatch excludes a model with the reason, and `threat-model` is blocked because it has no evaluation task.
+* **Digest-checked state.** Runs and the scoreboard live under `.agentic-security/eval-lab/` (registered in `artifact-registry.js`); a record that no longer matches its digest is reported and never used for routing.
+
 ## Gotchas
 
 - The seed `calibration-seed.json` is small (n < 30 for several families). Don't treat it as a held-out set — that's `holdout-eval.js`'s job, against an externally-supplied JSONL.

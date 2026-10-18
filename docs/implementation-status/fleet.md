@@ -1,60 +1,56 @@
 # Implementation status: Organization-Wide Security Graph + Distributed Scan Fabric (PRD 4)
 
-**Percent complete:** a real, tested, working slice of the scanning and blast-radius requirements. Most of the
-PRD's larger asks (enterprise graph with Internet-facing/regulated-data overlay, natural-language query, SQLite
-job store, persisted job queue with lease/retry) are explicitly not built — see below.
+**Percent complete:** all nine P0 requirements are implemented and tested, bounded as described under "Honest limits". The PRD's
+storage abstraction is delivered as an interface with two implementations (SQLite and in-memory), not with PostgreSQL or remote
+workers, which the PRD names as future work.
 
-**Current phase:** tests written and passing against the real CLI; documentation done.
+**Current phase:** G (completion): unit, integration, adversarial, multi-process and end-to-end tests pass.
 
-**Branch:** `feature/fleet-graph` (based on `feature/proof-fabric`, not yet merged).
+**Branch:** `feature/moat-prd6-eval-lab` (carries PRDs 4 gap-closure, 6 and 7).
 
-**Completed:**
-- Fleet manifest (`fleet.yaml`): organization + repositories[{id, path}] + workers + perRepoTimeout, closed-world
-  validated (unknown key, duplicate id, non-kebab id, unresolvable path, out-of-range workers, bad duration all
-  refuse the whole manifest) — `fleet-manifest.js`, 13 unit tests.
-- Cross-repository dependency graph built from each repo's own manifest (package.json/go.mod/Cargo.toml/
-  requirements.txt/pyproject.toml name + dependencies), with transitive blast-radius computation — `fleet-graph.js`.
-- CLI: `fleet init|scan|status|resume|query --depends-on`, reusing the EXISTING `posture/fleet.js` (`runFleet`:
-  bounded concurrency, resumable checkpoint, per-repo isolation, honest rollup) for the scanning half — `cli.js`.
-- Killer scenario, with a GROUNDED real finding (not asserted away): a 4-repository synthetic org
-  (frontend, payments-api, shared-auth-lib, payments-worker) where only `shared-auth-lib` has an actual
-  command-injection vulnerability the deterministic engine finds; `fleet query --depends-on shared-auth-lib`
-  correctly reports `frontend` and `payments-api` at depth 1 and `payments-worker` at depth 2, through the real
-  transitive dependency chain. `test/fleet/fleet-cli.test.js`, against the real spawned CLI.
+## Requirement to evidence
 
-**A real bug found and fixed before any test caught it structurally.** The first draft of `cli.js` wrapped the
-result of `runScan()` in an extra `{ scan }` object, but `runScan()` already returns `{ scan, meta }` — so every
-repository's scan result was double-wrapped, and `runFleet`'s internal `_summarise()` silently read zero findings
-from every repository (it reads fields defensively rather than throwing on the wrong shape, so nothing crashed —
-it just reported "4 repo(s) scanned, 0 finding(s)" for a fixture that should have had a real vulnerability).
-Caught by manually running the CLI against a real fixture and noticing zero findings where there should have been
-some — not by the first version of the automated test, whose fixture at the time also happened to use a
-vulnerability shape the deterministic engine does not actually flag (an unlabeled function parameter reaching
-`exec`, with no recognized untrusted source). Both are fixed: the double-wrap, and the fixture, which now uses the
-same confirmed-detected command-injection shape (`req.body.host` into `child_process.exec`) already used elsewhere
-in this repository's own fixtures.
+| Requirement | Where | Evidence |
+|---|---|---|
+| 1. Fleet manifest (organization, repositories, workers, perRepoTimeout) plus the metadata the graph needs | `fleet/fleet-manifest.js` | `test/fleet/enterprise-graph.test.js` (closed-world validation, references must resolve and fit) |
+| 2. Distributed job model (job id, repo, commit, status, worker, lease, heartbeat, retry count, timeout, artifacts, hashes), idempotent | `fleet/job-store.js` | one conformance suite run against both stores; idempotent enqueue; a two-process claim race on the SQLite file |
+| 3. Resumability: `fleet resume`, finished valid results reused | `fleet/job-runner.js`, `fleet/cli.js` | a controller killed with SIGKILL mid-run is resumed to GREEN with one job per repository; dead-worker recovery; manifest-changed refusal |
+| 4. Bounded parallelism; one hung repository must not stop the fleet | `fleet/job-runner.js`, `fleet/scan-child.js` | peak concurrency asserted; a hung scan times out in its own child and the rest finish; `--timeout-ms 100` makes every real scan time out and the org RED |
+| 5. Content-addressed cache; scanner changes invalidate | `fleet/scan-cache.js` | commit, dirty tree, untracked file, lockfile, configuration, scanner build and unknown inputs each invalidate; an edited record is a miss |
+| 6. Enterprise graph federating repositories, APIs, queues, databases, dependencies, data, providers and trust zones; every edge keeps its evidence | `fleet/enterprise-graph.js` | `validateEnterpriseGraph` (no edge without evidence), checked on every query |
+| 7. Cross-repository attack paths (Internet -> gateway -> API -> queue -> worker -> card database) | `attackPaths` | the PRD chain, hop by hop with each edge's evidence; a service nothing exposes is on no path |
+| 8. Shared-component blast radius with counts (repositories, Internet-facing, production, PCI-scoped), version aware | `componentBlastRadius` | counts asserted; a pin that does not name the version is excluded and anything reached only through it is not counted |
+| 9. Organization scan health; cannot be green while required repositories are missing | `fleet/org-health.js` | every requested repository is counted under one heading (1,250 example); queued, cancelled, failed, timed out and never-planned repositories all make it RED |
+| Definition of done: one command answers which Internet-facing applications reach regulated data through code depending on a vulnerable shared component | `fleet query "Show every Internet-facing path to PCI data involving vulnerable authentication code"` | five-repository organization with a real command-injection finding in the shared library; captured in the guide |
 
-**Not done (the larger PRD asks):**
-- No "Internet-facing" or "reaches regulated data" overlay — `fleet query` answers dependency reachability only.
-  The fuller PRD query ("every Internet-facing app that can reach PCI data through this component") needs the
-  existing deployment-boundary graph's trust-zone model layered on top; not attempted here.
-- No natural-language query parser — `--depends-on <repo-id>` is the one supported shape.
-- No SQLite-backed storage. The PRD explicitly asks for SQLite with an abstraction allowing Postgres/remote workers
-  later; this reuses the existing flat-JSON fleet checkpoint instead. `posture/portfolio/backend.js` (from the
-  prior differentiation PRD) already has exactly the abstraction (probe/lease/local-or-shared backend) a SQLite
-  implementation would plug into — genuinely the right next step, not done here.
-- No persisted, independently resumable job queue with per-job lease/retry states. `posture/portfolio/
-  work-units.js`/`scheduler.js` already provide that, for a different, heavier, operator-only surface; this
-  feature deliberately reuses the lighter-weight `runFleet` instead, which is in-process bounded concurrency, not
-  a durable job queue.
-- Matching across repositories is by declared package name only; two repos sharing a name under different
-  ecosystems are not disambiguated (disclosed, tested, not solved).
+## Honest limits
 
-**Blockers:** none structural — the remaining items are additional engineering (notably: wiring the existing
-deployment-boundary graph in for the Internet-facing/regulated-data overlay), not an external dependency.
+* **Reach edges are declared in the manifest.** Calls between services, queue producers and consumers, database access and
+  Internet exposure come from the operator, and every such edge says `source: fleet-manifest`. Dependency edges come from package
+  manifests. A second kind of edge is found by reading code literals (`discover-edges.js`: URL hosts, queue names on publish/consume
+  lines, database names on connect lines, matched as whole tokens against ids and declared `aliases`), tagged
+  `discovered-code-literal` and shown beside declared edges, never instead of them. It sees literals only (not run-time-built URLs,
+  environment-supplied hosts or mesh routing), cannot tell database direction, and was tested on small constructed repositories, not
+  on a real organization. The per-repository Data Flow Explorer graph is still not joined in.
+* **"Vulnerable authentication code" is a selection, not an analysis.** It is the repositories whose scan produced an authentication
+  finding (an authentication-class CWE or family) plus everything that depends on them.
+* **One question shape.** The documented sentence is recognised and mapped to the structured query; nothing else is parsed.
+* **Storage is SQLite on one machine.** No PostgreSQL store, no distributed queue, no remote workers. A lease held on another host is
+  recovered by expiry only.
+* **Dependency matching is by declared package name**, and a version pin is matched as text.
+* **`fleet explore` writes a static listing**, not the interactive Data Flow Explorer.
+* **Scaling was measured once** (`bench/fleet-scale/run.mjs`, 24 tiny synthetic repositories, 8-logical-core M2): speedup 1.00x/1.79x/2.98x/3.20x at 1/2/4/8 workers (100%/90%/74%/40% efficiency). Not near-linear beyond 2 workers on this hardware, and not a measurement of real repositories.
+* **A source checkout never reuses a cached result** (no built bundle, no scanner identity); an installed or built scanner does.
 
-**Last verified commands (this session):**
-- `cd scanner && node --test test/fleet/*.test.js test/fleet.test.js` → 66 pass, 0 fail.
-- Manual end-to-end run against a real 4-repository fixture (captured in
-  [`docs/guides/fleet.md`](../guides/fleet.md)): a real command-injection finding in the shared library, correctly
-  propagated through the blast-radius query at the right depths.
+## Also changed
+
+* Dependency edges now carry the pinned spec and the manifest file they came from. Existing queries are unchanged.
+* `fleet scan` no longer writes into a scanned repository (the scan child runs with state writes disabled).
+
+## Blockers
+
+None.
+
+## Last verified commands
+
+* `cd scanner && node --test test/fleet/*.test.js`

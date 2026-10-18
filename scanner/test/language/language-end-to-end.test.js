@@ -653,6 +653,20 @@ MATRIX['CAP-122'] = {
   },
 };
 
+// CAP-123 (dnr) and CAP-124 (eval lab, model router): consume proof records, reproducers and datasets that carry no ecosystem; their code has no Haskell or Nix branch.
+MATRIX['CAP-123'] = {
+  na: {
+    reason: 'detection generation works from the attack facts of a reproducer and from log lines; neither carries a source ecosystem, so there is no Haskell or Nix behavior to execute.',
+    behavior: 'A Haskell or Nix finding with a proven reproducer yields the same detection rules and hunt verdicts as any other language, because the rules describe the attack, not the code.',
+  },
+};
+MATRIX['CAP-124'] = {
+  na: {
+    reason: 'the Eval Lab scores arms against dataset entries and the router reads a scoreboard; it adds no scanning capability and has no per-ecosystem branch.',
+    behavior: 'A dataset may contain Haskell or Nix entries; the scanner arm scores them through the same engine as `scan`, and the router treats the task type the same way.',
+  },
+};
+
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
   for (const eco of ['haskell', 'nix']) {

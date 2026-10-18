@@ -76,6 +76,8 @@ One page per job, each with copy-paste commands and expected output:
 - **[Installing on NixOS](guides/nixos-install.md)**: run the scanner on a NixOS host, offline use, and what has not been verified
 - **[Background implementation loop](guides/loop-engineering.md)**: the bounded runbook used to build and verify the Haskell/Nix work (a development tool, not part of the scanner)
 - **[Fleet](guides/fleet.md)** — scan a declared set of repositories in one invocation and query cross-repository dependency reach
+- **[Detection and response](guides/detection-and-response.md)** — turn a proven vulnerability into a validated detection, hunt historical logs honestly, and scope the observable exposure window
+- **[Eval Lab and the model router](guides/eval-lab.md)** — compare a baseline and models on detection, exploit proof, remediation, cost, latency and repeatability, and route each task to the right model
 - **[Runtime-Corroborated Security Twin](guides/runtime-twin.md)** — ingest OpenTelemetry/Envoy/Kubernetes-audit/HTTP-access-log telemetry and reconcile it against the scanned Data Flow Explorer graph
 - **[Source-to-artifact provenance](guides/artifact-provenance.md)** — scan a built container image archive, verify its signature/attestation, and trace whether a source fix actually reached what's deployed
 

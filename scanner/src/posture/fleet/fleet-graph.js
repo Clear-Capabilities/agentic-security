@@ -27,8 +27,10 @@ function readBounded(p, maxBytes = 1024 * 1024) {
 function parsePackageJson(text) {
   let j;
   try { j = JSON.parse(text); } catch { return { name: null, deps: new Set() }; }
+  const specs = new Map();
+  for (const block of [j.peerDependencies, j.devDependencies, j.dependencies]) for (const [k, v] of Object.entries(block || {})) if (typeof v === 'string') specs.set(k, v.slice(0, 200));
   const deps = new Set([...Object.keys(j.dependencies || {}), ...Object.keys(j.devDependencies || {}), ...Object.keys(j.peerDependencies || {})]);
-  return { name: typeof j.name === 'string' ? j.name : null, deps };
+  return { name: typeof j.name === 'string' ? j.name : null, deps, specs, version: typeof j.version === 'string' ? j.version : null };
 }
 
 function parseGoMod(text) {
@@ -85,15 +87,18 @@ export function readRepoManifest(repoPath) {
   let name = null;
   const deps = new Set();
   const ecosystems = new Set();
+  const specs = new Map();
+  const files = new Map();
   for (const { file, ecosystem } of MANIFESTS) {
     const text = readBounded(path.join(repoPath, file));
     if (text == null) continue;
     const parsed = PARSERS[file](text);
     if (parsed.name && !name) name = parsed.name;
-    for (const d of parsed.deps) deps.add(d);
+    for (const d of parsed.deps) { deps.add(d); if (!files.has(d)) files.set(d, file); }
+    for (const [d, spec] of parsed.specs ?? []) specs.set(d, spec);
     ecosystems.add(ecosystem);
   }
-  return { name, deps, ecosystems: [...ecosystems] };
+  return { name, deps, ecosystems: [...ecosystems], specs, files };
 }
 
 /**
@@ -116,7 +121,7 @@ export function buildFleetDependencyGraph(repos) {
     for (const dep of r.manifest.deps) {
       const targets = byName.get(dep);
       if (!targets) continue;
-      for (const to of targets) if (to !== id) edges.push({ from: id, to, via: dep });
+      for (const to of targets) if (to !== id) edges.push({ from: id, to, via: dep, evidence: [{ source: 'package-manifest', repo: id, file: r.manifest.files.get(dep) ?? null, declared: dep, spec: r.manifest.specs.get(dep) ?? null }] });
     }
   }
   const nodes = [...manifests.values()].map((r) => ({ id: r.id, path: r.path, declaredName: r.manifest.name, ecosystems: r.manifest.ecosystems }));

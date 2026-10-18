@@ -1,0 +1,52 @@
+{
+  "dataset": {
+    "id": "eval-lab-proof",
+    "version": "1",
+    "language": "javascript",
+    "source": {
+      "kind": "directory"
+    },
+    "split": "dev",
+    "license": "CC0-1.0",
+    "cwe": [
+      "CWE-78"
+    ],
+    "leakagePolicy": {
+      "mode": "enforce",
+      "stripComments": true
+    },
+    "test": [
+      "node",
+      "check.mjs"
+    ]
+  },
+  "entries": [
+    {
+      "id": "app-1",
+      "kind": "vulnerable",
+      "cwe": "CWE-78",
+      "workspace": {
+        "dir": "cases/vuln"
+      },
+      "expectedSpan": {
+        "file": "app.mjs",
+        "startLine": 4,
+        "endLine": 4
+      },
+      "reproducer": "cases/vuln.reproducer.json"
+    },
+    {
+      "id": "app-2",
+      "kind": "fixed",
+      "resemblesCwe": "CWE-78",
+      "workspace": {
+        "dir": "cases/fixed"
+      },
+      "lookalikeSpan": {
+        "file": "app.mjs",
+        "startLine": 4,
+        "endLine": 4
+      }
+    }
+  ]
+}

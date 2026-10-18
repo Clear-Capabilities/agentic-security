@@ -151,3 +151,73 @@ test('synthesize refuses an ineligible finding (no CWE/family, no flow evidence)
   assert.equal(r.status, 4);
   assert.match(r.stderr, /Not eligible/);
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The synthesis loop through the CLI: no pattern is supplied, `labs synthesize-rule` is the PRD's literal command, and the
+// rule's provenance and cost are recorded.
+
+test('labs synthesize-rule proposes the rule itself from the vulnerable and patched code, and the unseen sibling is still caught', () => {
+  const dir = mkProject();
+  fs.writeFileSync(path.join(dir, 'server.js'), VULN_HANDLER);
+  const findingId = 'hunt-rawquery-0002';
+  fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: findingId, stableId: findingId, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'SQL injection via rawQuery concatenation', severity: 'critical', parser: 'IR-TAINT', snippet: 'db.rawQuery("..." + userId)' }] }));
+  // no `match` at all: the compiler proposes it. The material is code only; no benchmark name, no weakness comment.
+  const spec = {
+    id: 'auto-raw-query-concat', title: 'rawQuery built from string concatenation', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'],
+    originalCode: VULN_HANDLER, patchedCode: SAFE_HANDLER, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE_HANDLER],
+    model: 'hunt-agent-1', promptConfigVersion: 'p3', discoveryCost: { usd: 0.42, tokens: 51234, model: 'hunt-agent-1' },
+  };
+  const specFile = path.join(dir, 'spec.json'); fs.writeFileSync(specFile, JSON.stringify(spec));
+  const syn = runIn(dir, ['labs', 'synthesize-rule', findingId, '--spec', specFile, '--auto']);
+  assert.equal(syn.status, 0, syn.stderr + syn.stdout);
+  assert.match(syn.stdout, /attempt 1: /); assert.match(syn.stdout, /meets the promotion gate/); assert.match(syn.stdout, /DRAFT -> CANDIDATE/);
+  assert.ok(fs.existsSync(path.join(dir, '.agentic-security', 'rule-compiler', 'auto-raw-query-concat', 'synthesis.json')));
+
+  // evaluate needs no --corpus: the corpus the rule was synthesized on is the corpus it is judged on
+  const ev = runIn(dir, ['rules', 'evaluate', 'auto-raw-query-concat']);
+  assert.equal(ev.status, 0, ev.stderr + ev.stdout); assert.match(ev.stdout, /VALIDATED/);
+  const prov = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'rule-compiler', 'auto-raw-query-concat', 'provenance.json'), 'utf8'));
+  assert.equal(prov.originatingFinding, findingId); assert.equal(prov.evidenceState, 'taint-proven' === prov.evidenceState ? 'taint-proven' : prov.evidenceState);
+  assert.equal(prov.generatingModel, 'hunt-agent-1'); assert.equal(prov.promptConfigVersion, 'p3');
+  assert.match(prov.positiveCorpusHash, /^[0-9a-f]{64}$/); assert.match(prov.negativeCorpusHash, /^[0-9a-f]{64}$/); assert.notEqual(prov.positiveCorpusHash, prov.negativeCorpusHash);
+  assert.match(prov.ruleHash, /^[0-9a-f]{64}$/); assert.equal(prov.ruleVersion, 1);
+  assert.equal(prov.benchmarkResults.gate, 'passed'); assert.equal(prov.benchmarkResults.protectedFailures, 0);
+  assert.equal(prov.promotionEvent, null, 'not promoted yet, and the provenance says so');
+  assert.ok(prov.mutatorCoverage.applied.length >= 3);
+
+  assert.equal(runIn(dir, ['rules', 'promote', 'auto-raw-query-concat']).status, 0);
+  const afterPromote = JSON.parse(fs.readFileSync(path.join(dir, '.agentic-security', 'rule-compiler', 'auto-raw-query-concat', 'provenance.json'), 'utf8'));
+  assert.equal(afterPromote.promotionEvent.ruleHash, prov.ruleHash);
+
+  fs.writeFileSync(path.join(dir, 'orders.js'), UNSEEN_SIBLING);
+  const scan = JSON.parse(runIn(dir, ['scan', '.', '--format', 'json']).stdout);
+  assert.ok((scan.findings || []).some((f) => f.file === 'orders.js' && f.cwe === 'CWE-89'), 'the unseen sibling is caught by the proposed rule alone');
+
+  const cost = runIn(dir, ['rules', 'cost', 'auto-raw-query-concat', '--json']);
+  const c = JSON.parse(cost.stdout);
+  assert.equal(c.firstDiscovery.usd, 0.42); assert.equal(c.laterDeterministicModelUsd, 0);
+  assert.equal(c.state, 'promoted');
+});
+
+test('synthesis refuses material that carries benchmark or answer-key signals, and writes nothing', () => {
+  const dir = mkProject([{ id: 'f9', stableId: 'f9', file: 'a.js', line: 1, cwe: 'CWE-89', parser: 'IR-TAINT', snippet: 'x' }]);
+  const spec = { id: 'leaky-rule', title: 't', severity: 'high', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'], originalCode: '// FLAW: injection here\ndb.rawQuery("x" + y);\n', patchedCode: 'db.rawQuery("x", [y]);\n' };
+  const specFile = path.join(dir, 'spec.json'); fs.writeFileSync(specFile, JSON.stringify(spec));
+  const r = runIn(dir, ['rules', 'synthesize', 'f9', '--spec', specFile, '--auto']);
+  assert.equal(r.status, 4); assert.match(r.stderr, /answer-key signals/); assert.match(r.stderr, /comment that describes the vulnerability/);
+  assert.equal(fs.existsSync(path.join(dir, '.agentic-security', 'rule-compiler')), false);
+  const named = { ...spec, originalCode: 'db.rawQuery("x" + y);\n', fileNames: ['src/CWE89_SQL_Injection__01.java'] };
+  fs.writeFileSync(specFile, JSON.stringify(named));
+  const r2 = runIn(dir, ['rules', 'synthesize', 'f9', '--spec', specFile, '--auto']);
+  assert.equal(r2.status, 4); assert.match(r2.stderr, /weakness-bearing file name/);
+});
+
+test('labs without a recognised mode explains itself instead of doing nothing; a spec without a pattern or code is refused', () => {
+  const dir = mkProject([{ id: 'f8', stableId: 'f8', file: 'a.js', line: 1, cwe: 'CWE-89', parser: 'IR-TAINT', snippet: 'x' }]);
+  const r = runIn(dir, ['labs']);
+  assert.equal(r.status, 2); assert.match(r.stderr, /labs synthesize-rule <finding-id>/);
+  const spec = { id: 'no-material', title: 't', severity: 'high', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'] };
+  const specFile = path.join(dir, 'spec.json'); fs.writeFileSync(specFile, JSON.stringify(spec));
+  const r2 = runIn(dir, ['labs', 'synthesize-rule', 'f8', '--spec', specFile]);
+  assert.equal(r2.status, 4); assert.match(r2.stderr, /needs originalCode/);
+});

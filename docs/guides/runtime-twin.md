@@ -23,8 +23,7 @@ What was missing was telemetry input: only one hand-authored JSONL format could 
 - `runtime reconcile` — diagnostic drift detection: which already-imported observations would match
   differently against the CURRENT graph (because the code changed since import). Never auto-rewrites
   the stored match.
-- `runtime query` — two real, graph-backed queries, plus honest, named disclosure of the three
-  queries this architecture cannot answer at all (see "What this cannot answer" below).
+- `runtime query` — five real queries. `runtime edges` reports the per-edge states and `explore . --runtime` writes the views page.
 
 ## Quickstart
 
@@ -90,18 +89,86 @@ PRD's named properties in one scenario, end to end against the real CLI
 
 See that fixture's own `README.md` for the full property-by-property mapping.
 
+## Edge states, identities and two more queries
+
+`runtime edges` reports, for every static edge, one or more of six states: `STATIC_ONLY` (no telemetry was consulted),
+`RUNTIME_NOT_OBSERVED` (consulted, nothing trusted seen in the window, which never means unreachable), `RUNTIME_OBSERVED`,
+`RUNTIME_BLOCKED` (every recorded decision was `denied`), `RUNTIME_POLICY_VIOLATION` (observed on a flow the privacy policy
+prohibits) and `RUNTIME_EXPLOIT_CORRELATED`. That last one needs evidence you supply (`--exploit-evidence file.json`, each entry
+naming exactly one edge, flow or node); seeing traffic is never taken as seeing an attack. Only high- and medium-confidence mappings
+count. Observations placed on a node with no modelled flow (a refused queue publish) are reported under their node.
+
+Captured from the `test/fixtures/runtime-twin` scenario:
+
+```
+# Static vs runtime, per edge
+
+| Edge | State | Observations | Allowed | Denied | Uncertain |
+|---|---|---|---|---|---|
+| edge:7026967962a4 | RUNTIME_OBSERVED | 1 | 1 | 0 | 0 |
+| edge:fbf347827663 | RUNTIME_NOT_OBSERVED | 0 | 0 | 0 | 0 |
+
+## Observed on a node with no modelled flow
+
+| Node | State | Observations | Allowed | Denied |
+|---|---|---|---|---|
+| node:queue:ade2f784b653 | RUNTIME_BLOCKED | 1 | 0 | 1 |
+
+- RUNTIME_NOT_OBSERVED means "no trusted observation in this window", never "unreachable" or "safe".
+- Only high- and medium-confidence mappings count; low-confidence and ambiguous observations stay unmatched and are counted as uncertain.
+- RUNTIME_EXPLOIT_CORRELATED requires explicit operator-supplied evidence naming the edge, flow or node; observation alone never sets it.
+```
+
+`runtime query runtime-flows-absent-from-static` lists observed destinations the matcher could not place on any static node. They
+are candidates, not proof that static analysis missed a path:
+
+```
+{
+  "query": "runtime-flows-absent-from-static",
+  "supported": true,
+  "evaluated": true,
+  "candidates": [
+    {
+      "observationId": "observation:f30e060eef83",
+      "destination": "host=unknown-shadow-service.internal service=shadow-svc scheme=https",
+      "service": null,
+      "environment": "production",
+      "firstObservedAt": "2026-08-02T12:00:00.000Z",
+      "lastObservedAt": "2026-08-02T12:00:00.000Z",
+      "eventCountBand": "1"
+    }
+  ],
+  "note": "Unmatched observations are candidates, not proof that static analysis missed a path: the matcher may be too weak to place them."
+}
+```
+
+`runtime query identities-using-risky-paths` lists identity tokens seen on policy-violating or exploit-correlated edges. Identity is
+recorded only when you import with `--record-identity-tokens`, as `idt_` plus 16 hex of a keyed hash under this install's key. The
+raw username is in no persisted file. A token is a pseudonym, not anonymity: anyone with the install key and a candidate name can
+confirm a match.
+
+## The five Explorer views
+
+`agentic-security explore . --runtime` (also `runtime explore [path] [--out file.html] [--environment production]`) writes one static
+page, `.agentic-security/runtime-explorer.html`: **Static**, **Runtime**, **Static vs Runtime**, **Observed high-risk paths**,
+**Unexpected runtime paths**, plus every flow as a path ("field -> API -> service -> DB") with the state of each hop. Expand an edge
+to see its static evidence and the runtime observations behind its state side by side. The page has no script and a deny-by-default
+content policy, every telemetry value in it is escaped, and with no telemetry it says nothing was consulted instead of showing a clean
+runtime view. It is a snapshot, not a live server.
+
+## Vulnerable functions in production
+
+`runtime query vulnerable-functions-in-production [path]` evaluates the last scan's findings against the runtime trace at
+`.agentic-security/runtime-trace.jsonl` (or `AGENTIC_SECURITY_RUNTIME_TRACE_PATH`) with the same function, line and route matcher the
+scan uses, and lists the findings whose path appears in it. Findings not listed are counted as not observed or unknown. That is a
+statement about the trace window and its sampling, not about reachability. With no usable trace it answers "not evaluated", never
+"none".
+
 ## What this cannot answer
 
-`runtime query --list` names three of the PRD's own example queries as honestly unsupported, with a
-real reason, rather than silently omitting them:
-
-- *"Show runtime flows absent from the static graph"* — needs a config-declared/auto-correlated edge
-  mechanism (M5 7a / M2 F2-F3), both out of scope everywhere in this codebase. Every `RuntimeObservation`
-  matches an existing static graph node; it never mints a new one.
-- *"Show vulnerable functions actually exercised in production"* — needs function/symbol-level
-  telemetry; this adapter set only matches destinations (route/service/table/topic).
-- *"Show identities using risky paths"* — the `RuntimeObservation` contract deliberately carries no
-  identity field, as a payload-smuggling risk.
+- An identity query is only as complete as the identity telemetry: an edge with no identity field contributes nothing, which is not
+  evidence that no identity used it.
+- The graph itself carries no route or function symbol, so route/function evidence attaches to scan findings, not to graph edges.
 
 ## What this does not do
 

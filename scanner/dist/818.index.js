@@ -11,7 +11,7 @@ export const modules = {
 /* harmony export */ });
 /* harmony import */ var _states_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(12090);
 /* harmony import */ var _orchestrator_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3740);
-/* harmony import */ var _runner_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(2998);
+/* harmony import */ var _runner_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(23081);
 /* harmony import */ var _reproducer_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37055);
 // Verified remediation, extended with exploit replay. This EXTENDS the fix-verify vocabulary (`verifiedFull`,
 // `degradedLegs`); it does not define a competing meaning of "verified".
@@ -27,7 +27,7 @@ export const modules = {
 
 
 
-async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revision = null, policy = {}, staticVerification = null, siblings = null, signal, deps = {} } = {}) {
+async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revision = null, policy = {}, staticVerification = null, siblings = null, siblingSearchTruncated = [], signal, deps = {} } = {}) {
   const t0 = Date.now();
   const attemptFn = deps.attemptFn ?? _runner_js__WEBPACK_IMPORTED_MODULE_2__/* .runAttempt */ .Tm;
   const patchHash = (0,_reproducer_js__WEBPACK_IMPORTED_MODULE_3__/* .sha256 */ .sc)((0,_reproducer_js__WEBPACK_IMPORTED_MODULE_3__/* .canonicalize */ .dw)(files || {}));
@@ -67,6 +67,7 @@ async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revisi
   const siblingCount = Array.isArray(siblings) ? siblings.length : null;
   if (siblingCount === null) degraded.push('sibling-search-not-run');
   else if (siblingCount > 0) degraded.push(`sibling-exposures:${siblingCount}`);
+  if (siblingCount !== null && siblingSearchTruncated?.length) degraded.push('sibling-search-incomplete');
 
   const full = degraded.length === 0;
   // Same split as fix-verify: `ok` (nothing that ran failed) earns FIX_VERIFIED; `completeness` says whether anything was skipped.
@@ -99,7 +100,7 @@ function formatFixProof(r) {
 /* unused harmony exports independentVerify, applySeverityPolicy, _newRunId */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 /* harmony import */ var _states_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(12090);
-/* harmony import */ var _runner_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(2998);
+/* harmony import */ var _runner_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(23081);
 /* harmony import */ var _reproducer_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(37055);
 /* harmony import */ var _proof_tier_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(40216);
 // Proof orchestration: finding + revision + reproducer + policy -> structured evidence.

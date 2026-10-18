@@ -98,3 +98,7 @@ registry reference are **NOT implemented** — only `docker save`/OCI-layout TAR
 (same precedent as `fleet/`, `rule-compiler/`, `proof-fabric/` — not large enough for its own scoped script).
 `test/helpers/build-tar-fixture.js` is a test-only tar/OCI-archive WRITER (production code only ever reads
 tar, via `safe-tar.js`) — mirrors `build-git-fixture.js`'s role for the lineage/deployment suites.
+
+## Image sources, cosign and evidence (PRD 5 gap closure)
+
+`registry.js` (explicit remote OCI fetch; builds an OCI layout via `oci-layout.js`), `engine-source.js` (`docker|podman save`), `cosign.js` (delegated verification, digest-bound, `unavailable` is never `verified`) and `artifact-evidence.js` (Ed25519 bundle, top-level-key allowlist). All three sources end in the same `parseImageArchive`. Registry credentials live in a class that refuses to serialize; never log or put them in an error.

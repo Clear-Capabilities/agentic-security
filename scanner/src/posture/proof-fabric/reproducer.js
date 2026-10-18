@@ -4,6 +4,7 @@
 // and a target cannot learn the values in advance.
 import { createHash } from 'node:crypto';
 import { ORACLE_TYPES } from './oracles.js';
+import { validateAttackFacts } from '../dnr/attack-facts.js';
 
 const REPRODUCER_SCHEMA = 'agentic-security/reproducer';
 const REPRODUCER_VERSION = 1;
@@ -80,6 +81,8 @@ export function validateReproducer(r) {
     else for (const [dest, src] of Object.entries(r.sources)) if (!isSafeRelPath(dest) || !isSafeRelPath(src)) errs.push(`bad sources entry: ${dest}`);
   }
   if (r.network != null && !['none', 'callback'].includes(r.network)) errs.push('network must be none or callback');
+  // Optional request-level facts for the detection-and-response loop. The runner never reads them.
+  errs.push(...validateAttackFacts(r.attack));
   return errs;
 }
 

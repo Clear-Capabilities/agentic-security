@@ -173,7 +173,12 @@ export const RUNTIME_ATTRIBUTE_KEYS = Object.freeze([
   // RUNTIME_SECURITY_DECISION_VALUES below and its own dedicated check in
   // validateObservationAttributes.
   'network.securityDecision',
+  // authenticated identity (PRD 2 section 1) as a KEYED-HASH TOKEN only, never the identity itself: `idt_` + 16 hex. The importer
+  // computes it (HMAC under the per-install key) and hands the adapters a tokenizer; no raw username/email can pass this grammar.
+  'identity.token',
 ]);
+
+export const IDENTITY_TOKEN_RE = /^idt_[0-9a-f]{16}$/;
 
 // The closed enum for 'network.securityDecision' — deliberately narrower
 // than the generic identifier-value check every other scalar attribute
@@ -302,6 +307,12 @@ export function validateObservationAttributes(attributes) {
       // whole purpose is a binary allow/deny fact.
       if (!RUNTIME_SECURITY_DECISION_VALUES.includes(value)) {
         err(`$.attributes["${key}"]`, `must be one of ${RUNTIME_SECURITY_DECISION_VALUES.join('|')} — this field records a closed allow/deny fact, never a free-form identifier`);
+      }
+      continue;
+    }
+    if (key === 'identity.token') {
+      if (typeof value !== 'string' || !IDENTITY_TOKEN_RE.test(value)) {
+        err(`$.attributes["${key}"]`, 'must be an identity token (idt_ followed by 16 hex characters) — a raw identity is never accepted');
       }
       continue;
     }

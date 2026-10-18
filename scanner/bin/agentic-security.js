@@ -1763,7 +1763,7 @@ async function cmdRules(args) {
   // Self-learning finding-to-rule compiler (PRD 3): synthesize/evaluate/promote/status/rollback a DETECTION rule
   // from one confirmed finding — distinct from validate/lock below (rules.yml override linting and pack locking).
   // Dispatches to its own module rather than inlining here, same convention as `triage exploit`/`proof`.
-  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback') {
+  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'cost') {
     return (await import('../src/posture/rule-compiler/cli.js')).cmdRules(args, path.resolve(args.flags.root || '.'));
   }
   const target = path.resolve(args._[2] || '.');
@@ -1780,7 +1780,7 @@ async function cmdRules(args) {
     console.log(`  scanner: ${lock.scannerVersion}  rulePackHash: ${lock.rulePackHash}`);
     return 0;
   }
-  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> | rules evaluate|promote|status|rollback <rule-id>'); return 4;
+  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> [--auto] | rules evaluate|promote|status|rollback|cost <rule-id>'); return 4;
 }
 
 // `agentic-security secure [--launch]` — smart router. One command picks the
@@ -3324,6 +3324,16 @@ async function cmdVerifyAttestation(args) {
   // verifyEvidenceBundle() call below, which assumes evidence-bundle.js's
   // own shape (`.evidence`, `.finding` with severity/vuln/file/line) and
   // would misinterpret a provenance bundle.
+  const { verifyArtifactEvidenceBundle, ARTIFACT_BUNDLE_SCHEMA } = await import('../src/artifact/artifact-evidence.js');
+  if (bundle.schema === ARTIFACT_BUNDLE_SCHEMA) {
+    const ar = verifyArtifactEvidenceBundle(bundle, publicKeyPem);
+    if (!ar.ok) { console.error(`✗ INVALID — ${ar.reason}`); return 1; }
+    console.log('✓ VALID — the image evidence bundle is exactly what the signer produced.');
+    console.log(`  image: ${bundle.artifact.digest}  ${bundle.artifact.os}/${bundle.artifact.architecture}`);
+    console.log(`  vulnerabilities listed: ${bundle.scan.vulnerabilities.length} of ${bundle.scan.truncated.vulnerabilitiesTotal}; recoverable secrets: ${bundle.scan.truncated.secretsTotal}; image signature: ${bundle.signature.state}`);
+    console.log(`  ${bundle.doesNotProve}`);
+    return 0;
+  }
   const { verifyProvenanceEvidenceBundle, PROVENANCE_BUNDLE_SCHEMA } = await import('../src/posture/provenance-evidence-bundle.js');
   if (bundle.schema === PROVENANCE_BUNDLE_SCHEMA) {
     const pr = verifyProvenanceEvidenceBundle(bundle, publicKeyPem);
@@ -3680,16 +3690,22 @@ async function cmdFix(args) {
   // --require-proof: the patch is applied ONLY if the original exploit is confirmed beforehand and demonstrably blocked
   // afterwards (posture/proof-fabric/fix-proof.js). Missing reproducer, unavailable environment or an incomplete replay all refuse.
   if (args.flags['require-proof']) {
-    const { loadReproducerFor } = await import('../src/posture/proof-fabric/cli.js');
+    const { resolveReproducer } = await import('../src/posture/proof-fabric/cli.js');
+    const { findSiblings } = await import('../src/posture/proof-fabric/siblings.js');
     const { verifyFixWithProof, formatFixProof } = await import('../src/posture/proof-fabric/fix-proof.js');
     const { verifyFix } = await import('../src/posture/fix-verify.js');
-    const loaded = loadReproducerFor(scanRoot, f.id, args.flags.reproducer);
-    if (!loaded) { console.error(`--require-proof: no reproducer for ${f.id}. Refusing to apply; nothing was executed. Supply --reproducer <file>.`); return 4; }
+    const loaded = resolveReproducer(scanRoot, f, args.flags.reproducer);
+    if (!loaded.reproducer) { console.error(`--require-proof: no reproducer for ${f.id}, and none could be generated: ${loaded.reason}. Refusing to apply; nothing was executed. Supply --reproducer <file>.`); return 4; }
+    if (loaded.generated) console.error(`--require-proof: using a reproducer generated from the finding (${loaded.generated.shape}, ${loaded.generated.class}); it counts only if executing it confirms the exploit.`);
     const files = { [f.file]: newContent };
     const staticVerification = await verifyFix({ scanRoot, originalFindingStableId: f.stableId || null, files, recordMetrics: false });
-    const siblings = (last.findings || []).filter((x) => x.id !== f.id && x.file !== f.file && (x.vuln === f.vuln || x.cwe === f.cwe)).map((x) => ({ id: x.id, file: x.file, line: x.line }));
-    const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings });
+    // equivalent sibling exposures: the engine's own other findings of this kind, plus other places with the same code shape
+    const sib = findSiblings({ root: scanRoot, finding: f, scanFindings: last.findings || [] });
+    const siblings = sib.siblings.map((x) => ({ id: x.id ?? null, file: x.file, line: x.line, source: x.source }));
+    if (sib.truncated.length) console.error(`--require-proof: the sibling search stopped early (${sib.truncated.join(', ')}); absence of siblings is not shown.`);
+    const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings, siblingSearchTruncated: sib.truncated });
     console.log(formatFixProof(fp));
+    try { (await import('../src/posture/dnr/store.js')).saveRecord(scanRoot, f.stableId || f.id, 'fix', fp); } catch { /* recording is best effort; the refusal below does not depend on it */ }
     if (!fp.verified) { console.error('\nRefusing to apply: the fix is not proof-verified (--require-proof).'); return 4; }
   }
   let result = await applyVerifiedFix({
@@ -4065,6 +4081,8 @@ async function cmdBoundaries(args) {
 // every other cmdX(args) function's "resolves to an exit code" contract
 // while keeping the process alive for as long as the server is listening.
 async function cmdExplore(args) {
+  // `explore . --runtime`: the runtime views are one static, script-free page, not a route on the hardened local server.
+  if (args.flags.runtime) return cmdRuntimeExplorer(args, args._[1] || '.');
   const target = args._[1] || '.';
   const targetAbs = path.resolve(target);
 
@@ -5302,6 +5320,11 @@ async function cmdDataflowObservationsImport(args) {
     retention: { expiresAt: retainUntil },
     version: RUNTIME_OBSERVATION_VERSION,
   };
+  if (args.flags['record-identity-tokens']) {
+    // identity is recorded only as a keyed hash under the per-install key, and only when the operator asks for it
+    const { makeIdentityTokenizer } = await import('../src/lineage/identity-token.js');
+    context.tokenizeIdentity = makeIdentityTokenizer();
+  }
   const { drafts, errors: parseErrors } = adapterImpl.parse(text, context);
 
   const { matchObservationToGraph } = await import('../src/lineage/observation-correlation.js');
@@ -5764,26 +5787,108 @@ const _RUNTIME_QUERIES = Object.freeze({
   },
 });
 
-// PRD-named example queries this architecture cannot honestly answer —
-// disclosed, never silently omitted. "Runtime flows absent from the
-// static graph" needs a config-declared/auto-correlated edge mechanism
-// (M5 7a / M2 F2-F3, both out of scope here — every RuntimeObservation
-// matches an EXISTING static node, it never mints a new one). "Vulnerable
-// functions actually exercised in production" and "identities using
-// risky paths" both need identity/function-level telemetry this
-// contract's closed-world schema deliberately omits (see this PRD's
-// implementation-status doc).
-const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({
-  'runtime-flows-absent-from-static': 'Needs a config-declared/auto-correlated edge mechanism (not built — see M5 7a / M2 F2-F3 in scanner/src/lineage/CLAUDE.md) — every RuntimeObservation matches an existing static graph node, it never mints a new one.',
-  'vulnerable-functions-in-production': 'Needs function/symbol-level runtime telemetry; this adapter set only matches destinations (route/service/table/topic), never a function symbol.',
-  'identities-using-risky-paths': 'The RuntimeObservation contract deliberately carries no identity field (a payload-smuggling risk) — see this PRD\'s implementation-status doc for why.',
+// PRD-named example queries this architecture cannot honestly answer, disclosed rather than omitted. "Vulnerable functions actually
+// exercised in production" needs function/symbol-level telemetry and a function matching rung, neither of which exists.
+const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({});
+
+// Queries whose answer is not a list of flows. They run through the edge-state module.
+const _RUNTIME_EXTRA_QUERIES = Object.freeze({
+  'runtime-flows-absent-from-static': 'Observed destinations the matcher could not place on any static node: CANDIDATES for a path static analysis missed (or a mapping the matcher is too weak to make).',
+  'vulnerable-functions-in-production': 'Scan findings whose own function, line or route appears in the runtime trace (.agentic-security/runtime-trace.jsonl). Evaluated against the trace on disk when you ask, using the same matcher the scan uses.',
+  'identities-using-risky-paths': 'Identity TOKENS (keyed hashes, never identities) seen on edges in a policy-violation or exploit-correlated state. Needs observations imported with --record-identity-tokens.',
 });
+
+async function _loadExploitEvidence(flag) {
+  if (typeof flag !== 'string') return { evidence: [], errors: [] };
+  const { validateExploitEvidence } = await import('../src/lineage/runtime-edge-states.js');
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(path.resolve(flag), 'utf8')); } catch (e) { return { evidence: [], errors: [`could not read --exploit-evidence: ${e.code ?? e.message}`] }; }
+  return validateExploitEvidence(raw);
+}
+
+async function cmdRuntimeExplorer(args, target) {
+  const targetAbs = path.resolve(target);
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security explore --runtime: ${loaded.message}\n`); return 1; }
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const mod = await import('../src/lineage/runtime-edge-states.js');
+  const { renderRuntimeExplorer } = await import('../src/lineage/runtime-explorer-view.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+  const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+  if (ev.errors.length) { process.stderr.write(`agentic-security explore --runtime: ${ev.errors.join('; ')}\n`); return 2; }
+  const edgeStates = mod.deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+  const absent = correlation.evaluated ? mod.runtimeFlowsAbsentFromStatic(loaded.observations, correlation) : { candidates: [] };
+  const html = renderRuntimeExplorer({ graph: loaded.graph, edgeStates, correlation, observations: loaded.observations ?? [], absent });
+  const out = typeof args.flags.out === 'string' ? path.resolve(args.flags.out) : statePath(targetAbs, 'runtime-explorer.html');
+  try { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html); } catch (e) { process.stderr.write(`agentic-security explore --runtime: could not write ${args.flags.out ?? out}: ${e.code ?? e.message}\n`); return 1; }
+  process.stdout.write(`runtime explorer written to ${path.relative(process.cwd(), out) || out} (static page, no server; open it in a browser)\n`);
+  return 0;
+}
+
+async function cmdRuntimeEdges(args) {
+  const targetAbs = path.resolve(args._[2] || '.');
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security runtime edges: ${loaded.message}\n`); return 1; }
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const { deriveEdgeStates } = await import('../src/lineage/runtime-edge-states.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+  const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+  if (ev.errors.length) { process.stderr.write(`agentic-security runtime edges: ${ev.errors.join('; ')}\n`); return 2; }
+  const states = deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+  if ((args.flags.format ?? 'json') === 'markdown') {
+    const lines = ['# Static vs runtime, per edge', '', '| Edge | State | Observations | Allowed | Denied | Uncertain |', '|---|---|---|---|---|---|'];
+    for (const [id, e] of Object.entries(states.byEdge)) lines.push(`| ${id} | ${e.states.join(', ')} | ${e.observations} | ${e.allowed} | ${e.denied} | ${e.uncertainObservations} |`);
+    if (Object.keys(states.byNode).length) {
+      lines.push('', '## Observed on a node with no modelled flow', '', '| Node | State | Observations | Allowed | Denied |', '|---|---|---|---|---|');
+      for (const [id, n] of Object.entries(states.byNode)) lines.push(`| ${id} | ${n.states.join(', ')} | ${n.observations} | ${n.allowed} | ${n.denied} |`);
+    }
+    lines.push('', ...states.limitations.map((l) => `- ${l}`), '');
+    process.stdout.write(lines.join('\n'));
+  } else process.stdout.write(JSON.stringify({ evaluated: states.evaluated, counts: states.counts, byEdge: states.byEdge, byNode: states.byNode, limitations: states.limitations }, null, 2) + '\n');
+  return 0;
+}
 
 async function cmdRuntimeQuery(args) {
   const name = args._[2];
+  if (name === 'vulnerable-functions-in-production' && !args.flags.list) {
+    const rootAbs = path.resolve(args._[3] || '.');
+    const lsPath = statePath(rootAbs, 'last-scan.json');
+    let body; try { body = fs.readFileSync(lsPath, 'utf8'); } catch { process.stderr.write('agentic-security runtime query: no .agentic-security/last-scan.json here: run a scan first.\n'); return 1; }
+    if (_verifyLastScan(body, lsPath + '.sig') !== true) { process.stderr.write('agentic-security runtime query: last-scan.json failed its integrity check; re-run the scan.\n'); return 1; }
+    const { vulnerableFunctionsInProduction } = await import('../src/lineage/runtime-explorer-view.js');
+    const { annotateRuntimeCorrelation } = await import('../src/posture/runtime-correlation.js');
+    const scan = JSON.parse(body);
+    // evaluated NOW against the trace on disk, by the same annotator the scan uses, so a finding added late in a scan is not missed
+    // and the answer is never older than the trace
+    await annotateRuntimeCorrelation(rootAbs, scan.findings ?? [], {});
+    process.stdout.write(JSON.stringify({ query: name, supported: true, ...vulnerableFunctionsInProduction(scan.findings) }, null, 2) + '\n');
+    return 0;
+  }
+  if (name && Object.prototype.hasOwnProperty.call(_RUNTIME_EXTRA_QUERIES, name) && !args.flags.list) {
+    const targetAbs = path.resolve(args._[3] || '.');
+    const loaded = await _loadRuntimeInputs(targetAbs);
+    if (!loaded.ok) { process.stderr.write(`agentic-security runtime query: ${loaded.message}\n`); return 1; }
+    const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+    const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+    const mod = await import('../src/lineage/runtime-edge-states.js');
+    const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+    if (!correlation.evaluated) { process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: false, reason: 'no runtime observations were imported, so nothing can be said (not "no risk")' }, null, 2) + '\n'); return 0; }
+    if (name === 'runtime-flows-absent-from-static') {
+      process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: true, ...mod.runtimeFlowsAbsentFromStatic(loaded.observations, correlation) }, null, 2) + '\n');
+      return 0;
+    }
+    const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+    if (ev.errors.length) { process.stderr.write(`agentic-security runtime query: ${ev.errors.join('; ')}\n`); return 2; }
+    const states = mod.deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+    process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: true, ...mod.identitiesUsingRiskyPaths(states) }, null, 2) + '\n');
+    return 0;
+  }
   if (!name || args.flags.list) {
     process.stdout.write('Supported queries:\n');
     for (const [k, v] of Object.entries(_RUNTIME_QUERIES)) process.stdout.write(`  ${k} — ${v.description}\n`);
+    for (const [k, v] of Object.entries(_RUNTIME_EXTRA_QUERIES)) process.stdout.write(`  ${k} — ${v}\n`);
     process.stdout.write('\nNamed but NOT supported by this architecture (disclosed, not silently omitted):\n');
     for (const [k, v] of Object.entries(_RUNTIME_QUERIES_NOT_SUPPORTED)) process.stdout.write(`  ${k} — ${v}\n`);
     // --list is always a successful, intentional operation (exit 0);
@@ -5915,10 +6020,14 @@ async function _resolveArtifactScan(target) {
   return { ok: true, record: scanned.record };
 }
 
+const SCANNER_VERSION_FOR_ATTEST = () => { try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version; } catch { return null; } };
+
 async function cmdImageScan(args) {
   const target = args._[2];
-  if (!target) {
-    process.stderr.write('agentic-security image scan: provide a path to a docker-archive or oci-archive tar (OCI tar / Docker tar — see commands/image.md for the two supported input shapes).\n');
+  const registryRef = typeof args.flags.registry === 'string' ? args.flags.registry : null;
+  const engine = typeof args.flags.engine === 'string' ? args.flags.engine : null;
+  if (!target && !registryRef) {
+    process.stderr.write('agentic-security image scan: provide a path to a docker-archive or oci-archive tar, or --registry <ref> for an explicit remote image, or <name> --engine docker|podman for a local image (see commands/image.md).\n');
     return 2;
   }
   const format = args.flags.format ?? 'json';
@@ -5926,13 +6035,49 @@ async function cmdImageScan(args) {
     process.stderr.write('agentic-security image scan: --format must be json|cli.\n');
     return 2;
   }
-  const read = _readFileOrError(target);
-  if (!read.ok) { process.stderr.write(`agentic-security image scan: ${read.message}\n`); return 1; }
+  let buf; let source = { kind: 'archive' };
+  if (registryRef) {
+    // An explicit remote reference only: nothing is fetched unless the operator named the image. HTTPS only (plain HTTP just for a
+    // loopback registry the operator allows); every blob digest-verified; credentials from the environment or the Docker config.
+    const { fetchImage, RegistryError } = await import('../src/artifact/registry.js');
+    try {
+      const got = await fetchImage(registryRef, { platform: typeof args.flags.platform === 'string' ? args.flags.platform : 'linux/amd64', allowLoopbackHttp: !!args.flags['allow-http-loopback'] });
+      buf = got.tar; source = got.source;
+    } catch (err) {
+      if (err instanceof RegistryError) { process.stderr.write(`agentic-security image scan: ${err.message} (${err.code})\n`); return 1; }
+      throw err;
+    }
+  } else if (engine) {
+    const { saveFromEngine, EngineError } = await import('../src/artifact/engine-source.js');
+    try { const got = await saveFromEngine(target, { runtime: engine }); buf = got.tar; source = got.source; } catch (err) {
+      if (err instanceof EngineError) { process.stderr.write(`agentic-security image scan: ${err.message} (${err.code})\n`); return 1; }
+      throw err;
+    }
+  } else {
+    const read = _readFileOrError(target);
+    if (!read.ok) { process.stderr.write(`agentic-security image scan: ${read.message}\n`); return 1; }
+    buf = read.buf;
+  }
 
-  const scanned = await _scanArchiveFresh(read.buf);
+  const scanned = await _scanArchiveFresh(buf);
   if (!scanned.ok) { process.stderr.write(`agentic-security image scan: ${scanned.message}\n`); return 1; }
+  scanned.record.source = source;
 
   await _persistArtifactScan(scanned.record);
+
+  if (args.flags.attest) {
+    const { buildArtifactEvidenceBundle, signArtifactEvidenceBundle, ensureKeyPair } = await import('../src/artifact/artifact-evidence.js');
+    const { statePath, safeWriteState, ensureStateDir } = await import('../src/posture/state-dir.js');
+    const bundle = buildArtifactEvidenceBundle(scanned.record, { engineVersion: SCANNER_VERSION_FOR_ATTEST(), source });
+    const keys = ensureKeyPair();
+    const signed = signArtifactEvidenceBundle(bundle, keys.privateKeyPem);
+    const hex = _artifactScanDigestHex(scanned.record.inventory.digest);
+    if (ensureStateDir(process.cwd()) && hex) {
+      const file = statePath(process.cwd(), 'attestations', `artifact-${hex.slice(0, 16)}.json`);
+      if (safeWriteState(file, JSON.stringify(signed, null, 2))) process.stderr.write(`agentic-security image scan: signed evidence written to ${path.relative(process.cwd(), file)}\n`);
+      else process.stderr.write('agentic-security image scan: --attest could not write the signed bundle (state writes are disabled or this directory has no project marker); nothing was signed to disk.\n');
+    } else process.stderr.write('agentic-security image scan: --attest could not write the signed bundle (no usable .agentic-security directory here); nothing was signed to disk.\n');
+  }
 
   if (format === 'json') {
     process.stdout.write(JSON.stringify(scanned.record, null, 2) + '\n');
@@ -5942,6 +6087,7 @@ async function cmdImageScan(args) {
   const vulnCount = vulnerabilities.filter((v) => v.type === 'vulnerable_dep').length;
   process.stdout.write([
     `Image digest: ${inventory.digest} (${inventory.digestKind})`,
+    source.kind === 'registry' ? `Source: ${source.registry}/${source.repository}:${source.reference}${source.platform ? ` (${source.platform})` : ''}, ${source.bytes} bytes fetched${source.authenticated ? ', authenticated' : ''}` : source.kind === 'engine' ? `Source: local ${source.runtime} image ${source.reference}` : '',
     `OS/architecture: ${inventory.os}/${inventory.architecture}`,
     `OS packages: ${inventory.osPackages.length}, application packages: ${inventory.appPackages.length}`,
     `Vulnerabilities (OSV): ${vulnCount}`,
@@ -5985,7 +6131,15 @@ async function cmdImageVerify(args) {
     }
   }
 
-  const signatureResult = verifyImageSignature({ digest: inventory.digest, signature, publicKeyPem });
+  let signatureResult = verifyImageSignature({ digest: inventory.digest, signature, publicKeyPem });
+  if (args.flags.cosign) {
+    // delegated to cosign: bound to this image's digest, and never `verified` unless cosign says so for exactly this digest
+    const { verifyWithCosign } = await import('../src/artifact/cosign.js');
+    const repo = typeof args.flags.repository === 'string' ? args.flags.repository : (resolved.record.source?.kind === 'registry' ? `${resolved.record.source.registry}/${resolved.record.source.repository}` : null);
+    signatureResult = repo
+      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
+      : { state: 'unavailable', via: 'cosign', reason: 'cosign verifies against a registry: give --repository <registry/repo>, or scan with --registry so the repository is known' };
+  }
   const attestationResult = verifyProvenanceAttestation({ digest: inventory.digest, envelope: attestation, publicKeyPem });
 
   const result = { digest: inventory.digest, signature: signatureResult, attestation: attestationResult };
@@ -7659,6 +7813,16 @@ async function main() {
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
       case 'proof':    process.exit(await (await import('../src/posture/proof-fabric/cli.js')).cmdProof(args, path.resolve(args.flags.root || '.')));
+      case 'labs': {
+        // PRD 3 names `labs synthesize-rule FINDING-ID`. It is the rule compiler's synthesis step (`rules synthesize`). The older
+        // slash-command mode `/labs --synthesize-rule` (LLM-assisted detector-spec extraction for a CWE) is a different feature
+        // and is not reachable from this subcommand.
+        if (args._[1] === 'synthesize-rule' && args._[2]) { args._ = ['rules', 'synthesize', args._[2]]; process.exit(await cmdRules(args)); }
+        process.stderr.write('agentic-security labs: usage: labs synthesize-rule <finding-id> --spec <file.json> [--auto]\n(the other labs modes are slash-command modes: /labs --claude-audit, --model-rescan, ...)\n');
+        process.exit(2);
+        break;
+      }
+      case 'dnr':      process.exit(await (await import('../src/posture/dnr/cli.js')).cmdDnr(args, path.resolve(args.flags.root || '.')));
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));
       case 'rules':    process.exit(await cmdRules(args));
@@ -7668,7 +7832,12 @@ async function main() {
       case 'secure':   process.exit(await cmdSecure(args));
       case 'packs':    process.exit(await cmdPacks(args));
       case 'validator-cache': process.exit(await cmdValidatorCache(args));
-      case 'models':   process.exit(await cmdModels(args));
+      case 'models': {
+        // `models benchmark` and `models route explain` belong to the Eval Lab and the policy router (PRD 6); the rest stays the local-model UX.
+        if (args._[1] === 'benchmark' || args._[1] === 'route') process.exit(await (await import('../src/posture/evaluation/lab/cli.js')).cmdModelsLab(args, path.resolve(args.flags.root || '.')));
+        process.exit(await cmdModels(args));
+      }
+      case 'eval':     process.exit(await (await import('../src/posture/evaluation/lab/cli.js')).cmdEval(args, path.resolve(args.flags.root || '.')));
       case 'ask':      process.exit(await cmdAsk(args));
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));
@@ -7850,8 +8019,10 @@ async function main() {
         else if (sub === 'status') { process.exit(await cmdRuntimeStatus(args)); }
         else if (sub === 'reconcile') { process.exit(await cmdRuntimeReconcile(args)); }
         else if (sub === 'query') { process.exit(await cmdRuntimeQuery(args)); }
+        else if (sub === 'edges') { process.exit(await cmdRuntimeEdges(args)); }
+        else if (sub === 'explore') { process.exit(await cmdRuntimeExplorer(args, args._[2] || '.')); }
         else {
-          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", or "query".\n`);
+          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", "query", "edges", or "explore".\n`);
           process.exit(2);
         }
         break;
