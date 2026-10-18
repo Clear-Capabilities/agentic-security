@@ -43,6 +43,8 @@ export const TOOL_CAPABILITIES = Object.freeze({
   portfolio_progress: read('builds a read-only progress view from a portfolio store, ledger and optional inputs, confined to the session root'),
   apply_fix: mutating('writes verified patches into the project'),
   verify_fix: mutating('runs the project linter and tests and appends fix metrics'),
+  prove_finding: mutating('runs a reproducer in the confined proof environment and writes a proof record'),
+  prove_fix: mutating('replays the original exploit against a copy of the patched sources and runs the project tests; writes nothing to the project'),
   append_scratchpad: mutating('writes under the agent scratchpad'),
   append_agents_memory: mutating('appends to the continual-learning file'),
   synthesize_sca_upgrade: external('runs a package manager dry-run, which may reach a registry'),

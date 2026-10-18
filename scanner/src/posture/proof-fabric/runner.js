@@ -15,6 +15,7 @@ import { runInBoundary } from '../../sandbox/trust-boundary.js';
 import { detectBackend } from '../../sandbox/index.js';
 import { evaluateOracle } from './oracles.js';
 import { validateReproducer, substitute } from './reproducer.js';
+import { runInContainer, CONTAINER_ROOT, CONTAINER_TOOLS } from './container.js';
 
 export const DEFAULT_LIMITS = Object.freeze({
   timeoutMs: 20_000, buildTimeoutMs: 60_000, graceMs: 1000, maxOutputBytes: 256 * 1024,
@@ -58,7 +59,7 @@ export function selectEnvironment({ lang, preferContainer = true, requireContain
   if (preferContainer && dockerBin) {
     const image = docker?.images?.[lang] ?? CONTAINER_IMAGES[lang];
     const probe = (docker?.probe ?? defaultDockerProbe)(dockerBin, image);
-    if (probe.ok) return { mode: 'container', assurance: 'high', runtime: dockerBin, image, reason: null };
+    if (probe.ok) return { mode: 'container', assurance: 'high', runtime: dockerBin, image, imageId: probe.imageId ?? null, reason: null };
     if (requireContainer) return { mode: 'unavailable', assurance: 'none', reason: `container required but unavailable: ${probe.reason}` };
     const local = localEnv(force);
     return { ...local, containerSkipped: probe.reason };
@@ -76,8 +77,9 @@ function localEnv(force) {
 function defaultDockerProbe(bin, image) {
   const info = spawnSync(bin, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
   if (info.status !== 0) return { ok: false, reason: 'container daemon not responding' };
-  const img = spawnSync(bin, ['image', 'inspect', image], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
-  return img.status === 0 ? { ok: true } : { ok: false, reason: `image ${image} is not present locally (proofs never pull)` };
+  const img = spawnSync(bin, ['image', 'inspect', '--format', '{{.Id}}', image], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  // the image id is the environment's identity: two proofs with the same id ran on the same base
+  return img.status === 0 ? { ok: true, imageId: /^(?:sha256:)?[0-9a-f]{12,64}$/i.test(String(img.stdout).trim()) ? String(img.stdout).trim() : null } : { ok: false, reason: `image ${image} is not present locally (proofs never pull)` };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -134,10 +136,13 @@ export async function runAttempt(reproducer, opts = {}) {
   if (!sup.supported) return done({ status: 'unsupported', reasons: [sup.reason] });
   const env = opts.environment ?? selectEnvironment({ lang: reproducer.lang, requireContainer: opts.requireContainer, preferContainer: opts.preferContainer ?? true, force: opts.force });
   if (env.mode === 'unavailable') return done({ status: 'blocked', environment: env, reasons: [env.reason] });
-  if (env.mode === 'container') {
-    return done({ status: 'blocked', environment: env, reasons: ['container execution is selected but the container runner is not enabled in this build; use requireContainer:false for local-confined proof'] });
+  const inContainer = env.mode === 'container';
+  if (inContainer && reproducer.network === 'callback') {
+    // the container has no network by design, so it cannot reach the runner's loopback listener
+    if (opts.requireContainer) return done({ status: 'blocked', environment: env, reasons: ['this reproducer needs the loopback callback listener, which a container (no network) cannot reach, and a container was required'] });
+    return done({ status: 'unsupported', environment: env, reasons: ['a reproducer that needs the loopback callback listener cannot run in a container (no network); run it without a container requirement to use the local confined backend'] });
   }
-  if (reproducer.network === 'callback' && env.backend !== 'userspace') {
+  if (!inContainer && reproducer.network === 'callback' && env.backend !== 'userspace') {
     return done({ status: 'unsupported', environment: env, reasons: [`loopback callback needs the userspace backend; this host uses ${env.backend}`] });
   }
 
@@ -154,9 +159,10 @@ export async function runAttempt(reproducer, opts = {}) {
     const secrets = {};
     const canaries = {};
     const ctx = {
-      nonce, root, tools,
+      nonce, root: inContainer ? CONTAINER_ROOT : root, tools: inContainer ? CONTAINER_TOOLS : tools,
       secret: (n) => (secrets[n] ??= `SECRET-${nonce}-${n}`),
-      canary: (n) => { canaries[n] ??= { path: path.join(root, 'canary', `${nonce}-${n}`) }; return canaries[n].path; },
+      // the host path is what the oracle reads; inside a container the same file is seen under /work
+      canary: (n) => { canaries[n] ??= { path: path.join(root, 'canary', `${nonce}-${n}`) }; return inContainer ? path.posix.join(CONTAINER_ROOT, 'canary', `${nonce}-${n}`) : canaries[n].path; },
     };
     if (reproducer.network === 'callback') {
       listener = await startListener(aux);
@@ -194,20 +200,23 @@ export async function runAttempt(reproducer, opts = {}) {
       const p = path.join(root, rel);
       watch[name] = { path: p, existedBefore: fs.existsSync(p), digestBefore: digestFile(p) };
     }
-    const runEnv = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin', HOME: root, TMPDIR: path.join(root, 'tmp'), LANG: 'C.UTF-8', CI: '1' };
+    const runEnv = inContainer ? { LANG: 'C.UTF-8' } : { PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin', HOME: root, TMPDIR: path.join(root, 'tmp'), LANG: 'C.UTF-8', CI: '1' };
     for (const [k, v] of Object.entries(reproducer.env || {})) runEnv[k] = substitute(v, ctx);
     const boundary = { root, timeoutMs: limits.timeoutMs, graceMs: limits.graceMs, maxOutputBytes: limits.maxOutputBytes, env: runEnv, force: opts.force, signal: opts.signal, controlProbes: opts.controlProbes };
 
     const degraded = [];
     if (env.assurance === 'lower') degraded.push('lower-assurance-local-confinement');
 
+    const execute = (cmd, extra) => (inContainer
+      ? runInContainer({ runtime: env.runtime, image: env.image, name: `proof-${nonce}-${extra.stage}`, hostRoot: root, argv: cmd, env: runEnv, limits, timeoutMs: extra.timeoutMs, signal: opts.signal, maxOutputBytes: limits.maxOutputBytes, user: opts.containerUser })
+      : runInBoundary(cmd, { ...boundary, ...extra.boundary }));
     if (reproducer.build) {
-      const b = await runInBoundary(argv(reproducer.build), { ...boundary, timeoutMs: limits.buildTimeoutMs, cwd: undefined });
+      const b = await execute(argv(reproducer.build), { stage: 'build', timeoutMs: limits.buildTimeoutMs, boundary: { timeoutMs: limits.buildTimeoutMs, cwd: undefined } });
       if (b.blocked) return done({ status: 'blocked', environment: env, reasons: b.reasons, degraded });
       if (b.timedOut || b.exitCode !== 0) return done({ status: 'build-failed', executed: true, environment: env, reasons: [b.timedOut ? 'build timed out' : `build exited ${b.exitCode}`], degraded, observation: { buildStderr: trimOut(b.targetOutput?.stderr, 2000) } });
     }
 
-    const r = await runInBoundary(argv(reproducer.run), { ...boundary, ...(listener ? { networkProxyPort: listener.port } : {}) });
+    const r = await execute(argv(reproducer.run), { stage: 'run', timeoutMs: limits.timeoutMs, boundary: listener ? { networkProxyPort: listener.port } : {} });
     if (r.blocked) return done({ status: 'blocked', environment: env, reasons: r.reasons, degraded });
     if (!r.executed) return done({ status: 'error', environment: env, reasons: [`target did not execute (${r.status})`], degraded });
 

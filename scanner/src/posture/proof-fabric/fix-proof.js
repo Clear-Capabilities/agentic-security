@@ -12,7 +12,7 @@ import { proveFinding } from './orchestrator.js';
 import { runAttempt } from './runner.js';
 import { reproducerDigest, sha256, canonicalize } from './reproducer.js';
 
-export async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revision = null, policy = {}, staticVerification = null, siblings = null, signal, deps = {} } = {}) {
+export async function verifyFixWithProof({ finding, reproducer, files, scanRoot, revision = null, policy = {}, staticVerification = null, siblings = null, siblingSearchTruncated = [], signal, deps = {} } = {}) {
   const t0 = Date.now();
   const attemptFn = deps.attemptFn ?? runAttempt;
   const patchHash = sha256(canonicalize(files || {}));
@@ -52,6 +52,7 @@ export async function verifyFixWithProof({ finding, reproducer, files, scanRoot,
   const siblingCount = Array.isArray(siblings) ? siblings.length : null;
   if (siblingCount === null) degraded.push('sibling-search-not-run');
   else if (siblingCount > 0) degraded.push(`sibling-exposures:${siblingCount}`);
+  if (siblingCount !== null && siblingSearchTruncated?.length) degraded.push('sibling-search-incomplete');
 
   const full = degraded.length === 0;
   // Same split as fix-verify: `ok` (nothing that ran failed) earns FIX_VERIFIED; `completeness` says whether anything was skipped.

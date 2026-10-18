@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+// A stand-in container engine for the proof fabric's tests. It is NOT a container: it records the arguments it was given
+// (AS_FAKE_DOCKER_LOG), answers the probe commands, and for `run` executes the requested command locally with /work mapped to the
+// bind-mounted host directory. That is enough to prove the runner builds the hardened command line and reads results back; it proves
+// nothing about isolation, and the tests say so.
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+
+const argv = process.argv.slice(2);
+const log = process.env.AS_FAKE_DOCKER_LOG;
+if (log) fs.appendFileSync(log, `${JSON.stringify(argv)}\n`);
+const cmd = argv[0];
+if (cmd === 'info') { if (process.env.AS_FAKE_DOCKER_DOWN) process.exit(1); process.stdout.write('26.1.0\n'); process.exit(0); }
+if (cmd === 'image') { if (process.env.AS_FAKE_DOCKER_NO_IMAGE) process.exit(1); process.stdout.write('sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n'); process.exit(0); }
+if (cmd === 'rm' || cmd === 'kill') process.exit(0);
+if (cmd !== 'run') process.exit(125);
+
+// parse: run [flags...] image cmd...
+const flags = new Map(); const mounts = []; const envs = {};
+let i = 1;
+const valueFlags = new Set(['--pull', '--name', '--network', '--cap-drop', '--security-opt', '--pids-limit', '--memory', '--memory-swap', '--cpus', '--tmpfs', '--user', '--workdir', '-v', '-e']);
+for (; i < argv.length; i++) {
+  const a = argv[i];
+  if (!a.startsWith('-')) break;
+  if (valueFlags.has(a)) {
+    const v = argv[++i];
+    if (a === '-v') mounts.push(v); else if (a === '-e') { const k = v.indexOf('='); envs[v.slice(0, k)] = v.slice(k + 1); } else flags.set(a, v);
+  } else flags.set(a, true);
+}
+const image = argv[i]; const command = argv.slice(i + 1);
+const hostRoot = mounts.map((m) => m.split(':')).find((p) => p[1] === '/work')?.[0];
+if (!hostRoot) process.exit(125);
+const interp = { node: process.execPath, python3: process.env.AS_FAKE_PYTHON || 'python3' };
+const mapped = command.map((x) => (interp[x] ?? x).split('/work').join(hostRoot));
+if (process.env.AS_FAKE_DOCKER_HANG) { setTimeout(() => {}, 600000); } else {
+  const r = spawnSync(mapped[0], mapped.slice(1), { cwd: hostRoot, env: { ...envs, PATH: process.env.PATH }, encoding: 'utf8', timeout: 20000 });
+  void image;
+  process.stdout.write(r.stdout ?? ''); process.stderr.write(r.stderr ?? '');
+  process.exit(r.status ?? 1);
+}
