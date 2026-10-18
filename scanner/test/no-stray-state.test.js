@@ -94,6 +94,10 @@ const DELIBERATELY_UNGUARDED = new Set([
   'src/posture/deterministic.js', 'src/posture/fix-plan.js',
   'src/integrations/tickets.js',
   'bin/agentic-security-rule.js',
+  // `fleet scan` is an explicit user command whose whole purpose is to write its job store, scan cache and per-run artifacts under
+  // .agentic-security/fleet (resumability IS the state). It is not scan state a --no-state scan could reach; the CHILD scan it
+  // starts runs with AGENTIC_SECURITY_NO_STATE=1 so scanning a repository for the fleet never writes into that repository.
+  'src/posture/fleet/job-runner.js', 'src/posture/fleet/scan-cache.js',
 ]);
 
 /**
