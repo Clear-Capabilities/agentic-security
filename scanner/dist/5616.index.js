@@ -1117,6 +1117,8 @@ function ensureDetection(root, id, flags) {
 }
 
 function writeOut(dir, id, ir, formats) {
+  // the id names a file: it must be the digest-derived form, never text that arrived from a record on disk
+  if (!/^det-[0-9a-f]{12}$/.test(String(ir.id))) { console.error('refusing to write: the detection id is not in its derived form'); return []; }
   external_node_fs_.mkdirSync(dir, { recursive: true });
   const written = [];
   for (const f of formats) {
