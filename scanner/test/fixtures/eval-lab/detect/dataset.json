@@ -1,0 +1,103 @@
+{
+  "dataset": {
+    "id": "eval-lab-detect",
+    "version": "1",
+    "language": "javascript",
+    "source": {
+      "kind": "directory"
+    },
+    "split": "dev",
+    "license": "CC0-1.0",
+    "cwe": [
+      "CWE-78",
+      "CWE-79",
+      "CWE-89"
+    ],
+    "leakagePolicy": {
+      "mode": "enforce",
+      "stripComments": true
+    }
+  },
+  "entries": [
+    {
+      "id": "cmdi-1",
+      "kind": "vulnerable",
+      "cwe": "CWE-78",
+      "workspace": {
+        "dir": "cases/cmdi-vuln"
+      },
+      "expectedSpan": {
+        "file": "server.js",
+        "startLine": 8,
+        "endLine": 8
+      }
+    },
+    {
+      "id": "sqli-1",
+      "kind": "vulnerable",
+      "cwe": "CWE-89",
+      "workspace": {
+        "dir": "cases/sqli-vuln"
+      },
+      "expectedSpan": {
+        "file": "users.js",
+        "startLine": 6,
+        "endLine": 6
+      }
+    },
+    {
+      "id": "cmdi-2",
+      "kind": "fixed",
+      "resemblesCwe": "CWE-78",
+      "workspace": {
+        "dir": "cases/cmdi-fixed"
+      },
+      "lookalikeSpan": {
+        "file": "server.js",
+        "startLine": 9,
+        "endLine": 9
+      }
+    },
+    {
+      "id": "sqli-2",
+      "kind": "fixed",
+      "resemblesCwe": "CWE-89",
+      "workspace": {
+        "dir": "cases/sqli-fixed"
+      },
+      "lookalikeSpan": {
+        "file": "users.js",
+        "startLine": 6,
+        "endLine": 6
+      }
+    },
+    {
+      "id": "hn-1",
+      "kind": "hard-negative",
+      "category": "sanitization",
+      "resemblesCwe": "CWE-79",
+      "workspace": {
+        "dir": "cases/hn-sanitize"
+      },
+      "lookalikeSpan": {
+        "file": "render.js",
+        "startLine": 6,
+        "endLine": 6
+      }
+    },
+    {
+      "id": "hn-2",
+      "kind": "hard-negative",
+      "category": "authorization",
+      "resemblesCwe": "CWE-78",
+      "workspace": {
+        "dir": "cases/hn-allowlist"
+      },
+      "lookalikeSpan": {
+        "file": "open.js",
+        "startLine": 11,
+        "endLine": 11
+      }
+    }
+  ]
+}

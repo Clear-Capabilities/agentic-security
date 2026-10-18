@@ -7670,7 +7670,12 @@ async function main() {
       case 'secure':   process.exit(await cmdSecure(args));
       case 'packs':    process.exit(await cmdPacks(args));
       case 'validator-cache': process.exit(await cmdValidatorCache(args));
-      case 'models':   process.exit(await cmdModels(args));
+      case 'models': {
+        // `models benchmark` and `models route explain` belong to the Eval Lab and the policy router (PRD 6); the rest stays the local-model UX.
+        if (args._[1] === 'benchmark' || args._[1] === 'route') process.exit(await (await import('../src/posture/evaluation/lab/cli.js')).cmdModelsLab(args, path.resolve(args.flags.root || '.')));
+        process.exit(await cmdModels(args));
+      }
+      case 'eval':     process.exit(await (await import('../src/posture/evaluation/lab/cli.js')).cmdEval(args, path.resolve(args.flags.root || '.')));
       case 'ask':      process.exit(await cmdAsk(args));
       case 'verify':   process.exit(await cmdVerify(args));
       case 'reset':    process.exit(await cmdReset(args));

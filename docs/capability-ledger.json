@@ -301,6 +301,10 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/implementation-status/eval-lab-and-model-router.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/implementation-status/exploit-proof-fabric.md",
       "taskId": "CORE-001-T03"
     },
@@ -2246,6 +2250,41 @@
       "documents": [
         "README.md",
         "docs/guides/detection-and-response.md"
+      ]
+    },
+    {
+      "id": "CAP-124",
+      "kind": "command",
+      "title": "eval and models benchmark / route explain (CLI only): the Eval Lab and the per-task policy router",
+      "sources": [
+        "command:eval",
+        "docs/guides/eval-lab.md"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command groups (eval run|report|compare|list, models benchmark, models route explain) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "The Eval Lab scores arms on a dataset the operator supplies; it adds no analysis of its own. A Haskell dataset is accepted like any other language (the language field is free text), but this change ships no Haskell fixtures or Haskell-specific scoring."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "The lab has no Nix expression analysis; a Nix dataset is scored like any other, and none is shipped."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "The lab runs arms and the proof fabric's sandbox on the local host; it has no NixOS-host execution surface."
+      },
+      "entryPoints": [
+        "scanner/src/posture/evaluation/lab/cli.js",
+        "scanner/src/posture/evaluation/lab/run.js",
+        "scanner/src/posture/routing/policy-router.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/eval-lab.md"
       ]
     }
   ],
