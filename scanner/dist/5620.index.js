@@ -682,8 +682,8 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
   (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, GRAPH_FILE), JSON.stringify({ organization: manifest.organization, builtAt: new Date().toISOString(), ...dep }, null, 2));
   // edges the code implies; skipped with --no-discover. A failure here never fails the run: the graph is then declared-only and says so.
   let discovered = null; let discoveryNote = args.flags['no-discover'] ? 'skipped (--no-discover)' : null;
-  if (!args.flags['no-discover']) { try { discovered = (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .discoverEdges */ .UX)({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
-  const split = discovered ? (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .splitDeclared */ .ZC)(discovered, manifest) : null;
+  if (!args.flags['no-discover']) { try { discovered = (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .discoverEdges */ .U)({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
+  const split = discovered ? (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .splitDeclared */ .Z)(discovered, manifest) : null;
   const graph = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .finalizeGraph */ .Th)((0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .buildEnterpriseGraph */ .Ws)({ manifest, dependencyGraph: dep, discovered }));
   const findingsByRepo = Object.fromEntries([...artifacts].map(([id, a]) => [id, a.findings ?? []]));
   (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
@@ -880,12 +880,12 @@ __webpack_async_result__();
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   UX: () => (/* binding */ discoverEdges),
-/* harmony export */   ZC: () => (/* binding */ splitDeclared)
+/* harmony export */   U: () => (/* binding */ discoverEdges),
+/* harmony export */   Z: () => (/* binding */ splitDeclared)
 /* harmony export */ });
-/* unused harmony export DISCOVERY_LIMITS */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+/* harmony import */ var _state_dir_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(31174);
 // Edges the code implies but the manifest does not declare (PRD 4: the enterprise graph should not be only what someone wrote down).
 //
 // What this does: reads the text of each repository's source and configuration files and looks for a few exact, checkable
@@ -904,8 +904,9 @@ __webpack_async_result__();
 
 
 
+
 const DISCOVERY_LIMITS = Object.freeze({ maxFilesPerRepo: 2000, maxFileBytes: 512 * 1024, maxTotalBytes: 64 * 1024 * 1024, maxEvidencePerEdge: 3 });
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.venv', 'venv', '__pycache__', 'target', '.agentic-security', 'coverage', '.next', 'dist-newstyle', '.stack-work']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.venv', 'venv', '__pycache__', 'target', _state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .STATE_DIR_NAME */ .Ky, 'coverage', '.next', 'dist-newstyle', '.stack-work']);
 const TEXT_EXT = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|java|kt|go|rb|php|cs|rs|scala|ya?ml|json|toml|properties|env|tf|conf|ini|hs|nix)$/i;
 const COMMENT = /^\s*(?:\/\/|#|\*|\/\*|--|;)/;
 const URL_RE = /\b[a-z][a-z0-9+.-]{1,12}:\/\/[^\s'"`<>)\]}]{1,300}/gi;
