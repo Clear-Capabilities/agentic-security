@@ -85,7 +85,7 @@ tags:
 
 Formats: `sigma`, `http` (a generic JSON detection), `waf` (a ModSecurity-style suggestion that is always detect-only), `log-query`
 (a structured query), `yara` (only for the deserialization class, where there is content to match), and the P1 text renderers `spl`
-(Splunk), `kql` (Microsoft Sentinel) and `cloudwatch` (Logs Insights). A format that cannot honestly describe the finding says why
+(Splunk), `kql` (Microsoft Sentinel), `cloudwatch` (Logs Insights), `elastic` (an Elasticsearch query body over ECS fields), `yaral` (Google SecOps) and `datadog` (a Cloud SIEM rule, created disabled). A format that cannot honestly describe the finding says why
 instead of emitting a rule that would never fire: KQL and CloudWatch cannot see a request body, so they decline a body parameter.
 `--out <dir>` writes every applicable format.
 
@@ -212,8 +212,12 @@ limitation saying the exploit was not executed.
 
 ## Not built
 
-* SIEM adapters for Elastic, Google SecOps (YARA-L) and Datadog, and every remote integration (the PRD's P1 list asks for those to
-  be opt-in and read-only). Only text renderers for Splunk, Sentinel and CloudWatch exist, and none of them connects anywhere.
+* Every remote SIEM integration (the PRD's P1 list asks for those to be opt-in and read-only). All renderers are text; none connects
+  anywhere.
+* The Elastic, YARA-L and Datadog renderers translate exactly or say why not, which makes them narrow. Elastic uses Lucene regular
+  expressions (no anchors, word boundaries or look-around), YARA-L sees the whole URL, and Datadog has wildcards but no regular
+  expressions. Most payload classes are therefore reported as not expressible there; the structural cases (authentication bypass,
+  oversized values) render. The syntax of these three was not run against a live Elastic, Google SecOps or Datadog.
 * An MCP tool for the loop.
 * Hunting compressed logs (`.gz` and friends are reported as skipped, which makes the verdict INCONCLUSIVE).
 * Payload classes beyond the eight above. A finding of another class gets no detection rather than a guessed one.

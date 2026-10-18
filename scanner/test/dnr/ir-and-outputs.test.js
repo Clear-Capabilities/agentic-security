@@ -129,6 +129,8 @@ test('outputs: every format renders for a full IR, and an inapplicable one says 
   assert.deepEqual(Object.keys(all).sort(), [...FORMATS].sort());
   for (const f of FORMATS) {
     if (f === 'yara') { assert.equal(all.yara.applicable, false); assert.match(all.yara.reason, /request-shaped/); continue; }
+    // the P1 SIEM adapters translate exactly or say why not (see the adapter tests below)
+    if (['elastic', 'yaral', 'datadog'].includes(f)) { assert.equal(all[f].applicable === true || typeof all[f].reason === 'string', true, f); continue; }
     assert.equal(all[f].applicable, true, f);
     assert.match(all[f].content, /api\\?\/export/, f);
   }
@@ -196,4 +198,54 @@ test('validation: a rule that fires on everything is caught by the negatives; no
   } finally { PAYLOAD_CLASSES['command-injection'].indicators.splice(0, 1, ...saved); }
   const noEp = buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', { payloadClass: 'command-injection' }) }).ir;
   assert.equal(validateDetection(noEp).status, 'NOT_VALIDATED');
+});
+
+import { luceneRegex } from '../../src/posture/dnr/outputs.js';
+
+const irFor = (over) => buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', attack(over)) }).ir;
+
+test('luceneRegex: translates the shorthand classes, groups and reserved characters, and refuses what Lucene cannot say', () => {
+  assert.equal(luceneRegex('a\\d+b'), 'a[0-9]+b');
+  assert.equal(luceneRegex('(?:x|y)\\s*z'), '(x|y)[ \\t\\n\\r]*z');
+  assert.equal(luceneRegex('[\\d.]'), '[0-9.]');
+  assert.equal(luceneRegex('a&b~c<d>e@f"g#h'), 'a\\&b\\~c\\<d\\>e\\@f\\"g\\#h');
+  assert.equal(luceneRegex('a.*?b'), 'a.*b', 'lazy becomes greedy, which is exact for a yes/no match');
+  for (const bad of ['^a', 'a$', '\\bword', '(?=x)y', '(?<n>a)', '(a)\\1', '[abc', '\\p{L}']) assert.equal(luceneRegex(bad), null, bad);
+});
+
+test('elastic: a structurally exact query, or a stated reason; the proof\'s own class decides which', () => {
+  const auth = irFor({ payloadClass: 'auth-bypass', location: 'header', path: '/api/users/:id/export' });
+  const e = renderDetection(auth, 'elastic');
+  assert.equal(e.applicable, true);
+  const q = JSON.parse(e.content).query.bool;
+  assert.deepEqual(q.filter[0], { term: { 'http.request.method': 'POST' } });
+  assert.deepEqual(q.filter[1], { regexp: { 'url.path': { value: '/api/users/[^/]+/export' } } });
+  assert.deepEqual(q.filter[2], { range: { 'http.response.status_code': { gte: 200, lte: 299 } } });
+  assert.deepEqual(q.must_not, [{ exists: { field: 'http.request.headers.authorization' } }]);
+  const sql = renderDetection(irFor({ location: 'query' }), 'elastic');
+  assert.equal(sql.applicable, false); assert.match(sql.reason, /Lucene cannot express exactly/);
+  const body = renderDetection(irFor({ payloadClass: 'buffer-overflow', location: 'body' }), 'elastic');
+  assert.equal(body.applicable, true); assert.match(JSON.parse(body.content).query.bool.filter[2].regexp['http.request.body.content'].value, /^\.\*\(\.\{512,\}\)\.\*$/);
+  assert.equal(JSON.parse(body.content).query.bool.filter[2].regexp['http.request.body.content'].case_insensitive, true);
+  assert.equal(renderDetection(irFor({ payloadClass: 'buffer-overflow', location: 'header' }), 'elastic').applicable, false);
+});
+
+test('yaral and datadog: only what the target can say exactly', () => {
+  const big = irFor({ payloadClass: 'buffer-overflow', location: 'query' });
+  const y = renderDetection(big, 'yaral');
+  assert.equal(y.applicable, true); assert.match(y.content, /^rule as_[0-9a-f]{12} \{/); assert.match(y.content, /re\.regex\(\$e\.target\.url, `\(\?i\)\.\{512,\}`\)/);
+  assert.equal(renderDetection(irFor({ location: 'query' }), 'yaral').applicable, false, 'anchored indicators would mean something else against a whole URL');
+  assert.match(renderDetection(irFor({ location: 'query' }), 'yaral').reason, /anchored/);
+  assert.equal(renderDetection(irFor({ payloadClass: 'auth-bypass', location: 'header' }), 'yaral').applicable, false);
+  assert.equal(renderDetection(irFor({ payloadClass: 'buffer-overflow', location: 'body' }), 'yaral').applicable, false);
+  const auth = irFor({ payloadClass: 'auth-bypass', location: 'header', path: '/api/users/:id/export' });
+  const d = JSON.parse(renderDetection(auth, 'datadog').content);
+  assert.equal(d.isEnabled, false, 'generated rules are never enabled');
+  assert.equal(d.queries[0].query, '@http.method:POST @http.url_details.path:/api/users/*/export @http.status_code:[200 TO 299] -@http.request.headers.authorization:*');
+  assert.match(renderDetection(irFor({ location: 'query' }), 'datadog').reason, /no regular expressions/);
+});
+
+test('a path that could break out of a rule never reaches a renderer: the IR builder refuses it', () => {
+  const r = buildDetectionIR({ finding: FINDING, proof: proof('EXPLOIT_CONFIRMED', attack({ payloadClass: 'auth-bypass', location: 'header', path: '/api/a b' })) });
+  assert.equal(r.ir ?? null, null);
 });

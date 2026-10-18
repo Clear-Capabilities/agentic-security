@@ -46,6 +46,7 @@ export function planSteps({ tests = true } = {}) {
     { name: 'build the bundle', ...npm('build') },
     { name: 'render the language docs', ...npm('docs:render-language') },
     { name: 'capture the language examples', ...npm('docs:capture-language') },
+    { name: 'regenerate the assurance docs', ...npm('docs:assurance') },
     { name: 'regenerate the scorecard', ...npm('scorecard') },
     { name: 'record inventory test runs', ...node('scripts/engineering-excellence/inventory.mjs', '--verify') },
     { name: 'render the inventory', ...node('scripts/engineering-excellence/inventory.mjs', '--render') },
@@ -56,7 +57,7 @@ export function planSteps({ tests = true } = {}) {
   if (tests) {
     const suite = (name, ...files) => ({ name, cmd: process.execPath, args: ['--test', ...files], cwd: 'scanner' });
     steps.push(
-      suite('docs, registry and inventory suites', 'test/language/*.test.js', 'test/engineering-excellence/e0-01-inventory.test.js', 'test/engineering-excellence/e8-03-regression-report.test.js', 'test/engineering-excellence/e8-04-docs.test.js', 'test/engineering-excellence/e8-05-handoff.test.js', 'test/engineering-excellence/e8-06-release-decision.test.js'),
+      suite('docs, registry and inventory suites', 'test/language/*.test.js', 'test/documentation/*.test.js', 'test/engineering-excellence/e0-01-inventory.test.js', 'test/engineering-excellence/e8-03-regression-report.test.js', 'test/engineering-excellence/e8-04-docs.test.js', 'test/engineering-excellence/e8-05-handoff.test.js', 'test/engineering-excellence/e8-06-release-decision.test.js'),
       suite('pinned registry counts', 'test/lineage/*.test.js'),
       { name: 'language docs are current', ...npm('docs:check-language') },
       { name: 'gate and ship logic', cmd: process.execPath, args: ['--test', 'test/pre-push-gate.test.js', 'test/release-check.test.js', 'test/ship.test.js'], cwd: 'scanner' },

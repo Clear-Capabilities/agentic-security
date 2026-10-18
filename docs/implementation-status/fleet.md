@@ -27,8 +27,11 @@ workers, which the PRD names as future work.
 
 * **Reach edges are declared in the manifest.** Calls between services, queue producers and consumers, database access and
   Internet exposure come from the operator, and every such edge says `source: fleet-manifest`. Dependency edges come from package
-  manifests. Edges implied by code but not declared are not found; the per-repository Data Flow Explorer graph has them and is not
-  joined in.
+  manifests. A second kind of edge is found by reading code literals (`discover-edges.js`: URL hosts, queue names on publish/consume
+  lines, database names on connect lines, matched as whole tokens against ids and declared `aliases`), tagged
+  `discovered-code-literal` and shown beside declared edges, never instead of them. It sees literals only (not run-time-built URLs,
+  environment-supplied hosts or mesh routing), cannot tell database direction, and was tested on small constructed repositories, not
+  on a real organization. The per-repository Data Flow Explorer graph is still not joined in.
 * **"Vulnerable authentication code" is a selection, not an analysis.** It is the repositories whose scan produced an authentication
   finding (an authentication-class CWE or family) plus everything that depends on them.
 * **One question shape.** The documented sentence is recognised and mapped to the structured query; nothing else is parsed.
@@ -36,8 +39,7 @@ workers, which the PRD names as future work.
   recovered by expiry only.
 * **Dependency matching is by declared package name**, and a version pin is matched as text.
 * **`fleet explore` writes a static listing**, not the interactive Data Flow Explorer.
-* **Scaling is not benchmarked.** "Near-linear worker scaling within the supported range" is a PRD metric this change does not
-  measure; the protocol's correctness under concurrency is what is tested.
+* **Scaling was measured once** (`bench/fleet-scale/run.mjs`, 24 tiny synthetic repositories, 8-logical-core M2): speedup 1.00x/1.79x/2.98x/3.20x at 1/2/4/8 workers (100%/90%/74%/40% efficiency). Not near-linear beyond 2 workers on this hardware, and not a measurement of real repositories.
 * **A source checkout never reuses a cached result** (no built bundle, no scanner identity); an installed or built scanner does.
 
 ## Also changed

@@ -17,9 +17,9 @@ import { saveRecord, latestRecord, listRecords } from './store.js';
 import { buildLifecycleView, formatLifecycleView, loadFindingFromLastScan } from './view.js';
 
 const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
-const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt' };
+const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt', elastic: 'json', yaral: 'yaral', datadog: 'json' };
 
-const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
+const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
 
 function ensureDetection(root, id, flags) {
   const existing = latestRecord(root, id, 'detection');

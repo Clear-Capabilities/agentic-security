@@ -2,11 +2,11 @@
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
     "engineVersion": "0.176.0",
-    "bundleSha256": "a451e1001c7d7cb9a72112c9144efee525a72d8b5835d2140279b360106f5fe9",
-    "commit": "0cd8b8052b38705b44f519fba9724658794daa4e",
+    "bundleSha256": "91ad279460465f477ba6d8e0b795a75d1cfba1aac7456ad7e5b04b97532d2e42",
+    "commit": "597cc9034525365c0bce397f3ac8b8d584f2d5a3",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-18T18:07:51.631Z",
+    "generatedAt": "2026-10-18T18:57:24.381Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 730,
+        "total": 735,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -760,6 +760,7 @@
           "posture/evaluation/deployment-ablation.js": 2,
           "posture/evaluation/dev-cases.js": 1,
           "posture/evaluation/invariant-ablation.js": 1,
+          "posture/evaluation/lab/arm-ollama.js": 1,
           "posture/evaluation/lab/arms.js": 1,
           "posture/evaluation/lab/cli.js": 4,
           "posture/evaluation/lab/dataset.js": 2,
@@ -783,7 +784,8 @@
           "posture/fix-verify-loop.js": 2,
           "posture/fix-verify.js": 1,
           "posture/fleet.js": 1,
-          "posture/fleet/cli.js": 12,
+          "posture/fleet/cli.js": 13,
+          "posture/fleet/discover-edges.js": 1,
           "posture/fleet/fleet-graph.js": 2,
           "posture/fleet/fleet-manifest.js": 1,
           "posture/fleet/job-runner.js": 1,
@@ -825,6 +827,7 @@
           "posture/production-feedback.js": 1,
           "posture/profile.js": 4,
           "posture/proof-fabric/cli.js": 3,
+          "posture/proof-fabric/generate-python.js": 2,
           "posture/proof-fabric/generate.js": 4,
           "posture/proof-fabric/runner.js": 3,
           "posture/proof-fabric/siblings.js": 2,
@@ -970,8 +973,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 392,
-    "d": 611
+    "n": 396,
+    "d": 615
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2134,8 +2137,8 @@
   },
   "measurement": {
     "engineVersion": "0.176.0",
-    "commit": "0cd8b8052b38705b44f519fba9724658794daa4e",
-    "bundleSha256": "a451e1001c7d7cb9a72112c9144efee525a72d8b5835d2140279b360106f5fe9",
+    "commit": "597cc9034525365c0bce397f3ac8b8d584f2d5a3",
+    "bundleSha256": "91ad279460465f477ba6d8e0b795a75d1cfba1aac7456ad7e5b04b97532d2e42",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

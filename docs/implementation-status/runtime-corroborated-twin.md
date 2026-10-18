@@ -42,11 +42,16 @@ architecture rather than creating parallel systems"), every item below was exten
   Observation alone never sets it, and a denied-only edge cannot carry it.
 - **`runtime-flows-absent-from-static` lists CANDIDATES.** An unmatched observation may be a path static analysis missed or a mapping the
   matcher is too weak to make. It is a lead, not a verdict.
-- **Route and function/symbol matching rungs are NOT built**, so `vulnerable-functions-in-production` stays disclosed as unsupported. The
-  3-rung ladder is unchanged; a 4th/5th rung needs its own adversarial review of precedence and ambiguity.
-- **Explorer views (Static / Runtime / Static vs Runtime / Observed High-Risk / Unexpected) and `explore . --runtime` are NOT built.**
-  `runtime edges --format markdown` is a per-edge static-vs-runtime table, not a UI. Click-through from a field to its path with both
-  evidences is therefore not delivered.
+- **Function and route matching live at the finding layer, not as new rungs in the graph ladder.** The graph is destination-shaped
+  (nodes carry no route or function symbol), so adding rungs there would mean changing the signed `DataFlowGraph v1` contract. The
+  existing `posture/runtime-correlation.js` already matches findings to function, line and route evidence in a runtime trace;
+  `runtime query vulnerable-functions-in-production` evaluates the scan's findings against the trace on disk with that matcher. Its
+  limits are that matcher's: a trace without declared full sampling cannot show that something did NOT run (absence becomes unknown),
+  and a finding with no line or route on its path can only ever be `unknown`.
+- **The Explorer views are one static, script-free page, not a route on the local explore server.** `explore . --runtime` (or
+  `runtime explore`) writes `.agentic-security/runtime-explorer.html` with the five PRD views, a path view per flow with a state per
+  hop, and expandable static+runtime evidence per edge. The hardened loopback server still serves only the signed static graph;
+  widening it is a separate security decision. The page is a snapshot, not live.
 
 ## Verification
 

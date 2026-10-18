@@ -2,7 +2,7 @@
 
 **Percent complete:** all eight P0 requirements and the required end-to-end scenario are implemented and tested. The P1 SIEM
 adapters are partly done (Splunk SPL, Microsoft Sentinel KQL and CloudWatch Logs Insights as text renderers; Elastic, Google
-SecOps YARA-L and Datadog are not built), and no remote integration exists. No MCP tool.
+SecOps YARA-L and Datadog are built as text renderers that translate exactly or decline, never run against a live product), and no remote integration exists. No MCP tool.
 
 **Current phase:** G (completion): unit, integration, adversarial and end-to-end tests pass; full `npm test` and the release
 gates are run by the ship flow, not by this document.
@@ -34,7 +34,7 @@ gates are run by the ship flow, not by this document.
   source-to-artifact provenance graph (PRD 5), so "artifact history" means what the operator supplies.
 * **Not folded into `scanHealth`.** A hunt is not a scan, and its degraded states (inconclusive, unavailable) are reported in the
   hunt result and the finding view and carry their own exit codes. They do not feed the scan's assurance rollup.
-* **Not built:** Elastic, Google SecOps YARA-L and Datadog renderers; every remote, read-only SIEM integration; an MCP tool;
+* **Not built:** every remote, read-only SIEM integration; an MCP tool;
   hunting compressed logs (reported as skipped, which makes the verdict INCONCLUSIVE).
 * **Finding ids.** Records are keyed by the id you pass. Use the stable id consistently; `fix --require-proof` records under the
   finding's stable id.

@@ -578,7 +578,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _job_store_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(20121);
 /* harmony import */ var _job_runner_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(89072);
 /* harmony import */ var _org_health_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(75435);
-/* harmony import */ var _enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(81630);
+/* harmony import */ var _discover_edges_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(89632);
+/* harmony import */ var _enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(81630);
 var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_job_runner_js__WEBPACK_IMPORTED_MODULE_8__]);
 _job_runner_js__WEBPACK_IMPORTED_MODULE_8__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 // `agentic-security fleet init|scan|status|resume|query|explore`.
@@ -601,13 +602,14 @@ _job_runner_js__WEBPACK_IMPORTED_MODULE_8__ = (__webpack_async_dependencies__.th
 
 
 
+
 const GRAPH_FILE = 'fleet-graph.json';
 const ENTERPRISE_FILE = node_path__WEBPACK_IMPORTED_MODULE_1__.join('fleet', 'enterprise-graph.json');
 const DB_FILE = node_path__WEBPACK_IMPORTED_MODULE_1__.join('fleet', 'fleet.db');
 const ROLLUP_FILE = 'fleet-rollup.json';
 const sha = (s) => (0,node_crypto__WEBPACK_IMPORTED_MODULE_2__.createHash)('sha256').update(s).digest('hex');
 
-const usage = () => { console.error('usage: fleet init | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
+const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
 const isManifestArg = (s) => /\.ya?ml$/i.test(String(s ?? ''));
 const manifestArg = (args) => { const m = args._[2]; return m && !String(m).startsWith('--') ? m : 'fleet.yaml'; };
 const dbPath = (root) => (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, DB_FILE);
@@ -620,7 +622,25 @@ async function cmdFleet(args, root) {
   if (sub === 'resume') return cmdResume(args, root);
   if (sub === 'query') return cmdQuery(args, root);
   if (sub === 'explore') return cmdExplore(args, root);
+  if (sub === 'edges') return cmdEdges(args, root);
   return usage();
+}
+
+/** `fleet edges [--undeclared] [--json]`: every edge of the last enterprise graph with the evidence it rests on; --undeclared keeps the ones found only in code. */
+async function cmdEdges(args, root) {
+  const f = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE);
+  if (!node_fs__WEBPACK_IMPORTED_MODULE_0__.existsSync(f)) { console.error('No enterprise graph yet. Run `agentic-security fleet scan <manifest.yaml>` first.'); return 4; }
+  const g = JSON.parse(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(f, 'utf8'));
+  const edges = g.edges.filter((e) => e.type !== 'exposes' && (!args.flags.undeclared || e.discovered));
+  if (args.flags.json) { console.log(JSON.stringify({ discovery: g.discovery ?? null, edges }, null, 2)); return 0; }
+  if (!edges.length) { console.log(args.flags.undeclared ? 'No edge was found in code that the manifest does not declare.' : 'The graph has no edges.'); }
+  for (const e of edges) {
+    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal').map((x) => `${x.file}:${x.line}`);
+    console.log(`${e.from} -[${e.type}]-> ${e.to}  ${e.discovered ? 'FOUND ONLY IN CODE' : where.length ? 'declared, and seen in code' : 'declared'}${where.length ? `  (${where.join(', ')})` : ''}`);
+  }
+  if (g.discovery?.limitations) console.log(`\nLimits: ${g.discovery.limitations.join(' ')}`);
+  else if (g.discovery?.note) console.log(`\nEdge discovery: ${g.discovery.note}.`);
+  return 0;
 }
 
 async function cmdInit(args, root) {
@@ -660,14 +680,20 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
 
   const dep = (0,_fleet_graph_js__WEBPACK_IMPORTED_MODULE_4__/* .buildFleetDependencyGraph */ .u_)(manifest.repositories);
   (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, GRAPH_FILE), JSON.stringify({ organization: manifest.organization, builtAt: new Date().toISOString(), ...dep }, null, 2));
-  const graph = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .finalizeGraph */ .Th)((0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .buildEnterpriseGraph */ .Ws)({ manifest, dependencyGraph: dep }));
+  // edges the code implies; skipped with --no-discover. A failure here never fails the run: the graph is then declared-only and says so.
+  let discovered = null; let discoveryNote = args.flags['no-discover'] ? 'skipped (--no-discover)' : null;
+  if (!args.flags['no-discover']) { try { discovered = (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .discoverEdges */ .UX)({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
+  const split = discovered ? (0,_discover_edges_js__WEBPACK_IMPORTED_MODULE_10__/* .splitDeclared */ .ZC)(discovered, manifest) : null;
+  const graph = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .finalizeGraph */ .Th)((0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .buildEnterpriseGraph */ .Ws)({ manifest, dependencyGraph: dep, discovered }));
   const findingsByRepo = Object.fromEntries([...artifacts].map(([id, a]) => [id, a.findings ?? []]));
-  (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, builtAt: new Date().toISOString() }));
+  (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.safeWriteState)((0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.statePath)(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
 
   if (args.flags.json) console.log(JSON.stringify({ runId, health, rollup }, null, 2));
   else {
     console.log((0,_fleet_js__WEBPACK_IMPORTED_MODULE_5__/* .renderFleetSummary */ .LL)(rollup));
     console.log(`\nRun: ${runId}\n${(0,_org_health_js__WEBPACK_IMPORTED_MODULE_9__/* .renderOrgHealth */ .Vp)(health)}`);
+    if (split) console.log(`\nEdges found in code: ${split.undeclared.length} not in the manifest, ${split.confirmed.length} matching a declared edge. ${split.undeclared.length ? 'List them with: agentic-security fleet edges --undeclared' : ''}`.trimEnd());
+    else if (discoveryNote) console.log(`\nEdge discovery ${discoveryNote}.`);
     if (interrupted) console.log(`\nInterrupted. Continue with: agentic-security fleet resume ${runId}`);
     else if (health.counts.failed || health.counts.timedOut || health.counts.notRun) console.log(`\nRetry the failed and timed-out repositories with: agentic-security fleet resume ${runId} --retry-failed`);
   }
@@ -802,30 +828,31 @@ async function cmdQuery(args, root) {
 
   const ent = readEnterprise(root);
   if (!ent) { console.error('No enterprise graph yet. Run `agentic-security fleet scan <manifest.yaml>` first.'); return 4; }
-  const bad = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .validateEnterpriseGraph */ .cl)(ent);
+  const bad = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .validateEnterpriseGraph */ .cl)(ent);
   if (bad.length) { console.error(`The stored enterprise graph is inconsistent (${bad[0]}). Re-run the scan.`); return 1; }
   const findings = new Map(Object.entries(ent.findingsByRepo ?? {}));
 
   if (flags['blast-radius']) {
-    const r = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .componentBlastRadius */ ._o)({ graph: ent, component: String(flags['blast-radius']), version: flags.version ? String(flags.version) : null });
+    const r = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .componentBlastRadius */ ._o)({ graph: ent, component: String(flags['blast-radius']), version: flags.version ? String(flags.version) : null });
     if (!r) { console.error(`${flags['blast-radius']} is not in the last fleet scan.`); return 4; }
-    console.log(flags.json ? JSON.stringify(r, null, 2) : (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .renderBlastRadius */ .lB)(r));
+    console.log(flags.json ? JSON.stringify(r, null, 2) : (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .renderBlastRadius */ .lB)(r));
     return 0;
   }
 
   const toClass = parsed?.toDataClass ?? flags['internet-to'];
   if (toClass) {
     const sel = parsed?.involving ?? (flags['involving-vulnerable'] ? (/^[a-z][a-z0-9-]*$/.test(String(flags['involving-vulnerable'])) && ent.nodes.some((n) => n.id === flags['involving-vulnerable']) ? { repo: String(flags['involving-vulnerable']) } : { family: String(flags['involving-vulnerable']) }) : null);
-    const involving = sel ? (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .vulnerableSet */ .r8)({ graph: ent, findingsByRepo: findings, selector: sel }) : null;
-    const res = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .attackPaths */ .Nn)({ graph: ent, toDataClass: String(toClass).toLowerCase(), involving });
+    const involving = sel ? (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .vulnerableSet */ .r8)({ graph: ent, findingsByRepo: findings, selector: sel }) : null;
+    const res = (0,_enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .attackPaths */ .Nn)({ graph: ent, toDataClass: String(toClass).toLowerCase(), involving });
     if (flags.json) { console.log(JSON.stringify({ ...res, involving: involving ? { direct: [...involving.direct], all: [...involving.all], why: Object.fromEntries(involving.why) } : null }, null, 2)); return 0; }
     if (!res.targets.length) { console.log(`No node in the fleet manifest is marked as holding ${toClass} data, so there is nothing to reach.`); return 0; }
     if (!res.paths.length) console.log(`No Internet-facing path to ${toClass} data${involving ? ' involving that vulnerable code' : ''} was found in the declared graph.${res.truncated ? ' (search bound reached)' : ''}`);
     for (const p of res.paths) {
-      console.log(p.nodes.map((n) => (n === _enterprise_graph_js__WEBPACK_IMPORTED_MODULE_10__/* .INTERNET */ .aw ? 'Internet' : n)).join(' -> '));
+      console.log(p.nodes.map((n) => (n === _enterprise_graph_js__WEBPACK_IMPORTED_MODULE_11__/* .INTERNET */ .aw ? 'Internet' : n)).join(' -> '));
+      if (p.discoveredEdges?.length) console.log(`    rests on edge(s) found only in code, not declared: ${p.discoveredEdges.join(', ')}`);
       if (p.involving.length) console.log(`    involves vulnerable code: ${p.involving.map((n) => `${n} (${involving.why.get(n)})`).join(', ')}`);
     }
-    if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);
+    if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest, plus any marked above as found only in code.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);
     return 0;
   }
   return usage();
@@ -846,6 +873,154 @@ async function cmdExplore(args, root) {
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } });
+
+/***/ }),
+
+/***/ 89632:
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   UX: () => (/* binding */ discoverEdges),
+/* harmony export */   ZC: () => (/* binding */ splitDeclared)
+/* harmony export */ });
+/* unused harmony export DISCOVERY_LIMITS */
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
+// Edges the code implies but the manifest does not declare (PRD 4: the enterprise graph should not be only what someone wrote down).
+//
+// What this does: reads the text of each repository's source and configuration files and looks for a few exact, checkable
+// patterns that name ANOTHER node of the manifest:
+//   * a URL literal whose host IS a node's id or alias, or whose first label is (payments-api matches payments-api.svc.cluster.local);
+//   * a queue/topic resource's name or alias as a string literal on a line that publishes to it, or on one that consumes from it;
+//   * a database resource's name or alias on a line that opens a connection.
+// Each hit becomes an edge of type `calls`, `produces`, `consumes` or `connects-to` with the file and line that produced it, tagged
+// `source: discovered-code-literal`, and is reported separately from declared edges: a discovered edge never replaces or hides a
+// declared one, and a query result says which of its edges were only discovered.
+//
+// What it cannot do, and says so: it matches whole tokens, not substrings (so `orders` never matches `reorders`); it sees literals, not
+// values built at run time, environment-supplied URLs or service-mesh routing; it cannot tell the direction of a database use; it
+// skips comment lines but does not parse code, so a literal in a string that is never executed still counts. A discovered edge is a
+// lead with evidence, not a fact. It is bounded in files, bytes and time.
+
+
+
+const DISCOVERY_LIMITS = Object.freeze({ maxFilesPerRepo: 2000, maxFileBytes: 512 * 1024, maxTotalBytes: 64 * 1024 * 1024, maxEvidencePerEdge: 3 });
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.venv', 'venv', '__pycache__', 'target', '.agentic-security', 'coverage', '.next', 'dist-newstyle', '.stack-work']);
+const TEXT_EXT = /\.(?:js|mjs|cjs|jsx|ts|tsx|py|java|kt|go|rb|php|cs|rs|scala|ya?ml|json|toml|properties|env|tf|conf|ini|hs|nix)$/i;
+const COMMENT = /^\s*(?:\/\/|#|\*|\/\*|--|;)/;
+const URL_RE = /\b[a-z][a-z0-9+.-]{1,12}:\/\/[^\s'"`<>)\]}]{1,300}/gi;
+const PUBLISH = /\b(?:send_?message|publish|produce|send_?to_?queue|enqueue|put_?record|xadd|lpush|rpush|sendmessage|sendtoqueue|emit_?to)\b/i;
+const CONSUME = /\b(?:consume|subscribe|receive_?message|poll|on_?message|get_?messages?|basic_?consume|xread|brpop|blpop|receivemessage)\b/i;
+const CONNECT = /(?:\b(?:connect|create_?connection|createpool|new\s+pool|mongoclient|drivermanager|sqlalchemy|create_engine|database_url|dbname)\b|jdbc:|postgres(?:ql)?:\/\/|mysql:\/\/|mongodb(?:\+srv)?:\/\/|redis:\/\/)/i;
+
+/** The names a node answers to: its id plus declared aliases, lower-case. */
+function namesOf(node) { return [node.id, ...(node.aliases ?? [])].map((x) => String(x).toLowerCase()); }
+
+function* sourceFiles(root, limits) {
+  let count = 0; let bytes = 0;
+  const stack = ['']; const rootReal = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(root);
+  while (stack.length) {
+    const rel = stack.pop();
+    let ents; try { ents = node_fs__WEBPACK_IMPORTED_MODULE_0__.readdirSync(node_path__WEBPACK_IMPORTED_MODULE_1__.join(root, rel), { withFileTypes: true }); } catch { continue; }
+    for (const e of ents.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (e.isSymbolicLink()) continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) stack.push(r); continue; }
+      if (!e.isFile() || !TEXT_EXT.test(e.name)) continue;
+      let st; try { st = node_fs__WEBPACK_IMPORTED_MODULE_0__.statSync(node_path__WEBPACK_IMPORTED_MODULE_1__.join(root, r)); } catch { continue; }
+      if (st.size > limits.maxFileBytes) continue;
+      if (++count > limits.maxFilesPerRepo || (bytes += st.size) > limits.maxTotalBytes) return;
+      let real; try { real = node_fs__WEBPACK_IMPORTED_MODULE_0__.realpathSync(node_path__WEBPACK_IMPORTED_MODULE_1__.join(root, r)); } catch { continue; }
+      if (!real.startsWith(rootReal + node_path__WEBPACK_IMPORTED_MODULE_1__.sep)) continue;
+      yield { rel: r, abs: real };
+    }
+  }
+}
+
+const stringLiterals = (line) => [...line.matchAll(/(['"`])((?:\\.|(?!\1).){1,200})\1/g)].map((m) => m[2]);
+const tokenIn = (haystackLiteral, name) => new RegExp(`(?:^|[^a-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^a-z0-9_-])`, 'i').test(haystackLiteral);
+
+/**
+ * @param {{manifest: object, limits?: object}} o
+ * @returns {{edges: Array<{type: string, from: string, to: string, evidence: object[]}>, scanned: Record<string, {files: number, truncated: boolean}>, limitations: string[]}}
+ */
+function discoverEdges({ manifest, limits = DISCOVERY_LIMITS }) {
+  const L = { ...DISCOVERY_LIMITS, ...limits };
+  const repoNodes = manifest.repositories.map((r) => ({ id: r.id, aliases: r.aliases ?? [], kind: 'repo' }));
+  const resNodes = (manifest.resources ?? []).map((r) => ({ id: r.id, aliases: r.aliases ?? [], kind: r.kind }));
+  const found = new Map(); const scanned = {};
+  const add = (type, from, to, ev) => {
+    const key = `${type}\u0000${from}\u0000${to}`;
+    const e = found.get(key) ?? { type, from, to, evidence: [] };
+    if (e.evidence.length < L.maxEvidencePerEdge) e.evidence.push({ source: 'discovered-code-literal', repo: from, declared: false, ...ev });
+    found.set(key, e);
+  };
+  for (const repo of manifest.repositories) {
+    let files = 0; let truncated = false;
+    const targets = [...repoNodes.filter((n) => n.id !== repo.id), ...resNodes];
+    const it = sourceFiles(repo.path, L);
+    for (;;) {
+      const nx = it.next();
+      if (nx.done) break;
+      files++;
+      let text; try { text = node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(nx.value.abs, 'utf8'); } catch { continue; }
+      if (text.includes('\0')) continue;
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.length > 2000 || COMMENT.test(line)) continue;
+        // 1. URL literals naming a repository or gateway
+        for (const m of line.matchAll(URL_RE)) {
+          let host; try { host = new URL(m[0].replace(/[.,;]+$/, '')).hostname.toLowerCase(); } catch { continue; }
+          const first = host.split('.')[0];
+          for (const n of targets) {
+            if (n.kind !== 'repo' && n.kind !== 'gateway' && n.kind !== 'external-provider') continue;
+            if (namesOf(n).some((nm) => nm === host || nm === first)) add(n.kind === 'external-provider' ? 'uses-provider' : 'calls', repo.id, n.id, { file: nx.value.rel, line: i + 1, host });
+          }
+          for (const n of targets) if (n.kind === 'database' && namesOf(n).some((nm) => nm === host || nm === host.split('.')[0]) && CONNECT.test(m[0])) add('connects-to', repo.id, n.id, { file: nx.value.rel, line: i + 1, host });
+        }
+        // 2. queue and database names as literals on a publishing / consuming / connecting line
+        const lits = stringLiterals(line);
+        if (!lits.length) continue;
+        for (const n of targets) {
+          if (n.kind === 'queue') {
+            if (!lits.some((l) => namesOf(n).some((nm) => tokenIn(l, nm)))) continue;
+            if (PUBLISH.test(line)) add('produces', repo.id, n.id, { file: nx.value.rel, line: i + 1, name: n.id });
+            else if (CONSUME.test(line)) add('consumes', n.id, repo.id, { file: nx.value.rel, line: i + 1, name: n.id });
+          } else if (n.kind === 'database' && CONNECT.test(line) && lits.some((l) => namesOf(n).some((nm) => tokenIn(l, nm)))) add('connects-to', repo.id, n.id, { file: nx.value.rel, line: i + 1, name: n.id });
+        }
+      }
+    }
+    if (files >= L.maxFilesPerRepo) truncated = true;
+    scanned[repo.id] = { files, truncated };
+  }
+  return {
+    edges: [...found.values()].sort((a, b) => (a.type + a.from + a.to < b.type + b.from + b.to ? -1 : 1)),
+    scanned,
+    limitations: [
+      'Only string and URL literals are seen: a URL built at run time, read from the environment or routed by a mesh is not found.',
+      'Names match as whole tokens; an alias must be declared in the manifest for a node whose code name differs from its id.',
+      'The direction of a database use is not known, so those edges are `connects-to`.',
+      'A discovered edge is a lead with file and line evidence, not a confirmed call.',
+    ],
+  };
+}
+
+/** Discovered edges whose (type, from, to) the manifest already declares, and those it does not. */
+function splitDeclared(discovered, manifest) {
+  const declared = new Set();
+  for (const r of manifest.repositories) {
+    for (const t of r.calls) declared.add(`calls\u0000${r.id}\u0000${t}`);
+    for (const t of r.produces) declared.add(`produces\u0000${r.id}\u0000${t}`);
+    for (const t of r.consumes) declared.add(`consumes\u0000${t}\u0000${r.id}`);
+    for (const t of r.providers) declared.add(`uses-provider\u0000${r.id}\u0000${t}`);
+    for (const t of [...r.reads, ...r.writes]) declared.add(`connects-to\u0000${r.id}\u0000${t}`);
+  }
+  const undeclared = []; const confirmed = [];
+  for (const e of discovered.edges) (declared.has(`${e.type}\u0000${e.from}\u0000${e.to}`) ? confirmed : undeclared).push(e);
+  return { undeclared, confirmed };
+}
+
 
 /***/ }),
 
@@ -888,7 +1063,7 @@ const AUTH_CWES = new Set(['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863'
 const edgeId = (type, from, to) => `edge:${type}:${from}:${to}`;
 const hash = (v) => (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(JSON.stringify(v)).digest('hex');
 
-function buildEnterpriseGraph({ manifest, dependencyGraph }) {
+function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null }) {
   const nodes = new Map();
   const edges = new Map();
   const addNode = (n) => nodes.set(n.id, n);
@@ -913,6 +1088,10 @@ function buildEnterpriseGraph({ manifest, dependencyGraph }) {
     for (const t of r.providers) addEdge('uses-provider', r.id, t, ev(r.id, 'providers', t), true);
   }
   for (const d of dependencyGraph?.edges ?? []) addEdge('depends-on', d.from, d.to, d.evidence?.[0] ?? { source: 'package-manifest', repo: d.from, file: null, declared: d.via, spec: null }, false);
+  // Edges found in the code. They share an id with a declared edge of the same type and endpoints, so the evidence list shows both; an
+  // edge with ONLY discovered evidence is marked `discovered: true` so a query can say it rests on a code literal, not on a declaration.
+  for (const d of discovered?.edges ?? []) for (const evidence of d.evidence) addEdge(d.type, d.from, d.to, evidence, true);
+  for (const e of edges.values()) e.discovered = e.evidence.every((x) => x.source === 'discovered-code-literal');
   return { schema: ENTERPRISE_GRAPH_SCHEMA, version: 1, organization: manifest.organization, nodes: [...nodes.values()], edges: [...edges.values()], digest: null };
 }
 
@@ -959,7 +1138,7 @@ function attackPaths({ graph, toDataClass, from = INTERNET, involving = null, ma
     if (results.length >= maxPaths) { truncated = true; return; }
     if (targets.has(id) && nodePath.length > 1) {
       const inv = involving ? nodePath.filter((n) => involving.all.has(n)) : [];
-      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
+      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
     }
     if (nodePath.length > maxDepth) { truncated = true; return; }
     for (const e of out.get(id) ?? []) if (!nodePath.includes(e.to)) walk(e.to, [...nodePath, e.to], [...edgePath, e]);
@@ -1201,8 +1380,8 @@ function blastRadius(graph, repoId) {
 
 
 const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
-const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers']);
-const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment']);
+const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
+const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
 const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
 const RESOURCE_KINDS = Object.freeze(['queue', 'database', 'external-provider', 'gateway']);
 const ENVIRONMENTS = Object.freeze(['production', 'staging', 'development']);
@@ -1227,6 +1406,7 @@ function validateFleetManifest(doc, { baseDir = '.' } = {}) {
   const seen = new Set();
   const repos = [];
   const idList = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && NAME_RE.test(x))) { errors.push(`${where} must be a list of ids`); return []; } return v; };
+  const aliasList = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || v.length > 16 || !v.every((x) => typeof x === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(x))) { errors.push(`${where} must be a list of up to 16 lower-case names or hostnames`); return []; } return v; };
   const classes = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(x))) { errors.push(`${where} must be a list of data class names such as pci or pii`); return []; } return v; };
   for (const [i, r] of (Array.isArray(doc.repositories) ? doc.repositories : []).entries()) {
     if (!r || typeof r !== 'object') { errors.push(`repositories[${i}] must be a mapping`); continue; }
@@ -1246,7 +1426,7 @@ function validateFleetManifest(doc, { baseDir = '.' } = {}) {
     repos.push({
       id: r.id, path: abs, required: r.required !== false, kind: r.kind ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null,
       dataClasses: classes(r.dataClasses, `repositories[${i}].dataClasses`), trustZone: r.trustZone ?? null,
-      calls: idList(r.calls, `repositories[${i}].calls`), produces: idList(r.produces, `repositories[${i}].produces`), consumes: idList(r.consumes, `repositories[${i}].consumes`),
+      aliases: aliasList(r.aliases, `repositories[${i}].aliases`), calls: idList(r.calls, `repositories[${i}].calls`), produces: idList(r.produces, `repositories[${i}].produces`), consumes: idList(r.consumes, `repositories[${i}].consumes`),
       reads: idList(r.reads, `repositories[${i}].reads`), writes: idList(r.writes, `repositories[${i}].writes`), providers: idList(r.providers, `repositories[${i}].providers`),
     });
   }
@@ -1262,7 +1442,7 @@ function validateFleetManifest(doc, { baseDir = '.' } = {}) {
     if (!RESOURCE_KINDS.includes(r.kind)) errors.push(`resources[${i}].kind must be one of ${RESOURCE_KINDS.join(', ')}`);
     if (r.environment !== undefined && !ENVIRONMENTS.includes(r.environment)) errors.push(`resources[${i}].environment must be one of ${ENVIRONMENTS.join(', ')}`);
     if (r.internetFacing !== undefined && typeof r.internetFacing !== 'boolean') errors.push(`resources[${i}].internetFacing must be true or false`);
-    resources.push({ id: r.id, kind: r.kind, dataClasses: classes(r.dataClasses, `resources[${i}].dataClasses`), trustZone: r.trustZone ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null });
+    resources.push({ id: r.id, kind: r.kind, aliases: aliasList(r.aliases, `resources[${i}].aliases`), dataClasses: classes(r.dataClasses, `resources[${i}].dataClasses`), trustZone: r.trustZone ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null });
   }
   const known = new Set([...seen, ...resIds]);
   for (const r of repos) {

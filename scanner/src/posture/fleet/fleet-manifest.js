@@ -15,8 +15,8 @@ import path from 'node:path';
 import { load as loadYaml } from '../../util/yaml.js';
 
 const FLEET_MANIFEST_SCHEMA_KEYS = Object.freeze(['organization', 'repositories', 'workers', 'perRepoTimeout', 'retries', 'resources']);
-const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers']);
-const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment']);
+const REPO_KEYS = Object.freeze(['id', 'path', 'required', 'kind', 'internetFacing', 'environment', 'dataClasses', 'trustZone', 'calls', 'produces', 'consumes', 'reads', 'writes', 'providers', 'aliases']);
+const RESOURCE_KEYS = Object.freeze(['id', 'kind', 'dataClasses', 'trustZone', 'internetFacing', 'environment', 'aliases']);
 const REPO_KINDS = Object.freeze(['service', 'library', 'frontend', 'worker', 'gateway']);
 const RESOURCE_KINDS = Object.freeze(['queue', 'database', 'external-provider', 'gateway']);
 export const ENVIRONMENTS = Object.freeze(['production', 'staging', 'development']);
@@ -41,6 +41,7 @@ export function validateFleetManifest(doc, { baseDir = '.' } = {}) {
   const seen = new Set();
   const repos = [];
   const idList = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && NAME_RE.test(x))) { errors.push(`${where} must be a list of ids`); return []; } return v; };
+  const aliasList = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || v.length > 16 || !v.every((x) => typeof x === 'string' && /^[a-z0-9][a-z0-9._-]{0,99}$/.test(x))) { errors.push(`${where} must be a list of up to 16 lower-case names or hostnames`); return []; } return v; };
   const classes = (v, where) => { if (v === undefined) return []; if (!Array.isArray(v) || !v.every((x) => typeof x === 'string' && /^[a-z][a-z0-9-]{0,30}$/.test(x))) { errors.push(`${where} must be a list of data class names such as pci or pii`); return []; } return v; };
   for (const [i, r] of (Array.isArray(doc.repositories) ? doc.repositories : []).entries()) {
     if (!r || typeof r !== 'object') { errors.push(`repositories[${i}] must be a mapping`); continue; }
@@ -60,7 +61,7 @@ export function validateFleetManifest(doc, { baseDir = '.' } = {}) {
     repos.push({
       id: r.id, path: abs, required: r.required !== false, kind: r.kind ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null,
       dataClasses: classes(r.dataClasses, `repositories[${i}].dataClasses`), trustZone: r.trustZone ?? null,
-      calls: idList(r.calls, `repositories[${i}].calls`), produces: idList(r.produces, `repositories[${i}].produces`), consumes: idList(r.consumes, `repositories[${i}].consumes`),
+      aliases: aliasList(r.aliases, `repositories[${i}].aliases`), calls: idList(r.calls, `repositories[${i}].calls`), produces: idList(r.produces, `repositories[${i}].produces`), consumes: idList(r.consumes, `repositories[${i}].consumes`),
       reads: idList(r.reads, `repositories[${i}].reads`), writes: idList(r.writes, `repositories[${i}].writes`), providers: idList(r.providers, `repositories[${i}].providers`),
     });
   }
@@ -76,7 +77,7 @@ export function validateFleetManifest(doc, { baseDir = '.' } = {}) {
     if (!RESOURCE_KINDS.includes(r.kind)) errors.push(`resources[${i}].kind must be one of ${RESOURCE_KINDS.join(', ')}`);
     if (r.environment !== undefined && !ENVIRONMENTS.includes(r.environment)) errors.push(`resources[${i}].environment must be one of ${ENVIRONMENTS.join(', ')}`);
     if (r.internetFacing !== undefined && typeof r.internetFacing !== 'boolean') errors.push(`resources[${i}].internetFacing must be true or false`);
-    resources.push({ id: r.id, kind: r.kind, dataClasses: classes(r.dataClasses, `resources[${i}].dataClasses`), trustZone: r.trustZone ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null });
+    resources.push({ id: r.id, kind: r.kind, aliases: aliasList(r.aliases, `resources[${i}].aliases`), dataClasses: classes(r.dataClasses, `resources[${i}].dataClasses`), trustZone: r.trustZone ?? null, internetFacing: r.internetFacing === true, environment: r.environment ?? null });
   }
   const known = new Set([...seen, ...resIds]);
   for (const r of repos) {

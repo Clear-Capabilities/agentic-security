@@ -6,7 +6,7 @@
 // independent replay as any other. A generated reproducer is not a verdict; it is a proposal that is either confirmed by execution
 // or not.
 //
-// What this is not: a general exploit generator. It handles JavaScript only, and only code the proof environment can actually load:
+// What this is not: a general exploit generator. It handles JavaScript (here) and Python (`generate-python.js`), and only code the proof environment can actually load:
 // the file's imports must be Node built-ins or relative files inside the repository (a package from node_modules is not there in
 // the sandbox, so a handler that needs `express` is refused, with the package named). Anything outside that returns `{ ok: false }`
 // with the reason, and nothing is executed.
@@ -26,10 +26,11 @@ import path from 'node:path';
 import { builtinModules } from 'node:module';
 import { parse } from '@babel/parser';
 import { validateReproducer } from './reproducer.js';
+import { generatePythonReproducer } from './generate-python.js';
 
 const CLASSES = {
   'CWE-78': { name: 'command-injection', payload: 'x; touch {{CANARY:command}}', oracle: { type: 'command_execution', params: { canary: 'command' } } },
-  'CWE-22': { name: 'path-traversal', payload: '../escaped.txt', oracle: { type: 'filesystem_mutation', params: { canary: 'fs' } }, watch: { fs: 'escaped.txt' }, needs: /\b(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)\b/ },
+  'CWE-22': { needsPy: /\bopen\s*\([^)]*['"][wax]b?\+?['"]|\.write_(?:text|bytes)\s*\(|\bshutil\.(?:copy|move)/, name: 'path-traversal', payload: '../escaped.txt', oracle: { type: 'filesystem_mutation', params: { canary: 'fs' } }, watch: { fs: 'escaped.txt' }, needs: /\b(?:writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)\b/ },
   'CWE-918': { name: 'ssrf', payload: '{{CALLBACK_URL}}', oracle: { type: 'outbound_callback' }, network: 'callback' },
 };
 const MAX_SOURCE = 256 * 1024;
@@ -135,8 +136,10 @@ export function generateReproducer({ finding, root }) {
   const cls = CLASSES[cwe];
   if (!cls) return fail(`no payload and oracle exist for ${cwe ?? 'this finding'}; supported: ${Object.keys(CLASSES).join(', ')} (others need a database, a deserializer or a native harness)`);
   const rel = String(finding?.file ?? '');
-  if (!/\.(?:js|mjs|cjs)$/i.test(rel)) return fail(`no harness builder for ${path.extname(rel) || 'this file type'}; JavaScript only`);
+  const isPy = /\.py$/i.test(rel);
+  if (!isPy && !/\.(?:js|mjs|cjs)$/i.test(rel)) return fail(`no harness builder for ${path.extname(rel) || 'this file type'}; JavaScript and Python only`);
   if (!Number.isInteger(finding?.line)) return fail('the finding has no line number');
+  if (isPy) return generatePythonReproducer({ finding, root, cls });
   const src = readSource(root, rel);
   if (!src) return fail('the flagged file is missing, outside the repository, or too large');
   const ast = parseSource(src.text);

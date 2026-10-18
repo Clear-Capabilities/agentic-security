@@ -69,9 +69,12 @@ itself.
 
 ## Arms
 
-An arm is the deterministic scanner, or a model reached through a command you supply. There is no built-in provider client: the
-repository's provider calls go through the feature gate, the egress policy and the audit chain, and the lab is not a second way
-around them.
+An arm is the deterministic scanner, a model on a LOCAL Ollama server (`adapter: { type: ollama }`, loopback host only, through the
+repository's own Ollama provider), or any other model reached through a command you supply. There is no built-in client for a
+remote model: the repository's provider calls go through the feature gate, the egress policy and the audit chain, and the lab is not
+a second way around them. The ollama adapter sends the neutralised workspace's source (numbered, bounded) with a JSON schema for the
+task, passes the prompt through the leakage guard first, and validates the answer exactly as it validates a command arm's. Token
+counts are what Ollama reports; a failed local model is never retried against another provider.
 
 ```yaml
 arms:
@@ -286,11 +289,11 @@ precondition. `--budget` stops starting new attempts once measured spend reaches
 
 ## What is not built
 
-* **No built-in provider adapters.** Local and external models attach through the command adapter. Wrapping a provider so it honours
-  the repository's guarded model call is the operator's job.
-* **The SARD corpus is not wired in.** The `sard` source kind is accepted by the manifest but is not materialized: the existing SARD
-  harness (`bench/sard/`, `bench-realworld.js`) downloads its corpus from the network and keeps its own neutralization. This lab uses
-  its own neutralizer, which is line-preserving and best effort.
+* **Only a local Ollama server has a built-in adapter**, and it was tested against a stand-in that speaks the protocol, never a real
+  model. A remote model attaches through the command adapter, and wrapping it so it honours the guarded model call is the operator's job.
+* **The SARD corpus is not wired in, and the manifest no longer pretends it is** (the `sard` source kind was removed from the schema
+  because nothing could load it). The existing SARD harness keeps its own neutralization and reads answer keys, which this lab's
+  custody rules keep out of a scored run. This lab uses its own neutralizer, which is line-preserving and best effort.
 * **No curated real-vulnerability corpus ships.** The loader reads commit pairs from a local repository; assembling and licensing
   the corpus is data work this change does not include. The shipped fixtures are small and synthetic.
 * **`threat-model` has no benchmark**, so no model is recommended for it.

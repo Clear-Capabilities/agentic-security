@@ -1,6 +1,7 @@
 // Arms: the things the Eval Lab measures (PRD 6). An arm is the deterministic scanner, or a model reached through a small
-// operator-supplied command. There is deliberately no built-in provider client here: provider calls in this repository go through
-// the feature gate, the egress policy, redaction and the audit chain, and the lab must not become a second path around them.
+// operator-supplied command, or a LOCAL Ollama server through the repository's own provider. There is deliberately no built-in client
+// for a remote model: provider calls in this repository go through the feature gate, the egress policy, redaction and the audit chain,
+// and the lab must not become a second path around them.
 // An arm whose model is not local is therefore checked against the egress policy BEFORE it runs, and a denial is recorded as
 // `blocked`, not as a score.
 //
@@ -20,6 +21,7 @@ import { evaluateEgress } from '../../../egress/policy.js';
 import { guardPrompt } from '../custody.js';
 import { defaultScanFn } from '../runner.js';
 import { LAYER_ENV } from '../scan-child.js';
+import { runOllamaArm } from './arm-ollama.js';
 
 export const TASKS = Object.freeze(['detect', 'falsify', 'exploit', 'patch']);
 const ARM_KINDS = Object.freeze(['deterministic', 'model']);
@@ -43,7 +45,12 @@ export function validateArm(a) {
   } else if (ad.type === 'command') {
     if (!Array.isArray(ad.argv) || !ad.argv.length || !ad.argv.every((x) => typeof x === 'string' && x.length < 2000 && !x.includes('\0'))) bad('adapter.argv must be a non-empty array of strings (no shell string)');
     if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
-  } else bad('adapter.type must be builtin-scanner or command');
+  } else if (ad.type === 'ollama') {
+    if (a.kind !== 'model') bad('the ollama adapter is a model arm');
+    if (a.model?.local !== true) bad('the ollama adapter talks to a local server, so model.local must be true');
+    if (ad.host !== undefined && !LOOPBACK.test(String(ad.host))) bad('adapter.host must be a loopback address; use the command adapter for a remote model');
+    if (ad.timeoutMs !== undefined && !(Number.isInteger(ad.timeoutMs) && ad.timeoutMs >= 1000 && ad.timeoutMs <= 3_600_000)) bad('adapter.timeoutMs must be between 1000 and 3600000');
+  } else bad('adapter.type must be builtin-scanner, command or ollama');
   if (a.kind === 'model') {
     const m = a.model;
     if (!m || typeof m.id !== 'string' || !m.id || typeof m.provider !== 'string' || !m.provider) bad('a model arm needs model.id and model.provider');
@@ -52,7 +59,7 @@ export function validateArm(a) {
       if (m.local === true && m.endpoint && !LOOPBACK.test(String(m.endpoint))) bad('model.local is true but model.endpoint is not a loopback address');
       if (m.local === false && (typeof m.endpoint !== 'string' || !m.endpoint)) bad('a non-local model arm must name its endpoint so the egress policy can judge it');
     }
-    if (a.kind === 'model' && ad?.type === 'builtin-scanner') bad('a model arm needs a command adapter');
+    if (a.kind === 'model' && ad?.type === 'builtin-scanner') bad('a model arm needs a command or ollama adapter');
   }
   if (a.price !== undefined) {
     const p = a.price;
@@ -76,6 +83,16 @@ export function usageOf(arm, reported, latencyMs) {
 
 const normalizeFinding = (f) => ({ file: String(f.file ?? ''), line: Number.isInteger(f.line) ? f.line : null, cwe: f.cwe ?? null, confidence: typeof f.confidence === 'number' ? f.confidence : null });
 
+/** Turn an arm's parsed JSON answer into the task's output, or an `error` result. Shared by every adapter, so a model gets no softer validation than a command. */
+function shapeBody(task, body, done) {
+  const out = {};
+  if (task === 'detect') { if (!Array.isArray(body.findings)) return done('error', { reason: 'invalid-response: detect needs "findings"', reported: body.usage }); out.findings = body.findings.slice(0, 5000).filter((f) => f && typeof f === 'object').map(normalizeFinding); }
+  else if (task === 'falsify') { if (!body.verdicts || typeof body.verdicts !== 'object') return done('error', { reason: 'invalid-response: falsify needs "verdicts"', reported: body.usage }); out.verdicts = Object.fromEntries(Object.entries(body.verdicts).slice(0, 5000).map(([k, v]) => [k, ['confirmed', 'refuted', 'uncertain'].includes(v) ? v : 'uncertain'])); }
+  else if (task === 'exploit') { if (!body.reproducer || typeof body.reproducer !== 'object') return done('completed', { output: { reproducer: null }, reported: body.usage }); out.reproducer = body.reproducer; }
+  else if (task === 'patch') { if (!body.files || typeof body.files !== 'object' || Array.isArray(body.files)) return done('completed', { output: { files: null }, reported: body.usage }); out.files = Object.fromEntries(Object.entries(body.files).slice(0, 64).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v.length < 1_000_000)); }
+  return done('completed', { output: out, reported: body.usage });
+}
+
 /**
  * Run one task for one arm. Never throws, never returns a score: it returns what happened.
  * @returns {{status: 'completed'|'timeout'|'error'|'blocked'|'unavailable', reason?: string, output?: object, usage: object}}
@@ -93,10 +110,15 @@ export async function runArmTask({ arm, task, request, workspaceDir, terms = [],
       return done(e.code === 'TIMEOUT' ? 'timeout' : e.code === 'UNAVAILABLE' ? 'unavailable' : 'error', { reason: String(e.message).slice(0, 200) });
     }
   }
-  // model arm through the command adapter
+  // model arm through the command or ollama adapter
   if (arm.model.local === false) {
     const d = egress({ scanRoot, purpose: 'eval-lab', endpoint: arm.model.endpoint, model: arm.model.id, provider: arm.model.provider, role: `eval-${task}`, dataClass: 'source-code' });
     if (!d.allowed) return done('blocked', { reason: `egress policy: ${d.reason}` });
+  }
+  if (arm.adapter.type === 'ollama') {
+    const o = await runOllamaArm({ arm, task, request, workspaceDir, terms, timeoutMs, signal });
+    if (o.status !== 'ok') return done(o.status, { reason: o.reason, reported: o.reported });
+    return shapeBody(task, o.body, done);
   }
   const guard = guardPrompt(JSON.stringify(request), terms);
   if (!guard.ok) return done('blocked', { reason: `leakage guard: the request contained a protected term (${guard.leaks[0]?.kind})` });
@@ -115,11 +137,6 @@ export async function runArmTask({ arm, task, request, workspaceDir, terms = [],
     let body;
     try { body = JSON.parse(r.stdout); } catch { return done('error', { reason: 'invalid-response: the arm did not print JSON' }); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return done('error', { reason: 'invalid-response: expected a JSON object' });
-    const out = {};
-    if (task === 'detect') { if (!Array.isArray(body.findings)) return done('error', { reason: 'invalid-response: detect needs "findings"', reported: body.usage }); out.findings = body.findings.slice(0, 5000).filter((f) => f && typeof f === 'object').map(normalizeFinding); }
-    else if (task === 'falsify') { if (!body.verdicts || typeof body.verdicts !== 'object') return done('error', { reason: 'invalid-response: falsify needs "verdicts"', reported: body.usage }); out.verdicts = Object.fromEntries(Object.entries(body.verdicts).slice(0, 5000).map(([k, v]) => [k, ['confirmed', 'refuted', 'uncertain'].includes(v) ? v : 'uncertain'])); }
-    else if (task === 'exploit') { if (!body.reproducer || typeof body.reproducer !== 'object') return done('completed', { output: { reproducer: null }, reported: body.usage }); out.reproducer = body.reproducer; }
-    else if (task === 'patch') { if (!body.files || typeof body.files !== 'object' || Array.isArray(body.files)) return done('completed', { output: { files: null }, reported: body.usage }); out.files = Object.fromEntries(Object.entries(body.files).slice(0, 64).filter(([k, v]) => typeof k === 'string' && typeof v === 'string' && v.length < 1_000_000)); }
-    return done('completed', { output: out, reported: body.usage });
+    return shapeBody(task, body, done);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }

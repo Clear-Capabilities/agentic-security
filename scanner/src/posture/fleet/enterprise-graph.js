@@ -22,7 +22,7 @@ const AUTH_CWES = new Set(['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863'
 const edgeId = (type, from, to) => `edge:${type}:${from}:${to}`;
 const hash = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
-export function buildEnterpriseGraph({ manifest, dependencyGraph }) {
+export function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null }) {
   const nodes = new Map();
   const edges = new Map();
   const addNode = (n) => nodes.set(n.id, n);
@@ -47,6 +47,10 @@ export function buildEnterpriseGraph({ manifest, dependencyGraph }) {
     for (const t of r.providers) addEdge('uses-provider', r.id, t, ev(r.id, 'providers', t), true);
   }
   for (const d of dependencyGraph?.edges ?? []) addEdge('depends-on', d.from, d.to, d.evidence?.[0] ?? { source: 'package-manifest', repo: d.from, file: null, declared: d.via, spec: null }, false);
+  // Edges found in the code. They share an id with a declared edge of the same type and endpoints, so the evidence list shows both; an
+  // edge with ONLY discovered evidence is marked `discovered: true` so a query can say it rests on a code literal, not on a declaration.
+  for (const d of discovered?.edges ?? []) for (const evidence of d.evidence) addEdge(d.type, d.from, d.to, evidence, true);
+  for (const e of edges.values()) e.discovered = e.evidence.every((x) => x.source === 'discovered-code-literal');
   return { schema: ENTERPRISE_GRAPH_SCHEMA, version: 1, organization: manifest.organization, nodes: [...nodes.values()], edges: [...edges.values()], digest: null };
 }
 
@@ -93,7 +97,7 @@ export function attackPaths({ graph, toDataClass, from = INTERNET, involving = n
     if (results.length >= maxPaths) { truncated = true; return; }
     if (targets.has(id) && nodePath.length > 1) {
       const inv = involving ? nodePath.filter((n) => involving.all.has(n)) : [];
-      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
+      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
     }
     if (nodePath.length > maxDepth) { truncated = true; return; }
     for (const e of out.get(id) ?? []) if (!nodePath.includes(e.to)) walk(e.to, [...nodePath, e.to], [...edgePath, e]);

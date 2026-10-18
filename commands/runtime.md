@@ -30,14 +30,11 @@ observations), `unavailable` (no observation store was ever consulted —
 `RUNTIME_BLOCKED`, `RUNTIME_POLICY_VIOLATION` or `RUNTIME_EXPLOIT_CORRELATED` (the last only with `--exploit-evidence`). Import with
 `--record-identity-tokens` to keep a keyed-hash identity token per observation; the raw identity is never stored.
 
-**What this cannot answer, disclosed by `runtime query` itself.** Which functions were exercised in production needs
-function/symbol-level telemetry and a matching rung this codebase does not have. `runtime query --list` names it alongside the four
-it CAN answer.
+**Vulnerable functions in production** is answered from the scan's findings and a runtime trace, with the scan's own matcher; see
+`docs/guides/runtime-twin.md`. Absence from the trace is never reported as safe.
 
-**No Explorer UI wiring.** `agentic-security explore . --runtime` is
-**not implemented** — `scanner/src/server/CLAUDE.md`'s own deferred list
-already names `runtime/` among the Milestone 4/5 endpoints the read-only
-local server does not serve. Use this CLI surface instead.
+**Explorer views.** `agentic-security explore . --runtime` writes a static, script-free page with the five views and per-edge
+static+runtime evidence (it does not start the local server, which still serves only the signed static graph).
 
 ### `ingest`
 

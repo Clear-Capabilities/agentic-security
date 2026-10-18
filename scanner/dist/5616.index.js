@@ -162,7 +162,7 @@ function validateDetectionIR(ir) {
 // parameter name is hostile input (it came from a reproducer a model may have written).
 
 
-const FORMATS = Object.freeze(['sigma', 'http', 'waf', 'log-query', 'yara', 'spl', 'kql', 'cloudwatch']);
+const FORMATS = Object.freeze(['sigma', 'http', 'waf', 'log-query', 'yara', 'spl', 'kql', 'cloudwatch', 'elastic', 'yaral', 'datadog']);
 
 /** One regular expression (source text, case-insensitive) covering a class's indicators. */
 function classRegex(className) {
@@ -313,6 +313,108 @@ function renderDetection(ir, format) {
 function renderAll(ir) {
   return Object.fromEntries(FORMATS.map((f) => [f, renderDetection(ir, f)]));
 }
+
+// ── Elasticsearch / Elastic Security, Google Chronicle (YARA-L) and Datadog Cloud SIEM (P1 adapters) ──────────────────────────────────
+// Text only, like every other renderer here: nothing connects to a SIEM. Each target has a different regular-expression dialect or none,
+// and a rule that silently means something else is worse than no rule, so a renderer either translates exactly or reports why it cannot.
+
+/**
+ * A JavaScript regular-expression source as an Elasticsearch/Lucene `regexp` pattern, or null when some construct has no Lucene
+ * equivalent (anchors, word boundaries, look-around, back-references). A lazy quantifier becomes greedy, which is exact for a yes/no match. Lucene matches the WHOLE term, so the caller
+ * wraps unanchored patterns in `.*(...).*`; case-insensitivity is the query's `case_insensitive` flag, not an inline flag.
+ */
+function luceneRegex(src) {
+  const cls = { d: '0-9', w: 'a-zA-Z0-9_', s: ' \\t\\n\\r' };
+  const bare = { d: '[0-9]', D: '[^0-9]', w: '[a-zA-Z0-9_]', s: '[ \\t\\n\\r]', S: '[^ \\t\\n\\r]' };
+  const RESERVED = new Set(['&', '~', '<', '>', '@', '"', '#']);
+  let out = ''; let inClass = false; let prevQuant = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === '\\') {
+      const n = src[++i];
+      if (n === undefined) return null;
+      if (inClass) {
+        if (cls[n]) out += cls[n]; else if (/[dswDSWbBnrt0-9A-Za-z]/.test(n)) { if (n === 'n') out += '\\n'; else if (n === 'r') out += '\\r'; else if (n === 't') out += '\\t'; else return null; } else out += `\\${n}`;
+      } else if (bare[n]) out += bare[n];
+      else if (n === 'n') out += '\\n'; else if (n === 'r') out += '\\r'; else if (n === 't') out += '\\t';
+      else if (/[A-Za-z0-9]/.test(n)) return null;
+      else out += `\\${n}`;
+      prevQuant = false; continue;
+    }
+    if (inClass) { if (c === ']') inClass = false; out += RESERVED.has(c) ? `\\${c}` : c; continue; }
+    if (c === '[') { inClass = true; out += c; prevQuant = false; continue; }
+    if (c === '(') {
+      if (src[i + 1] === '?') { if (src[i + 2] === ':') { out += '('; i += 2; prevQuant = false; continue; } return null; }
+      out += '('; prevQuant = false; continue;
+    }
+    if (c === '^' || c === '$') return null;
+    if (c === '?' && prevQuant) { prevQuant = false; continue; } // a lazy quantifier: for a yes/no match the greedy form is equivalent, and Lucene has no lazy form
+    if (c === '*' || c === '+' || c === '?') { out += c; prevQuant = true; continue; }
+    if (c === '{') { const m = /^\{\d+(?:,\d*)?\}/.exec(src.slice(i)); if (!m) { out += '\\{'; prevQuant = false; continue; } out += m[0]; i += m[0].length - 1; prevQuant = true; continue; }
+    if (c === '}') { out += '\\}'; prevQuant = false; continue; }
+    out += RESERVED.has(c) ? `\\${c}` : c; prevQuant = false;
+  }
+  return inClass ? null : out;
+}
+
+function elastic(ir) {
+  if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
+  const loc = ir.parameter?.location;
+  const filter = [{ term: { 'http.request.method': ir.endpoint.method } }];
+  if (hasTemplate(ir.endpoint.path)) {
+    const p = luceneRegex(pathRegex(ir.endpoint.path).replace(/^\^|\$$/g, ''));
+    if (p === null) return unavailable('the endpoint path template has no Lucene regular-expression form');
+    filter.push({ regexp: { 'url.path': { value: p } } });
+  } else filter.push({ term: { 'url.path': ir.endpoint.path } });
+  const mustNot = [];
+  if (ir.payloadClass === 'auth-bypass') {
+    filter.push({ range: { 'http.response.status_code': { gte: 200, lte: 299 } } });
+    mustNot.push({ exists: { field: 'http.request.headers.authorization' } });
+  } else {
+    const re = luceneRegex(classRegex(ir.payloadClass) ?? '');
+    if (re === null || !classRegex(ir.payloadClass)) return unavailable(`the ${ir.payloadClass} indicators use regular-expression constructs Lucene cannot express exactly (anchors, word boundaries or look-around), so a rule would not mean what the proof established`);
+    const field = loc === 'body' ? 'http.request.body.content' : loc === 'query' ? 'url.query' : loc === 'header' || loc === 'cookie' ? null : 'url.query';
+    if (!field) return unavailable(`ECS web logs do not record request ${loc}s by default, so this rule would never see the parameter`);
+    filter.push({ regexp: { [field]: { value: `.*(${re}).*`, case_insensitive: true } } });
+  }
+  const body = { query: { bool: { filter, ...(mustNot.length ? { must_not: mustNot } : {}) } }, _meta: { id: ir.id, findingId: ir.findingId, generatedBy: 'agentic-security', note: 'Lucene regexp matches the whole field value; the pattern is wrapped accordingly.' } };
+  return { applicable: true, format: 'elastic', content: `${JSON.stringify(body, null, 2)}\n` };
+}
+
+/** True when a regex source uses `^`, `$` or a word boundary outside a character class: its meaning depends on WHERE the value starts and ends. */
+const edgeSensitive = (src) => /[\^$]/.test(src.replace(/\\./g, 'x').replace(/\[[^\]]*\]/g, 'x')) || /\\[bB]/.test(src);
+
+function yaral(ir) {
+  if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
+  if (['body', 'header', 'cookie'].includes(ir.parameter?.location)) return unavailable(`UDM HTTP events carry the URL, not request ${ir.parameter.location}s, so this rule would never see the parameter`);
+  if (ir.payloadClass === 'auth-bypass') return unavailable('UDM HTTP events do not carry request headers, so "no credential was sent" cannot be expressed');
+  const cr = classRegex(ir.payloadClass);
+  if (!cr) return unavailable(`the ${ir.payloadClass} class has no regular-expression indicators`);
+  // the indicators are written against a query string or a body; YARA-L sees the whole URL, so a pattern anchored to "the start/end of the value" would mean something else
+  if (edgeSensitive(cr)) return unavailable(`the ${ir.payloadClass} indicators are anchored to the start or end of the parameter value, and UDM only exposes the whole URL, so a rule would not mean what the proof established`);
+  const pathRe = hasTemplate(ir.endpoint.path) ? pathRegex(ir.endpoint.path).replace(/^\^|\$$/g, '') : escRe(ir.endpoint.path);
+  const urlRe = `(?i)^[^?]*${pathRe}(?:\\?.*)?$`;
+  const payloadRe = `(?i)${cr}`;
+  if (urlRe.includes('`') || payloadRe.includes('`')) return unavailable('the pattern contains a backtick, which cannot appear in a YARA-L raw regular expression');
+  const ident = `as_${ir.digest.slice(0, 12)}`;
+  const content = [
+    `rule ${ident} {`, '  meta:', `    description = ${JSON.stringify(title(ir))}`, `    finding = ${JSON.stringify(ir.findingId)}`, '    author = "agentic-security"', `    severity = ${JSON.stringify(levelFor(ir).toUpperCase())}`,
+    '  events:', '    $e.metadata.event_type = "NETWORK_HTTP"', `    $e.network.http.method = ${JSON.stringify(ir.endpoint.method)}`,
+    `    re.regex($e.target.url, \`${urlRe}\`)`, `    re.regex($e.target.url, \`${payloadRe}\`)`, '  condition:', '    $e', '}', '',
+  ].join('\n');
+  return { applicable: true, format: 'yaral', content };
+}
+
+function datadog(ir) {
+  if (!ir.endpoint) return unavailable('no endpoint is known for this finding');
+  if (ir.payloadClass !== 'auth-bypass') return unavailable(`Datadog log search has wildcards but no regular expressions, so the ${ir.payloadClass} indicators cannot be expressed exactly; use the log-query or sigma output`);
+  const wild = ir.endpoint.path.replace(/\/(?::[A-Za-z_]\w*|\{[A-Za-z_]\w*\})(?=\/|$)/g, '/*');
+  if (/[\s"\\]/.test(wild)) return unavailable('the endpoint path contains characters that cannot be quoted safely in a Datadog query');
+  const query = `@http.method:${ir.endpoint.method} @http.url_details.path:${wild} @http.status_code:[200 TO 299] -@http.request.headers.authorization:*`;
+  const rule = { name: title(ir), type: 'log_detection', isEnabled: false, message: `${title(ir)}. Finding ${ir.findingId}. Generated by agentic-security; review before enabling.`, tags: ['source:agentic-security'], queries: [{ query, aggregation: 'count', groupByFields: [], distinctFields: [], name: 'a' }], cases: [{ name: 'proven pattern seen', status: levelFor(ir) === 'high' ? 'high' : 'medium', condition: 'a > 0', notifications: [] }], options: { evaluationWindow: 900, keepAlive: 3600, maxSignalDuration: 86400 } };
+  return { applicable: true, format: 'datadog', content: `${JSON.stringify(rule, null, 2)}\n` };
+}
+RENDERERS.elastic = elastic; RENDERERS.yaral = yaral; RENDERERS.datadog = datadog;
 
 ;// CONCATENATED MODULE: ./src/posture/dnr/matchers.js
 // The one evaluator behind every detection output. Validation (synthetic events), hunting (historical logs) and the
@@ -995,9 +1097,9 @@ function formatLifecycleView(v) {
 
 
 const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
-const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt' };
+const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt', elastic: 'json', yaral: 'yaral', datadog: 'json' };
 
-const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
+const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
 
 function ensureDetection(root, id, flags) {
   const existing = (0,dnr_store.latestRecord)(root, id, 'detection');

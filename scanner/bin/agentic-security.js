@@ -4081,6 +4081,8 @@ async function cmdBoundaries(args) {
 // every other cmdX(args) function's "resolves to an exit code" contract
 // while keeping the process alive for as long as the server is listening.
 async function cmdExplore(args) {
+  // `explore . --runtime`: the runtime views are one static, script-free page, not a route on the hardened local server.
+  if (args.flags.runtime) return cmdRuntimeExplorer(args, args._[1] || '.');
   const target = args._[1] || '.';
   const targetAbs = path.resolve(target);
 
@@ -5787,13 +5789,12 @@ const _RUNTIME_QUERIES = Object.freeze({
 
 // PRD-named example queries this architecture cannot honestly answer, disclosed rather than omitted. "Vulnerable functions actually
 // exercised in production" needs function/symbol-level telemetry and a function matching rung, neither of which exists.
-const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({
-  'vulnerable-functions-in-production': 'Needs function/symbol-level runtime telemetry; this adapter set only matches destinations (route/service/table/topic), never a function symbol.',
-});
+const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({});
 
 // Queries whose answer is not a list of flows. They run through the edge-state module.
 const _RUNTIME_EXTRA_QUERIES = Object.freeze({
   'runtime-flows-absent-from-static': 'Observed destinations the matcher could not place on any static node: CANDIDATES for a path static analysis missed (or a mapping the matcher is too weak to make).',
+  'vulnerable-functions-in-production': 'Scan findings whose own function, line or route appears in the runtime trace (.agentic-security/runtime-trace.jsonl). Evaluated against the trace on disk when you ask, using the same matcher the scan uses.',
   'identities-using-risky-paths': 'Identity TOKENS (keyed hashes, never identities) seen on edges in a policy-violation or exploit-correlated state. Needs observations imported with --record-identity-tokens.',
 });
 
@@ -5803,6 +5804,26 @@ async function _loadExploitEvidence(flag) {
   let raw;
   try { raw = JSON.parse(fs.readFileSync(path.resolve(flag), 'utf8')); } catch (e) { return { evidence: [], errors: [`could not read --exploit-evidence: ${e.code ?? e.message}`] }; }
   return validateExploitEvidence(raw);
+}
+
+async function cmdRuntimeExplorer(args, target) {
+  const targetAbs = path.resolve(target);
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security explore --runtime: ${loaded.message}\n`); return 1; }
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const mod = await import('../src/lineage/runtime-edge-states.js');
+  const { renderRuntimeExplorer } = await import('../src/lineage/runtime-explorer-view.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+  const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+  if (ev.errors.length) { process.stderr.write(`agentic-security explore --runtime: ${ev.errors.join('; ')}\n`); return 2; }
+  const edgeStates = mod.deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+  const absent = correlation.evaluated ? mod.runtimeFlowsAbsentFromStatic(loaded.observations, correlation) : { candidates: [] };
+  const html = renderRuntimeExplorer({ graph: loaded.graph, edgeStates, correlation, observations: loaded.observations ?? [], absent });
+  const out = typeof args.flags.out === 'string' ? path.resolve(args.flags.out) : statePath(targetAbs, 'runtime-explorer.html');
+  try { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html); } catch (e) { process.stderr.write(`agentic-security explore --runtime: could not write ${args.flags.out ?? out}: ${e.code ?? e.message}\n`); return 1; }
+  process.stdout.write(`runtime explorer written to ${path.relative(process.cwd(), out) || out} (static page, no server; open it in a browser)\n`);
+  return 0;
 }
 
 async function cmdRuntimeEdges(args) {
@@ -5831,6 +5852,20 @@ async function cmdRuntimeEdges(args) {
 
 async function cmdRuntimeQuery(args) {
   const name = args._[2];
+  if (name === 'vulnerable-functions-in-production' && !args.flags.list) {
+    const rootAbs = path.resolve(args._[3] || '.');
+    const lsPath = statePath(rootAbs, 'last-scan.json');
+    let body; try { body = fs.readFileSync(lsPath, 'utf8'); } catch { process.stderr.write('agentic-security runtime query: no .agentic-security/last-scan.json here: run a scan first.\n'); return 1; }
+    if (_verifyLastScan(body, lsPath + '.sig') !== true) { process.stderr.write('agentic-security runtime query: last-scan.json failed its integrity check; re-run the scan.\n'); return 1; }
+    const { vulnerableFunctionsInProduction } = await import('../src/lineage/runtime-explorer-view.js');
+    const { annotateRuntimeCorrelation } = await import('../src/posture/runtime-correlation.js');
+    const scan = JSON.parse(body);
+    // evaluated NOW against the trace on disk, by the same annotator the scan uses, so a finding added late in a scan is not missed
+    // and the answer is never older than the trace
+    await annotateRuntimeCorrelation(rootAbs, scan.findings ?? [], {});
+    process.stdout.write(JSON.stringify({ query: name, supported: true, ...vulnerableFunctionsInProduction(scan.findings) }, null, 2) + '\n');
+    return 0;
+  }
   if (name && Object.prototype.hasOwnProperty.call(_RUNTIME_EXTRA_QUERIES, name) && !args.flags.list) {
     const targetAbs = path.resolve(args._[3] || '.');
     const loaded = await _loadRuntimeInputs(targetAbs);
@@ -7985,8 +8020,9 @@ async function main() {
         else if (sub === 'reconcile') { process.exit(await cmdRuntimeReconcile(args)); }
         else if (sub === 'query') { process.exit(await cmdRuntimeQuery(args)); }
         else if (sub === 'edges') { process.exit(await cmdRuntimeEdges(args)); }
+        else if (sub === 'explore') { process.exit(await cmdRuntimeExplorer(args, args._[2] || '.')); }
         else {
-          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", "query", or "edges".\n`);
+          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", "query", "edges", or "explore".\n`);
           process.exit(2);
         }
         break;

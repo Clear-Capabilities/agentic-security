@@ -42,10 +42,11 @@ The manifest is validated closed-world: an unknown key, a duplicate id, a path t
 that does not exist (or is the wrong kind: you cannot `produces` into a database) refuses the whole manifest. `required: false`
 marks a repository whose problems should not turn the organization red.
 
-**These relationships are declared, not discovered.** `calls`, `produces`, `consumes`, `reads`, `writes`, `providers` and
-`internetFacing` come from you, and every edge built from them says `source: fleet-manifest`. Dependency edges come from each
-repository's own package manifest and say so. An attack path is exactly as good as your declaration; nothing here claims to have
-found a route you did not describe.
+**These relationships are declared, and then checked against the code.** `calls`, `produces`, `consumes`, `reads`, `writes`,
+`providers` and `internetFacing` come from you, and every edge built from them says `source: fleet-manifest`. Dependency edges come
+from each repository's own package manifest and say so. After a scan, the code is searched for a few exact patterns that name
+another node (see "Edges found in code" below); anything it finds is a separate kind of edge, marked as found only in code unless
+you also declared it. Give a node `aliases:` (hostnames or names its code uses) so the search can recognise it.
 
 ## Scan
 
@@ -192,6 +193,25 @@ Repositories depending on shared-auth-lib (directly or transitively):
 `fleet explore --out graph.html` writes a single static page listing every node and every edge with its evidence. It has no script
 and needs no server.
 
+## Edges found in code
+
+`fleet scan` reads each repository's source and configuration text for: a URL literal whose host is a node's id or alias (or whose
+first label is, so `payments-api` matches `payments-api.svc.cluster.local`); a queue's name on a line that publishes to it or on one
+that consumes from it; a database's name on a line that opens a connection. Each hit is an edge with the file and line, tagged
+`source: discovered-code-literal`. It sits beside a declared edge of the same shape rather than replacing it. `fleet edges
+--undeclared` lists the ones you did not declare, and an attack path that depends on one says so:
+
+```
+agentic-security fleet edges --undeclared
+agentic-security fleet query --internet-to pci
+```
+
+The search matches whole tokens (`orders` never matches `reorders`), skips comment lines, `node_modules`, build output and symlinks,
+keeps no credential from a connection string, and is bounded in files and bytes (a truncated repository says so). It sees literals
+only: a URL built at run time, read from the environment or routed by a service mesh is not found, and the direction of a database
+use is unknown, so those are `connects-to` edges. A discovered edge is a lead with evidence, not a confirmed call. `--no-discover`
+turns the search off.
+
 ## Commands
 
 ```bash
@@ -203,6 +223,7 @@ agentic-security fleet query --blast-radius <component> [--version <pin>]
 agentic-security fleet query --internet-to <data-class> [--involving-vulnerable auth|<repo-id>]
 agentic-security fleet query --depends-on <repo-id>
 agentic-security fleet query "Show every Internet-facing path to PCI data involving vulnerable authentication code"
+agentic-security fleet edges [--undeclared] [--json]
 agentic-security fleet explore [--out graph.html]
 ```
 
@@ -210,11 +231,15 @@ agentic-security fleet explore [--out graph.html]
 
 * **No PostgreSQL or remote-worker store, and no distributed queue.** The interface allows them; one machine's SQLite file is what
   exists. Leases on another host are recovered by expiry only.
-* **Edges the code implies but you did not declare are not found.** A service call or queue topic seen in source, but absent from
-  the manifest, is not an edge. The Data Flow Explorer's per-repository graph has that information; joining it here is not done.
+* **Edge discovery is literal matching, not analysis.** It reads string and URL literals for a handful of patterns (see "Edges found
+  in code"). The Data Flow Explorer's per-repository graph has richer information; joining it here is not done.
 * **Dependency matching is by declared package name.** Two repositories that share a name under different ecosystems are not
   disambiguated, and a version pin is matched as text (a commit id or version string appearing in the pinned spec), not resolved.
 * **`fleet explore` is a static listing, not the Data Flow Explorer.** No graph drawing, no filtering.
 * **Scan results are summaries.** The store keeps each repository's finding locations and counts, not source code.
-* **Scaling is not measured.** The design bounds work per worker and the tests prove the protocol; "near-linear scaling" is not a
-  claim this repository has benchmarked.
+* **Scaling is measured once, on one machine, on a toy workload.** `node bench/fleet-scale/run.mjs` scans 24 synthetic repositories
+  (6 small files each, cache off) with 1, 2, 4 and 8 workers. Captured on an 8-logical-core Apple M2: 14.6 s, 8.14 s, 4.9 s and
+  4.56 s, a 1.00x, 1.79x, 2.98x and 3.20x speedup, which is 100%, 90%, 74% and 40% parallel efficiency. So it is close to linear
+  at 2 workers, clearly sub-linear at 4, and past that the extra workers buy little on this hardware (an M2 has 4 performance and 4
+  efficiency cores, and each scan spawns its own Node process). That is the job fabric on tiny repositories; it says nothing about
+  real repositories, where scan time dominates and "near-linear scaling" is not a claim this repository can make.

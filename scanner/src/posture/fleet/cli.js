@@ -16,6 +16,7 @@ import { statePath, ensureStateDir, safeWriteState } from '../state-dir.js';
 import { createSqliteJobStore } from './job-store.js';
 import { planRun, runJobs, loadArtifacts, reclaimDeadWorkers, childScan } from './job-runner.js';
 import { computeOrgHealth, renderOrgHealth } from './org-health.js';
+import { discoverEdges, splitDeclared } from './discover-edges.js';
 import { buildEnterpriseGraph, finalizeGraph, validateEnterpriseGraph, attackPaths, vulnerableSet, componentBlastRadius, renderBlastRadius, INTERNET } from './enterprise-graph.js';
 
 const GRAPH_FILE = 'fleet-graph.json';
@@ -24,7 +25,7 @@ const DB_FILE = path.join('fleet', 'fleet.db');
 const ROLLUP_FILE = 'fleet-rollup.json';
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 
-const usage = () => { console.error('usage: fleet init | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
+const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
 const isManifestArg = (s) => /\.ya?ml$/i.test(String(s ?? ''));
 const manifestArg = (args) => { const m = args._[2]; return m && !String(m).startsWith('--') ? m : 'fleet.yaml'; };
 const dbPath = (root) => statePath(root, DB_FILE);
@@ -37,7 +38,25 @@ export async function cmdFleet(args, root) {
   if (sub === 'resume') return cmdResume(args, root);
   if (sub === 'query') return cmdQuery(args, root);
   if (sub === 'explore') return cmdExplore(args, root);
+  if (sub === 'edges') return cmdEdges(args, root);
   return usage();
+}
+
+/** `fleet edges [--undeclared] [--json]`: every edge of the last enterprise graph with the evidence it rests on; --undeclared keeps the ones found only in code. */
+async function cmdEdges(args, root) {
+  const f = statePath(root, ENTERPRISE_FILE);
+  if (!fs.existsSync(f)) { console.error('No enterprise graph yet. Run `agentic-security fleet scan <manifest.yaml>` first.'); return 4; }
+  const g = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const edges = g.edges.filter((e) => e.type !== 'exposes' && (!args.flags.undeclared || e.discovered));
+  if (args.flags.json) { console.log(JSON.stringify({ discovery: g.discovery ?? null, edges }, null, 2)); return 0; }
+  if (!edges.length) { console.log(args.flags.undeclared ? 'No edge was found in code that the manifest does not declare.' : 'The graph has no edges.'); }
+  for (const e of edges) {
+    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal').map((x) => `${x.file}:${x.line}`);
+    console.log(`${e.from} -[${e.type}]-> ${e.to}  ${e.discovered ? 'FOUND ONLY IN CODE' : where.length ? 'declared, and seen in code' : 'declared'}${where.length ? `  (${where.join(', ')})` : ''}`);
+  }
+  if (g.discovery?.limitations) console.log(`\nLimits: ${g.discovery.limitations.join(' ')}`);
+  else if (g.discovery?.note) console.log(`\nEdge discovery: ${g.discovery.note}.`);
+  return 0;
 }
 
 async function cmdInit(args, root) {
@@ -77,14 +96,20 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
 
   const dep = buildFleetDependencyGraph(manifest.repositories);
   safeWriteState(statePath(root, GRAPH_FILE), JSON.stringify({ organization: manifest.organization, builtAt: new Date().toISOString(), ...dep }, null, 2));
-  const graph = finalizeGraph(buildEnterpriseGraph({ manifest, dependencyGraph: dep }));
+  // edges the code implies; skipped with --no-discover. A failure here never fails the run: the graph is then declared-only and says so.
+  let discovered = null; let discoveryNote = args.flags['no-discover'] ? 'skipped (--no-discover)' : null;
+  if (!args.flags['no-discover']) { try { discovered = discoverEdges({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
+  const split = discovered ? splitDeclared(discovered, manifest) : null;
+  const graph = finalizeGraph(buildEnterpriseGraph({ manifest, dependencyGraph: dep, discovered }));
   const findingsByRepo = Object.fromEntries([...artifacts].map(([id, a]) => [id, a.findings ?? []]));
-  safeWriteState(statePath(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, builtAt: new Date().toISOString() }));
+  safeWriteState(statePath(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
 
   if (args.flags.json) console.log(JSON.stringify({ runId, health, rollup }, null, 2));
   else {
     console.log(renderFleetSummary(rollup));
     console.log(`\nRun: ${runId}\n${renderOrgHealth(health)}`);
+    if (split) console.log(`\nEdges found in code: ${split.undeclared.length} not in the manifest, ${split.confirmed.length} matching a declared edge. ${split.undeclared.length ? 'List them with: agentic-security fleet edges --undeclared' : ''}`.trimEnd());
+    else if (discoveryNote) console.log(`\nEdge discovery ${discoveryNote}.`);
     if (interrupted) console.log(`\nInterrupted. Continue with: agentic-security fleet resume ${runId}`);
     else if (health.counts.failed || health.counts.timedOut || health.counts.notRun) console.log(`\nRetry the failed and timed-out repositories with: agentic-security fleet resume ${runId} --retry-failed`);
   }
@@ -240,9 +265,10 @@ async function cmdQuery(args, root) {
     if (!res.paths.length) console.log(`No Internet-facing path to ${toClass} data${involving ? ' involving that vulnerable code' : ''} was found in the declared graph.${res.truncated ? ' (search bound reached)' : ''}`);
     for (const p of res.paths) {
       console.log(p.nodes.map((n) => (n === INTERNET ? 'Internet' : n)).join(' -> '));
+      if (p.discoveredEdges?.length) console.log(`    rests on edge(s) found only in code, not declared: ${p.discoveredEdges.join(', ')}`);
       if (p.involving.length) console.log(`    involves vulnerable code: ${p.involving.map((n) => `${n} (${involving.why.get(n)})`).join(', ')}`);
     }
-    if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);
+    if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest, plus any marked above as found only in code.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);
     return 0;
   }
   return usage();

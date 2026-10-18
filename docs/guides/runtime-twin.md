@@ -23,8 +23,7 @@ What was missing was telemetry input: only one hand-authored JSONL format could 
 - `runtime reconcile` — diagnostic drift detection: which already-imported observations would match
   differently against the CURRENT graph (because the code changed since import). Never auto-rewrites
   the stored match.
-- `runtime query` — four real queries, plus honest, named disclosure of the one this architecture cannot answer
-  (see "What this cannot answer" below). `runtime edges` reports the per-edge states.
+- `runtime query` — five real queries. `runtime edges` reports the per-edge states and `explore . --runtime` writes the views page.
 
 ## Quickstart
 
@@ -148,12 +147,28 @@ recorded only when you import with `--record-identity-tokens`, as `idt_` plus 16
 raw username is in no persisted file. A token is a pseudonym, not anonymity: anyone with the install key and a candidate name can
 confirm a match.
 
+## The five Explorer views
+
+`agentic-security explore . --runtime` (also `runtime explore [path] [--out file.html] [--environment production]`) writes one static
+page, `.agentic-security/runtime-explorer.html`: **Static**, **Runtime**, **Static vs Runtime**, **Observed high-risk paths**,
+**Unexpected runtime paths**, plus every flow as a path ("field -> API -> service -> DB") with the state of each hop. Expand an edge
+to see its static evidence and the runtime observations behind its state side by side. The page has no script and a deny-by-default
+content policy, every telemetry value in it is escaped, and with no telemetry it says nothing was consulted instead of showing a clean
+runtime view. It is a snapshot, not a live server.
+
+## Vulnerable functions in production
+
+`runtime query vulnerable-functions-in-production [path]` evaluates the last scan's findings against the runtime trace at
+`.agentic-security/runtime-trace.jsonl` (or `AGENTIC_SECURITY_RUNTIME_TRACE_PATH`) with the same function, line and route matcher the
+scan uses, and lists the findings whose path appears in it. Findings not listed are counted as not observed or unknown. That is a
+statement about the trace window and its sampling, not about reachability. With no usable trace it answers "not evaluated", never
+"none".
+
 ## What this cannot answer
 
-- *"Show vulnerable functions actually exercised in production"* needs function/symbol-level telemetry and a function matching rung.
-  Neither exists; `runtime query --list` says so rather than omitting it. Route matching is not built either.
 - An identity query is only as complete as the identity telemetry: an edge with no identity field contributes nothing, which is not
   evidence that no identity used it.
+- The graph itself carries no route or function symbol, so route/function evidence attaches to scan findings, not to graph edges.
 
 ## What this does not do
 
