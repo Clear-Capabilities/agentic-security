@@ -1763,7 +1763,7 @@ async function cmdRules(args) {
   // Self-learning finding-to-rule compiler (PRD 3): synthesize/evaluate/promote/status/rollback a DETECTION rule
   // from one confirmed finding — distinct from validate/lock below (rules.yml override linting and pack locking).
   // Dispatches to its own module rather than inlining here, same convention as `triage exploit`/`proof`.
-  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback') {
+  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'cost') {
     return (await import('../src/posture/rule-compiler/cli.js')).cmdRules(args, path.resolve(args.flags.root || '.'));
   }
   const target = path.resolve(args._[2] || '.');
@@ -1780,7 +1780,7 @@ async function cmdRules(args) {
     console.log(`  scanner: ${lock.scannerVersion}  rulePackHash: ${lock.rulePackHash}`);
     return 0;
   }
-  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> | rules evaluate|promote|status|rollback <rule-id>'); return 4;
+  console.error('rules validate | rules lock | rules synthesize <finding-id> --spec <file.json> [--auto] | rules evaluate|promote|status|rollback|cost <rule-id>'); return 4;
 }
 
 // `agentic-security secure [--launch]` — smart router. One command picks the
@@ -7660,6 +7660,15 @@ async function main() {
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
       case 'proof':    process.exit(await (await import('../src/posture/proof-fabric/cli.js')).cmdProof(args, path.resolve(args.flags.root || '.')));
+      case 'labs': {
+        // PRD 3 names `labs synthesize-rule FINDING-ID`. It is the rule compiler's synthesis step (`rules synthesize`). The older
+        // slash-command mode `/labs --synthesize-rule` (LLM-assisted detector-spec extraction for a CWE) is a different feature
+        // and is not reachable from this subcommand.
+        if (args._[1] === 'synthesize-rule' && args._[2]) { args._ = ['rules', 'synthesize', args._[2]]; process.exit(await cmdRules(args)); }
+        process.stderr.write('agentic-security labs: usage: labs synthesize-rule <finding-id> --spec <file.json> [--auto]\n(the other labs modes are slash-command modes: /labs --claude-audit, --model-rescan, ...)\n');
+        process.exit(2);
+        break;
+      }
       case 'dnr':      process.exit(await (await import('../src/posture/dnr/cli.js')).cmdDnr(args, path.resolve(args.flags.root || '.')));
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));

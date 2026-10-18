@@ -13,14 +13,30 @@ export const PROMOTION_DEFAULTS = Object.freeze({ minPrecision: 0.95, minRecall:
 // checker rather than reaching across that isolation boundary.
 const ADVISORY_ID = /\b(?:CVE|GHSA|CWE)-[A-Za-z0-9-]+\b/i;
 
-/** Anti-cheating: the synthesis agent must never see benchmark answer keys, hidden labels, CWE-bearing hidden
- * filenames or vulnerability-comment metadata. */
-export function checkLeakage(promptText, { benchmarkNames = [] } = {}) {
+// What a synthesis agent must never see (PRD 3, anti-cheating): benchmark answer keys, hidden test labels, CWE-bearing hidden file
+// names, vulnerability comments and protected test metadata. These defaults are always applied; a caller adds its own benchmark names.
+const DEFAULT_BENCHMARK_NAMES = Object.freeze(['owasp benchmark', 'juliet', 'sard test', 'cve-replay', 'corpus-baseline', 'answer key', 'ground truth', 'adjudicated', 'hidden test', 'expectedresults']);
+const CWE_FILENAME = /(^|[\\/])[^\\/]*cwe[-_]?\d+[^\\/]*$/i;
+const ANSWER_KEY_FILENAME = /(^|[\\/])(?:labels?|answers?|expected|ground[-_]?truth|answer[-_]?key|oracle|result)[^\\/]*\.(?:json|jsonl|ya?ml|csv|txt)$/i;
+const VULNERABILITY_COMMENT = /(?:\/\/|#|\/\*|^\s*\*)\s*(?:POTENTIAL FLAW|FLAW\b|INCIDENTAL|BAD\b|GOOD\b|vulnerab\w*|insecure|exploit\w*)/im;
+
+/**
+ * Anti-cheating gate. Fails closed: any hit makes `ok` false, and the synthesis loop will not report a pass.
+ * @param {string} promptText everything the synthesis agent would be shown (corpus code, spec text)
+ * @param {{benchmarkNames?: string[], fileNames?: string[]}} opts
+ */
+export function checkLeakage(promptText, { benchmarkNames = [], fileNames = [] } = {}) {
   const hay = String(promptText ?? '');
+  const lower = hay.toLowerCase();
   const offending = [];
-  for (const name of benchmarkNames) if (name && hay.toLowerCase().includes(String(name).toLowerCase())) offending.push(name);
+  for (const name of [...DEFAULT_BENCHMARK_NAMES, ...benchmarkNames]) if (name && lower.includes(String(name).toLowerCase())) offending.push(`benchmark name: ${name}`);
   const m = ADVISORY_ID.exec(hay);
-  if (m) offending.push(m[0]);
+  if (m) offending.push(`identifier: ${m[0]}`);
+  if (VULNERABILITY_COMMENT.test(hay)) offending.push('a comment that describes the vulnerability');
+  for (const f of fileNames) {
+    if (CWE_FILENAME.test(String(f))) offending.push(`weakness-bearing file name: ${f}`);
+    if (ANSWER_KEY_FILENAME.test(String(f))) offending.push(`answer-key file name: ${f}`);
+  }
   return { ok: offending.length === 0, offendingTerms: offending };
 }
 

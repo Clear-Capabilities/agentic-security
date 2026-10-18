@@ -33,8 +33,16 @@ export function buildCorpus(ir, { originalCode, patchedCode = null, nearbyCleanC
     negatives.push({ label: 'patched', code: patchedCode });
     for (const v of generateVariants(patchedCode)) negatives.push({ label: `patched-sibling:${v.mutator}`, code: v.code });
   }
-  nearbyCleanCode.forEach((code, i) => negatives.push({ label: `nearby-clean-${i}`, code }));
-  protectedVariantsCode.forEach((code, i) => negatives.push({ label: `protected-${i}`, code }));
+  // The safe side is mutated too (rename, wrapper, equivalent API, ALTERNATE SANITIZER, framework variant, ...): a rule keyed to one
+  // sanitizer's name or one framework's accessor fires on the sibling that uses another, and that is a protected-negative failure.
+  nearbyCleanCode.forEach((code, i) => {
+    negatives.push({ label: `nearby-clean-${i}`, code });
+    for (const v of generateVariants(code)) negatives.push({ label: `nearby-clean-${i}-sibling:${v.mutator}`, code: v.code });
+  });
+  protectedVariantsCode.forEach((code, i) => {
+    negatives.push({ label: `protected-${i}`, code });
+    for (const v of generateVariants(code)) negatives.push({ label: `protected-${i}-sibling:${v.mutator}`, code: v.code });
+  });
 
   return { positives, negatives };
 }
