@@ -5318,6 +5318,11 @@ async function cmdDataflowObservationsImport(args) {
     retention: { expiresAt: retainUntil },
     version: RUNTIME_OBSERVATION_VERSION,
   };
+  if (args.flags['record-identity-tokens']) {
+    // identity is recorded only as a keyed hash under the per-install key, and only when the operator asks for it
+    const { makeIdentityTokenizer } = await import('../src/lineage/identity-token.js');
+    context.tokenizeIdentity = makeIdentityTokenizer();
+  }
   const { drafts, errors: parseErrors } = adapterImpl.parse(text, context);
 
   const { matchObservationToGraph } = await import('../src/lineage/observation-correlation.js');
@@ -5780,26 +5785,75 @@ const _RUNTIME_QUERIES = Object.freeze({
   },
 });
 
-// PRD-named example queries this architecture cannot honestly answer —
-// disclosed, never silently omitted. "Runtime flows absent from the
-// static graph" needs a config-declared/auto-correlated edge mechanism
-// (M5 7a / M2 F2-F3, both out of scope here — every RuntimeObservation
-// matches an EXISTING static node, it never mints a new one). "Vulnerable
-// functions actually exercised in production" and "identities using
-// risky paths" both need identity/function-level telemetry this
-// contract's closed-world schema deliberately omits (see this PRD's
-// implementation-status doc).
+// PRD-named example queries this architecture cannot honestly answer, disclosed rather than omitted. "Vulnerable functions actually
+// exercised in production" needs function/symbol-level telemetry and a function matching rung, neither of which exists.
 const _RUNTIME_QUERIES_NOT_SUPPORTED = Object.freeze({
-  'runtime-flows-absent-from-static': 'Needs a config-declared/auto-correlated edge mechanism (not built — see M5 7a / M2 F2-F3 in scanner/src/lineage/CLAUDE.md) — every RuntimeObservation matches an existing static graph node, it never mints a new one.',
   'vulnerable-functions-in-production': 'Needs function/symbol-level runtime telemetry; this adapter set only matches destinations (route/service/table/topic), never a function symbol.',
-  'identities-using-risky-paths': 'The RuntimeObservation contract deliberately carries no identity field (a payload-smuggling risk) — see this PRD\'s implementation-status doc for why.',
 });
+
+// Queries whose answer is not a list of flows. They run through the edge-state module.
+const _RUNTIME_EXTRA_QUERIES = Object.freeze({
+  'runtime-flows-absent-from-static': 'Observed destinations the matcher could not place on any static node: CANDIDATES for a path static analysis missed (or a mapping the matcher is too weak to make).',
+  'identities-using-risky-paths': 'Identity TOKENS (keyed hashes, never identities) seen on edges in a policy-violation or exploit-correlated state. Needs observations imported with --record-identity-tokens.',
+});
+
+async function _loadExploitEvidence(flag) {
+  if (typeof flag !== 'string') return { evidence: [], errors: [] };
+  const { validateExploitEvidence } = await import('../src/lineage/runtime-edge-states.js');
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(path.resolve(flag), 'utf8')); } catch (e) { return { evidence: [], errors: [`could not read --exploit-evidence: ${e.code ?? e.message}`] }; }
+  return validateExploitEvidence(raw);
+}
+
+async function cmdRuntimeEdges(args) {
+  const targetAbs = path.resolve(args._[2] || '.');
+  const loaded = await _loadRuntimeInputs(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security runtime edges: ${loaded.message}\n`); return 1; }
+  const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+  const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+  const { deriveEdgeStates } = await import('../src/lineage/runtime-edge-states.js');
+  const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+  const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+  if (ev.errors.length) { process.stderr.write(`agentic-security runtime edges: ${ev.errors.join('; ')}\n`); return 2; }
+  const states = deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+  if ((args.flags.format ?? 'json') === 'markdown') {
+    const lines = ['# Static vs runtime, per edge', '', '| Edge | State | Observations | Allowed | Denied | Uncertain |', '|---|---|---|---|---|---|'];
+    for (const [id, e] of Object.entries(states.byEdge)) lines.push(`| ${id} | ${e.states.join(', ')} | ${e.observations} | ${e.allowed} | ${e.denied} | ${e.uncertainObservations} |`);
+    if (Object.keys(states.byNode).length) {
+      lines.push('', '## Observed on a node with no modelled flow', '', '| Node | State | Observations | Allowed | Denied |', '|---|---|---|---|---|');
+      for (const [id, n] of Object.entries(states.byNode)) lines.push(`| ${id} | ${n.states.join(', ')} | ${n.observations} | ${n.allowed} | ${n.denied} |`);
+    }
+    lines.push('', ...states.limitations.map((l) => `- ${l}`), '');
+    process.stdout.write(lines.join('\n'));
+  } else process.stdout.write(JSON.stringify({ evaluated: states.evaluated, counts: states.counts, byEdge: states.byEdge, byNode: states.byNode, limitations: states.limitations }, null, 2) + '\n');
+  return 0;
+}
 
 async function cmdRuntimeQuery(args) {
   const name = args._[2];
+  if (name && Object.prototype.hasOwnProperty.call(_RUNTIME_EXTRA_QUERIES, name) && !args.flags.list) {
+    const targetAbs = path.resolve(args._[3] || '.');
+    const loaded = await _loadRuntimeInputs(targetAbs);
+    if (!loaded.ok) { process.stderr.write(`agentic-security runtime query: ${loaded.message}\n`); return 1; }
+    const environment = typeof args.flags.environment === 'string' ? args.flags.environment : null;
+    const { correlateObservations } = await import('../src/lineage/observation-correlation.js');
+    const mod = await import('../src/lineage/runtime-edge-states.js');
+    const correlation = correlateObservations(loaded.graph, loaded.observations, { environment, windowStart: null, windowEnd: null });
+    if (!correlation.evaluated) { process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: false, reason: 'no runtime observations were imported, so nothing can be said (not "no risk")' }, null, 2) + '\n'); return 0; }
+    if (name === 'runtime-flows-absent-from-static') {
+      process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: true, ...mod.runtimeFlowsAbsentFromStatic(loaded.observations, correlation) }, null, 2) + '\n');
+      return 0;
+    }
+    const ev = await _loadExploitEvidence(args.flags['exploit-evidence']);
+    if (ev.errors.length) { process.stderr.write(`agentic-security runtime query: ${ev.errors.join('; ')}\n`); return 2; }
+    const states = mod.deriveEdgeStates(loaded.graph, correlation, loaded.observations, { exploitEvidence: ev.evidence });
+    process.stdout.write(JSON.stringify({ query: name, supported: true, evaluated: true, ...mod.identitiesUsingRiskyPaths(states) }, null, 2) + '\n');
+    return 0;
+  }
   if (!name || args.flags.list) {
     process.stdout.write('Supported queries:\n');
     for (const [k, v] of Object.entries(_RUNTIME_QUERIES)) process.stdout.write(`  ${k} — ${v.description}\n`);
+    for (const [k, v] of Object.entries(_RUNTIME_EXTRA_QUERIES)) process.stdout.write(`  ${k} — ${v}\n`);
     process.stdout.write('\nNamed but NOT supported by this architecture (disclosed, not silently omitted):\n');
     for (const [k, v] of Object.entries(_RUNTIME_QUERIES_NOT_SUPPORTED)) process.stdout.write(`  ${k} — ${v}\n`);
     // --list is always a successful, intentional operation (exit 0);
@@ -7930,8 +7984,9 @@ async function main() {
         else if (sub === 'status') { process.exit(await cmdRuntimeStatus(args)); }
         else if (sub === 'reconcile') { process.exit(await cmdRuntimeReconcile(args)); }
         else if (sub === 'query') { process.exit(await cmdRuntimeQuery(args)); }
+        else if (sub === 'edges') { process.exit(await cmdRuntimeEdges(args)); }
         else {
-          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", or "query".\n`);
+          process.stderr.write(`agentic-security runtime: unrecognized sub-command "${sub}" — must be "ingest", "status", "reconcile", "query", or "edges".\n`);
           process.exit(2);
         }
         break;

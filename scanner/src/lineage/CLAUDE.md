@@ -1259,3 +1259,7 @@ synthetic root `$hs`, seeds record-parameter sources, and treats `length`/`null`
 field-to-store flows from `language/nix-privacy.js` (a personal-data `config.<module>.<field>` interpolated into another option;
 hashed, measured or compared references are protected and make no flow). Coverage reports `unknown` for both languages: no
 taint-recall tier is borrowed. See `scanner/src/language/CLAUDE.md`.
+
+## Runtime twin additions (PRD 2 gap closure)
+
+`runtime-edge-states.js` derives the six edge states and the identity / absent-from-static queries from the existing correlation, as a pure read: nothing is written into the static graph. `RUNTIME_EXPLOIT_CORRELATED` is never inferred from observation; it needs validated operator evidence. `identity-token.js` supplies a keyed-hash tokenizer injected into the adapters through `context.tokenizeIdentity`; the adapters stay zero-import and drop identity when no tokenizer is given. The attribute allowlist test pins `identity.token`; widen it deliberately, never by loosening the grammar.

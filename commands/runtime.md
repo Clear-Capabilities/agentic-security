@@ -26,17 +26,13 @@ string, header, username, or request/response body.
 observations), `unavailable` (no observation store was ever consulted —
 **never** silently reported as "no runtime risk").
 
-**What this cannot answer, disclosed by `runtime query` itself, not
-hidden.** Three of PRD 2's own named example queries have no honest
-answer with this architecture: a flow a runtime observation reaches but
-static analysis never predicted (would need a config-declared/auto-
-correlated edge mechanism — M5 7a / M2 F2-F3, both out of scope
-everywhere in this codebase); which functions were exercised in
-production (needs function/symbol-level telemetry this adapter set
-doesn't carry); which identities used a risky path (the underlying
-`RuntimeObservation` contract deliberately carries no identity field, as
-a payload-smuggling risk). `runtime query --list` names all three
-alongside the two it CAN answer.
+**Edge states and identities.** `runtime edges` gives each static edge `STATIC_ONLY`, `RUNTIME_NOT_OBSERVED`, `RUNTIME_OBSERVED`,
+`RUNTIME_BLOCKED`, `RUNTIME_POLICY_VIOLATION` or `RUNTIME_EXPLOIT_CORRELATED` (the last only with `--exploit-evidence`). Import with
+`--record-identity-tokens` to keep a keyed-hash identity token per observation; the raw identity is never stored.
+
+**What this cannot answer, disclosed by `runtime query` itself.** Which functions were exercised in production needs
+function/symbol-level telemetry and a matching rung this codebase does not have. `runtime query --list` names it alongside the four
+it CAN answer.
 
 **No Explorer UI wiring.** `agentic-security explore . --runtime` is
 **not implemented** — `scanner/src/server/CLAUDE.md`'s own deferred list
@@ -124,6 +120,8 @@ was given.
 /runtime status --environment production
 /runtime reconcile
 /runtime query --list
+/runtime edges . --environment production --format markdown
+/runtime query runtime-flows-absent-from-static . --environment production
 /runtime query sensitive-crossing-boundary --environment production
 ```
 
