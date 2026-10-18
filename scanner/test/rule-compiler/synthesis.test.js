@@ -67,7 +67,7 @@ test('proposals come from the lines only the vulnerable version has, and the saf
   assert.equal(props[0].strategy, 'line-shape');
   assert.ok(props.some((p) => p.strategy === 'sink-with-interpolation'));
   assert.ok(props.some((p) => p.strategy === 'source-and-sink' && p.match.allOf && p.match.window));
-  assert.ok(props.every((p) => { const parts = p.match.pattern ? [p.match.pattern] : p.match.allOf; return parts.every((r) => { try { new RegExp(r); return true; } catch { return false; } }); }));
+  assert.ok(props.every((p) => { const parts = p.structure ? [p.structure.source, p.structure.sink] : (p.match.pattern ? [p.match.pattern] : p.match.allOf); return parts.every((r) => { try { new RegExp(r); return true; } catch { return false; } }); }));
   assert.deepEqual(safeNames({ vulnerableCode: VULN, patchedCode: SAFE }), ['?']);
   assert.ok(safeNames({ vulnerableCode: 'exec(cmd + x)', patchedCode: 'execFile("ls", [x])' }).includes('execFile'));
   assert.deepEqual(safeNames({ vulnerableCode: VULN, patchedCode: null }), []);

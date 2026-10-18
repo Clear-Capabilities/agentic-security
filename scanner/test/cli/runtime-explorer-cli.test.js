@@ -45,5 +45,7 @@ test('the runtime explorer page and the vulnerable-functions query, end to end',
   assert.equal(q.evaluated, true); assert.ok(q.counts.observed >= 1);
   assert.ok(q.findings.some((f) => f.file === 'app.js' && f.line === 22));
   assert.match(q.note, /not about reachability/);
+  assert.equal(typeof q.counts.exploitCorrelated, 'number');
+  assert.ok(q.findings.every((f) => f.exploitCorrelation && f.exploitCorrelation.correlated === false && /no proof record/.test(f.exploitCorrelation.basis)), 'with no proof and no hunt nothing is exploit-correlated, and it says why');
   assert.ok(!JSON.stringify(q).includes('"unsupported"'));
 });

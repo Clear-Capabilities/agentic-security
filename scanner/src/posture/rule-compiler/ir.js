@@ -4,9 +4,20 @@
 // regex/allOf/notMatch/window engine; this module only adds PROVENANCE metadata around it.
 //
 // A rule's match semantics are deliberately the same closed vocabulary custom-rules.js
-// already supports (pattern | allOf+window | notMatch) — no new matching primitive is
-// introduced, so a promoted rule is exactly as auditable as a hand-written one.
+// already supports (pattern | allOf+window | notMatch, plus the structural fields below): no
+// separate matching engine is introduced, so a promoted rule is exactly as auditable as a hand-written one.
+//
+// The structural fields are REAL, not annotations: each is a regular expression and each compiles to a constraint the
+// runtime matcher enforces.
+//   source, propagator, sink   together they become a windowed co-occurrence (allOf) anchored on the SINK; a sink alone is the pattern
+//   sanitizer, dominatingGuard a hit is dropped when either matches within `guardWindow` lines before (or on) it
+//   frameworkConstraint        a file-level precondition (the file must contain it, wherever it is)
+//   exclusions                 a hit is dropped when its own line matches one
+//   languages                  the rule only runs on files of those languages
+// An explicit `match` always wins over a derived one. An AST pattern is NOT a field: the existing engine has no AST matcher for rules to
+// compile to, and a field the matcher ignored would be the old mistake (an annotation that looks like a constraint).
 import { sha256 } from '../proof-fabric/reproducer.js';
+import { normalizeCustomRule } from '../custom-rules.js';
 
 const RULE_IR_SCHEMA = 'agentic-security/rule-ir';
 const RULE_IR_VERSION = 1;
@@ -28,8 +39,9 @@ export function validateRuleIR(ir) {
   if (!isStr(ir.family)) errs.push('family required');
   if (!Array.isArray(ir.languages) || !ir.languages.length || !ir.languages.every((l) => VALID_LANGS.has(l))) errs.push('languages must be a non-empty array from the supported set');
   const m = ir.match;
-  if (!m || typeof m !== 'object') errs.push('match required');
-  else {
+  if (m == null && !isStr(ir.sink)) errs.push('match required (or at least a sink, from which one is derived)');
+  else if (m != null && typeof m !== 'object') errs.push('match must be an object');
+  else if (m) {
     const hasPattern = isStr(m.pattern);
     const hasAllOf = Array.isArray(m.allOf) && m.allOf.length > 0 && m.allOf.every(isStr);
     if (!hasPattern && !hasAllOf) errs.push('match needs a pattern or a non-empty allOf');
@@ -39,12 +51,20 @@ export function validateRuleIR(ir) {
       try { new RegExp(re); } catch { errs.push(`invalid regex: ${re}`); }
     }
   }
-  // Declarative-only hint fields (sink/source/propagator/sanitizer/dominatingGuard/frameworkConstraint): free text,
-  // never executable, carried for provenance/review only and NOT consulted by the matcher.
+  // Structural fields: each is a regular expression the matcher enforces (see the header). Free text is rejected, so a field can
+  // never look like a constraint while being ignored.
   for (const k of ['sink', 'source', 'propagator', 'sanitizer', 'dominatingGuard', 'frameworkConstraint']) {
-    if (ir[k] != null && !isStr(ir[k])) errs.push(`${k} must be a string when present`);
+    if (ir[k] == null) continue;
+    if (!isStr(ir[k])) { errs.push(`${k} must be a regular-expression string when present`); continue; }
+    try { new RegExp(ir[k]); } catch { errs.push(`${k} is not a valid regular expression`); }
   }
-  if (ir.exclusions != null && !(Array.isArray(ir.exclusions) && ir.exclusions.every(isStr))) errs.push('exclusions must be an array of strings');
+  if ((ir.source || ir.propagator) && !ir.sink && !ir.match) errs.push('a source or propagator needs a sink');
+  if (ir.window != null && !(Number.isInteger(ir.window) && ir.window > 0 && ir.window <= 200)) errs.push('window must be an integer in 1..200');
+  if (ir.guardWindow != null && !(Number.isInteger(ir.guardWindow) && ir.guardWindow > 0 && ir.guardWindow <= 200)) errs.push('guardWindow must be an integer in 1..200');
+  if (ir.exclusions != null) {
+    if (!(Array.isArray(ir.exclusions) && ir.exclusions.every(isStr))) errs.push('exclusions must be an array of regular-expression strings');
+    else for (const re of ir.exclusions) { try { new RegExp(re); } catch { errs.push(`invalid exclusion regex: ${re}`); } }
+  }
   if (!ir.provenance || typeof ir.provenance !== 'object') errs.push('provenance required');
   else {
     if (!isStr(ir.provenance.originatingFindingId)) errs.push('provenance.originatingFindingId required');
@@ -74,14 +94,37 @@ export function draftRuleIR({ id, title, severity, cwe, family, languages, match
 export function compileToCustomRule(ir) {
   const errs = validateRuleIR(ir);
   if (errs.length) return { ok: false, errs };
+  const alt = (...parts) => { const p = parts.filter(isStr); return p.length ? p.map((x) => `(?:${x})`).join('|') : null; };
+  // the base match: explicit wins; otherwise source -> propagator -> sink as a windowed co-occurrence, or a sink alone
+  let base = ir.match;
+  if (!base) {
+    // the SINK leads: the matcher anchors on the first pattern, and the finding, the guard window and the line exclusions all belong at
+    // the sink, where the flaw manifests. The window is symmetric, so the order of the others does not affect co-occurrence.
+    const chain = [ir.sink, ir.propagator, ir.source].filter(isStr);
+    base = chain.length > 1 ? { allOf: chain, window: ir.window ?? 8 } : { pattern: ir.sink };
+  }
+  const guard = alt(ir.sanitizer, ir.dominatingGuard);
   const doc = {
     id: `rule-compiler/${ir.id}`,
     title: ir.title,
     severity: ir.severity,
     cwe: ir.cwe,
     languages: ir.languages,
-    match: { ...(ir.match.pattern ? { pattern: ir.match.pattern } : {}), ...(ir.match.allOf ? { allOf: ir.match.allOf, window: ir.match.window ?? 5 } : {}), ...(ir.match.notMatch ? { notMatch: ir.match.notMatch } : {}) },
+    match: {
+      ...(base.pattern ? { pattern: base.pattern } : {}),
+      ...(base.allOf ? { allOf: base.allOf, window: base.window ?? 5 } : {}),
+      ...(base.notMatch ? { notMatch: base.notMatch } : {}),
+      ...(isStr(ir.frameworkConstraint) ? { fileRequires: [ir.frameworkConstraint] } : {}),
+      ...(guard ? { guardedBy: guard, guardWindow: ir.guardWindow ?? base.window ?? 5 } : {}),
+      ...(Array.isArray(ir.exclusions) && ir.exclusions.length ? { excludeLine: ir.exclusions } : {}),
+    },
     message: ir.remediation || `${ir.title} (${ir.cwe}, compiled from ${ir.provenance.originatingFindingId})`,
   };
+  // The loader has its own safety checks (nested quantifiers and so on). A rule it would refuse must not be reported as compiled,
+  // or it would score well here and silently never fire in a scan.
+  const origError = console.error; let loaderSaid = '';
+  console.error = (...a) => { loaderSaid = a.join(' '); };
+  let normalized; try { normalized = normalizeCustomRule(doc); } finally { console.error = origError; }
+  if (!normalized) return { ok: false, errs: [`the scanner's rule loader would reject this rule${loaderSaid ? `: ${loaderSaid.replace(/^agentic-security:\s*/, '').slice(0, 160)}` : ''}`] };
   return { ok: true, doc };
 }

@@ -1763,7 +1763,7 @@ async function cmdRules(args) {
   // Self-learning finding-to-rule compiler (PRD 3): synthesize/evaluate/promote/status/rollback a DETECTION rule
   // from one confirmed finding — distinct from validate/lock below (rules.yml override linting and pack locking).
   // Dispatches to its own module rather than inlining here, same convention as `triage exploit`/`proof`.
-  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'cost') {
+  if (sub === 'synthesize' || sub === 'evaluate' || sub === 'promote' || sub === 'status' || sub === 'rollback' || sub === 'cost' || sub === 'regress') {
     return (await import('../src/posture/rule-compiler/cli.js')).cmdRules(args, path.resolve(args.flags.root || '.'));
   }
   const target = path.resolve(args._[2] || '.');
@@ -5863,7 +5863,14 @@ async function cmdRuntimeQuery(args) {
     // evaluated NOW against the trace on disk, by the same annotator the scan uses, so a finding added late in a scan is not missed
     // and the answer is never older than the trace
     await annotateRuntimeCorrelation(rootAbs, scan.findings ?? [], {});
-    process.stdout.write(JSON.stringify({ query: name, supported: true, ...vulnerableFunctionsInProduction(scan.findings) }, null, 2) + '\n');
+    const answer = vulnerableFunctionsInProduction(scan.findings);
+    if (answer.evaluated) {
+      // RUNTIME_EXPLOIT_CORRELATED at the finding level: observed in the trace AND proven exploitable AND exploit-shaped requests seen in logs
+      const { exploitCorrelationOf } = await import('../src/posture/dnr/exploit-correlation.js');
+      for (const f of answer.findings) f.exploitCorrelation = exploitCorrelationOf(rootAbs, f.id);
+      answer.counts.exploitCorrelated = answer.findings.filter((f) => f.exploitCorrelation.correlated).length;
+    }
+    process.stdout.write(JSON.stringify({ query: name, supported: true, ...answer }, null, 2) + '\n');
     return 0;
   }
   if (name && Object.prototype.hasOwnProperty.call(_RUNTIME_EXTRA_QUERIES, name) && !args.flags.list) {

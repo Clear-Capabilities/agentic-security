@@ -667,6 +667,20 @@ MATRIX['CAP-124'] = {
   },
 };
 
+// CAP-125 (proof) and CAP-126 (rules): the proof fabric and the rule compiler have no Haskell or Nix branch.
+MATRIX['CAP-125'] = {
+  na: {
+    reason: 'the proof fabric has no Haskell toolchain or harness builder, so there is no Haskell or Nix behavior to execute; a language it cannot run is reported as unsupported.',
+    behavior: 'A Haskell or Nix finding is reported as unsupported by `proof`, never as a pass, and the other proof commands treat it like any finding whose language cannot run on the host.',
+  },
+};
+MATRIX['CAP-126'] = {
+  na: {
+    reason: 'the rule compiler compiles regular-expression rules for the languages the custom-rule matcher supports, which do not include Haskell or Nix, so there is no ecosystem-specific CLI behavior to execute.',
+    behavior: 'A Haskell or Nix project is scanned by the rules it would be scanned by anyway; promoting a rule written for another language changes nothing for it.',
+  },
+};
+
 // ── the matrix ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 for (const [cap, row] of Object.entries(MATRIX)) {
   for (const eco of ['haskell', 'nix']) {

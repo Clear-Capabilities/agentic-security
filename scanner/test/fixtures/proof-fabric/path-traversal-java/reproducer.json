@@ -1,0 +1,9 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-path-traversal-java",
+  "lang": "java", "sources": { "App.java": "App.java" },
+  "build": ["{{JAVAC}}", "-d", ".", "App.java"],
+  "run": ["{{JAVA}}", "-cp", ".", "App", "../escaped.txt"],
+  "watch": { "fs": "escaped.txt" },
+  "oracle": { "type": "filesystem_mutation", "params": { "canary": "fs" } },
+  "network": "none"
+}

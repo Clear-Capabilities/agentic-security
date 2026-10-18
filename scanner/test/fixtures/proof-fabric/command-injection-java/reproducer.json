@@ -1,0 +1,8 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-command-injection-java",
+  "lang": "java", "sources": { "App.java": "App.java" },
+  "build": ["{{JAVAC}}", "-d", ".", "App.java"],
+  "run": ["{{JAVA}}", "-cp", ".", "App", "x; touch {{CANARY:command}}"],
+  "oracle": { "type": "command_execution", "params": { "canary": "command" } },
+  "network": "none"
+}

@@ -1,4 +1,4 @@
-// CLI surface: `agentic-security rules synthesize|evaluate|promote|status|rollback`.
+// CLI surface: `agentic-security rules synthesize|evaluate|promote|status|rollback|cost|regress`.
 //
 // Distinct from the pre-existing `labs synthesize-rule` (posture/rule-synthesis.js), which proposes SUPPRESSION
 // rules from repeated false-positive triage verdicts — a different input, a different output and a different
@@ -9,6 +9,8 @@
 // it never decides promotion).
 import fs from 'node:fs';
 import { statePath } from '../state-dir.js';
+import { packTrust, signPublishedRule } from './store.js';
+import { sharedFalsePositiveCorpus, falsePositiveHits, regressRules } from './regression.js';
 import { draftRuleIR, validateRuleIR, ruleIRDigest } from './ir.js';
 import { checkEligibility } from './eligibility.js';
 import { buildCorpus } from './corpus.js';
@@ -39,6 +41,7 @@ export async function cmdRules(args, root) {
   if (sub === 'status') return cmdStatus(args, root);
   if (sub === 'rollback') return cmdRollback(args, root);
   if (sub === 'cost') return cmdCost(args, root);
+  if (sub === 'regress') return cmdRegress(args, root);
   console.error('usage: rules synthesize <finding-id> --spec <file.json> [--auto] [--max-attempts N] | evaluate <rule-id> | promote <rule-id> | status [rule-id] | rollback <rule-id> | cost <rule-id>');
   return 4;
 }
@@ -61,13 +64,13 @@ async function cmdSynthesize(args, root) {
   const corpusSpec = { originalCode: spec.originalCode, patchedCode: spec.patchedCode ?? null, nearbyCleanCode: spec.nearbyCleanCode ?? [], protectedVariantsCode: spec.protectedVariantsCode ?? [] };
   const leak = checkLeakage(JSON.stringify(corpusSpec), { benchmarkNames: args.flags['benchmark-names'] ? String(args.flags['benchmark-names']).split(',') : [], fileNames: spec.fileNames ?? [] });
   if (!leak.ok) { console.error(`Refusing: the material for this rule shows benchmark or answer-key signals (${leak.offendingTerms.join('; ')}). Nothing was written.`); return 4; }
-  if (args.flags.auto || !spec.match) {
+  if (args.flags.auto || (!spec.match && !spec.sink)) {
     if (!isStr(spec.originalCode)) { console.error('Automatic proposal needs originalCode (the vulnerable snippet) in the spec.'); return 4; }
     const { id, title, severity, cwe, family, languages, remediation } = spec;
     synthesis = synthesizeCandidate({ base: { id, title, severity, cwe, family, languages, remediation, originatingFindingId: finding.stableId ?? finding.id, evidenceState: elig.evidenceState }, corpusSpec, proposed: spec.match ?? null, maxAttempts: Number(args.flags['max-attempts']) || 6, leakageOk: true });
     for (const a of synthesis.attempts) console.log(`  attempt ${a.n}: ${a.strategy.padEnd(34)} ${a.valid ? `precision ${fmtPct(a.score.precision)}  recall ${fmtPct(a.score.recall)}  protected-failures ${a.score.protectedFailures}${a.pass ? '  PASS' : ''}` : `invalid (${a.errors[0]})`}`);
     if (!synthesis.best) { console.error('No valid candidate could be proposed from this material.'); return 1; }
-    finalSpec = { ...spec, match: synthesis.best.match };
+    finalSpec = { ...spec, ...(synthesis.best.match ? { match: synthesis.best.match } : {}), ...(synthesis.best.structure ?? {}) };
     console.log(synthesis.best.pass ? `  candidate meets the promotion gate on this corpus (not yet recorded as VALIDATED).` : `  no attempt met the gate; the best is kept as a CANDIDATE only: ${synthesis.best.reasons.join('; ')}`);
   }
   const ir = draftRuleIR({ ...finalSpec, originatingFindingId: finding.stableId ?? finding.id, originatingCommit: spec.originatingCommit ?? null, evidenceState: elig.evidenceState });
@@ -95,10 +98,17 @@ async function cmdEvaluate(args, root) {
   const corpusSpec = readJsonArg(args.flags.corpus) ?? loadCorpus(root, id);
   if (!corpusSpec) { console.error('No corpus supplied. Pass --corpus <file.json> with originalCode (and optionally patchedCode/nearbyCleanCode/protectedVariantsCode).'); return 4; }
   const corpus = buildCorpus(ir, corpusSpec);
+  // the corpus a rule is evaluated on is the evidence for it: keep it, so `rules regress` and the shared false-positive corpus use the SAME code
+  if (args.flags.corpus) saveCorpus(root, id, { ...(loadCorpus(root, id) ?? {}), ...corpusSpec });
   const leakage = checkLeakage(JSON.stringify({ ...corpusSpec, fileNames: undefined, discoveryCost: undefined }), { benchmarkNames: args.flags['benchmark-names'] ? String(args.flags['benchmark-names']).split(',') : [], fileNames: corpusSpec.fileNames ?? [] });
   const gate = gatePromotion({ ir, corpus, leakageCheck: leakage, thresholds: args.flags.thresholds ? readJsonArg(args.flags.thresholds) : PROMOTION_DEFAULTS });
 
   const ledger = loadLedger(root);
+  // the shared false-positive corpus: the safe code of every other promoted rule, plus the operator's own files. Part of the gate.
+  const fpItems = sharedFalsePositiveCorpus(root, ledger, id);
+  const fpHits = falsePositiveHits(ir, fpItems);
+  gate.fpCorpus = { items: fpItems.length, hits: fpHits.map((h) => h.label) };
+  if (fpHits.length) { gate.pass = false; gate.reasons.push(`fires on ${fpHits.length} of ${fpItems.length} item(s) in the shared false-positive corpus: ${fpHits.slice(0, 3).map((h) => h.label).join(', ')}${fpHits.length > 3 ? ', ...' : ''}`); }
   const cur = stateOf(ledger, id);
   if (gate.pass && cur === 'CANDIDATE') recordTransition(ledger, { ruleId: id, from: 'CANDIDATE', to: 'VALIDATED', reason: 'promotion gate passed', evidence: { score: gate.evaluation.score }, actor: args.flags.actor || 'agent' });
   saveLedger(root, ledger);
@@ -134,6 +144,9 @@ async function cmdPromote(args, root) {
   if (stateOf(ledger, id) !== 'VALIDATED') { console.error(`Rule ${id} is not VALIDATED (run rules evaluate first); refusing to promote.`); return 4; }
   const ir = loadIR(root, id);
   if (!ir) { console.error(`No rule IR found for ${id}.`); return 4; }
+  // other rules may have been promoted since this one was evaluated: hold it to the false-positive corpus as it is NOW
+  const fpNow = falsePositiveHits(ir, sharedFalsePositiveCorpus(root, ledger, id));
+  if (fpNow.length) { console.error(`Promotion refused: ${id} fires on ${fpNow.length} item(s) of the shared false-positive corpus (${fpNow.slice(0, 3).map((h) => h.label).join(', ')}). Re-evaluate or narrow the rule.`); return 1; }
   const pub = publishCustomRule(root, ir);
   if (!pub.ok) { console.error(`Promotion refused: ${pub.reason}`); return 4; }
   const t = recordTransition(ledger, { ruleId: id, from: 'VALIDATED', to: 'PROMOTED', reason: args.flags.reason || 'promoted', actor: args.flags.actor || 'operator' });
@@ -141,8 +154,27 @@ async function cmdPromote(args, root) {
   const prov = loadProvenance(root, id);
   if (prov) saveProvenance(root, id, { ...prov, promotionEvent: { at: new Date().toISOString(), actor: args.flags.actor || 'operator', reason: args.flags.reason || 'promoted', ruleHash: ruleIRDigest(ir) } });
   console.log(`Rule ${id}: VALIDATED -> PROMOTED. Published to ${pub.file}.`);
+  // Publishing is not trusting. Rule packs are signature-checked so a rule dropped into a repository cannot run in someone's CI; sign this
+  // one with the operator's key when there is one, and say plainly whether the scanner will load it.
+  const key = args.flags['sign-key'] ?? process.env.AGENTIC_SECURITY_PRIVATE_KEY;
+  if (key) { const sg = signPublishedRule(pub.file, key); console.log(sg.ok ? `  signed: ${pub.file}.sig` : `  could not sign (${sg.reason}); the rule is published unsigned`); }
+  const trust = packTrust(root, id);
+  console.log(trust.live ? `  The scanner will load it (${trust.via}).` : `  NOT LIVE YET: the scanner will refuse this rule (${trust.reason}). To make it live: ${trust.remediation}.`);
   if (!t.ok) console.error(t.reason);
   return 0;
+}
+
+/** `rules regress [rule-id]`: re-score every PROMOTED rule against its own corpus and the shared false-positive corpus. Exit 1 on any regression. */
+async function cmdRegress(args, root) {
+  const ledger = loadLedger(root);
+  if (ledger.tampered) { console.error(`Refusing: rule lifecycle ledger failed its integrity check (${ledger.tamperReason}).`); return 4; }
+  const only = args._[2] ?? null;
+  const results = regressRules(root, ledger, { only, thresholds: args.flags.thresholds ? readJsonArg(args.flags.thresholds) : undefined });
+  if (args.flags.json) console.log(JSON.stringify({ results }, null, 2));
+  else if (!results.length) console.log(only ? `No promoted rule ${only}.` : 'No rule is PROMOTED; nothing to regress.');
+  else for (const r of results) { console.log(`${r.id}: ${r.status.toUpperCase()}${r.precision != null ? `  precision ${fmtPct(r.precision)}  recall ${fmtPct(r.recall)}  false-positive corpus hits ${r.fpCorpusHits}` : ''}`); for (const m of r.reasons) console.log(`  - ${m}`); }
+  if (only && !results.length) return 4;
+  return results.every((r) => r.status === 'ok') ? 0 : 1;
 }
 
 async function cmdRollback(args, root) {
@@ -165,16 +197,18 @@ async function cmdStatus(args, root) {
     const h = historyFor(ledger, id);
     if (!h.length) { console.error(`No history for rule ${id}.`); return 4; }
     if (args.flags.json) console.log(JSON.stringify(h, null, 2));
-    else { console.log(`Rule ${id}: ${stateOf(ledger, id)}`); for (const e of h) console.log(`  ${e.at}  ${e.from ?? '(new)'} -> ${e.to}  (${e.reason || ''})`); 
+    else { console.log(`Rule ${id}: ${stateOf(ledger, id)}`);
+      if (stateOf(ledger, id) === 'PROMOTED') { const tr = packTrust(root, id); console.log(tr.live ? `  live: yes (${tr.via})` : `  live: NO, the scanner refuses it (${tr.reason}). ${tr.remediation}.`); }
+      for (const e of h) console.log(`  ${e.at}  ${e.from ?? '(new)'} -> ${e.to}  (${e.reason || ''})`); 
       const syn = loadSynthesis(root, id);
       if (syn?.attempts?.length) { console.log(`  synthesis: ${syn.attempts.length} attempt(s), best ${syn.best ? `${syn.best.strategy}${syn.best.pass ? ' (met the gate)' : ' (did not meet the gate)'}` : 'none'}`); }
     }
     return 0;
   }
   const ids = [...new Set(ledger.entries.map((e) => e.ruleId))];
-  if (args.flags.json) { console.log(JSON.stringify(ids.map((rid) => ({ id: rid, state: stateOf(ledger, rid) })), null, 2)); return 0; }
+  if (args.flags.json) { console.log(JSON.stringify(ids.map((rid) => ({ id: rid, state: stateOf(ledger, rid), ...(stateOf(ledger, rid) === 'PROMOTED' ? { live: packTrust(root, rid).live } : {}) })), null, 2)); return 0; }
   if (!ids.length) { console.log('No rules in the lifecycle ledger yet.'); return 0; }
-  for (const rid of ids) console.log(`  ${rid.padEnd(40)} ${stateOf(ledger, rid)}`);
+  for (const rid of ids) console.log(`  ${rid.padEnd(40)} ${stateOf(ledger, rid)}${stateOf(ledger, rid) === 'PROMOTED' && !packTrust(root, rid).live ? '  (NOT LIVE: the scanner refuses it)' : ''}`);
   return 0;
 }
 

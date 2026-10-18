@@ -257,10 +257,6 @@
       "taskId": "CORE-001-T03"
     },
     {
-      "path": "docs/guides/exploit-proof-fabric.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
       "path": "docs/guides/measurement-status.md",
       "taskId": "CORE-001-T03"
     },
@@ -282,10 +278,6 @@
     },
     {
       "path": "docs/guides/routing-replay.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
-      "path": "docs/guides/rule-compiler.md",
       "taskId": "CORE-001-T03"
     },
     {
@@ -2285,6 +2277,74 @@
       "documents": [
         "README.md",
         "docs/guides/eval-lab.md"
+      ]
+    },
+    {
+      "id": "CAP-125",
+      "kind": "command",
+      "title": "proof (CLI only): execution-backed exploit proof, independent replay, fix replay, reproducer generation",
+      "sources": [
+        "command:proof",
+        "docs/guides/exploit-proof-fabric.md"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command group (show|replay|doctor|generate) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "proof runs a reproducer in a sandbox for JavaScript, TypeScript, Python, Java, C, C++ and C#; the proof fabric has no Haskell toolchain or harness builder, so a Haskell finding cannot be proven and is reported as unsupported, never as a pass."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "proof has no Nix expression analysis and adds no NixOS configuration rule."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "proof executes only a supplied or generated reproducer inside its own confined sandbox on the build host, never on a NixOS host or a deployed system."
+      },
+      "entryPoints": [
+        "scanner/src/posture/proof-fabric/cli.js",
+        "scanner/src/posture/proof-fabric/orchestrator.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/exploit-proof-fabric.md"
+      ]
+    },
+    {
+      "id": "CAP-126",
+      "kind": "command",
+      "title": "rules (CLI only): rule compiler synthesize, evaluate, promote, status, rollback, cost and regress",
+      "sources": [
+        "command:rules",
+        "docs/guides/rule-compiler.md"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command group (synthesize|evaluate|promote|status|rollback|cost|regress) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "the rule compiler compiles regular-expression rules for the languages custom-rules.js supports; Haskell is not among them, so it neither adds nor removes Haskell detection."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "the rule compiler adds no Nix analysis; a Nix file is matched by a rule only if the rule names that language, and none does."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "rules are evaluated on code text; nothing executes on a NixOS host."
+      },
+      "entryPoints": [
+        "scanner/src/posture/rule-compiler/cli.js",
+        "scanner/src/posture/rule-compiler/ir.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/rule-compiler.md"
       ]
     }
   ],

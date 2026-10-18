@@ -1,5 +1,18 @@
 # Implementation status: Vulnerability-to-Detection-and-Response Loop (PRD 7)
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** All 8 P0 requirements are implemented with executable evidence (8 of 8), plus the P1 text renderers for Splunk SPL, Microsoft Sentinel KQL, CloudWatch Logs Insights, Elastic, Google SecOps (YARA-L) and Datadog. The last three translate exactly or decline and were never run against the live products.
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Detection IR, grounded outputs (Sigma, generic HTTP, detect-only WAF, structured log query, YARA, six SIEM renderers), evidence grounding, historical hunting with four honest verdicts, the exposure window, detection validation with synthetic telemetry, remediation closure, the unified Find-Prove-Hunt-Fix-Verify-Detect view, redaction, and the ten-step end-to-end test.
+* **Current work:** None in flight.
+* **Remaining requirements:** Remote, opt-in, read-only SIEM integrations (every renderer is text only); an MCP tool; telemetry captured from real traffic (the synthetic telemetry is built from the proof's own facts).
+* **Failing tests:** None at the last run.
+* **Blockers:** No SIEM product or captured production telemetry on the build host.
+* **Last verified command:** `node --test test/dnr/*.test.js test/cli/dnr-cli.test.js` (scanner/): 52 pass, 0 fail.
+
+---
+
 **Percent complete:** all eight P0 requirements and the required end-to-end scenario are implemented and tested. The P1 SIEM
 adapters are partly done (Splunk SPL, Microsoft Sentinel KQL and CloudWatch Logs Insights as text renderers; Elastic, Google
 SecOps YARA-L and Datadog are built as text renderers that translate exactly or decline, never run against a live product), and no remote integration exists. No MCP tool.

@@ -8,6 +8,7 @@
 // controller): scanning a repository for the fleet must not change that repository.
 import { runFleet } from '../fleet.js';
 import { runScan } from '../../runScan.js';
+import { summarizeLineage } from './lineage-summary.js';
 
 export const BEGIN = '@@FLEET-SCAN-BEGIN@@';
 export const END = '@@FLEET-SCAN-END@@';
@@ -21,7 +22,9 @@ async function main(repoPath) {
   const entry = res.results?.[0];
   if (!entry) throw new Error('the scan produced no entry');
   const findings = (captured?.findings ?? []).slice(0, MAX_FINDINGS).map(slim);
-  process.stdout.write(`${BEGIN}${JSON.stringify({ entry, findings, findingsTruncated: (captured?.findings?.length ?? 0) > MAX_FINDINGS })}${END}`);
+  // the Code Boundaries graph exists only when the controller asked for it (AGENTIC_SECURITY_LINEAGE_DEEP=1); it is summarized, never copied whole
+  const lineage = process.env.AGENTIC_SECURITY_LINEAGE_DEEP === '1' ? summarizeLineage(captured?.lineageGraph) : null;
+  process.stdout.write(`${BEGIN}${JSON.stringify({ entry, findings, findingsTruncated: (captured?.findings?.length ?? 0) > MAX_FINDINGS, lineage })}${END}`);
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {

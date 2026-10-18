@@ -1,5 +1,18 @@
 # PRD 5 — Source-to-Artifact Security & Provenance
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** 7 of 8 P0 requirements fully evidenced; 1 partial. Requirement 5 (signature verification) verifies a supplied key natively and in-toto/SLSA attestations, and delegates cosign and keyless verification to cosign; that delegation is tested against a stand-in cosign only.
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Archive, local-engine and explicit remote-registry inputs; inventory; layer secret analysis; OSV/KEV/EPSS correlation; signature and attestation states; the provenance graph; source-versus-artifact mismatch; VEX; a signed evidence bundle; all required fixtures including the stale-deployment demonstration.
+* **Current work:** None in flight.
+* **Remaining requirements:** Native Sigstore keyless and transparency-log verification (delegated to cosign); validation against a real Docker daemon, a real registry and a real cosign.
+* **Failing tests:** None at the last run.
+* **Blockers:** No Docker daemon, cosign binary or reachable registry on the build host.
+* **Last verified command:** `node --test test/artifact/*.test.js test/cli/artifact-*.test.js` (scanner/): 129 pass, 0 fail.
+
+---
+
 **Status as of 2026-10-12: P0 scope complete, honestly bounded (see "Deliberately NOT done" below).**
 
 ## Objective (from the PRD)

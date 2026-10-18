@@ -198,9 +198,11 @@ export function signRulePack(rulePackPath, privateKeyB64) {
   const body = fs.readFileSync(rulePackPath);
   const privBytes = Buffer.from(privateKeyB64, 'base64');
   if (privBytes.length !== 32) throw new Error('private key must be 32 bytes (raw ed25519)');
+  // A raw 32-byte Ed25519 seed as a PKCS#8 key. (A JWK with only `d`, which this used to build, is rejected by current Node: it also
+  // requires the public `x`, so signing failed with "Invalid JWK OKP key" and no rule pack could be signed through this workflow.)
   const keyObj = crypto.createPrivateKey({
-    key: { kty: 'OKP', crv: 'Ed25519', d: privBytes.toString('base64url') },
-    format: 'jwk',
+    key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), privBytes]),
+    format: 'der', type: 'pkcs8',
   });
   const sig = crypto.sign(null, body, keyObj);
   fs.writeFileSync(rulePackPath + '.sig', sig);

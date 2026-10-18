@@ -10,11 +10,12 @@ import { generateReproducer } from '../../src/posture/proof-fabric/generate.js';
 import { proveFinding } from '../../src/posture/proof-fabric/orchestrator.js';
 import { validateReproducer } from '../../src/posture/proof-fabric/reproducer.js';
 import { sandboxAvailable } from '../../src/sandbox/index.js';
+import { skipUnlessRuns } from '../helpers/toolchain-probe.js';
 
 const py = spawnSync('python3', ['-c', 'import sys; print(hasattr(sys, "stdlib_module_names"))'], { encoding: 'utf8' });
 const hasPy = py.status === 0 && py.stdout.trim() === 'True';
 const skipNoPy = hasPy ? false : 'python3 3.10+ is not installed';
-const skipSandbox = sandboxAvailable() && hasPy ? false : (hasPy ? 'no confinement backend on this host' : skipNoPy);
+const skipSandbox = !hasPy ? skipNoPy : !sandboxAvailable() ? 'no confinement backend on this host' : skipUnlessRuns('python');
 const repo = (files) => { const d = mkTestTmp('gen-py-'); for (const [f, c] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), c); } return d; };
 const F = (over = {}) => ({ id: 'P1', stableId: 'P1', cwe: 'CWE-78', file: 'app.py', line: 4, parser: 'IR-TAINT', ...over });
 const prove = (finding, dir, reproducer) => proveFinding({ finding, reproducer, sourceRoot: dir, policy: { timeoutMs: 20000 } });

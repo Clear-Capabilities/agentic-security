@@ -97,6 +97,48 @@ scrubbed environment, a timeout, and cleanup of its whole process tree. Its answ
 `{ "files": { "path": "new content" } }` for `patch`, plus an optional `usage` with token counts or dollars. There is no fallback
 from one arm to another, so a local model can never silently become a cloud call.
 
+## Real advisory pairs from the independent population
+
+The lab can run on real code. `scripts/eval-lab/import-independent.mjs` turns part of `bench/independent` (published security
+advisories, each with the upstream project's fix commit and the package before and after) into a dataset:
+
+```bash
+node scripts/eval-lab/import-independent.mjs --split dev --language javascript --limit 12 --out ./lab-data/js-dev
+agentic-security eval run --dataset ./lab-data/js-dev/dataset.json --arms arms.yaml --tasks detect
+```
+
+Rules it enforces: only the `dev` and `validation` splits (the `sealed` split is refused outright, because exporting it into something an
+arm can run on would end its sealing); only repositories whose recorded licence is on the lab's permitted list; only entries whose
+before and after trees are in the local cache; and every skipped entry is listed with its reason (a licence of `NOASSERTION`, a missing
+cache, a change too large to localize). Each advisory becomes a vulnerable workspace (before the fix) and a fixed workspace (after it). The
+expected span is the hunk of the upstream change that removes the most old code, so an unrelated edit elsewhere in the file does not
+stretch it; a fix that only adds lines gets an approximate span, marked as such. Labels stay in the manifest and out of the workspaces.
+
+Captured on 12 advisory pairs (JavaScript, `dev` split, files the fix touched), deterministic scanner only:
+
+```
+* Scanner: 0.176.0 @ 34a22edfca36
+* Dataset: independent-javascript-dev 1.0.0+2026-10-18 (dev), hash c5300b81ee948e07
+* Models: none (deterministic only)
+* Config: tasks detect; repeats 1; timeout 120000ms; budget none
+* Machine: darwin/arm64, 8 cpus, 16 GB, node v24.20.0
+* Run: 2026-10-18T22:57:12.895Z to 2026-10-18T22:57:57.524Z
+* Leakage audit: clean (24/24 entries usable; comments stripped)
+
+## detect
+
+| arm | runs | precision | recall | f1 | macroF1 | localizationAccuracy | completion |
+|---|---|---|---|---|---|---|---|
+| baseline | 1 | 20.0% (not representative) | 8.3% (not representative) | 11.8% (not representative) | 14.3% (not representative) | 25.0% (not representative) | 100.0% (not representative) |
+```
+
+Read that as a baseline and as a demonstration, not as a quality claim. It is one run on 12 entries, so every figure is labelled "not
+representative" by the lab itself, and it says the deterministic engine finds about one of twelve of these real advisories in a single
+file with comments stripped and file names changed. That is a hard number about where detection stands on code this project did not
+write, and a reason the model arms exist. `--scope package` copies the whole cached package instead of only the touched files; the
+leakage audit then quarantines entries whose surrounding files (changelogs, advisories) name the vulnerability, and marks the run
+INCOMPLETE rather than scoring them.
+
 ## Run one command, compare everything
 
 ```
@@ -287,6 +329,55 @@ agentic-security models route explain <hunt|falsification|exploit-generation|pat
 Exit codes: `0` done, `1` done but incomplete (leakage exclusions, a budget stop, cancellation) or no recommendation, `4` usage or
 precondition. `--budget` stops starting new attempts once measured spend reaches it; the skipped attempts are recorded.
 
+## Output schema
+
+**Dataset manifest** (JSON or YAML; `agentic-security/eval-dataset`): `dataset` with `id`, `version`, `language`, `source.kind` (`directory` or
+`git-pairs`), `split` (`dev`, `validation`, `sealed`), `license`, `cwe`, `leakagePolicy` (`mode` must be `enforce`; there is no `off`), optional
+`build` and `test` argv; and `entries`, each `vulnerable` (with `cwe` and an `expectedSpan` of `file`, `startLine`, `endLine`), `fixed` (with
+`resemblesCwe`) or `hard-negative` (with `category`, `resemblesCwe`, `lookalikeSpan`). A git-pairs dataset needs a licence on the permitted list.
+Labels live only here; a workspace an arm can read never contains one.
+
+**Run record** (`.agentic-security/eval-lab/runs/<run-id>.json`): the dataset hash, the scanner commit, every arm and its repeats, every
+attempt with its status (`completed`, `timeout`, `error`, `blocked`, `unavailable`, `skipped-budget`), the leakage-audit result, whether the
+run is `complete` and, if not, why. A run that no longer matches its own digest is reported as failed and never used for routing.
+
+**Report** (`eval report <run-id> --format json`; also `md`, `csv`, `html`, `chart`), `agentic-security/eval-lab-report` version 1:
+
+```json
+{
+  "schema": "agentic-security/eval-lab-report", "version": 1, "runId": "...", "runDigest": "...",
+  "header": ["scannerCommit", "scannerVersion", "datasetId", "datasetVersion", "datasetHash", "split", "models", "config", "machine", "startedAt", "finishedAt"],
+  "leakageAudit": {"status": "clean|entries-excluded|...", "...": "..."}, "complete": true, "incompleteReasons": [],
+  "providerVariance": [ { "model": "...", "task": "detect", "spread": 0.0, "arms": ["..."], "representative": false } ],
+  "arms": [ {
+    "id": "...", "kind": "deterministic|model", "model": {}, "runs": 1,
+    "tasks": { "detect": { "precision": {}, "recall": {}, "f1": {}, "macroF1": {}, "localizationAccuracy": {}, "completion": {} } },
+    "economics": ["usd", "latencyMedianMs", "latencyP95Ms", "inputTokens", "outputTokens", "timeouts", "failures", "unknownCostAttempts"],
+    "intelligencePerDollar": ["confirmedVulnerabilitiesPer100Usd", "verifiedFixesPer100Usd", "truePositivesPer100Usd", "recallAtBudget"],
+    "dollarsPer": {}, "primary": {}
+  } ],
+  "notes": []
+}
+```
+
+(The `header`, `economics` and `intelligencePerDollar` lines above list the real keys; in a report they are objects.) Every statistic is
+`{n, unmeasured, mean, stdev, min, max, ci95, representative, note}`: `representative` is false for fewer than three runs, and an interval is
+withheld when there are too few independent groups to compute one. A cost that is not reported is `null` with the reason, never `0`.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `INCOMPLETE: leakage audit: entries-excluded (N quarantined ...)` | The audit found a protected term (an advisory id, the vulnerability named in a changelog) in a workspace and quarantined that entry; the run is marked incomplete rather than scored. Use a narrower workspace scope (`--scope files` for imports) or remove the file. Do not loosen the audit. |
+| Every figure says `(not representative)` | Fewer than three runs. Use `--repeats 3` or more for a model arm. A deterministic arm runs once because it is repeatable. |
+| An arm's attempts are `blocked` | Either the egress policy refused a non-local model (`egress policy: ...`; pass `--allow-external` and fix the policy) or the leakage guard found a protected term in what would have been sent (`leakage guard: ...`). Nothing was sent. |
+| An arm's attempts are `unavailable` | The local model server is not running, the model is not installed (`ollama-model-not-installed`), or the toolchain is missing. A run with an unavailable arm is incomplete, not zero. |
+| `the ollama adapter only talks to a loopback server` | By design. Reach a remote model through the `command` adapter so the egress policy decides first. |
+| `dataset.leakagePolicy.mode must be "enforce"` / `a real-code dataset needs a license that permits use` | The manifest cannot opt out of leakage controls, and a git-pairs dataset must name a permitted licence. |
+| `import-independent: the sealed split is evaluated only by the sealed-label protocol` | The sealed split is never exported into something an arm can run on. Use `dev` or `validation`. |
+| The import skipped entries | Each skip has a reason: licence not on the permitted list or not recorded, trees not in the local cache (`bench/independent/fetch.mjs` fills it), or a change too large to localize to a span. |
+| `models route explain threat-model` says there is no benchmark | There is no evaluation task for it, so nothing is recommended. The router will not guess. |
+
 ## What is not built
 
 * **Only a local Ollama server has a built-in adapter**, and it was tested against a stand-in that speaks the protocol, never a real
@@ -294,7 +385,8 @@ precondition. `--budget` stops starting new attempts once measured spend reaches
 * **The SARD corpus is not wired in, and the manifest no longer pretends it is** (the `sard` source kind was removed from the schema
   because nothing could load it). The existing SARD harness keeps its own neutralization and reads answer keys, which this lab's
   custody rules keep out of a scored run. This lab uses its own neutralizer, which is line-preserving and best effort.
-* **No curated real-vulnerability corpus ships.** The loader reads commit pairs from a local repository; assembling and licensing
-  the corpus is data work this change does not include. The shipped fixtures are small and synthetic.
+* **No hand-curated corpus ships**, but the existing independent advisory population can be imported (above). Its entries are mined
+  from advisories, not read and chosen one by one; the expected span comes from the fix diff, so a fix that restructures code can place it
+  imprecisely. The shipped test fixtures are small and synthetic.
 * **`threat-model` has no benchmark**, so no model is recommended for it.
 * **Costs are what arms report.** The lab does not meter a provider; a wrapper that under-reports tokens makes a model look cheaper.

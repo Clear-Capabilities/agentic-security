@@ -1,0 +1,7 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-command-injection-python",
+  "lang": "python", "sources": { "app.py": "app.py" },
+  "run": ["{{PYTHON}}", "app.py", "x; touch {{CANARY:command}}"],
+  "oracle": { "type": "command_execution", "params": { "canary": "command" } },
+  "network": "none"
+}

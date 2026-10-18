@@ -25,7 +25,7 @@ const DB_FILE = path.join('fleet', 'fleet.db');
 const ROLLUP_FILE = 'fleet-rollup.json';
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 
-const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
+const usage = () => { console.error('usage: fleet init | edges [--undeclared] | scan <manifest.yaml> [--workers N] [--retries N] [--timeout-seconds N | --timeout-ms N] [--no-cache] [--no-discover] [--lineage] | status [run-id] | resume <run-id|manifest.yaml> [--retry-failed] | query (--depends-on <id> | --blast-radius <component> [--version v] | --internet-to <data-class> [--involving-vulnerable auth|<repo>] | "<question>") | explore [--out file.html]'); return 4; };
 const isManifestArg = (s) => /\.ya?ml$/i.test(String(s ?? ''));
 const manifestArg = (args) => { const m = args._[2]; return m && !String(m).startsWith('--') ? m : 'fleet.yaml'; };
 const dbPath = (root) => statePath(root, DB_FILE);
@@ -51,7 +51,7 @@ async function cmdEdges(args, root) {
   if (args.flags.json) { console.log(JSON.stringify({ discovery: g.discovery ?? null, edges }, null, 2)); return 0; }
   if (!edges.length) { console.log(args.flags.undeclared ? 'No edge was found in code that the manifest does not declare.' : 'The graph has no edges.'); }
   for (const e of edges) {
-    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal').map((x) => `${x.file}:${x.line}`);
+    const where = e.evidence.filter((x) => x.source === 'discovered-code-literal' || x.source === 'code-boundaries').map((x) => (x.file ? `${x.file}:${x.line}` : `code boundaries: ${x.host ?? x.topic ?? x.name}`));
     console.log(`${e.from} -[${e.type}]-> ${e.to}  ${e.discovered ? 'FOUND ONLY IN CODE' : where.length ? 'declared, and seen in code' : 'declared'}${where.length ? `  (${where.join(', ')})` : ''}`);
   }
   if (g.discovery?.limitations) console.log(`\nLimits: ${g.discovery.limitations.join(' ')}`);
@@ -81,6 +81,12 @@ function entriesOf(artifacts, manifest) {
   return manifest.repositories.filter((r) => artifacts.has(r.id)).map((r) => ({ ...artifacts.get(r.id).entry, repo: r.id }));
 }
 
+/** The PRD names its commands `fleet status JOB-ID` and `fleet resume JOB-ID`; a run is a set of jobs, so a job id names the run it belongs to. */
+function runOfJob(store, id) {
+  const job = store.getJob(String(id));
+  return job ? store.getRun(job.runId) : null;
+}
+
 async function finishRun({ args, root, store, runId, manifest, manifestFile, interrupted }) {
   const { artifacts, problems } = loadArtifacts({ store, runId, root });
   const jobs = store.listJobs(runId);
@@ -100,14 +106,16 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
   let discovered = null; let discoveryNote = args.flags['no-discover'] ? 'skipped (--no-discover)' : null;
   if (!args.flags['no-discover']) { try { discovered = discoverEdges({ manifest }); } catch (e) { discoveryNote = `failed (${String(e.message).slice(0, 80)}); the graph holds declared edges only`; } }
   const split = discovered ? splitDeclared(discovered, manifest) : null;
-  const graph = finalizeGraph(buildEnterpriseGraph({ manifest, dependencyGraph: dep, discovered }));
+  const lineageByRepo = new Map([...artifacts].filter(([, a]) => a.lineage).map(([id, a]) => [id, a.lineage]));
+  const graph = finalizeGraph(buildEnterpriseGraph({ manifest, dependencyGraph: dep, discovered, lineage: lineageByRepo.size ? lineageByRepo : null }));
   const findingsByRepo = Object.fromEntries([...artifacts].map(([id, a]) => [id, a.findings ?? []]));
-  safeWriteState(statePath(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
+  safeWriteState(statePath(root, ENTERPRISE_FILE), JSON.stringify({ ...graph, runId, manifestFile, findingsByRepo, codeBoundaries: lineageByRepo.size ? { repositories: lineageByRepo.size, undeclaredDataClasses: Object.fromEntries(graph.nodes.filter((n) => n.discoveredDataClasses?.length).map((n) => [n.id, n.discoveredDataClasses])) } : { note: args.flags.lineage ? 'no repository returned a Code Boundaries graph' : 'not requested (--lineage)' }, discovery: discovered ? { scanned: discovered.scanned, limitations: discovered.limitations, undeclared: split.undeclared.length, confirmed: split.confirmed.length } : { note: discoveryNote }, builtAt: new Date().toISOString() }));
 
   if (args.flags.json) console.log(JSON.stringify({ runId, health, rollup }, null, 2));
   else {
     console.log(renderFleetSummary(rollup));
     console.log(`\nRun: ${runId}\n${renderOrgHealth(health)}`);
+    if (lineageByRepo.size) { const und = graph.nodes.filter((n) => n.discoveredDataClasses?.length); console.log(`\nCode Boundaries: ${lineageByRepo.size} repositor${lineageByRepo.size === 1 ? 'y' : 'ies'} contributed a data flow graph.${und.length ? ` Data classes found in code but not declared: ${und.map((n) => `${n.id} (${n.discoveredDataClasses.join(', ')})`).join('; ')}.` : ' No undeclared data class was found.'}`); }
     if (split) console.log(`\nEdges found in code: ${split.undeclared.length} not in the manifest, ${split.confirmed.length} matching a declared edge. ${split.undeclared.length ? 'List them with: agentic-security fleet edges --undeclared' : ''}`.trimEnd());
     else if (discoveryNote) console.log(`\nEdge discovery ${discoveryNote}.`);
     if (interrupted) console.log(`\nInterrupted. Continue with: agentic-security fleet resume ${runId}`);
@@ -119,7 +127,9 @@ async function finishRun({ args, root, store, runId, manifest, manifestFile, int
 async function runAll({ args, root, store, runId, manifest, manifestFile }) {
   const ac = new AbortController(); const onSig = () => ac.abort(); process.once('SIGINT', onSig); process.once('SIGTERM', onSig);
   try {
-    await runJobs({ manifest, store, runId, root, scan: childScan, signal: ac.signal, useCache: !args.flags['no-cache'], onEvent: (e) => {
+    // Code Boundaries are requested at scan time and remembered on the run, so a resume does the same thing the scan would have
+    const lineage = !!args.flags.lineage || !!store.getRun(runId)?.meta?.lineage;
+    await runJobs({ manifest, store, runId, root, scan: childScan, scanOptions: { lineage }, signal: ac.signal, useCache: !args.flags['no-cache'], onEvent: (e) => {
       if (args.flags.json) return;
       if (e.type === 'done') console.error(`[fleet] done: ${e.repo}${e.cached ? ' (cached)' : ''}${e.status === 'partial' ? ' (partial)' : ''}`);
       else if (e.type === 'failed') console.error(`[fleet] ${e.timedOut ? 'TIMED OUT' : 'FAILED'}: ${e.repo} (${e.error})${e.next === 'queued' ? ', will retry' : ''}`);
@@ -141,7 +151,7 @@ async function cmdScan(args, root) {
   try {
     const manifestHash = sha(fs.readFileSync(manifestFile));
     console.error(`[fleet] planning ${manifest.repositories.length} repository(ies) for ${manifest.organization} (${manifest.workers} worker(s), ${manifest.retries} retr${manifest.retries === 1 ? 'y' : 'ies'}, ${Math.round(manifest.perRepoTimeoutMs / 1000)}s per repository)...`);
-    const plan = planRun({ manifest, manifestHash, store, meta: { manifestFile } });
+    const plan = planRun({ manifest, manifestHash, store, config: args.flags.lineage ? { lineage: true } : {}, meta: { manifestFile, lineage: !!args.flags.lineage } });
     return await runAll({ args, root, store, runId: plan.runId, manifest, manifestFile });
   } finally { store.close(); }
 }
@@ -158,7 +168,7 @@ async function cmdResume(args, root) {
       const hash = sha(fs.readFileSync(path.resolve(root, target)));
       run = store.listRuns().find((r) => r.manifestHash === hash && store.listJobs(r.runId).some((j) => ['queued', 'leased'].includes(j.status)));
       if (!run) { console.error('Nothing to resume for that manifest: no run of it has unfinished work. Use `fleet resume <run-id> --retry-failed` to retry failed repositories.'); return 4; }
-    } else run = store.getRun(target);
+    } else run = store.getRun(target) ?? runOfJob(store, target);
     if (!run) { console.error(`No run ${target}. Runs: ${store.listRuns().slice(0, 5).map((r) => r.runId).join(', ') || 'none'}`); return 4; }
     const full = store.getRun(run.runId);
     const manifestFile = path.resolve(root, args.flags.manifest ?? full.meta?.manifestFile ?? (isManifestArg(target) ? target : 'fleet.yaml'));
@@ -190,14 +200,15 @@ async function cmdStatus(args, root) {
   const store = await createSqliteJobStore({ file: dbFile });
   try {
     const arg = args._[2];
-    const run = arg && !isManifestArg(arg) ? store.getRun(String(arg)) : store.listRuns()[0] && store.getRun(store.listRuns()[0].runId);
-    if (!run) { console.error(arg && !isManifestArg(arg) ? `No run ${arg}.` : 'No fleet run exists yet.'); return 4; }
+    const run = arg && !isManifestArg(arg) ? (store.getRun(String(arg)) ?? runOfJob(store, String(arg))) : store.listRuns()[0] && store.getRun(store.listRuns()[0].runId);
+    if (!run) { console.error(arg && !isManifestArg(arg) ? `No run or job ${arg}.` : 'No fleet run exists yet.'); return 4; }
+    if (arg && !isManifestArg(arg) && String(arg) !== run.runId) console.error(`Job ${arg} belongs to run ${run.runId}.`);
     const meta = run.meta ?? {};
     const manifest = loadFleetManifest(path.resolve(root, meta.manifestFile ?? 'fleet.yaml'));
     const jobs = store.listJobs(run.runId);
     const m = manifest.ok ? manifest.manifest : { repositories: jobs.map((j) => ({ id: j.repoId, required: j.required })) };
     const health = computeOrgHealth({ manifest: m, jobs });
-    if (args.flags.json) { console.log(JSON.stringify({ runId: run.runId, health, jobs: jobs.map((j) => ({ repo: j.repoId, status: j.status, attempts: j.attempts, worker: j.worker, leaseExpiresAt: j.leaseExpiresAt, error: j.error })) }, null, 2)); return 0; }
+    if (args.flags.json) { console.log(JSON.stringify({ runId: run.runId, health, jobs: jobs.map((j) => ({ jobId: j.jobId, repo: j.repoId, status: j.status, attempts: j.attempts, worker: j.worker, leaseExpiresAt: j.leaseExpiresAt, error: j.error })) }, null, 2)); return 0; }
     console.log(`Run: ${run.runId} (${run.organization})\n${renderOrgHealth(health)}`);
     const live = jobs.filter((j) => j.status === 'leased');
     if (live.length) console.log(`\nIn progress: ${live.map((j) => `${j.repoId} (attempt ${j.attempts}, lease until ${new Date(j.leaseExpiresAt).toISOString()})`).join(', ')}`);
@@ -266,6 +277,7 @@ async function cmdQuery(args, root) {
     for (const p of res.paths) {
       console.log(p.nodes.map((n) => (n === INTERNET ? 'Internet' : n)).join(' -> '));
       if (p.discoveredEdges?.length) console.log(`    rests on edge(s) found only in code, not declared: ${p.discoveredEdges.join(', ')}`);
+      if (p.discoveredDataClassNodes?.length) console.log(`    reaches ${toClass} data only because the code shows it, not the manifest: ${p.discoveredDataClassNodes.join(', ')}`);
       if (p.involving.length) console.log(`    involves vulnerable code: ${p.involving.map((n) => `${n} (${involving.why.get(n)})`).join(', ')}`);
     }
     if (res.paths.length) console.log(`\n${res.paths.length} path(s). Reach edges are as declared in the fleet manifest, plus any marked above as found only in code.${res.truncated ? ' The search bound was reached; more may exist.' : ''}`);

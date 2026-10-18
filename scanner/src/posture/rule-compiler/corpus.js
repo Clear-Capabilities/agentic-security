@@ -9,17 +9,13 @@
 // the score a rule gets here is the score it will actually produce once promoted.
 import { generateVariants } from './mutation.js';
 import { compileToCustomRule } from './ir.js';
-import { runRule } from '../custom-rules.js';
+import { runRule, normalizeCustomRule } from '../custom-rules.js';
 
+/** The rule exactly as the scanner would load it: through the loader's own normalizer, not a second implementation. */
 function toRuntimeRule(ir) {
   const { ok, doc, errs } = compileToCustomRule(ir);
   if (!ok) throw new Error(`cannot build corpus for an invalid rule IR: ${errs.join('; ')}`);
-  const regexes = doc.match.allOf ? doc.match.allOf.map((p) => new RegExp(p, 'g')) : [new RegExp(doc.match.pattern, 'g')];
-  return {
-    id: doc.id, title: doc.title, severity: doc.severity, cwe: doc.cwe, languages: doc.languages, message: doc.message,
-    regexes, requireAll: !!doc.match.allOf, windowLines: doc.match.window ?? 5,
-    notMatch: doc.match.notMatch ? new RegExp(doc.match.notMatch) : null,
-  };
+  return normalizeCustomRule(doc);
 }
 
 const EXT = { javascript: 'x.js', typescript: 'x.ts', python: 'x.py', go: 'x.go', ruby: 'x.rb', java: 'x.java', rust: 'x.rs', csharp: 'x.cs', php: 'x.php', any: 'x.txt' };

@@ -1,0 +1,9 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-sql-injection-python",
+  "lang": "python", "sources": { "app.py": "app.py" },
+  "files": { "db-state.txt": "protected" },
+  "run": ["{{PYTHON}}", "app.py", "' OR '1'='1"],
+  "watch": { "db": "db-state.txt" },
+  "oracle": { "type": "database_mutation", "params": { "canary": "db" } },
+  "network": "none"
+}

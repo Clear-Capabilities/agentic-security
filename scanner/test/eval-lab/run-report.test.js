@@ -164,3 +164,19 @@ test('scoreboard: only model arms, median per-call cost and latency, a newer run
   const merged = mergeScoreboard(mergeScoreboard(null, entries), entries.map((e) => ({ ...e, quality: { ...e.quality, mean: 0.5 } })));
   assert.equal(merged.entries.length, 2); assert.equal(merged.entries.find((e) => e.model === 'fake/good').quality.mean, 0.5);
 });
+
+test('provider variance: the same model id behind two providers is reported as its own spread; different models are not conflated', { skip: sandbox }, async () => {
+  const viaA = { ...model('good', ['detect']), id: 'qwen-a', model: { id: 'qwen', provider: 'host-a', local: true } };
+  const viaB = { ...model('noisy', ['detect']), id: 'qwen-b', model: { id: 'qwen', provider: 'host-b', local: true } };
+  const other = { ...model('lazy', ['detect']), id: 'other', model: { id: 'other-model', provider: 'host-a', local: true } };
+  const res = await runEval({ dataset: detectDs(), arms: [viaA, viaB, other], tasks: ['detect'], repeats: 3, ...quiet, deps: { scanFn: stubScan } });
+  assert.equal(res.ok, true, JSON.stringify(res.errors));
+  const rep = summarizeRun(res.run);
+  assert.equal(rep.providerVariance.length, 1, 'only the model reached through two providers');
+  const v = rep.providerVariance[0];
+  assert.equal(v.model, 'qwen'); assert.equal(v.task, 'detect'); assert.deepEqual(v.arms.map((a) => a.provider).sort(), ['host-a', 'host-b']);
+  assert.ok(v.spread > 0.2, `a good and a noisy provider differ: ${v.spread}`);
+  assert.match(renderReport(rep, 'md'), /## Provider variance[\s\S]*qwen \| detect/);
+  const alone = summarizeRun((await runEval({ dataset: detectDs(), arms: [viaA, other], tasks: ['detect'], repeats: 3, ...quiet, deps: { scanFn: stubScan } })).run);
+  assert.deepEqual(alone.providerVariance, []);
+});

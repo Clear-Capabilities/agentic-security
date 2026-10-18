@@ -78,6 +78,12 @@ test('scan, health, the three questions, and the static graph page', { timeout: 
   const st = run(root, ['fleet', 'status', runId]);
   assert.equal(st.status, 0, st.stderr); assert.match(st.stdout, /Complete: 5/);
   assert.equal(run(root, ['fleet', 'status', 'frun-nope']).status, 4);
+  // the PRD names `fleet status JOB-ID` / `fleet resume JOB-ID`: a job id resolves to the run it belongs to
+  const jobId = JSON.parse(run(root, ['fleet', 'status', runId, '--json']).stdout).jobs[0].jobId;
+  assert.match(jobId, /^\S+$/);
+  const byJob = run(root, ['fleet', 'status', jobId]);
+  assert.equal(byJob.status, 0, byJob.stderr); assert.match(byJob.stdout, /Complete: 5/); assert.match(byJob.stderr, new RegExp(`Job ${jobId} belongs to run ${runId}`));
+  assert.match(run(root, ['fleet', 'resume', 'job-nope']).stderr, /No run job-nope/);
 });
 
 test('timeouts make the organization red, name the repositories, and resume --retry-failed finishes the job without redoing finished work', { timeout: 600000 }, () => {
