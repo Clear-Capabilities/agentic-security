@@ -9,6 +9,12 @@
 > make the history less accurate, not more.
 
 
+## Unreleased
+
+- **Detection and response (`dnr`).** `dnr generate|validate|hunt|window|show|status <finding-id>` turns a proven vulnerability into a validated detection (Sigma, a generic HTTP rule, a detect-only WAF suggestion, a structured log query, YARA for the deserialization class, and Splunk, Sentinel and CloudWatch text), hunts local historical logs (`OBSERVED`, `NOT_OBSERVED`, `INCONCLUSIVE`, `TELEMETRY_UNAVAILABLE`, with a distinct exit code each; `NOT_OBSERVED` never means not exploited), computes the observable exposure window from deployment history, and shows Find, Prove, Hunt, Fix, Verify and Detect for one finding. Built only from facts the proof established, with no attacker address, domain, hash or user agent anywhere in the format. Local only: no network or model call. A reproducer may now carry an optional `attack` block (endpoint, parameter, payload class) that the proof runner ignores.
+- **Fixed: `triage exploit --prove` could not prove a reproducer that imports repository sources.** The command never passed a source root, so every such reproducer ended with incomplete attempts. It now reads sources from the project root, as `fix --require-proof` already did.
+- **`fix --require-proof` records its result** so the finding view can show the fix and the post-fix replay.
+
 ## 0.175.0 - More NixOS and Haskell detection
 
 Development cases only (renamed copies and near misses that must stay silent); no accuracy measurement was run, and the frozen holdout and unseen-shapes split were not read.

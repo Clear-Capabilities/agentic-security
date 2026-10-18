@@ -3690,6 +3690,7 @@ async function cmdFix(args) {
     const siblings = (last.findings || []).filter((x) => x.id !== f.id && x.file !== f.file && (x.vuln === f.vuln || x.cwe === f.cwe)).map((x) => ({ id: x.id, file: x.file, line: x.line }));
     const fp = await verifyFixWithProof({ finding: f, reproducer: loaded.reproducer, files, scanRoot, staticVerification, siblings });
     console.log(formatFixProof(fp));
+    try { (await import('../src/posture/dnr/store.js')).saveRecord(scanRoot, f.stableId || f.id, 'fix', fp); } catch { /* recording is best effort; the refusal below does not depend on it */ }
     if (!fp.verified) { console.error('\nRefusing to apply: the fix is not proof-verified (--require-proof).'); return 4; }
   }
   let result = await applyVerifiedFix({
@@ -7659,6 +7660,7 @@ async function main() {
       case 'accept':   process.exit(await cmdAccept(args));
       case 'profile':  process.exit(await cmdProfile(args));
       case 'proof':    process.exit(await (await import('../src/posture/proof-fabric/cli.js')).cmdProof(args, path.resolve(args.flags.root || '.')));
+      case 'dnr':      process.exit(await (await import('../src/posture/dnr/cli.js')).cmdDnr(args, path.resolve(args.flags.root || '.')));
       case 'triage':   process.exit(await cmdTriage(args));
       case 'org-scan': process.exit(await cmdOrgScan(args));
       case 'rules':    process.exit(await cmdRules(args));

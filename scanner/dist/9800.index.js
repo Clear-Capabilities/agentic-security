@@ -83,7 +83,7 @@ async function cmdProve(args, root, { json = false } = {}) {
   const onSig = () => ac.abort();
   process.once('SIGINT', onSig);
   let result;
-  try { result = await (0,_orchestrator_js__WEBPACK_IMPORTED_MODULE_4__/* .proveFinding */ .kO)({ finding, reproducer: loaded.reproducer, revision: args.flags.revision ?? null, policy, signal: ac.signal }); } finally { process.off('SIGINT', onSig); }
+  try { result = await (0,_orchestrator_js__WEBPACK_IMPORTED_MODULE_4__/* .proveFinding */ .kO)({ finding, reproducer: loaded.reproducer, revision: args.flags.revision ?? null, policy, signal: ac.signal, sourceRoot: root }); } finally { process.off('SIGINT', onSig); }
   const saved = (0,_store_js__WEBPACK_IMPORTED_MODULE_5__.saveProof)(root, { ...result, reproducer: loaded.reproducer });
   // Printed output gets the same secret-scrubbing pass as what is persisted (defense in depth: a free-text reason/note
   // field that captured something from stdout/stderr should never reach a terminal unredacted either).
@@ -105,6 +105,11 @@ async function cmdProof(args, root) {
     const good = all.find((p) => p.record && !p.tampered);
     if (!good) { console.error('No intact proof record.'); return 1; }
     if (args.flags.json) console.log(JSON.stringify(good.record, null, 2)); else console.log(formatResult(good.record));
+    // the detection generated from this finding's proof (detection-and-response loop), when there is one
+    try {
+      const det = (await __webpack_require__.e(/* import() */ 8551).then(__webpack_require__.bind(__webpack_require__, 58551))).latestRecord(root, id, 'detection');
+      if (det && !args.flags.json) console.log(`Detection: ${det.record.ir?.id ?? 'unknown'} (${det.record.validation?.status ?? 'not validated'}${det.record.enabled ? ', enabled' : ''})`);
+    } catch { /* the proof output does not depend on it */ }
     void latest;
     return 0;
   }

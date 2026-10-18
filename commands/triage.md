@@ -122,6 +122,19 @@ agentic-security proof doctor
 
 A reproducer is a small JSON document naming the files, build/run argv and oracle (`command_execution`, `unauthorized_db_read`, `crash_sanitizer`, `outbound_callback`, …). There is no reproducer-generation tool yet — see [the exploit proof guide](../docs/guides/exploit-proof-fabric.md) for the schema and worked fixtures. Nothing runs unless you supply one, and nothing here ever executes against a production host. Full detail, including what `--require-proof` does for `/fix`, is in that guide.
 
+## After a proof: detection and response (`dnr`)
+
+Once a finding is `EXPLOIT_CONFIRMED`, `dnr` turns it into a defense and answers whether the flaw was used. Local only: no network or model call.
+
+```bash
+agentic-security dnr generate <finding-id> --format sigma   # validated detection; also http|waf|log-query|yara|spl|kql|cloudwatch
+agentic-security dnr hunt <finding-id> --logs ./historical-logs
+agentic-security dnr window <finding-id> --deployments ./deploys.json --fix-commit <sha>
+agentic-security dnr status <finding-id>                     # FIND, PROVE, HUNT, FIX, VERIFY, DETECT in one view
+```
+
+`hunt` answers `OBSERVED` (exit 10), `NOT_OBSERVED` (0), `INCONCLUSIVE` (11) or `TELEMETRY_UNAVAILABLE` (12). `NOT_OBSERVED` never means not exploited, and logs that cannot show the vulnerable field are `INCONCLUSIVE`. See [Detection and response](../docs/guides/detection-and-response.md).
+
 ## Consolidated modes (v0.85.0+)
 
 `/triage` now also routes:

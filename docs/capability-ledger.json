@@ -297,6 +297,10 @@
       "taskId": "CORE-001-T03"
     },
     {
+      "path": "docs/implementation-status/detection-and-response-loop.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
       "path": "docs/implementation-status/exploit-proof-fabric.md",
       "taskId": "CORE-001-T03"
     },
@@ -306,6 +310,14 @@
     },
     {
       "path": "docs/implementation-status/rule-compiler.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/runtime-corroborated-twin.md",
+      "taskId": "CORE-001-T03"
+    },
+    {
+      "path": "docs/implementation-status/source-to-artifact-provenance.md",
       "taskId": "CORE-001-T03"
     },
     {
@@ -338,14 +350,6 @@
     },
     {
       "path": "docs/standards/README.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
-      "path": "docs/implementation-status/runtime-corroborated-twin.md",
-      "taskId": "CORE-001-T03"
-    },
-    {
-      "path": "docs/implementation-status/source-to-artifact-provenance.md",
       "taskId": "CORE-001-T03"
     }
   ],
@@ -2208,6 +2212,40 @@
         "README.md",
         "docs/README.md",
         "docs/engineering-excellence/README.md"
+      ]
+    },
+    {
+      "id": "CAP-123",
+      "kind": "command",
+      "title": "dnr (CLI only): detection generation and validation, historical log hunting, exposure window and the Find-to-Detect finding view",
+      "sources": [
+        "command:dnr",
+        "docs/guides/detection-and-response.md"
+      ],
+      "modes": [],
+      "modesJustification": "CLI-only command group (generate|validate|hunt|window|show|status) with no named report modes.",
+      "haskell": {
+        "applicability": "not-applicable",
+        "justification": "dnr works from a proven exploit's request shape (endpoint, parameter, payload class) and from HTTP logs, not from source syntax; a Haskell service is handled like any other service whose proof records those facts."
+      },
+      "nix": {
+        "applicability": "not-applicable",
+        "justification": "dnr reads proofs and HTTP logs; it has no Nix expression analysis and adds no NixOS configuration rule."
+      },
+      "nixosExecution": {
+        "applicability": "not-applicable",
+        "justification": "dnr does not execute anything on a host: hunting reads log files and the proof it builds on ran in the proof fabric's own sandbox."
+      },
+      "entryPoints": [
+        "scanner/src/posture/dnr/cli.js",
+        "scanner/src/posture/dnr/hunt.js"
+      ],
+      "suites": [
+        "language-discovery"
+      ],
+      "documents": [
+        "README.md",
+        "docs/guides/detection-and-response.md"
       ]
     }
   ],
