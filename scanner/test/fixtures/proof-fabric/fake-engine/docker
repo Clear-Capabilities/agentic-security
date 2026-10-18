@@ -13,7 +13,15 @@ const cmd = argv[0];
 if (cmd === 'info') { if (process.env.AS_FAKE_DOCKER_DOWN) process.exit(1); process.stdout.write('26.1.0\n'); process.exit(0); }
 if (cmd === 'image') { if (process.env.AS_FAKE_DOCKER_NO_IMAGE) process.exit(1); process.stdout.write('sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n'); process.exit(0); }
 if (cmd === 'rm' || cmd === 'kill') process.exit(0);
-if (cmd !== 'run') process.exit(125);
+if (cmd === 'save') {
+  if (process.env.AS_FAKE_SAVE_FAIL) { process.stderr.write('Error response from daemon: No such image: ' + argv[1] + '\n'); process.exit(1); }
+  if (process.env.AS_FAKE_SAVE_HANG) { setTimeout(() => {}, 600000); }
+  else if (process.env.AS_FAKE_SAVE_ENDLESS) { const pump = () => { while (process.stdout.write(Buffer.alloc(65536))); process.stdout.once('drain', pump); }; pump(); }
+  else { const f = process.env.AS_FAKE_SAVE_FILE; if (!f) process.exit(125); process.stdout.write(fs.readFileSync(f), () => process.exit(0)); }
+  if (!process.env.AS_FAKE_SAVE_HANG && !process.env.AS_FAKE_SAVE_ENDLESS) { /* exit happens after the write callback */ }
+}
+if (cmd !== 'run' && cmd !== 'save') process.exit(125);
+if (cmd === 'save') { /* handled above; keep the process alive until it exits itself */ } else {
 
 // parse: run [flags...] image cmd...
 const flags = new Map(); const mounts = []; const envs = {};
@@ -37,4 +45,5 @@ if (process.env.AS_FAKE_DOCKER_HANG) { setTimeout(() => {}, 600000); } else {
   void image;
   process.stdout.write(r.stdout ?? ''); process.stderr.write(r.stderr ?? '');
   process.exit(r.status ?? 1);
+}
 }

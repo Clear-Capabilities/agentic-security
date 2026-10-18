@@ -104,21 +104,17 @@ vocabulary the PRD mandates.
 
 ## Deliberately NOT done (disclosed, not silently dropped)
 
-- **Local Docker daemon image input** (`docker save <name>` piped in) — `image scan` accepts only a local
-  docker-archive/oci-archive **tar file path**. Shelling out to `docker` would be the first external-process
-  invocation in `bin/agentic-security.js` and needs its own timeout/cancellation discipline per the Shared
-  Engineering Contract; not attempted in this increment. `commands/image.md` states this.
-- **Explicit remote OCI registry reference** (`image scan registry.example.com/app:tag`) — needs a minimal
-  OCI Distribution API v2 client (manifest/blob GET, bearer-token auth challenge). Genuinely new network
-  capability, out of scope for this increment; the PRD's own Required Fixtures are entirely local-tar-based,
-  so the two implemented input shapes cover 100% of what's testable today.
-- **Keyless/Rekor-transparency-log signature verification** — `signature.js` verifies real signatures given
-  an explicit public key; it does not query Rekor to discover a signature the way `sca/sigstore-verify.js`
-  does for dependency packages. That module's Rekor-query/disk-cache pattern is the template a future
-  increment could extend this with.
-- **A signed, portable evidence bundle for an artifact scan** (the sibling-bundle pattern
-  `provenance-evidence-bundle.js`/`obligation-evidence-pack.js` establish) — scoped in the pre-implementation
-  survey as a nice-to-have extension, not one of the PRD's 8 numbered P0 requirements. Not built.
+- **Keyless/Rekor verification is delegated, not implemented.** `cosign.js` runs cosign and reads its answer; this repository
+  does not itself verify certificate chains or transparency-log proofs. Tested only against a stand-in cosign
+  (`test/fixtures/artifact/fake-cosign/cosign`), so how a real cosign behaves is not proven here.
+- **Local engine input is proven only against a stand-in `docker`** (`test/fixtures/proof-fabric/fake-engine/docker`), not a real
+  daemon. Podman is accepted by name and untested.
+- **The registry client is proven only against a local mock registry.** Not exercised against Docker Hub, GHCR, ECR or any real
+  registry; foreign layers, schema-1 manifests and non-sha256 digests are refused rather than handled.
+- **Closed in this increment (PRD gap closure):** local Docker/Podman input (`engine-source.js`), explicit remote OCI references
+  (`registry.js`, `oci-layout.js`), cosign delegation (`cosign.js`), and the signed evidence bundle (`artifact-evidence.js`,
+  verified by `verify-attestation`). Tests: `test/artifact/registry.test.js`, `test/artifact/sources-cosign-evidence.test.js`,
+  `test/cli/artifact-sources-cli.test.js`.
 - **A pre-existing, unrelated observation**, found while building the Killer Demonstration fixture: a plain
   `agentic-security scan`/`scan --only sca` run against a small test project declaring an exact, pinned
   vulnerable npm dependency (e.g. `lodash@4.17.4`) does not populate `scan.supplyChain` with the

@@ -87,9 +87,19 @@ or attestation is `invalid`; `2` a usage error.
 ```
 /image scan ./build/image.tar
 /image scan ./build/image.tar --format cli
+/image scan acme/app:1 --engine docker --attest --format cli
+/image scan --registry ghcr.io/acme/app:v1 --platform linux/amd64
+/image verify ./build/image.tar --cosign --repository ghcr.io/acme/app --public-key cosign.pub
 /image verify ./build/image.tar --signature image.sig --public-key cosign.pub
 /image verify sha256:abc123... --attestation provenance.json --public-key cosign.pub
 ```
+
+### Image sources, signature delegation, signed evidence
+
+* `--engine docker|podman` reads a local image with `<engine> save`, under a timeout and a byte cap, in a temporary file removed on every exit. The image is exported, never run.
+* `--registry <ref>` fetches ONE explicitly named remote image (HTTPS only; plain HTTP only for a loopback registry with `--allow-http-loopback`). Every blob is digest-verified and size-capped, redirects never carry the credential to another host, and credentials come from `AGENTIC_SECURITY_REGISTRY_TOKEN`, `AGENTIC_SECURITY_REGISTRY_USER`/`_PASSWORD` or the Docker config entry for that registry only. `--platform os/arch` picks a variant of a multi-platform image.
+* `image verify --cosign` delegates to cosign, bound to the scanned digest. `verified` needs cosign to succeed AND name that digest. No cosign, no network, or a timeout is `unavailable`, never `verified`.
+* `image scan --attest` writes an Ed25519 evidence bundle to `.agentic-security/attestations/`; `verify-attestation <bundle> --public-key <pem>` checks it. It proves the record is unmodified, not that the image is safe.
 
 ## Implementation
 

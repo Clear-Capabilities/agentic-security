@@ -3324,6 +3324,16 @@ async function cmdVerifyAttestation(args) {
   // verifyEvidenceBundle() call below, which assumes evidence-bundle.js's
   // own shape (`.evidence`, `.finding` with severity/vuln/file/line) and
   // would misinterpret a provenance bundle.
+  const { verifyArtifactEvidenceBundle, ARTIFACT_BUNDLE_SCHEMA } = await import('../src/artifact/artifact-evidence.js');
+  if (bundle.schema === ARTIFACT_BUNDLE_SCHEMA) {
+    const ar = verifyArtifactEvidenceBundle(bundle, publicKeyPem);
+    if (!ar.ok) { console.error(`✗ INVALID — ${ar.reason}`); return 1; }
+    console.log('✓ VALID — the image evidence bundle is exactly what the signer produced.');
+    console.log(`  image: ${bundle.artifact.digest}  ${bundle.artifact.os}/${bundle.artifact.architecture}`);
+    console.log(`  vulnerabilities listed: ${bundle.scan.vulnerabilities.length} of ${bundle.scan.truncated.vulnerabilitiesTotal}; recoverable secrets: ${bundle.scan.truncated.secretsTotal}; image signature: ${bundle.signature.state}`);
+    console.log(`  ${bundle.doesNotProve}`);
+    return 0;
+  }
   const { verifyProvenanceEvidenceBundle, PROVENANCE_BUNDLE_SCHEMA } = await import('../src/posture/provenance-evidence-bundle.js');
   if (bundle.schema === PROVENANCE_BUNDLE_SCHEMA) {
     const pr = verifyProvenanceEvidenceBundle(bundle, publicKeyPem);
@@ -5921,10 +5931,14 @@ async function _resolveArtifactScan(target) {
   return { ok: true, record: scanned.record };
 }
 
+const SCANNER_VERSION_FOR_ATTEST = () => { try { return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version; } catch { return null; } };
+
 async function cmdImageScan(args) {
   const target = args._[2];
-  if (!target) {
-    process.stderr.write('agentic-security image scan: provide a path to a docker-archive or oci-archive tar (OCI tar / Docker tar — see commands/image.md for the two supported input shapes).\n');
+  const registryRef = typeof args.flags.registry === 'string' ? args.flags.registry : null;
+  const engine = typeof args.flags.engine === 'string' ? args.flags.engine : null;
+  if (!target && !registryRef) {
+    process.stderr.write('agentic-security image scan: provide a path to a docker-archive or oci-archive tar, or --registry <ref> for an explicit remote image, or <name> --engine docker|podman for a local image (see commands/image.md).\n');
     return 2;
   }
   const format = args.flags.format ?? 'json';
@@ -5932,13 +5946,49 @@ async function cmdImageScan(args) {
     process.stderr.write('agentic-security image scan: --format must be json|cli.\n');
     return 2;
   }
-  const read = _readFileOrError(target);
-  if (!read.ok) { process.stderr.write(`agentic-security image scan: ${read.message}\n`); return 1; }
+  let buf; let source = { kind: 'archive' };
+  if (registryRef) {
+    // An explicit remote reference only: nothing is fetched unless the operator named the image. HTTPS only (plain HTTP just for a
+    // loopback registry the operator allows); every blob digest-verified; credentials from the environment or the Docker config.
+    const { fetchImage, RegistryError } = await import('../src/artifact/registry.js');
+    try {
+      const got = await fetchImage(registryRef, { platform: typeof args.flags.platform === 'string' ? args.flags.platform : 'linux/amd64', allowLoopbackHttp: !!args.flags['allow-http-loopback'] });
+      buf = got.tar; source = got.source;
+    } catch (err) {
+      if (err instanceof RegistryError) { process.stderr.write(`agentic-security image scan: ${err.message} (${err.code})\n`); return 1; }
+      throw err;
+    }
+  } else if (engine) {
+    const { saveFromEngine, EngineError } = await import('../src/artifact/engine-source.js');
+    try { const got = await saveFromEngine(target, { runtime: engine }); buf = got.tar; source = got.source; } catch (err) {
+      if (err instanceof EngineError) { process.stderr.write(`agentic-security image scan: ${err.message} (${err.code})\n`); return 1; }
+      throw err;
+    }
+  } else {
+    const read = _readFileOrError(target);
+    if (!read.ok) { process.stderr.write(`agentic-security image scan: ${read.message}\n`); return 1; }
+    buf = read.buf;
+  }
 
-  const scanned = await _scanArchiveFresh(read.buf);
+  const scanned = await _scanArchiveFresh(buf);
   if (!scanned.ok) { process.stderr.write(`agentic-security image scan: ${scanned.message}\n`); return 1; }
+  scanned.record.source = source;
 
   await _persistArtifactScan(scanned.record);
+
+  if (args.flags.attest) {
+    const { buildArtifactEvidenceBundle, signArtifactEvidenceBundle, ensureKeyPair } = await import('../src/artifact/artifact-evidence.js');
+    const { statePath, safeWriteState, ensureStateDir } = await import('../src/posture/state-dir.js');
+    const bundle = buildArtifactEvidenceBundle(scanned.record, { engineVersion: SCANNER_VERSION_FOR_ATTEST(), source });
+    const keys = ensureKeyPair();
+    const signed = signArtifactEvidenceBundle(bundle, keys.privateKeyPem);
+    const hex = _artifactScanDigestHex(scanned.record.inventory.digest);
+    if (ensureStateDir(process.cwd()) && hex) {
+      const file = statePath(process.cwd(), 'attestations', `artifact-${hex.slice(0, 16)}.json`);
+      if (safeWriteState(file, JSON.stringify(signed, null, 2))) process.stderr.write(`agentic-security image scan: signed evidence written to ${path.relative(process.cwd(), file)}\n`);
+      else process.stderr.write('agentic-security image scan: --attest could not write the signed bundle (state writes are disabled or this directory has no project marker); nothing was signed to disk.\n');
+    } else process.stderr.write('agentic-security image scan: --attest could not write the signed bundle (no usable .agentic-security directory here); nothing was signed to disk.\n');
+  }
 
   if (format === 'json') {
     process.stdout.write(JSON.stringify(scanned.record, null, 2) + '\n');
@@ -5948,6 +5998,7 @@ async function cmdImageScan(args) {
   const vulnCount = vulnerabilities.filter((v) => v.type === 'vulnerable_dep').length;
   process.stdout.write([
     `Image digest: ${inventory.digest} (${inventory.digestKind})`,
+    source.kind === 'registry' ? `Source: ${source.registry}/${source.repository}:${source.reference}${source.platform ? ` (${source.platform})` : ''}, ${source.bytes} bytes fetched${source.authenticated ? ', authenticated' : ''}` : source.kind === 'engine' ? `Source: local ${source.runtime} image ${source.reference}` : '',
     `OS/architecture: ${inventory.os}/${inventory.architecture}`,
     `OS packages: ${inventory.osPackages.length}, application packages: ${inventory.appPackages.length}`,
     `Vulnerabilities (OSV): ${vulnCount}`,
@@ -5991,7 +6042,15 @@ async function cmdImageVerify(args) {
     }
   }
 
-  const signatureResult = verifyImageSignature({ digest: inventory.digest, signature, publicKeyPem });
+  let signatureResult = verifyImageSignature({ digest: inventory.digest, signature, publicKeyPem });
+  if (args.flags.cosign) {
+    // delegated to cosign: bound to this image's digest, and never `verified` unless cosign says so for exactly this digest
+    const { verifyWithCosign } = await import('../src/artifact/cosign.js');
+    const repo = typeof args.flags.repository === 'string' ? args.flags.repository : (resolved.record.source?.kind === 'registry' ? `${resolved.record.source.registry}/${resolved.record.source.repository}` : null);
+    signatureResult = repo
+      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
+      : { state: 'unavailable', via: 'cosign', reason: 'cosign verifies against a registry: give --repository <registry/repo>, or scan with --registry so the repository is known' };
+  }
   const attestationResult = verifyProvenanceAttestation({ digest: inventory.digest, envelope: attestation, publicKeyPem });
 
   const result = { digest: inventory.digest, signature: signatureResult, attestation: attestationResult };
