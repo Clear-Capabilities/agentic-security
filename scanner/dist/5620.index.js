@@ -694,7 +694,7 @@ async function cmdScan(args, root) {
   const o = overrides(loaded.manifest, args);
   if (o.error) { console.error(o.error); return 4; }
   const { manifest } = o;
-  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__/* .ensureStateDir */ .xH)(root)) { console.error('No safe state directory for this project.'); return 4; }
+  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_6__.ensureStateDir)(root)) { console.error('No safe state directory for this project.'); return 4; }
   const store = await (0,_job_store_js__WEBPACK_IMPORTED_MODULE_7__/* .createSqliteJobStore */ .J6)({ file: dbPath(root) });
   try {
     const manifestHash = sha(node_fs__WEBPACK_IMPORTED_MODULE_0__.readFileSync(manifestFile));

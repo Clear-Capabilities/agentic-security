@@ -2484,7 +2484,7 @@ function write(root, parts, doc) {
   safe.digest = (0,identity/* digestOf */.ol)({ ...safe, digest: undefined });
   const text = JSON.stringify(safe);
   if (Buffer.byteLength(text) > MAX_BYTES) return { ok: false, reason: 'record exceeds the size limit' };
-  if (!(0,state_dir/* ensureStateDir */.xH)(root)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(root)) return { ok: false, reason: 'no safe state directory for this project' };
   const enc = (0,encryption_provider/* maybeEncryptForWrite */.v2)(root, DIR, text);
   if (!enc.ok) return { ok: false, reason: enc.reason };
   const file = (0,state_dir.statePath)(root, DIR, ...parts);
@@ -3182,7 +3182,7 @@ function saveProof(scanRoot, record) {
   safe.recordDigest = recordDigest(safe);
   const text = JSON.stringify(safe, null, 2);
   if (Buffer.byteLength(text) > MAX_RECORD_BYTES) return { ok: false, reason: 'proof record exceeds the size limit' };
-  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .ensureStateDir */ .xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const enc = (0,_encryption_provider_js__WEBPACK_IMPORTED_MODULE_3__/* .maybeEncryptForWrite */ .v2)(scanRoot, PROOFS_DIR, text);
   if (!enc.ok) return { ok: false, reason: enc.reason };
   const file = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(scanRoot, PROOFS_DIR, findingKey(record.findingId), `${safe.recordDigest}.json`);

@@ -9,7 +9,7 @@
 > make the history less accurate, not more.
 
 
-## Unreleased
+## 0.176.0 - Moat PRDs: proof, rules, fleet, runtime twin, artifacts, eval lab, detect and respond
 
 - **Runtime twin: edge states, identity tokens, two more queries (PRD 2 gap closure).** `runtime edges` derives the six edge states (observed, blocked, policy violation, exploit correlated only with explicit evidence, not observed, static only); `--record-identity-tokens` stores identity only as a keyed-hash `identity.token`; `runtime query` now answers `runtime-flows-absent-from-static` (candidates) and `identities-using-risky-paths`. Route and function rungs and the Explorer views remain unbuilt.
 

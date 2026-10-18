@@ -210,13 +210,13 @@ function loadLedger(scanRoot) {
 }
 
 function saveLedger(scanRoot, ledger) {
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = (0,state_dir.statePath)(scanRoot, DIR, 'ledger.json');
   return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(ledger, null, 2)) };
 }
 
 function saveIR(scanRoot, ir) {
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = external_node_path_.join(ruleDir(scanRoot, ir.id), 'ir.json');
   return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(ir, null, 2)), file: f };
 }
@@ -227,7 +227,7 @@ function loadIR(scanRoot, id) {
 }
 
 function saveJson(scanRoot, id, name, doc) {
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = external_node_path_.join(ruleDir(scanRoot, id), name);
   return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(doc, null, 2)), file: f };
 }
@@ -243,7 +243,7 @@ const saveProvenance = (r, id, doc) => saveJson(r, id, 'provenance.json', doc);
 const loadProvenance = (r, id) => loadJson(r, id, 'provenance.json');
 
 function saveEvaluation(scanRoot, id, evaluation) {
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = external_node_path_.join(ruleDir(scanRoot, id), 'evaluation.json');
   return { ok: (0,state_dir.safeWriteState)(f, JSON.stringify(evaluation, null, 2)) };
 }
@@ -253,7 +253,7 @@ function saveEvaluation(scanRoot, id, evaluation) {
 function writeFixtures(scanRoot, ir, corpus) {
   const ext = EXT[ir.languages[0]] || 'txt';
   const base = external_node_path_.join(ruleDir(scanRoot, ir.id), 'fixtures');
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const written = [];
   for (const p of corpus.positives) {
     const f = external_node_path_.join(base, 'vulnerable', `${p.label.replace(/[^a-z0-9_-]/gi, '_')}.${ext}`);
@@ -272,7 +272,7 @@ function writeFixtures(scanRoot, ir, corpus) {
 function publishCustomRule(scanRoot, ir) {
   const { ok, doc, errs } = (0,rule_compiler_ir/* compileToCustomRule */.Mo)(ir);
   if (!ok) return { ok: false, reason: `invalid rule IR: ${errs.join('; ')}` };
-  if (!(0,state_dir/* ensureStateDir */.xH)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,state_dir.ensureStateDir)(scanRoot)) return { ok: false, reason: 'no safe state directory for this project' };
   const f = (0,state_dir.statePath)(scanRoot, 'rules', `${ir.id}.yml`);
   const yamlText = [
     `# Compiled by the rule compiler from finding ${ir.provenance.originatingFindingId} (${ir.provenance.evidenceState}).`,

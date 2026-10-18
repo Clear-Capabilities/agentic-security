@@ -46,7 +46,7 @@ function saveRecord(root, findingId, kind, record) {
   safe.recordDigest = digestOf(safe);
   const text = JSON.stringify(safe, null, 2);
   if (Buffer.byteLength(text) > MAX_RECORD_BYTES) return { ok: false, reason: 'record exceeds the size limit' };
-  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__/* .ensureStateDir */ .xH)(root)) return { ok: false, reason: 'no safe state directory for this project' };
+  if (!(0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.ensureStateDir)(root)) return { ok: false, reason: 'no safe state directory for this project' };
   const enc = (0,_encryption_provider_js__WEBPACK_IMPORTED_MODULE_3__/* .maybeEncryptForWrite */ .v2)(root, DIR, text);
   if (!enc.ok) return { ok: false, reason: enc.reason };
   const file = (0,_state_dir_js__WEBPACK_IMPORTED_MODULE_2__.statePath)(root, DIR, (0,_proof_fabric_store_js__WEBPACK_IMPORTED_MODULE_5__.findingKey)(findingId), `${kind}-${safe.recordDigest.slice(0, 16)}.json`);
