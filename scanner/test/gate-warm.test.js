@@ -55,6 +55,25 @@ test('failed checks are read from the gate output, once each; the child environm
   assert.deepEqual(Object.keys(e), ['KEEP']);
 });
 
+test('the hook\'s commit identity does not reach the gate: a fixture commit keeps its own author (and the leak is real without the scrub)', () => {
+  const hookEnv = { ...process.env, GIT_AUTHOR_NAME: 'Maintainer', GIT_AUTHOR_EMAIL: 'm@example.com', GIT_AUTHOR_DATE: '2020-01-01T00:00:00Z', GIT_COMMITTER_NAME: 'Maintainer', GIT_COMMITTER_EMAIL: 'm@example.com' };
+  const authorIn = (env) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gw-author-'));
+    try {
+      const g = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8', env });
+      g('init', '-q'); g('config', 'user.name', 'Fixture Person'); g('config', 'user.email', 'fixture@example.com');
+      fs.writeFileSync(path.join(dir, 'f.txt'), 'x\n');
+      g('add', '-A'); g('commit', '-q', '-m', 'c');
+      return g('log', '-1', '--format=%an').stdout.trim();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+  assert.equal(authorIn(hookEnv), 'Maintainer', 'without the scrub the hook identity overrides the fixture identity');
+  assert.equal(authorIn(cleanEnv(hookEnv)), 'Fixture Person', 'with the scrub the fixture keeps its own');
+  for (const k of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE']) {
+    assert.equal(k in cleanEnv({ [k]: 'x' }), false, k);
+  }
+});
+
 test('skip reasons: the opt-out, CI, and a rebase in progress', () => {
   const dir = tmpRepo(PASS_GATE);
   assert.equal(skipReason({ env: {}, repo: dir }), null);
