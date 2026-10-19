@@ -89,7 +89,9 @@ export async function createSqliteJobStore({ file }) {
   const { DatabaseSync } = await import('node:sqlite');
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
+  // the busy timeout comes FIRST: the very next statements (switching the journal mode, creating tables) take locks, and another process
+  // opening the same file at the same instant must wait for them instead of failing with "database is locked"
+  db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   const tx = (fn) => { db.exec('BEGIN IMMEDIATE'); try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { try { db.exec('ROLLBACK'); } catch { /* already rolled back */ } throw e; } };
   const q = (sql, ...p) => db.prepare(sql).all(...p);
