@@ -640,6 +640,78 @@ jobs:
           path: ${{ runner.temp }}/sandbox-linux-test-report.json
           if-no-files-found: warn
 
+  # GA PROMOTION, WAVE 2: EXPLOIT PROOF ON LINUX, AND IN A REAL CONTAINER
+  # ----------------------------------------------------------------------
+  # `bench/proof-fabric/measure.mjs` ran on macOS only, and the container path had been exercised against a fake engine that records its
+  # arguments. These two jobs run the same corpus on a Linux runner, once under the local confinement backend and once in a real Docker
+  # container, and each one FAILS on: a reproduction rate under the 90% target, any false confirmation on a mitigated fixture, a hanging
+  # reproducer that was not represented as degraded, or a run that executed in a different environment than the job is named for (a
+  # container leg that fell back to local confinement is a failure, not a pass). Neither skips. The measurement is uploaded so it can be
+  # committed with its host recorded.
+  proof-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      # same relaxation `sandbox-linux` makes, for the same reason: a hosted Ubuntu runner restricts unprivileged user namespaces
+      - name: Relax the unprivileged user-namespace restriction for this job
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
+      - name: Measure exploit proof under local confinement (fails on a missed target, a false confirmation or an undegraded timeout)
+        run: node bench/proof-fabric/measure.mjs --expect-mode local-confined --out "$RUNNER_TEMP/proof-linux.json"
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: proof-linux-measurement
+          path: ${{ runner.temp }}/proof-linux.json
+          if-no-files-found: warn
+
+  proof-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+        working-directory: scanner
+        timeout-minutes: 10
+      # the proof runner never pulls an image (nothing is fetched during a proof), so the job pulls them first
+      - name: Pull the proof images
+        run: |
+          for image in node:24-slim python:3-slim eclipse-temurin:21 gcc:latest; do
+            for attempt in 1 2 3; do
+              if timeout 300 docker pull "$image"; then break; fi
+              if [ "$attempt" = 3 ]; then echo "could not pull $image"; exit 1; fi
+              sleep 10
+            done
+          done
+        timeout-minutes: 20
+      - name: Container engine
+        run: docker version
+        timeout-minutes: 2
+      - name: Measure exploit proof in a real container (fails if any run was not in a container)
+        run: node bench/proof-fabric/measure.mjs --require-container --out "$RUNNER_TEMP/proof-container.json"
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: proof-container-measurement
+          path: ${{ runner.temp }}/proof-container.json
+          if-no-files-found: warn
+
   corpus:
     runs-on: ubuntu-latest
     timeout-minutes: 45
