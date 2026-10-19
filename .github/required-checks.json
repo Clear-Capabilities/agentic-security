@@ -78,7 +78,9 @@
     "nixos-runtime (aarch64-linux)",
     "chrome-exports",
     "proof-linux",
-    "proof-container"
+    "proof-container",
+    "artifact-real",
+    "local-model"
   ],
   "self": [
     "publish",
