@@ -114,7 +114,8 @@ export function formatFinding(f) {
   return `[${f.rule}] ${f.file}${f.line ? `:${f.line}` : ''}  ${f.message}`;
 }
 
-const exists = (repo, rel) => fs.existsSync(path.join(repo, rel));
+// A docs checker over a checkout nobody is writing to: a missing path is reported as a finding, and a read that then fails is a finding too.
+const exists = (repo, rel) => fs.statSync(path.join(repo, rel), { throwIfNoEntry: false }) !== undefined;  // agentic-security-ignore: CWE-367
 const read = (repo, rel) => fs.readFileSync(path.join(repo, rel), 'utf8');
 
 // ---------------------------------------------------------------------------
@@ -214,9 +215,34 @@ export function renderLifecycleTable(reg, { fromDir = '.' } = {}) {
   return lines.join('\n');
 }
 
-const LIFE_RE = /<!-- generated:lifecycle:start -->\n(?:(?!<!-- generated:)[^\n]*\n)*<!-- generated:lifecycle:end -->/g;
+/**
+ * Replace every generated block in `text`. A block is a start marker line, body lines that contain no other generated marker, and an end
+ * marker line. Read line by line (not with one regular expression) so an unterminated block, or two blocks run together, can never make
+ * one match swallow the prose between them. `markers` is [startRe, endRe]; `want(match)` returns the full replacement text or null to keep.
+ */
+export function mapBlocks(text, startRe, endRe, want) {
+  const lines = text.split('\n');
+  const out = [];
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = startRe.exec(lines[i]);
+    if (!m) { out.push(lines[i]); continue; }
+    let j = i + 1;
+    while (j < lines.length && !endRe.test(lines[j]) && !lines[j].startsWith('<!-- generated:')) j++;
+    if (j >= lines.length || !endRe.test(lines[j])) { out.push(lines[i]); continue; } // unterminated: leave it alone
+    const whole = lines.slice(i, j + 1).join('\n');
+    const next = want(m, whole);
+    if (next !== null && next !== whole) changed = true;
+    out.push(next === null ? whole : next);
+    i = j;
+  }
+  return { text: out.join('\n'), changed };
+}
 
-const BLOCK_RE = /<!-- generated:capabilities(?::([a-z-]+))?:start -->\n(?:(?!<!-- generated:)[^\n]*\n)*<!-- generated:capabilities(?::[a-z-]+)?:end -->/g;
+const CAP_START = /^<!-- generated:capabilities(?::([a-z-]+))?:start -->$/;
+const CAP_END = /^<!-- generated:capabilities(?::[a-z-]+)?:end -->$/;
+const LIFE_START = /^<!-- generated:lifecycle:start -->$/;
+const LIFE_END = /^<!-- generated:lifecycle:end -->$/;
 
 /** Every markdown file that may hold a generated block. */
 function generatedHosts(repo) {
@@ -232,26 +258,22 @@ export function checkTables(reg, repo = REPO_DEFAULT, { write = false } = {}) {
     const text = read(repo, rel);
     if (!text.includes('<!-- generated:capabilities') && !text.includes('<!-- generated:lifecycle')) continue;
     const dir = path.posix.dirname(rel);
-    let changed = false;
-    const next = text.replace(BLOCK_RE, (whole, stage) => {
+    const caps = mapBlocks(text, CAP_START, CAP_END, (m, whole) => {
       blocks++;
-      if (stage && !STAGES.includes(stage)) { out.push(F('table', rel, lineOf(text, whole), `generated block names unknown stage "${stage}"`)); return whole; }
+      const stage = m[1];
+      if (stage && !STAGES.includes(stage)) { out.push(F('table', rel, lineOf(text, whole), `generated block names unknown stage "${stage}"`)); return null; }
       const tag = stage ? `:${stage}` : '';
       const want = `<!-- generated:capabilities${tag}:start -->\n${renderTable(reg, { stage: stage || null, fromDir: dir })}\n<!-- generated:capabilities${tag}:end -->`;
-      if (whole === want) return whole;
-      if (write) { changed = true; return want; }
-      out.push(F('table', rel, lineOf(text, whole), `generated capability table${stage ? ` (${stage})` : ''} is stale; run node scripts/check-positioning-docs.mjs --write`));
-      return whole;
+      if (whole !== want && !write) out.push(F('table', rel, lineOf(text, whole), `generated capability table${stage ? ` (${stage})` : ''} is stale; run node scripts/check-positioning-docs.mjs --write`));
+      return want;
     });
-    const next2 = next.replace(LIFE_RE, whole => {
+    const life = mapBlocks(caps.text, LIFE_START, LIFE_END, (m, whole) => {
       blocks++;
       const want = `<!-- generated:lifecycle:start -->\n${renderLifecycleTable(reg, { fromDir: dir })}\n<!-- generated:lifecycle:end -->`;
-      if (whole === want) return whole;
-      if (write) { changed = true; return want; }
-      out.push(F('table', rel, lineOf(text, whole), 'generated lifecycle table is stale; run node scripts/check-positioning-docs.mjs --write'));
-      return whole;
+      if (whole !== want && !write) out.push(F('table', rel, lineOf(text, whole), 'generated lifecycle table is stale; run node scripts/check-positioning-docs.mjs --write'));
+      return want;
     });
-    if (write && changed) fs.writeFileSync(path.join(repo, rel), next2);
+    if (write && life.text !== text) fs.writeFileSync(path.join(repo, rel), life.text);
   }
   if (!blocks) out.push(F('table', 'README.md', 0, 'no generated capability block found; the README capability snapshot must be generated from docs/capabilities.yaml'));
   return out;
@@ -279,7 +301,7 @@ export function walkMarkdown(repo, rel) {
       else if (e.isFile() && e.name.endsWith('.md')) out.push(r);
     }
   };
-  if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) walk(abs, rel);
+  if (fs.statSync(abs, { throwIfNoEntry: false })?.isDirectory()) walk(abs, rel);
   return out;
 }
 
@@ -434,7 +456,7 @@ export function slashCommands(repo = REPO_DEFAULT) {
   return new Set(fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, '')));
 }
 
-const CLI_LINE = /(?:^|[\s`$>])(?:agentic-security|npx @clear-capabilities\/agentic-security-scanner)\s+([a-z][a-z0-9-]*)((?:\s+[^\s`|;&]+)*)/g;
+const CLI_LINE = /(?:^|[\s`$>])(?:agentic-security|npx @clear-capabilities\/agentic-security-scanner) +([a-z][a-z0-9-]*)([^`|;&\n]*)/g;
 const SLASH = /\/agentic-security:([a-z][a-z0-9-]*)/g;
 
 /** The command-shaped text on each line: inline code spans everywhere, and whole lines inside a code fence. Prose is not parsed. */
@@ -619,8 +641,9 @@ export function checkLinks(repo = REPO_DEFAULT, pages = null) {
           resolvedRel = p.startsWith('/') ? p.slice(1) : path.posix.normalize(path.posix.join(path.posix.dirname(rel), p));
         }
         const abs = path.join(repo, resolvedRel);
-        if (!fs.existsSync(abs)) { out.push(F('link', rel, i + 1, `broken link ${target}`)); continue; }
-        if (frag && resolvedRel.endsWith('.md') && fs.statSync(abs).isFile()) {
+        const st = fs.statSync(abs, { throwIfNoEntry: false });
+        if (!st) { out.push(F('link', rel, i + 1, `broken link ${target}`)); continue; }
+        if (frag && resolvedRel.endsWith('.md') && st.isFile()) {
           let f = frag;
           try { f = decodeURIComponent(f); } catch { /* keep */ }
           if (!anchors(resolvedRel).has(f)) out.push(F('link', rel, i + 1, `anchor #${frag} not found in ${resolvedRel}`));
