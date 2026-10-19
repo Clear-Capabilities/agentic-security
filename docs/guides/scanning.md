@@ -1,5 +1,7 @@
 # Scanning
 
+**Maturity:** GA. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** run a scan the right way for your situation, and understand what
 comes back.
 

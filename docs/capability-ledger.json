@@ -360,7 +360,9 @@
         "examples/demo-app/",
         "docs/guides/haskell.md",
         "docs/guides/nix-nixos.md",
-        "docs/guides/nixos-install.md"
+        "docs/guides/nixos-install.md",
+        "docs/quickstart/5-minute-demo.md",
+        "docs/quickstart/15-minute-quickstart.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -412,7 +414,9 @@
         "docs/guides/scanning.md",
         "docs/guides/haskell.md",
         "docs/guides/nix-nixos.md",
-        "docs/guides/nixos-install.md"
+        "docs/guides/nixos-install.md",
+        "docs/quickstart/5-minute-demo.md",
+        "docs/quickstart/15-minute-quickstart.md"
       ],
       "baselineRefs": [
         "BASE-001",
@@ -428,7 +432,8 @@
       "title": "Fix, triage, verify and verified remediation",
       "sources": [
         "docs/guides/fixing-vulnerabilities.md",
-        "docs/walkthroughs/verified-remediation.md"
+        "docs/walkthroughs/verified-remediation.md",
+        "docs/trust/verified-remediation.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -464,7 +469,8 @@
       ],
       "documents": [
         "docs/guides/fixing-vulnerabilities.md",
-        "docs/walkthroughs/verified-remediation.md"
+        "docs/walkthroughs/verified-remediation.md",
+        "docs/trust/verified-remediation.md"
       ]
     },
     {
@@ -473,7 +479,8 @@
       "title": "Finding evidence and provenance, attack surface and execution proof",
       "sources": [
         "docs/walkthroughs/finding-evidence.md",
-        "docs/guides/finding-provenance.md"
+        "docs/guides/finding-provenance.md",
+        "docs/workflows/one-findings-journey.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -510,7 +517,8 @@
       ],
       "documents": [
         "docs/walkthroughs/finding-evidence.md",
-        "docs/guides/finding-provenance.md"
+        "docs/guides/finding-provenance.md",
+        "docs/workflows/one-findings-journey.md"
       ]
     },
     {
@@ -518,7 +526,8 @@
       "kind": "doc-link",
       "title": "SBOM, AI-BOM, SCA, license policy and supply-chain integrity",
       "sources": [
-        "docs/guides/sbom-and-ai-bom.md"
+        "docs/guides/sbom-and-ai-bom.md",
+        "docs/workflows/vulnerability-response.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -562,7 +571,8 @@
         "nix-resolved-closure"
       ],
       "documents": [
-        "docs/guides/sbom-and-ai-bom.md"
+        "docs/guides/sbom-and-ai-bom.md",
+        "docs/workflows/vulnerability-response.md"
       ],
       "baselineRefs": [
         "BASE-007",
@@ -616,7 +626,8 @@
       "sources": [
         "docs/guides/ollama.md",
         "docs/MODEL_COST_OPTIMIZATION.md",
-        "docs/walkthroughs/model-egress.md"
+        "docs/walkthroughs/model-egress.md",
+        "docs/trust/model-egress.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -652,7 +663,8 @@
       ],
       "documents": [
         "docs/guides/ollama.md",
-        "docs/walkthroughs/model-egress.md"
+        "docs/walkthroughs/model-egress.md",
+        "docs/trust/model-egress.md"
       ]
     },
     {
@@ -662,7 +674,9 @@
       "sources": [
         "docs/walkthroughs/scan-health.md",
         "docs/walkthroughs/assurance-modes.md",
-        "docs/troubleshooting/scan-health.md"
+        "docs/troubleshooting/scan-health.md",
+        "docs/trust/scan-health.md",
+        "docs/trust/assurance-modes.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -697,7 +711,9 @@
       "documents": [
         "docs/walkthroughs/scan-health.md",
         "docs/walkthroughs/assurance-modes.md",
-        "docs/troubleshooting/scan-health.md"
+        "docs/troubleshooting/scan-health.md",
+        "docs/trust/scan-health.md",
+        "docs/trust/assurance-modes.md"
       ]
     },
     {
@@ -708,7 +724,13 @@
         "docs/architecture/finding-lifecycle.md",
         "docs/ARCHITECTURE.md",
         "docs/concepts.md",
-        "docs/AGENT_THREAT_MODEL.md"
+        "docs/AGENT_THREAT_MODEL.md",
+        "docs/how-it-works/assurance-lifecycle.md",
+        "docs/how-it-works/evidence-model.md",
+        "docs/how-it-works/deterministic-and-agentic.md",
+        "docs/how-it-works/maturity-model.md",
+        "docs/how-it-works/finding-lifecycle.md",
+        "docs/trust/agent-threat-model.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -744,7 +766,13 @@
       ],
       "documents": [
         "docs/architecture/finding-lifecycle.md",
-        "docs/ARCHITECTURE.md"
+        "docs/ARCHITECTURE.md",
+        "docs/how-it-works/assurance-lifecycle.md",
+        "docs/how-it-works/evidence-model.md",
+        "docs/how-it-works/deterministic-and-agentic.md",
+        "docs/how-it-works/maturity-model.md",
+        "docs/how-it-works/finding-lifecycle.md",
+        "docs/trust/agent-threat-model.md"
       ]
     },
     {
@@ -753,7 +781,11 @@
       "title": "Data Flow Explorer, privacy flows and code boundaries",
       "sources": [
         "docs/guides/data-flow-explorer.md",
-        "docs/walkthroughs/privacy-data-flow.md"
+        "docs/walkthroughs/privacy-data-flow.md",
+        "docs/security-graph/code-boundaries.md",
+        "docs/security-graph/data-flow.md",
+        "docs/security-graph/blast-radius.md",
+        "docs/security-graph/provenance.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -793,7 +825,11 @@
       ],
       "documents": [
         "docs/guides/data-flow-explorer.md",
-        "docs/walkthroughs/privacy-data-flow.md"
+        "docs/walkthroughs/privacy-data-flow.md",
+        "docs/security-graph/code-boundaries.md",
+        "docs/security-graph/data-flow.md",
+        "docs/security-graph/blast-radius.md",
+        "docs/security-graph/provenance.md"
       ]
     },
     {
@@ -802,7 +838,8 @@
       "title": "Compliance frameworks, coverage maps and OSCAL",
       "sources": [
         "docs/guides/compliance.md",
-        "docs/compliance/"
+        "docs/compliance/",
+        "docs/workflows/compliance-evidence.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -833,7 +870,8 @@
         "language-compliance"
       ],
       "documents": [
-        "docs/guides/compliance.md"
+        "docs/guides/compliance.md",
+        "docs/workflows/compliance-evidence.md"
       ]
     },
     {
@@ -878,7 +916,8 @@
       "kind": "doc-link",
       "title": "CI setup, severity and assurance gates, predeploy gate",
       "sources": [
-        "docs/guides/ci-setup.md"
+        "docs/guides/ci-setup.md",
+        "docs/workflows/ci-gating.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -914,7 +953,8 @@
         "language-integrations"
       ],
       "documents": [
-        "docs/guides/ci-setup.md"
+        "docs/guides/ci-setup.md",
+        "docs/workflows/ci-gating.md"
       ]
     },
     {
@@ -968,7 +1008,9 @@
       "sources": [
         "docs/reference/cli.md",
         "docs/reference/output-schema.md",
-        "docs/reference/glossary.md"
+        "docs/reference/glossary.md",
+        "docs/reference/README.md",
+        "docs/reference/capability-reference.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -1006,7 +1048,9 @@
       "documents": [
         "docs/reference/cli.md",
         "docs/reference/output-schema.md",
-        "docs/reference/glossary.md"
+        "docs/reference/glossary.md",
+        "docs/reference/README.md",
+        "docs/reference/capability-reference.md"
       ]
     },
     {
@@ -1060,7 +1104,8 @@
         "docs/METRICS.md",
         "docs/SCORECARD.md",
         "docs/language-support.md",
-        "docs/language-toolchain.json"
+        "docs/language-toolchain.json",
+        "docs/trust/benchmarking-methodology.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -1091,7 +1136,8 @@
         "docs/METRICS.md",
         "docs/SCORECARD.md",
         "docs/language-support.md",
-        "docs/language-toolchain.json"
+        "docs/language-toolchain.json",
+        "docs/trust/benchmarking-methodology.md"
       ],
       "baselineRefs": [
         "BASE-009"
@@ -1148,7 +1194,34 @@
         "docs/POSITIONING.md",
         "docs/ROADMAP.md",
         "CLAUDE.md",
-        "docs/guides/loop-engineering.md"
+        "docs/guides/loop-engineering.md",
+        "docs/trust/trust-and-limitations.md",
+        "docs/capabilities.yaml",
+        "docs/discover/README.md",
+        "docs/corroborate/README.md",
+        "docs/prove/README.md",
+        "docs/learn/README.md",
+        "docs/scale/README.md",
+        "docs/observe/README.md",
+        "docs/trace/README.md",
+        "docs/fix/README.md",
+        "docs/verify/README.md",
+        "docs/detect/README.md",
+        "docs/roles/developer.md",
+        "docs/roles/appsec.md",
+        "docs/roles/ciso.md",
+        "docs/roles/platform-engineering.md",
+        "docs/roles/ai-engineering.md",
+        "docs/roles/privacy.md",
+        "docs/roles/compliance.md",
+        "docs/roles/detection-engineering.md",
+        "docs/integrations/README.md",
+        "docs/labs/README.md",
+        "docs/roadmap/README.md",
+        "docs/website/",
+        "docs/STYLE-AND-TERMINOLOGY.md",
+        "docs/DOCS-MIGRATION.md",
+        "docs/implementation-status/autonomous-assurance-docs-repositioning.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -1186,7 +1259,34 @@
         "docs/POSITIONING.md",
         "docs/ROADMAP.md",
         "CLAUDE.md",
-        "docs/guides/loop-engineering.md"
+        "docs/guides/loop-engineering.md",
+        "docs/trust/trust-and-limitations.md",
+        "docs/capabilities.yaml",
+        "docs/discover/README.md",
+        "docs/corroborate/README.md",
+        "docs/prove/README.md",
+        "docs/learn/README.md",
+        "docs/scale/README.md",
+        "docs/observe/README.md",
+        "docs/trace/README.md",
+        "docs/fix/README.md",
+        "docs/verify/README.md",
+        "docs/detect/README.md",
+        "docs/roles/developer.md",
+        "docs/roles/appsec.md",
+        "docs/roles/ciso.md",
+        "docs/roles/platform-engineering.md",
+        "docs/roles/ai-engineering.md",
+        "docs/roles/privacy.md",
+        "docs/roles/compliance.md",
+        "docs/roles/detection-engineering.md",
+        "docs/integrations/README.md",
+        "docs/labs/README.md",
+        "docs/roadmap/README.md",
+        "docs/website/",
+        "docs/STYLE-AND-TERMINOLOGY.md",
+        "docs/DOCS-MIGRATION.md",
+        "docs/implementation-status/autonomous-assurance-docs-repositioning.md"
       ]
     },
     {

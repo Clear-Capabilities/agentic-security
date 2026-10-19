@@ -1,5 +1,7 @@
 # Release assurance: package, verdict, views, offline verification
 
+**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 A release package is one signed file holding the evidence for one build: the scan's health, the findings, any fix verification records and any runtime explanations. It answers one question, **"is there anything in this evidence that blocks the release?"**, and it answers it the same way every time, because the answer is a function of the package alone.
 
 It never says a release is *safe*. The most it says is that no blocking or unknown condition was found in the evidence it holds.

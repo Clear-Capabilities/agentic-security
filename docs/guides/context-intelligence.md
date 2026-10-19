@@ -1,5 +1,7 @@
 # Deterministic Context Intelligence
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 `agentic-security context` builds, for each entry point of a program, one small, inspectable, hash-bound bundle of the code that decides whether that entry point is safe. It does this with static analysis only. Optionally, it then asks a model one focused question about each bundle and checks that every claim the model makes points at real lines.
 
 It is opt-in and additive. The default scan, `hunt` and every other command behave exactly as before.

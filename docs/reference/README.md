@@ -1,0 +1,18 @@
+# Reference
+
+<!-- seo: title="Reference: CLI, output schema, configuration, glossary" description="Reference material for Agentic Security: the CLI, the finding output schema, configuration and environment variables, the glossary, and the MCP tool contract." -->
+
+Deep reference material. Nothing here is a tutorial; start from [docs home](../README.md) for those.
+
+| Page | Contents |
+|---|---|
+| [CLI](cli.md) | Commands, subcommands and flags |
+| [Output schema](output-schema.md) | The shape of a finding and of a scan |
+| [Configuration](configuration.md) | Every toggle, environment variable and `.agentic-security/` file |
+| [Glossary](glossary.md) | Terms, including the three compliance vocabularies |
+| [MCP tool contract](mcp-tool-contract.md) | The 17 MCP tools and their guarantees |
+| [Assurance capability matrix](assurance-capability-matrix.md) | The assurance programme's capability map |
+| [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
+| [Style and terminology](../STYLE-AND-TERMINOLOGY.md) | How these docs talk |
+| [Metrics](../METRICS.md) and [scorecard](../SCORECARD.md) | Measured numbers with the command that produced each |
+| [Language support](../language-support.md) | Haskell and Nix support, per capability |

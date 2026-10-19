@@ -1,5 +1,7 @@
 # Finding provenance
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** know which commit introduced a finding, when, by whom, and how
 confident that answer is — resolved from real git history, not guessed from
 `git blame` (which answers "who last touched this line," a different and

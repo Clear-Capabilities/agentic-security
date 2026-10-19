@@ -173,6 +173,8 @@ ide/jetbrains/build/
 /*_PRD.docx
 /*-PRD.md
 /*_PRD.md
+/*.PRD
+/*.prd
 
 # Supervised-loop controller state (run state, evidence, logs); never committed
 .loop-engineering/

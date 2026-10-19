@@ -1,5 +1,7 @@
 # Local AI with Ollama
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 Run `agentic-security`'s AI-assisted stages — validation, adversarial
 verification, explanation, patch synthesis, PoC synthesis, and `hunt` — against
 a model running entirely on your own machine, so source code, findings, and

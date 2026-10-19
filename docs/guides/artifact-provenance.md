@@ -1,5 +1,7 @@
 # Source-to-Artifact Security & Provenance
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Status: new.** A finding in Git tells you a dependency is vulnerable. It does not tell you whether the
 container image actually running in production was built before or after the fix — or whether the
 vulnerable package even shipped in that image at all. This closes that gap: source code → commit → build →
