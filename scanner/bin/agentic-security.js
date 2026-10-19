@@ -6144,7 +6144,7 @@ async function cmdImageVerify(args) {
     const { verifyWithCosign } = await import('../src/artifact/cosign.js');
     const repo = typeof args.flags.repository === 'string' ? args.flags.repository : (resolved.record.source?.kind === 'registry' ? `${resolved.record.source.registry}/${resolved.record.source.repository}` : null);
     signatureResult = repo
-      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
+      ? await verifyWithCosign({ repository: repo, digest: inventory.digest, publicKeyPem, ignoreTlog: !!args.flags['ignore-tlog'], certificateIdentity: args.flags['certificate-identity'], certificateOidcIssuer: args.flags['certificate-oidc-issuer'] })
       : { state: 'unavailable', via: 'cosign', reason: 'cosign verifies against a registry: give --repository <registry/repo>, or scan with --registry so the repository is known' };
   }
   const attestationResult = verifyProvenanceAttestation({ digest: inventory.digest, envelope: attestation, publicKeyPem });
@@ -6192,8 +6192,17 @@ async function cmdProvenanceTrace(args) {
     }
     const sourceScan = JSON.parse(fs.readFileSync(lastScanPath, 'utf8'));
     const { detectSourceArtifactMismatch } = await import('../src/artifact/mismatch.js');
+    // A full scan keeps its dependency findings in `supplyChain`; a scan limited with `--only sca` keeps them in `findings`. Reading only the first
+    // made a source that carried the same advisories look fixed, which is the one reading this comparison must never produce, so both are read
+    // and a source scan with no dependency data at all is refused instead of treated as clean.
+    const sourceVulns = (sourceScan.supplyChain && sourceScan.supplyChain.length) ? sourceScan.supplyChain : (sourceScan.findings || []).filter((x) => x && x.type === 'vulnerable_dep');
+    const sourceHasData = Array.isArray(sourceScan.supplyChain) || sourceVulns.length > 0 || !!(sourceScan.components && sourceScan.components.length);
+    if (!sourceHasData) {
+      process.stderr.write(`agentic-security provenance trace: --source "${args.flags.source}" carries no dependency data (no components and no dependency findings), so nothing can be compared; run "scan" there with SCA enabled.\n`);
+      return 1;
+    }
     mismatch = detectSourceArtifactMismatch({
-      sourceVulnerabilities: sourceScan.supplyChain || [],
+      sourceVulnerabilities: sourceVulns,
       artifactVulnerabilities: vulnerabilities,
       artifactComponents: [...inventory.osPackages, ...inventory.appPackages],
     });

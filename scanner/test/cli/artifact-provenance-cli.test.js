@@ -199,3 +199,27 @@ test('PRD 5: safety — a hostile tar entry (path traversal) in an archive is su
   const report = JSON.parse(r.stdout);
   assert.ok(report.inventory.unsafeEntries.some((e) => e.name === '../../etc/passwd'));
 });
+
+test('PRD 5: a source scan limited to SCA (dependency findings under `findings`) is read like a full one, and a source with no dependency data is refused, never read as fixed', { timeout: 60000 }, (t) => {
+  const fx = createGitFixture();
+  t.after(() => fx.cleanup());
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'as-artifact-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'prod.tar'), dockerArchiveWithLodash(VULNERABLE_VERSION));
+  const report = JSON.parse(run(dir, ['image', 'scan', 'prod.tar']).stdout);
+  const advisories = report.vulnerabilities.filter((v) => v.type === 'vulnerable_dep');
+  assert.ok(advisories.length > 0);
+
+  // the source carries the SAME advisories, recorded the way `scan --only sca` records them: nothing is fixed, so nothing is flagged
+  fx.writeFile('.agentic-security/last-scan.json', JSON.stringify({ findings: advisories }));
+  fx.commit('source on the same version');
+  const same = JSON.parse(run(dir, ['provenance', 'trace', 'prod.tar', '--source', fx.root, '--format', 'json']).stdout);
+  assert.equal(same.mismatch.scenarioA.length, 0, 'the same advisories on both sides is not "fixed in source"');
+
+  // a source scan with no dependency data at all cannot be compared; it is refused rather than read as clean
+  fx.writeFile('.agentic-security/last-scan.json', JSON.stringify({ findings: [] }));
+  fx.commit('a scan with no dependency data');
+  const none = run(dir, ['provenance', 'trace', 'prod.tar', '--source', fx.root, '--format', 'json']);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /no dependency data/);
+});
