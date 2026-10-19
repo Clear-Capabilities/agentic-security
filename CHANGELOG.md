@@ -9,6 +9,14 @@
 > make the history less accurate, not more.
 
 
+## 0.180.0 - The GA bar: GA is earned against named evidence, and checked
+
+Documentation, registry and release-gate tooling only. No scanner behavior changed, and no capability changed maturity.
+
+- **What GA means is now written and checked.** `docs/how-it-works/maturity-model.md` states seven criteria. Five are mechanical: a GA capability in `docs/capabilities.yaml` names `since`, a `contract` page, a `contractTest`, a release `gate`, `platforms` (`os:job` pairs with a Linux job) and a `limits` section. `scripts/check-positioning-docs.mjs` fails when any named page, test, gate, job or section does not exist, when the contract test is run by no scanner test script, or when a limits section lacks a `limits-verified` date within 90 days of the checkout's HEAD commit. A Preview capability needs a contract page or a dated contract note.
+- **Two new release checks.** `contract-conformance` runs exactly the contract tests the registry names. `sca-replay-gate` is the first release gate on dependency risk: it compares the SCA bench to its committed result and fails on a drop of more than half a point in version recall or precision, or on a lost scored entry. It needs network and is not part of the offline pre-push gate.
+- **The twelve capabilities already GA meet the bar; none was demoted.** Five of them had no limits section and now have one (assurance modes, model egress, AI-written-code guardrails, CI gating, scanning, which also states the measured dependency-matching figures: 77.9% version recall, 100% precision). Two contract tests are weaker than the bar wants and are recorded as open in `docs/implementation-status/ga-promotion.md`.
+
 ## 0.179.0 - Faster releases: checks run at commit time, and the release gate stops repeating itself
 
 Release tooling only. No scanner behavior changed. The last full release took 68 minutes: push 15.5, hosted CI wait 14.5, local release gate 25, hosted release workflow 8, npm 4.5. Two changes cut the local share, and nothing the hosted gate proves was removed.

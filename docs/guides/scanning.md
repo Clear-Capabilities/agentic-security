@@ -149,6 +149,14 @@ instead.
 Without an advisory snapshot the dependency half of a Haskell or Nix scan is not performed, and the verdict says so: see
 [Haskell](haskell.md#dependencies-advisories-and-the-software-bill-of-materials) and [Nix and NixOS](nix-nixos.md).
 
+## What a scan does not do
+
+<!-- limits-verified: 2026-10-19 -->
+
+- **Dependency matching is measured, and not complete.** On thirteen pinned third-party repositories, labelled by an independent reader against the public advisory database, the recorded version-level recall is 77.9% (307 of 394) with 100% precision, and package-level recall is 96.8%. Both sides read the same advisory source, so a wrong advisory cancels out and is not measured. See [`bench/sca-replay`](../../bench/sca-replay/README.md).
+- **Static analysis accuracy on independent code is low.** The measured figures, and why they are the headline, are in [trust and limitations](../trust/trust-and-limitations.md#known-limits-worth-knowing-first).
+- **A partial scan says so.** A file skipped for size or density, or a stale feed, makes the scan `partial`; zero findings from a partial scan is never reported as clean.
+
 ## Related
 
 - [Fixing vulnerabilities](fixing-vulnerabilities.md)

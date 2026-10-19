@@ -49,7 +49,7 @@ Every major capability carries exactly one of four maturity labels, taken from `
 
 | Label | Meaning |
 |---|---|
-| **GA** | Production-supported |
+| **GA** | Production-supported, and only a capability that meets the [GA bar](how-it-works/maturity-model.md#the-ga-bar) |
 | **Preview** | Implemented and usable, still being hardened |
 | **Labs** | Experimental; the interface may change materially |
 | **Roadmap** | Strategic direction; not shipped |

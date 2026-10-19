@@ -309,6 +309,27 @@ export const CHECKS = [
       'adapter logic deliberately, re-pin with `node scripts/verification-conformance-check.mjs --update-pins` and say why in the commit.',
   },
   {
+    // GA promotion G3: the dependency-risk capability is measured by bench/sca-replay against third-party labels. Until this
+    // existed the measurement ran only by hand, so a recall drop would have shipped unseen. `--check` compares to the committed
+    // RESULT.json (a rise passes, a drop beyond half a point or a lost scored entry fails) and writes nothing. It fetches the
+    // pinned manifests first and queries the public advisory database, so it needs network and is excluded from the offline
+    // pre-push gate; an unreachable database lowers recall, which fails closed.
+    id: 'sca-replay-gate',
+    title: 'Dependency risk (SCA) recall and precision hold against third-party labels',
+    slow: true,
+    remedy: 'Run `npm run bench:sca-replay:check` in scanner/. A real regression is an engine defect to fix; an accepted change is ' +
+      're-recorded by running `npm run bench:sca-replay` and committing bench/sca-replay/RESULT.json with the reason.',
+  },
+  {
+    // GA promotion G1: every Preview and GA capability names a contract page and a compatibility test in docs/capabilities.yaml.
+    // This check runs exactly those tests, so a contract test that exists but is not run by anything cannot count as evidence.
+    id: 'contract-conformance',
+    title: 'Every capability contract test named in the registry passes',
+    slow: true,
+    remedy: 'Run `node scripts/check-ga-contracts.mjs` and fix the test named. A deliberate contract change updates the reference page ' +
+      'and the test in the same commit and adds a version note to the page.',
+  },
+  {
     // REL-001: the new assurance suites plus the existing controller, smoke, build/bundle-source, documentation, scorecard and
     // Haskell/Nix/core-language compatibility checks, run against ONE exact commit (scripts/release-closure.mjs). The local gate
     // holds only when every locally runnable step passes with no skip, the tree is clean and the record binds suite versions and
@@ -400,7 +421,7 @@ export const HOSTED_CLOSURE_NOTE = 'hosted runner: only the static closure (plan
 
 export const RELEASE_GROUPS = {
   tests: ['test-suite'],
-  'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate'],
+  'benches-a': ['provenance-gate', 'corpus-gate', 'ttff-gate', 'sca-replay-gate'],
   'benches-b': ['self-scan-gate', 'layer-recall-gate', 'memory-gate', 'verification-conformance-gate'],
   closure: ['release-closure-gate'],
 };
@@ -1086,6 +1107,11 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('memory-gate', () => runNpmGate('bench:memory:check'));
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
   evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
+  evaluate('sca-replay-gate', () => runNpmGate('bench:sca-replay:check'));
+  evaluate('contract-conformance', () => {
+    const r = run('node', [path.join(REPO, 'scripts', 'check-ga-contracts.mjs')], { cwd: REPO, stdio: 'inherit' });
+    return evaluateCommandGate({ label: 'node scripts/check-ga-contracts.mjs', exitCode: r.status });
+  });
   evaluate('release-closure-gate', () => {
     const script = closureGateScript();
     const r = runNpmGate(script);
