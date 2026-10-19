@@ -2,7 +2,7 @@
 
 **Overall completion:** see "Acceptance criteria" below. Every criterion has executable or reviewable evidence recorded in this file; items that are not fully met say so.
 **Current phase:** Phase 9, reconciliation (complete for the pages this work owns; residual items listed under "Not done or deliberately out of scope").
-**Last verified command:** `node scripts/check-positioning-docs.mjs` (exit 0), `node scripts/check-doc-drift.mjs --gate` (exit 0), `node --test test/docs-positioning.test.js` in `scanner/` (40 tests, 0 failures). See "Verification log" for the full list and what each proved.
+**Last verified command:** `node scripts/check-positioning-docs.mjs` (exit 0), `node scripts/check-doc-drift.mjs --gate` (exit 0), `node --test test/docs-positioning.test.js` in `scanner/` (41 tests, 0 failures). See "Verification log" for the full list and what each proved.
 
 ## Phases
 
@@ -11,7 +11,7 @@
 | 0 Baseline | Done | README read end to end; docs inventoried; CLI help, Labs, Code Boundaries, scanHealth, verified remediation and benchmark docs read; no website source exists |
 | 1 Foundations | Done | `docs/STYLE-AND-TERMINOLOGY.md`, `docs/capabilities.yaml`, `docs/how-it-works/maturity-model.md` |
 | 2 Core architecture docs | Done | Assurance lifecycle, evidence model, deterministic and agentic, finding lifecycle, Trust area (7 pages), Code Boundaries repositioned |
-| 3 README | Done | 551 lines to 390 (of which about 60 are generated tables and the generated language blocks); first screen states category, promise, difference, how to try; generated tables; quickstart output re-captured |
+| 3 README | Done | 551 lines to the current count (see `wc -l README.md`) (of which about 60 are generated tables and the generated language blocks); first screen states category, promise, difference, how to try; generated tables; quickstart output re-captured |
 | 4 Role docs | Done | Eight lanes, each with a primary question and a Core workflow link |
 | 5 One Finding's Journey | Done | Real finding `ir-taint:server.js:11:js-sql-query`, all ten stages, captured output |
 | 6 Website | Done as a package | No website source in the repository; `docs/website/` has homepage, navigation, metadata and component specs |
@@ -21,16 +21,16 @@
 
 ## Capability registry counts by maturity
 
-From `docs/capabilities.yaml` (35 capabilities, verified by `node scripts/check-positioning-docs.mjs`):
+From `docs/capabilities.yaml` (37 capabilities, verified by `node scripts/check-positioning-docs.mjs`):
 
 | Maturity | Count |
 |---|---|
 | GA | 12 |
 | Preview | 15 |
-| Labs | 4 |
-| Roadmap | 4 |
+| Labs | 7 |
+| Roadmap | 3 |
 
-Assigned conservatively from the code, tests and existing status pages. Nothing was promoted because the positioning would benefit. Labs: finding-to-rule compiler, detector spec synthesis, fleet scanning, runner-level capability enforcement. Roadmap (no implementation evidence listed): continuous production runtime observation, exploitation detection, detection and hunt-query generation, the security learning rate metric. Exploit proof, runtime corroboration, Code Boundaries and artifact provenance are Preview because their own status pages list unbuilt parts.
+Assigned conservatively from the code, tests and existing status pages. Nothing was promoted because the positioning would benefit. Labs: finding-to-rule compiler, detector spec synthesis, fleet scanning, detection and response (`dnr`), the Eval Lab, release assurance, runner-level capability enforcement. Roadmap (no implementation evidence listed): continuous production runtime observation, connected production detection, the security learning rate metric. Exploit proof, runtime corroboration, Code Boundaries and artifact provenance are Preview because their own status pages list unbuilt parts.
 
 ## Acceptance criteria
 
@@ -47,7 +47,7 @@ Assigned conservatively from the code, tests and existing status pages. Nothing 
 | AC-9 One Finding's Journey has real output for shipped stages | `docs/workflows/one-findings-journey.md`: every captured block was produced by the bundled scanner against a copy of `examples/demo-app` in this work; stages that could not run show the real "nothing ran" message | Yes |
 | AC-10 Every role reaches its core workflow within two clicks | `checkNavigation`: docs home links each role page; each role page has a `**Core workflow:**` link that resolves | Yes |
 | AC-11 No substantial existing capability documentation lost | No existing doc page was moved or deleted. README sections that left the README are preserved in `docs/reference/capability-reference.md` (verbatim, em-dashes replaced with commas) and mapped in `docs/DOCS-MIGRATION.md` | Yes |
-| AC-12 README clearer, not longer | 551 lines to 390; deep material moved to docs; first screen restructured | Yes by line count and structure; clarity is a reviewable judgment |
+| AC-12 README clearer, not longer | 551 lines to the current count (see `wc -l README.md`); deep material moved to docs; first screen restructured | Yes by line count and structure; clarity is a reviewable judgment |
 
 ## Definition of done
 
@@ -100,10 +100,20 @@ Each line is a command run during this work in the current session, with what it
 
 | Command | Result |
 |---|---|
-| `node scripts/check-positioning-docs.mjs` | exit 0; 35 capabilities (12 GA, 15 Preview, 4 Labs, 4 Roadmap); tables fresh; links, commands, lifecycle order and style clean |
+| `node scripts/check-positioning-docs.mjs` | exit 0; 37 capabilities (12 GA, 15 Preview, 7 Labs, 3 Roadmap); tables fresh; links, commands, lifecycle order and style clean |
 | `node scripts/check-doc-drift.mjs --gate` | exit 0 with the positioning checks included |
-| `node --test test/docs-positioning.test.js` (in `scanner/`) | 40 tests, 0 failures; both directions proved for each rule |
+| `node --test test/docs-positioning.test.js` (in `scanner/`) | 41 tests, 0 failures; both directions proved for each rule |
 | `node --test test/language/capability-ledger.test.js` | 14 tests, 0 failures after the new pages were mapped in `docs/capability-ledger.json` |
 | `node --test test/unscored-claims.test.js` | 7 tests, 0 failures (README still names `agentic-security image scan` and the remaining image-scanning gap) |
 | `node scripts/render-language-docs.mjs --check`, `node scripts/capture-language-examples.mjs --check` | both exit 0; the generated Haskell and Nix README blocks are unchanged |
 | `npm run test:lifecycle` (in `scanner/`) | see the final entry below |
+
+## Rebase onto 0.177.0 (what changed while this was in review)
+
+Main moved from 0.172.1 to 0.177.0 during this work (independent accuracy measurement, release assurance, fleet job fabric, `dnr`, the Eval Lab, container-engine and registry image sources, a stronger rule compiler and proof fabric). The branch was rebased and the docs were reconciled, not just merged:
+
+- Detect moved from Roadmap to Labs for `dnr` (generate, validate, hunt, window); connected SIEM detection stays Roadmap.
+- The demo finding changed: on the 0.177.0 engine the demo SQL injection is `struct:server.js:11:SQL_Injection_(Template_Literal)`. One Finding's Journey was re-captured from scratch against the new engine, including `dnr`, `proof generate`, `rules status` and the refusals they print.
+- Trust pages now state the measured independent accuracy (precision 6/19, recall 6/278, F1 0.040) and the scan-health change for skipped files.
+- Artifact provenance limits, fleet limits, rule compiler limits and the proof limits were updated from the new guides.
+- A bug found while re-running the table generator: with empty adjacent generated blocks, `--write` could swallow the prose between them. Fixed and pinned by a test; the lifecycle page, which was affected, was rewritten from its source text.
