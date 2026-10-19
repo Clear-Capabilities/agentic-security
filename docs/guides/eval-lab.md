@@ -1,5 +1,7 @@
 # Eval Lab and the model router: measuring security intelligence per dollar
 
+**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Status: new. The lab itself makes no network call.** It reads a dataset, runs the arms you name, and scores what they did. A
 model arm that is not local needs `--allow-external`, and the egress policy is still consulted for it before it runs.
 

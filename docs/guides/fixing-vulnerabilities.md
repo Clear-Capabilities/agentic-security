@@ -1,5 +1,7 @@
 # Fixing vulnerabilities
 
+**Maturity:** GA. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** go from a finding to a fix that is *proven safe before it touches
 your disk*.
 

@@ -1,5 +1,7 @@
 # Fleet: scan an organization, resume it, and ask what a flaw can reach
 
+**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Status: new.** The unit of analysis is a declared set of repositories. One manifest, one command, one honest account of what
 was and was not scanned, and answers to the questions an organization actually asks about a shared flaw. Everything runs on your
 own machine from a local database; there is no server and no account.

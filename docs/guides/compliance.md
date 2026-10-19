@@ -1,5 +1,7 @@
 # Compliance
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** produce automated technical-control evidence for a framework, and
 find the gaps you need to close — without the tool ever claiming assurance
 it didn't earn.

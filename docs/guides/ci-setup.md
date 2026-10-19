@@ -1,5 +1,7 @@
 # CI setup
 
+**Maturity:** GA. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** gate every pull request so a new critical (or high) vulnerability
 can't merge — and, optionally, block risky deploys from your own terminal.
 

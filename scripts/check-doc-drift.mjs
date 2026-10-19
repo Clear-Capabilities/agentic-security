@@ -67,6 +67,9 @@ import { fileURLToPath } from 'node:url';
 // The assurance pages' own check (DOC-001.AC03): referenced commands, scripts, schemas, variables and fixture paths exist, and no
 // page makes a universal safe or full-coverage claim. It runs in the same `--gate` as the link check below.
 import { checkAllAssuranceDocs, formatFinding as formatAssuranceFinding } from './check-assurance-docs.mjs';
+// The positioning pages' own check: the capability registry, the tables generated from it, maturity consistency, command and
+// lifecycle-order validation, style, role navigation and the SVGs. Also in `--gate`; run alone with check-positioning-docs.mjs.
+import { checkPositioningDocs, formatFinding as formatPositioningFinding } from './check-positioning-docs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -341,9 +344,11 @@ async function main() {
     // Release-gate mode: link integrity only (deterministic, low-FP).
     const links = checkAllLinks(REPO);
     const assurance = await checkAllAssuranceDocs(REPO);
-    if (!links.length && !assurance.length) {
+    const positioning = checkPositioningDocs(REPO);
+    if (!links.length && !assurance.length && !positioning.length) {
       console.log('doc-links: all user-facing markdown links resolve.');
       console.log('assurance-docs: referenced commands, scripts, schemas, variables and paths exist; no universal claim.');
+      console.log('positioning-docs: capability registry valid, generated tables fresh, maturity consistent, commands and lifecycle order valid.');
       process.exit(0);
     }
     if (links.length) console.error(`doc-links: ${links.length} dangling link(s):`);
@@ -352,6 +357,8 @@ async function main() {
     }
     if (assurance.length) console.error(`assurance-docs: ${assurance.length} finding(s):`);
     for (const f of assurance) console.error(`  ${formatAssuranceFinding(f, REPO)}`);
+    if (positioning.length) console.error(`positioning-docs: ${positioning.length} finding(s):`);
+    for (const f of positioning) console.error(`  ${formatPositioningFinding(f)}`);
     process.exit(1);
   }
 

@@ -1,5 +1,7 @@
 # Runtime-Corroborated Security Twin
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Status: new.** Static analysis explains what a flow *can* do; this corroborates what has actually
 *happened*, from telemetry the operator already has — without ever requiring a raw request body, a
 captured payload, or an identity value to leave the operator's own machine.

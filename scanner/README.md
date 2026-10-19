@@ -1,6 +1,6 @@
 # @clear-capabilities/agentic-security-scanner
 
-The scan engine behind the [agentic-security](https://github.com/Clear-Capabilities/agentic-security) Claude Code plugin: SAST, SCA with function-level reachability and CISA KEV, secrets, IaC, prompt-injection and MCP/agent-tool audit, auth/authZ analysis, SBOM/AI-BOM, and compliance evidence.
+The scan engine behind [Agentic Security](https://github.com/Clear-Capabilities/agentic-security), an autonomous security assurance platform (a Claude Code plugin and CLI) that pairs deterministic analysis with security agents and never treats an incomplete scan as a clean one. See [how it works](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/how-it-works/assurance-lifecycle.md) and [trust and limitations](https://github.com/Clear-Capabilities/agentic-security/blob/main/docs/trust/trust-and-limitations.md). The engine provides: SAST, SCA with function-level reachability and CISA KEV, secrets, IaC, prompt-injection and MCP/agent-tool audit, auth/authZ analysis, SBOM/AI-BOM, and compliance evidence.
 
 ```bash
 npx @clear-capabilities/agentic-security-scanner scan .

@@ -1,8 +1,8 @@
 # agentic-security
 
-Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
+Autonomous Security Assurance Platform for the AI Software Era (a Claude Code plugin and CLI; also described as an agentic security harness). Full ASPM + LLMSecOps. Delivers SAST, SCA (OSV + CISA KEV + function-level reachability), secrets, IaC, prompt-injection, MCP/agent-tool audit, auth/authZ deep analysis, attack chains, PoC generation, SBOM/PBOM/AI-BOM, and compliance attestation (NIST AI 600-1, NIST SP 800-171 Rev. 3 (CUI/CMMC basis), NIST Privacy Framework 1.1, OWASP ASVS, OWASP LLM Top 10, EU AI Act).
 
-**Version:** 0.177.0  
+**Version:** 0.178.0  
 **License:** PolyForm Internal Use 1.0.0  
 **Author:** Ross Young <ross@clearcapabilities.com> / Clear Capabilities Inc.
 
@@ -51,6 +51,9 @@ Full ASPM + LLMSecOps Claude Code plugin. Delivers SAST, SCA (OSV + CISA KEV + f
 | `docs/compliance/` | Per-framework coverage maps, derived from the framework JSON. One per framework linked in the README table. |  |
 | `docs/language-support.{md,json}`, `docs/language-toolchain.json` | Generated Haskell/Nix support registry (do not edit by hand) and the recorded tool versions. | |
 | `docs/POSITIONING.md` | ICP statement: vibecoder-first; pro follow-on. |  |
+| `docs/capabilities.yaml` | **Capability registry: the single source of truth for GA / Preview / Labs / Roadmap.** Every page that states a maturity is checked against it; the README and lifecycle capability tables are generated from it (`npm run docs:positioning` writes them, `npm run docs:check-positioning` checks). Promote or demote a capability here, with evidence, never by rewriting a page. A Roadmap capability lists no implementation evidence. Also run by `node scripts/check-doc-drift.mjs --gate`. | |
+| `docs/STYLE-AND-TERMINOLOGY.md` | Product vocabulary: the one ten-stage lifecycle ordering, the avoid-list (unqualified secure/safe/guarantees/compliant/certified), the "verified" and "proven" rules, no em-dashes in prose. Enforced mechanically by `scripts/check-positioning-docs.mjs` for the pages the repositioning owns. | |
+| `docs/DOCS-MIGRATION.md` | Where every pre-repositioning doc path and README section lives now. No page was moved or deleted. | |
 | `docs/OSCAL.md` | NIST OSCAL output: which model and why, and what an OSCAL document must REFUSE to claim (an unassessed control gets no finding). Read before changing `src/report/oscal.js`. |  |
 | `docs/HARNESS_ASSESSMENT_SPEC.md` | Six-domain rubric for scoring an AI agent harness (PRD-derived, versioned). |  |
 | `docs/HARNESS_ASSESSMENT_EVIDENCE.md` + `docs/schemas/harness-evidence.schema.json` | Wire format a conforming harness must emit so it can be scored. |  |

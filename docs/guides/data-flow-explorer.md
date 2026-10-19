@@ -1,5 +1,7 @@
 # Code Boundaries
 
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+
 **Goal:** see where sensitive data actually goes in your codebase — not just
 "this line looks dangerous," but the real path from where a piece of data
 enters your system to every place it ends up, with a protection verdict on

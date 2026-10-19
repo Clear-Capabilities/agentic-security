@@ -1,0 +1,460 @@
+# Capability registry: the single source of truth for maturity.
+#
+# Every major capability has exactly one maturity:
+#   GA       production-supported
+#   Preview  implemented and usable, still being hardened
+#   Labs     experimental; the interface may change materially
+#   Roadmap  strategic direction; NOT shipped
+#
+# Rules enforced by scripts/check-positioning-docs.mjs (fail closed):
+#   - an unknown maturity or lifecycle stage fails;
+#   - GA and Preview need at least one `evidence` path that exists in this repository;
+#   - Labs needs evidence too (it is shipped code); only Roadmap may have none, and a Roadmap
+#     capability must not list evidence (it would claim code that is not there);
+#   - every `docs` path must exist;
+#   - a page may not state a different maturity for a capability than this file does;
+#   - the capability tables in README.md and docs/how-it-works/assurance-lifecycle.md are GENERATED
+#     from this file (node scripts/check-positioning-docs.mjs --write), and a stale table fails.
+#
+# Maturity was assigned from the code, tests and existing status pages, conservatively. Nothing is
+# GA because the positioning would benefit from it. To promote a capability, change it here and
+# let the checker show every page that still disagrees.
+#
+# The file is parsed by a deliberately small reader (flat records, scalar fields, inline `[a, b]`
+# lists or `- item` block lists). Keep to that shape.
+
+lifecycle:
+  - id: discover
+    question: What might be wrong?
+    page: docs/discover/README.md
+  - id: corroborate
+    question: What independent evidence supports or refutes the finding?
+    page: docs/corroborate/README.md
+  - id: prove
+    question: Can exploitability be mechanically demonstrated?
+    page: docs/prove/README.md
+  - id: learn
+    question: Can a confirmed novel weakness become reusable deterministic knowledge?
+    page: docs/learn/README.md
+  - id: scale
+    question: Where else does this weakness exist?
+    page: docs/scale/README.md
+  - id: observe
+    question: What has actually occurred at runtime?
+    page: docs/observe/README.md
+  - id: trace
+    question: How does risk connect through code, data, architecture, provenance, and artifacts?
+    page: docs/trace/README.md
+  - id: fix
+    question: What is the safest remediation?
+    page: docs/fix/README.md
+  - id: verify
+    question: Did the fix work, and which verification legs actually ran?
+    page: docs/verify/README.md
+  - id: detect
+    question: Was exploitation observed and can recurrence be detected?
+    page: docs/detect/README.md
+
+capabilities:
+  - id: deterministic-scan
+    name: Deterministic security analysis
+    lifecycleStages: [discover]
+    maturity: GA
+    establishes: A candidate weakness at a file and line, found by mechanical rules (SAST, secrets, IaC, auth, prompt-injection, MCP audit), with no model in the loop.
+    docs:
+      - docs/guides/scanning.md
+      - docs/discover/README.md
+    evidence:
+      - scanner/src/sast
+      - scanner/src/secrets
+      - scanner/src/engine.js
+
+  - id: dependency-risk
+    name: Dependency risk with function-level reachability
+    lifecycleStages: [discover, corroborate]
+    maturity: GA
+    establishes: Which vulnerable dependencies exist, which are actively exploited, and whether the vulnerable function is actually reachable.
+    docs:
+      - docs/guides/scanning.md
+      - docs/guides/sbom-and-ai-bom.md
+    evidence:
+      - scanner/src/sca
+
+  - id: agentic-discovery
+    name: Agentic discovery (hunt)
+    lifecycleStages: [discover]
+    maturity: Preview
+    establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
+    docs:
+      - docs/discover/README.md
+      - docs/how-it-works/deterministic-and-agentic.md
+    evidence:
+      - scanner/src/discovery
+
+  - id: context-intelligence
+    name: Deterministic context intelligence
+    lifecycleStages: [discover, corroborate]
+    maturity: Preview
+    establishes: Per-entry-point, hash-bound context bundles and citation-checked focused reviews. Opt-in.
+    docs:
+      - docs/guides/context-intelligence.md
+    evidence:
+      - scanner/src/context-intelligence
+
+  - id: language-depth-haskell-nix
+    name: Haskell and Nix/NixOS analysis
+    lifecycleStages: [discover, corroborate]
+    maturity: Preview
+    establishes: Static findings for Haskell and Nix/NixOS, with support measured per capability on a synthetic corpus and some legs honestly blocked.
+    docs:
+      - docs/language-support.md
+      - docs/guides/haskell.md
+      - docs/guides/nix-nixos.md
+    evidence:
+      - scanner/src/language
+
+  - id: taint-and-reachability
+    name: Taint flow and reachability corroboration
+    lifecycleStages: [corroborate]
+    maturity: GA
+    establishes: A hop-by-hop path from where untrusted data entered to the sink, and whether the flow is reachable from an entry point.
+    docs:
+      - docs/corroborate/README.md
+      - docs/walkthroughs/finding-evidence.md
+    evidence:
+      - scanner/src/dataflow
+      - scanner/src/posture/reachability-filter.js
+
+  - id: falsification
+    name: Falsification of findings
+    lifecycleStages: [corroborate]
+    maturity: GA
+    establishes: Whether a context-matched control on the path (a sanitizer or dominating guard) blocks the finding. Lowers confidence only; never removes a finding and never changes severity.
+    docs:
+      - docs/concepts.md
+      - docs/corroborate/README.md
+    evidence:
+      - scanner/src/posture/falsification.js
+
+  - id: model-validation
+    name: Model-assisted validation
+    lifecycleStages: [corroborate]
+    maturity: Preview
+    establishes: A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured.
+    docs:
+      - docs/how-it-works/deterministic-and-agentic.md
+    evidence:
+      - scanner/src/llm-validator
+
+  - id: exploit-proof
+    name: Execution-backed exploit proof
+    lifecycleStages: [prove]
+    maturity: Preview
+    establishes: Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Container isolation has been exercised only against a fake engine, and the feature has been exercised on macOS only.
+    docs:
+      - docs/guides/exploit-proof-fabric.md
+      - docs/prove/README.md
+    evidence:
+      - scanner/src/posture/proof-fabric
+  - id: rule-compiler
+    name: Finding-to-rule compiler
+    lifecycleStages: [learn]
+    maturity: Labs
+    establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
+    docs:
+      - docs/guides/rule-compiler.md
+      - docs/learn/README.md
+    evidence:
+      - scanner/src/posture/rule-compiler
+  - id: detector-spec-synthesis
+    name: Detector spec synthesis
+    lifecycleStages: [learn]
+    maturity: Labs
+    establishes: A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically.
+    docs:
+      - commands/labs.md
+      - docs/learn/README.md
+    evidence:
+      - commands/labs.md
+
+  - id: security-learning-rate
+    name: Security learning rate metric
+    lifecycleStages: [learn]
+    maturity: Roadmap
+    aliases: [security learning rate]
+    establishes: The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI.
+    docs:
+      - docs/roadmap/README.md
+      - docs/trust/benchmarking-methodology.md
+
+  - id: root-cause-sweep
+    name: Repository-wide sibling sweep
+    lifecycleStages: [scale]
+    maturity: Preview
+    establishes: Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately.
+    docs:
+      - docs/scale/README.md
+    evidence:
+      - scanner/src/posture/root-cause-sweep.js
+
+  - id: fleet-scan
+    name: Fleet scanning and dependency blast radius
+    lifecycleStages: [scale]
+    maturity: Labs
+    establishes: Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue.
+    docs:
+      - docs/guides/fleet.md
+      - docs/scale/README.md
+    evidence:
+      - scanner/src/posture/fleet
+  - id: federation
+    name: Cross-repository graph federation
+    lifecycleStages: [scale, trace]
+    maturity: Preview
+    establishes: A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified.
+    docs:
+      - docs/guides/data-flow-explorer.md
+      - docs/scale/README.md
+    evidence:
+      - scanner/src/lineage/cross-repo-link.js
+
+  - id: runtime-corroboration
+    name: Runtime corroboration of the scanned graph
+    lifecycleStages: [observe]
+    maturity: Preview
+    establishes: Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live.
+    docs:
+      - docs/guides/runtime-twin.md
+      - docs/observe/README.md
+    evidence:
+      - scanner/src/lineage/runtime-assurance.js
+      - scanner/src/lineage/observation-correlation.js
+  - id: live-runtime-observation
+    name: Continuous production runtime observation
+    lifecycleStages: [observe]
+    maturity: Roadmap
+    aliases: [live runtime observation, production runtime observation]
+    establishes: Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import.
+    docs:
+      - docs/roadmap/README.md
+      - docs/observe/README.md
+
+  - id: code-boundaries
+    name: Code Boundaries security graph
+    lifecycleStages: [trace]
+    maturity: Preview
+    establishes: Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time.
+    docs:
+      - docs/security-graph/code-boundaries.md
+      - docs/guides/data-flow-explorer.md
+    evidence:
+      - scanner/src/lineage
+      - scanner/src/server
+
+  - id: blast-radius
+    name: Blast-radius assessment
+    lifecycleStages: [trace]
+    maturity: Preview
+    establishes: What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph.
+    docs:
+      - docs/security-graph/blast-radius.md
+    evidence:
+      - scanner/src/lineage/impact-engine.js
+      - scanner/src/lineage/impact-assessment.js
+
+  - id: finding-provenance
+    name: Finding provenance from Git history
+    lifecycleStages: [trace]
+    maturity: Preview
+    establishes: Which commit introduced a finding, resolved from Git history, with the resolution quality stated.
+    docs:
+      - docs/guides/finding-provenance.md
+      - docs/security-graph/provenance.md
+    evidence:
+      - scanner/src/posture/provenance
+
+  - id: artifact-provenance
+    name: Source-to-artifact provenance
+    lifecycleStages: [trace]
+    maturity: Preview
+    establishes: Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry.
+    docs:
+      - docs/guides/artifact-provenance.md
+      - docs/security-graph/provenance.md
+    evidence:
+      - scanner/src/artifact
+  - id: safe-fix
+    name: Fix synthesis
+    lifecycleStages: [fix]
+    maturity: GA
+    establishes: A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification.
+    docs:
+      - docs/guides/fixing-vulnerabilities.md
+      - docs/fix/README.md
+    evidence:
+      - scanner/src/fix
+
+  - id: verified-remediation
+    name: Verified remediation
+    lifecycleStages: [verify]
+    maturity: GA
+    establishes: Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND.
+    docs:
+      - docs/trust/verified-remediation.md
+      - docs/walkthroughs/verified-remediation.md
+    evidence:
+      - scanner/src/posture/fix-verify.js
+      - scanner/src/posture/fix-verify-loop.js
+
+  - id: proof-gated-fix
+    name: Proof-gated fix
+    lifecycleStages: [verify]
+    maturity: Preview
+    establishes: With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it.
+    docs:
+      - docs/guides/exploit-proof-fabric.md
+      - docs/verify/README.md
+    evidence:
+      - scanner/src/posture/proof-fabric
+
+  - id: detection-and-response
+    name: Detection and response (dnr)
+    aliases: [dnr, detection generation]
+    lifecycleStages: [detect]
+    maturity: Labs
+    establishes: A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection.
+    docs:
+      - docs/guides/detection-and-response.md
+      - docs/detect/README.md
+    evidence:
+      - scanner/src/posture/dnr
+  - id: connected-production-detection
+    name: Connected production detection
+    aliases: [production detection, siem integration, live detection]
+    lifecycleStages: [detect]
+    maturity: Roadmap
+    establishes: Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally.
+    docs:
+      - docs/detect/README.md
+      - docs/roles/detection-engineering.md
+  - id: scan-health
+    name: Scan health
+    lifecycleStages: [corroborate]
+    maturity: GA
+    establishes: Whether every analyzer finished, which files and feeds were incomplete or stale, and therefore whether a clean result may be called clean.
+    docs:
+      - docs/trust/scan-health.md
+      - docs/walkthroughs/scan-health.md
+    evidence:
+      - scanner/src/pipeline/scan-health.js
+
+  - id: assurance-modes
+    name: Assurance gate modes
+    lifecycleStages: [verify]
+    maturity: GA
+    establishes: Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard).
+    docs:
+      - docs/trust/assurance-modes.md
+      - docs/walkthroughs/assurance-modes.md
+    evidence:
+      - scanner/src/pipeline/assurance-mode.js
+
+  - id: model-egress-policy
+    name: Model egress policy
+    lifecycleStages: [cross-cutting]
+    maturity: GA
+    establishes: An allow or deny decision on every outbound model call before a prompt is built, with local-only mode and redaction.
+    docs:
+      - docs/trust/model-egress.md
+      - docs/walkthroughs/model-egress.md
+    evidence:
+      - scanner/src/egress
+
+  - id: agent-guardrails
+    name: AI-written-code guardrails
+    lifecycleStages: [discover]
+    maturity: GA
+    establishes: Insecure edits (injectable SQL, hardcoded keys, eval on user input) intercepted before they reach disk, and destructive shell commands blocked.
+    docs:
+      - docs/roles/ai-engineering.md
+    evidence:
+      - hooks/pre-edit-bodyguard.js
+      - hooks/pre-bash-guard.js
+
+  - id: mcp-server
+    name: MCP server and agent-tool audit
+    lifecycleStages: [discover]
+    maturity: GA
+    establishes: A hardened MCP surface for agents (including two write tools) and an audit of the agent tools a project exposes.
+    docs:
+      - docs/reference/mcp-tool-contract.md
+      - docs/trust/agent-threat-model.md
+    evidence:
+      - scanner/src/mcp
+
+  - id: local-models
+    name: Local model support
+    lifecycleStages: [discover]
+    maturity: Preview
+    establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
+    docs:
+      - docs/guides/ollama.md
+    evidence:
+      - scanner/src/llm-validator/local-endpoint.js
+
+  - id: ci-gating
+    name: CI gating
+    lifecycleStages: [verify]
+    maturity: GA
+    establishes: A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate.
+    docs:
+      - docs/guides/ci-setup.md
+      - docs/workflows/ci-gating.md
+    evidence:
+      - scripts/ci-templates
+
+  - id: compliance-evidence
+    name: Compliance control evidence
+    lifecycleStages: [trace]
+    maturity: Preview
+    establishes: Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification.
+    docs:
+      - docs/guides/compliance.md
+      - docs/workflows/compliance-evidence.md
+    evidence:
+      - scripts/nist-compliance
+      - scripts/nist-800-171
+      - scanner/src/report/oscal.js
+
+  - id: capability-enforcement
+    name: Runner-level capability enforcement
+    lifecycleStages: [cross-cutting]
+    maturity: Labs
+    establishes: Filesystem, command and network limits enforced by the task runner. Off by default and operator-only; Linux is partially verified.
+    docs:
+      - docs/trust/agent-threat-model.md
+    evidence:
+      - scanner/src/capabilities
+
+  - id: eval-lab
+    name: Eval Lab and model router
+    aliases: [eval lab, model router]
+    lifecycleStages: [cross-cutting]
+    maturity: Labs
+    establishes: A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in.
+    docs:
+      - docs/guides/eval-lab.md
+    evidence:
+      - scanner/src/posture/evaluation
+
+  - id: release-assurance
+    name: Release assurance
+    lifecycleStages: [verify]
+    maturity: Labs
+    establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions.
+    docs:
+      - docs/guides/release-assurance.md
+    evidence:
+      - scanner/src/posture/assurance/release-package.js
+      - scanner/src/posture/assurance/release-verdict.js
+      - scripts/verify-release-package.mjs
