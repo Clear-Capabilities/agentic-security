@@ -705,6 +705,12 @@ jobs:
         timeout-minutes: 2
       - name: Measure exploit proof in a real container (fails if any run was not in a container)
         run: node bench/proof-fabric/measure.mjs --require-container --out "$RUNNER_TEMP/proof-container.json"
+      # the proof gate bench also confines the fix's own tests, which needs the same relaxation `sandbox-linux` makes
+      - name: Relax the unprivileged user-namespace restriction for this job
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 2>&1 || true
+          sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: Proof gate on applying a fix, with the container as the environment
         run: node bench/fix-verification/proof-gate.mjs --check
       - name: Upload the measurement
