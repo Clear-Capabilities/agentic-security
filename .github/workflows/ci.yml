@@ -667,6 +667,8 @@ jobs:
           sudo sysctl -w user.max_user_namespaces=15000 2>&1 || true
       - name: Measure exploit proof under local confinement (fails on a missed target, a false confirmation or an undegraded timeout)
         run: node bench/proof-fabric/measure.mjs --expect-mode local-confined --out "$RUNNER_TEMP/proof-linux.json"
+      - name: Proof gate on applying a fix (no unsafe fix applied, refusals fail closed)
+        run: node bench/fix-verification/proof-gate.mjs --check
       - name: Upload the measurement
         if: always()
         uses: actions/upload-artifact@v7
@@ -703,6 +705,8 @@ jobs:
         timeout-minutes: 2
       - name: Measure exploit proof in a real container (fails if any run was not in a container)
         run: node bench/proof-fabric/measure.mjs --require-container --out "$RUNNER_TEMP/proof-container.json"
+      - name: Proof gate on applying a fix, with the container as the environment
+        run: node bench/fix-verification/proof-gate.mjs --check
       - name: Upload the measurement
         if: always()
         uses: actions/upload-artifact@v7
