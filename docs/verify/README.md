@@ -25,7 +25,7 @@ Do not confuse `agentic-security verify` (is this *finding* real, a verifier ver
 | [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **Preview** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |
-| [Release assurance](../guides/release-assurance.md) | Verify | **Labs** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions. |
+| [Release assurance](../guides/release-assurance.md) | Verify | **Preview** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline. |
 <!-- generated:capabilities:verify:end -->
 
 ## Read more

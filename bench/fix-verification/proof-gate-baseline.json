@@ -1,0 +1,37 @@
+{
+  "schema": "agentic-security/fix-proof-gate-bench",
+  "version": 1,
+  "denominators": {
+    "patches": 23,
+    "safe": 8,
+    "unsafe": 15,
+    "withReproducer": 3,
+    "withoutReproducer": 20,
+    "unscored": 0
+  },
+  "unsafeApplied": [],
+  "gapsClosedByProof": [],
+  "gapsStillOpen": [
+    "sqli-query/dodge-rule-by-indirection"
+  ],
+  "safeApplied": [
+    "cmdi-exec/execFile"
+  ],
+  "safeRefused": {
+    "no-reproducer": [
+      "authz-delete/owner-scoped",
+      "idor-get/owner-check",
+      "secret-jwt/from-env",
+      "sqli-query/parameterized",
+      "traversal-readfile/basename",
+      "xss-send/content-type-plain",
+      "xss-send/escape-helper"
+    ]
+  },
+  "unsafeRefusedBy": {
+    "no-reproducer": 13,
+    "post-patch-exploit": 1,
+    "static-verifier": 1
+  },
+  "unscored": []
+}

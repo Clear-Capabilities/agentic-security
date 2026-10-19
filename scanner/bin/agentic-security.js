@@ -142,6 +142,8 @@ Commands:
   verify [--finding <id>]      Re-run the verifier loop on last-scan findings (use --live --target <url> to execute PoCs)
   ask "<question>" [target]    Bounded local-model Q&A with read-only tool access (requires AGENTIC_SECURITY_LLM_PRESET=ollama)
   release-view <package.json>  Developer, CISO and auditor views of one signed release package (--view, --format text|json|html, --previous, --public-key)
+  metrics [path]               Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan, each with numerator and denominator (--format text|json)
+  release-package build|verify Build a signed release package from the last scan (--private-key, --output, --fix-records), or check one offline (--public-key)
   reset [--yes] [--keep ...]   Right-to-delete: wipe accumulated learned state under .agentic-security/ (preserves operator-authored config)
                                --expired    only remove artifacts past their retention-class TTL
                                Every run writes a deletion-report.json proving what was planned/deleted/preserved/failed.
@@ -7858,6 +7860,8 @@ async function main() {
       case 'attest':   process.exit(await cmdAttest(args));
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
       case 'release-view': process.exit(await cmdReleaseView(args));
+      case 'metrics': process.exit(await (await import('../src/posture/strategic-metrics-cli.js')).cmdMetrics(args));
+      case 'release-package': process.exit(await (await import('../src/posture/assurance/release-package-cli.js')).cmdReleasePackage(args));
       case 'policy-explain': process.exit(await cmdPolicyExplain(args));
       case 'policy-sign': process.exit(await cmdPolicySign(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));

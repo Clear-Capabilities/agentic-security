@@ -358,7 +358,8 @@ test('release-gate — full run plans all thirty-three checks in order', () => {
   // GA promotion Phase 0 added sca-replay-gate (slow, the dependency-risk measurement) and contract-conformance (slow, runs the
   // contract test every GA capability names in the registry).
   // Wave 1 added sibling-sweep-gate and blast-radius-gate (fast: deterministic, offline, well under a second).
-  assert.equal(ids.length, 33);
+  // Wave 3 added release-assurance-gate (slow: it scans a project and builds, verifies and tampers with a package).
+  assert.equal(ids.length, 34);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -383,7 +384,7 @@ test('release-gate — attestation-self-check and nist-catalog-freshness are reg
 test('release-gate — --fast skips only the slow gates, keeping every fast check', () => {
   const ids = plannedCheckIds({ fast: true });
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
-  assert.equal(slowIds.length, 16);
+  assert.equal(slowIds.length, 17);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
   assert.equal(ids.length, 17);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
@@ -408,7 +409,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
 test('release-gate — the slow checks are the six command gates, the three measurement gates (FR-906\'s ttff/memory plus the Finding Provenance M2 provenance gate), and the registry gate', () => {
   assert.deepEqual(
     CHECKS.filter(c => c.slow).map(c => c.id),
-    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'sca-replay-gate', 'contract-conformance', 'release-closure-gate', 'dependency-currency']
+    ['test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'ttff-gate', 'memory-gate', 'provenance-gate', 'verification-conformance-gate', 'sca-replay-gate', 'contract-conformance', 'release-assurance-gate', 'release-closure-gate', 'dependency-currency']
   );
 });
 

@@ -349,6 +349,15 @@ export const CHECKS = [
       'and the test in the same commit and adds a version note to the page.',
   },
   {
+    // GA promotion Wave 3: release assurance runs in the release gate. A package is built from a scan of a project the repository ships,
+    // the independent offline verifier must accept it, and a lowered severity, a restated verdict and an unsigned scan must each be refused.
+    id: 'release-assurance-gate',
+    title: 'A release assurance package built from a scan verifies offline, and tampering is refused',
+    slow: true,
+    remedy: 'Run `node scripts/check-release-assurance.mjs`. The message names which direction failed: the verifier rejecting a good package is a ' +
+      'producer defect (posture/assurance/release-package*.js); accepting a tampered one is a verifier defect (release-package-verify.js).',
+  },
+  {
     // REL-001: the new assurance suites plus the existing controller, smoke, build/bundle-source, documentation, scorecard and
     // Haskell/Nix/core-language compatibility checks, run against ONE exact commit (scripts/release-closure.mjs). The local gate
     // holds only when every locally runnable step passes with no skip, the tree is clean and the record binds suite versions and
@@ -1132,6 +1141,10 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('contract-conformance', () => {
     const r = run('node', [path.join(REPO, 'scripts', 'check-ga-contracts.mjs')], { cwd: REPO, stdio: 'inherit' });
     return evaluateCommandGate({ label: 'node scripts/check-ga-contracts.mjs', exitCode: r.status });
+  });
+  evaluate('release-assurance-gate', () => {
+    const r = run('node', [path.join(REPO, 'scripts', 'check-release-assurance.mjs')], { cwd: REPO, stdio: 'inherit' });
+    return evaluateCommandGate({ label: 'node scripts/check-release-assurance.mjs', exitCode: r.status });
   });
   evaluate('release-closure-gate', () => {
     const script = closureGateScript();

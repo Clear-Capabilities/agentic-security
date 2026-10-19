@@ -197,7 +197,10 @@ capabilities:
   - id: rule-compiler
     name: Finding-to-rule compiler
     lifecycleStages: [learn]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/rule-compiler-contract.md
+    contractTest: scanner/test/contracts/rule-compiler.contract.test.js
+    contractNote: Rule format and records are frozen at version 1; the rule is text matching with structure, not a syntax-tree pattern; reviewed 2026-10-19.
     establishes: Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence.
     docs:
       - docs/guides/rule-compiler.md
@@ -245,7 +248,10 @@ capabilities:
   - id: fleet-scan
     name: Fleet scanning and dependency blast radius
     lifecycleStages: [scale]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/fleet-contract.md
+    contractTest: scanner/test/contracts/fleet.contract.test.js
+    contractNote: Manifest keys and result shapes are frozen at version 1; scheduling is local to one machine; reviewed 2026-10-19.
     establishes: Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue.
     docs:
       - docs/guides/fleet.md
@@ -396,7 +402,10 @@ capabilities:
     name: Detection and response (dnr)
     aliases: [dnr, detection generation]
     lifecycleStages: [detect]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/dnr-contract.md
+    contractTest: scanner/test/contracts/dnr.contract.test.js
+    contractNote: Record schemas and exit codes are frozen at version 1; renderers for the three newest targets (Elastic, YARA-L, Datadog) were not run against a live product; reviewed 2026-10-19.
     establishes: A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection.
     docs:
       - docs/guides/detection-and-response.md
@@ -549,11 +558,28 @@ capabilities:
     evidence:
       - scanner/src/capabilities
 
+  - id: strategic-metrics
+    name: Strategic metrics
+    aliases: [assurance coverage, evidence conversion, verified remediation rate]
+    lifecycleStages: [cross-cutting]
+    maturity: Preview
+    contract: docs/reference/strategic-metrics.md
+    contractTest: scanner/test/contracts/strategic-metrics.contract.test.js
+    contractNote: Report schema version 1 is frozen; the three figures describe one scan and the recorded fix attempts, and the Security Learning Rate stays unmeasured; reviewed 2026-10-19.
+    establishes: Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan and the recorded fix attempts, each with its numerator, denominator and basis. The Security Learning Rate is reported as not measured.
+    docs:
+      - docs/reference/strategic-metrics.md
+      - docs/how-it-works/maturity-model.md
+    evidence:
+      - scanner/src/posture/strategic-metrics.js
   - id: eval-lab
     name: Eval Lab and model router
     aliases: [eval lab, model router]
     lifecycleStages: [cross-cutting]
-    maturity: Labs
+    maturity: Preview
+    contract: docs/reference/eval-lab-report.md
+    contractTest: scanner/test/contracts/eval-lab-report.contract.test.js
+    contractNote: Report schema version 1 is frozen; the SARD integration is not built by design; reviewed 2026-10-19.
     establishes: A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in.
     docs:
       - docs/guides/eval-lab.md
@@ -563,8 +589,11 @@ capabilities:
   - id: release-assurance
     name: Release assurance
     lifecycleStages: [verify]
-    maturity: Labs
-    establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions.
+    maturity: Preview
+    contract: docs/reference/release-assurance-contract.md
+    contractTest: scanner/test/contracts/release-assurance.contract.test.js
+    contractNote: Package schema 1.0.0 and verdict reason codes are frozen; the signing key is the holder own; reviewed 2026-10-19.
+    establishes: A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline.
     docs:
       - docs/guides/release-assurance.md
     evidence:

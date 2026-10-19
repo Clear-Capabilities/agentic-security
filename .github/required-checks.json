@@ -76,7 +76,9 @@
     "sard-full-test-split",
     "nixos-runtime (x86_64-linux)",
     "nixos-runtime (aarch64-linux)",
-    "chrome-exports"
+    "chrome-exports",
+    "proof-linux",
+    "proof-container"
   ],
   "self": [
     "publish",

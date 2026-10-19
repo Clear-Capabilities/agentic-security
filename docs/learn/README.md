@@ -6,7 +6,7 @@
 
 **Maturity of this stage:** see the table below. Every capability carries its own label.
 
-**This stage is Labs.** The idea: a weakness confirmed once should not need to be rediscovered by a model every time. It should become a rule, a test or a control that costs nothing to run.
+**This stage has a Preview capability and a Labs one.** The idea: a weakness confirmed once should not need to be rediscovered by a model every time. It should become a rule, a test or a control that costs nothing to run.
 
 What exists:
 
@@ -27,7 +27,7 @@ What is not there:
 <!-- generated:capabilities:learn:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
+| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Preview** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](../../commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](../roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
 <!-- generated:capabilities:learn:end -->

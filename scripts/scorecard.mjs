@@ -34,6 +34,7 @@ import {
   renderScorecardMarkdown,
 } from '../scanner/src/posture/accuracy-scorecard.js';
 import { mappingCoverageOf } from '../scanner/src/posture/auditor-walkthrough.js';
+import { computeStrategicMetrics } from '../scanner/src/posture/strategic-metrics.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -52,6 +53,22 @@ function complianceMappingCoverage() {
     } catch { /* a malformed framework file is caught by other gates; skip here */ }
   }
   return out;
+}
+
+// Strategic metrics (GA promotion Wave 3): counted on a real scan of the reference project the repository ships, and on the fix attempts the
+// committed end-to-end demo recorded ([patch id, fully verified]). The scan runs in this process with the network off, so the figures do not
+// depend on advisory data.
+async function strategicMetricsFor() {
+  const project = path.join(REPO, 'examples', 'assurance-demo');
+  const { runScan } = await import('../scanner/src/runScan.js');
+  const { scan } = await runScan(project, { network: false });
+  const outline = readJsonIfPresent('docs/engineering-excellence/data/e2e-demo-outline.json');
+  const attempts = (outline && Array.isArray(outline.verified) ? outline.verified : []).map(([, verifiedFull]) => ({ verifiedFull: verifiedFull === true }));
+  return {
+    source: 'a scan of examples/assurance-demo (network off)',
+    remediationSource: 'the three patches the committed end-to-end demo verified',
+    metrics: computeStrategicMetrics({ scan, fixAttempts: attempts }),
+  };
 }
 
 function runJson(scriptRelPath, args, label) {
@@ -251,6 +268,7 @@ function countPartiallyEvidenced(dir) {
     // reader would assume.
     limits: computeLimits(),
     complianceMappingCoverage: complianceMappingCoverage(),
+    strategicMetrics: await strategicMetricsFor(),
   });
 
   const md = renderScorecardMarkdown(model);

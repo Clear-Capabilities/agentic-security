@@ -36,7 +36,7 @@ Note what it keeps: `Scope: possible` (a topology fact, not an exploit), and the
 
 ## Across repositories
 
-`fleet query --depends-on <repo-id>` (Labs) lists which of a declared set of repositories depend, directly or transitively, on a given one by declared package name. It answers the dependency-reachability half only; it has no Internet-facing or regulated-data overlay.
+`fleet query --depends-on <repo-id>` (Preview) lists which of a declared set of repositories depend, directly or transitively, on a given one by declared package name. It answers the dependency-reachability half only; it has no Internet-facing or regulated-data overlay.
 
 ## Contract
 
@@ -88,4 +88,4 @@ Note what it keeps: `Scope: possible` (a topology fact, not an exploit), and the
 - Dollar figures elsewhere in the product are scenario defaults, not outputs of this assessment.
 - **It agrees with its specification, not with every real program.** On 300 seeded graphs (7856 targets) the assessment matched an independent reference on every node, edge, data class and recipient, and reported no node that is not in the graph. The graphs are generated, so this is agreement with the definitions above and not recall against real code. How well a real graph reflects a real program is bounded by the coverage tiers it carries.
 - **A node target is deliberately pessimistic.** Everything reachable counts, whether or not an attacker could really traverse it.
-- **It reads one graph.** It does not look across repositories; that is the separate, Labs, fleet query.
+- **It reads one graph.** It does not look across repositories; that is the separate, Preview, fleet query.
