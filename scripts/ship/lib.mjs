@@ -113,6 +113,35 @@ export function preflightProblems({ version, files, changelog, npmLatest, branch
   return problems;
 }
 
+// ── what the local release gate need not repeat ─────────────────────────────────────────────────────────────
+
+/**
+ * Release-gate checks whose verdict about THIS tree the pre-push gate already produced when it gated the push of the PR head (same
+ * checks, same commands, same inputs). The measured cost of repeating them in `verify` was about 25 of the 68 minutes of the last
+ * release; the hosted release workflow still runs every one of them again with the cache off, in parallel, and its publish job needs all
+ * of them, so the authoritative gate is unchanged. Only the local third repetition is dropped, and only under the conditions in
+ * `verifyArgs`.
+ */
+export const PROVEN_BY_PRE_PUSH = Object.freeze([
+  'test-suite', 'corpus-gate', 'self-scan-gate', 'mutation-gate', 'protection-verdict-gate', 'provenance-gate',
+  'fix-verification-gate', 'layer-recall-gate', 'language-support-gate', 'verification-conformance-gate',
+]);
+
+/**
+ * The arguments for the local release gate. The whole gate (`[]`) unless ALL of these hold: the commit being released has the identical
+ * tree to the PR head (tree equivalence), and the pre-push gate is recorded as PASSED for exactly that PR head. Then everything the
+ * pre-push gate did not already prove is run: the network and state checks that bite at publish (changelog entry, dependency currency,
+ * remote CI, version consistency, scorecard), the full release closure, and the time and memory gates the pre-push gate does not run.
+ * A recorded pass for a different commit, or none (the push was already on origin, so no gate output was seen), runs the whole gate.
+ */
+export function verifyArgs({ allIds, treeEquivalent, prePushPassed, prHead }) {
+  if (!treeEquivalent || !prHead || prePushPassed !== prHead) return { args: [], reason: 'the whole gate: no recorded pre-push pass for this exact tree' };
+  const skip = new Set(PROVEN_BY_PRE_PUSH);
+  const ids = (allIds || []).filter((id) => !skip.has(id));
+  if (!ids.length || ids.length === (allIds || []).length) return { args: [], reason: 'the whole gate: nothing to omit' };
+  return { args: ['--only', ids.join(',')], reason: `the ${ids.length} checks the pre-push gate did not already prove for this tree (omitted: ${[...skip].filter((x) => (allIds || []).includes(x)).join(', ')})` };
+}
+
 export function cmpVersions(a, b) {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
   for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }
@@ -126,7 +155,7 @@ export class ShipState {
   static load(path, now) { const s = new ShipState(path, now); try { s.data = JSON.parse(readFileSync(path, 'utf8')); } catch { /* a fresh run */ } return s; }
   save() { mkdirSync(dirname(this.path), { recursive: true }); const tmp = `${this.path}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(this.data, null, 1)); renameSync(tmp, this.path); }
   // Only the facts the flow records, so a stray or hostile key (a `__proto__`, say) can never be merged into the state.
-  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
+  static KEYS = ['branch', 'version', 'tag', 'pr', 'prUrl', 'releaseSha', 'mergeSha', 'prePushPassed', 'prHead', 'treeEquivalent', 'releaseRun', 'current', 'finished', 'failed', 'tmpdir', 'tmpdirGiven', 'dryRun', 'remoteAttestation'];
   set(patch) {
     for (const k of Object.keys(patch || {})) if (ShipState.KEYS.includes(k)) this.data[k] = patch[k];
     this.data.updated = this.now(); this.save();
