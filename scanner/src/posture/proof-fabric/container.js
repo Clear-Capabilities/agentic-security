@@ -20,7 +20,7 @@ import { scrubEnv } from '../../sandbox/trust-domains.js';
 export const CONTAINER_ROOT = '/work';
 // the image's own toolchain directories matter: the Temurin image puts the JDK at /opt/java/openjdk/bin and sets it through ENV, which a
 // bare PATH override throws away (found by the first run against a real engine: `javac: not found`)
-export const CONTAINER_PATH = '/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+const CONTAINER_PATH = '/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 // the interpreter names inside the image; the host paths the runner uses locally mean nothing in there
 export const CONTAINER_TOOLS = Object.freeze({ node: 'node', python: 'python3', java: 'java', javac: 'javac', cc: 'gcc', dotnet: 'dotnet' });
 
