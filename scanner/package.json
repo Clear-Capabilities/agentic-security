@@ -1,6 +1,6 @@
 {
   "name": "@clear-capabilities/agentic-security-scanner",
-  "version": "0.180.0",
+  "version": "0.181.0",
   "description": "Scanner engine for the agentic-security Claude Code plugin: SAST, SCA with reachability and CISA KEV, secrets, IaC, Haskell and Nix/NixOS, prompt-injection, MCP/agent-tool audit, authZ analysis, SBOM, compliance attestation, and more.",
   "type": "module",
   "main": "src/index.js",
@@ -199,7 +199,7 @@
     "bench:sibling-sweep:check": "node ../bench/sibling-sweep/runner.mjs --check",
     "bench:sibling-sweep:update-baseline": "node ../bench/sibling-sweep/runner.mjs --update-baseline",
     "bench:sca-replay": "node ../bench/sca-replay/runner.mjs",
-    "bench:sca-replay:check": "node ../bench/sca-replay/fetch.mjs && node ../bench/sca-replay/runner.mjs --check",
+    "bench:sca-replay:check": "node ../bench/sca-replay/check.mjs",
     "bench:sca-replay:reachability": "node ../bench/sca-replay/reachability.mjs",
     "bench:sca-replay:fetch": "node ../bench/sca-replay/fetch.mjs",
     "bench:sca-replay:label": "node ../bench/sca-replay/label.mjs",

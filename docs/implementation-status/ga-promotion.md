@@ -8,7 +8,7 @@ This page is the promotion record. A capability is promoted only when its row he
 
 | Phase | Content | Status |
 |---|---|---|
-| 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done in 0.180.0 |
+| 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
 | 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
 | 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Not started |
 | 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Not started |
