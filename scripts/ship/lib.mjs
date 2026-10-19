@@ -142,6 +142,19 @@ export function verifyArgs({ allIds, treeEquivalent, prePushPassed, prHead }) {
   return { args: ['--only', ids.join(',')], reason: `the ${ids.length} checks the pre-push gate did not already prove for this tree (omitted: ${[...skip].filter((x) => (allIds || []).includes(x)).join(', ')})` };
 }
 
+/**
+ * The background gate's verdict for HEAD, from `gate-warm.mjs --wait --json` output, or null when there is none to read (the script is
+ * absent, printed something else, or the state is unknown). Null means "no information": the push runs the gate as it always did.
+ */
+export function parseWarm(text) {
+  for (const line of String(text || '').split('\n').reverse()) {
+    const t = line.trim();
+    if (!t.startsWith('{')) continue;
+    try { const d = JSON.parse(t); if (d && ['passed', 'failed', 'running', 'none'].includes(d.state)) return d; } catch { /* not the json line */ }
+  }
+  return null;
+}
+
 export function cmpVersions(a, b) {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
   for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }

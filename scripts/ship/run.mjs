@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs } from './lib.mjs';
+import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -51,6 +51,11 @@ export async function runShip(ctx, opts = {}) {
       const head = git(['rev-parse', 'HEAD']).trim();
       const remote = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
       if (remote === head) return 'already on origin';
+      // The post-commit hook may already be running (or have finished) the gate for this commit in the background. Wait for it rather than start
+      // a second run, and stop at once if it already failed: the push would only repeat that failure after the same wait.
+      const warm = parseWarm(sh('node', ['scripts/gate-warm.mjs', '--wait', '--json'], { timeoutMs: 95 * 60 * 1000 }).out);
+      if (warm && warm.state === 'failed') throw new Stop('push', `the background gate already failed for this commit: ${(warm.failed || []).join('; ') || 'see .agentic-security/gate-warm/gate.log'}`);
+      if (warm) log(`  background gate for this commit: ${warm.state}${warm.state === 'passed' ? ' (the push reuses its cached verdicts)' : ''}`);
       const r = sh('git', [...CRED, 'push', '-u', 'origin', branch], { timeoutMs: 60 * 60 * 1000, stream: true });
       if (r.code !== 0) {
         const text = `${r.err}\n${r.out}`;

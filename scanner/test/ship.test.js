@@ -10,6 +10,8 @@ import { chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyR
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runShip } from '../../scripts/ship/run.mjs';
+import { parseWarm, verifyArgs, PROVEN_BY_PRE_PUSH } from '../../scripts/ship/lib.mjs';
+import { CHECKS, plannedCheckIds } from '../../scripts/release-check.mjs';
 
 const T = (c) => c.repeat(40).slice(0, 40);
 
@@ -141,9 +143,11 @@ function world(overrides = {}) {
       if (args[0] === 'rev-parse' && /\^\{tree\}$/.test(args[1])) return ok(`${w.trees[args[1].replace('^{tree}', '')]}\n`);
       if (args[0] === 'rev-parse' && args[1] === '-q') return { code: 1, out: '', err: '' };
       if (args[0] === 'ls-remote') return ok('');
+      if (args.includes('push') && args.includes('-u')) return { code: 0, out: '', err: w.prePushOut || '' };
       if (args[0] === 'log') return ok('release: 1.2.3\n');
       return ok();
     }
+    if (cmd === 'node' && args[0] === 'scripts/gate-warm.mjs') return ok(w.warmOut || '');
     if (cmd === 'node') w.gateEnv = (opts && opts.env) || {};
     if (cmd === 'node') return { code: w.releaseCheckCode, out: w.releaseCheckCode ? 'FAIL  Full test suite passes\n' : 'Release gate passed\n', err: '' };
     if (cmd === 'gh') {
@@ -504,5 +508,65 @@ test('[REL-003.AC03] flow: hosted CI attestation of the remote closure prerequis
   const r2 = await runShip(ctx2, { maxRetries: 2 });
   assert.equal(r2.ok, true);
   assert.match(lines2.join('\n'), /bad-response|informational only/);
+  fs.rmSync(ctx2._dir, { recursive: true, force: true });
+});
+
+test('background gate: a recorded failure stops the push at once; a pass or no record lets it proceed', async () => {
+  assert.deepEqual(parseWarm('noise\n{"state":"failed","failed":["Full test suite passes"]}\n').failed, ['Full test suite passes']);
+  assert.equal(parseWarm('Release gate passed\n'), null, 'unreadable output is no information, not a pass');
+  assert.equal(parseWarm('{"state":"mystery"}'), null);
+
+  const w = world({ warmOut: '{"state":"failed","failed":["Self-scan precision baseline holds"]}\n' }); const ctx = ctxFor(w);
+  const r = await runShip(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, false); assert.equal(r.phase, 'push');
+  assert.match(r.message, /background gate already failed.*Self-scan precision/);
+  assert.equal(ran(w, /^git .*push -u origin/).length, 0, 'nothing was pushed');
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+
+  for (const warmOut of ['{"state":"passed"}\n', '{"state":"none"}\n', '']) {
+    const w2 = world({ warmOut }); const c2 = ctxFor(w2);
+    const r2 = await runShip(c2, { maxRetries: 2 });
+    assert.equal(r2.ok, true, `${warmOut || '(empty)'}: ${JSON.stringify(r2)}`);
+    assert.equal(ran(w2, /^git .*push -u origin/).length, 1);
+    fs.rmSync(c2._dir, { recursive: true, force: true });
+  }
+});
+
+// ── the local release gate does not repeat what the pre-push gate proved for the identical tree ─────────────────
+
+test('verify args: the whole gate unless the tree is equivalent AND the pre-push gate passed for exactly that head', () => {
+  const allIds = plannedCheckIds();
+  const full = (x) => verifyArgs({ allIds, ...x }).args.length === 0;
+  assert.ok(full({ treeEquivalent: false, prePushPassed: 'h', prHead: 'h' }), 'a different tree was never verified');
+  assert.ok(full({ treeEquivalent: true, prePushPassed: undefined, prHead: 'h' }), 'no recorded pass: nothing is assumed');
+  assert.ok(full({ treeEquivalent: true, prePushPassed: 'other', prHead: 'h' }), 'a pass for another commit says nothing about this one');
+  const reduced = verifyArgs({ allIds, treeEquivalent: true, prePushPassed: 'h', prHead: 'h' });
+  assert.equal(reduced.args[0], '--only');
+  const ids = reduced.args[1].split(',');
+  for (const skipped of PROVEN_BY_PRE_PUSH) assert.ok(!ids.includes(skipped), `${skipped} is proven by the pre-push gate and omitted`);
+  for (const kept of ['changelog-entry', 'dependency-currency', 'remote-ci-green', 'version-consistency', 'scorecard-freshness', 'release-closure-gate', 'working-tree-clean', 'head-pushed']) assert.ok(ids.includes(kept), `${kept} still runs locally`);
+});
+
+test('verify args: every omitted id is a real release check, and nothing the publish needs is omitted', () => {
+  const known = new Set(CHECKS.map((c) => c.id));
+  for (const id of PROVEN_BY_PRE_PUSH) assert.ok(known.has(id), `${id} is a release-check id`);
+  for (const id of ['changelog-entry', 'dependency-currency', 'remote-ci-green', 'release-closure-gate', 'ttff-gate', 'memory-gate']) assert.ok(!PROVEN_BY_PRE_PUSH.includes(id), `${id} must keep running`);
+});
+
+test('flow: with a recorded pre-push pass for the released head the local gate runs only the unproven checks; without one it runs the whole gate', async () => {
+  const w = world({ prePushOut: 'PASS  Full test suite passes\n\npre-push gate PASSED in 900s: verified: x\n' }); const ctx = ctxFor(w);
+  const r = await runShip(ctx, { maxRetries: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const gate = ran(w, /^node scripts\/release-check\.mjs/);
+  assert.equal(gate.length, 1);
+  assert.match(gate[0], /--only /);
+  assert.doesNotMatch(gate[0], /test-suite|corpus-gate/);
+  assert.match(gate[0], /changelog-entry/);
+  fs.rmSync(ctx._dir, { recursive: true, force: true });
+
+  const w2 = world(); const ctx2 = ctxFor(w2);
+  const r2 = await runShip(ctx2, { maxRetries: 2 });
+  assert.equal(r2.ok, true, JSON.stringify(r2));
+  assert.equal(ran(w2, /^node scripts\/release-check\.mjs$/).length, 1, 'no evidence of a gated push: the whole gate');
   fs.rmSync(ctx2._dir, { recursive: true, force: true });
 });
