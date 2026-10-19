@@ -54,7 +54,7 @@ Each role page opens with its primary question and a **Core workflow** link, so 
 ## More areas
 
 - **[Integrations](integrations/README.md)** · **[Reference](reference/README.md)** (with the **[capability reference](reference/capability-reference.md)** moved from the README) · **[Labs](labs/README.md)** · **[Roadmap](roadmap/README.md)** · **[Website package](website/)**
-- **[Style and terminology](STYLE-AND-TERMINOLOGY.md)** · **[Documentation migration map](DOCS-MIGRATION.md)** · **[Implementation status](implementation-status/autonomous-assurance-docs-repositioning.md)**
+- **[Style and terminology](STYLE-AND-TERMINOLOGY.md)** · **[Documentation migration map](DOCS-MIGRATION.md)** · **[Implementation status](implementation-status/autonomous-assurance-docs-repositioning.md)** · **[GA promotion record](implementation-status/ga-promotion.md)**
 
 ---
 

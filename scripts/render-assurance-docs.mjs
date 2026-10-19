@@ -13,6 +13,10 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// The date the limits section of the generated MCP contract page was last re-read against the code. The GA bar fails a limits section that is
+// more than 90 days older than the checkout, so changing this is a deliberate re-read, not a formality.
+const LIMITS_VERIFIED = '2026-10-19';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const S = (p) => import(pathToFileURL(join(ROOT, 'scanner', 'src', p)).href);
 export const PAGES = Object.freeze({
@@ -59,6 +63,8 @@ export async function renderMcp() {
     table(['Tool', 'Classification', 'Checks before handler', 'Inputs', 'What it does', 'Classification note'], rows),
     '',
     '## What the classification means, and what it does not',
+    '',
+    `<!-- limits-verified: ${LIMITS_VERIFIED} -->`,
     '',
     '- The classification is policy at the tool boundary. A tool runs in the MCP server process, so the decision is `in-process-policy`, never enforced isolation. Only the capability runner mediates a task\'s files, commands and network, and the capability pages say where it is verified.',
     `- ${code('invariant_scenario_export')} and ${code('portfolio_progress')} are read tools: they build an export or a progress view from files confined to the session root and execute nothing. They are off unless the operator enabled ${code('invariant-scenarios')} or ${code('portfolio-assurance')} respectively.`,

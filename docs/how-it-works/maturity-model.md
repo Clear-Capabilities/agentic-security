@@ -6,7 +6,7 @@ Every major capability uses exactly one of four labels. The labels live in one p
 
 | Label | Meaning | What you can rely on |
 |---|---|---|
-| **GA** | Production-supported | Implemented, tested, and supported for production use. A GA capability must name implementation evidence that exists in the repository. |
+| **GA** | Production-supported | Implemented, tested, and supported for production use. A GA capability meets the [GA bar](#the-ga-bar) below, and the registry names the evidence for each criterion. |
 | **Preview** | Implemented and usable, still being hardened | It works as documented. Its limits are written next to it, and its behavior may still tighten. |
 | **Labs** | Experimental; the interface may change materially | It is real code, but do not build a process on its exact output shape. |
 | **Roadmap** | Strategic direction; not shipped | Nothing. It is described in the future or conditional tense, and the registry lists no implementation evidence for it. |
@@ -20,12 +20,29 @@ Every major capability uses exactly one of four labels. The labels live in one p
 
 The labels describe the *capability*, not the quality of any one result. A GA capability can return a `partial` scan; that is the system working as designed.
 
+## The GA bar
+
+GA is earned, not assigned. A capability is GA only when every criterion below holds. Criteria marked mechanical are checked from fields in the registry, and the checker fails when a named page, test, gate, job or section does not exist.
+
+| # | Criterion | How it is checked |
+|---|---|---|
+| G1 | **Frozen contract.** The flags, exit codes, output fields and state files the capability exposes are listed on a reference page and covered by a compatibility test. | Mechanical: `contract` names the page, `contractTest` names a test that a scanner test script runs, and the `contract-conformance` release check runs every named test. |
+| G2 | **Both-direction tests.** Every claim on the capability's page has a test that proves it fires and a test that proves it stays quiet. | Reviewed, and recorded per capability in the [promotion record](../implementation-status/ga-promotion.md). |
+| G3 | **Measured, with the denominator.** A bench or gate measures the capability, is evaluated by the release gate, and fails closed on a regression. | Mechanical: `gate` must be a check that `scripts/release-check.mjs` evaluates. |
+| G4 | **Platform coverage stated and tested.** The capability runs in hosted CI on Linux, and on macOS where the maintainer machine is the only other evidence. | Mechanical: `platforms` lists `os:job` pairs, at least one `linux`, each job present in `.github/workflows/`. |
+| G5 | **Limits are current.** The page has a "does not do" section, dated and re-read. | Mechanical: `limits` is `page#anchor`; the section must exist and carry a `limits-verified` date no more than 90 days before the checkout's HEAD commit. |
+| G6 | **Stable across releases.** No contract-breaking change for two releases, and `since` records the version of promotion. | Mechanical for `since`; the compatibility test enforces the rest from then on. |
+| G7 | **Degradation is honest.** Every way the capability can fail to run produces a named degraded state, never a clean result. | Reviewed, and recorded in the promotion record. |
+
+A **Preview** capability needs a frozen `contract` page, or a dated `contractNote` that says which fields may still change. **Labs** and **Roadmap** are unchanged. The bar applies to every GA capability, the twelve that existed first included; one that fails it is fixed or demoted with the reason written on its page.
+
 ## What is checked
 
 `node scripts/check-positioning-docs.mjs` (also run by `check-doc-drift.mjs --gate`, which the release gate runs) fails on:
 
 - an unknown maturity or lifecycle stage;
 - a GA, Preview or Labs capability with no implementation evidence, or evidence that does not exist;
+- a GA capability that does not meet the mechanical criteria of the GA bar, or a Preview capability with neither a contract page nor a dated contract note;
 - a Roadmap capability that lists implementation evidence;
 - a page that states a maturity different from the registry (for example `[GA]` beside a Labs capability);
 - a Roadmap capability described in the present tense as shipped, or a Labs capability described as production-ready;

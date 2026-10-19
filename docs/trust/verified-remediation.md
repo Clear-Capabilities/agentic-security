@@ -57,6 +57,8 @@ A fourth, unrelated surface exists: `agentic-security verify` re-runs the verifi
 
 ## What verification does not establish
 
+<!-- limits-verified: 2026-10-19 -->
+
 - That no other weakness exists.
 - That a `MITIGATION` or `WORKAROUND` removed the underlying issue.
 - That a re-scan stopping the detector means the vulnerability is closed. Only the proof-of-concept leg re-executes the exploit.

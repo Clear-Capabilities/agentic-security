@@ -32,6 +32,15 @@ Validation, fix proposal and `hunt` can run against a model on loopback: [Local 
 - In Claude Code, delegate to the bundled agents: triager, fixer, PoC generator, logic reviewer, chain synthesizer and material-change scorer. Edit-capable agents follow a path-confinement contract.
 - Deterministic Context Intelligence builds hash-bound context bundles for focused, citation-checked reviews (opt-in, Preview): [guide](../guides/context-intelligence.md).
 
+## What the guardrails do not do
+
+<!-- limits-verified: 2026-10-19 -->
+
+- **Bodyguard is a pattern check on the content about to be written.** It catches the classes it knows (injectable SQL, hardcoded keys, `eval` on user input, and any pattern in `forbidden-apis.yml`). It is not a code review, and its default mode is `warn`; only `block` stops an edit.
+- **The destructive-command guard is not a sandbox.** It parses file deletions and blocks those outside the allowed roots or that it cannot resolve statically. It cannot see deletion done inside another program, such as a script that removes files itself.
+- **Both are editor hooks.** They run where the plugin is installed and enabled, and a developer who bypasses the editor integration bypasses them.
+- **Neither replaces the scan.** They act before the write; the scan and its evidence still apply to everything already on disk.
+
 ## Model and token cost
 
 A per-prompt advisor suggests a cheaper model or lower reasoning depth when one would do, accounting for the prompt cache a model switch would discard. It is advisory and on by default. See [cache economics](../MODEL_COST_OPTIMIZATION.md).

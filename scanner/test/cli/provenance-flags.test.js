@@ -247,7 +247,13 @@ test('I3: --require-provenance records a scanHealth condition and demotes the st
 test('--pseudonymize-authors replaces the real author name with a stable Contributor-XXXXXXXX id in real scan output', () => {
   const CLI = fileURLToPath(new URL('../../bin/agentic-security.js', import.meta.url));
   const dir = mkdtempSync(path.join(tmpdir(), 'as-cli-pseudo-'));
-  const git = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8' });
+  // Every fixture step must succeed. An unchecked failed commit leaves an uncommitted tree, whose origin has no author, and this test
+  // then fails far away from the cause with "real author name missing".
+  const git = (...a) => {
+    const r = spawnSync('git', a, { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${a.join(' ')} failed (${r.status}): ${r.stderr}`);
+    return r;
+  };
   try {
     git('init', '-q');
     git('config', 'user.email', 'jamie@example.com');
@@ -284,7 +290,7 @@ test('--pseudonymize-authors replaces the real author name with a stable Contrib
       .filter(Boolean);
     assert.ok(originsWithout.length > 0, 'no findingOrigin present to assert against');
     assert.ok(originsWithout.some((o) => o.authorName === 'Jamie Chen'),
-      'real author name missing from output when --pseudonymize-authors was not passed');
+      `real author name missing from output when --pseudonymize-authors was not passed: ${JSON.stringify(originsWithout)}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

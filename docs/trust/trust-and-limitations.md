@@ -26,6 +26,8 @@ This page is the front door to everything the product will not claim. It replace
 
 ## What a clean result means
 
+<!-- limits-verified: 2026-10-19 -->
+
 | You see | It means | It does not mean |
 |---|---|---|
 | Zero actionable findings, `scanHealth.status: complete` | Nothing actionable was found by the analyses that ran, and they all finished | Nothing is wrong |
@@ -37,6 +39,8 @@ This page is the front door to everything the product will not claim. It replace
 | A `FULL` fix tier | The sink changed, callers are routed through the fix, and tests flipped, as far as the legs ran | No other weakness exists |
 
 ## Known limits worth knowing first
+
+<!-- limits-verified: 2026-10-19 -->
 
 - **Independent accuracy is low, and measured.** On code the engine was not built from (278 of 283 entries scored), localized precision was 6/19 and recall 6/278, F1 0.040 (95% interval 0.013 to 0.075). Every miss is classified, and the number is the headline of the evidence, not a footnote. See [Engineering excellence evidence](../engineering-excellence/README.md) and [benchmarking methodology](benchmarking-methodology.md).
 - **The regression corpus is a regression net, not a recall measurement.** Most of its entries are self-authored synthetic fixtures.

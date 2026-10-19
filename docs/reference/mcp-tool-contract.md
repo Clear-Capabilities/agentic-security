@@ -43,6 +43,8 @@ An asterisk marks a required input. "Checks before handler" lists the capability
 
 ## What the classification means, and what it does not
 
+<!-- limits-verified: 2026-10-19 -->
+
 - The classification is policy at the tool boundary. A tool runs in the MCP server process, so the decision is `in-process-policy`, never enforced isolation. Only the capability runner mediates a task's files, commands and network, and the capability pages say where it is verified.
 - `invariant_scenario_export` and `portfolio_progress` are read tools: they build an export or a progress view from files confined to the session root and execute nothing. They are off unless the operator enabled `invariant-scenarios` or `portfolio-assurance` respectively.
 - The mutating and external tools (`apply_fix`, `apply_sca_upgrade`, `verify_fix`, `append_scratchpad`, `append_agents_memory`, `synthesize_sca_upgrade`) always require the tool and session-root checks when the gate is active. Whether the tool gate is active at all is an operator decision.
