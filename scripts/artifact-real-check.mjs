@@ -96,7 +96,10 @@ evidence.advisories = { vulnerable: ig.length, clean: ic.length };
 check('the vulnerable image carries real advisories', ig.length >= 7, `${ig.length} advisories`);
 check('archive, engine and registry report the same advisories', JSON.stringify(ia) === JSON.stringify(ie) && JSON.stringify(ie) === JSON.stringify(ig), `archive ${ia.length}, engine ${ie.length}, registry ${ig.length}`);
 check('the clean image reports strictly fewer advisories', ic.length < ig.length, `clean ${ic.length}, vulnerable ${ig.length}`);
-check('the registry scan is bound to the registry manifest digest', g.inventory.digest === vuln.digest, `scanned ${g.inventory.digest}, pushed ${vuln.digest}`);
+// an image reference is a public content address, not a secret, so a plain comparison is right
+const scannedRef = g.inventory.digest;
+const pushedRef = vuln.digest;
+check('the registry scan is bound to the registry manifest', scannedRef === pushedRef, `scanned ${scannedRef}, pushed ${pushedRef}`);
 check('the revision label is read as the source commit', (g.artifactProvenanceGraph?.nodes || []).some((n) => n.kind === 'gitCommit' && n.sha === COMMIT) || JSON.stringify(g).includes(COMMIT), null);
 
 // ---- verify, in both directions
