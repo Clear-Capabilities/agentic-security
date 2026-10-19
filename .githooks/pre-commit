@@ -1,0 +1,7 @@
+#!/bin/sh
+# Pre-commit preparation (committed hook; activated by `git config core.hooksPath .githooks`).
+# A thin shim over scripts/pre-commit-prepare.mjs: rebuild the bundle when a build input is staged and regenerate the generated docs
+# tables when a docs page is staged, so those never fail the pre-push gate later. `git commit --no-verify` skips it.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+exec node "$REPO_ROOT/scripts/pre-commit-prepare.mjs" "$@"

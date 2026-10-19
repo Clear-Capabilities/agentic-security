@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.179.0 - Faster releases: checks run at commit time, and the release gate stops repeating itself
+
+Release tooling only. No scanner behavior changed. The last full release took 68 minutes: push 15.5, hosted CI wait 14.5, local release gate 25, hosted release workflow 8, npm 4.5. Two changes cut the local share, and nothing the hosted gate proves was removed.
+
+- **Background gate warm-up.** `.githooks/post-commit` starts `scripts/gate-warm.mjs --start`: a detached, low-priority run of the same pre-push gate (`pre-push-gate.mjs --force`) for the commit just made, recording passes in the same signed verdict cache, so `git push` reuses them. `npm run gate:status` (exit 0 passed, 1 failed, 2 running, 3 nothing usable for HEAD) and `npm run gate:wait` show or await it. It is not a second gate: an amend, rebase, edit or different Node changes the cache key and the push runs the gate in full. It does not start in CI, during a rebase, merge, cherry-pick or bisect, or with `AGENTIC_SECURITY_NO_GATE_WARM=1`.
+- **Commit-time preparation.** `.githooks/pre-commit` runs `scripts/pre-commit-prepare.mjs`: it rebuilds `scanner/dist` and stages it when a build input is staged (the bundle embeds `package.json`), and regenerates the generated docs tables when a docs page is staged. A partial commit of build inputs is refused. `--no-verify` and `AGENTIC_SECURITY_NO_PRECOMMIT=1` skip it.
+- **`ship` uses both.** Before pushing it asks for the background verdict: a recorded failure stops it at once with the check names, a running warm-up is awaited, a pass lets the push reuse it.
+- **The local release gate no longer repeats what the pre-push gate proved.** When the released commit has the PR head's identical tree and the push output recorded `pre-push gate PASSED` for exactly that head, `verify` runs every check except the ten the pre-push gate already ran (`PROVEN_BY_PRE_PUSH` in `scripts/ship/lib.mjs`). The publish blockers (changelog entry, dependency currency, remote CI, version, scorecard), the full release closure and the time and memory gates still run locally. Otherwise the whole gate runs. The hosted release workflow still runs every check with the cache off and its publish job needs all of them.
+
+Measured effect is not yet known: this release is the first to use them. The expected saving is about 20 of the 25 local-gate minutes, plus the push wait when the warm-up has finished.
+
 ## 0.178.0 - Autonomous Security Assurance: documentation repositioning
 
 Documentation and documentation tooling only. No scanner behavior changed, no benchmark claim was added, and no capability was promoted to GA.

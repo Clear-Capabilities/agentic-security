@@ -1,0 +1,9 @@
+#!/bin/sh
+# Background gate warm-up (committed hook; activated by `git config core.hooksPath .githooks`).
+# Starts `scripts/gate-warm.mjs --start`, which runs the pre-push gate for the commit just made in a detached, low-priority process and
+# records the verdict in the shared cache, so `git push` reuses it. It returns immediately and can never fail or slow a commit.
+# Off with AGENTIC_SECURITY_NO_GATE_WARM=1.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+node "$REPO_ROOT/scripts/gate-warm.mjs" --start --quiet >/dev/null 2>&1 || true
+exit 0

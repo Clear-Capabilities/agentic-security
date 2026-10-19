@@ -1,7 +1,7 @@
 // The release flow, as a state machine over an injected context (scripts/ship.mjs wires the real one; the tests wire a scripted one).
 // Each phase starts the moment the previous one finishes: no human or agent polling sits between a green check and the next step.
 
-import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor } from './lib.mjs';
+import { PHASES, ShipState, chooseReleaseSha, parseChecks, classifyChecks, findStuckJobs, classifyReleaseFailure, npmFacts, preflightProblems, waitFor, verifyArgs, parseWarm } from './lib.mjs';
 
 const PKG = '@clear-capabilities/agentic-security-scanner';
 const CRED = ['-c', "credential.helper=!gh auth git-credential"];
@@ -51,6 +51,11 @@ export async function runShip(ctx, opts = {}) {
       const head = git(['rev-parse', 'HEAD']).trim();
       const remote = sh('git', ['ls-remote', 'origin', `refs/heads/${branch}`]).out.split('\t')[0];
       if (remote === head) return 'already on origin';
+      // The post-commit hook may already be running (or have finished) the gate for this commit in the background. Wait for it rather than start
+      // a second run, and stop at once if it already failed: the push would only repeat that failure after the same wait.
+      const warm = parseWarm(sh('node', ['scripts/gate-warm.mjs', '--wait', '--json'], { timeoutMs: 95 * 60 * 1000 }).out);
+      if (warm && warm.state === 'failed') throw new Stop('push', `the background gate already failed for this commit: ${(warm.failed || []).join('; ') || 'see .agentic-security/gate-warm/gate.log'}`);
+      if (warm) log(`  background gate for this commit: ${warm.state}${warm.state === 'passed' ? ' (the push reuses its cached verdicts)' : ''}`);
       const r = sh('git', [...CRED, 'push', '-u', 'origin', branch], { timeoutMs: 60 * 60 * 1000, stream: true });
       if (r.code !== 0) {
         const text = `${r.err}\n${r.out}`;
@@ -59,6 +64,8 @@ export async function runShip(ctx, opts = {}) {
         const why = failed.length ? `failed checks: ${failed.join('; ')}` : text.trim().split('\n').slice(-6).join(' | ');
         throw new Stop('push', `git push failed (the pre-push gate or the remote refused): ${why.slice(0, 400)}`);
       }
+      // the gate prints exactly this line when every check passed; it is the only evidence that this head was gated
+      if (/pre-push gate PASSED/.test(`${r.err}\n${r.out}`)) state.set({ prePushPassed: head });
       return `pushed ${head.slice(0, 8)}`;
     });
 
@@ -144,7 +151,10 @@ export async function runShip(ctx, opts = {}) {
       // The gate gets an EMPTY temp directory unless the operator named one: leftover temp files from earlier runs slow the suite.
       let tmp = o.tmpdir;
       if (!tmp && ctx.makeTmpdir) { tmp = autoTmp = ctx.makeTmpdir(); state.set({ tmpdir: tmp }); log(`  release gate TMPDIR: ${tmp} (fresh and empty)`); }
-      const r = sh('node', ['scripts/release-check.mjs'], { stream: true, timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {} });
+      const { plannedCheckIds } = await import('../release-check.mjs');
+      const plan = verifyArgs({ allIds: plannedCheckIds(), treeEquivalent, prePushPassed: state.data.prePushPassed, prHead });
+      log(`  release gate: ${plan.reason}`);
+      const r = sh('node', ['scripts/release-check.mjs', ...plan.args], { stream: true, timeoutMs: 90 * 60 * 1000, env: tmp ? { TMPDIR: tmp, TMP: tmp, TEMP: tmp } : {} });
       sh('git', ['checkout', '--', 'bench/memory/history.jsonl', 'bench/provenance/history.jsonl', 'bench/ttff/history.jsonl']);
       if (r.code !== 0) throw new Stop('verify', `the release gate failed: ${(r.out + r.err).split('\n').filter((l) => /^(FAIL|✗)/.test(l)).slice(0, 4).join(' | ')}`);
       return `release gate passed on ${releaseSha.slice(0, 8)}${treeEquivalent ? ' (verdicts for this tree reused where identical inputs allow)' : ''}`;
