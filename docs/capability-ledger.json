@@ -1222,7 +1222,9 @@
         "docs/STYLE-AND-TERMINOLOGY.md",
         "docs/DOCS-MIGRATION.md",
         "docs/implementation-status/autonomous-assurance-docs-repositioning.md",
-        "docs/implementation-status/ga-promotion.md"
+        "docs/implementation-status/ga-promotion.md",
+        "docs/reference/root-cause-sweep.md",
+        "docs/reference/federation.md"
       ],
       "haskell": {
         "applicability": "applicable",

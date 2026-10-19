@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { readManifest, entryDir, entryComplete } from './fetch.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const LABELS = path.join(HERE, 'labels.json');
+const LABELS = process.env.SCA_REPLAY_LABELS_OUT || path.join(HERE, 'labels.json');
 const OSV_BATCH = 'https://api.osv.dev/v1/querybatch';
 
 // ─── Independent readers, one per format ─────────────────────────────────────

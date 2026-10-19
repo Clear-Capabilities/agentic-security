@@ -9,6 +9,16 @@
 > make the history less accurate, not more.
 
 
+## 0.181.0 - Three capabilities earn GA: the sibling sweep, blast radius and federation
+
+Registry, documentation and release-gate tooling, plus one precision fix to the sibling sweep. No capability was relabeled without evidence: each promotion below meets the GA bar, and four others were assessed and held at Preview with the measured reason recorded in `docs/implementation-status/ga-promotion.md`.
+
+- **0.180.0 was tagged but never published, and the reason is fixed here.** Its hosted release gate failed on `sca-replay-gate`: the engine reads today's advisory data while `labels.json` is a months-old snapshot, so every advisory published since counted as an engine false positive (precision 95.6% against a committed 100%). The check now re-labels in the same run (`bench/sca-replay/check.mjs`, labels in a temp file, nothing written to the repository) so both sides read the same data, holds precision to 2 points and recall to 6 (recall moves with how fresh the engine's own advisory lookups are). Everything 0.180.0 described ships in this release.
+- **Repository-wide sibling sweep is GA.** New `bench/sibling-sweep` seeds eight sink kinds across JavaScript, Python and Java plus a 150-sibling case, and the new `sibling-sweep-gate` release check compares it for equality. It finds every same-shape copy (159 of 159) and 1 of 9 siblings built another way, and it can match a mention in a comment; both are written on the contract page. The bench exposed a defect that is fixed: a chain of argument-less calls such as `Runtime.getRuntime().exec(x)` anchored on its first call, so every other use of `Runtime.getRuntime()` counted as a sibling.
+- **Blast-radius assessment is GA.** New `bench/blast-radius` compares the assessment with an independent reference on 300 seeded graphs (7856 targets) and the new `blast-radius-gate` release check holds it. The command's exit codes and the record's fields are now a contract page with a test that fails when either changes.
+- **Cross-repository graph federation is GA.** A contract page and a test that runs the real `federate declare` and `federate list`, and checks that neither graph file changes, a dry run writes nothing, the same fact is one link, and a declaration can never claim to be observed.
+- **Held at Preview, with evidence:** Code Boundaries (the lineage corpus passes 17 of 24), deterministic context intelligence (Flask routes mostly unresolved), compliance control evidence (coverage maps for 5 of 10 frameworks), finding provenance (accuracy, coverage and overhead below their targets).
+
 ## 0.180.0 - The GA bar: GA is earned against named evidence, and checked
 
 Documentation, registry and release-gate tooling only. No scanner behavior changed, and no capability changed maturity.

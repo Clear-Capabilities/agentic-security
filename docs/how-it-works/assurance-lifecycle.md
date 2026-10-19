@@ -109,7 +109,7 @@ This stage is **Labs**. The finding-to-rule compiler (`rules synthesize|evaluate
 
 **Where else does this weakness exist?**
 
-- Within a repository (Preview): a confirmed finding triggers a repo-wide sweep for sibling instances, reported as found, candidate and mitigated counts.
+- Within a repository (GA): a confirmed finding triggers a repo-wide sweep for sibling instances, reported as found, candidate and mitigated counts.
 - Across repositories (Labs): `fleet` runs leased, supervised scan jobs for a declared set of repositories from a local SQLite store and answers which of them depend on, or reference in code, a given one. Dependency matching is by declared package name; there is no remote-worker store.
 
 Cross-repository claims here are limited to those two behaviors.
@@ -119,9 +119,9 @@ Cross-repository claims here are limited to those two behaviors.
 <!-- generated:capabilities:scale:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Repository-wide sibling sweep](../scale/README.md) | Scale | **Preview** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
+| [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
 | [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
-| [Cross-repository graph federation](../guides/data-flow-explorer.md) | Scale, Trace | **Preview** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
+| [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 <!-- generated:capabilities:scale:end -->
 
 ## 6. Observe
@@ -145,16 +145,16 @@ Live, continuous collection of production behavior is **Roadmap** and is not shi
 
 **How does risk connect through code, data, architecture, provenance, and artifacts?**
 
-Trace is grounded in the [security graph](../security-graph/code-boundaries.md) (Code Boundaries): sources, sinks, field-level flows and protection state, with blast radius and federation across repositories. [Provenance](../security-graph/provenance.md) adds which commit introduced a finding and whether a built container image still contains it. All of it is Preview.
+Trace is grounded in the [security graph](../security-graph/code-boundaries.md) (Code Boundaries): sources, sinks, field-level flows and protection state, with blast radius and federation across repositories. [Provenance](../security-graph/provenance.md) adds which commit introduced a finding and whether a built container image still contains it. The graph and provenance are Preview; blast radius and federation are GA.
 
 *Evidence created:* a signed graph artifact, an impact assessment, a provenance record.
 
 <!-- generated:capabilities:trace:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Cross-repository graph federation](../guides/data-flow-explorer.md) | Scale, Trace | **Preview** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
+| [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 | [Code Boundaries security graph](../security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
-| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **Preview** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
+| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
 | [Finding provenance from Git history](../guides/finding-provenance.md) | Trace | **Preview** | Which commit introduced a finding, resolved from Git history, with the resolution quality stated. |
 | [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **Preview** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry. |
 | [Compliance control evidence](../guides/compliance.md) | Trace | **Preview** | Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification. |
@@ -228,13 +228,13 @@ The other half is **Roadmap**: connecting detections to a live SIEM or EDR and r
 | [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](../../commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](../roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
-| [Repository-wide sibling sweep](../scale/README.md) | Scale | **Preview** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
+| [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
 | [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
-| [Cross-repository graph federation](../guides/data-flow-explorer.md) | Scale, Trace | **Preview** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
+| [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 | [Runtime corroboration of the scanned graph](../guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](../roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
 | [Code Boundaries security graph](../security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
-| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **Preview** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
+| [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
 | [Finding provenance from Git history](../guides/finding-provenance.md) | Trace | **Preview** | Which commit introduced a finding, resolved from Git history, with the resolution quality stated. |
 | [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **Preview** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry. |
 | [Fix synthesis](../guides/fixing-vulnerabilities.md) | Fix | **GA** | A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification. |

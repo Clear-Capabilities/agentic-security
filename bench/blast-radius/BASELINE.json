@@ -1,0 +1,32 @@
+{
+  "schema": "blast-radius/v1",
+  "total": {
+    "graphs": 300,
+    "targets": 7856,
+    "nodesAgree": 7856,
+    "edgesAgree": 7856,
+    "classesAgree": 7856,
+    "recipientsAgree": 7856,
+    "schemaValid": 7856,
+    "phantomNodes": 0,
+    "disclosesCoverage": 7856
+  },
+  "byKind": {
+    "node": {
+      "targets": 2651,
+      "agree": 2651
+    },
+    "edge": {
+      "targets": 3084,
+      "agree": 3084
+    },
+    "flow": {
+      "targets": 1057,
+      "agree": 1057
+    },
+    "data": {
+      "targets": 1064,
+      "agree": 1064
+    }
+  }
+}

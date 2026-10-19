@@ -8,12 +8,12 @@ This page is the promotion record. A capability is promoted only when its row he
 
 | Phase | Content | Status |
 |---|---|---|
-| 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done in 0.180.0 |
-| 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Not started |
+| 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
+| 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
 | 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Not started |
 | 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Not started |
 
-No capability has been promoted yet. Phase 0 changed what GA means, not what is GA.
+Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promotions made against the bar.
 
 ## Phase 0: what was built
 
@@ -41,6 +41,31 @@ No capability has been promoted yet. Phase 0 changed what GA means, not what is 
 
 All twelve pass the mechanical criteria. None was demoted.
 
+## Wave 1: decisions and evidence
+
+Seven capabilities were assessed. Three met the bar and were promoted in 0.181.0. Four did not, and the reason for each is a measured result, not a missing document.
+
+### Promoted
+
+| Capability | Contract page | Contract test | Gate | What was built |
+|---|---|---|---|---|
+| Repository-wide sibling sweep | [sibling sweep contract](../reference/root-cause-sweep.md) | `contracts/root-cause-sweep.contract.test.js` | `sibling-sweep-gate` (new, equality) | `bench/sibling-sweep`: eight seeded sink kinds plus a 150-sibling case. A defect the bench exposed was fixed: a chain of argument-less calls such as `Runtime.getRuntime().exec(x)` anchored on its first call, so unrelated uses of `Runtime.getRuntime()` counted as siblings |
+| Blast-radius assessment | [blast radius](../security-graph/blast-radius.md#contract) | `contracts/blast-radius.contract.test.js` | `blast-radius-gate` (new, equality) | `bench/blast-radius`: 300 seeded graphs, 7856 targets, compared with an independent reference |
+| Cross-repository graph federation | [federation contract](../reference/federation.md) | `contracts/federation.contract.test.js` | `contract-conformance` | A contract test that runs the real commands and checks both graph files are byte-identical afterwards |
+
+The measured limits are on each capability's page and are not softened. The sweep finds every same-shape copy (159 of 159) but only 1 of 9 siblings whose argument is built another way, and it can match a mention in a comment. Blast radius agrees with its specification on every seeded target, which says nothing about how faithful a real graph is.
+
+### Held, and why
+
+| Capability | Held at | Evidence |
+|---|---|---|
+| Code Boundaries security graph | Preview | The lineage accuracy corpus passes 17 of 24 cases, with 7 capability-tier failures (a missing `http-body`, `database`, `storage-read`, `user-input`, `http-upload` or `cli-argument` node, and flows through an alias or a helper function that were not connected). The corpus is JavaScript only. Per-language measured taint recall is 58% for JavaScript and 66% for Python |
+| Deterministic context intelligence | Preview | The application-shaped benchmark settles 31 of 39 routes. Flask is the gap: 6 of its 10 routes are unresolved and none of the settled Flask routes is a true positive. Express precision is 82% (2 false positives in the ownership families). The cases are self-labelled and synthetic |
+| Compliance control evidence | Preview | There are 10 bundled frameworks and per-control coverage maps for 5 of them, which the README records as a known gap. The coverage maps are hand-maintained, with no gate that checks their counts against the framework files |
+| Finding provenance from Git history | Preview | Known-origin accuracy is 92.3% against a 98% target, coverage 91.2% against 95%, and cold-cache overhead roughly 27 times against a 1.3 times target. Renamed files resolve to `partial`. This needs engine work, not documentation |
+
+These four stay in the registry as Preview with their limits written. They are the Phase 1 backlog, in this order: provenance (engine), the lineage corpus failures, a compliance coverage generator, then Flask context resolution.
+
 ## Reviewed criteria and open gaps
 
 G2 (both-direction tests) was reviewed by reading each contract test's cases on 2026-10-19. Ten of the twelve have cases in both directions for the claims on their pages. Two are weaker than the bar wants, and Phase 1 owes them stronger contract tests:
@@ -52,4 +77,4 @@ G7 (honest degradation) has not yet been audited per capability. The scan health
 
 ## Not done
 
-Everything in the PRD's Waves 1 to 3. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.
+Waves 2 and 3, and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.

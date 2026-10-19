@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-19T00:00:44.662Z",
-  "commit": "b3035a288fce8a1139dc52ceedbbf681a11f0fe2",
+  "generatedAt": "2026-10-19T18:08:40.628Z",
+  "commit": "cf93103e46a2f9db268a9c1a067c2210d8677550",
   "targets": {
     "hooks": {
       "total": 21,
@@ -61,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 737,
+      "total": 736,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -303,7 +303,6 @@
         "posture/remediation-ledger.js": 1,
         "posture/retention-policy.js": 1,
         "posture/risk-dollars.js": 3,
-        "posture/root-cause-sweep.js": 1,
         "posture/router.js": 3,
         "posture/rule-compiler/cli.js": 5,
         "posture/rule-compiler/mutation.js": 2,

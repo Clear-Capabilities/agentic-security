@@ -321,6 +321,25 @@ export const CHECKS = [
       're-recorded by running `npm run bench:sca-replay` and committing bench/sca-replay/RESULT.json with the reason.',
   },
   {
+    // GA promotion, Wave 1: the repository-wide sibling sweep is measured on seeded sibling sets (bench/sibling-sweep). The gate
+    // compares for equality: a drop is a regression and a rise is an unrecorded change, so both fail until the baseline is updated
+    // on purpose. It is deterministic, offline and takes well under a second, so it also runs under --fast.
+    id: 'sibling-sweep-gate',
+    title: 'Sibling sweep recall, known-site classification and look-alike rejection match the recorded baseline',
+    slow: false,
+    remedy: 'Run `npm run bench:sibling-sweep:check` in scanner/. A real regression is a defect in root-cause-sweep.js; a deliberate ' +
+      'change is re-recorded with `npm run bench:sibling-sweep:update-baseline` and the reason goes in the commit.',
+  },
+  {
+    // GA promotion, Wave 1: blast-radius assessment is measured against an independent reference over seeded graphs
+    // (bench/blast-radius). Equality gate; deterministic, offline and under a second, so it also runs under --fast.
+    id: 'blast-radius-gate',
+    title: 'Blast-radius assessment agrees with the independent reference on every seeded graph',
+    slow: false,
+    remedy: 'Run `npm run bench:blast-radius:check` in scanner/. A real regression is a defect in lineage/impact-engine.js; a deliberate ' +
+      'change is re-recorded with `npm run bench:blast-radius:update-baseline` and the reason goes in the commit.',
+  },
+  {
     // GA promotion G1: every Preview and GA capability names a contract page and a compatibility test in docs/capabilities.yaml.
     // This check runs exactly those tests, so a contract test that exists but is not run by anything cannot count as evidence.
     id: 'contract-conformance',
@@ -1108,6 +1127,8 @@ export function main(argv, { overrides = {}, out = process.stderr } = {}) {
   evaluate('provenance-gate', () => runNpmGate('bench:provenance:check'));
   evaluate('verification-conformance-gate', () => runNpmGate('verification:conformance:check'));
   evaluate('sca-replay-gate', () => runNpmGate('bench:sca-replay:check'));
+  evaluate('sibling-sweep-gate', () => runNpmGate('bench:sibling-sweep:check'));
+  evaluate('blast-radius-gate', () => runNpmGate('bench:blast-radius:check'));
   evaluate('contract-conformance', () => {
     const r = run('node', [path.join(REPO, 'scripts', 'check-ga-contracts.mjs')], { cwd: REPO, stdio: 'inherit' });
     return evaluateCommandGate({ label: 'node scripts/check-ga-contracts.mjs', exitCode: r.status });

@@ -314,7 +314,7 @@ test('release-gate — attestation-self-check passes on a real compute/verify ro
 });
 
 // -------------------------------------------------------- --fast selection
-test('release-gate — full run plans all thirty-one checks in order', () => {
+test('release-gate — full run plans all thirty-three checks in order', () => {
   // M2 (Stage-0 audit, 2026) added mutation-gate + layer-recall-gate — both
   // slow, both were previously unreachable from every gate including this one.
   // A Stage-6 correctness follow-up added attestation-self-check +
@@ -357,7 +357,8 @@ test('release-gate — full run plans all thirty-one checks in order', () => {
   // E3-08 added fix-verification-gate: slow, wiring bench/fix-verification/ (fake-but-green fixes must stay rejected).
   // GA promotion Phase 0 added sca-replay-gate (slow, the dependency-risk measurement) and contract-conformance (slow, runs the
   // contract test every GA capability names in the registry).
-  assert.equal(ids.length, 31);
+  // Wave 1 added sibling-sweep-gate and blast-radius-gate (fast: deterministic, offline, well under a second).
+  assert.equal(ids.length, 33);
   assert.deepEqual(ids, CHECKS.map(c => c.id));
 });
 
@@ -384,7 +385,7 @@ test('release-gate — --fast skips only the slow gates, keeping every fast chec
   const slowIds = CHECKS.filter(c => c.slow).map(c => c.id);
   assert.equal(slowIds.length, 16);
   assert.deepEqual(ids, CHECKS.filter(c => !c.slow).map(c => c.id));
-  assert.equal(ids.length, 15);
+  assert.equal(ids.length, 17);
   for (const s of slowIds) assert.ok(!ids.includes(s), `--fast must skip ${s}`);
   // The four cheap correctness gates, the two new fast checks,
   // package-contents, both provenance gates, the doc-link gate, the two

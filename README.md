@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.180.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.181.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -100,9 +100,9 @@ Ten stages, one canonical order:
 | 2. Corroborate | What independent evidence supports or refutes the finding? | **GA**, **Preview** | [Corroborate](./docs/corroborate/README.md) |
 | 3. Prove | Can exploitability be mechanically demonstrated? | **Preview** | [Prove](./docs/prove/README.md) |
 | 4. Learn | Can a confirmed novel weakness become reusable deterministic knowledge? | **Labs**, **Roadmap** | [Learn](./docs/learn/README.md) |
-| 5. Scale | Where else does this weakness exist? | **Preview**, **Labs** | [Scale](./docs/scale/README.md) |
+| 5. Scale | Where else does this weakness exist? | **GA**, **Labs** | [Scale](./docs/scale/README.md) |
 | 6. Observe | What has actually occurred at runtime? | **Preview**, **Roadmap** | [Observe](./docs/observe/README.md) |
-| 7. Trace | How does risk connect through code, data, architecture, provenance, and artifacts? | **Preview** | [Trace](./docs/trace/README.md) |
+| 7. Trace | How does risk connect through code, data, architecture, provenance, and artifacts? | **GA**, **Preview** | [Trace](./docs/trace/README.md) |
 | 8. Fix | What is the safest remediation? | **GA** | [Fix](./docs/fix/README.md) |
 | 9. Verify | Did the fix work, and which verification legs actually ran? | **GA**, **Preview**, **Labs** | [Verify](./docs/verify/README.md) |
 | 10. Detect | Was exploitation observed and can recurrence be detected? | **Labs**, **Roadmap** | [Detect](./docs/detect/README.md) |
@@ -131,13 +131,13 @@ Generated from [`docs/capabilities.yaml`](docs/capabilities.yaml). **GA** is pro
 | [Finding-to-rule compiler](./docs/guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](./commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](./docs/roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
-| [Repository-wide sibling sweep](./docs/scale/README.md) | Scale | **Preview** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
+| [Repository-wide sibling sweep](./docs/reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
 | [Fleet scanning and dependency blast radius](./docs/guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
-| [Cross-repository graph federation](./docs/guides/data-flow-explorer.md) | Scale, Trace | **Preview** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
+| [Cross-repository graph federation](./docs/reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 | [Runtime corroboration of the scanned graph](./docs/guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](./docs/roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
 | [Code Boundaries security graph](./docs/security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
-| [Blast-radius assessment](./docs/security-graph/blast-radius.md) | Trace | **Preview** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
+| [Blast-radius assessment](./docs/security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
 | [Finding provenance from Git history](./docs/guides/finding-provenance.md) | Trace | **Preview** | Which commit introduced a finding, resolved from Git history, with the resolution quality stated. |
 | [Source-to-artifact provenance](./docs/guides/artifact-provenance.md) | Trace | **Preview** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry. |
 | [Fix synthesis](./docs/guides/fixing-vulnerabilities.md) | Fix | **GA** | A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification. |
@@ -185,7 +185,7 @@ agentic-security explore: serving /Users/you/your-project
 
 That starts a local, **read-only, loopback-only** server over your already-scanned graph. Nothing leaves your machine and it makes no model calls. It has four linked views: the architecture graph colored by protection status, a privacy lifecycle view, a trace and evidence view, and an inventory of every source and sink.
 
-What is in the graph today is **Preview**: sources, sinks, field-level flows, protection state, sensitive-data classes, architecture nodes, blast radius, provenance and federation. Runtime evidence is offline telemetry import only, and artifact evidence takes image archives only; continuous production observation is **Roadmap**. See [Code Boundaries](docs/security-graph/code-boundaries.md), the [Code Boundaries guide](docs/guides/data-flow-explorer.md) and [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
+What is in the graph today is **Preview**: sources, sinks, field-level flows, protection state, sensitive-data classes, architecture nodes and provenance. Blast radius and federation over the graph are **GA**. Runtime evidence is offline telemetry import only, and artifact evidence takes image archives only; continuous production observation is **Roadmap**. See [Code Boundaries](docs/security-graph/code-boundaries.md), the [Code Boundaries guide](docs/guides/data-flow-explorer.md) and [Watch one field's journey](docs/walkthroughs/privacy-data-flow.md).
 
 ## Where do I go for my role?
 

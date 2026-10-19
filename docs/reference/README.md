@@ -12,6 +12,8 @@ Deep reference material. Nothing here is a tutorial; start from [docs home](../R
 | [Glossary](glossary.md) | Terms, including the three compliance vocabularies |
 | [MCP tool contract](mcp-tool-contract.md) | The 17 MCP tools and their guarantees |
 | [Assurance capability matrix](assurance-capability-matrix.md) | The assurance programme's capability map |
+| [Repository-wide sibling sweep](root-cause-sweep.md) | The sweep result, its accounting rule and what it does not find |
+| [Cross-repository federation](federation.md) | Declaring and listing links between two repositories' graphs |
 | [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
 | [Style and terminology](../STYLE-AND-TERMINOLOGY.md) | How these docs talk |
 | [Metrics](../METRICS.md) and [scorecard](../SCORECARD.md) | Measured numbers with the command that produced each |
