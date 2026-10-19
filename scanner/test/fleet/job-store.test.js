@@ -146,7 +146,7 @@ test('[sqlite] two real processes racing to claim the same jobs never receive th
     await new Promise((r) => setTimeout(r, Math.max(0, ${START} - Date.now())));
     for (;;) { const j = s.claim(${JSON.stringify(run.runId)}, { worker: 'p' + process.pid, leaseMs: 60000, now: Date.now() }); if (!j) break; got.push(j.jobId); await new Promise((r) => setTimeout(r, 8)); }
     s.close(); process.stdout.write(JSON.stringify(got));`;
-  const child = () => new Promise((resolve, reject) => { const c = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'pipe'] }); let out = ''; c.stdout.on('data', (d) => { out += d; }); c.on('close', (code) => (code === 0 ? resolve(JSON.parse(out)) : reject(new Error(`child exited ${code}`)))); });
+  const child = () => new Promise((resolve, reject) => { const c = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'pipe', 'pipe'] }); let out = ''; let err = ''; c.stdout.on('data', (d) => { out += d; }); c.stderr.on('data', (d) => { err += d; }); c.on('close', (code) => (code === 0 ? resolve(JSON.parse(out)) : reject(new Error(`child exited ${code}: ${err.trim().split('\n').slice(-3).join(' | ').slice(0, 400)}`)))); });
   const [x, y] = await Promise.all([child(), child()]);
   assert.equal(x.length + y.length, 40, 'every job was handed out exactly once');
   assert.equal(new Set([...x, ...y]).size, 40);

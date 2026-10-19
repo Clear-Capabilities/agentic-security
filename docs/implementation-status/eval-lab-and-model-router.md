@@ -1,5 +1,18 @@
 # Implementation status: Eval Lab and Intelligent Model Router (PRD 6)
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** 6 of 8 P0 requirements fully evidenced; 1 partial, 1 not done. Not done: requirement 2 (integrating the existing SARD evaluation: the SARD harness reads answer keys, which the lab's custody rules keep out of a scored run). Partial: requirement 5 (the end-to-end comparison has no separate `deterministic + hunt` arm; hunts are model arms behind the command adapter).
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Dataset manifest with mandatory leakage enforcement, hard negatives, real advisory pairs imported from the independent population (dev and validation only), neutralized and audited workspaces, deterministic and model arms (a local Ollama arm built in), mechanical scoring of detection, exploit and patch tasks, repeats with variance and provider variance, reports in five formats, intelligence per dollar, the policy router and `models route explain`.
+* **Current work:** None in flight.
+* **Remaining requirements:** SARD integration; a curated licensed corpus beyond the mined advisory population; a remote-model client (remote models go through the command adapter and the egress policy); a measured multi-model comparison on real models (the only real-code run so far is the deterministic baseline).
+* **Failing tests:** None at the last run.
+* **Blockers:** No model server or API access on the build host, so model arms are tested against stand-ins.
+* **Last verified command:** `node --test test/eval-lab/*.test.js test/cli/eval-lab-cli.test.js` (scanner/): 63 pass, 0 fail.
+
+---
+
 **Percent complete:** requirements 1, 3 (the loader and the licence gate), 4, 5, 6, 7 and 8 are implemented and tested, and the
 CLI surface and reports are done. Requirement 2 (integrate the existing SARD evaluation) is NOT done beyond reusing its neutralization
 ideas and the custody audit. No curated real-vulnerability corpus ships. The only built-in model adapter is a local Ollama server (tested against a protocol stand-in, never a real model).
@@ -29,6 +42,9 @@ ideas and the custody audit. No curated real-vulnerability corpus ships. The onl
 * **The SARD corpus is not integrated.** The existing harness downloads its corpus from the network and keeps its own neutralizer;
   the lab does not call it. The lab's neutralizer is line-preserving and best effort (a regular-expression literal containing `//`
   can be mis-read) and the audit is a pattern audit.
+* **The independent advisory population can be imported** (`scripts/eval-lab/import-independent.mjs`; dev and validation splits only,
+  permitted licences only; first measured result: 1 of 12 real JavaScript advisories detected by the deterministic baseline, one run, not
+  representative). It is mined, not hand-curated, and its spans come from fix diffs.
 * **No curated corpus.** The loader supports commit pairs from a local repository and requires a permissive licence; assembling the
   corpus is data work. The shipped fixtures are small and synthetic, so no quality number in this repository describes any real model.
 * **Only a local Ollama adapter is built in.** Other models attach through a command the operator supplies, which keeps the lab from

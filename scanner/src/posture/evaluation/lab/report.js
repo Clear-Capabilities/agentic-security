@@ -74,8 +74,22 @@ export function summarizeRun(run, { budgetUsd = 10 } = {}) {
     const primary = Object.fromEntries(Object.entries(tasks).map(([t, m]) => [t, m[PRIMARY[t]]]));
     return { id: arm.id, kind: arm.kind, model: arm.model, runs: rs.length, tasks, economics: econ, intelligencePerDollar: ipd, dollarsPer, primary };
   });
+  // PRD 6 reliability: provider variance. The SAME model id reached through different providers is not necessarily the same behaviour
+  // (quantization, serving stack, sampling defaults), so when a run has such arms the spread between them is reported on its own.
+  const byModel = new Map();
+  for (const a of arms) if (a.kind === 'model' && a.model?.id) byModel.set(a.model.id, [...(byModel.get(a.model.id) ?? []), a]);
+  const providerVariance = [];
+  for (const [modelId, group] of byModel) {
+    if (new Set(group.map((g) => g.model.provider)).size < 2) continue;
+    for (const task of new Set(group.flatMap((g) => Object.keys(g.primary)))) {
+      const vals = group.map((g) => ({ arm: g.id, provider: g.model.provider, mean: g.primary[task]?.mean ?? null })).filter((v) => v.mean != null);
+      if (vals.length < 2) continue;
+      const means = vals.map((v) => v.mean);
+      providerVariance.push({ model: modelId, task, spread: Math.max(...means) - Math.min(...means), arms: vals, representative: group.every((g) => g.primary[task]?.representative) });
+    }
+  }
   return {
-    schema: REPORT_SCHEMA, version: 1, runId: run.runId, runDigest: run.digest,
+    schema: REPORT_SCHEMA, version: 1, runId: run.runId, runDigest: run.digest, providerVariance,
     header: { scannerCommit: run.scanner?.commit ?? null, scannerVersion: run.scanner?.version ?? null, datasetId: run.dataset.id, datasetVersion: run.dataset.version, datasetHash: run.dataset.hash, split: run.dataset.split, models: run.arms.filter((a) => a.model).map((a) => `${a.model.provider}/${a.model.id}${a.model.local ? ' (local)' : ''}`), config: run.config, machine: run.machine, startedAt: run.startedAt, finishedAt: run.finishedAt },
     leakageAudit: run.leakageAudit, complete: run.complete, incompleteReasons: run.incompleteReasons, arms,
     notes: arms.some((a) => Object.values(a.primary).some((s) => s && !s.representative)) ? ['At least one figure rests on fewer than three runs and is marked not representative.'] : [],
@@ -111,6 +125,10 @@ export function toMarkdown(rep) {
   }
   L.push('## Cost, speed and reliability', '', '| arm | spend per run | median latency | p95 latency | timeouts | failures | unknown-cost attempts |', '|---|---|---|---|---|---|---|');
   for (const a of rep.arms) L.push(`| ${a.id} | ${a.kind === 'deterministic' ? 'no model cost' : fmt(a.economics.usd, 'usd')} | ${fmt(a.economics.latencyMedianMs, 'ms')} | ${fmt(a.economics.latencyP95Ms, 'ms')} | ${a.economics.timeouts} | ${a.economics.failures} | ${a.economics.unknownCostAttempts} |`);
+  if (rep.providerVariance?.length) {
+    L.push('', '## Provider variance', '', 'The same model id reached through different providers:', '', '| model | task | spread | arms |', '|---|---|---|---|');
+    for (const v of rep.providerVariance) L.push(`| ${v.model} | ${v.task} | ${pct(v.spread)}${v.representative ? '' : ' (not representative)'} | ${v.arms.map((a) => `${a.arm} (${a.provider}) ${pct(a.mean)}`).join('; ')} |`);
+  }
   L.push('', '## Intelligence per dollar', '', '| arm | confirmed vulnerabilities / $100 | verified fixes / $100 | true positives / $100 | recall at fixed budget |', '|---|---|---|---|---|');
   for (const a of rep.arms) {
     const i = a.intelligencePerDollar; const cell = (x) => (x?.value == null ? `n/a (${x?.reason ?? 'not measured'})` : x.value.toFixed(1));

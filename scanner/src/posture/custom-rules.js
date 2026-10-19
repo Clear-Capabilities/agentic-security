@@ -23,6 +23,13 @@
 //   match.allOf: [regex…] — every regex must match somewhere in the file
 //   match.notMatch: regex — kill if this regex matches
 //   match.window: N       — when allOf is set, all matches must fall within N lines
+//   match.fileRequires: [regex…]: file-level preconditions (e.g. a framework marker); every one must match somewhere in the file
+//   match.guardedBy: regex : a sanitizer or dominating guard: a hit is dropped when this matches within `guardWindow` lines BEFORE
+//                             (or on) the hit's line. Unlike notMatch it is local to the hit, not the whole file.
+//   match.guardWindow: N   : how far back guardedBy looks (default: the rule's window, else 5)
+//   match.excludeLine: [regex…]: a hit is dropped when its own line matches any of these
+//   (the last four are the structural vocabulary the rule compiler's IR compiles to; a rule that uses any of them is evaluated
+//    against EVERY anchor and reports the first that survives, not only the first anchor in the file)
 //
 // `agentic-security rule test <fixture-glob>` runs every rule against every
 // file and prints PASS/FAIL.
@@ -153,6 +160,10 @@ function _isSafePattern(p) {
   return !_REDOS_NESTED_RE.test(p);
 }
 
+/** The loader's own rule normalizer, exported so anything that scores or validates a rule uses the SAME one the scanner loads
+ * with (and so a rule the loader would reject is never reported as working). Returns null for a rule the loader refuses. */
+export function normalizeCustomRule(r, fp = '(compiled)') { return normalizeRule(r, fp); }
+
 function normalizeRule(r, fp) {
   if (!r || !r.id || !r.match) return null;
   const m = r.match;
@@ -176,6 +187,22 @@ function normalizeRule(r, fp) {
   }
   let notMatch = null;
   if (m.notMatch) { try { notMatch = new RegExp(m.notMatch, 'm'); } catch {} }
+
+  // Structural vocabulary (rule compiler IR): every regex passes the same ReDoS guard as the main patterns, and a rule that
+  // cannot be compiled is rejected whole rather than loaded with a constraint silently missing.
+  const compileAll = (list) => {
+    const out = [];
+    for (const p of list) {
+      if (typeof p !== 'string' || !p || !_isSafePattern(p)) { console.error(`agentic-security: rejected unsafe or non-string structural regex in ${r.id}`); return null; }
+      try { out.push(new RegExp(p, 'm')); } catch (e) { console.error(`agentic-security: invalid structural regex in ${r.id}: ${e.message}`); return null; }
+    }
+    return out;
+  };
+  let fileRequires = null; let guardedBy = null; let excludeLine = null;
+  if (m.fileRequires != null) { if (!Array.isArray(m.fileRequires)) return null; fileRequires = compileAll(m.fileRequires); if (!fileRequires) return null; }
+  if (m.guardedBy != null) { const g = compileAll([m.guardedBy]); if (!g) return null; guardedBy = g[0]; }
+  if (m.excludeLine != null) { if (!Array.isArray(m.excludeLine)) return null; excludeLine = compileAll(m.excludeLine); if (!excludeLine) return null; }
+  const guardWindow = Number.isInteger(m.guardWindow) && m.guardWindow > 0 && m.guardWindow <= 200 ? m.guardWindow : (m.window || 5);
 
   // SentQL extensions (Sentinel-parity FR-DSL-1):
   //   llm_validate: { prompt, min_confidence }
@@ -208,6 +235,8 @@ function normalizeRule(r, fp) {
     notMatch,
     requireAll: Array.isArray(m.allOf),
     windowLines: m.window || 50,
+    fileRequires, guardedBy, guardWindow, excludeLine,
+    structural: !!(fileRequires || guardedBy || excludeLine),
     sourceFile: fp,
     llmValidate,
     pathConstraints,
@@ -260,17 +289,34 @@ export function runRule(rule, file, content) {
   });
 
   const findings = [];
+  // structural preconditions and per-hit filters (see the header): file-level requirements first
+  if (rule.fileRequires && !rule.fileRequires.every((rx) => rx.test(content))) return [];
+  const lineText = (n) => lines[n - 1] ?? '';
+  const guardLines = [];
+  if (rule.guardedBy) {
+    const g = new RegExp(rule.guardedBy.source, 'gm');
+    let gm; const deadline = Date.now() + EXEC_TIMEOUT_MS;
+    while ((gm = g.exec(content)) !== null) { guardLines.push(offsetToLine(gm.index)); if (gm.index === g.lastIndex) g.lastIndex++; if (Date.now() > deadline) break; }
+  }
+  const survives = (hit) => {
+    if (rule.excludeLine && rule.excludeLine.some((rx) => rx.test(lineText(hit.line)))) return false;
+    if (rule.guardedBy && guardLines.some((gl) => gl <= hit.line && hit.line - gl <= rule.guardWindow)) return false;
+    return true;
+  };
   if (rule.requireAll) {
     if (matches.some(l => l.length === 0)) return [];
-    // Pick the earliest match in the first list, verify the others fall within window.
-    const anchor = matches[0][0];
-    const close = matches.slice(1).every(list =>
-      list.some(x => Math.abs(x.line - anchor.line) <= rule.windowLines)
-    );
-    if (!close) return [];
-    findings.push(toFinding(rule, file, anchor));
+    // Pick the earliest match in the first list, verify the others fall within window. A structural rule tries every anchor in order.
+    const anchors = rule.structural ? matches[0] : [matches[0][0]];
+    for (const anchor of anchors) {
+      const close = matches.slice(1).every(list =>
+        list.some(x => Math.abs(x.line - anchor.line) <= rule.windowLines)
+      );
+      if (!close || !survives(anchor)) continue;
+      findings.push(toFinding(rule, file, anchor));
+      break;
+    }
   } else {
-    for (const m of matches[0]) findings.push(toFinding(rule, file, m));
+    for (const m of matches[0]) if (survives(m)) findings.push(toFinding(rule, file, m));
   }
   return findings;
 }

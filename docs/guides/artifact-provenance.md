@@ -102,6 +102,38 @@ See that fixture's own `README.md` for the full property-by-property mapping, in
 (`supply vex` against the real CLI, and a hostile path-traversal tar entry that's surfaced, never silently
 dropped or crashed on).
 
+## Output schema
+
+`image scan IMAGE` prints (and stores under `.agentic-security/artifact-scans/<sha256>.json`) one record: `inventory` (`digest`,
+`digestKind` of `manifest` or `config`, `repoTags`, `os`, `architecture`, `baseImage`, `osPackages`, `appPackages`, `layers` with sizes and diff
+ids, `entrypoint`, `cmd`, `buildLabels`, `history`, `unsafeEntries`, `materializationTruncated`), `vulnerabilities` (OSV matches with the package,
+`osvId`, `cveAliases`, `fixedVersions`, `severity`, `cvssVector`, `range`), `secrets` (`deletedButRecoverable`, listed by layer, path and kind,
+never by value, and `totalFindings`), `scannedAt`, and `source` (`archive`, `registry` with host, repository, reference, platform and bytes
+fetched, or `engine` with the runtime and reference). `image verify` prints `{digest, signature: {state, via, reason}, attestation: {state,
+reason}}` where `state` is exactly one of `verified`, `invalid`, `missing`, `unavailable`.
+
+`image scan --attest` writes `.agentic-security/attestations/artifact-<id>.json`, schema `agentic-security/artifact-evidence@1`: `artifact`,
+`scan` (vulnerabilities and secret locations, each capped and with `truncated` totals so a cut-off list is visible, and
+`vulnerabilityLookup`), `signature` (the image's own signature state, or `not-checked`), `engine`, `proves`, `doesNotProve`, and an Ed25519
+`attestation`. `verify-attestation <bundle> --public-key <pem>` exits 0 if valid and 1 if the bundle was edited, carries a key the
+signature does not cover, or was signed by another key. The bundle proves the record is unmodified since signing; it does not prove the image
+is free of vulnerabilities.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `... (bad_reference)` | The registry reference was not a plain `[host/]repo[:tag]` or `repo@sha256:...`: a scheme, spaces, `..`, userinfo or a leading `-` are refused. |
+| `refusing a non-HTTPS target (insecure_transport)` | Registries are reached over HTTPS only. A loopback registry over plain HTTP needs `--allow-http-loopback`. A redirect to a plain-HTTP host is refused. |
+| `the registry refused access (unauthorized)` | Set `AGENTIC_SECURITY_REGISTRY_TOKEN`, or `AGENTIC_SECURITY_REGISTRY_USER` and `AGENTIC_SECURITY_REGISTRY_PASSWORD`, or log in with Docker (its config is read for that registry only). The credential is never printed and is not sent to a host the registry redirects to. |
+| `the image has no linux/arm64 variant (platform_not_found)` | The error lists what exists; choose with `--platform os/arch`. |
+| `a downloaded blob does not match its digest (digest_mismatch)` | The registry served bytes that are not what its manifest promised. Nothing is scanned. Treat the source as untrustworthy. |
+| `... is not installed or not on PATH; nothing was read (engine_unavailable)` | `--engine docker|podman` needs that tool. The image is exported with `save`, never run. |
+| `image scan --engine` hangs, then `timeout` | The export has a time and size limit (`engine_error` / `too_large` for the size). A very large image needs a tar file you scan directly. |
+| `signature: unavailable` after `--cosign` | cosign is not installed, could not reach what it needed, or `--repository` was not given. `unavailable` is never read as verified. `missing` means no signature exists for this digest; `invalid` means one exists and does not verify (or names a different digest). |
+| `--attest could not write the signed bundle` | State writes are disabled, or the directory has no project marker (`.git`, `package.json`, ...). Nothing was signed to disk. |
+| `NOTE: some layer content exceeded the scan size cap` | Large files in layers are skipped, not scanned. The scan says so rather than reporting the layer clean. |
+
 ## What this does not do
 
 Disclosed, not silently dropped:

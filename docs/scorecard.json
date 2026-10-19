@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.176.0",
-    "bundleSha256": "ccbccaa1ca1f3c6b8f1332e15cb9ee82fa2c4712cc68d0eb2c47051aaa1f7989",
-    "commit": "bf576ef17b68006d39321366376d4f1ad9d78e47",
+    "engineVersion": "0.177.0",
+    "bundleSha256": "6a72326303aab625b38a9efa798132a7652377aeaa8339131d043634fd8266ec",
+    "commit": "54dfc52c66ceadee86cb738278d8bde2bac20041",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-18T19:37:11.637Z",
+    "generatedAt": "2026-10-18T23:48:43.373Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -600,7 +600,7 @@
         }
       },
       "scanner/src": {
-        "total": 735,
+        "total": 737,
         "byFile": {
           "(deep-engine)": 1,
           "artifact/cosign.js": 1,
@@ -847,6 +847,7 @@
           "posture/rule-compiler/cli.js": 5,
           "posture/rule-compiler/mutation.js": 2,
           "posture/rule-compiler/proposal.js": 2,
+          "posture/rule-compiler/regression.js": 2,
           "posture/rule-compiler/store.js": 5,
           "posture/rule-overrides.js": 5,
           "posture/rule-pack-signing.js": 8,
@@ -924,7 +925,7 @@
         }
       },
       "scripts": {
-        "total": 108,
+        "total": 109,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
@@ -947,6 +948,7 @@
           "engineering-excellence/perf-child.mjs": 2,
           "engineering-excellence/regression-report.mjs": 2,
           "engineering-excellence/runtime-audit.mjs": 2,
+          "eval-lab/import-independent.mjs": 1,
           "gate-verdict-cache.mjs": 1,
           "llm-cost-ceiling.py": 1,
           "loop-engineering/lib/claude.mjs": 1,
@@ -973,8 +975,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 387,
-    "d": 615
+    "n": 404,
+    "d": 618
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2136,9 +2138,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.176.0",
-    "commit": "bf576ef17b68006d39321366376d4f1ad9d78e47",
-    "bundleSha256": "ccbccaa1ca1f3c6b8f1332e15cb9ee82fa2c4712cc68d0eb2c47051aaa1f7989",
+    "engineVersion": "0.177.0",
+    "commit": "54dfc52c66ceadee86cb738278d8bde2bac20041",
+    "bundleSha256": "6a72326303aab625b38a9efa798132a7652377aeaa8339131d043634fd8266ec",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

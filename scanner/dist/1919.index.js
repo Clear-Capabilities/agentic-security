@@ -16,7 +16,7 @@ __webpack_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(76760);
 /* harmony import */ var node_readline__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(80481);
 /* harmony import */ var _runScan_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(45950);
-/* harmony import */ var _posture_custom_rules_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(9049);
+/* harmony import */ var _posture_custom_rules_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(69400);
 /* harmony import */ var _posture_state_dir_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(31174);
 /* harmony import */ var _mcp_redact_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(83468);
 /* harmony import */ var _report_index_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(75917);

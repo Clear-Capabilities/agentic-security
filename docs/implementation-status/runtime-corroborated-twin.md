@@ -1,5 +1,18 @@
 # PRD 2 — Runtime-Corroborated Security Twin
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** 6 of 8 P0 requirements fully evidenced; 2 partial. Partial: requirement 3 (matching: destination, table and queue rungs on the graph plus function, line and route evidence on scan findings; no route or function rung on the graph because the signed graph carries no route or symbol) and requirement 5 (the Explorer views are one static page, not the live explore server).
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Runtime evidence schema (with identity as a keyed-hash token), five adapters, the overlay, `runtimeStatus` assurance, privacy by closed-world rejection, six edge states, five queries including vulnerable functions in production and identities on risky paths, finding-level exploit correlation, the static five-view page, and the five-property fixture through the real CLI.
+* **Current work:** None in flight.
+* **Remaining requirements:** Route and function rungs on the graph (needs a graph contract change); the Explorer views on the live local server; deriving the edge-level exploit-correlated state automatically (the graph carries no finding locations to join on).
+* **Failing tests:** None at the last run.
+* **Blockers:** The DataFlowGraph v1 contract has no route or function-symbol field; changing it is a signed-contract decision outside this work.
+* **Last verified command:** `node --test test/lineage/runtime-*.test.js test/lineage/observation-*.test.js test/cli/runtime-*.test.js test/dnr/exploit-correlation.test.js` (scanner/): 189 pass, 0 fail.
+
+---
+
 **Status as of 2026-10-13: P0 scope complete, honestly bounded (see "Deliberately NOT done" below).**
 
 ## What already existed (reused, not rebuilt)
@@ -37,7 +50,10 @@ architecture rather than creating parallel systems"), every item below was exten
 - **Identity tokens are pseudonyms, not anonymity.** Whoever holds the install key and a candidate username can confirm a match; tokens
   from two installs do not match. Identity is read from three fields only (K8s audit `user.username`, access-log `user`/`remote_user`/
   `authenticated_user`, OTel `enduser.id`); Envoy has no standard field and carries none.
-- **`RUNTIME_EXPLOIT_CORRELATED` needs operator-supplied evidence** (`--exploit-evidence file.json`, entries naming exactly one edge, flow
+- **Finding-level exploit correlation is derived** (`dnr/exploit-correlation.js`, shown by `runtime query vulnerable-functions-in-production`):
+  proof confirmed + hunt OBSERVED + path exercised in the trace. The edge-level state is not derived, because the graph carries no
+  finding locations to join on.
+- **The edge-level `RUNTIME_EXPLOIT_CORRELATED` needs operator-supplied evidence** (`--exploit-evidence file.json`, entries naming exactly one edge, flow
   or node). Nothing derives it automatically from a proof or a DnR hunt record, because those records name findings, not graph edges.
   Observation alone never sets it, and a denied-only edge cannot carry it.
 - **`runtime-flows-absent-from-static` lists CANDIDATES.** An unmatched observation may be a path static analysis missed or a mapping the

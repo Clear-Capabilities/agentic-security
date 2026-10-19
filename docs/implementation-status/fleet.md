@@ -1,5 +1,18 @@
 # Implementation status: Organization-Wide Security Graph + Distributed Scan Fabric (PRD 4)
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** All 9 P0 requirements are implemented with executable evidence (9 of 9). Success metrics: resumable jobs, no duplicated findings from retries, every edge traceable to evidence and failed repositories never missing from assurance are tested; near-linear scaling is NOT met beyond 2 workers on the one measurement taken (speedup 1.00, 1.79, 2.98, 3.20 at 1, 2, 4, 8 workers on a synthetic workload).
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Fleet manifest, job store behind an interface (SQLite and in-memory with one conformance suite), leases and fencing, resume (by run id or job id), bounded parallelism with per-repository timeouts, a content-addressed cache, the enterprise graph (declared edges, package dependencies, edges found in code literals, Code Boundaries summaries with `--lineage`), attack paths, blast radius, organization health.
+* **Current work:** None in flight.
+* **Remaining requirements:** A PostgreSQL or remote-worker store (the interface allows it; none is built). Edge discovery is literal matching plus a summary of each repository's data flow graph, not a node-for-node join. Scaling on real repositories.
+* **Failing tests:** None at the last run.
+* **Blockers:** None.
+* **Last verified command:** `node --test test/fleet/*.test.js` (scanner/): 84 pass, 0 fail. `node bench/fleet-scale/run.mjs --repos 24 --workers 1,2,4,8`: see the guide for the numbers.
+
+---
+
 **Percent complete:** all nine P0 requirements are implemented and tested, bounded as described under "Honest limits". The PRD's
 storage abstraction is delivered as an interface with two implementations (SQLite and in-memory), not with PostgreSQL or remote
 workers, which the PRD names as future work.
@@ -31,7 +44,11 @@ workers, which the PRD names as future work.
   lines, database names on connect lines, matched as whole tokens against ids and declared `aliases`), tagged
   `discovered-code-literal` and shown beside declared edges, never instead of them. It sees literals only (not run-time-built URLs,
   environment-supplied hosts or mesh routing), cannot tell database direction, and was tested on small constructed repositories, not
-  on a real organization. The per-repository Data Flow Explorer graph is still not joined in.
+  on a real organization. With `--lineage`, each repository's Code Boundaries graph is summarized into the enterprise graph (`lineage-summary.js`): data classes
+  the code handles (a class the manifest did not declare is listed on the node and marked on any path that depends on it), external
+  destinations, queue topics and stores, joined to nodes by id or alias, with `code-boundaries` evidence. Proven on a three-repository
+  example with a real scan; the graph is summarized, not joined node for node, so a single data element is not followed across a boundary.
+- `fleet status` / `fleet resume` accept a job id (the PRD's `JOB-ID`) and resolve it to its run.
 * **"Vulnerable authentication code" is a selection, not an analysis.** It is the repositories whose scan produced an authentication
   finding (an authentication-class CWE or family) plus everything that depends on them.
 * **One question shape.** The documented sentence is recognised and mapped to the structured query; nothing else is parsed.

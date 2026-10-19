@@ -25,8 +25,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const DEFAULTS = Object.freeze({ leaseMs: 30_000, heartbeatMs: 10_000, retryDelayMs: 2_000, pollMs: 100 });
 
 /** The default scan: one supervised child process per repository. Throws `{code: 'TIMEOUT'|'ERROR', message}`. */
-export async function childScan(repoPath, { timeoutMs, signal }) {
-  const r = await superviseSpawn(process.execPath, [SCAN_CHILD, repoPath], { cwd: repoPath, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1' }, timeoutMs, signal, maxOutputBytes: 96 * 1024 * 1024 });
+export async function childScan(repoPath, { timeoutMs, signal, lineage = false }) {
+  const r = await superviseSpawn(process.execPath, [SCAN_CHILD, repoPath], { cwd: repoPath, env: { ...process.env, AGENTIC_SECURITY_NO_STATE: '1', ...(lineage ? { AGENTIC_SECURITY_LINEAGE_DEEP: '1' } : {}) }, timeoutMs, signal, maxOutputBytes: 96 * 1024 * 1024 });
   const fail = (code, message) => Object.assign(new Error(message), { code });
   if (r.timedOut) throw fail('TIMEOUT', `no result within ${Math.round(timeoutMs / 1000)}s`);
   if (r.cancelled) throw fail('CANCELLED', 'cancelled');
@@ -69,7 +69,7 @@ export function planRun({ manifest, manifestHash, store, runId = null, config = 
  * Run (or continue) a planned run until no job is queued or leased by a live worker. Returns when the work is done, the signal
  * aborts, or `maxWaitMs` passes with only other workers' leases outstanding.
  */
-export async function runJobs({ manifest, store, runId, root, scan = childScan, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
+export async function runJobs({ manifest, store, runId, root, scan = childScan, scanOptions = {}, workers = manifest.workers, leaseMs = DEFAULTS.leaseMs, heartbeatMs = DEFAULTS.heartbeatMs, retryDelayMs = DEFAULTS.retryDelayMs, pollMs = DEFAULTS.pollMs, maxWaitMs = null, signal, now = () => Date.now(), onEvent = () => {}, cacheDir = null, artifactDir = null, useCache = true }) {
   const repoById = new Map(manifest.repositories.map((r) => [r.id, r]));
   const cacheD = cacheDir ?? statePath(root, 'fleet', 'cache');
   const artD = artifactDir ?? statePath(root, 'fleet', 'artifacts', runId);
@@ -102,7 +102,7 @@ export async function runJobs({ manifest, store, runId, root, scan = childScan, 
       onEvent({ type: 'start', repo: job.repoId, attempt: job.attempts });
       const cached = useCache ? readCache(cacheD, job.cacheKey) : null;
       if (cached) {
-        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, cached: true });
+        const a = writeArtifact(job, { entry: cached.entry, findings: cached.findings, findingsTruncated: !!cached.findingsTruncated, lineage: cached.lineage ?? null, cached: true });
         const status = cached.entry?.scanHealth && cached.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
         if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: cached.entry?.total ?? null, cached: true, artifact: path.basename(a.file) }, now: now() })) onEvent({ type: 'done', repo: job.repoId, cached: true, status });
         continue;
@@ -113,15 +113,15 @@ export async function runJobs({ manifest, store, runId, root, scan = childScan, 
       let lost = false;
       const hb = setInterval(() => { if (!store.heartbeat(job.jobId, job.epoch, { now: now(), leaseMs })) { lost = true; ac.abort(); } }, heartbeatMs);
       try {
-        const out = await scan(repo.path, { timeoutMs: job.timeoutMs, signal: ac.signal });
+        const out = await scan(repo.path, { timeoutMs: job.timeoutMs, signal: ac.signal, ...scanOptions });
         clearInterval(hb);
         if (lost) { onEvent({ type: 'fenced', repo: job.repoId }); continue; }
         if (!out?.entry) throw Object.assign(new Error('the scan returned no entry'), { code: 'ERROR' });
         if (out.entry.ok === false) throw Object.assign(new Error(out.entry.error || 'the scan failed'), { code: 'ERROR' });
-        const a = writeArtifact(job, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated });
+        const a = writeArtifact(job, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated, lineage: out.lineage ?? null });
         const status = out.entry.scanHealth && out.entry.scanHealth.status !== 'complete' ? 'partial' : 'succeeded';
         if (store.complete(job.jobId, job.epoch, { status, artifactSha256: a.sha256, summary: { total: out.entry.total ?? null, cached: false, artifact: path.basename(a.file) }, now: now() })) {
-          if (useCache && status === 'succeeded') writeCache(cacheD, job.cacheKey, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated });
+          if (useCache && status === 'succeeded') writeCache(cacheD, job.cacheKey, { entry: out.entry, findings: out.findings ?? [], findingsTruncated: !!out.findingsTruncated, lineage: out.lineage ?? null });
           onEvent({ type: 'done', repo: job.repoId, cached: false, status });
         } else onEvent({ type: 'fenced', repo: job.repoId });
       } catch (e) {

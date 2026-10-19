@@ -22,7 +22,7 @@ const AUTH_CWES = new Set(['CWE-287', 'CWE-306', 'CWE-285', 'CWE-862', 'CWE-863'
 const edgeId = (type, from, to) => `edge:${type}:${from}:${to}`;
 const hash = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
-export function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null }) {
+export function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = null, lineage = null }) {
   const nodes = new Map();
   const edges = new Map();
   const addNode = (n) => nodes.set(n.id, n);
@@ -50,7 +50,48 @@ export function buildEnterpriseGraph({ manifest, dependencyGraph, discovered = n
   // Edges found in the code. They share an id with a declared edge of the same type and endpoints, so the evidence list shows both; an
   // edge with ONLY discovered evidence is marked `discovered: true` so a query can say it rests on a code literal, not on a declaration.
   for (const d of discovered?.edges ?? []) for (const evidence of d.evidence) addEdge(d.type, d.from, d.to, evidence, true);
-  for (const e of edges.values()) e.discovered = e.evidence.every((x) => x.source === 'discovered-code-literal');
+  // Code Boundaries (each repository's own data flow graph, summarized): data classes the code handles, and destinations it sends to.
+  // These add to what the manifest declared and never replace it; a class the manifest did not declare is listed on the node so a path
+  // that exists only because of it can say so.
+  const aliasesOf = new Map([...manifest.repositories, ...(manifest.resources ?? [])].map((n) => [n.id, [n.id, ...(n.aliases ?? [])].map((a) => String(a).toLowerCase())]));
+  for (const [repoId, sum] of lineage ?? []) {
+    const node = nodes.get(repoId);
+    if (!node || !sum) continue;
+    const declared = new Set(node.dataClasses);
+    const found = (sum.dataClasses ?? []).filter((c) => !declared.has(c));
+    node.dataClasses = [...declared, ...found];
+    node.discoveredDataClasses = found;
+    const cb = (extra) => ({ source: 'code-boundaries', repo: repoId, declared: false, file: null, ...extra });
+    for (const d of sum.externalDestinations ?? []) {
+      if (!d.host) continue;
+      const first = d.host.split('.')[0];
+      for (const [target, names] of aliasesOf) {
+        if (target === repoId || !(names.includes(d.host) || names.includes(first))) continue;
+        const tn = nodes.get(target);
+        addEdge(tn?.type === 'external-provider' ? 'uses-provider' : 'calls', repoId, target, cb({ host: d.host, nodeKind: 'external' }), true);
+      }
+    }
+    for (const q of sum.queues ?? []) {
+      for (const [target, names] of aliasesOf) {
+        const tn = nodes.get(target);
+        if (tn?.type !== 'queue' || !names.includes(String(q.topic).toLowerCase())) continue;
+        if (q.operation === 'consume') addEdge('consumes', target, repoId, cb({ topic: q.topic }), true); else addEdge('produces', repoId, target, cb({ topic: q.topic }), true);
+      }
+    }
+    for (const st of sum.stores ?? []) {
+      for (const key of [st.host, st.database]) {
+        if (!key) continue;
+        const k = String(key).toLowerCase();
+        for (const [target, names] of aliasesOf) {
+          const tn = nodes.get(target);
+          if (tn?.type !== 'database' || !(names.includes(k) || names.includes(k.split('.')[0]))) continue;
+          addEdge('connects-to', repoId, target, cb({ store: st.subtype, name: key }), true);
+        }
+      }
+    }
+  }
+  const FOUND_IN_CODE = new Set(['discovered-code-literal', 'code-boundaries']);
+  for (const e of edges.values()) e.discovered = e.evidence.every((x) => FOUND_IN_CODE.has(x.source));
   return { schema: ENTERPRISE_GRAPH_SCHEMA, version: 1, organization: manifest.organization, nodes: [...nodes.values()], edges: [...edges.values()], digest: null };
 }
 
@@ -97,7 +138,7 @@ export function attackPaths({ graph, toDataClass, from = INTERNET, involving = n
     if (results.length >= maxPaths) { truncated = true; return; }
     if (targets.has(id) && nodePath.length > 1) {
       const inv = involving ? nodePath.filter((n) => involving.all.has(n)) : [];
-      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
+      if (!involving || inv.length) results.push({ nodes: [...nodePath], edges: edgePath.map((e) => e.id), involving: inv, discoveredEdges: edgePath.filter((e) => e.discovered).map((e) => e.id), discoveredDataClassNodes: nodePath.filter((n) => (nodeOf(graph, n)?.discoveredDataClasses ?? []).includes(toDataClass)), evidence: edgePath.flatMap((e) => e.evidence.map((x) => ({ edge: e.id, ...x }))) });
     }
     if (nodePath.length > maxDepth) { truncated = true; return; }
     for (const e of out.get(id) ?? []) if (!nodePath.includes(e.to)) walk(e.to, [...nodePath, e.to], [...edgePath, e]);

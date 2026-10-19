@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-18T20:04:34.465Z",
-  "commit": "5240ead63e26c18d09f2ceb103dcdf38edc93ae8",
+  "generatedAt": "2026-10-19T00:00:44.662Z",
+  "commit": "b3035a288fce8a1139dc52ceedbbf681a11f0fe2",
   "targets": {
     "hooks": {
       "total": 21,
@@ -18,7 +18,7 @@
       }
     },
     "scripts": {
-      "total": 108,
+      "total": 109,
       "byFile": {
         "_compliance_lib.py": 2,
         "apply-command-trim.mjs": 2,
@@ -41,6 +41,7 @@
         "engineering-excellence/perf-child.mjs": 2,
         "engineering-excellence/regression-report.mjs": 2,
         "engineering-excellence/runtime-audit.mjs": 2,
+        "eval-lab/import-independent.mjs": 1,
         "gate-verdict-cache.mjs": 1,
         "llm-cost-ceiling.py": 1,
         "loop-engineering/lib/claude.mjs": 1,
@@ -60,7 +61,7 @@
       }
     },
     "scanner/src": {
-      "total": 735,
+      "total": 737,
       "byFile": {
         "(deep-engine)": 1,
         "artifact/cosign.js": 1,
@@ -307,6 +308,7 @@
         "posture/rule-compiler/cli.js": 5,
         "posture/rule-compiler/mutation.js": 2,
         "posture/rule-compiler/proposal.js": 2,
+        "posture/rule-compiler/regression.js": 2,
         "posture/rule-compiler/store.js": 5,
         "posture/rule-overrides.js": 5,
         "posture/rule-pack-signing.js": 8,

@@ -9,6 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proveFinding } from '../../src/posture/proof-fabric/orchestrator.js';
 import { sandboxAvailable, detectBackend } from '../../src/sandbox/index.js';
+import { languageSupport } from '../../src/posture/proof-fabric/runner.js';
+import { skipUnlessRuns } from '../helpers/toolchain-probe.js';
 
 const FIXTURES_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '../fixtures/proof-fabric');
 const CLASSES = fs.readdirSync(FIXTURES_ROOT).filter((n) => fs.existsSync(path.join(FIXTURES_ROOT, n, 'reproducer.json')));
@@ -21,9 +23,11 @@ for (const cls of CLASSES) {
   // as unsupported on the Linux namespace backend (root CLAUDE.md, src/sandbox/CLAUDE.md). A callback-mode fixture
   // genuinely cannot reach EXPLOIT_CONFIRMED there, so the test must skip, loudly, rather than fail or pass vacuously.
   const needsCallback = reproducer.network === 'callback';
+  const lang = languageSupport(reproducer.lang);
   const skip = !sandboxAvailable() ? 'no confinement backend on this host'
+    : !lang.supported ? `${reproducer.lang} cannot run on this host (${lang.reason}); the runner reports it as unsupported, never as a pass`
     : (needsCallback && detectBackend() !== 'userspace') ? `mediated network (network: 'callback') is unsupported on the ${detectBackend()} backend`
-    : false;
+    : (['python', 'java'].includes(reproducer.lang) ? skipUnlessRuns(reproducer.lang) : false);
 
   test(`fixture ${cls}: vulnerable implementation reaches EXPLOIT_CONFIRMED`, { skip }, async () => {
     const r = await proveFinding({

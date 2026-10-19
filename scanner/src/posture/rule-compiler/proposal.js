@@ -62,7 +62,7 @@ export function proposeCandidates({ vulnerableCode, patchedCode = null }) {
   const vuln = onlyIn(vulnerableCode, patchedCode);
   const lines = vuln.length ? vuln : String(vulnerableCode).split('\n').filter(meaningful).map((l) => l.trim()).filter((l) => callNames(l).length);
   const out = []; const seen = new Set();
-  const add = (strategy, match) => { const k = JSON.stringify(match); if (!seen.has(k)) { seen.add(k); out.push({ strategy, match }); } };
+  const add = (strategy, match, structure = null) => { const k = JSON.stringify([match, structure]); if (!seen.has(k)) { seen.add(k); out.push({ strategy, ...(match ? { match } : {}), ...(structure ? { structure } : {}) }); } };
   for (const l of lines.slice(0, 3)) add('line-shape', { pattern: generalizeLine(l) });
   for (const l of lines.slice(0, 3)) {
     const sink = sinkOf(l);
@@ -71,6 +71,9 @@ export function proposeCandidates({ vulnerableCode, patchedCode = null }) {
   const sink = lines.map(sinkOf).find(Boolean);
   const src = SOURCES.find((s) => new RegExp(s).test(vulnerableCode));
   if (sink && src) add('source-and-sink', { allOf: [`${esc(sink)}\\s*\\(`, src], window: 6 });
+  // the same evidence as an explicit structure: a source and a sink the matcher enforces, so a sanitizer found in the patched code can
+  // later be added as a LOCAL guard (dropping one hit) instead of a file-level exclusion (silencing the whole file)
+  if (sink && src) add('structural', null, { source: src, sink: `${esc(sink)}\\s*\\(`, window: 6 });
   if (sink) add('sink-call', { pattern: `${esc(sink)}\\s*\\(` });
   return out;
 }
@@ -104,29 +107,31 @@ export function synthesizeCandidate({ base, corpusSpec, proposed = null, maxAtte
   for (const p of proposeCandidates({ vulnerableCode: corpusSpec.originalCode, patchedCode: corpusSpec.patchedCode })) queue.push(p);
   const names = safeNames({ vulnerableCode: corpusSpec.originalCode, patchedCode: corpusSpec.patchedCode });
   const attempts = []; const tried = new Set();
-  const tryOne = (strategy, match) => {
-    const key = JSON.stringify(match);
+  const tryOne = (strategy, match, structure = null) => {
+    const key = JSON.stringify([match, structure]);
     if (tried.has(key) || attempts.length >= cap) return null;
     tried.add(key);
-    const ir = draftRuleIR({ ...base, match });
+    const ir = draftRuleIR({ ...base, ...(match ? { match } : {}), ...(structure ?? {}) });
     const errs = validateRuleIR(ir);
-    if (errs.length) { attempts.push({ n: attempts.length + 1, strategy, match, valid: false, errors: errs, pass: false, reasons: errs }); return null; }
+    if (errs.length) { attempts.push({ n: attempts.length + 1, strategy, match: match ?? null, structure, valid: false, errors: errs, pass: false, reasons: errs }); return null; }
     const corpus = buildCorpus(ir, corpusSpec);
     const ev = evaluateRule(ir, corpus, thresholds);
-    const rec = { n: attempts.length + 1, strategy, match, valid: true, pass: ev.pass && leakageOk, reasons: ev.reasons, score: summary(ev.score), ir, corpusSizes: { positives: corpus.positives.length, negatives: corpus.negatives.length } };
+    const rec = { n: attempts.length + 1, strategy, match: match ?? null, structure, valid: true, pass: ev.pass && leakageOk, reasons: ev.reasons, score: summary(ev.score), ir, corpusSizes: { positives: corpus.positives.length, negatives: corpus.negatives.length } };
     attempts.push(rec);
     return { rec, ev };
   };
   for (let qi = 0; qi < queue.length && attempts.length < cap; qi++) {
-    const first = tryOne(queue[qi].strategy, queue[qi].match);
+    const q = queue[qi];
+    const first = tryOne(q.strategy, q.match, q.structure);
     if (!first) continue;
     if (first.rec.pass) break;
     // revise from the failure: a negative that fired means the safe version is not excluded yet
     const fired = first.ev.score.negatives.filter((n) => n.fired);
     const rx = safeRegex(names);
-    if (fired.length && rx && !queue[qi].match.notMatch) { const r = tryOne(`${queue[qi].strategy}+exclude-safe`, { ...queue[qi].match, notMatch: rx }); if (r?.rec.pass) break; }
+    if (fired.length && rx && q.structure && !q.structure.sanitizer) { const r = tryOne(`${q.strategy}+sanitizer`, null, { ...q.structure, sanitizer: rx }); if (r?.rec.pass) break; }
+    else if (fired.length && rx && q.match && !q.match.notMatch) { const r = tryOne(`${q.strategy}+exclude-safe`, { ...q.match, notMatch: rx }); if (r?.rec.pass) break; }
   }
   const valid = attempts.filter((a) => a.valid);
   const best = valid.length ? [...valid].sort((a, b) => quality({ pass: b.pass, score: b.score }) - quality({ pass: a.pass, score: a.score }))[0] : null;
-  return { attempts: attempts.map(({ ir, ...rest }) => rest), best: best ? { strategy: best.strategy, match: best.match, pass: best.pass, score: best.score, reasons: best.reasons } : null, exhausted: !attempts.some((a) => a.pass) };
+  return { attempts: attempts.map(({ ir, ...rest }) => rest), best: best ? { strategy: best.strategy, match: best.match, structure: best.structure, pass: best.pass, score: best.score, reasons: best.reasons } : null, exhausted: !attempts.some((a) => a.pass) };
 }

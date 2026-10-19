@@ -210,6 +210,30 @@ agentic-security dnr status <finding-id>
 `--allow-unproven` builds a lower-confidence detection from the static finding alone; it is labelled `static-only` and carries a
 limitation saying the exploit was not executed.
 
+## Output schema
+
+Records live under `.agentic-security/dnr/<finding>/` as `<kind>-<digest>.json`, each with its own `recordDigest` (a record that no longer
+matches is returned flagged and never trusted) and encrypted per the encryption policy. Kinds: `detection` (the detection IR,
+`agentic-security/detection-ir`: finding id, CWE and family, attack behaviour, endpoint, payload class, affected operation, process, network and
+database effect, confidence, evidence references, a content `digest` and a derived `id` of the form `det-` plus 12 hex characters, plus the
+validation result), `hunt` (`verdict`, `logs` read with parse and byte counts, `window`, `coverage` including which required fields were
+present, `matches` with a count, first and last seen and redacted samples, `caveats`, and a plain-language `statement`), `window` (the
+exposure window with every unknown listed) and `fix` (the remediation closure). `dnr hunt` exit codes: 10 `OBSERVED`, 0 `NOT_OBSERVED`, 11
+`INCONCLUSIVE`, 12 `TELEMETRY_UNAVAILABLE`.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `INCONCLUSIVE` | The logs could not show the thing: a required field (for example the query string or the response status) was absent from some or all lines, a parse failure rate was too high, a read was cut off, or lines had no usable timestamp. `caveats` and `coverage.fieldAvailability` say which. It is never read as "not exploited". |
+| `TELEMETRY_UNAVAILABLE` | There was nothing to read: no log files, or none in a format the reader understands. Supported: common and combined access logs and JSON lines. |
+| `NOT_OBSERVED` | The searched window, in the logs that were readable, contained no matching event. It does not mean the vulnerability was not exploited elsewhere or outside the window. |
+| A format prints `not applicable (...)` | That target cannot express the finding exactly (for example KQL and CloudWatch cannot see a request body; Elastic uses Lucene regular expressions without anchors or word boundaries; Datadog has no regular expressions). The reason is the output, not a gap in the tool. Use `sigma`, `http` or `log-query`, which cover every class. |
+| `dnr generate` refuses | The proof is not a confirmed exploit, or the reproducer carries no attack facts. Prove it first (`triage exploit <id> --prove`); `--allow-unproven` generates a clearly labelled lower-confidence detection. |
+| Validation fails: a positive did not fire or a look-alike did | The IR and the generated rule disagree. This is checked with the same evaluator the hunt uses, so fix the IR (the reproducer's attack facts), not the threshold. |
+| `refusing to write: the detection id is not in its derived form` | A detection record on disk carries an id that is not `det-` plus 12 hex characters, so it will not be used to name a file. Regenerate it. |
+| A hunt prints samples with `[redacted]` | Passwords, tokens and secrets are redacted before anything is stored or printed, and a value fingerprint stands in for the value. |
+
 ## Not built
 
 * Every remote SIEM integration (the PRD's P1 list asks for those to be opt-in and read-only). All renderers are text; none connects

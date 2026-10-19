@@ -164,11 +164,86 @@ scan uses, and lists the findings whose path appears in it. Findings not listed 
 statement about the trace window and its sampling, not about reachability. With no usable trace it answers "not evaluated", never
 "none".
 
+Each listed finding also carries `exploitCorrelation`: **true only when three independent records agree**: an execution-backed proof
+at `EXPLOIT_CONFIRMED` or beyond, a historical hunt (`dnr hunt`) that `OBSERVED` exploit-shaped requests in your own logs, and (the
+row being listed at all) the vulnerable path exercised in the trace. This is the finding-level form of `RUNTIME_EXPLOIT_CORRELATED`;
+the graph carries no finding locations, so the edge-level state still comes only from evidence you supply. A missing record is
+reported as "not established" with the reason, and a record that fails its own digest is not used.
+
 ## What this cannot answer
 
 - An identity query is only as complete as the identity telemetry: an edge with no identity field contributes nothing, which is not
   evidence that no identity used it.
 - The graph itself carries no route or function symbol, so route/function evidence attaches to scan findings, not to graph edges.
+
+## Output schema
+
+`runtime edges` (JSON by default, a table with `--format markdown`) prints the derived state of every static edge, and of nodes that
+received observations with no modelled flow. Real output for the fixture above, one edge abbreviated:
+
+```json
+{
+  "evaluated": true,
+  "counts": {
+    "STATIC_ONLY": 0,
+    "RUNTIME_NOT_OBSERVED": 1,
+    "RUNTIME_OBSERVED": 1,
+    "RUNTIME_BLOCKED": 0,
+    "RUNTIME_POLICY_VIOLATION": 0,
+    "RUNTIME_EXPLOIT_CORRELATED": 0
+  },
+  "byEdge": {
+    "edge:7026967962a4": {
+      "states": [
+        "RUNTIME_OBSERVED"
+      ],
+      "primary": "RUNTIME_OBSERVED",
+      "observations": 1,
+      "allowed": 1,
+      "denied": 0,
+      "uncertainObservations": 0,
+      "identityTokens": [],
+      "exploitEvidence": [],
+      "note": ""
+    },
+    "edge:fbf347827663": "..."
+  },
+  "byNode": {
+    "node:queue:ade2f784b653": {
+      "states": [
+        "RUNTIME_BLOCKED"
+      ],
+      "observations": 1,
+      "allowed": 0,
+      "denied": 1
+    }
+  },
+  "limitations": [
+    "RUNTIME_NOT_OBSERVED means \"no trusted observation in this...",
+    "..."
+  ]
+}
+```
+
+An edge can carry several states (`RUNTIME_OBSERVED` and `RUNTIME_BLOCKED` when some traffic was allowed and some denied); `primary` is the
+most severe. Observation records themselves (`agentic-security/runtime-observation`) are closed-world: only approved metadata keys are
+accepted, event counts are bands (`1`, `2-10`, ...), never exact numbers, and `identity.token` must be `idt_` plus 16 hex characters. A record
+with any other key or a value that does not look like an identifier is rejected at import, not scrubbed. `runtime status` prints
+`runtimeStatus: complete|partial|unavailable` with the telemetry window, freshness, parse failures, mapping percentage and unmatched counts.
+The page written by `explore --runtime` is HTML for people; the JSON above is the machine interface.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `runtimeStatus: unavailable` | No observation store was ever consulted. It is never reported as "no runtime risk". Import telemetry with `runtime ingest`. |
+| Every edge is `STATIC_ONLY` | Telemetry was not consulted for this environment and window (`--environment` must match the import's exactly). Not the same as `RUNTIME_NOT_OBSERVED`, which means "consulted, nothing trusted seen". |
+| An observation stays unmatched | The matcher only joins on a literal destination, a store table or a queue topic, and only high- and medium-confidence matches count. A hostname the graph does not know cannot be placed; it shows under `runtime-flows-absent-from-static` as a candidate. |
+| `unapproved attribute key` / a record is rejected at import | The contract is closed-world on purpose. A key outside the approved list, a free-text value or a raw identity is refused; fix the exporter instead of widening the list. |
+| `identities-using-risky-paths` returns nothing | Identity is recorded only when you import with `--record-identity-tokens`, and only from the fields listed in the guide. No identity telemetry is not evidence that no identity used the path. |
+| `vulnerable-functions-in-production`: `evaluated: false` | There is no usable trace at `.agentic-security/runtime-trace.jsonl` (or `AGENTIC_SECURITY_RUNTIME_TRACE_PATH`), or it says nothing about any finding. Absence from a trace that is sampled, or for a rare path, is not evidence of non-use. |
+| `--exploit-evidence` is rejected | Each entry needs `kind` (`proof`, `dnr-hunt` or `incident`), an `id`, and exactly one of `edgeId`, `flowId`, `nodeId`. |
+| The explorer page looks empty | It says why at the top: no telemetry consulted, or no observed flow is sensitive. It is a snapshot of the last import; re-run `explore . --runtime` after importing. |
 
 ## What this does not do
 

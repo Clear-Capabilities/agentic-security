@@ -29,11 +29,33 @@ const CONTAINER_IMAGES = Object.freeze({
 
 const SIGNALS = { 134: 'SIGABRT', 135: 'SIGBUS', 136: 'SIGFPE', 132: 'SIGILL', 139: 'SIGSEGV' };
 
+// only language toolchains are probed; the container engine has its own, richer health check (`container.js`)
+const PROBED_TOOLS = new Set(['java', 'javac', 'python3', 'cc', 'gcc', 'dotnet']);
+const probeCache = new Map();
+/** A launcher that exists is not a toolchain that works: macOS ships /usr/bin/java and /usr/bin/python3 as stubs that only prompt for an
+ * install. A tool counts only if it answers its version flag, within a short timeout, with exit 0. */
+function toolWorks(file, name) {
+  if (probeCache.has(file)) return probeCache.get(file);
+  const args = name === 'java' || name === 'javac' ? ['-version'] : ['--version'];
+  let ok = false;
+  try { const r = spawnSync(file, args, { stdio: 'ignore', timeout: 8000 }); ok = r.status === 0; } catch { ok = false; }
+  probeCache.set(file, ok);
+  return ok;
+}
+
 function findTool(name, pathEnv = process.env.PATH || '') {
-  for (const dir of pathEnv.split(path.delimiter)) {
+  const dirs = pathEnv.split(path.delimiter);
+  // a configured JDK wins over whatever stub sits on PATH
+  if ((name === 'java' || name === 'javac') && process.env.JAVA_HOME) dirs.unshift(path.join(process.env.JAVA_HOME, 'bin'));
+  for (const dir of dirs) {
     if (!dir) continue;
     const p = path.join(dir, name);
-    try { fs.accessSync(p, fs.constants.X_OK); if (fs.statSync(p).isFile()) return fs.realpathSync(p); } catch { /* next */ }
+    try {
+      fs.accessSync(p, fs.constants.X_OK);
+      if (!fs.statSync(p).isFile()) continue;
+      const real = fs.realpathSync(p);
+      if (!PROBED_TOOLS.has(name) || toolWorks(real, name)) return real;
+    } catch { /* next */ }
   }
   return null;
 }

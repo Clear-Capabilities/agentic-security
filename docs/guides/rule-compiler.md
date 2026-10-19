@@ -81,7 +81,7 @@ agentic-security rules promote orm-raw-query-concat
 
 This compiles the rule IR into a document the EXISTING custom-rule engine (`posture/custom-rules.js`) already
 knows how to run, no second matching engine, and writes it to `.agentic-security/rules/orm-raw-query-concat.yml`.
-From the next scan onward, this rule fires deterministically, with no model call, including on an **unseen
+Once the scanner trusts it (see "Promotion is not trust"), this rule fires deterministically in every scan, with no model call, including on an **unseen
 sibling** the corpus never contained (different file, renamed identifiers, extra indirection around the same
 shape), the "no model call occurs for B" scenario PRD 3 asks for, and the exact thing
 `test/cli/rule-compiler-cli.test.js` asserts against a real spawned CLI and a real `scan`.
@@ -90,6 +90,78 @@ shape), the "no model call occurs for B" scenario PRD 3 asks for, and the exact 
 agentic-security rules status orm-raw-query-concat
 agentic-security rules rollback orm-raw-query-concat   # un-publishes; ROLLED_BACK, never deleted from the ledger
 ```
+
+## Structured rules: source, sink, sanitizer
+
+The rule IR is more than a pattern. These fields are regular expressions the scanner's rule matcher **enforces**; there is no
+free-text hint that looks like a constraint and is ignored (a field that is not a valid regular expression is rejected):
+
+| Field | What the matcher does with it |
+|---|---|
+| `sink` | the location of the finding; a sink alone is the pattern |
+| `source`, `propagator` | must occur within `window` lines of the sink (a windowed co-occurrence, anchored on the sink) |
+| `sanitizer`, `dominatingGuard` | a hit is dropped when either matches within `guardWindow` lines **before** (or on) it |
+| `frameworkConstraint` | a file-level precondition: the file must contain it, wherever it is |
+| `exclusions` | a hit is dropped when its own line matches one |
+| `languages` | the rule only runs on files of those languages |
+
+A sanitizer is **local**: it silences the hit it guards, not every hit in the file. The two files below show the difference. `mixed.js`
+has a sanitized function and, further down, an unsanitized one; a file-wide `notMatch` would have hidden both.
+
+```bash
+agentic-security rules synthesize hunt-rawquery-0002 --spec spec.json
+Rule orm-raw-query-structured: DRAFT -> CANDIDATE (digest 221aa8b79daf)
+agentic-security rules evaluate orm-raw-query-structured --corpus corpus.json
+Rule orm-raw-query-structured: VALIDATED
+  precision 100.0%  recall 100.0%  protected-failures 0
+  regression fixtures written: 15 file(s) under .agentic-security/rule-compiler/orm-raw-query-structured/fixtures/
+agentic-security rules promote orm-raw-query-structured --sign-key "$RULE_SIGNING_KEY"
+Rule orm-raw-query-structured: VALIDATED -> PROMOTED. Published to /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.W6DJQJj3Wj/.agentic-security/rules/orm-raw-query-structured.yml.
+  signed: /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.W6DJQJj3Wj/.agentic-security/rules/orm-raw-query-structured.yml.sig
+  The scanner will load it (signed, accepted in pass-through mode (no trusted keys are configured)).
+
+agentic-security rules status orm-raw-query-structured
+Rule orm-raw-query-structured: PROMOTED
+  live: yes (signed, accepted in pass-through mode (no trusted keys are configured))
+  2026-10-18T23:07:35.815Z  (new) -> DRAFT  (drafted from hunt-rawquery-0002)
+  2026-10-18T23:07:35.817Z  DRAFT -> CANDIDATE  (eligibility passed)
+  2026-10-18T23:07:38.709Z  CANDIDATE -> VALIDATED  (promotion gate passed)
+  2026-10-18T23:07:40.507Z  VALIDATED -> PROMOTED  (promoted)
+```
+
+The published rule, as the scanner loads it:
+
+```yaml
+# Compiled by the rule compiler from finding hunt-rawquery-0002 (taint-proven).
+- id: rule-compiler/orm-raw-query-structured
+  title: "rawQuery fed by a request value without escaping"
+  severity: critical
+  cwe: CWE-89
+  languages: [javascript]
+  match:
+    allOf:
+      - "rawQuery\\s*\\("
+      - "(?:req(?:uest)?|ctx)\\.(?:request\\.)?(?:query|params|body)\\b"
+    window: 4
+    guardedBy: "(?:escapeSql\\s*\\()"
+    guardWindow: 4
+    excludeLine:
+      - "//\\s*audited"
+  message: "rawQuery fed by a request value without escaping (CWE-89, compiled from hunt-rawquery-0002)"
+```
+
+A real scan then reports the unguarded handler and the unguarded function in the mixed file, and not the sanitizer-guarded one:
+
+```
+mixed.js:10 critical
+server.js:3 critical
+```
+
+Two properties worth knowing. First, the evaluation does its job: with a narrower source (`req` only) the same rule scored 75%
+recall and was refused, because the mutation engine's framework variant (`ctx.query`) slipped past it. Second, scoring now goes through
+the scanner's own rule loader, so a rule the loader would refuse (a nested-quantifier pattern, say) is rejected at compile time
+instead of scoring well and never firing. An AST pattern is deliberately not a field: the engine has no AST matcher for a rule to
+compile to.
 
 ## The synthesis loop
 
@@ -166,6 +238,63 @@ Rule orm-raw-query-concat (promoted)
 
 The detection count comes from the last scan only, so it is a floor, not a history.
 
+## Promotion is not trust
+
+Publishing a rule file is not the same as the scanner running it. Rule packs are signature-checked so that a rule dropped into a
+repository cannot run in someone's CI: **an unsigned pack is refused** unless `AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1`. So `rules promote`
+signs the published rule when you give it a key (`--sign-key <base64>` or `AGENTIC_SECURITY_PRIVATE_KEY`; make one with
+`agentic-security-rule keygen`), and then says whether the scanner will load it. With no key it publishes, records `PROMOTED`, and tells you
+plainly that the rule is **not live yet**, instead of implying a capability that a scan would then not show:
+
+```
+agentic-security rules promote orm-raw-query-structured
+Rule orm-raw-query-structured: VALIDATED -> PROMOTED. Published to /private/var/folders/df/jvqnhbfd36v2lw3z4kwbdc580000gn/T/tmp.OQ9DCuPOeM/.agentic-security/rules/orm-raw-query-structured.yml.
+  NOT LIVE YET: the scanner will refuse this rule (unsigned). To make it live: sign it (agentic-security-rule sign .agentic-security/rules/orm-raw-query-structured.yml with your key, or re-run promote with --sign-key <base64>), or opt in for this environment with AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1.
+
+agentic-security rules status orm-raw-query-structured
+Rule orm-raw-query-structured: PROMOTED
+  live: NO, the scanner refuses it (unsigned). sign it (agentic-security-rule sign .agentic-security/rules/orm-raw-query-structured.yml with your key, or re-run promote with --sign-key <base64>), or opt in for this environment with AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1.
+```
+
+`rules status` (and `rules status --json`) show `live` for every promoted rule. Know what the signature buys you: with no trusted keys
+configured the scanner is in *pass-through* mode, which accepts any signed pack (and refuses it entirely in CI unless
+`AGENTIC_SECURITY_ALLOW_PASSTHROUGH_IN_CI=1`). To have the signature actually checked against your key, add the public key to
+`.agentic-security/trusted-keys.json` and set `AGENTIC_SECURITY_ALLOW_PROJECT_KEYS=1` (the setup is in `bin/agentic-security-rule.js`).
+Signing was broken on current Node (`Invalid JWK OKP key`) until this release; `test/rule-pack-signing.test.js` now round-trips it.
+
+## Regression integration: the shared false-positive corpus
+
+A promoted rule joins a corpus every later rule and every later run is held to. The **shared false-positive corpus** is the safe code of
+every promoted rule (its patched, nearby-clean and protected variants) plus any file you drop in
+`.agentic-security/rule-compiler/fp-corpus/` (real code a rule must never flag). It is part of the promotion gate: a rule that fires on any
+of it cannot be `VALIDATED`, and `rules promote` re-checks it against the corpus as it is *now*, since other rules may have been promoted
+since the evaluation. Rule B below is too broad (it flags any escape call) and is stopped by rule A's safe code:
+
+```
+agentic-security rules evaluate rule-b-overbroad --corpus corpus-b.json
+rules synthesize h3 --spec b.json 0 Rule rule-b-overbroad: DRAFT -> CANDIDATE (digest dd9aebc90e3f)
+ 
+rules evaluate rule-b-overbroad --corpus corpus-b.json 1 Rule rule-b-overbroad: gate FAILED
+  precision 100.0%  recall 66.7%  protected-failures 0
+  - recall 66.7% below 80%
+  - fires on 8 of 11 item(s) in the shared false-positive corpus: rule:rule-a-rawquery:patched, rule:rule-a-rawquery:patched-sibling:variable-rename, rule:rule-a-rawquery:patched-sibling:wrap-in-function, ...
+```
+
+`rules regress [rule-id]` re-scores every promoted rule against its own corpus and then the shared false-positive corpus, and exits 1 if any
+rule no longer clears its gate (the matcher, the loader or another rule changed underneath it, or a false positive you recorded now matches).
+After the operator added a real false positive that rule A fires on:
+
+```
+agentic-security rules regress
+rule-a-rawquery: REGRESSED  precision 100.0%  recall 100.0%  false-positive corpus hits 1
+  - fires on 1 item(s) of the shared false-positive corpus: operator-fp:audit-log.js
+```
+
+`rules evaluate --corpus` now keeps the corpus it evaluated, so `regress` and the shared corpus use exactly the code the rule was judged on.
+Per-rule unit tests remain the fixtures written at evaluation (the existing `rule test` convention); the cross-rule check is the part a
+per-rule test cannot see. This does not wire a promoted rule into this repository's own `bench/` corpora: those live in the project's
+source tree, not in an operator's `.agentic-security/`.
+
 ## Anti-cheating
 
 The synthesis material is checked before anything is written, and a hit fails closed (exit 4, nothing stored): benchmark names
@@ -178,15 +307,117 @@ outside `posture/evaluation/`.
 
 ## What this does not do
 
-- **A proposal is a regular expression over text.** The loop generalizes the vulnerable line and, failing that, the sink call with
-  interpolation, a source-and-sink pair within a window, or the bare sink. It does not build an AST or data-flow rule, and a rule is
-  only as good as its corpus.
+- **A rule is regular expressions over text, with structure.** The loop proposes a generalized line, a sink with interpolation, a
+  source-and-sink pair, or a structural source/sink/sanitizer candidate. There is no AST pattern (the engine has no AST matcher to
+  compile to) and no data-flow rule: "source within N lines of the sink" is proximity, not a proven flow. A rule is only as good as
+  its corpus.
 - **The mutators are syntactic and table-driven.** They show that a rule survives a different author's version of the code, not that
   it survives every one. `bench/mutation/` (the engine-wide verdict-flip gate) is a different, much larger thing and is untouched.
 - **Benchmark leakage is a pattern check on the synthesis material**, not a connection to any real benchmark population.
 - **No MCP tool** exposes synthesis.
-- **Regression fixtures are written in the operator's own `.agentic-security/`**, in the existing `vulnerable`/`clean` convention
-  `agentic-security rule test` already reads, not into this repository's own `bench/`.
+- **Regression is per installation.** Fixtures and the false-positive corpus live in the operator's own `.agentic-security/`, in the
+  existing `vulnerable`/`clean` convention `agentic-security rule test` reads. A promoted rule is not added to this repository's `bench/`
+  corpora automatically (they are the project's gated regression net, and a rule that lives in operator state is not part of the engine
+  those benches scan with).
+
+## Output schema
+
+Each rule keeps its state under `.agentic-security/rule-compiler/<rule-id>/`: `ir.json` (`agentic-security/rule-ir` version 1), `corpus.json`
+(the code it was judged on), `evaluation.json` (the gate result and every positive and negative with whether it fired), `provenance.json`,
+`synthesis.json` (every attempt), and the hash-chained `ledger.json` beside them. `provenance.json`, real, nested values abbreviated:
+
+```json
+{
+  "schema": "agentic-security/rule-provenance",
+  "version": 1,
+  "ruleId": "rule-a-rawquery",
+  "ruleVersion": 1,
+  "ruleHash": "dfe10d11b5bca4584d1c852b15feb6dc65c149ae6c5cda0edc74a3448...",
+  "originatingFinding": "h3",
+  "originatingCommit": null,
+  "evidenceState": "taint-proven",
+  "generatingModel": null,
+  "promptConfigVersion": null,
+  "positiveCorpusHash": "84e31aab849581319f82fef89191f44b4d7f96e03fefa55138296e140...",
+  "negativeCorpusHash": "232238d2a54680f9ec1f478362bbc3a827543f1aaf0cbe128cfc18579...",
+  "benchmarkResults": {
+    "precision": 1,
+    "recall": 1,
+    "tp": 4,
+    "fp": 0,
+    "fn": 0,
+    "tn": 11,
+    "protectedFailures": 0,
+    "thresholds": "{...}",
+    "gate": "passed",
+    "reasons": "[...]"
+  },
+  "leakageCheck": {
+    "ok": true,
+    "offendingTerms": "[...]"
+  },
+  "mutatorCoverage": {
+    "applied": "[...]",
+    "notApplicable": "[...]"
+  },
+  "discoveryCost": null,
+  "promotionEvent": {
+    "at": "2026-10-18T23:09:15.587Z",
+    "actor": "operator",
+    "reason": "promoted",
+    "ruleHash": "dfe10d11b5bca4584d1c852b15feb6dc65c149ae6c5cda0edc74a3448..."
+  },
+  "evaluatedAt": "2026-10-18T23:09:14.855Z"
+}
+```
+
+`rules status --json` lists every rule with its state and, for promoted rules, whether the scanner will load it; `rules regress --json`
+reports each promoted rule:
+
+```json
+[
+  {
+    "id": "rule-a-rawquery",
+    "state": "PROMOTED",
+    "live": false
+  },
+  {
+    "id": "rule-b-overbroad",
+    "state": "CANDIDATE"
+  }
+]
+```
+
+```json
+{
+  "results": [
+    {
+      "id": "rule-a-rawquery",
+      "status": "regressed",
+      "reasons": [
+        "fires on 1 item(s) of the shared false-positive corpus: operator-fp:audit-log.js"
+      ],
+      "precision": 1,
+      "recall": 1,
+      "protectedFailures": 0,
+      "fpCorpusHits": 1
+    }
+  ]
+}
+```
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `gate FAILED ... recall 75.0% below 80%` | The mutation siblings exposed a rule that is too narrow. Open `evaluation.json` and look at which positive has `"fired": false` (for example a `framework-variant` using `ctx.query` against a source that only matches `req`). Widen the source or sink, not the threshold. |
+| `the scanner's rule loader would reject this rule` | The rule has a pattern the scanner refuses to load (nested quantifiers are a ReDoS risk). It would have scored well and never fired. Rewrite the pattern. |
+| `NOT LIVE YET: the scanner will refuse this rule (unsigned)` | By design: an unsigned rule pack is refused. Re-run `rules promote <id> --sign-key <base64>` (key from `agentic-security-rule keygen`), sign the file with `agentic-security-rule sign`, or opt in for one environment with `AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1`. In CI, pass-through of signed packs is refused unless `AGENTIC_SECURITY_ALLOW_PASSTHROUGH_IN_CI=1`. |
+| `fires on N of M item(s) in the shared false-positive corpus` | The rule matches safe code from another promoted rule or a file in `fp-corpus/`. Narrow the rule. If the file is not a real false positive, remove it from `.agentic-security/rule-compiler/fp-corpus/`. |
+| `rules regress`: `REGRESSED` or `unverifiable` | `REGRESSED` names the reason (the rule no longer clears its gate, or now matches a false positive). `unverifiable: no evaluated corpus was kept` means the rule was evaluated before corpora were kept; run `rules evaluate <id> --corpus <file>` again. |
+| `Refusing: the material for this rule shows benchmark or answer-key signals` | The anti-cheating check found a benchmark name, advisory id, vulnerability comment or answer-key file name in the synthesis material. Nothing was written. Remove the signal; do not work around it. |
+| `Not eligible for rule synthesis` | The finding needs a stable id, a vulnerable span, a CWE or family, code-flow evidence, and an exploit proof or deterministic corroboration. The message lists what is missing. |
+| `Rule ... is not VALIDATED ... refusing to promote` | Promotion needs a passing `rules evaluate` first. A rule that failed the gate cannot be promoted. |
 
 ## Reference
 

@@ -221,3 +221,125 @@ test('labs without a recognised mode explains itself instead of doing nothing; a
   const r2 = runIn(dir, ['labs', 'synthesize-rule', 'f8', '--spec', specFile]);
   assert.equal(r2.status, 4); assert.match(r2.stderr, /needs originalCode/);
 });
+
+test('structured rule (PRD 3 requirement 2): source, sink and sanitizer are enforced by a real scan, locally, not file-wide', () => {
+  const dir = mkProject();
+  const GUARDED_THEN_UNGUARDED = `function a(req, res) {
+  const id = escapeSql(req.query.id);
+  res.json(db.rawQuery("SELECT * FROM users WHERE id = " + id));
+}
+${'\n'.repeat(15)}
+function b(req, res) {
+  const name = req.query.name;
+  res.json(db.rawQuery("SELECT * FROM users WHERE name = " + name));
+}
+`;
+  fs.writeFileSync(path.join(dir, 'server.js'), VULN_HANDLER);
+  fs.writeFileSync(path.join(dir, 'mixed.js'), GUARDED_THEN_UNGUARDED);
+  const findingId = 'hunt-rawquery-0002';
+  fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: findingId, stableId: findingId, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'SQL injection via rawQuery concatenation', severity: 'critical', parser: 'IR-TAINT', snippet: 'db.rawQuery("SELECT * FROM users WHERE id = " + userId)' }] }));
+  const spec = {
+    id: 'orm-raw-query-structured', title: 'rawQuery fed by a request value without escaping', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'],
+    source: 'req(?:uest)?\\.(?:query|params|body)\\b', sink: 'rawQuery\\s*\\(', sanitizer: 'escapeSql\\s*\\(', frameworkConstraint: 'rawQuery', exclusions: ['//\\s*audited'], window: 4,
+    remediation: 'Bind parameters; escape only as a last resort.',
+  };
+  fs.writeFileSync(path.join(dir, 'spec.json'), JSON.stringify(spec));
+  assert.equal(runIn(dir, ['rules', 'synthesize', findingId, '--spec', path.join(dir, 'spec.json')]).status, 0);
+  const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
+  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] }));
+  const ev = runIn(dir, ['rules', 'evaluate', 'orm-raw-query-structured', '--corpus', path.join(dir, 'corpus.json')]);
+  assert.equal(ev.status, 0, ev.stderr + ev.stdout); assert.match(ev.stdout, /VALIDATED/);
+  assert.equal(runIn(dir, ['rules', 'promote', 'orm-raw-query-structured']).status, 0);
+  const yml = fs.readFileSync(path.join(dir, '.agentic-security', 'rules', 'orm-raw-query-structured.yml'), 'utf8');
+  assert.match(yml, /guardedBy:/); assert.match(yml, /fileRequires:/); assert.match(yml, /excludeLine:/);
+  const findings = JSON.parse(runIn(dir, ['scan', '.', '--format', 'json']).stdout).findings || [];
+  const hits = findings.filter((f) => f.cwe === 'CWE-89').map((f) => `${f.file}:${f.line}`);
+  assert.ok(hits.some((h) => h.startsWith('server.js:')), `the unguarded handler is caught: ${hits}`);
+  assert.ok(hits.some((h) => h.startsWith('mixed.js:')), `the unguarded function in a file that also has a guarded one is still caught: ${hits}`);
+  const mixedLines = findings.filter((f) => f.file === 'mixed.js' && f.cwe === 'CWE-89').map((f) => f.line);
+  assert.ok(mixedLines.every((l) => l > 5), `the sanitizer-guarded function (lines 1-4) is not reported: ${mixedLines}`);
+});
+
+test('regression integration (PRD 3 requirement 8): a promoted rule joins a shared false-positive corpus that holds later rules and later runs to account', () => {
+  const dir = mkProject();
+  fs.writeFileSync(path.join(dir, 'server.js'), VULN_HANDLER);
+  const findingId = 'hunt-rawquery-0003';
+  fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: findingId, stableId: findingId, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'SQL injection via rawQuery', severity: 'critical', parser: 'IR-TAINT', snippet: 'db.rawQuery(x)' }] }));
+  const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
+  const corpus = { originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] };
+  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify(corpus));
+  const specA = { id: 'rule-a-rawquery', title: 'rawQuery fed by a request value', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'], source: '(?:req(?:uest)?|ctx)\\.(?:request\\.)?(?:query|params|body)\\b', sink: 'rawQuery\\s*\\(', sanitizer: 'escapeSql\\s*\\(', window: 4 };
+  fs.writeFileSync(path.join(dir, 'a.json'), JSON.stringify(specA));
+  assert.equal(runIn(dir, ['rules', 'synthesize', findingId, '--spec', path.join(dir, 'a.json')]).status, 0);
+  assert.equal(runIn(dir, ['rules', 'evaluate', 'rule-a-rawquery', '--corpus', path.join(dir, 'corpus.json')]).status, 0);
+  assert.equal(runIn(dir, ['rules', 'promote', 'rule-a-rawquery']).status, 0);
+
+  // nothing regressed yet
+  const clean = runIn(dir, ['rules', 'regress']);
+  assert.equal(clean.status, 0, clean.stdout + clean.stderr); assert.match(clean.stdout, /rule-a-rawquery: OK/);
+
+  // a later rule that is too broad fires on rule A's safe code: it cannot even be VALIDATED
+  const specB = { id: 'rule-b-overbroad', title: 'any escape call', severity: 'low', cwe: 'CWE-20', family: 'validation', languages: ['javascript'], match: { pattern: 'escapeSql\\s*\\(' } };
+  fs.writeFileSync(path.join(dir, 'b.json'), JSON.stringify(specB));
+  assert.equal(runIn(dir, ['rules', 'synthesize', findingId, '--spec', path.join(dir, 'b.json')]).status, 0);
+  fs.writeFileSync(path.join(dir, 'corpus-b.json'), JSON.stringify({ originalCode: 'x = escapeSql(a);\n', nearbyCleanCode: ['const n = 5;\n'], protectedVariantsCode: [] }));
+  const evalB = runIn(dir, ['rules', 'evaluate', 'rule-b-overbroad', '--corpus', path.join(dir, 'corpus-b.json')]);
+  assert.equal(evalB.status, 1, evalB.stdout + evalB.stderr); assert.match(evalB.stdout, /shared false-positive corpus/);
+  assert.match(evalB.stdout, /rule:rule-a-rawquery:/, 'the offending items are named');
+  assert.equal(runIn(dir, ['rules', 'promote', 'rule-b-overbroad']).status, 4, 'a rule that failed the gate cannot be promoted');
+
+  // the operator adds a real false positive; rule A fires on it, so `rules regress` reports the regression
+  const fpDir = path.join(dir, '.agentic-security', 'rule-compiler', 'fp-corpus');
+  fs.mkdirSync(fpDir, { recursive: true });
+  fs.writeFileSync(path.join(fpDir, 'audit-log.js'), 'function log(req) {\n  const user = req.query.user;\n  return db.rawQuery("SELECT * FROM audit WHERE u = " + user);\n}\n');
+  const bad = runIn(dir, ['rules', 'regress']);
+  assert.equal(bad.status, 1, bad.stdout); assert.match(bad.stdout, /rule-a-rawquery: REGRESSED/); assert.match(bad.stdout, /operator-fp:audit-log\.js/);
+  assert.equal(JSON.parse(runIn(dir, ['rules', 'regress', '--json']).stdout).results[0].fpCorpusHits, 1);
+  assert.equal(runIn(dir, ['rules', 'regress', 'no-such-rule']).status, 4);
+});
+
+import { keygen } from '../../src/posture/rule-pack-signing.js';
+
+// The scanner refuses unsigned rule packs by design (a rule dropped into a repository must not run in someone's CI). A promoted rule is
+// therefore only a capability once the scanner will actually load it, and the CLI says which it is instead of implying it.
+function trustProject() {
+  const dir = mkProject();
+  fs.writeFileSync(path.join(dir, 'server.js'), VULN_HANDLER);
+  const fid = 'hunt-rawquery-0004';
+  fs.writeFileSync(path.join(dir, '.agentic-security', 'last-scan.json'), JSON.stringify({ findings: [{ id: fid, stableId: fid, file: 'server.js', line: 3, cwe: 'CWE-89', vuln: 'x', severity: 'critical', parser: 'IR-TAINT', snippet: 'x' }] }));
+  const SAFE = VULN_HANDLER.replace('req.query.id', 'escapeSql(req.query.id)');
+  fs.writeFileSync(path.join(dir, 'corpus.json'), JSON.stringify({ originalCode: VULN_HANDLER, patchedCode: SAFE, nearbyCleanCode: ['db.rawQuery("SELECT * FROM users");'], protectedVariantsCode: [SAFE] }));
+  fs.writeFileSync(path.join(dir, 'spec.json'), JSON.stringify({ id: 'trust-rawquery', title: 'rawQuery fed by a request value', severity: 'critical', cwe: 'CWE-89', family: 'sql-injection', languages: ['javascript'], source: '(?:req(?:uest)?|ctx)\\.(?:request\\.)?(?:query|params|body)\\b', sink: 'rawQuery\\s*\\(', sanitizer: 'escapeSql\\s*\\(', window: 4 }));
+  return { dir, fid };
+}
+const strictEnv = () => { const e = { ...process.env }; for (const k of ['AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS', 'AGENTIC_SECURITY_PRIVATE_KEY', 'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE', 'CIRCLECI', 'JENKINS_URL', 'TF_BUILD', 'AGENTIC_SECURITY_STRICT_SIGNING']) delete e[k]; return e; };
+const runStrict = (dir, args) => spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: 'utf8', timeout: 60000, env: strictEnv() });
+
+test('promotion is not trust: an unsigned promoted rule is reported NOT LIVE and the scan does not load it; signing it makes it live', () => {
+  const { dir, fid } = trustProject();
+  assert.equal(runStrict(dir, ['rules', 'synthesize', fid, '--spec', path.join(dir, 'spec.json')]).status, 0);
+  assert.equal(runStrict(dir, ['rules', 'evaluate', 'trust-rawquery', '--corpus', path.join(dir, 'corpus.json')]).status, 0);
+  const promote = runStrict(dir, ['rules', 'promote', 'trust-rawquery']);
+  assert.equal(promote.status, 0, promote.stderr);
+  assert.match(promote.stdout, /NOT LIVE YET: the scanner will refuse this rule \(unsigned\)/);
+  assert.match(promote.stdout, /agentic-security-rule sign|--sign-key/);
+  assert.match(runStrict(dir, ['rules', 'status', 'trust-rawquery']).stdout, /live: NO, the scanner refuses it \(unsigned\)/);
+  assert.match(runStrict(dir, ['rules', 'status']).stdout, /trust-rawquery\s+PROMOTED\s+\(NOT LIVE/);
+  assert.equal(JSON.parse(runStrict(dir, ['rules', 'status', '--json']).stdout)[0].live, false);
+  const before = JSON.parse(runStrict(dir, ['scan', '.', '--format', 'json']).stdout).findings || [];
+  assert.equal(before.filter((f) => f.cwe === 'CWE-89').length, 0, 'the scanner did not load an unsigned rule');
+
+  // roll back, then promote again with a signing key: the same rule is now live and finds the flaw
+  assert.equal(runStrict(dir, ['rules', 'rollback', 'trust-rawquery']).status, 0);
+  assert.equal(fs.existsSync(path.join(dir, '.agentic-security', 'rules', 'trust-rawquery.yml.sig')), false);
+  const { privateKey } = keygen();
+  const dir2 = trustProject();
+  assert.equal(runStrict(dir2.dir, ['rules', 'synthesize', dir2.fid, '--spec', path.join(dir2.dir, 'spec.json')]).status, 0);
+  assert.equal(runStrict(dir2.dir, ['rules', 'evaluate', 'trust-rawquery', '--corpus', path.join(dir2.dir, 'corpus.json')]).status, 0);
+  const signed = runStrict(dir2.dir, ['rules', 'promote', 'trust-rawquery', '--sign-key', privateKey]);
+  assert.equal(signed.status, 0, signed.stderr); assert.match(signed.stdout, /signed: .*trust-rawquery\.yml\.sig/); assert.match(signed.stdout, /The scanner will load it/);
+  assert.ok(fs.existsSync(path.join(dir2.dir, '.agentic-security', 'rules', 'trust-rawquery.yml.sig')));
+  assert.match(runStrict(dir2.dir, ['rules', 'status', 'trust-rawquery']).stdout, /live: yes/);
+  const after = JSON.parse(runStrict(dir2.dir, ['scan', '.', '--format', 'json']).stdout).findings || [];
+  assert.ok(after.some((f) => f.cwe === 'CWE-89' && f.file === 'server.js'), 'the signed promoted rule fires in a normal scan');
+});

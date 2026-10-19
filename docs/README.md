@@ -75,6 +75,8 @@ One page per job, each with copy-paste commands and expected output:
 - **[Nix and NixOS](guides/nix-nixos.md)**: scan a flake or a configuration: effective options, hardening, build trust, store secrets, closures, optional evaluation
 - **[Installing on NixOS](guides/nixos-install.md)**: run the scanner on a NixOS host, offline use, and what has not been verified
 - **[Background implementation loop](guides/loop-engineering.md)**: the bounded runbook used to build and verify the Haskell/Nix work (a development tool, not part of the scanner)
+- **[Exploit proof](guides/exploit-proof-fabric.md)**: prove a finding is exploitable by running a reproducer in a confined sandbox, replay it independently, and verify a fix by replaying the same exploit against the patch
+- **[Rule compiler](guides/rule-compiler.md)**: turn a proven finding into a deterministic rule with structure, a corpus, a promotion gate, a lifecycle, a shared false-positive corpus and `rules regress`
 - **[Fleet](guides/fleet.md)** — scan a declared set of repositories in one invocation and query cross-repository dependency reach
 - **[Detection and response](guides/detection-and-response.md)** — turn a proven vulnerability into a validated detection, hunt historical logs honestly, and scope the observable exposure window
 - **[Eval Lab and the model router](guides/eval-lab.md)** — compare a baseline and models on detection, exploit proof, remediation, cost, latency and repeatability, and route each task to the right model

@@ -1,5 +1,18 @@
 # Implementation status: Self-Learning Finding-to-Rule Compiler (PRD 3)
 
+## Status summary (2026-10-18)
+
+* **Percent complete:** 7 of 8 P0 requirements fully evidenced; 1 partial. Requirement 8 (regression integration) is a working per-installation mechanism (fixtures, a shared false-positive corpus, `rules regress`) but a promoted rule is not added to this repository's own `bench/` corpora. Requirement 2 compiles source, sink, propagator, sanitizer, guard, framework constraint, exclusions and language; an AST pattern is not supported (the engine has no AST matcher to compile to).
+* **Current phase:** G (completion): built, documented, released; ongoing work is hardening.
+* **Completed requirements:** Eligibility, the rule IR with enforced structure, automatic corpus with seven mutators on both sides, the synthesis loop, the promotion gate, provenance, the lifecycle ledger, `rules synthesize|evaluate|promote|status|rollback|cost|regress`, signing on promotion with a truthful `live` status, and the killer scenario against a real spawned CLI and a real scan.
+* **Current work:** None in flight.
+* **Remaining requirements:** AST-pattern rules; adding a promoted rule to this repository's bench corpora; an MCP tool for synthesis; a real benchmark population behind the anti-cheating check (it is a pattern check on the synthesis material).
+* **Failing tests:** None at the last run.
+* **Blockers:** None structural.
+* **Last verified command:** `node --test test/rule-compiler/*.test.js test/cli/rule-compiler-cli.test.js` (scanner/): 38 pass, 0 fail.
+
+---
+
 **Percent complete (updated):** all eight P0 requirements are implemented and tested; the follow-up list below closes the gaps this
 page first disclosed. Original summary, kept for the record:
 
@@ -69,8 +82,29 @@ of reuse; `promotion.js` now has its own small, independent leakage check instea
 - `rules cost <rule-id>`: the business metric (first discovery cost against later deterministic detections at $0 of model spend).
 - `rules evaluate` defaults to the corpus the rule was synthesized on.
 
+**Closed in the second follow-up (PRD 3 requirement 2, the IR):**
+- The IR's source, propagator, sink, sanitizer, dominating guard, framework constraint, exclusions and language fields are regular
+  expressions the matcher enforces. Before this they were free-text hints the matcher ignored, which this page had counted as
+  done. They compile into the existing custom-rule matcher, extended additively (`fileRequires`, `guardedBy`/`guardWindow`,
+  `excludeLine`) in `posture/custom-rules.js`; a sanitizer is local to the hit it guards.
+- Scoring now uses the scanner's own rule normalizer (`normalizeCustomRule`), not a second implementation, and a rule the loader would
+  refuse is rejected at compile time. Previously a rule could score well and never fire in a scan.
+- The synthesis loop proposes a structural candidate and revises it with the patched code's vocabulary as a local sanitizer.
+- Tests: `test/rule-compiler/structure.test.js` (9) and a structured-rule scenario in `test/cli/rule-compiler-cli.test.js` against a
+  real spawned CLI and a real scan.
+
+- Requirement 8 (regression integration) is now a mechanism, not only fixtures: a shared false-positive corpus (every promoted rule's
+  safe code plus operator files) is part of the gate and of `rules promote`, and `rules regress` re-scores all promoted rules. The
+  promoted rule is still not added to this repository's own `bench/` corpora (see the guide for why).
+
+- A defect in the delivered flow, found by re-reading the PRD and trying it without test-only environment overrides: `rules promote`
+  published an unsigned pack that the scanner refuses by design, so a "promoted" rule found nothing in a default scan (every test had
+  set `AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1`). Now `promote` signs with `--sign-key`, reports whether the scanner will load the rule
+  (`NOT LIVE YET` otherwise), and `rules status` shows `live`. Underneath it, `signRulePack` itself was broken on current Node
+  ("Invalid JWK OKP key"); fixed and covered by `test/rule-pack-signing.test.js`.
+
 **Still not done:**
-- Four of the earlier gaps are closed; what remains is: no MCP tool surface for synthesis; the anti-cheating check is a pattern
+- What remains is: no MCP tool surface for synthesis; the anti-cheating check is a pattern
   check on the synthesis material, not a connection to a real benchmark population; a proposal is a regular expression over text
   (no AST or data-flow rule); the mutator tables are small and conservative by design; the later-detection count in `rules cost`
   reads the last scan only.

@@ -212,11 +212,51 @@ only: a URL built at run time, read from the environment or routed by a service 
 use is unknown, so those are `connects-to` edges. A discovered edge is a lead with evidence, not a confirmed call. `--no-discover`
 turns the search off.
 
+## Code Boundaries, from the code itself
+
+`fleet scan --lineage` runs each repository's scan with the Data Flow Explorer's own data flow graph (Code Boundaries) and folds a
+bounded summary of it into the enterprise graph: the data classes the code handles, the hosts it sends data to, the queue topics it
+publishes or consumes, and the stores it connects to. The whole graph is not copied. It adds to what the manifest says and never replaces
+it; every edge it contributes carries `source: code-boundaries` evidence, and an edge that both the code literals and Code Boundaries
+agree on has both. In this three-repository example the manifest never said the API handles payment data or calls the ledger:
+
+```
+agentic-security fleet scan fleet.yaml --lineage
+...
+
+Assurance: GREEN
+
+Code Boundaries: 3 repositories contributed a data flow graph. Data classes found in code but not declared: api (pci).
+
+Edges found in code: 1 not in the manifest, 0 matching a declared edge. List them with: agentic-security fleet edges --undeclared
+```
+
+```
+agentic-security fleet query --internet-to pci
+Internet -> web -> api
+    reaches pci data only because the code shows it, not the manifest: api
+
+1 path(s). Reach edges are as declared in the fleet manifest, plus any marked above as found only in code.
+```
+
+```
+agentic-security fleet edges --undeclared
+api -[calls]-> ledger  FOUND ONLY IN CODE  (index.js:5, code boundaries: ledger.internal)
+```
+
+A path that exists only because of a data class the code shows (not the manifest) says so, so a reader can tell a declared exposure
+from an inferred one. Slower than a plain scan (it builds the graph for every repository), so it is opt-in; the choice is remembered on the
+run, so `fleet resume` does the same thing. A destination, topic or database is joined to a node only when its name is that node's id or a
+declared `aliases:` entry.
+
+`fleet status` and `fleet resume` accept either a run id or the id of one of its jobs (`fleet status frun-1234abcd:payments-api`): a job
+id resolves to the run it belongs to.
+
 ## Commands
 
 ```bash
 agentic-security fleet init
-agentic-security fleet scan fleet.yaml [--workers N] [--retries N] [--timeout-seconds N] [--no-cache]
+agentic-security fleet scan fleet.yaml [--workers N] [--retries N] [--timeout-seconds N] [--no-cache] [--no-discover] [--lineage]
 agentic-security fleet status [run-id]
 agentic-security fleet resume <run-id|manifest.yaml> [--retry-failed]
 agentic-security fleet query --blast-radius <component> [--version <pin>]
@@ -227,12 +267,55 @@ agentic-security fleet edges [--undeclared] [--json]
 agentic-security fleet explore [--out graph.html]
 ```
 
+## Output schema
+
+`fleet scan --json` and `fleet status <run-id|job-id> --json` print the run and its jobs. The health block is the same one the text report
+shows:
+
+```json
+{
+  "runId": "frun-f382cd7e8f719609",
+  "health": {
+    "counts": { "requested": 3, "complete": 3, "partial": 0, "failed": 0, "timedOut": 0, "cancelled": 0, "notRun": 0 },
+    "assurance": "green",
+    "reasons": [],
+    "repositories": [ { "id": "web", "state": "complete", "required": true } ]
+  },
+  "jobs": [ { "jobId": "frun-f382cd7e8f719609:web", "repo": "web", "status": "succeeded", "attempts": 1, "worker": "host:4242:0", "leaseExpiresAt": null, "error": null } ]
+}
+```
+
+`assurance` is `green` (every required repository complete, nothing else wrong), `degraded` (every required repository has a result, but
+some result is partial or an optional repository has a problem) or `red` (a required repository has no result). The enterprise graph is
+written to `.agentic-security/fleet/enterprise-graph.json` (`agentic-security/enterprise-graph` version 1): `nodes` (`id`, `type`, `kind`,
+`internetFacing`, `environment`, `dataClasses`, `trustZone`, `required`, and `discoveredDataClasses` when Code Boundaries added any), `edges`
+(`id`, `type`, `from`, `to`, `reach`, `discovered`, and an `evidence` list of `{source, ...}` where `source` is `fleet-manifest`,
+`package-manifest`, `discovered-code-literal` or `code-boundaries`), `discovery`, `codeBoundaries`, `runId` and a `digest`. Every edge has at
+least one evidence entry; a graph without that is rejected. Per-repository results are artifacts under `.agentic-security/fleet/artifacts/<run-id>/`,
+each checked against the hash the job store recorded before it is used.
+
+## Troubleshooting
+
+| What you see | Why, and what to do |
+|---|---|
+| `Assurance: RED` though the code looks fine | A required repository has no result: failed, timed out, cancelled or never ran. `Reasons` names them. `fleet resume <run-id> --retry-failed` re-runs only those. Mark a repository `required: false` only if its absence really should not turn the organization red. |
+| `Invalid fleet manifest: ...` | The manifest is validated closed-world: an unknown key, a duplicate id, a path that is not a directory, or a reference to a missing or wrong-kind node refuses the whole file. The message names the line to fix. |
+| `Nothing to resume for that manifest` | No run of that manifest has unfinished work. Resume by run id (or job id) with `--retry-failed` to retry failures. |
+| `The manifest ... has changed since run ... was planned` | A resumed run must scan what it planned. Start a new run with `fleet scan`. |
+| `No Internet-facing path to X data` but you expect one | Reach edges are what the manifest declares, plus what the code literals and (with `--lineage`) Code Boundaries show. Declare the call, or give the target node an `aliases:` entry so the code's hostname can be joined to it, then `fleet scan` again. |
+| `No node in the fleet manifest is marked as holding X data` | Nothing declares that class. Add `dataClasses:` to the node, or scan with `--lineage` so the code can show it. |
+| A repository shows a result that is not from today | It was served from the content-addressed cache because its commit, lockfiles, configuration and the scanner build are unchanged. `--no-cache` forces a fresh scan. |
+| The run died when the controller was killed | Leases expire and `fleet resume` recovers jobs held by a dead worker on this host. Another host's leases are recovered only by expiry. |
+| `fleet` fails to start with a SQLite error | The job store uses `node:sqlite` (this project requires Node 24 or newer). |
+
 ## What is not built
 
 * **No PostgreSQL or remote-worker store, and no distributed queue.** The interface allows them; one machine's SQLite file is what
   exists. Leases on another host are recovered by expiry only.
-* **Edge discovery is literal matching, not analysis.** It reads string and URL literals for a handful of patterns (see "Edges found
-  in code"). The Data Flow Explorer's per-repository graph has richer information; joining it here is not done.
+* **Edge discovery is literal matching, plus a summary of each repository's data flow graph.** The literal search reads string and URL
+  literals (see "Edges found in code"). With `--lineage` the Data Flow Explorer's per-repository graph contributes data classes and
+  destinations; it is summarized, not joined node for node, so the enterprise graph cannot follow a single data element across a
+  repository boundary.
 * **Dependency matching is by declared package name.** Two repositories that share a name under different ecosystems are not
   disambiguated, and a version pin is matched as text (a commit id or version string appearing in the pinned spec), not resolved.
 * **`fleet explore` is a static listing, not the Data Flow Explorer.** No graph drawing, no filtering.

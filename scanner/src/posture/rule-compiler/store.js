@@ -8,6 +8,7 @@ import path from 'node:path';
 import { statePath, ensureStateDir, safeWriteState } from '../state-dir.js';
 import { newLedger, verifyLedger } from './lifecycle.js';
 import { compileToCustomRule } from './ir.js';
+import { verifyRulePack, loadTrustedKeys, signRulePack } from '../rule-pack-signing.js';
 
 const DIR = 'rule-compiler';
 const EXT = { javascript: 'js', typescript: 'ts', python: 'py', go: 'go', ruby: 'rb', java: 'java', rust: 'rs', csharp: 'cs', php: 'php', any: 'txt' };
@@ -100,13 +101,40 @@ export function publishCustomRule(scanRoot, ir) {
     ...(doc.match.pattern ? [`    pattern: ${JSON.stringify(doc.match.pattern)}`] : []),
     ...(doc.match.allOf ? [`    allOf:`, ...doc.match.allOf.map((p) => `      - ${JSON.stringify(p)}`), `    window: ${doc.match.window}`] : []),
     ...(doc.match.notMatch ? [`    notMatch: ${JSON.stringify(doc.match.notMatch)}`] : []),
+    ...(doc.match.fileRequires ? [`    fileRequires:`, ...doc.match.fileRequires.map((p) => `      - ${JSON.stringify(p)}`)] : []),
+    ...(doc.match.guardedBy ? [`    guardedBy: ${JSON.stringify(doc.match.guardedBy)}`, `    guardWindow: ${doc.match.guardWindow}`] : []),
+    ...(doc.match.excludeLine ? [`    excludeLine:`, ...doc.match.excludeLine.map((p) => `      - ${JSON.stringify(p)}`)] : []),
     `  message: ${JSON.stringify(doc.message)}`,
     '',
   ].join('\n');
   return { ok: safeWriteState(f, yamlText), file: f };
 }
 
+/** Sign a published rule with the operator's key (the same Ed25519 scheme `agentic-security-rule sign` uses). The key is never stored here. */
+export function signPublishedRule(file, privateKeyB64) {
+  try { signRulePack(file, privateKeyB64); return { ok: true }; } catch (e) { return { ok: false, reason: String(e.message).slice(0, 120) }; }
+}
+
+/**
+ * Will the scanner actually LOAD this promoted rule? Publishing a file is not the same as the scanner trusting it: rule packs are
+ * signature-checked (posture/rule-pack-signing.js) so that a rule dropped into a repository cannot run in someone's CI. A promoted rule
+ * the scanner would refuse is not a capability yet, so this is reported next to the lifecycle state instead of being assumed.
+ */
+export function packTrust(scanRoot, id) {
+  const file = statePath(scanRoot, 'rules', `${id}.yml`);
+  if (!fs.existsSync(file)) return { live: false, reason: 'not published', remediation: null };
+  let r;
+  const origErr = console.error; console.error = () => {};
+  try { r = verifyRulePack(file, loadTrustedKeys(scanRoot)); } finally { console.error = origErr; }
+  if (r.ok) return { live: true, via: r.passThrough ? 'signed, accepted in pass-through mode (no trusted keys are configured)' : `signed by ${r.keyId}`, reason: null, remediation: null };
+  if (r.reason === 'unsigned' && r.allowUnsigned) return { live: true, via: 'unsigned, accepted because AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1', reason: null, remediation: null };
+  const remediation = r.reason === 'unsigned'
+    ? `sign it (agentic-security-rule sign ${path.relative(process.cwd(), file) || file} with your key, or re-run promote with --sign-key <base64>), or opt in for this environment with AGENTIC_SECURITY_ALLOW_UNSIGNED_PACKS=1`
+    : (r.remediation ?? 'see the signing setup in bin/agentic-security-rule.js');
+  return { live: false, reason: r.reason, remediation };
+}
+
 export function unpublishCustomRule(scanRoot, id) {
   const f = statePath(scanRoot, 'rules', `${id}.yml`);
-  try { if (fs.existsSync(f)) fs.unlinkSync(f); return { ok: true }; } catch (e) { return { ok: false, reason: e.message }; }
+  try { for (const x of [f, `${f}.sig`]) if (fs.existsSync(x)) fs.unlinkSync(x); return { ok: true }; } catch (e) { return { ok: false, reason: e.message }; }
 }
