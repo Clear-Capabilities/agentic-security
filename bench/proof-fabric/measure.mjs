@@ -68,6 +68,7 @@ for (const cls of classes) {
   for (let r = 0; r < ROUNDS; r++) {
     for (const side of ['vulnerable', 'mitigated']) {
       const res = await proveFinding({ finding: { id: reproducer.findingId, stableId: reproducer.findingId, parser: 'IR-TAINT' }, reproducer, sourceRoot: path.join(dir, side), policy: { requireContainer: REQUIRE_CONTAINER, timeoutMs: 20000 } });
+      if (side === 'vulnerable' && res.state !== 'EXPLOIT_CONFIRMED') process.stderr.write(`unconfirmed ${cls} (${res.outcome}): ${JSON.stringify({ degradation: res.degradation, attempts: res.attempts?.detail?.slice(0, 1) })}\n`);
       rows.push({ class: cls, lang: reproducer.lang, side, round: r, mode: res.environment?.mode ?? null, state: res.state, confirmed: res.state === 'EXPLOIT_CONFIRMED', successes: res.attempts.successes, proofMs: res.timing.proofMs });
     }
   }
