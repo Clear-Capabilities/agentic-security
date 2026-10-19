@@ -26,7 +26,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = process.env.FIXBENCH_BASELINE_PATH || path.join(HERE, 'baseline.json');
 const DOC = path.join(HERE, '../../docs/engineering-excellence/FIX_BENCHMARK.md');
 
-async function setup(c) {
+export async function setup(c) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `fixbench-${c.id}-`));
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'case', version: '1.0.0', scripts: { test: 'node test.js' } }));
   for (const [rel, text] of Object.entries(c.files)) { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); }

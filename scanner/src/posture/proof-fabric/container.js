@@ -18,6 +18,9 @@ import { superviseSpawn } from '../../sandbox/supervise.js';
 import { scrubEnv } from '../../sandbox/trust-domains.js';
 
 export const CONTAINER_ROOT = '/work';
+// the image's own toolchain directories matter: the Temurin image puts the JDK at /opt/java/openjdk/bin and sets it through ENV, which a
+// bare PATH override throws away (found by the first run against a real engine: `javac: not found`)
+export const CONTAINER_PATH = '/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 // the interpreter names inside the image; the host paths the runner uses locally mean nothing in there
 export const CONTAINER_TOOLS = Object.freeze({ node: 'node', python: 'python3', java: 'java', javac: 'javac', cc: 'gcc', dotnet: 'dotnet' });
 
@@ -30,7 +33,7 @@ export function containerArgs({ image, name, hostRoot, argv, env = {}, limits, u
     '--pids-limit', String(limits.pids), '--memory', `${limits.memoryMb}m`, '--memory-swap', `${limits.memoryMb}m`, '--cpus', String(limits.cpus),
     '--tmpfs', `/tmp:rw,nosuid,size=${limits.diskMb}m`, '--user', uid,
     '-v', `${hostRoot}:${CONTAINER_ROOT}:rw`, '--workdir', CONTAINER_ROOT,
-    '-e', 'HOME=/work', '-e', 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', '-e', 'CI=1',
+    '-e', 'HOME=/work', '-e', `PATH=${CONTAINER_PATH}`, '-e', 'CI=1',
   ];
   for (const [k, v] of Object.entries(env)) args.push('-e', `${k}=${v}`);
   args.push(image, ...argv);
