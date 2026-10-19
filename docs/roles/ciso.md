@@ -16,7 +16,7 @@ Raw finding counts are the wrong headline. These are the questions that matter, 
 | 2 | How many findings are reachable? | `reachable`, `unreachable`, `entrypointReachable` per finding | GA |
 | 3 | How many survived falsification? | `falsification.verdict` per finding (`survived` means no blocking control was found) | GA |
 | 4 | How many have stronger proof? | The proof state per finding: `STATICALLY_CORROBORATED`, `REPRODUCED`, `EXPLOIT_CONFIRMED` | Preview |
-| 5 | What sensitive data is in the blast radius? | `dataflow impact assess` over the Code Boundaries graph: affected data classes and recipients | Preview |
+| 5 | What sensitive data is in the blast radius? | `dataflow impact assess` over the Code Boundaries graph: affected data classes and recipients | GA |
 | 6 | Which fixes are fully verified? | The verification record: `verifiedFull`, `degradedLegs[]` and the completeness tier | GA |
 | 7 | What is GA and what is experimental? | [`capabilities.yaml`](../capabilities.yaml), rendered in the [README](../../README.md#what-exists-today) | GA |
 | 8 | What can the platform not prove? | [Trust and limitations](../trust/trust-and-limitations.md) | GA |

@@ -228,10 +228,16 @@ capabilities:
   - id: root-cause-sweep
     name: Repository-wide sibling sweep
     lifecycleStages: [scale]
-    maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    maturity: GA
+    since: 0.181.0
+    contract: docs/reference/root-cause-sweep.md
+    contractTest: scanner/test/contracts/root-cause-sweep.contract.test.js
+    gate: sibling-sweep-gate
+    platforms: [linux:test-shard]
+    limits: docs/reference/root-cause-sweep.md#what-the-sweep-does-not-do
     establishes: Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately.
     docs:
+      - docs/reference/root-cause-sweep.md
       - docs/scale/README.md
     evidence:
       - scanner/src/posture/root-cause-sweep.js
@@ -249,10 +255,16 @@ capabilities:
   - id: federation
     name: Cross-repository graph federation
     lifecycleStages: [scale, trace]
-    maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    maturity: GA
+    since: 0.181.0
+    contract: docs/reference/federation.md
+    contractTest: scanner/test/contracts/federation.contract.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard]
+    limits: docs/reference/federation.md#what-federation-does-not-do
     establishes: A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified.
     docs:
+      - docs/reference/federation.md
       - docs/guides/data-flow-explorer.md
       - docs/scale/README.md
     evidence:
@@ -296,8 +308,13 @@ capabilities:
   - id: blast-radius
     name: Blast-radius assessment
     lifecycleStages: [trace]
-    maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    maturity: GA
+    since: 0.181.0
+    contract: docs/security-graph/blast-radius.md
+    contractTest: scanner/test/contracts/blast-radius.contract.test.js
+    gate: blast-radius-gate
+    platforms: [linux:test-shard]
+    limits: docs/security-graph/blast-radius.md#what-blast-radius-does-not-establish
     establishes: What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph.
     docs:
       - docs/security-graph/blast-radius.md

@@ -27,9 +27,9 @@ Each stage ends with **Evidence created**, the transition into the next stage.
 | 2 | Corroborate | [GA] | Three analyses agree; no blocking control found; scan was `partial` |
 | 3 | Prove | [Preview] | Nothing ran: no reproducer exists and none can be generated for CWE-89 |
 | 4 | Learn | [Labs] | Not run for this finding |
-| 5 | Scale | [Preview] / [Labs] | Repo sweep seeded elsewhere; fleet not configured |
+| 5 | Scale | [GA] / [Labs] | Repo sweep seeded elsewhere; fleet not configured |
 | 6 | Observe | [Preview] / [Roadmap] | No telemetry imported: status `unavailable` |
-| 7 | Trace | [Preview] | Graph built; blast radius from the database computed; no Git provenance |
+| 7 | Trace | [GA] / [Preview] | Graph built; blast radius from the database computed; no Git provenance |
 | 8 | Fix | [GA] | No mechanical fix exists; the CLI said so |
 | 9 | Verify | [GA] | Finding verifier returned `cannot-verify`; no fix existed to verify |
 | 10 | Detect | [Labs] / [Roadmap] | A static-only detection was refused without a proof, and drafted only when forced, unvalidated |
@@ -170,7 +170,7 @@ The Security Learning Rate, which would measure how often this happens across th
 
 *Where else does this weakness exist?*
 
-The repository sweep (Preview) counts siblings of a confirmed finding as found, candidate and mitigated. In this scan it ran from this finding and from the prompt-injection finding:
+The repository sweep (GA) counts siblings of a confirmed finding as found, candidate and mitigated. In this scan it ran from this finding and from the prompt-injection finding:
 
 ```json
 { "totals": { "found": 0, "candidates": 0, "mitigated": 0 } }
