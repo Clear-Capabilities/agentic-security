@@ -3,6 +3,7 @@
 //   release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]
 //   release-package verify <package.json> --public-key <pem> [--require kind,kind]
 //
+// `io.git(root, ...args)` answers a read-only git query (or null); the caller supplies it so this layer never spawns a process itself.
 // Exit codes: 0 built or verified; 1 the scan state failed its integrity check, or a package was rejected; 2 a usage problem or unreadable input.
 //
 // What goes in: the scan's health record and one record per finding (and, with --fix-records, one verification record per fix claimed). The proof tier of a
@@ -11,7 +12,6 @@
 // verdict can always be recomputed by anyone holding the package.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { statePath } from '../state-dir.js';
 import { verifyLastScan } from '../integrity.js';
 import { buildSnapshotRef } from './evidence-registry.js';
@@ -22,7 +22,6 @@ import { verifyReleasePackage } from './release-package-verify.js';
 const USAGE = 'Usage: agentic-security release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]\n       agentic-security release-package verify <package.json> --public-key <pem> [--require kind,kind]';
 const DEFAULT_OUT = 'release-package.json';
 
-const git = (root, ...a) => { const r = spawnSync('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
 
 function proofTierOf(f) {
   if (typeof f.proofTier === 'string') return f.proofTier;
@@ -37,7 +36,7 @@ function findingPayload(f) {
   };
 }
 
-async function build(args, say) {
+async function build(args, say, git) {
   const root = path.resolve(args._[2] || '.');
   const keyFile = args.flags['private-key'];
   if (!keyFile) { say.err(USAGE); return 2; }
@@ -108,7 +107,7 @@ async function verify(args, say) {
 export async function cmdReleasePackage(args, io = {}) {
   const say = { out: io.out || ((s) => console.log(s)), err: io.err || ((s) => console.error(s)) };
   const sub = args._[1];
-  if (sub === 'build') return build(args, say);
+  if (sub === 'build') return build(args, say, io.git || (() => null));
   if (sub === 'verify') return verify(args, say);
   say.err(USAGE);
   return 2;

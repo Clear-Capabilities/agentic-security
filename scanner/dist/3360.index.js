@@ -17,8 +17,6 @@ __webpack_require__.d(__webpack_exports__, {
 var external_node_fs_ = __webpack_require__(73024);
 // EXTERNAL MODULE: external "node:path"
 var external_node_path_ = __webpack_require__(76760);
-// EXTERNAL MODULE: external "node:child_process"
-var external_node_child_process_ = __webpack_require__(31421);
 // EXTERNAL MODULE: ./src/posture/state-dir.js
 var state_dir = __webpack_require__(31174);
 // EXTERNAL MODULE: ./src/posture/integrity.js
@@ -378,6 +376,7 @@ var release_package_verify = __webpack_require__(93917);
 //   release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]
 //   release-package verify <package.json> --public-key <pem> [--require kind,kind]
 //
+// `io.git(root, ...args)` answers a read-only git query (or null); the caller supplies it so this layer never spawns a process itself.
 // Exit codes: 0 built or verified; 1 the scan state failed its integrity check, or a package was rejected; 2 a usage problem or unreadable input.
 //
 // What goes in: the scan's health record and one record per finding (and, with --fix-records, one verification record per fix claimed). The proof tier of a
@@ -393,11 +392,9 @@ var release_package_verify = __webpack_require__(93917);
 
 
 
-
 const USAGE = 'Usage: agentic-security release-package build [path] --private-key <pem> [--output <file>] [--fix-records <file>] [--public-key-out <file>]\n       agentic-security release-package verify <package.json> --public-key <pem> [--require kind,kind]';
 const DEFAULT_OUT = 'release-package.json';
 
-const git = (root, ...a) => { const r = (0,external_node_child_process_.spawnSync)('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
 
 function release_package_cli_proofTierOf(f) {
   if (typeof f.proofTier === 'string') return f.proofTier;
@@ -412,7 +409,7 @@ function findingPayload(f) {
   };
 }
 
-async function build(args, say) {
+async function build(args, say, git) {
   const root = external_node_path_.resolve(args._[2] || '.');
   const keyFile = args.flags['private-key'];
   if (!keyFile) { say.err(USAGE); return 2; }
@@ -483,7 +480,7 @@ async function verify(args, say) {
 async function cmdReleasePackage(args, io = {}) {
   const say = { out: io.out || ((s) => console.log(s)), err: io.err || ((s) => console.error(s)) };
   const sub = args._[1];
-  if (sub === 'build') return build(args, say);
+  if (sub === 'build') return build(args, say, io.git || (() => null));
   if (sub === 'verify') return verify(args, say);
   say.err(USAGE);
   return 2;

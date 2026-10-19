@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.182.0 - Five Labs capabilities freeze their interfaces and move to Preview, and the strategic metrics become product numbers
+
+Preview is not GA. Each move below gives a capability a reference page that lists every field, flag and exit code, and a compatibility test that runs the real commands and fails when the output gains or loses a field the page does not list.
+
+- **Five capabilities leave Labs for Preview:** Eval Lab and the model router, fleet scanning, the finding-to-rule compiler, release assurance, and detection and response. Detector spec synthesis and runner-level capability enforcement stay Labs, with their exit criteria written on the Labs page.
+- **Release assurance has a command and a release check.** `agentic-security release-package build|verify` assembles a signed package from the last scan (refusing a scan whose signature does not verify) and checks one offline. The new `release-assurance-gate` builds a package from a scan of a shipped project, requires the independent offline verifier to accept it, and requires it to refuse a lowered severity, a restated verdict and an unsigned scan.
+- **The exposure window joins the artifact provenance graph.** `dnr window --artifact-graph` places a deployment that names only an image digest at the commit the image declares, refuses a record that disagrees with its image, and never infers a commit the image does not declare.
+- **Three strategic metrics are reported with their counts.** `agentic-security metrics` (and `posture --metrics`, and the scorecard) report Assurance Coverage, Evidence Conversion and Verified Remediation Rate, each with numerator, denominator and basis. The Security Learning Rate is reported as not measured.
+- **The proof gate on fixes is measured.** `bench/fix-verification/proof-gate.mjs` runs `fix --apply --require-proof` over the fix-verification corpus: 0 of 15 unsafe fixes applied, 1 of 8 safe fixes applied and 7 refused for want of a reproducer (generation covers command injection, path-writing traversal and request forgery). The gate fails closed. An exploit-proof contract page and test freeze the proof result and the fix proof record.
+- **Hosted legs for real tools are written** (`scripts/artifact-real-check.mjs`, `scripts/local-model-check.mjs`); the local-model script was run against a real model server on a laptop and found and fixed one wrong assertion about where the validator lists what it rejects.
+
 ## 0.181.0 - Three capabilities earn GA: the sibling sweep, blast radius and federation
 
 Registry, documentation and release-gate tooling, plus one precision fix to the sibling sweep. No capability was relabeled without evidence: each promotion below meets the GA bar, and four others were assessed and held at Preview with the measured reason recorded in `docs/implementation-status/ga-promotion.md`.

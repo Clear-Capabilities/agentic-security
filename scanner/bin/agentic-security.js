@@ -7861,7 +7861,11 @@ async function main() {
       case 'verify-attestation': process.exit(await cmdVerifyAttestation(args));
       case 'release-view': process.exit(await cmdReleaseView(args));
       case 'metrics': process.exit(await (await import('../src/posture/strategic-metrics-cli.js')).cmdMetrics(args));
-      case 'release-package': process.exit(await (await import('../src/posture/assurance/release-package-cli.js')).cmdReleasePackage(args));
+      case 'release-package': {
+        const { spawnSync } = await import('node:child_process');
+        const git = (root, ...a) => { const r = spawnSync('git', a, { cwd: root, encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
+        process.exit(await (await import('../src/posture/assurance/release-package-cli.js')).cmdReleasePackage(args, { git }));
+      }
       case 'policy-explain': process.exit(await cmdPolicyExplain(args));
       case 'policy-sign': process.exit(await cmdPolicySign(args));
       case 'rule-synth': process.exit(await cmdRuleSynth(args));

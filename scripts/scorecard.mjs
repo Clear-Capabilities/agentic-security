@@ -25,6 +25,7 @@
 //        <(grep -v 'Generated (UTC)' docs/SCORECARD.md)
 
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as cp from 'node:child_process';
 import * as crypto from 'node:crypto';
@@ -59,9 +60,19 @@ function complianceMappingCoverage() {
 // committed end-to-end demo recorded ([patch id, fully verified]). The scan runs in this process with the network off, so the figures do not
 // depend on advisory data.
 async function strategicMetricsFor() {
-  const project = path.join(REPO, 'examples', 'assurance-demo');
+  // scan a COPY: a scan writes state next to the project, and the committed example must stay as it is (its end-to-end demo is checked against it)
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'scorecard-strategic-'));
+  fs.cpSync(path.join(REPO, 'examples', 'assurance-demo'), project, { recursive: true });
   const { runScan } = await import('../scanner/src/runScan.js');
-  const { scan } = await runScan(project, { network: false });
+  const { disableStateWrites } = await import('../bench/_lib/tree-integrity.mjs');
+  const savedNoState = process.env.AGENTIC_SECURITY_NO_STATE;
+  await disableStateWrites();
+  let scan;
+  try { ({ scan } = await runScan(project, { network: false })); } finally {
+    if (savedNoState === undefined) delete process.env.AGENTIC_SECURITY_NO_STATE; else process.env.AGENTIC_SECURITY_NO_STATE = savedNoState;
+    try { (await import('../scanner/src/posture/state-dir.js')).setStateWritesEnabled(true); } catch { /* best effort */ }
+    fs.rmSync(project, { recursive: true, force: true });
+  }
   const outline = readJsonIfPresent('docs/engineering-excellence/data/e2e-demo-outline.json');
   const attempts = (outline && Array.isArray(outline.verified) ? outline.verified : []).map(([, verifiedFull]) => ({ verifiedFull: verifiedFull === true }));
   return {
