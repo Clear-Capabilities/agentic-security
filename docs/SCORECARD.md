@@ -9,9 +9,9 @@ that produced them.
 
 | Field | Value |
 | --- | --- |
-| Engine version | 0.181.0 |
-| Bundle SHA-256 | `517c6f020e5f59d55a09fd612b9808b5f4bb277eb5ee4bda38fc70f5831bd989` |
-| Commit | `284826d34abe67570b2fbad6bdf452f7e209629b` |
+| Engine version | 0.182.0 |
+| Bundle SHA-256 | `e735c6cb2078bf7df6efc0138545e8476148d4a6426f21e4f2678105d94b2ec7` |
+| Commit | `f2847e6578a627f674e0a5d4c3efb12952dfa5ba` |
 | Worktree at measurement time | DIRTY — the commit above does not fully describe what was measured |
 | Measurement identity | NOT a clean measurement: the commit and bundle above do not identify the measured tree |
 | Independent accuracy of THIS engine | unmeasured (no real-code run of this engine exists; see the historical record below, if present) |
@@ -19,7 +19,7 @@ that produced them.
 | Corpus entries | 220 (220 scored) |
 | Corpus version | `4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0` |
 | Scope | bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run) |
-| Generated (UTC) | 2026-10-19T17:15:37.084Z |
+| Generated (UTC) | 2026-10-19T21:15:18.858Z |
 
 ## What these numbers are, and what they are not
 
@@ -208,14 +208,14 @@ Treat it as a tripwire, never as a quality figure.
 | Target | Findings |
 | --- | --- |
 | `hooks` | 21 |
-| `scripts` | 109 |
+| `scripts` | 114 |
 | `polyglot` fixture (expected 0) | 0 |
 
 ### Drift tripwire — NOT hand-reviewed, NOT a precision signal
 
 | Target | Findings |
 | --- | --- |
-| `scanner/src` | 736 |
+| `scanner/src` | 738 |
 
 These counts exist so that a rule which starts firing somewhere new is
 visible per file. Nobody has adjudicated them, and quoting the total as
@@ -232,12 +232,25 @@ the PRD's Release Scope table names direct dependency findings only.
 
 | P0-scoped findings — complete/uncommitted provenance |
 | --- |
-| 383/618 (62.0%) |
+| 395/624 (63.3%) |
 
 Secrets, SAST, and direct-dependency findings all resolve through the same
 git-origin resolution pipeline, so a gap in this rate reflects the clone
 itself (shallow history, uncommitted lines the pipeline could not blame) —
 not a channel this measurement structurally cannot yet cover.
+
+## Strategic metrics
+
+Counted on a scan of examples/assurance-demo (network off). These describe one reference project and its recorded fix attempts, not field averages; every figure carries its numerator and denominator. Contract: `docs/reference/strategic-metrics.md`.
+
+| Metric | Figure | Basis |
+| --- | --- | --- |
+| Assurance Coverage | 100% (files 3/3 (100%), analyzers 120/120 (100%)) | the lower of files completed and analyzers completed |
+| Evidence Conversion | 2/11 (18.2%) | findings corroborated or stronger, over all findings |
+| Verified Remediation Rate | 2/3 (66.7%) | the three patches the committed end-to-end demo verified; a lower bound where a class has no attack replay |
+| Security Learning Rate | not measured | nothing measures it independently of the rule compiler's own corpus |
+
+Evidence states reached: single-signal 9, corroborated 2, taint-confirmed 0, execution-proven 0.
 
 ## Compliance mapping coverage
 
@@ -361,7 +374,7 @@ This run does not use the sealed split, so it is a baseline on development and v
 ## Independent evaluation population: historical record (engine 0.141.0, 2026-08-23)
 
 **This is a historical record of engine 0.141.0, measured 2026-08-23.** It is not a measurement of the
-engine this scorecard describes (0.181.0), it is a different population from the curated corpus above, and the two are
+engine this scorecard describes (0.182.0), it is a different population from the curated corpus above, and the two are
 never combined into one accuracy figure. The current engine has no independent figure: it is **unmeasured**.
 
 Everything above is a **regression net**: its fixtures and its labels are both

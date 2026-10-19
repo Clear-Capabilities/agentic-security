@@ -10,7 +10,7 @@ Two scopes, at two different maturities.
 
 **Within a repository (GA).** After a confirmed finding, the root-cause sweep looks for sibling instances the detectors missed and reports honest `N found / M candidate / K mitigated` counts.
 
-**Across repositories (Labs).** `fleet` plans one idempotent job per repository in a local SQLite store (lease, heartbeat, retry count, timeout, result hash), runs each scan in a supervised child process under a hard timeout with bounded workers, and reuses a content-addressed cache. A repository that failed to scan is counted as failed, never dropped from the denominator. `fleet query --depends-on <repo-id>` lists which repositories depend on a given one, `fleet edges` finds references in code, and `fleet scan --lineage` adds data classes and destinations from each repository's own Code Boundaries graph.
+**Across repositories (Preview).** `fleet` plans one idempotent job per repository in a local SQLite store (lease, heartbeat, retry count, timeout, result hash), runs each scan in a supervised child process under a hard timeout with bounded workers, and reuses a content-addressed cache. A repository that failed to scan is counted as failed, never dropped from the denominator. `fleet query --depends-on <repo-id>` lists which repositories depend on a given one, `fleet edges` finds references in code, and `fleet scan --lineage` adds data classes and destinations from each repository's own Code Boundaries graph.
 
 ```bash
 agentic-security fleet init
@@ -30,7 +30,7 @@ Federation of two repositories' graphs is a separate, declared link (`federate d
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
 | [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
-| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
+| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Preview** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
 | [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 <!-- generated:capabilities:scale:end -->
 

@@ -6,7 +6,7 @@
 
 **Stage maturity:** Labs for what exists, Roadmap for what does not. Every capability below carries its own label.
 
-**What exists (Labs).** `dnr` turns a *proven* vulnerability into a validated detection and hunts local historical logs for it. Everything runs locally and is text-only; it makes no network call and no model call.
+**What exists (Preview).** `dnr` turns a *proven* vulnerability into a validated detection and hunts local historical logs for it. Everything runs locally and is text-only; it makes no network call and no model call.
 
 - **Generate** a detection from the facts the proof established: Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA for the deserialization class, and Splunk, Sentinel and CloudWatch text. Elastic, Google SecOps (YARA-L) and Datadog renderers translate exactly or say why they cannot.
 - **Validate** it before it is enabled: synthetic exploit requests must fire it and lookalikes must not.
@@ -36,7 +36,7 @@ Other exported evidence a detection team can use today: the signed per-finding b
 <!-- generated:capabilities:detect:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Labs** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
+| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Preview** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
 | [Connected production detection](./README.md) | Detect | **Roadmap** | Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally. |
 <!-- generated:capabilities:detect:end -->
 

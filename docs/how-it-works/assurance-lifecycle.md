@@ -93,14 +93,14 @@ When there is no reproducer, nothing runs and the tool says so. An unproven find
 
 **Can a confirmed novel weakness become reusable deterministic knowledge?**
 
-This stage is **Labs**. The finding-to-rule compiler (`rules synthesize|evaluate|promote|status|rollback|cost|regress`) can promote one proven finding into a reviewed deterministic rule that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule, but promotion is decided by evidence, never by a model, and a rule is regular expressions over text with structure, not a data-flow rule. The *Security Learning Rate* metric that would measure this across the system is **Roadmap**.
+The finding-to-rule compiler is **Preview**, with its rule format and records frozen at version 1 ([contract](../reference/rule-compiler-contract.md)); detector spec synthesis is **Labs**. The finding-to-rule compiler (`rules synthesize|evaluate|promote|status|rollback|cost|regress`) can promote one proven finding into a reviewed deterministic rule that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule, but promotion is decided by evidence, never by a model, and a rule is regular expressions over text with structure, not a data-flow rule. The *Security Learning Rate* metric that would measure this across the system is **Roadmap**.
 
 *Evidence created:* a promoted rule with its own regression corpus.
 
 <!-- generated:capabilities:learn:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
+| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Preview** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](../../commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](../roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
 <!-- generated:capabilities:learn:end -->
@@ -110,7 +110,7 @@ This stage is **Labs**. The finding-to-rule compiler (`rules synthesize|evaluate
 **Where else does this weakness exist?**
 
 - Within a repository (GA): a confirmed finding triggers a repo-wide sweep for sibling instances, reported as found, candidate and mitigated counts.
-- Across repositories (Labs): `fleet` runs leased, supervised scan jobs for a declared set of repositories from a local SQLite store and answers which of them depend on, or reference in code, a given one. Dependency matching is by declared package name; there is no remote-worker store.
+- Across repositories (Preview): `fleet` runs leased, supervised scan jobs for a declared set of repositories from a local SQLite store and answers which of them depend on, or reference in code, a given one. Dependency matching is by declared package name; there is no remote-worker store.
 
 Cross-repository claims here are limited to those two behaviors.
 
@@ -120,7 +120,7 @@ Cross-repository claims here are limited to those two behaviors.
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
 | [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
-| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
+| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Preview** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
 | [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 <!-- generated:capabilities:scale:end -->
 
@@ -189,14 +189,14 @@ Verification re-scans, lints and runs tests, and reports every leg as pass, fail
 | [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **Preview** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |
-| [Release assurance](../guides/release-assurance.md) | Verify | **Labs** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions. |
+| [Release assurance](../guides/release-assurance.md) | Verify | **Preview** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline. |
 <!-- generated:capabilities:verify:end -->
 
 ## 10. Detect
 
 **Was exploitation observed and can recurrence be detected?**
 
-Half of this stage exists, as **Labs**. `dnr` generates a validated detection from a proven vulnerability, hunts local historical logs for it (`OBSERVED`, `NOT_OBSERVED`, `INCONCLUSIVE`, `TELEMETRY_UNAVAILABLE`) and scopes the observable exposure window. It is local and text-only, built only from what the proof established, and it refuses to dress a static guess up as a defense.
+Half of this stage exists, as **Preview**, with its records frozen at version 1 ([contract](../reference/dnr-contract.md)). `dnr` generates a validated detection from a proven vulnerability, hunts local historical logs for it (`OBSERVED`, `NOT_OBSERVED`, `INCONCLUSIVE`, `TELEMETRY_UNAVAILABLE`) and scopes the observable exposure window. It is local and text-only, built only from what the proof established, and it refuses to dress a static guess up as a defense.
 
 The other half is **Roadmap**: connecting detections to a live SIEM or EDR and reading results back, and observing exploitation in production telemetry. None of that is shipped. See [Detect](../detect/README.md) and the [detection engineering lane](../roles/detection-engineering.md) for the exact line.
 
@@ -205,7 +205,7 @@ The other half is **Roadmap**: connecting detections to a live SIEM or EDR and r
 <!-- generated:capabilities:detect:start -->
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
-| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Labs** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
+| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Preview** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
 | [Connected production detection](../detect/README.md) | Detect | **Roadmap** | Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally. |
 <!-- generated:capabilities:detect:end -->
 
@@ -225,11 +225,11 @@ The other half is **Roadmap**: connecting detections to a live SIEM or EDR and r
 | [Falsification of findings](../concepts.md) | Corroborate | **GA** | Whether a context-matched control on the path (a sanitizer or dominating guard) blocks the finding. Lowers confidence only; never removes a finding and never changes severity. |
 | [Model-assisted validation](./deterministic-and-agentic.md) | Corroborate | **Preview** | A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured. |
 | [Execution-backed exploit proof](../guides/exploit-proof-fabric.md) | Prove | **Preview** | Whether a bounded, serialized reproducer (supplied, or generated by `proof generate`), run in a confined sandbox and judged by a deterministic oracle, reproduces the effect. Container isolation has been exercised only against a fake engine, and the feature has been exercised on macOS only. |
-| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Labs** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
+| [Finding-to-rule compiler](../guides/rule-compiler.md) | Learn | **Preview** | Whether one proven finding can be promoted to a reviewed, deterministic detection rule (regular expressions over text, with structure) that passes its own corpus, a mutation set and a shared false-positive corpus. `rules synthesize --auto` can propose the rule; promotion is still decided by evidence. |
 | [Detector spec synthesis](../../commands/labs.md) | Learn | **Labs** | A detector-spec proposal drafted from sample vulnerable files, written for a human to review and never incorporated automatically. |
 | [Security learning rate metric](../roadmap/README.md) | Learn | **Roadmap** | The long-term measure of how many novel confirmed weakness patterns became reusable rules, tests or controls. Not an existing KPI. |
 | [Repository-wide sibling sweep](../reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
-| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Labs** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
+| [Fleet scanning and dependency blast radius](../guides/fleet.md) | Scale | **Preview** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
 | [Cross-repository graph federation](../reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
 | [Runtime corroboration of the scanned graph](../guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](../roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
@@ -240,7 +240,7 @@ The other half is **Roadmap**: connecting detections to a live SIEM or EDR and r
 | [Fix synthesis](../guides/fixing-vulnerabilities.md) | Fix | **GA** | A candidate patch, deterministic or agent-composed, with a preview, a backup and a revert path. A patch is never written without passing verification. |
 | [Verified remediation](../trust/verified-remediation.md) | Verify | **GA** | Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND. |
 | [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **Preview** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
-| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Labs** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
+| [Detection and response (dnr)](../guides/detection-and-response.md) | Detect | **Preview** | A validated detection generated from a proven vulnerability (Sigma, a generic HTTP rule, a detect-only WAF suggestion, structured log queries, YARA, and Splunk, Sentinel and CloudWatch text), a bounded hunt of local historical logs (observed, not observed, inconclusive, telemetry unavailable) and the observable exposure window. All local and text-only; no SIEM connection. |
 | [Connected production detection](../detect/README.md) | Detect | **Roadmap** | Detections deployed to and read back from a connected SIEM or EDR, and exploitation observed in live production telemetry. Not shipped; today's detections are generated and hunted locally. |
 | [Scan health](../trust/scan-health.md) | Corroborate | **GA** | Whether every analyzer finished, which files and feeds were incomplete or stale, and therefore whether a clean result may be called clean. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
@@ -251,8 +251,9 @@ The other half is **Roadmap**: connecting detections to a live SIEM or EDR and r
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |
 | [Compliance control evidence](../guides/compliance.md) | Trace | **Preview** | Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification. |
 | [Runner-level capability enforcement](../trust/agent-threat-model.md) | Cross-cutting | **Labs** | Filesystem, command and network limits enforced by the task runner. Off by default and operator-only; Linux is partially verified. |
-| [Eval Lab and model router](../guides/eval-lab.md) | Cross-cutting | **Labs** | A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in. |
-| [Release assurance](../guides/release-assurance.md) | Verify | **Labs** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; the package is assembled by a demo script and library functions. |
+| [Strategic metrics](../reference/strategic-metrics.md) | Cross-cutting | **Preview** | Assurance Coverage, Evidence Conversion and Verified Remediation Rate for the last scan and the recorded fix attempts, each with its numerator, denominator and basis. The Security Learning Rate is reported as not measured. |
+| [Eval Lab and model router](../guides/eval-lab.md) | Cross-cutting | **Preview** | A measured comparison of a deterministic baseline and any number of models on detection, exploit proof, remediation, cost, latency and repeatability, and routing of each task to a model. Only a local Ollama server has a built-in adapter, tested against a stand-in. |
+| [Release assurance](../guides/release-assurance.md) | Verify | **Preview** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline. |
 <!-- generated:capabilities:end -->
 
 Capabilities that apply to every stage rather than one, such as the model egress policy, runner-level capability enforcement and the Eval Lab, are marked cross-cutting and appear only in this table.

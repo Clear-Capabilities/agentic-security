@@ -12,11 +12,11 @@ import { buildDetectionIR, validateDetectionIR } from './detection-ir.js';
 import { renderDetection, renderAll, FORMATS } from './outputs.js';
 import { validateDetection } from './validate.js';
 import { huntLogs } from './hunt.js';
-import { computeExposureWindow, loadDeployments, formatExposureWindow } from './exposure-window.js';
+import { computeExposureWindow, loadDeployments, formatExposureWindow, artifactCommitMap } from './exposure-window.js';
 import { saveRecord, latestRecord, listRecords } from './store.js';
 import { buildLifecycleView, formatLifecycleView, loadFindingFromLastScan } from './view.js';
 
-const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
+export const HUNT_EXIT = Object.freeze({ NOT_OBSERVED: 0, OBSERVED: 10, INCONCLUSIVE: 11, TELEMETRY_UNAVAILABLE: 12 });
 const EXT = { sigma: 'yml', http: 'json', waf: 'conf', 'log-query': 'json', yara: 'yar', spl: 'spl', kql: 'kql', cloudwatch: 'txt', elastic: 'json', yaral: 'yaral', datadog: 'json' };
 
 const usage = () => { console.error('usage: dnr generate <finding-id> [--format sigma|http|waf|log-query|yara|spl|kql|cloudwatch|elastic|yaral|datadog|all] [--out dir] [--allow-unproven]\n       dnr validate <finding-id>\n       dnr hunt <finding-id> --logs <file-or-dir> [--since ISO] [--until ISO]\n       dnr window <finding-id> --deployments <file> [--fix-commit sha] [--environment name]\n       dnr show <finding-id>\n       dnr status <finding-id>'); return 4; };
@@ -109,10 +109,19 @@ export async function cmdDnr(args, root) {
   }
 
   if (sub === 'window') {
-    if (!flags.deployments) { console.error('dnr window needs --deployments <file> (a JSON list of {commit, deployedAt, environment?}). Nothing was computed.'); return 4; }
+    if (!flags.deployments) { console.error('dnr window needs --deployments <file> (a JSON list of {commit, deployedAt, environment?}; with --artifact-graph, {artifactDigest, deployedAt} is enough). Nothing was computed.'); return 4; }
     const finding = loadFindingFromLastScan(root, id);
     if (!finding) { console.error(`Finding ${id} not found in the last scan.`); return 4; }
-    const { deployments, problems } = loadDeployments(path.resolve(String(flags.deployments)), { environment: flags.environment ?? null });
+    let artifactCommits = null; const graphProblems = [];
+    if (flags['artifact-graph']) {
+      const docs = [];
+      for (const f of String(flags['artifact-graph']).split(',').filter(Boolean)) {
+        try { docs.push(JSON.parse(fs.readFileSync(path.resolve(f), 'utf8'))); } catch (e) { graphProblems.push(`artifact graph ${f}: could not be read (${e.code || 'not JSON'})`); }
+      }
+      const map = artifactCommitMap(docs); artifactCommits = map.commits; graphProblems.push(...map.problems);
+    }
+    const loaded = loadDeployments(path.resolve(String(flags.deployments)), { environment: flags.environment ?? null, artifactCommits });
+    const deployments = loaded.deployments; const problems = [...loaded.problems, ...graphProblems];
     const hunt = latestRecord(root, id, 'hunt')?.record ?? null;
     const telemetry = flags['telemetry-start'] && flags['telemetry-end'] ? { start: flags['telemetry-start'], end: flags['telemetry-end'] } : hunt?.window ?? null;
     const w = computeExposureWindow({ finding, repo: root, deployments, deploymentProblems: problems, fixCommit: flags['fix-commit'] ?? null, telemetry });

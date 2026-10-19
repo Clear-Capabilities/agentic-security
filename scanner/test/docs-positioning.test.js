@@ -430,15 +430,15 @@ test('real checkout: no Roadmap capability lists evidence; every GA capability n
 
 test('real checkout: conservative assignments hold (nothing promoted because the positioning would benefit)', () => {
   const by = Object.fromEntries(loadRegistry(REPO).capabilities.map(c => [c.id, c.maturity]));
-  assert.equal(by['rule-compiler'], 'Labs');
-  assert.equal(by['fleet-scan'], 'Labs');
+  assert.equal(by['rule-compiler'], 'Preview');
+  assert.equal(by['fleet-scan'], 'Preview');
   assert.equal(by['exploit-proof'], 'Preview');
   assert.equal(by['runtime-corroboration'], 'Preview');
   assert.equal(by['live-runtime-observation'], 'Roadmap');
-  assert.equal(by['detection-and-response'], 'Labs');
+  assert.equal(by['detection-and-response'], 'Preview');
   assert.equal(by['connected-production-detection'], 'Roadmap');
-  assert.equal(by['eval-lab'], 'Labs');
-  assert.equal(by['release-assurance'], 'Labs');
+  assert.equal(by['eval-lab'], 'Preview');
+  assert.equal(by['release-assurance'], 'Preview');
   assert.equal(by['security-learning-rate'], 'Roadmap');
   assert.equal(by['verified-remediation'], 'GA');
   assert.equal(by['scan-health'], 'GA');

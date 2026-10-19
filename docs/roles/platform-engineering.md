@@ -25,7 +25,7 @@ The scanner and hooks run on Node.js 24 or later. Claude Code is the primary int
 
 ## Scale it
 
-`fleet` (Labs) runs idempotent, leased scan jobs for a declared set of repositories from a local SQLite store, each scan in a supervised child process under a hard timeout. See [Fleet](../guides/fleet.md). Dependency matching is by declared package name; there is no remote-worker store.
+`fleet` (Preview) runs idempotent, leased scan jobs for a declared set of repositories from a local SQLite store, each scan in a supervised child process under a hard timeout. See [Fleet](../guides/fleet.md). Dependency matching is by declared package name; there is no remote-worker store.
 
 ## Read more
 

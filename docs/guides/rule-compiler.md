@@ -1,6 +1,6 @@
 # Self-learning finding-to-rule compiler
 
-**Maturity:** Labs. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
+**Maturity:** Preview. See the [capability registry](../capabilities.yaml) and the [maturity model](../how-it-works/maturity-model.md).
 
 **Status: new.** Turns ONE model- or human-discovered vulnerability into a reusable, deterministic detection rule ,
 evidence promotes rules, never a model. Nothing here calls a model; a model (or a human) may propose a candidate

@@ -13,8 +13,34 @@ const SHA_RE = /^[0-9a-f]{7,64}$/i;
 const ts = (v) => { if (v == null) return null; const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
 const iso = (t) => (t == null ? null : new Date(t).toISOString());
 
-/** Parse a deployment-history file. Returns {deployments, problems}. Unusable entries are listed, never silently dropped. */
-export function loadDeployments(file, { environment = null } = {}) {
+/**
+ * Which source commit each artifact digest was built from, read from artifact provenance graphs (`provenance trace` output, or the
+ * graph alone). The commit is whatever the graph's build label declared: a graph whose commit is unknown contributes nothing, and a
+ * digest named by two graphs that disagree is listed as a conflict and resolves to neither.
+ * Returns { commits: Map<digest, sha>, problems }.
+ */
+export function artifactCommitMap(graphs) {
+  const commits = new Map(); const conflicts = new Set(); const problems = [];
+  (graphs || []).forEach((doc, i) => {
+    const g = doc?.artifactProvenanceGraph ?? doc;
+    if (!g || !Array.isArray(g.nodes) || !Array.isArray(g.edges)) { problems.push(`artifact graph ${i}: not an artifact provenance graph`); return; }
+    const digest = g.nodes.find((n) => n && n.kind === 'ociDigest' && typeof n.digest === 'string')?.digest;
+    const commit = g.nodes.find((n) => n && n.kind === 'gitCommit' && n.known === true && typeof n.sha === 'string' && SHA_RE.test(n.sha))?.sha?.toLowerCase();
+    if (!digest) { problems.push(`artifact graph ${i}: no image digest`); return; }
+    if (!commit) { problems.push(`artifact graph ${i}: the image declares no source commit, so ${digest.slice(0, 19)} cannot be placed in history`); return; }
+    if (commits.has(digest) && commits.get(digest) !== commit) { conflicts.add(digest); return; }
+    commits.set(digest, commit);
+  });
+  for (const d of conflicts) { commits.delete(d); problems.push(`artifact graphs disagree about the source commit of ${d.slice(0, 19)}; it resolves to neither`); }
+  return { commits, problems };
+}
+
+/**
+ * Parse a deployment-history file. Returns {deployments, problems}. Unusable entries are listed, never silently dropped.
+ * With `artifactCommits` (from artifactCommitMap), a deployment that names only an artifact digest is placed at the commit the image
+ * declares, and one that names both is refused when they disagree: the record cannot be trusted over the build label or the reverse.
+ */
+export function loadDeployments(file, { environment = null, artifactCommits = null } = {}) {
   const problems = [];
   let raw;
   try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return { deployments: [], problems: [`could not read deployment history: ${e.code || e.message}`] }; }
@@ -24,10 +50,17 @@ export function loadDeployments(file, { environment = null } = {}) {
   const deployments = [];
   list.slice(0, MAX_DEPLOYMENTS).forEach((d, i) => {
     if (!d || typeof d !== 'object') { problems.push(`deployment ${i}: not an object`); return; }
-    if (typeof d.commit !== 'string' || !SHA_RE.test(d.commit)) { problems.push(`deployment ${i}: commit must be a hex sha`); return; }
+    const digest = typeof d.artifactDigest === 'string' ? d.artifactDigest.slice(0, 80) : null;
+    const fromGraph = digest && artifactCommits ? artifactCommits.get(digest) ?? null : null;
+    let commit = typeof d.commit === 'string' && SHA_RE.test(d.commit) ? d.commit.toLowerCase() : null;
+    let commitSource = 'deployment-record';
+    if (!commit && d.commit !== undefined && d.commit !== null) { problems.push(`deployment ${i}: commit must be a hex sha`); return; }
+    if (commit && fromGraph && !(fromGraph.startsWith(commit) || commit.startsWith(fromGraph))) { problems.push(`deployment ${i}: the record says commit ${commit.slice(0, 12)} but the image ${digest.slice(0, 19)} declares ${fromGraph.slice(0, 12)}; it was not used`); return; }
+    if (!commit && fromGraph) { commit = fromGraph; commitSource = 'artifact-provenance-graph'; }
+    if (!commit) { problems.push(digest && artifactCommits ? `deployment ${i}: commit must be a hex sha, and image ${digest.slice(0, 19)} is not in the artifact graphs` : `deployment ${i}: commit must be a hex sha`); return; }
     if (ts(d.deployedAt) == null) { problems.push(`deployment ${i}: deployedAt is not a date`); return; }
     if (environment && d.environment !== environment) return;
-    deployments.push({ commit: d.commit.toLowerCase(), deployedAt: iso(ts(d.deployedAt)), environment: typeof d.environment === 'string' ? d.environment.slice(0, 40) : null, artifactDigest: typeof d.artifactDigest === 'string' ? d.artifactDigest.slice(0, 80) : null });
+    deployments.push({ commit, commitSource, deployedAt: iso(ts(d.deployedAt)), environment: typeof d.environment === 'string' ? d.environment.slice(0, 40) : null, artifactDigest: digest });
   });
   return { deployments, problems };
 }
@@ -107,9 +140,9 @@ export function computeExposureWindow({ finding, repo, deployments: rawDeploymen
   return {
     schema: 'agentic-security/exposure-window', version: 1, findingId: finding?.stableId ?? finding?.id ?? null, status,
     vulnerabilityIntroduced: introducedAt ? { at: introducedAt, commit: introCommit, source: 'finding-provenance' } : null,
-    firstVulnerableDeployment: firstVulnerable ? { at: firstVulnerable.deployedAt, commit: firstVulnerable.commit, environment: firstVulnerable.environment, artifactDigest: firstVulnerable.artifactDigest } : null,
+    firstVulnerableDeployment: firstVulnerable ? { at: firstVulnerable.deployedAt, commit: firstVulnerable.commit, commitSource: firstVulnerable.commitSource ?? 'deployment-record', environment: firstVulnerable.environment, artifactDigest: firstVulnerable.artifactDigest } : null,
     fixCommitted: fixAt ? { at: fixAt, commit: fixCommit } : null,
-    fixDeployed: fixDeployedAt ? { at: fixDeployedAt.deployedAt, commit: fixDeployedAt.commit, environment: fixDeployedAt.environment, artifactDigest: fixDeployedAt.artifactDigest } : null,
+    fixDeployed: fixDeployedAt ? { at: fixDeployedAt.deployedAt, commit: fixDeployedAt.commit, commitSource: fixDeployedAt.commitSource ?? 'deployment-record', environment: fixDeployedAt.environment, artifactDigest: fixDeployedAt.artifactDigest } : null,
     stillExposed: stillExposed(deployments, vulnerable),
     telemetryWindow: telStart != null && telEnd != null ? { start: iso(telStart), end: iso(telEnd) } : null,
     observableWindow: observable, unobservableBefore, unresolvedDeployments: unresolved, deploymentProblems, unknowns,
