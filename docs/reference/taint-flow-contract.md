@@ -70,6 +70,7 @@ A compatibility test (`scanner/test/contracts/taint-flow.contract.test.js`) deep
 - **A control for another context does not count.** A sanitizer that does not neutralize this sink's kind of injection leaves `falsification.verdict` at `survived`.
 - **The last hop is the sink.** Every non-empty `chain` ends with a hop whose `kind` is `sink`, so a code-flow view ends where the finding is reported.
 - **Unknown is stated.** A flow with no nameable source has `source: null`. The engine does not invent one.
+- **A skipped analysis says so.** Deep data-flow analysis is skipped in a CI environment unless `AGENTIC_SECURITY_DEEP_IN_CI=1` is set. A scan that skipped it reports an `info` finding with the id `ir-taint-ci-skipped` and `scanHealth.deepAnalysis.enabled: false`, and claims no flow. A scan with no taint findings and that notice has not been checked for flows.
 - **Dead code is marked.** A flow in code that cannot run is flagged and scored down, not removed.
 
 ## What this does not do

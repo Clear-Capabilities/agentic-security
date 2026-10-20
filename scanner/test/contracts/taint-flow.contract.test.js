@@ -11,6 +11,9 @@ import { readPage, fieldsUnder } from '../helpers/contract-page.js';
 import { mkTestTmp } from '../helpers/tmp.js';
 
 process.env.AGENTIC_SECURITY_OFFLINE = '1';
+// Deep analysis is skipped in a CI environment unless this is set, and the scan says so (the last test below pins that). The other tests
+// need the analysis to run, and this suite runs in CI too.
+process.env.AGENTIC_SECURITY_DEEP_IN_CI = '1';
 const PAGE = readPage('docs/reference/taint-flow-contract.md');
 const CORE = fieldsUnder(PAGE, 'Core fields');
 const FIX = (n) => fileURLToPath(new URL(`../fixtures/ir-taint/${n}/`, import.meta.url));
@@ -78,4 +81,23 @@ test('contract: a flow in code that cannot run is kept and flagged, not removed'
   const dead = await taintOf('deadbranch');
   assert.ok(dead.length >= 1);
   assert.ok(dead.some((f) => f._inDeadCode === true));
+});
+
+test('contract: where deep analysis is skipped (a CI environment without the opt-in) the scan says so and reports no taint flow, never a clean one', async () => {
+  const keep = { ci: process.env.CI, opt: process.env.AGENTIC_SECURITY_DEEP_IN_CI };
+  process.env.CI = 'true';
+  delete process.env.AGENTIC_SECURITY_DEEP_IN_CI;
+  try {
+    const dir = mkTestTmp('agsec-taint-contract-');
+    fs.cpSync(FIX('interproc'), dir, { recursive: true });
+    const { scan } = await runScan(dir, { deep: true });
+    assert.equal(scan.findings.filter((f) => f.parser === 'IR-TAINT' && f.id !== 'ir-taint-ci-skipped').length, 0, 'no flow is claimed');
+    assert.ok(scan.findings.some((f) => f.id === 'ir-taint-ci-skipped' && f.severity === 'info'), 'the skip is a named finding');
+    assert.equal(scan.scanHealth.deepAnalysis.enabled, false);
+    assert.equal(scan.scanHealth.deepAnalysis.inCi, true);
+    assert.ok(PAGE.includes('ir-taint-ci-skipped') && PAGE.includes('AGENTIC_SECURITY_DEEP_IN_CI'), 'the page names the state and the opt-in');
+  } finally {
+    if (keep.ci === undefined) delete process.env.CI; else process.env.CI = keep.ci;
+    if (keep.opt === undefined) delete process.env.AGENTIC_SECURITY_DEEP_IN_CI; else process.env.AGENTIC_SECURITY_DEEP_IN_CI = keep.opt;
+  }
 });
