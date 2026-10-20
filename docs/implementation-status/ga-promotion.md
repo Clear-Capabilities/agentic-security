@@ -11,7 +11,7 @@ This page is the promotion record. A capability is promoted only when its row he
 | 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
 | 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
 | 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Not started |
-| 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Not started |
+| 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Five Labs capabilities frozen and moved to Preview in 0.182.0; strategic metrics not yet done |
 
 Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promotions made against the bar.
 
@@ -66,6 +66,27 @@ The measured limits are on each capability's page and are not softened. The swee
 
 These four stay in the registry as Preview with their limits written. They are the Phase 1 backlog, in this order: provenance (engine), the lineage corpus failures, a compliance coverage generator, then Flask context resolution.
 
+## Wave 3: Labs to Preview (interface freezes)
+
+Preview is not GA. Each move below gives the capability a reference page that lists every field, flag and exit code, and a compatibility test that runs the real commands and fails when the output gains or loses a field the page does not list. The record `version` changes in the same commit as the page when a field does.
+
+| Capability | Contract page | Contract test | What else was done |
+|---|---|---|---|
+| Eval Lab and model router | [Eval Lab report](../reference/eval-lab-report.md) | `contracts/eval-lab-report.contract.test.js` | The report is built from a stand-in model arm and the deterministic baseline; a cost not reported is proven `null`, not zero. The SARD integration stays "not built" because the lab's custody rule forbids answer keys |
+| Fleet scanning and dependency blast radius | [Fleet contract](../reference/fleet-contract.md) | `contracts/fleet.contract.test.js` | Runs a real `fleet scan` over two fixture repositories; the manifest key lists are exported from the validator so the page cannot drift from them |
+| Finding-to-rule compiler | [Rule compiler contract](../reference/rule-compiler-contract.md) | `contracts/rule-compiler.contract.test.js` | Drives synthesize, evaluate, promote, status and regress over a fixture finding; a rule that fires on the safe code it is held to exits 1; a tampered ledger refuses to run. The "not yet merged" branch note on the status pages was stale (merged as #86) and is corrected |
+| Release assurance | [Release assurance contract](../reference/release-assurance-contract.md) | `contracts/release-assurance.contract.test.js` | New `release-package build\|verify` command replaces the demo-script assembly. New release check `release-assurance-gate` builds a package from a scan, requires the independent offline verifier to accept it, and requires it to refuse a lowered severity, a restated verdict and an unsigned scan |
+| Detection and response | [Detection and response contract](../reference/dnr-contract.md) | `contracts/dnr.contract.test.js` | The exposure window now joins the artifact provenance graph: `dnr window --artifact-graph` places a deployment that names only an image digest at the commit the image declares, refuses a record that disagrees with its image, and never infers a commit the image does not declare |
+
+### Stays Labs, with exit criteria
+
+- **Runner-level capability enforcement.** Linux is `partially-verified` (only the controls the hosted `sandbox-linux` job proves), mediated network is unsupported and macOS runs are `host-proved`. It leaves Labs when every control is proven by `sandbox-linux` and mediated network is either supported or removed from the advertised set.
+- **Detector spec synthesis.** A drafting aid for a human reviewer with no measurable output. Promoting it would claim a precision it cannot have.
+
+### Preview limits that remain
+
+The five stay Preview because each says something is still being hardened: Eval Lab has no SARD integration and small written datasets; fleet is local to one machine with a toy scaling measurement; the rule compiler is text matching and nothing measures learning independently of the compiler's own corpus; release assurance is signed by the holder's own key and is not certified by anyone else; `dnr` has three renderers that were never run against a live product. Learn gets no GA capability from this wave, by design.
+
 ## Reviewed criteria and open gaps
 
 G2 (both-direction tests) was reviewed by reading each contract test's cases on 2026-10-19. Ten of the twelve have cases in both directions for the claims on their pages. Two are weaker than the bar wants, and Phase 1 owes them stronger contract tests:
@@ -77,4 +98,4 @@ G7 (honest degradation) has not yet been audited per capability. The scan health
 
 ## Not done
 
-Waves 2 and 3, and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.
+Wave 2, the strategic metrics from Wave 3, and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.

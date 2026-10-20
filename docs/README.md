@@ -166,7 +166,7 @@ Real captured output, field by field or run by run:
 - **[Configuration & env vars](reference/configuration.md)**: every toggle and `.agentic-security/` file
 - **[Output schema](reference/output-schema.md)**: the real shape of `scan --format json` output: findings, scanHealth, coverage
 - **[Glossary](reference/glossary.md)**: the vocabulary used across the docs, findings, and CLI output, defined once
-- **Contracts**: the frozen shapes a Preview or GA capability keeps: **[sibling sweep](reference/root-cause-sweep.md)**, **[federation](reference/federation.md)**
+- **Contracts**: the frozen shapes a Preview or GA capability keeps: **[sibling sweep](reference/root-cause-sweep.md)**, **[federation](reference/federation.md)**, **[fleet](reference/fleet-contract.md)**, **[Eval Lab report](reference/eval-lab-report.md)**, **[rule compiler](reference/rule-compiler-contract.md)**, **[release assurance](reference/release-assurance-contract.md)**, **[detection and response](reference/dnr-contract.md)**, **[strategic metrics](reference/strategic-metrics.md)**, **[exploit proof](reference/exploit-proof-contract.md)**
 - **[Cost optimization](MODEL_COST_OPTIMIZATION.md)**: the cache-aware model-cost advisor
 
 ## Contributing

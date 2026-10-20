@@ -393,6 +393,9 @@ export function buildScorecard(inputs) {
     // frameworks" from "this scorecard predates the metric" the same way
     // every other section here distinguishes absence from zero.
     complianceMappingCoverage: inputs.complianceMappingCoverage || [],
+    // Strategic metrics (GA promotion Wave 3): computed by the driver from a scan of a reference project and the recorded fix attempts, relayed here
+    // unchanged. `null` (never omitted) when the caller supplies nothing, so a scorecard that predates the metric reads as such.
+    strategicMetrics: inputs.strategicMetrics || null,
     // QA-001/QA-003: the real-code gates registered in the evaluation protocol. Relayed, never computed here.
     evaluationGates: summarizeEvaluationGates(inputs.evaluation),
     // QA-008.AC01: what this scorecard measured, stated once. `clean` is what lets the commit and bundle identify the measured tree.
@@ -666,6 +669,25 @@ export function renderScorecardMarkdown(m) {
     L.push('git-origin resolution pipeline, so a gap in this rate reflects the clone');
     L.push('itself (shallow history, uncommitted lines the pipeline could not blame) —');
     L.push('not a channel this measurement structurally cannot yet cover.');
+    L.push('');
+  }
+  if (m.strategicMetrics && m.strategicMetrics.metrics) {
+    const sm = m.strategicMetrics; const mt = sm.metrics;
+    const cell = (r) => (r && r.percent !== null && r.percent !== undefined ? `${r.numerator}/${r.denominator} (${r.percent}%)` : `${r ? r.numerator : 0}/${r ? r.denominator : 0} (not measurable)`);
+    L.push('## Strategic metrics');
+    L.push('');
+    L.push(`Counted on ${sm.source}. These describe one reference project and its recorded fix attempts, not field averages; every figure carries its numerator and denominator. Contract: \`docs/reference/strategic-metrics.md\`.`);
+    L.push('');
+    L.push('| Metric | Figure | Basis |');
+    L.push('| --- | --- | --- |');
+    const ac = mt.assuranceCoverage;
+    L.push(`| Assurance Coverage | ${ac.percent === null ? 'not measurable' : `${ac.percent}%`}${ac.files ? ` (files ${cell(ac.files)}, analyzers ${ac.analyzers ? cell(ac.analyzers) : 'not reported'})` : ''} | the lower of files completed and analyzers completed |`);
+    L.push(`| Evidence Conversion | ${cell(mt.evidenceConversion)} | findings corroborated or stronger, over all findings |`);
+    L.push(`| Verified Remediation Rate | ${cell(mt.verifiedRemediationRate)} | ${sm.remediationSource}; a lower bound where a class has no attack replay |`);
+    L.push('| Security Learning Rate | not measured | nothing measures it independently of the rule compiler\'s own corpus |');
+    L.push('');
+    const st = mt.evidenceConversion.byState;
+    L.push(`Evidence states reached: ${Object.keys(st).map((k) => `${k} ${st[k]}`).join(', ')}.`);
     L.push('');
   }
   if (Array.isArray(m.complianceMappingCoverage) && m.complianceMappingCoverage.length) {
