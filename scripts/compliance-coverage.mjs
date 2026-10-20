@@ -26,6 +26,8 @@ export const HAND_WRITTEN = Object.freeze({
 });
 export const SUMMARY_PAGE = 'COVERAGE.md';
 
+/** The file's text, or null when it cannot be read. One read, so there is no gap between asking whether it exists and opening it. */
+const readOrNull = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const esc = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 const TESTABLE = { yes: 'yes', partial: 'partial', no: 'no' };
 
@@ -102,13 +104,12 @@ export function checkCoverage(repo = REPO_DEFAULT) {
   const findings = [];
   const fws = loadFrameworks(repo);
   for (const [rel, want] of Object.entries(expectedFiles(repo))) {
-    const p = path.join(repo, rel);
-    if (!fs.existsSync(p)) { findings.push({ file: rel, message: 'missing; run node scripts/compliance-coverage.mjs --write' }); continue; }
-    const have = fs.readFileSync(p, 'utf8');
+    const have = readOrNull(path.join(repo, rel));
+    if (have === null) { findings.push({ file: rel, message: 'missing; run node scripts/compliance-coverage.mjs --write' }); continue; }
     if (have !== (want.endsWith('\n') ? want : want + '\n')) findings.push({ file: rel, message: 'stale; run node scripts/compliance-coverage.mjs --write' });
   }
   for (const fw of fws) {
-    if (HAND_WRITTEN[fw.id] && !fs.existsSync(path.join(repo, OUT_DIR, HAND_WRITTEN[fw.id]))) findings.push({ file: path.join(OUT_DIR, HAND_WRITTEN[fw.id]), message: `the hand-written page for ${fw.id} is missing` });
+    if (HAND_WRITTEN[fw.id] && readOrNull(path.join(repo, OUT_DIR, HAND_WRITTEN[fw.id])) === null) findings.push({ file: path.join(OUT_DIR, HAND_WRITTEN[fw.id]), message: `the hand-written page for ${fw.id} is missing` });
   }
   // the README states how many frameworks there are and how many have a map
   const readme = fs.readFileSync(path.join(repo, 'README.md'), 'utf8');
@@ -116,7 +117,7 @@ export function checkCoverage(repo = REPO_DEFAULT) {
   if (!m) findings.push({ file: 'README.md', message: 'the compliance line no longer states the framework count and map coverage in the form this check reads' });
   else {
     if (Number(m[1]) !== fws.length) findings.push({ file: 'README.md', message: `states ${m[1]} bundled frameworks; there are ${fws.length}` });
-    const mapped = fws.filter((fw) => fs.existsSync(path.join(repo, OUT_DIR, pageName(fw)))).length;
+    const mapped = fws.filter((fw) => readOrNull(path.join(repo, OUT_DIR, pageName(fw))) !== null).length;
     const claimed = m[2] === 'all' ? fws.length : Number(m[2]);
     if (claimed !== mapped) findings.push({ file: 'README.md', message: `states per-control maps for ${m[2]}; ${mapped} of ${fws.length} exist` });
   }
