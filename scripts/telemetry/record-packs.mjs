@@ -146,13 +146,14 @@ static_resources:
   for (let i = 0; i < 3; i++) run('curl', ['-s', '-o', '/dev/null', 'http://127.0.0.1:18080/ok']);
   run('curl', ['-s', '-o', '/dev/null', 'http://127.0.0.1:18080/down']);
   run('curl', ['-s', '-o', '/dev/null', 'http://127.0.0.1:18080/nowhere']);
-  await sleep(1500);
+  // Envoy flushes a file access log on an interval (10 seconds by default), so a graceful stop is what guarantees every line is out
+  must('docker', ['stop', '-t', '10', 'telemetry-envoy']);
   const logs = run('docker', ['logs', 'telemetry-envoy']);
   const lines = `${logs.stdout}\n${logs.stderr}`.split('\n').filter((l) => l.startsWith('{') && l.includes('"upstream_cluster"'));
   const version = must('docker', ['run', '--rm', ENVOY_IMAGE, '--version']).stdout.trim().split('\n')[0];
   run('docker', ['rm', '-f', 'telemetry-envoy']);
   up.s.close();
-  if (lines.length < 4) throw new Error(`envoy wrote ${lines.length} access-log lines, expected at least 4`);
+  if (lines.length < 5) { console.error(`${logs.stdout}\n${logs.stderr}`); throw new Error(`envoy wrote ${lines.length} access-log lines, expected 5`); }
   record('envoy', 'access.jsonl', lines.join('\n') + '\n', ENVOY_IMAGE, version, 'envoy json_format access log on stdout; 3 routed, 1 to a closed upstream, 1 with no route');
 }
 
@@ -185,7 +186,7 @@ http {
   const version = must('docker', ['run', '--rm', NGINX_IMAGE, 'nginx', '-v']).stderr.trim();
   run('docker', ['rm', '-f', 'telemetry-nginx']);
   up.s.close();
-  if (lines.length < 3) throw new Error(`nginx wrote ${lines.length} access-log lines, expected at least 3`);
+  if (lines.length < 3) { console.error(`${logs.stdout}\n${logs.stderr}`); throw new Error(`nginx wrote ${lines.length} access-log lines, expected at least 3`); }
   record('http', 'access.jsonl', lines.join('\n') + '\n', NGINX_IMAGE, version, 'nginx log_format with escape=json (host, upstream, scheme, status) on stdout; three proxied requests');
 }
 
@@ -253,10 +254,14 @@ nodes:
 }
 
 const RUN = { otel, envoy, http: httpLog, k8s };
+// Every source is attempted so one run reports on all of them, and the run fails if any did not record: a pack that was not recorded
+// is not evidence, and a partial manifest is written only so the sources that did record can be inspected.
+const failed = [];
 for (const s of SOURCES) {
   if (!RUN[s]) throw new Error(`unknown source: ${s}`);
   console.log(`\n== ${s} ==`);
-  await RUN[s]();
+  try { await RUN[s](); } catch (e) { failed.push(s); console.error(`FAILED ${s}: ${e.message}`); }
 }
 fs.writeFileSync(path.join(OUT, 'MANIFEST.json'), JSON.stringify({ recorder: 'scripts/telemetry/record-packs.mjs', packs: manifest }, null, 2) + '\n');
 console.log(`\nwrote ${manifest.length} pack(s) to ${OUT}`);
+if (failed.length) { console.error(`did not record: ${failed.join(', ')}`); process.exit(1); }

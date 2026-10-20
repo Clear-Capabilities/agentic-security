@@ -366,10 +366,20 @@ test('AD/ENVOY-1: a real Envoy JSON access log line maps upstream_host/cluster/p
   assert.deepEqual(_roundTrip(d), { valid: true, errors: [] });
 });
 
-test('AD/ENVOY-2: a non-empty response_flags reads network.securityDecision as denied', () => {
+test('AD/ENVOY-2: an authorization denial (UAEX) reads network.securityDecision as denied', () => {
   const line = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: 'UAEX' });
   const { drafts } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
   assert.equal(drafts[0].attributes['network.securityDecision'], 'denied');
+});
+
+test('AD/ENVOY-2b: an operational flag (upstream failure, no route, timeout) is not a security decision in either direction', () => {
+  for (const flag of ['UF', 'NR', 'UT', 'DC', 'UF,URX']) {
+    const line = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: flag });
+    const { drafts } = parseEnvoyAccessLogObservations(line + '\n', baseContext({ adapter: 'envoy-access-log' }));
+    assert.equal(drafts[0].attributes['network.securityDecision'], undefined, `${flag} must not read as allowed or denied`);
+  }
+  const mixed = JSON.stringify({ upstream_host: '10.0.4.12:8443', response_flags: 'UF,UAEX' });
+  assert.equal(parseEnvoyAccessLogObservations(mixed + '\n', baseContext({ adapter: 'envoy-access-log' })).drafts[0].attributes['network.securityDecision'], 'denied');
 });
 
 test('AD/ENVOY-3: a malformed line is one error naming its line number; other lines still parse', () => {

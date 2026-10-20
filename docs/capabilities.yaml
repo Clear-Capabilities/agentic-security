@@ -89,8 +89,8 @@ capabilities:
     lifecycleStages: [discover, corroborate]
     maturity: GA
     since: 0.178.0
-    contract: docs/reference/output-schema.md
-    contractTest: scanner/test/sca-verdict.test.js
+    contract: docs/reference/dependency-finding-contract.md
+    contractTest: scanner/test/contracts/dependency-finding.contract.test.js
     gate: sca-replay-gate
     platforms: [linux:test-shard]
     limits: docs/guides/scanning.md#what-a-scan-does-not-do
@@ -144,8 +144,8 @@ capabilities:
     lifecycleStages: [corroborate]
     maturity: GA
     since: 0.178.0
-    contract: docs/walkthroughs/finding-evidence.md
-    contractTest: scanner/test/reachability-claim.test.js
+    contract: docs/reference/taint-flow-contract.md
+    contractTest: scanner/test/contracts/taint-flow.contract.test.js
     gate: layer-recall-gate
     platforms: [linux:test-shard]
     limits: docs/METRICS.md#reading-it-honestly

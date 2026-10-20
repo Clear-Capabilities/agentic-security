@@ -23,6 +23,8 @@ Deep reference material. Nothing here is a tutorial; start from [docs home](../R
 | [Model-assisted validation](model-validation-contract.md) | The fields, verdicts and statuses a model verdict adds to a finding |
 | [Agentic discovery](agentic-discovery-contract.md) | The hunt report, its coverage block and the rules that keep proposals advisory |
 | [Local models](local-models-contract.md) | The loopback rule, the preset configurations and the error codes |
+| [Dependency finding](dependency-finding-contract.md) | The vulnerable dependency finding, its reachability tiers and what an empty result means |
+| [Taint flow](taint-flow-contract.md) | The core fields of a data-flow finding and its proof verdicts |
 | [Exploit proof](exploit-proof-contract.md) | The proof result, evidence ladder, environments and the fix proof gate |
 | [Artifact provenance](artifact-provenance-contract.md) | Image scan, verify, trace and VEX output, the inputs and the signature states |
 | [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
