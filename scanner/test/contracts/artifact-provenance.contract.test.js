@@ -36,7 +36,7 @@ test('contract: image scan has exactly the documented fields, and every document
   sameFields(report.inventory, fieldsUnder(PAGE, 'Inventory'), 'inventory');
   sameFields(report.secrets, fieldsUnder(PAGE, 'Secrets'), 'secrets');
   assert.equal(report.source.kind, 'archive');
-  const documented = ['type', 'name', 'version', 'ecosystem', 'purl', 'osvId', 'cveAliases', 'description', 'fixedVersions', 'severity', 'cvssVector', 'osvVulnFunctions', 'scope', 'file', 'line', 'depChain', 'advisory', 'range'];
+  const documented = ['type', 'name', 'version', 'ecosystem', 'purl', 'osvId', 'cveAliases', 'description', 'fixedVersions', 'severity', 'cvssVector', 'osvVulnFunctions', 'scope', 'file', 'line', 'depChain', 'advisory', 'range', 'hasKnownAttackRef'];
   const seen = new Set(report.vulnerabilities.flatMap(v => Object.keys(v)));
   for (const k of documented) assert.ok(PAGE.includes(`\`${k}\``), `${k} is on the page`);
   for (const k of seen) assert.ok(documented.includes(k), `${k} is carried and not documented`);

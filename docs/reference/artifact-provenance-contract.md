@@ -74,7 +74,7 @@ All three give the same inventory and the same advisories for the same image. Th
 | `deletedButRecoverable` | Secrets present in a layer and removed by a later one, which remain recoverable from the earlier layer. Values are masked |
 | `totalFindings` | All secret findings |
 
-A vulnerability entry is a dependency finding: `type`, `name`, `version`, `ecosystem`, `purl`, `osvId`, `cveAliases`, `description`, `fixedVersions`, `severity`, `cvssVector`, `osvVulnFunctions`, `scope`, `file`, `line`, `depChain`, `advisory` and `range`.
+A vulnerability entry is a dependency finding: `type`, `name`, `version`, `ecosystem`, `purl`, `osvId`, `cveAliases`, `description`, `fixedVersions`, `severity`, `cvssVector`, `osvVulnFunctions`, `scope`, `file`, `line`, `depChain`, `advisory`, `range` and, when the advisory links a public exploit reference, `hasKnownAttackRef`.
 
 ## `image verify`
 
