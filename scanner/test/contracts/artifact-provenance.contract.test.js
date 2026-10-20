@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { mkTestTmp } from '../helpers/tmp.js';
 import { buildDockerArchive } from '../helpers/build-tar-fixture.js';
 import { readPage, fieldsUnder, sameFields } from '../helpers/contract-page.js';
+import { seedAdvisory } from '../helpers/seed-osv-cache.js';
 
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'agentic-security.js');
 const PAGE = readPage('docs/reference/artifact-provenance-contract.md');
@@ -24,7 +25,10 @@ fs.writeFileSync(path.join(dir, 'image.tar'), buildDockerArchive({
     { files: [{ name: 'secrets/c.env', whiteout: true }] },
   ],
 }));
-const run = (...a) => spawnSync(process.execPath, [CLI, ...a], { cwd: dir, encoding: 'utf8', timeout: 120000, env: { ...process.env, AGENTIC_SECURITY_OFFLINE: '1' } });
+// the advisory data is seeded into a private home, so the result is the same on a warm machine and a cold runner
+const home = mkTestTmp('agsec-artifact-home-');
+seedAdvisory(home, { ecosystem: 'npm', name: 'lodash', version: '4.17.4', id: 'GHSA-contract-0001', description: 'seeded advisory for the contract test', fixedVersions: ['4.17.21'] });
+const run = (...a) => spawnSync(process.execPath, [CLI, ...a], { cwd: dir, encoding: 'utf8', timeout: 120000, env: { ...process.env, HOME: home, AGENTIC_SECURITY_OFFLINE: '1' } });
 
 const scan = run('image', 'scan', 'image.tar');
 const report = JSON.parse(scan.stdout);
