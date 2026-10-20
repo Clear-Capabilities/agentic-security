@@ -443,9 +443,10 @@ function parseOtelJsonObservations(text, context) {
  * `destination.service`), `protocol` (normalized — Envoy writes
  * `"HTTP/1.1"`, which contains `/` and is not an approved identifier
  * shape; lowercased and `/` stripped, e.g. `"http1.1"`), and
- * `response_flags` (`'-'`/empty means no flag, i.e. allowed; a non-empty
- * flags string, e.g. `"UAEX"` for unauthorized, is treated as `'denied'`
- * via `network.securityDecision`). `start_time`/`end_time` (or
+ * `response_flags` (`'-'`/empty means no flag, i.e. allowed; `"UAEX"`, the
+ * external authorization service denying the request, is `'denied'` via
+ * `network.securityDecision`; any other flag, such as an upstream failure or
+ * a missing route, is an operational outcome and carries no decision). `start_time`/`end_time` (or
  * `start_time` alone, with `duration` in milliseconds added) feed
  * `firstObservedAt`/`lastObservedAt`. Everything else — client address,
  * request path/query, user agent, request id, response code's own exact
@@ -488,7 +489,13 @@ function parseEnvoyAccessLogObservations(text, context) {
     if (cluster) attributes['destination.service'] = cluster;
     if (protocol) attributes['network.protocol'] = protocol;
     if (typeof record.response_flags === 'string') {
-      attributes['network.securityDecision'] = record.response_flags.trim().length === 0 || record.response_flags.trim() === '-' ? 'allowed' : 'denied';
+      // Only a flag that records an authorization decision is a security decision. UAEX is the external authorization service
+      // denying the request. Every other flag (UF upstream connection failure, NR no route, UT timeout, DC client disconnect) is
+      // an operational outcome, and calling it "denied" would invent a denial, so those make no claim either way.
+      const flags = record.response_flags.trim();
+      const tokens = flags.split(',').map((t) => t.trim()).filter(Boolean);
+      if (flags.length === 0 || flags === '-') attributes['network.securityDecision'] = 'allowed';
+      else if (tokens.includes('UAEX')) attributes['network.securityDecision'] = 'denied';
     }
 
     if (Object.keys(attributes).length === 0) continue; // nothing safe/present to report for this line
