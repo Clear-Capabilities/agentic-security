@@ -10,7 +10,7 @@ This page is the promotion record. A capability is promoted only when its row he
 |---|---|---|
 | 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
 | 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
-| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Three promoted in 0.183.0 (exploit proof, proof-gated fix, source-to-artifact provenance); five held with the evidence below |
+| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Three promoted in 0.183.1 (exploit proof, proof-gated fix, source-to-artifact provenance); five held with the evidence below |
 | 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Five Labs capabilities frozen and moved to Preview in 0.182.0; strategic metrics not yet done |
 
 Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promotions made against the bar.
@@ -91,7 +91,7 @@ The five stay Preview because each says something is still being hardened: Eval 
 
 Four hosted jobs now run in `ci.yml`, each against the real tool and each failing (never skipping) when the tool is missing: `proof-linux`, `proof-container`, `artifact-real` and `local-model`. The first three are blocking checks, so the release gate's hosted-CI check (`remote-ci-green`) refuses a commit on which they are red. `local-model` stays informational (see below).
 
-### Promoted in 0.183.0
+### Promoted in 0.183.1
 
 | Capability | Contract | Hosted evidence | What the first real run found |
 |---|---|---|---|

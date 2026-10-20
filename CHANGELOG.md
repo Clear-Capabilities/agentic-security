@@ -9,7 +9,10 @@
 > make the history less accurate, not more.
 
 
-## 0.183.0 - Exploit proof, the proof gate on fixes and source-to-artifact provenance reach GA, measured against the real tools
+## 0.183.1 - Exploit proof, the proof gate on fixes and source-to-artifact provenance reach GA, measured against the real tools
+
+
+**Release note.** A 0.183.0 tag was created and its hosted release gate failed before anything was published, so these changes ship as 0.183.1. The failure was a contract test that depended on warm local advisory data; it now seeds its own. The container probe also waits for a busy daemon and retries once instead of reading one slow answer as no daemon.
 
 Each promotion is held to the GA bar and rests on a hosted CI job that runs the real tool and fails, rather than skips, when the tool is missing. Those jobs are now blocking checks, so a release cannot go out on a commit where they are red.
 

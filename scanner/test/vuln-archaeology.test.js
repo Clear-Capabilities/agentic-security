@@ -94,7 +94,7 @@ test('a non-repository degrades to unavailable, never an error', () => {
     assert.match(h.reason, /git history unavailable/);
     assert.deepEqual(h.hotspots, []);
     assert.match(renderArchaeology(h), /skipped/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('mines real history and ranks hotspots by strong evidence only', () => {
@@ -122,7 +122,7 @@ test('mines real history and ranks hotspots by strong evidence only', () => {
     assert.equal(auth.identified, 1);
     assert.equal(auth.likely, 1);
     assert.ok(auth.subjects.length > 0, 'a hotspot must carry the evidence behind it');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('a commit subject cannot forge a record boundary', () => {
@@ -141,7 +141,7 @@ test('a commit subject cannot forge a record boundary', () => {
     assert.ok(!h.hotspots.some(x => x.file === 'evil.js'),
       'a fabricated file path in a commit body became a hotspot');
     assert.equal(h.byTier.identified, 0, 'a CVE in the body must not count as a subject match');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('annotation is advisory and never touches severity', () => {
@@ -179,14 +179,14 @@ test('truncation is disclosed rather than implied', () => {
     assert.equal(h.commitsScanned, 2);
     assert.equal(h.truncated, true);
     assert.match(renderArchaeology(h), /history truncated/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('the summary names the ranking caveat', () => {
   const dir = repo([['fix XSS in parser', 'a.js']]);
   try {
     assert.match(renderArchaeology(mineVulnHistory(dir)), /Ranking ignores the "mentioned" tier/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('ranking is churn-corrected — a high-traffic file is not a hotspot', () => {
@@ -212,7 +212,7 @@ test('ranking is churn-corrected — a high-traffic file is not a hotspot', () =
     assert.equal(top.concentration, 1);
     assert.ok(!h.hotspots.some(x => x.file === 'CHANGELOG.md'),
       'a file with 1 security commit in 21 must not be reported as a hotspot');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('every hotspot carries the denominator behind its concentration', () => {
@@ -225,5 +225,5 @@ test('every hotspot carries the denominator behind its concentration', () => {
     const a = h.hotspots.find(x => x.file === 'a.js');
     assert.equal(a.totalCommits, 2, 'the total must be counted across ALL commits, not just matched ones');
     assert.equal(a.concentration, 0.5);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });

@@ -187,7 +187,7 @@ capabilities:
     name: Execution-backed exploit proof
     lifecycleStages: [prove]
     maturity: GA
-    since: 0.183.0
+    since: 0.183.1
     contract: docs/reference/exploit-proof-contract.md
     contractTest: scanner/test/contracts/exploit-proof.contract.test.js
     gate: remote-ci-green
@@ -349,7 +349,7 @@ capabilities:
     name: Source-to-artifact provenance
     lifecycleStages: [trace]
     maturity: GA
-    since: 0.183.0
+    since: 0.183.1
     contract: docs/reference/artifact-provenance-contract.md
     contractTest: scanner/test/contracts/artifact-provenance.contract.test.js
     gate: remote-ci-green
@@ -400,7 +400,7 @@ capabilities:
     name: Proof-gated fix
     lifecycleStages: [verify]
     maturity: GA
-    since: 0.183.0
+    since: 0.183.1
     contract: docs/reference/exploit-proof-contract.md
     contractTest: scanner/test/contracts/exploit-proof.contract.test.js
     gate: remote-ci-green
