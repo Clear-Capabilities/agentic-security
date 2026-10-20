@@ -433,7 +433,7 @@ test('real checkout: conservative assignments hold (nothing promoted because the
   assert.equal(by['rule-compiler'], 'Preview');
   assert.equal(by['fleet-scan'], 'Preview');
   assert.equal(by['exploit-proof'], 'GA');
-  assert.equal(by['runtime-corroboration'], 'Preview');
+  assert.equal(by['runtime-corroboration'], 'GA', 'promoted in 0.184.0 on adapters tested against files the real tools wrote');
   assert.equal(by['live-runtime-observation'], 'Roadmap');
   assert.equal(by['detection-and-response'], 'Preview');
   assert.equal(by['connected-production-detection'], 'Roadmap');

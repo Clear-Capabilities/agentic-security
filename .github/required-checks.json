@@ -69,7 +69,8 @@
     "language-tools-ghc",
     "proof-linux",
     "proof-container",
-    "artifact-real"
+    "artifact-real",
+    "telemetry-capture"
   ],
   "informational": [
     "realworld-bench",
@@ -80,8 +81,7 @@
     "nixos-runtime (x86_64-linux)",
     "nixos-runtime (aarch64-linux)",
     "chrome-exports",
-    "local-model",
-    "telemetry-capture"
+    "local-model"
   ],
   "self": [
     "publish",

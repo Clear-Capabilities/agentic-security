@@ -9,9 +9,9 @@ This page is the promotion record. A capability is promoted only when its row he
 | Phase | Content | Status |
 |---|---|---|
 | 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
-| 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
-| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Three promoted in 0.183.1 (exploit proof, proof-gated fix, source-to-artifact provenance); five held with the evidence below |
-| 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Five Labs capabilities frozen and moved to Preview in 0.182.0; strategic metrics not yet done |
+| 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held, with the evidence below brought up to date in 0.184.0 |
+| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Three promoted in 0.183.1 (exploit proof, proof-gated fix, source-to-artifact provenance) and one in 0.184.0 (runtime corroboration); four held with the evidence below |
+| 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Five Labs capabilities frozen and moved to Preview in 0.182.0; strategic metrics reported from 0.182.0 |
 
 Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promotions made against the bar.
 
@@ -27,8 +27,8 @@ Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promot
 | Capability | Contract page | Contract test | Gate | Limits section |
 |---|---|---|---|---|
 | Deterministic security analysis | output schema | `finding-schema.test.js` | `corpus-gate` | trust and limitations, known limits |
-| Dependency risk with function-level reachability | output schema | `sca-verdict.test.js` | `sca-replay-gate` (new) | scanning, what a scan does not do |
-| Taint flow and reachability corroboration | finding evidence walkthrough | `reachability-claim.test.js` | `layer-recall-gate` | METRICS, reading it honestly |
+| Dependency risk with function-level reachability | [dependency finding contract](../reference/dependency-finding-contract.md) (0.184.0, was the output schema) | `contracts/dependency-finding.contract.test.js` (was `sca-verdict.test.js`) | `sca-replay-gate` (new) | scanning, what a scan does not do |
+| Taint flow and reachability corroboration | [taint flow contract](../reference/taint-flow-contract.md) (0.184.0, was the finding evidence walkthrough) | `contracts/taint-flow.contract.test.js` (was `reachability-claim.test.js`) | `layer-recall-gate` | METRICS, reading it honestly |
 | Falsification of findings | finding evidence walkthrough | `falsification.test.js` | `mutation-gate` | trust and limitations, what a clean result means |
 | Fix synthesis | fixing vulnerabilities | `fix-verify-loop.test.js` | `fix-verification-gate` | verified remediation, what verification does not establish |
 | Verified remediation | verified remediation | `fix-verify-tests.test.js` | `fix-verification-gate` | verified remediation, what verification does not establish |
@@ -57,14 +57,16 @@ The measured limits are on each capability's page and are not softened. The swee
 
 ### Held, and why
 
+Re-checked against the code in 0.184.0. Two of the four held figures in the original record were out of date, and one was hard to meet by construction.
+
 | Capability | Held at | Evidence |
 |---|---|---|
-| Code Boundaries security graph | Preview | The lineage accuracy corpus passes 17 of 24 cases, with 7 capability-tier failures (a missing `http-body`, `database`, `storage-read`, `user-input`, `http-upload` or `cli-argument` node, and flows through an alias or a helper function that were not connected). The corpus is JavaScript only. Per-language measured taint recall is 58% for JavaScript and 66% for Python |
-| Deterministic context intelligence | Preview | The application-shaped benchmark settles 31 of 39 routes. Flask is the gap: 6 of its 10 routes are unresolved and none of the settled Flask routes is a true positive. Express precision is 82% (2 false positives in the ownership families). The cases are self-labelled and synthetic |
-| Compliance control evidence | Preview | There are 10 bundled frameworks and per-control coverage maps for 5 of them, which the README records as a known gap. The coverage maps are hand-maintained, with no gate that checks their counts against the framework files |
-| Finding provenance from Git history | Preview | Known-origin accuracy is 92.3% against a 98% target, coverage 91.2% against 95%, and cold-cache overhead roughly 27 times against a 1.3 times target. Renamed files resolve to `partial`. This needs engine work, not documentation |
+| Code Boundaries security graph | Preview | The lineage accuracy corpus passes 17 of 24 cases, with 7 capability-tier failures. Four are source categories the JavaScript catalog has no entry for (`http-upload`, `cli-argument`, `storage-read`, `user-input`): adding them to the shared taint catalog would also make them taint sources for the whole engine, so it needs a lineage-only source catalog, not an entry. Two are aliasing and interprocedural shapes that need changes to the field-identity driver, and one is an unsupported sink. The corpus is JavaScript only. Per-language measured taint recall is 58% for JavaScript and 66% for Python |
+| Deterministic context intelligence | Preview | **Flask is no longer the gap.** The analysis now sees SQLAlchemy ORM operations (`Model.query...`, session writes, chained deletes) and judges ownership at the first write rather than the first read. On the application-shaped benchmark that took Flask from 6 of 10 routes unresolved to 0 (3 true positives, 7 true negatives) and Express precision from 82% to 100% (12 of 12), with 100% recall. 2 routes remain unresolved because the router-mount prefix is not composed into the route path. The cases are self-labelled and synthetic, so these figures are not accuracy on real applications, and only the SQLAlchemy data layer is covered for Python |
+| Compliance control evidence | Preview | **The gap named here is closed.** All 10 bundled frameworks now have a per-control coverage map, generated from the framework files and checked for staleness (`scripts/compliance-coverage.mjs`, run by the doc-drift gate), and the README counts are checked against them. What stays Preview is the coverage itself: most frameworks are selective subsets of a much larger standard, and the maps say so |
+| Finding provenance from Git history | Preview | **The recorded figures were stale.** Renamed files are followed since E7-02 and the labelled corpus passes 13 of 13 (it was recorded as 12 of 13). Coverage is 83.8% of eligible findings (393 of 469) on this project's own source in deep mode against a 95% target, because 64 findings come from whole-project analyses that a single-file replay cannot reproduce. Cold-cache overhead is 24 times against a 1.3 times target, measured on a 15-finding fixture where the scan itself takes 44 milliseconds: the cost is roughly 70 milliseconds of git work per file, so the ratio cannot reach the target on a small project. The guide now states these numbers |
 
-These four stay in the registry as Preview with their limits written. They are the Phase 1 backlog, in this order: provenance (engine), the lineage corpus failures, a compliance coverage generator, then Flask context resolution.
+These four stay in the registry as Preview with their limits written.
 
 ## Wave 3: Labs to Preview (interface freezes)
 
@@ -99,25 +101,46 @@ Four hosted jobs now run in `ci.yml`, each against the real tool and each failin
 | Proof-gated fix | the same page | The proof gate bench runs on both Linux jobs and matches its baseline: 0 of 15 unsafe fixes applied, 1 of 8 safe fixes applied, 7 refused for want of a reproducer | Generation covers three classes, so the gate applies few fixes by design: it fails closed. The three-class scope is written into the contract |
 | Source-to-artifact provenance | [artifact provenance contract](../reference/artifact-provenance-contract.md) | `artifact-real`: docker 28.0.4, a registry container and cosign 2.4.1; archive, engine and registry inputs agree (10 advisories), the clean image has 3, signed/other key/unsigned give `verified`/`invalid`/`missing`, source patched is flagged (7) and source equal is not (0). `bench/artifact-real/RESULT.json` | Three product defects: a source scan limited to SCA was read as having no advisories, so a source on the same vulnerable version looked fixed; cosign's wrong-key message was classified `missing`; a key-signed image from a registry with no transparency log could not be verified. All fixed with tests, and `--ignore-tlog` added as an explicit opt-in. The guide's stale limits (no engine, no registry, stand-in only) were rewritten |
 
+### Promoted in 0.184.0
+
+| Capability | Contract | Hosted evidence | What the first real exports found |
+|---|---|---|---|
+| Runtime corroboration of the scanned graph | [runtime corroboration contract](../reference/runtime-corroboration-contract.md) | `telemetry-capture` (now a blocking check) runs the real OpenTelemetry JavaScript SDK with its OTLP exporter, Envoy 1.31.2, nginx 1.27.5 and a kind cluster with the kube-apiserver audit log on, and records the files they write, untouched, with a manifest of tool, version, command and digest. The packs are in `scanner/test/fixtures/telemetry-packs/`. Each adapter parses its pack with no error (3 spans, 6 Envoy lines, 4 nginx lines, 79 audit events) and every record passes the observation contract | Two false security decisions. The Envoy adapter read any response flag as a denial, so an upstream failure (`UF`) and a missing route (`NR`) were reported as `denied`; the Kubernetes adapter read any status of 400 or more as a denial, so on the real audit log (2 forbidden, 4 not found, 1 conflict) it would have reported 7 denials instead of 2. Both now decide only on an authorization outcome. The recorder itself had two bugs the real tools exposed (an upstream that could not answer because the recorder blocked its own event loop, and Envoy buffering its access log) |
+
 ### Held, and why
 
 | Capability | Held at | Evidence |
 |---|---|---|
-| Local model support | Preview | `local-model` ran a real Ollama server with `qwen3.5:2b` on a 4-CPU hosted runner and every contract check passed (verdicts recorded and never changing severity, a rejected finding listed in the suppression ledger, a non-loopback endpoint refused in 2 seconds and the loopback one used). The model itself is the limit: the validation scan took 389 seconds for 19 findings and produced only `escalate` (6) and `unvalidated` (3), and in the Eval Lab comparison the model arm completed 0 of 5 attempts. A contract that is true but describes a model that cannot finish its work on the hosted runner is not GA material, and the job stays informational |
-| Model-assisted validation | Preview | Same run. The decision logic is tested deterministically, but no recorded-response replay harness exists yet and the live path returned no `accept` or `reject` to measure |
-| Agentic discovery (hunt) | Preview | Same run: 0 of 3 areas hunted, 3 of 3 runs degraded, no candidates. There is no hunt precision to publish because the hosted model produced no usable output; publishing a number would invent one |
-| Runtime corroboration | Preview | Needs fixture packs recorded from real exports of OpenTelemetry, Envoy, Kubernetes audit logs and an HTTP access log. None is recorded yet |
-| Haskell and Nix/NixOS analysis | Preview | Needs unseen-shape targets met and one measurement on a second sealed holdout. A holdout authored for this purpose by the engine's own maintainer cannot be independent, so it is not manufactured here |
+| Local model support | Preview, contract frozen | The [contract](../reference/local-models-contract.md) and its test freeze the loopback rule (against a table of accepted and refused endpoints), both preset configurations and the closed set of Ollama error codes, and pin that a refused endpoint makes no request and a failed one never falls back to another provider. `local-model` ran a real Ollama server with `qwen3.5:2b` on a 4-CPU hosted runner and every contract check passed, but the model cannot finish its work there: the validation scan took 389 seconds for 19 findings and produced only `escalate` (6) and `unvalidated` (3), and the Eval Lab model arm completed 0 of 5 attempts. The job stays informational |
+| Model-assisted validation | Preview, contract frozen | The [contract](../reference/model-validation-contract.md) and its test now exist, with a recorded-reply replay harness (`test/helpers/model-replay.js`) that plays eleven written replies through the real validator: well-formed accept, reject and escalate, a reply with the wrong challenge, file or line, no JSON, an unknown verdict, an injection note, an error status and a dead connection. The replies are written to the documented shape, not captured from a model, and the page says so. The live path still returned no `accept` or `reject` to measure, and no precision is published for the model's own judgments |
+| Agentic discovery (hunt) | Preview, contract frozen | The [contract](../reference/agentic-discovery-contract.md) and its test now exist and play recorded replies through the real pipeline. Writing them found two defects, both fixed: a hunter reply whose candidates had no file and line was dropped without a word, and `--forget-refuted`, named in the tool's own output, was not read by the command. The hosted run still hunted 0 of 3 areas with no candidates, so there is no hunt precision to publish; publishing a number would invent one |
+| Haskell and Nix/NixOS analysis | Preview | Needs unseen-shape targets met and one measurement on a second sealed holdout. The unseen split has been measured, so tuning the engine against its known failures would be fitting to it, and a holdout authored for this purpose by the engine's own maintainer cannot be independent, so it is not manufactured here |
 
 ## Reviewed criteria and open gaps
 
-G2 (both-direction tests) was reviewed by reading each contract test's cases on 2026-10-19. Ten of the twelve have cases in both directions for the claims on their pages. Two are weaker than the bar wants, and Phase 1 owes them stronger contract tests:
+**G2 (both-direction tests).** Reviewed by reading each contract test's cases on 2026-10-19. The two that were weaker than the bar wants are closed in 0.184.0: dependency risk and taint now have contract pages and tests over the finding's own fields (`contracts/dependency-finding.contract.test.js`, `contracts/taint-flow.contract.test.js`), each checking both directions.
 
-- **Dependency risk.** `sca-verdict.test.js` pins the triage verdict rules, not the dependency finding's own fields. The measured behavior is gated by `sca-replay-gate`, but a contract test over the `vulnerable_dep` finding shape is still to be written.
-- **Taint and reachability.** `reachability-claim.test.js` pins how the reachability claim is published (unknown is first class, every rate carries its denominator). The flow itself is gated by `layer-recall-gate` and `mutation-gate` rather than by a contract test over its output fields.
+**G7 (honest degradation).** Audited for the capabilities this programme promoted or froze. Each path below produces a named state and has a test:
 
-G7 (honest degradation) has not yet been audited per capability. The scan health, assurance mode, fix verification and egress tests exercise named degraded states, but the per-capability audit the PRD calls for is part of Phase 1.
+| Capability | Way it can fail to run | Named state | Test |
+|---|---|---|---|
+| Dependency risk | Offline with nothing cached, or the advisory service did not answer | `scanHealth.freshness.advisories` with `unanswered` and `source`, status `partial`, and a condition saying an empty result is not evidence of safety. **This was a gap:** such a scan used to report `complete` | `contracts/dependency-finding.contract.test.js` |
+| Dependency risk | The vulnerable function cannot be checked | `functionReachable: unknown`, never `unreachable` | same |
+| Taint flow | No nameable source | `source: null`, no invented hops | `contracts/taint-flow.contract.test.js` |
+| Exploit proof | No container engine, or only local confinement | `unavailable`, or `DEGRADED` completeness | `contracts/exploit-proof.contract.test.js` |
+| Proof-gated fix | No reproducer for the class | refused as `no-reproducer` | the `bench/fix-verification` proof gate, whose baseline records 7 refusals for want of a reproducer and fails on any change |
+| Artifact provenance | No signature, wrong key, no key, no dependency data in the source | `missing`, `invalid`, `unavailable`, and a refusal that names the cause | `contracts/artifact-provenance.contract.test.js` |
+| Runtime corroboration | Nothing imported, unmatched or stale telemetry | `unavailable`, `partial` with limitations | `contracts/runtime-corroboration.contract.test.js` |
+| Model validation | No endpoint, a refused endpoint, a failed call, an unusable reply | `model-disabled`, `policy-blocked`, `unavailable`, `malformed` | `contracts/model-validation.contract.test.js` |
+| Agentic discovery | A failed call, an exhausted budget, a cap, a discarded candidate | `degraded` runs, `budgetExhausted`, `candidatesCapped` and a reason for each. **This was a gap:** discarded candidates were silent | `contracts/agentic-discovery.contract.test.js` |
+| Federation | No local graph, a moved remote export | `stillValid: null`, `remote.ok: false` with a reason | `contracts/federation.contract.test.js` |
+| Sibling sweep | Garbage input, a list over the cap | an empty result, `instancesTruncated` with exact counts | `contracts/root-cause-sweep.contract.test.js` |
+
+The twelve capabilities that were GA before this programme are covered by the scan health, assurance mode, fix verification and egress tests, which exercise named degraded states. They were not audited path by path here.
 
 ## Not done
 
-The five Wave 2 capabilities and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.
+- **Haskell and Nix/NixOS** stays Preview for want of an independent second holdout (above).
+- **The three model capabilities** stay Preview with frozen contracts. GA needs a measured number, and the only model a hosted runner can run produces none.
+- **The four Wave 1 capabilities** stay Preview, with the measured reasons above. Code Boundaries needs a lineage-only source catalog and field-identity changes; provenance needs whole-project analyses it cannot replay, and its overhead target cannot be met on a cold cache; the context analysis still needs router-mount composition and covers one Python data layer.
+- **`local-model` stays an informational check**, because the model it runs cannot finish the work it is checking.

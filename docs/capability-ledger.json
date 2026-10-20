@@ -1235,6 +1235,7 @@
         "docs/reference/local-models-contract.md",
         "docs/reference/dependency-finding-contract.md",
         "docs/reference/taint-flow-contract.md",
+        "docs/reference/runtime-corroboration-contract.md",
         "docs/reference/strategic-metrics.md",
         "docs/reference/exploit-proof-contract.md",
         "docs/reference/artifact-provenance-contract.md"
