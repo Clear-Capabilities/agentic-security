@@ -105,7 +105,9 @@ capabilities:
     name: Agentic discovery (hunt)
     lifecycleStages: [discover]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/agentic-discovery-contract.md
+    contractTest: scanner/test/contracts/agentic-discovery.contract.test.js
+    contractNote: Report and coverage fields are frozen at version 1; candidates are model proposals, and no precision for them is published because the small hosted model produced none the gates accepted; reviewed 2026-10-20.
     establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
     docs:
       - docs/discover/README.md
@@ -176,7 +178,9 @@ capabilities:
     name: Model-assisted validation
     lifecycleStages: [corroborate]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/model-validation-contract.md
+    contractTest: scanner/test/contracts/model-validation.contract.test.js
+    contractNote: Finding fields, verdicts and statuses are frozen at version 1; the decision logic is tested with recorded replies and no precision is published for the model's own judgments; reviewed 2026-10-20.
     establishes: A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured.
     docs:
       - docs/how-it-works/deterministic-and-agentic.md
@@ -525,7 +529,9 @@ capabilities:
     name: Local model support
     lifecycleStages: [discover]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/local-models-contract.md
+    contractTest: scanner/test/contracts/local-models.contract.test.js
+    contractNote: The loopback rule, configuration shapes and error codes are frozen at version 1; the smallest supported model is exercised in a hosted job but is not evidence of what a larger model does; reviewed 2026-10-20.
     establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
     docs:
       - docs/guides/ollama.md

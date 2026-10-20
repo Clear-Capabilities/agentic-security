@@ -1230,6 +1230,9 @@
         "docs/reference/rule-compiler-contract.md",
         "docs/reference/release-assurance-contract.md",
         "docs/reference/dnr-contract.md",
+        "docs/reference/model-validation-contract.md",
+        "docs/reference/agentic-discovery-contract.md",
+        "docs/reference/local-models-contract.md",
         "docs/reference/strategic-metrics.md",
         "docs/reference/exploit-proof-contract.md",
         "docs/reference/artifact-provenance-contract.md"

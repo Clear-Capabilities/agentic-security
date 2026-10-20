@@ -80,7 +80,8 @@
     "nixos-runtime (x86_64-linux)",
     "nixos-runtime (aarch64-linux)",
     "chrome-exports",
-    "local-model"
+    "local-model",
+    "telemetry-capture"
   ],
   "self": [
     "publish",

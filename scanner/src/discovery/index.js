@@ -13,7 +13,7 @@ import { runHunter } from './hunter.js';
 import { confirmAll } from './confirm.js';
 import { disprovePanel } from './disprove.js';
 import { judgeCandidates } from './judge.js';
-import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan } from './memory.js';
+import { loadMemory, saveMemory, rememberRun, previouslyRefuted, nextWavePlan, forgetRefuted } from './memory.js';
 import { emitVerification, headCommit } from '../posture/verification/emit.js';
 import { promoteHypothesis } from '../posture/verification/hypothesis-promotion.js';
 import { featureStatus } from '../posture/assurance/config.js';
@@ -149,7 +149,9 @@ export async function runDiscovery(ctx = {}, opts = {}) {
   const budget = makeBudget(opts);
   // PRD C4 — what previous runs already judged. scanRoot absent => no memory,
   // which is the correct default for a library call with nowhere to persist.
-  const memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  let memory = opts.scanRoot ? loadMemory(opts.scanRoot) : null;
+  // `--forget-refuted`: a model, a ruleset or the code changed, so what an earlier run refuted is worth examining again.
+  if (memory && opts.forgetRefuted) memory = forgetRefuted(memory);
   // Every LLM call in this pipeline goes through this one wrapped callback.
   const llmInvoke = budget.wrap(opts.llmInvoke);
 
@@ -184,6 +186,7 @@ export async function runDiscovery(ctx = {}, opts = {}) {
       const run = await runHunter(area, lens, { fileContents: ctx.fileContents || {}, scanRoot: opts.scanRoot }, { llmInvoke, scanRoot: opts.scanRoot });
       runs.push({ focusAreaId: run.focusAreaId, lens: run.lens, degraded: run.degraded, reason: run.reason, candidateCount: run.candidates.length });
       if (run.degraded && run.reason) reasons.push(`${area.label} × ${lens.key}: ${run.reason}`);
+      if (run.discarded > 0) reasons.push(`${area.label} × ${lens.key}: ${run.discarded} proposed candidate(s) had no usable file and line and were discarded`);
       if (run.degraded) areaDegradedCount += 1;
       else hunted.add(area.id);
       candidates = candidates.concat(run.candidates);

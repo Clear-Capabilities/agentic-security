@@ -20,6 +20,9 @@ Deep reference material. Nothing here is a tutorial; start from [docs home](../R
 | [Release assurance](release-assurance-contract.md) | The signed package, the verdict and the offline verifier |
 | [Detection and response](dnr-contract.md) | The detection, hunt and exposure window records |
 | [Strategic metrics](strategic-metrics.md) | Assurance Coverage, Evidence Conversion and Verified Remediation Rate |
+| [Model-assisted validation](model-validation-contract.md) | The fields, verdicts and statuses a model verdict adds to a finding |
+| [Agentic discovery](agentic-discovery-contract.md) | The hunt report, its coverage block and the rules that keep proposals advisory |
+| [Local models](local-models-contract.md) | The loopback rule, the preset configurations and the error codes |
 | [Exploit proof](exploit-proof-contract.md) | The proof result, evidence ladder, environments and the fix proof gate |
 | [Artifact provenance](artifact-provenance-contract.md) | Image scan, verify, trace and VEX output, the inputs and the signature states |
 | [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
