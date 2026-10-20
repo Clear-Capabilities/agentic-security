@@ -527,10 +527,8 @@ function parseEnvoyAccessLogObservations(text, context) {
  * `destination.service` — never `objectRef.name`, which is frequently a
  * user-chosen, potentially sensitive resource name) and
  * `responseStatus.code` (mapped to `network.securityDecision`: `< 400`
- * is `'allowed'`, `>= 400` is `'denied'` — a client error is treated as a
- * decision here because the audit log's own admission/authorization
- * failures surface as 401/403/409, which is exactly the "security
- * decision" fact this adapter exists to carry). `requestReceivedTimestamp`/
+ * is `'allowed'`, `401`/`403` is `'denied'`, anything else carries no
+ * decision: a not-found or a conflict is not an authorization outcome). `requestReceivedTimestamp`/
  * `stageTimestamp` feed the observed-at window. **`user.username` and
  * every request/response body field are deliberately never read** — a
  * K8s audit event's `user` block is exactly the "authenticated identity"
@@ -572,7 +570,10 @@ function parseK8sAuditLogObservations(text, context) {
     if (namespace && resource) attributes['destination.service'] = `${namespace}:${resource}`;
     else if (resource) attributes['destination.service'] = resource;
     if (typeof code === 'number' && Number.isFinite(code)) {
-      attributes['network.securityDecision'] = code < 400 ? 'allowed' : 'denied';
+      // 401 and 403 are the authentication and authorization outcomes. Any other client or server error (404 not found, 409 conflict,
+      // 422 invalid, 5xx) is an operational outcome and makes no claim, the same rule as the proxy adapters.
+      if (code < 400) attributes['network.securityDecision'] = 'allowed';
+      else if (code === 401 || code === 403) attributes['network.securityDecision'] = 'denied';
     }
 
     if (Object.keys(attributes).length === 0) continue;

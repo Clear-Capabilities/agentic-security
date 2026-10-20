@@ -33,10 +33,11 @@ const runAsync = (cmd, a, o = {}) => new Promise((resolve, reject) => {
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const manifest = [];
+const pendingWrites = [];
 
 function record(source, file, text, tool, version, command) {
   fs.mkdirSync(path.join(OUT, source), { recursive: true });
-  fs.writeFileSync(path.join(OUT, source, file), text);
+  pendingWrites.push(fs.promises.writeFile(path.join(OUT, source, file), text));
   manifest.push({ source, file, tool, version, command, sha256: sha(text), bytes: Buffer.byteLength(text), recordedAt: new Date().toISOString(), host: `${os.platform()}-${os.arch()}` });
   console.log(`recorded ${source}/${file} (${Buffer.byteLength(text)} bytes) from ${tool} ${version}`);
 }
@@ -69,7 +70,7 @@ async function upstream(port) {
 async function otel() {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'otel-rec-'));
   const VERSIONS = { '@opentelemetry/api': '1.9.0', '@opentelemetry/sdk-trace-base': '1.30.1', '@opentelemetry/exporter-trace-otlp-http': '0.57.2', '@opentelemetry/resources': '1.30.1', '@opentelemetry/semantic-conventions': '1.28.0' };
-  fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify({ name: 'otel-rec', version: '1.0.0', type: 'module', dependencies: VERSIONS }));
+  await fs.promises.writeFile(path.join(work, 'package.json'), JSON.stringify({ name: 'otel-rec', version: '1.0.0', type: 'module', dependencies: VERSIONS }));
   must('npm', ['install', '--no-audit', '--no-fund', '--ignore-scripts'], { cwd: work });
   let body = null;
   const { s, port } = await server((req, res, b) => { if (req.url === '/v1/traces') body = b; res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); });
@@ -89,7 +90,7 @@ const calls = [
 for (const c of calls) { const sp = tracer.startSpan(c.name, { kind: c.kind, attributes: c.attributes }); sp.end(); }
 await provider.forceFlush(); await provider.shutdown();
 `;
-  fs.writeFileSync(path.join(work, 'rec.mjs'), prog);
+  await fs.promises.writeFile(path.join(work, 'rec.mjs'), prog);
   await runAsync('node', ['rec.mjs'], { cwd: work });
   s.close();
   if (!body) throw new Error('the OpenTelemetry exporter posted nothing');
@@ -148,7 +149,7 @@ static_resources:
     connect_timeout: 1s
     load_assignment: { cluster_name: dead, endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: 127.0.0.1, port_value: ${upDeadPort} } } } }] }] }
 `.replace('- name: healthy\n    type: STATIC', '- name: healthy\n    type: STATIC\n    connect_timeout: 1s');
-  fs.writeFileSync(path.join(work, 'envoy.yaml'), cfg);
+  await fs.promises.writeFile(path.join(work, 'envoy.yaml'), cfg);
   must('docker', ['rm', '-f', 'telemetry-envoy'], {});
   must('docker', ['run', '-d', '--name', 'telemetry-envoy', '--network', 'host', '-v', `${work}/envoy.yaml:/etc/envoy/envoy.yaml:ro`, ENVOY_IMAGE, '-c', '/etc/envoy/envoy.yaml']);
   let ready = false;
@@ -184,7 +185,7 @@ http {
   }
 }
 `;
-  fs.writeFileSync(path.join(work, 'nginx.conf'), conf);
+  await fs.promises.writeFile(path.join(work, 'nginx.conf'), conf);
   run('docker', ['rm', '-f', 'telemetry-nginx']);
   must('docker', ['run', '-d', '--name', 'telemetry-nginx', '--network', 'host', '-v', `${work}/nginx.conf:/etc/nginx/nginx.conf:ro`, NGINX_IMAGE]);
   let ready = false;
@@ -209,13 +210,13 @@ async function k8s() {
   const arch = os.arch() === 'arm64' ? 'arm64' : 'amd64';
   must('curl', ['-sSL', '-o', kind, `https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${arch}`]);
   fs.chmodSync(kind, 0o755);
-  fs.writeFileSync(path.join(work, 'audit-policy.yaml'), `apiVersion: audit.k8s.io/v1
+  await fs.promises.writeFile(path.join(work, 'audit-policy.yaml'), `apiVersion: audit.k8s.io/v1
 kind: Policy
 omitStages: ["RequestReceived"]
 rules:
 - level: Metadata
 `);
-  fs.writeFileSync(path.join(work, 'kind.yaml'), `kind: Cluster
+  await fs.promises.writeFile(path.join(work, 'kind.yaml'), `kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
@@ -274,6 +275,7 @@ for (const s of SOURCES) {
   console.log(`\n== ${s} ==`);
   try { await RUN[s](); } catch (e) { failed.push(s); console.error(`FAILED ${s}: ${e.message}`); }
 }
-fs.writeFileSync(path.join(OUT, 'MANIFEST.json'), JSON.stringify({ recorder: 'scripts/telemetry/record-packs.mjs', packs: manifest }, null, 2) + '\n');
+await Promise.all(pendingWrites);
+await fs.promises.writeFile(path.join(OUT, 'MANIFEST.json'), JSON.stringify({ recorder: 'scripts/telemetry/record-packs.mjs', packs: manifest }, null, 2) + '\n');
 console.log(`\nwrote ${manifest.length} pack(s) to ${OUT}`);
 if (failed.length) { console.error(`did not record: ${failed.join(', ')}`); process.exit(1); }

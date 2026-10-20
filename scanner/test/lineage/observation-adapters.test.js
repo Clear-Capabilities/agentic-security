@@ -390,6 +390,16 @@ test('AD/ENVOY-3: a malformed line is one error naming its line number; other li
   assert.equal(drafts.length, 1);
 });
 
+test('AD/K8S-1b: only 401 and 403 read as denied; a not-found, a conflict and a server error make no claim; below 400 is allowed', () => {
+  const decisionFor = (code) => {
+    const line = JSON.stringify({ objectRef: { resource: 'configmaps', namespace: 'payments' }, responseStatus: { code } });
+    return parseK8sAuditLogObservations(line + '\n', baseContext({ adapter: 'k8s-audit-log' })).drafts[0].attributes['network.securityDecision'];
+  };
+  for (const c of [200, 201, 204, 302]) assert.equal(decisionFor(c), 'allowed', String(c));
+  for (const c of [401, 403]) assert.equal(decisionFor(c), 'denied', String(c));
+  for (const c of [400, 404, 409, 422, 500, 503]) assert.equal(decisionFor(c), undefined, `${c} is not an authorization outcome`);
+});
+
 test('AD/K8S-1: a real k8s audit event maps objectRef/responseStatus safely, never the username', () => {
   const line = JSON.stringify({
     objectRef: { apiVersion: 'v1', resource: 'secrets', namespace: 'payments', name: 'db-credentials' },
