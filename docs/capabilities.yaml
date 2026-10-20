@@ -89,8 +89,8 @@ capabilities:
     lifecycleStages: [discover, corroborate]
     maturity: GA
     since: 0.178.0
-    contract: docs/reference/output-schema.md
-    contractTest: scanner/test/sca-verdict.test.js
+    contract: docs/reference/dependency-finding-contract.md
+    contractTest: scanner/test/contracts/dependency-finding.contract.test.js
     gate: sca-replay-gate
     platforms: [linux:test-shard]
     limits: docs/guides/scanning.md#what-a-scan-does-not-do
@@ -105,7 +105,9 @@ capabilities:
     name: Agentic discovery (hunt)
     lifecycleStages: [discover]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/agentic-discovery-contract.md
+    contractTest: scanner/test/contracts/agentic-discovery.contract.test.js
+    contractNote: Report and coverage fields are frozen at version 1; candidates are model proposals, and no precision for them is published because the small hosted model produced none the gates accepted; reviewed 2026-10-20.
     establishes: Model-proposed candidate weaknesses that no rule encodes, each routed back through the deterministic engine before it is reported. Advisory; needs a configured model endpoint.
     docs:
       - docs/discover/README.md
@@ -142,8 +144,8 @@ capabilities:
     lifecycleStages: [corroborate]
     maturity: GA
     since: 0.178.0
-    contract: docs/walkthroughs/finding-evidence.md
-    contractTest: scanner/test/reachability-claim.test.js
+    contract: docs/reference/taint-flow-contract.md
+    contractTest: scanner/test/contracts/taint-flow.contract.test.js
     gate: layer-recall-gate
     platforms: [linux:test-shard]
     limits: docs/METRICS.md#reading-it-honestly
@@ -176,7 +178,9 @@ capabilities:
     name: Model-assisted validation
     lifecycleStages: [corroborate]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/model-validation-contract.md
+    contractTest: scanner/test/contracts/model-validation.contract.test.js
+    contractNote: Finding fields, verdicts and statuses are frozen at version 1; the decision logic is tested with recorded replies and no precision is published for the model's own judgments; reviewed 2026-10-20.
     establishes: A second-opinion verdict on a finding, recorded separately from the deterministic evidence. A no-op unless a model endpoint is configured.
     docs:
       - docs/how-it-works/deterministic-and-agentic.md
@@ -284,13 +288,21 @@ capabilities:
   - id: runtime-corroboration
     name: Runtime corroboration of the scanned graph
     lifecycleStages: [observe]
-    maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    maturity: GA
+    since: 0.184.0
+    contract: docs/reference/runtime-corroboration-contract.md
+    contractTest: scanner/test/contracts/runtime-corroboration.contract.test.js
+    gate: contract-conformance
+    platforms: [linux:test-shard, linux:telemetry-capture]
+    limits: docs/reference/runtime-corroboration-contract.md#what-this-does-not-do
     establishes: Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live.
     docs:
+      - docs/reference/runtime-corroboration-contract.md
       - docs/guides/runtime-twin.md
       - docs/observe/README.md
     evidence:
+      - scanner/src/lineage/observation-adapters.js
+      - scanner/test/fixtures/telemetry-packs
       - scanner/src/lineage/runtime-assurance.js
       - scanner/src/lineage/observation-correlation.js
   - id: live-runtime-observation
@@ -525,7 +537,9 @@ capabilities:
     name: Local model support
     lifecycleStages: [discover]
     maturity: Preview
-    contractNote: Flags and output fields may still tighten before they are frozen; reviewed 2026-10-19.
+    contract: docs/reference/local-models-contract.md
+    contractTest: scanner/test/contracts/local-models.contract.test.js
+    contractNote: The loopback rule, configuration shapes and error codes are frozen at version 1; the smallest supported model is exercised in a hosted job but is not evidence of what a larger model does; reviewed 2026-10-20.
     establishes: Validation, fix proposal and hunt against a model on loopback, refusing non-loopback endpoints and never falling back to a cloud provider.
     docs:
       - docs/guides/ollama.md

@@ -722,6 +722,35 @@ jobs:
           path: ${{ runner.temp }}/proof-container.json
           if-no-files-found: warn
 
+  # GA PROMOTION, WAVE 2: RUNTIME CORROBORATION AGAINST REAL TELEMETRY EXPORTS
+  # --------------------------------------------------------------------------
+  # Runs the real tools (the OpenTelemetry SDK and its OTLP exporter, Envoy, nginx, and a kind cluster with the kube-apiserver audit log
+  # on) and records the files they write, untouched. `scripts/telemetry/record-packs.mjs` fails, with the reason, when a tool cannot run:
+  # a pack that was not recorded is not evidence. The recorded files are uploaded; the committed packs under
+  # `scanner/test/fixtures/telemetry-packs/` were produced by this job, and the adapters are tested against them.
+  telemetry-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Container engine
+        run: docker version
+        timeout-minutes: 2
+      - name: Record the packs from the real tools
+        run: node scripts/telemetry/record-packs.mjs --out "$RUNNER_TEMP/telemetry-packs"
+        timeout-minutes: 30
+      - name: Upload the packs
+        if: always()
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 5
+        with:
+          name: telemetry-packs
+          path: ${{ runner.temp }}/telemetry-packs
+          if-no-files-found: warn
+
   # GA PROMOTION, WAVE 2: SOURCE-TO-ARTIFACT PROVENANCE AGAINST THE REAL TOOLS
   # --------------------------------------------------------------------------
   # Builds two images with the real container engine, runs a registry on localhost, pushes both, signs one with cosign, and runs

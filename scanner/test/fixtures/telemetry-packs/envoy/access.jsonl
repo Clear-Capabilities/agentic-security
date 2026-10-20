@@ -1,0 +1,6 @@
+{"protocol":"HTTP/1.1","duration":1,"response_code":200,"upstream_host":"127.0.0.1:18090","start_time":"2026-10-20T16:33:34.244Z","upstream_cluster":"healthy","response_flags":"-"}
+{"response_flags":"-","upstream_cluster":"healthy","start_time":"2026-10-20T16:33:34.251Z","response_code":200,"duration":0,"protocol":"HTTP/1.1","upstream_host":"127.0.0.1:18090"}
+{"upstream_host":"127.0.0.1:18090","protocol":"HTTP/1.1","response_code":200,"start_time":"2026-10-20T16:33:34.257Z","duration":0,"upstream_cluster":"healthy","response_flags":"-"}
+{"protocol":"HTTP/1.1","duration":0,"upstream_cluster":"healthy","start_time":"2026-10-20T16:33:34.263Z","response_code":200,"upstream_host":"127.0.0.1:18090","response_flags":"-"}
+{"protocol":"HTTP/1.1","response_flags":"UF","upstream_host":"127.0.0.1:9","upstream_cluster":"dead","duration":0,"start_time":"2026-10-20T16:33:34.269Z","response_code":503}
+{"upstream_host":null,"start_time":"2026-10-20T16:33:34.275Z","response_flags":"NR","upstream_cluster":null,"response_code":404,"protocol":"HTTP/1.1","duration":0}

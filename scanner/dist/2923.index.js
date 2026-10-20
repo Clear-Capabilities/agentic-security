@@ -443,9 +443,10 @@ function parseOtelJsonObservations(text, context) {
  * `destination.service`), `protocol` (normalized — Envoy writes
  * `"HTTP/1.1"`, which contains `/` and is not an approved identifier
  * shape; lowercased and `/` stripped, e.g. `"http1.1"`), and
- * `response_flags` (`'-'`/empty means no flag, i.e. allowed; a non-empty
- * flags string, e.g. `"UAEX"` for unauthorized, is treated as `'denied'`
- * via `network.securityDecision`). `start_time`/`end_time` (or
+ * `response_flags` (`'-'`/empty means no flag, i.e. allowed; `"UAEX"`, the
+ * external authorization service denying the request, is `'denied'` via
+ * `network.securityDecision`; any other flag, such as an upstream failure or
+ * a missing route, is an operational outcome and carries no decision). `start_time`/`end_time` (or
  * `start_time` alone, with `duration` in milliseconds added) feed
  * `firstObservedAt`/`lastObservedAt`. Everything else — client address,
  * request path/query, user agent, request id, response code's own exact
@@ -488,7 +489,13 @@ function parseEnvoyAccessLogObservations(text, context) {
     if (cluster) attributes['destination.service'] = cluster;
     if (protocol) attributes['network.protocol'] = protocol;
     if (typeof record.response_flags === 'string') {
-      attributes['network.securityDecision'] = record.response_flags.trim().length === 0 || record.response_flags.trim() === '-' ? 'allowed' : 'denied';
+      // Only a flag that records an authorization decision is a security decision. UAEX is the external authorization service
+      // denying the request. Every other flag (UF upstream connection failure, NR no route, UT timeout, DC client disconnect) is
+      // an operational outcome, and calling it "denied" would invent a denial, so those make no claim either way.
+      const flags = record.response_flags.trim();
+      const tokens = flags.split(',').map((t) => t.trim()).filter(Boolean);
+      if (flags.length === 0 || flags === '-') attributes['network.securityDecision'] = 'allowed';
+      else if (tokens.includes('UAEX')) attributes['network.securityDecision'] = 'denied';
     }
 
     if (Object.keys(attributes).length === 0) continue; // nothing safe/present to report for this line
@@ -520,10 +527,8 @@ function parseEnvoyAccessLogObservations(text, context) {
  * `destination.service` — never `objectRef.name`, which is frequently a
  * user-chosen, potentially sensitive resource name) and
  * `responseStatus.code` (mapped to `network.securityDecision`: `< 400`
- * is `'allowed'`, `>= 400` is `'denied'` — a client error is treated as a
- * decision here because the audit log's own admission/authorization
- * failures surface as 401/403/409, which is exactly the "security
- * decision" fact this adapter exists to carry). `requestReceivedTimestamp`/
+ * is `'allowed'`, `401`/`403` is `'denied'`, anything else carries no
+ * decision: a not-found or a conflict is not an authorization outcome). `requestReceivedTimestamp`/
  * `stageTimestamp` feed the observed-at window. **`user.username` and
  * every request/response body field are deliberately never read** — a
  * K8s audit event's `user` block is exactly the "authenticated identity"
@@ -565,7 +570,10 @@ function parseK8sAuditLogObservations(text, context) {
     if (namespace && resource) attributes['destination.service'] = `${namespace}:${resource}`;
     else if (resource) attributes['destination.service'] = resource;
     if (typeof code === 'number' && Number.isFinite(code)) {
-      attributes['network.securityDecision'] = code < 400 ? 'allowed' : 'denied';
+      // 401 and 403 are the authentication and authorization outcomes. Any other client or server error (404 not found, 409 conflict,
+      // 422 invalid, 5xx) is an operational outcome and makes no claim, the same rule as the proxy adapters.
+      if (code < 400) attributes['network.securityDecision'] = 'allowed';
+      else if (code === 401 || code === 403) attributes['network.securityDecision'] = 'denied';
     }
 
     if (Object.keys(attributes).length === 0) continue;

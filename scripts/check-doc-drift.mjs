@@ -70,6 +70,8 @@ import { checkAllAssuranceDocs, formatFinding as formatAssuranceFinding } from '
 // The positioning pages' own check: the capability registry, the tables generated from it, maturity consistency, command and
 // lifecycle-order validation, style, role navigation and the SVGs. Also in `--gate`; run alone with check-positioning-docs.mjs.
 import { checkPositioningDocs, formatFinding as formatPositioningFinding } from './check-positioning-docs.mjs';
+// The compliance coverage maps are generated from the framework files; this finds one that is missing or stale, or a README count that is wrong.
+import { checkCoverage } from './compliance-coverage.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -345,10 +347,12 @@ async function main() {
     const links = checkAllLinks(REPO);
     const assurance = await checkAllAssuranceDocs(REPO);
     const positioning = checkPositioningDocs(REPO);
-    if (!links.length && !assurance.length && !positioning.length) {
+    const coverage = checkCoverage(REPO);
+    if (!links.length && !assurance.length && !positioning.length && !coverage.length) {
       console.log('doc-links: all user-facing markdown links resolve.');
       console.log('assurance-docs: referenced commands, scripts, schemas, variables and paths exist; no universal claim.');
       console.log('positioning-docs: capability registry valid, generated tables fresh, maturity consistent, commands and lifecycle order valid.');
+      console.log('compliance-coverage: every bundled framework has a per-control map that matches its framework file.');
       process.exit(0);
     }
     if (links.length) console.error(`doc-links: ${links.length} dangling link(s):`);
@@ -359,6 +363,8 @@ async function main() {
     for (const f of assurance) console.error(`  ${formatAssuranceFinding(f, REPO)}`);
     if (positioning.length) console.error(`positioning-docs: ${positioning.length} finding(s):`);
     for (const f of positioning) console.error(`  ${formatPositioningFinding(f)}`);
+    if (coverage.length) console.error(`compliance-coverage: ${coverage.length} finding(s):`);
+    for (const f of coverage) console.error(`  ${f.file}: ${f.message}`);
     process.exit(1);
   }
 

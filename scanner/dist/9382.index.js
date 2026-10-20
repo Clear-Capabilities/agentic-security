@@ -1442,6 +1442,9 @@ const AUTH_NAME = /(?:^|[.:])(?:(?:require|ensure|check|assert|verify|validate|e
 
 const SENSITIVE_NAME = /(?:^|[.:])(?:query|queryOne|queryRow|exec|execute|executeQuery|raw|rawQuery|prepare|find|findAll|findOne|findById|findByPk|findUnique|findFirst|findMany|get|getById|getBy|select|selectList|selectFirst|insert|insertOne|insertMany|insert_|update|updateOne|updateMany|upsert|delete|deleteOne|deleteMany|remove|destroy|save|create|createMany|aggregate|runDB|writeFile|writeFileSync|appendFile|unlink|rm|rmdir|spawn|spawnSync|execSync|execFile|system|popen|fetch|request|post|put|patch)$/i;
 const DB_RECEIVER = /(?:^|\b)(?:db|database|conn|connection|pool|client|cursor|session|repo|repository|dao|model|models|collection|table|prisma|knex|sequelize|orm|store|objects|manager|em|entityManager|mongo|redis|cache|conn|stmt|statement|fs|child_process|cp|axios|http|https|requests|httpx|got|superagent|Database|Persist|Yesod|System)\b/;
+// Flask-SQLAlchemy `Model.query...`, SQLAlchemy `session.query/add/delete/merge/execute/get`, and the query-builder methods that end a chain.
+const PY_ORM = /(?:\b[A-Z]\w*\.query\b|\b(?:db\.)?session\.(?:query|add|add_all|delete|merge|execute|get|bulk_save_objects)\b|\.(?:filter_by|get_or_404|first_or_404|one_or_404)\()/;
+const PY_ORM_WRITE = /\.(?:delete|update|bulk_update_mappings|bulk_insert_mappings)\(|\b(?:db\.)?session\.(?:add|add_all|delete|merge|bulk_save_objects)\b/;
 const SQL_TEXT = /\b(?:select\s[\s\S]{1,120}\sfrom|insert\s+into|update\s+\w+\s+set|delete\s+from)\b/i;
 const HS_SENSITIVE = /(?:^|\.)(?:runDB|selectList|selectFirst|getBy|getJust|insert_?|insertEntity|update|updateWhere|delete|deleteWhere|replace|upsert|query|query_|execute|execute_|readFile|writeFile|callProcess|readProcess)$|^(?:Database\.|System\.Process\.|System\.Directory\.)/;
 
@@ -1599,6 +1602,18 @@ function analyzeSymbolText(symbol, lines, { haskell = false } = {}) {
         if (pr) {
           push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-bare-identifier', rejectionSeen: null, text: clip(raw) });
         }
+      }
+    }
+    // Python ORM calls. `Model.query.filter_by(...).delete()` and `db.session.add(x)` name no database receiver the call-name rule
+    // recognises, and the chained `.delete()` is not a call on one, so the data operation was invisible and a route that
+    // deletes a row read as touching nothing sensitive. A write is a chained mutation or a session write; anything else is a read.
+    if (!haskell && PY_ORM.test(raw)) {
+      const orm = PY_ORM_WRITE.test(raw) ? 'write' : 'read';
+      push({ line: ln, category: 'sensitive', kind: `data-${orm}`, subkind: orm, evidence: 'observed', basis: 'orm-call', rejectionSeen: null, text: clip(raw) });
+      const stmt = statementAt(lines, ln);
+      const pr = ownerBinding(stmt, extraPrincipal);
+      if (pr) {
+        push({ line: ln, category: 'control', kind: pr.tenant ? 'tenant-scope' : 'ownership', subkind: null, evidence: pr.level === 'qualified' ? 'observed' : 'inferred', basis: pr.level === 'qualified' ? 'query-filter' : 'query-filter-unqualified', rejectionSeen: null, text: clip(raw) });
       }
     }
     if (SQL_TEXT.test(raw)) {
@@ -3474,8 +3489,14 @@ function evaluateProtection({ facts, unknowns, omittedWithControls = false, capp
     const ctl = facts.filter(f => f.category === 'control' && kinds.includes(f.kind));
     // A control whose answer is visibly thrown away (a predicate called as a bare statement) guards nothing.
     const effective = (f) => f.rejectionSeen !== false;
-    const before = ctl.filter(f => effective(f) && (firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens)));
-    const after = ctl.filter(f => firstSens !== null && f.effLine > firstSens);
+    // Ownership is the one dimension where reading before checking is the ordinary safe shape: load the record by id, refuse unless the
+    // principal owns it, and only then act on it. What an unchecked read can do is bounded by the check that follows before anything is
+    // written, so for ownership and tenant scope the line that must be preceded is the first WRITE. With no write in view the first
+    // sensitive operation of any kind still applies, so a read returned without a check is not excused.
+    const writes = sens.filter(f => f.subkind === 'write' || f.kind === 'filesystem' || f.kind === 'process');
+    const gate = dim === 'ownership' && writes.length ? Math.min(...writes.map(f => f.effLine)) : firstSens;
+    const before = ctl.filter(f => effective(f) && (gate === null || f.effLine < gate || (f.basis === 'query-filter' && f.effLine <= gate)));
+    const after = ctl.filter(f => gate !== null && f.effLine > gate);
     let state; let why;
     if (before.length) { state = 'present'; why = 'a control precedes the first sensitive operation'; }
     else if (after.length) { state = 'evaluated_and_ineffective'; why = 'every control of this kind runs after the first sensitive operation'; }

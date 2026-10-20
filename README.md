@@ -12,7 +12,7 @@ Agentic Security is an autonomous security assurance platform. It pairs **determ
 
 [![CI](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml/badge.svg)](https://github.com/Clear-Capabilities/agentic-security/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm--Internal--Use-blue)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.183.1-blue)]()
+[![Version](https://img.shields.io/badge/version-0.184.0-blue)]()
 [![Bundle](https://img.shields.io/badge/bundle-3.6MB-orange)]()
 
 > Built by **[Clear Capabilities](https://www.clearcapabilities.com/)**. Also known as an *agentic security harness* for Claude Code, Codex, Cursor and Gemini CLI.
@@ -101,7 +101,7 @@ Ten stages, one canonical order:
 | 3. Prove | Can exploitability be mechanically demonstrated? | **GA** | [Prove](./docs/prove/README.md) |
 | 4. Learn | Can a confirmed novel weakness become reusable deterministic knowledge? | **Preview**, **Labs**, **Roadmap** | [Learn](./docs/learn/README.md) |
 | 5. Scale | Where else does this weakness exist? | **GA**, **Preview** | [Scale](./docs/scale/README.md) |
-| 6. Observe | What has actually occurred at runtime? | **Preview**, **Roadmap** | [Observe](./docs/observe/README.md) |
+| 6. Observe | What has actually occurred at runtime? | **GA**, **Roadmap** | [Observe](./docs/observe/README.md) |
 | 7. Trace | How does risk connect through code, data, architecture, provenance, and artifacts? | **GA**, **Preview** | [Trace](./docs/trace/README.md) |
 | 8. Fix | What is the safest remediation? | **GA** | [Fix](./docs/fix/README.md) |
 | 9. Verify | Did the fix work, and which verification legs actually ran? | **GA**, **Preview** | [Verify](./docs/verify/README.md) |
@@ -134,7 +134,7 @@ Generated from [`docs/capabilities.yaml`](docs/capabilities.yaml). **GA** is pro
 | [Repository-wide sibling sweep](./docs/reference/root-cause-sweep.md) | Scale | **GA** | Other instances of the same weakness in the repository, with found, candidate and mitigated counts reported separately. |
 | [Fleet scanning and dependency blast radius](./docs/guides/fleet.md) | Scale | **Preview** | Idempotent, leased scan jobs for a declared set of repositories in a local SQLite store, an honest per-repository rollup, and which repositories depend on, or reference in code, a given one. Dependency matching is by declared package name; no remote workers or distributed queue. |
 | [Cross-repository graph federation](./docs/reference/federation.md) | Scale, Trace | **GA** | A declared link between a node in this repository's graph and a node in another repository's graph export. Each graph stays unmodified. |
-| [Runtime corroboration of the scanned graph](./docs/guides/runtime-twin.md) | Observe | **Preview** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
+| [Runtime corroboration of the scanned graph](./docs/reference/runtime-corroboration-contract.md) | Observe | **GA** | Whether imported runtime telemetry (OpenTelemetry, Envoy, Kubernetes audit, HTTP access logs) matches nodes in the scanned graph, edge states (observed, blocked, policy violation, not observed, static only), identity tokens stored only as keyed hashes, and a static page of the five Explorer views. A complete, partial or unavailable status; telemetry is imported, not collected live. |
 | [Continuous production runtime observation](./docs/roadmap/README.md) | Observe | **Roadmap** | Live collection of production behavior and exercised vulnerable functions. Not shipped; today's runtime support is offline telemetry import. |
 | [Code Boundaries security graph](./docs/security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
 | [Blast-radius assessment](./docs/security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
@@ -389,7 +389,7 @@ The detectors are precision-first: parameterized queries, escaped output, allow-
 
 - **Limitations:** [Trust & Limitations](docs/trust/trust-and-limitations.md), the maturity of every capability in [`docs/capabilities.yaml`](docs/capabilities.yaml), and each capability's own "what this does not do" section (for example [exploit proof](docs/guides/exploit-proof-fabric.md#what-this-does-not-prove), [fleet](docs/guides/fleet.md#what-is-not-built), [source-to-artifact provenance](docs/guides/artifact-provenance.md#what-this-does-not-do)).
 - **Benchmarking:** Agentic Security is evaluated against neutralized NIST SARD datasets with leakage controls, and once against an independent population of advisories (low accuracy, published with its forensics in the [evidence](docs/engineering-excellence/README.md)); no SARD scores are published in this repository. See [benchmarking methodology](docs/trust/benchmarking-methodology.md).
-- **Compliance:** automated technical-control evidence for 10 bundled frameworks, with per-control coverage maps for 5 of the 10 bundled frameworks today, tracked as a known gap (NIST AI 600-1, NIST SP 800-171 Rev. 3, NIST CSF 2.0, NIST Privacy Framework 1.1, OWASP ASVS 5.0, OWASP Top 10 for LLM Applications 2025, EU AI Act, GDPR, HIPAA Security Rule, CCPA). Never "compliant" or "certified". The framework table, coverage maps and the Privacy Framework section are in the [capability reference](docs/reference/capability-reference.md#compliance-frameworks) and [compliance evidence](docs/workflows/compliance-evidence.md).
+- **Compliance:** automated technical-control evidence for 10 bundled frameworks, with per-control coverage maps for all 10, generated from the framework files and checked for drift ([summary](docs/compliance/COVERAGE.md)) (NIST AI 600-1, NIST SP 800-171 Rev. 3, NIST CSF 2.0, NIST Privacy Framework 1.1, OWASP ASVS 5.0, OWASP Top 10 for LLM Applications 2025, EU AI Act, GDPR, HIPAA Security Rule, CCPA). Never "compliant" or "certified". The framework table, coverage maps and the Privacy Framework section are in the [capability reference](docs/reference/capability-reference.md#compliance-frameworks) and [compliance evidence](docs/workflows/compliance-evidence.md).
 - **Moved from this README:** the detailed capability descriptions, sample report output, token-cost advisor, local-model setup and the full "what makes it different" list are preserved in the [capability reference](docs/reference/capability-reference.md). See the [documentation migration map](docs/DOCS-MIGRATION.md).
 - **Style:** [Style and terminology](docs/STYLE-AND-TERMINOLOGY.md).
 

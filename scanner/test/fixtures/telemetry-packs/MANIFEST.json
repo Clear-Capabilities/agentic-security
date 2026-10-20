@@ -1,0 +1,49 @@
+{
+  "recorder": "scripts/telemetry/record-packs.mjs",
+  "packs": [
+    {
+      "source": "otel",
+      "file": "traces.otlp.json",
+      "tool": "opentelemetry-js",
+      "version": "{\"@opentelemetry/api\":\"1.9.0\",\"@opentelemetry/sdk-trace-base\":\"1.30.1\",\"@opentelemetry/exporter-trace-otlp-http\":\"0.57.2\",\"@opentelemetry/resources\":\"1.30.1\",\"@opentelemetry/semantic-conventions\":\"1.28.0\"}",
+      "command": "BasicTracerProvider + OTLPTraceExporter (OTLP/JSON over HTTP) to a local receiver",
+      "sha256": "81d305814428c118b2bd0bc6e1291f70087ead3eb495157703ec88cca2f2187e",
+      "bytes": 1939,
+      "recordedAt": "2026-10-20T16:33:23.605Z",
+      "host": "linux-x64"
+    },
+    {
+      "source": "envoy",
+      "file": "access.jsonl",
+      "tool": "envoyproxy/envoy:v1.31.2",
+      "version": "envoy  version: cc4a75482810de4b84c301d13deb551bd3147339/1.31.2/Clean/RELEASE/BoringSSL",
+      "command": "envoy json_format access log on stdout; 3 routed, 1 to a closed upstream, 1 with no route",
+      "sha256": "7b845b5352139fca454810d124e1a3369e8e14bd9a40f48d9d856b2d9f18f8ae",
+      "bytes": 1063,
+      "recordedAt": "2026-10-20T16:33:34.606Z",
+      "host": "linux-x64"
+    },
+    {
+      "source": "http",
+      "file": "access.jsonl",
+      "tool": "nginx:1.27",
+      "version": "nginx version: nginx/1.27.5",
+      "command": "nginx log_format with escape=json (host, upstream, scheme, status) on stdout; three proxied requests",
+      "sha256": "8ef4dab62ecd8124b504186175a59030b77232e5ba9da3a920677d46fdac372b",
+      "bytes": 492,
+      "recordedAt": "2026-10-20T16:33:41.060Z",
+      "host": "linux-x64"
+    },
+    {
+      "source": "k8s",
+      "file": "audit.jsonl",
+      "tool": "kind v0.25.0",
+      "version": "v1.31.2",
+      "command": "kube-apiserver file audit backend, policy level Metadata; namespace, configmap, secret, forbidden and not-found requests",
+      "sha256": "1212c6765edbeabd1be42c9cd8d15fbbb5931c7e91df2076651a0a3b0d9c2718",
+      "bytes": 70583,
+      "recordedAt": "2026-10-20T16:34:44.858Z",
+      "host": "linux-x64"
+    }
+  ]
+}

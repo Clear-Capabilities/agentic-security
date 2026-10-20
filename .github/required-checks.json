@@ -69,7 +69,8 @@
     "language-tools-ghc",
     "proof-linux",
     "proof-container",
-    "artifact-real"
+    "artifact-real",
+    "telemetry-capture"
   ],
   "informational": [
     "realworld-bench",

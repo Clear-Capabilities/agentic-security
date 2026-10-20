@@ -172,6 +172,7 @@ const FRESHNESS_CONDITION_BUILDERS = {
   epss: (f) => (f?.stale === true) ? `EPSS exploit-probability data is stale (${f.ageDays} day(s) old)` : null,
   calibration: (f) => (f?.stale === true) ? `calibration data is stale (${f.ageDays} day(s) old${f.generatedAt ? `, last generated ${f.generatedAt}` : ''})` : null,
   customRules: (f) => (f?.stale === true) ? `${f.staleFiles.length} custom rule file(s) exceed their configured review interval` : null,
+  advisories: (f) => (Number(f?.unanswered) > 0) ? `${f.unanswered} of ${f.componentsChecked} dependencies were not checked against advisory data (${f.source}) — the absence of a vulnerable dependency finding is not evidence that the dependency is safe` : null,
   compliance: (f) => (Number(f?.stale) > 0) ? `${f.stale} compliance control(s) have stale evidence` : null,
 };
 

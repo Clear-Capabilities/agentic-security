@@ -2743,6 +2743,7 @@ async function cmdHunt(args) {
       maxCostUsd: numFlag('max-cost-usd'),
       // PRD C4 — persist and consult cross-run memory.
       scanRoot: args.flags['no-memory'] ? undefined : scanRoot,
+      forgetRefuted: !!args.flags['forget-refuted'],
       // PRD C2 — a comma-separated endpoint list turns on consensus.
       endpoints: args.flags.endpoints,
       costPerCallUsd: numFlag('cost-per-call-usd'),

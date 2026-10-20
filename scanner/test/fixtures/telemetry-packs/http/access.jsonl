@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-20T16:33:39+00:00","host":"127.0.0.1","upstream":"127.0.0.1:18091","scheme":"http","status":"200"}
+{"timestamp":"2026-10-20T16:33:39+00:00","host":"shop.example","upstream":"127.0.0.1:18091","scheme":"http","status":"200"}
+{"timestamp":"2026-10-20T16:33:39+00:00","host":"api.example","upstream":"127.0.0.1:18091","scheme":"http","status":"200"}
+{"timestamp":"2026-10-20T16:33:39+00:00","host":"shop.example","upstream":"127.0.0.1:18091","scheme":"http","status":"200"}
