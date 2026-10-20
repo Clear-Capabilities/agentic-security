@@ -1,12 +1,12 @@
 {
   "schema": "agentic-security/accuracy-scorecard@1",
   "provenance": {
-    "engineVersion": "0.182.0",
-    "bundleSha256": "e735c6cb2078bf7df6efc0138545e8476148d4a6426f21e4f2678105d94b2ec7",
-    "commit": "f2847e6578a627f674e0a5d4c3efb12952dfa5ba",
+    "engineVersion": "0.183.0",
+    "bundleSha256": "7ae453d1e175f63c38fe6553e83521825bc32fcd09de9ed860b89884fdbd5e07",
+    "commit": "d8b5ab1fc81aae0272e15b7a8bc06a313ddabce4",
     "worktreeClean": false,
     "nodeVersion": "v24.20.0",
-    "generatedAt": "2026-10-19T21:15:18.858Z",
+    "generatedAt": "2026-10-20T00:37:32.961Z",
     "corpusVersion": "4b956c30e4b568034b88ef40c9ada1087c2cfdb8df2a80db60c4e6ac2f2483e0",
     "scope": "bench/cve-replay CVE-replay corpus (detection + correct-silence), bench/self-scan precision harness (hooks/, scripts/, scanner/src, polyglot fixtures), bench/layer-recall taint recall (when measured this run)"
   },
@@ -926,11 +926,10 @@
         }
       },
       "scripts": {
-        "total": 114,
+        "total": 113,
         "byFile": {
           "_compliance_lib.py": 2,
           "apply-command-trim.mjs": 2,
-          "artifact-real-check.mjs": 1,
           "assurance-review-example.mjs": 1,
           "calibration-expand.mjs": 2,
           "calibration-holdout-check.mjs": 1,
@@ -978,8 +977,8 @@
   },
   "provenanceCoverage": {
     "measuredThisRun": true,
-    "n": 395,
-    "d": 624
+    "n": 384,
+    "d": 623
   },
   "taintRecall": {
     "measuredThisRun": true,
@@ -2193,9 +2192,9 @@
     "reason": "no frozen real-code evaluation protocol and no sealed adjudicated population exist yet; no real-code gate has been evaluated"
   },
   "measurement": {
-    "engineVersion": "0.182.0",
-    "commit": "f2847e6578a627f674e0a5d4c3efb12952dfa5ba",
-    "bundleSha256": "e735c6cb2078bf7df6efc0138545e8476148d4a6426f21e4f2678105d94b2ec7",
+    "engineVersion": "0.183.0",
+    "commit": "d8b5ab1fc81aae0272e15b7a8bc06a313ddabce4",
+    "bundleSha256": "7ae453d1e175f63c38fe6553e83521825bc32fcd09de9ed860b89884fdbd5e07",
     "cleanMeasurement": false,
     "identity": "the worktree was dirty: the commit below does NOT identify what was measured, so this is not a clean measurement",
     "currentEngineIndependentAccuracy": "unmeasured",

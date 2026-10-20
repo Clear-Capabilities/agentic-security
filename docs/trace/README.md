@@ -10,7 +10,7 @@ Trace is where individual findings meet the connected picture, grounded in [Code
 
 - **Security graph.** Field-level flows with sources, sinks, protection state and sensitive-data classes. See [Code Boundaries](../security-graph/code-boundaries.md).
 - **Blast radius.** What a compromised node can reach. See [blast radius](../security-graph/blast-radius.md).
-- **Provenance.** Which commit introduced a finding, and whether a built image still contains it (images from archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins). See [provenance](../security-graph/provenance.md).
+- **Provenance.** Which commit introduced a finding, and whether a built image still contains it (images from archives, a local Docker or Podman engine, or one named registry reference; the engine, registry and signing paths are exercised by a hosted job against the real tools). See [provenance](../security-graph/provenance.md).
 - **Federation.** A declared link between two repositories' graphs.
 - **Compliance evidence.** Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count.
 
@@ -25,7 +25,7 @@ Trace is where individual findings meet the connected picture, grounded in [Code
 | [Code Boundaries security graph](../security-graph/code-boundaries.md) | Trace | **Preview** | Field-level sources, sinks, protection state, sensitive-data classes and findings as one signed graph, browsable locally. Opt-in at scan time. |
 | [Blast-radius assessment](../security-graph/blast-radius.md) | Trace | **GA** | What a compromised graph node can reach, including affected data classes and recipients, read from the already-scanned graph. |
 | [Finding provenance from Git history](../guides/finding-provenance.md) | Trace | **Preview** | Which commit introduced a finding, resolved from Git history, with the resolution quality stated. |
-| [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **Preview** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine and registry paths were tested against stand-ins, not a real daemon or registry. |
+| [Source-to-artifact provenance](../guides/artifact-provenance.md) | Trace | **GA** | Whether a finding is present in a built container image and whether a fix in source reached it. Images come from OCI or Docker archives, a local Docker or Podman engine, or one named registry reference; the engine, registry and signing paths are exercised by a hosted job against a real container engine, a real registry and a real signing tool. |
 | [Compliance control evidence](../guides/compliance.md) | Trace | **Preview** | Automated technical-control evidence mapped to bundled frameworks, with unassessed and manual controls kept out of the satisfied count. Not a certification. |
 <!-- generated:capabilities:trace:end -->
 

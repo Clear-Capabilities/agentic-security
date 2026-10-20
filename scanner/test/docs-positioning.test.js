@@ -432,7 +432,7 @@ test('real checkout: conservative assignments hold (nothing promoted because the
   const by = Object.fromEntries(loadRegistry(REPO).capabilities.map(c => [c.id, c.maturity]));
   assert.equal(by['rule-compiler'], 'Preview');
   assert.equal(by['fleet-scan'], 'Preview');
-  assert.equal(by['exploit-proof'], 'Preview');
+  assert.equal(by['exploit-proof'], 'GA');
   assert.equal(by['runtime-corroboration'], 'Preview');
   assert.equal(by['live-runtime-observation'], 'Roadmap');
   assert.equal(by['detection-and-response'], 'Preview');

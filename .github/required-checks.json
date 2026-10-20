@@ -66,7 +66,10 @@
     "nvim-plugin",
     "dependency-currency",
     "language-suites",
-    "language-tools-ghc"
+    "language-tools-ghc",
+    "proof-linux",
+    "proof-container",
+    "artifact-real"
   ],
   "informational": [
     "realworld-bench",
@@ -77,9 +80,6 @@
     "nixos-runtime (x86_64-linux)",
     "nixos-runtime (aarch64-linux)",
     "chrome-exports",
-    "proof-linux",
-    "proof-container",
-    "artifact-real",
     "local-model"
   ],
   "self": [

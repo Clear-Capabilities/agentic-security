@@ -22,7 +22,7 @@ Do not confuse `agentic-security verify` (is this *finding* real, a verifier ver
 | Capability | Lifecycle Stage | Maturity | What It Establishes |
 |---|---|---|---|
 | [Verified remediation](../trust/verified-remediation.md) | Verify | **GA** | Whether a patch passed its rescan, lint and test legs, which legs were skipped, and a completeness tier of FULL, MITIGATION or WORKAROUND. |
-| [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **Preview** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
+| [Proof-gated fix](../guides/exploit-proof-fabric.md) | Verify | **GA** | With `fix --apply --require-proof`, that the original exploit reproduced before the patch and is blocked after it. |
 | [Assurance gate modes](../trust/assurance-modes.md) | Verify | **GA** | Whether CI fails on an incomplete analysis (strict) or only reports it (advisory, standard). |
 | [CI gating](../guides/ci-setup.md) | Verify | **GA** | A baseline-aware pull request scan that writes SARIF, JUnit and JSON and applies a severity gate and an assurance gate. |
 | [Release assurance](../guides/release-assurance.md) | Verify | **Preview** | A signed release package, an independent offline verifier and a deterministic not_deployable, needs_review or deployable verdict that names every blocker and never says safe. Not part of the default scan; `release-package build` assembles the package from the last scan, and the independent verifier checks it offline. |
