@@ -53,6 +53,17 @@ function server(handler) {
   });
 }
 
+/** An upstream the proxies talk to, in its own process: this process blocks on child tools, so a server here could never answer them. */
+async function upstream(port) {
+  const child = spawn(process.execPath, ['-e', `require('http').createServer((q,r)=>{r.writeHead(200,{'content-type':'text/plain'});r.end('ok')}).listen(${port},'127.0.0.1')`], { stdio: 'ignore' });
+  for (let i = 0; i < 40; i++) {
+    await sleep(250);
+    if (run('curl', ['-s', '-o', '/dev/null', `http://127.0.0.1:${port}/`]).status === 0) return { port, stop: () => child.kill() };
+  }
+  child.kill();
+  throw new Error(`the upstream on ${port} did not start`);
+}
+
 // ---------------------------------------------------------------------------------------------------------------- OpenTelemetry
 // The real OpenTelemetry JavaScript SDK and its real OTLP/JSON HTTP exporter produce the document; a local server takes the POST.
 async function otel() {
@@ -89,7 +100,7 @@ await provider.forceFlush(); await provider.shutdown();
 const ENVOY_IMAGE = 'envoyproxy/envoy:v1.31.2';
 async function envoy() {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'envoy-rec-'));
-  const up = await server((req, res) => { res.writeHead(200); res.end('ok'); });
+  const up = await upstream(18090);
   const upDeadPort = 9; // nothing listens: Envoy reports an upstream connection failure
   const cfg = `
 static_resources:
@@ -152,7 +163,7 @@ static_resources:
   const lines = `${logs.stdout}\n${logs.stderr}`.split('\n').filter((l) => l.startsWith('{') && l.includes('"upstream_cluster"'));
   const version = must('docker', ['run', '--rm', ENVOY_IMAGE, '--version']).stdout.trim().split('\n')[0];
   run('docker', ['rm', '-f', 'telemetry-envoy']);
-  up.s.close();
+  up.stop();
   if (lines.length < 5) { console.error(`${logs.stdout}\n${logs.stderr}`); throw new Error(`envoy wrote ${lines.length} access-log lines, expected 5`); }
   record('envoy', 'access.jsonl', lines.join('\n') + '\n', ENVOY_IMAGE, version, 'envoy json_format access log on stdout; 3 routed, 1 to a closed upstream, 1 with no route');
 }
@@ -161,7 +172,7 @@ static_resources:
 const NGINX_IMAGE = 'nginx:1.27';
 async function httpLog() {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'nginx-rec-'));
-  const up = await server((req, res) => { res.writeHead(200); res.end('ok'); });
+  const up = await upstream(18091);
   const conf = `
 events {}
 http {
@@ -185,7 +196,7 @@ http {
   const lines = `${logs.stdout}\n${logs.stderr}`.split('\n').filter((l) => l.startsWith('{"timestamp"'));
   const version = must('docker', ['run', '--rm', NGINX_IMAGE, 'nginx', '-v']).stderr.trim();
   run('docker', ['rm', '-f', 'telemetry-nginx']);
-  up.s.close();
+  up.stop();
   if (lines.length < 3) { console.error(`${logs.stdout}\n${logs.stderr}`); throw new Error(`nginx wrote ${lines.length} access-log lines, expected at least 3`); }
   record('http', 'access.jsonl', lines.join('\n') + '\n', NGINX_IMAGE, version, 'nginx log_format with escape=json (host, upstream, scheme, status) on stdout; three proxied requests');
 }
@@ -243,7 +254,8 @@ nodes:
     kc('--as=system:anonymous', '-n', 'payments', 'get', 'secrets'); // forbidden: a 403 in the audit log
     kc('-n', 'payments', 'get', 'configmap', 'does-not-exist'); // not found: a 404
     await sleep(3000);
-    const cat = must('docker', ['exec', 'telemetry-control-plane', 'cat', '/var/log/kubernetes/audit.log']).stdout;
+    // the audit log of a whole cluster is large; keep only the events that touch the namespace we drove, inside the container
+    const cat = must('docker', ['exec', 'telemetry-control-plane', 'sh', '-c', "grep -E '\"namespace\":\"payments\"|\"resource\":\"namespaces\"' /var/log/kubernetes/audit.log"], { maxBuffer: 256 * 1024 * 1024 }).stdout;
     const version = must('kubectl', ['--context', 'kind-telemetry', 'version', '-o', 'json']).stdout;
     const sv = JSON.parse(version).serverVersion?.gitVersion || 'unknown';
     // keep the events that touch the namespace we drove, so the capture is small and about what we did; every line is untouched
