@@ -45,7 +45,7 @@ These cases are written and labelled by the programme's author, so this is **not
 
 <!-- capture: dci-real-app-overall -->
 ```text
-39 routes: TP 9, FP 2, FN 0, TN 20, unresolved 8; precision 82% (9/11), recall 100% (9/9)
+39 routes: TP 12, FP 0, FN 0, TN 25, unresolved 2; precision 100% (12/12), recall 100% (12/12)
 ```
 
 ### Performance on three project sizes (E6-08)
@@ -78,7 +78,7 @@ large: P95 25850 ms, peak RSS 1232 MB, NOT GREEN (3 of 3 runs finished with a sc
 Read these before relying on anything above. They are the open items the programme itself recorded; none was waived.
 
 - **Independent accuracy is low and was measured once.** A localized F1 near 0.04 on 278 scored entries. 272 misses are classified (151 had no detector rule fire at all). One targeted change since (a Ruby path-resolver rule) recovered one of them, measured by re-running the three entries it can reach (true positives 6 to 7, false positives unchanged); the pinned baseline was not re-run, and the sealed holdout was not used.
-- **The DCI case corpus is not independent.** It is synthetic, labelled by its author, with two web stacks of which Flask is mostly unresolved (no ownership or role extraction for Python). It reports two false positives and a router-mount gap.
+- **The DCI case corpus is not independent.** It is synthetic, labelled by its author, with two web stacks, Express and Flask. Flask cases cover only the SQLAlchemy data layer. Two routes behind a mounted router are unresolved.
 - **Deep taint analysis is not incremental.** The analysis cache covers the per-file detector stage only; a changed-file scan is about 1.7 times faster than a cold one, below the 2 times aspiration, and the repository's own source (829 files) stops its deep analysis early, so that class never reports a complete scan.
 - **Pattern detectors flag constant operands.** A query or command built by concatenating a constant is reported at reduced confidence in JavaScript, Python and Go; the flow-based layer is correctly silent. Pinned by a test, not fixed.
 - **Provenance attribution is below its 95 percent target** for the eligible findings, because project-wide detectors cannot be replayed one file at a time. The coverage and its causes are in [Provenance coverage](PROVENANCE_COVERAGE.md).

@@ -10,7 +10,7 @@ Caveats (do not block):
 
 - E2 exit gate partially met: One missed real-code vulnerability was recovered with a causal explanation and matched safe controls (basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39, Ruby CWE-22): measured localized true positives 6 to 7 with false positives unchanged at 13, on the entries the change can reach. That is 1 of 272 misses. The dataflow and IR work was measured on fixtures; the baseline run already contains it, so its effect on real code has no before measurement.
 - E3 exit gate partially met: One declared gap still accepts an unsafe fix (1 of 15) and 3 of 8 safe fixes are refused; both are listed in the benchmark.
-- E4 exit gate partially met: Measurable and proof-backed, but the cases are synthetic and author-labelled, two safe routes become false positives, and Flask is mostly unresolved.
+- E4 exit gate partially met: Measurable and proof-backed, but the cases are synthetic and author-labelled, two routes behind a mounted router are unresolved, and the Flask cases cover only SQLAlchemy.
 - E6 exit gate partially met: Scans are bounded and containment is measured, but the measured benefit (1.72 times for one changed file) is under the 2 times aspiration and the 829-file class never completes its deep analysis.
 
 The decision is computed by `releaseDecision` in `final-report.mjs`. It cannot be changed by relabelling a metric (an exit gate is "met" only while its evidence files exist), by omitting a gate run (an absent run blocks), or by editing a flag (a blocker is waived only by a signed, unexpired, justified waiver with a compensating control; none exists).
@@ -41,7 +41,7 @@ Each task was closed only with a recorded passing test run naming an existing te
 | E1 | met | A valid run exists (F1 0.040). No target is claimed and the sealed holdout was not used. |
 | E2 | partially_met | One missed real-code vulnerability was recovered with a causal explanation and matched safe controls (basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39, Ruby CWE-22): measured localized true positives 6 to 7 with false positives unchanged at 13, on the entries the change can reach. That is 1 of 272 misses. The dataflow and IR work was measured on fixtures; the baseline run already contains it, so its effect on real code has no before measurement. |
 | E3 | partially_met | One declared gap still accepts an unsafe fix (1 of 15) and 3 of 8 safe fixes are refused; both are listed in the benchmark. |
-| E4 | partially_met | Measurable and proof-backed, but the cases are synthetic and author-labelled, two safe routes become false positives, and Flask is mostly unresolved. |
+| E4 | partially_met | Measurable and proof-backed, but the cases are synthetic and author-labelled, two routes behind a mounted router are unresolved, and the Flask cases cover only SQLAlchemy. |
 | E5 | met | Runtime collection is off until a policy file enables it; records from another build corroborate nothing. Several pieces are library code, not default scan behaviour. |
 | E6 | partially_met | Scans are bounded and containment is measured, but the measured benefit (1.72 times for one changed file) is under the 2 times aspiration and the 829-file class never completes its deep analysis. |
 | E7 | met | Shown on the demo project; the default scan does not assemble or sign a package. Provenance attribution is below its 95 percent target. |
@@ -54,7 +54,7 @@ localized precision 6/19 = 31.6%
 localized recall    6/278 = 2.2%
 localized F1        0.040 (95% interval 0.013 to 0.075)
 
-39 routes: TP 9, FP 2, FN 0, TN 20, unresolved 8; precision 82% (9/11), recall 100% (9/9)
+39 routes: TP 12, FP 0, FN 0, TN 25, unresolved 2; precision 100% (12/12), recall 100% (12/12)
 
 small: P95 236 ms, peak RSS 218 MB, within budget
 medium: P95 3002 ms, peak RSS 563 MB, within budget
@@ -82,7 +82,7 @@ Not run: the network-dependent publish checks (dependency currency, hosted CI) â
 | U-07 | no | P1 | The repository's own source (829 files) never completes its deep analysis (function and summary budgets) | Decide whether the budgets are right for trees this size, or report the early stop as a first-class scan-health state |
 | U-08 | no | P1 | Pattern detectors flag a constant operand concatenated into a query or command (JS, Python, Go) | Constant-fold the operand before the pattern fires, and update the pinned test |
 | U-09 | no | P2 | Ruby send_file with a request-built path produces no finding | Add the sink with a safe twin, and update the pinned test |
-| U-10 | no | P1 | DCI corpus is synthetic and author-labelled; Flask mostly unresolved; two false positives; router-mounted routes unresolved | Add independently labelled cases from upstream advisories; recognise an owner check performed in code before the write |
+| U-10 | no | P1 | DCI corpus is synthetic and author-labelled; Flask cases cover only the SQLAlchemy data layer; router-mounted routes unresolved | Add independently labelled cases from upstream advisories; recognise an owner check performed in code before the write |
 | U-11 | no | P2 | Provenance attribution is below its 95 percent target for eligible findings | A project-scoped replay for whole-project detectors |
 | U-12 | no | P1 | Fix verification: 1 of 15 unsafe fixes accepted and 3 of 8 safe fixes refused (declared gaps) | Close the dodge-rule-by-indirection gap; stop the scanner objecting to the three safe fixes |
 | U-13 | no | P2 | Release package, verdict, perspectives, compliance truth model, fleet ranking and runtime explanation are libraries and scripts, not default scan behaviour | Add a package command and wire it into ci --assurance |
@@ -108,8 +108,8 @@ Every command below was run in this programme. Each names the artifact it produc
 | `node ../bench/independent/forensics.mjs --run a72968195aa1` | `bench/independent/runs/a72968195aa1/forensics.json` | `sha256:7e8ced1ea4ffbe32` |
 | `npm run ee:perf-budget` | `docs/engineering-excellence/data/perf-budget.json` | `sha256:951f433fa06ea2fd` |
 | `npm run ee:e2e-demo` | `docs/engineering-excellence/data/e2e-demo-outline.json` | `sha256:8f04806b6aaa5bd3` |
-| `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:97e0d241f3cc1d74` |
-| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:1b89825b3509c384` |
-| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:498f7961d2e8f4fd` |
+| `npm run bench:dci-real-app` | `docs/engineering-excellence/data/dci-real-app.json` | `sha256:f3ed31fcde19d788` |
+| `npm run ee:regression-report` | `docs/engineering-excellence/REGRESSION_REPORT.md` | `sha256:f31f8d73a64634ce` |
+| `npm run ee:doc-captures` | `docs/engineering-excellence/README.md` | `sha256:e000d3fad936f2a3` |
 
 Resume from disk: `node scripts/engineering-excellence/status.mjs --resume` prints the next step, and `node scripts/engineering-excellence/status.mjs --markdown` regenerates `STATUS.md` (it carries a revision number and timestamp, so it has no digest here); `docs/engineering-excellence/STATUS.md` and `unresolved.json` hold the same state.

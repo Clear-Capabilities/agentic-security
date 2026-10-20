@@ -92,12 +92,12 @@ Before: evidence existed as separate files with no shared contract. After: 16 re
 
 | Area | Change |
 |---|---|
-| Bundle size | 5.34 MB to 5.53 MB (+3.4%) |
+| Bundle size | 5.34 MB to 5.53 MB (+3.5%) |
 | Published package files | 2869 to 3095 (+226) |
 | Scan health | A scan that skipped a file for size or density is now `partial`, where it used to say `complete`. Strict assurance fails such scans. Repositories with minified bundles or large data files will see it. |
 | Large trees | The repository's own source (829 files) stops its deep analysis early on every run, so its scan is never `complete`. |
 | Warm incremental scans | 1.72 times faster for one changed file, below the 2 times aspiration; deep analysis is not cached. |
-| Context analysis | On hand-written authorization cases it reports 2 false positives (an owner check performed in code after an unscoped read) and leaves 8 of 39 routes unresolved, most of them Flask. |
+| Context analysis | On hand-written authorization cases it reports 0 false positives (an owner check performed in code after an unscoped read) and leaves 2 of 39 routes unresolved, most of them Flask. |
 | Miss forensics | The six misses first attributed to suppression were coincidences of location; the diagnosis was corrected, the engine was not changed. |
 
 ## 10. Release candidate

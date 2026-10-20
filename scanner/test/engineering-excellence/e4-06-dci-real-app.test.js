@@ -35,10 +35,10 @@ test('NOTHING IS DROPPED FROM THE DENOMINATORS: every labelled route is a TP, FP
   assert.equal(result.misses.length, result.overall.fp + result.overall.fn + result.overall.unresolved, 'every wrong or unsettled route is listed');
 });
 
-test('FAILURES ARE LIMITATIONS, NOT EXCLUSIONS: the report lists each wrong route, says Flask is mostly unresolved, and names the families that cannot be represented', () => {
+test('FAILURES ARE LIMITATIONS, NOT EXCLUSIONS: the report lists each wrong route, lists the routes it could not settle, and names the families that cannot be represented', () => {
   for (const m of result.misses) assert.ok(md.includes(`| ${m.case} |`) && md.includes(m.route), `${m.case} ${m.route} is in the report`);
-  assert.ok(result.byStack.flask.unresolved >= 1, 'Flask ownership and role extraction are not available, so those routes stay unresolved');
-  assert.ok(result.overall.fp >= 1 || result.overall.fn >= 1, 'the corpus contains cases the analysis gets wrong, and they are reported');
+  assert.ok(result.overall.unresolved >= 1, 'router-mounted routes are not resolved to their mounted path, so those routes stay unresolved and are listed');
+  assert.equal(result.misses.length, result.overall.fp + result.overall.fn + result.overall.unresolved, 'whatever the analysis gets wrong or cannot settle is reported, and nothing is dropped');
   assert.deepEqual(result.notRepresentable.map((n) => n.family), NOT_REPRESENTABLE.map((n) => n.family)); assert.deepEqual(NOT_REPRESENTABLE.map((n) => n.family), ['state-machine-bypass', 'race-toctou']);
   assert.match(md, /not an independent reviewer/); assert.match(md, /not.* accuracy on real software/); assert.match(result.labelledBy, /not an independent reviewer/);
 });

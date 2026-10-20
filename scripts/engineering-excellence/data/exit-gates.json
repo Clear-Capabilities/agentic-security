@@ -53,7 +53,7 @@
         "docs/engineering-excellence/DCI_REAL_APP.md",
         "docs/engineering-excellence/DCI_MATURITY.md"
       ],
-      "note": "Measurable and proof-backed, but the cases are synthetic and author-labelled, two safe routes become false positives, and Flask is mostly unresolved."
+      "note": "Measurable and proof-backed, but the cases are synthetic and author-labelled, two routes behind a mounted router are unresolved, and the Flask cases cover only SQLAlchemy."
     },
     {
       "epic": "E5",

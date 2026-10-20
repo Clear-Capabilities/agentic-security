@@ -4,79 +4,79 @@
   "cases": 21,
   "routes": 39,
   "overall": {
-    "tp": 9,
-    "fp": 2,
+    "tp": 12,
+    "fp": 0,
     "fn": 0,
-    "tn": 20,
-    "unresolved": 8,
+    "tn": 25,
+    "unresolved": 2,
     "routes": 39,
-    "precision": 0.8182,
+    "precision": 1,
     "recall": 1,
-    "precisionOf": 11,
-    "recallOf": 9
+    "precisionOf": 12,
+    "recallOf": 12
   },
   "byStack": {
     "express": {
       "tp": 9,
-      "fp": 2,
+      "fp": 0,
       "fn": 0,
-      "tn": 16,
+      "tn": 18,
       "unresolved": 2,
       "routes": 29,
-      "precision": 0.8182,
+      "precision": 1,
       "recall": 1,
-      "precisionOf": 11,
+      "precisionOf": 9,
       "recallOf": 9
     },
     "flask": {
-      "tp": 0,
+      "tp": 3,
       "fp": 0,
       "fn": 0,
-      "tn": 4,
-      "unresolved": 6,
+      "tn": 7,
+      "unresolved": 0,
       "routes": 10,
-      "precision": null,
-      "recall": null,
-      "precisionOf": 0,
-      "recallOf": 0
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 3,
+      "recallOf": 3
     }
   },
   "byFamily": {
     "function-level-authorization": {
-      "tp": 1,
+      "tp": 2,
       "fp": 0,
       "fn": 0,
       "tn": 4,
-      "unresolved": 1,
+      "unresolved": 0,
       "routes": 6,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 2,
+      "recallOf": 2
+    },
+    "indirect-ownership": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "tn": 1,
+      "unresolved": 0,
+      "routes": 2,
       "precision": 1,
       "recall": 1,
       "precisionOf": 1,
       "recallOf": 1
     },
-    "indirect-ownership": {
-      "tp": 1,
-      "fp": 1,
-      "fn": 0,
-      "tn": 0,
-      "unresolved": 0,
-      "routes": 2,
-      "precision": 0.5,
-      "recall": 1,
-      "precisionOf": 2,
-      "recallOf": 1
-    },
     "missing-middleware": {
-      "tp": 2,
+      "tp": 3,
       "fp": 0,
       "fn": 0,
       "tn": 8,
-      "unresolved": 3,
+      "unresolved": 2,
       "routes": 13,
       "precision": 1,
       "recall": 1,
-      "precisionOf": 2,
-      "recallOf": 2
+      "precisionOf": 3,
+      "recallOf": 3
     },
     "multi-tenant": {
       "tp": 1,
@@ -91,41 +91,41 @@
       "recallOf": 1
     },
     "ownership": {
-      "tp": 4,
-      "fp": 1,
-      "fn": 0,
-      "tn": 5,
-      "unresolved": 4,
-      "routes": 14,
-      "precision": 0.8,
-      "recall": 1,
-      "precisionOf": 5,
-      "recallOf": 4
-    }
-  },
-  "byNonObvious": {
-    "false": {
       "tp": 5,
       "fp": 0,
       "fn": 0,
-      "tn": 17,
-      "unresolved": 6,
-      "routes": 28,
+      "tn": 9,
+      "unresolved": 0,
+      "routes": 14,
       "precision": 1,
       "recall": 1,
       "precisionOf": 5,
       "recallOf": 5
+    }
+  },
+  "byNonObvious": {
+    "false": {
+      "tp": 8,
+      "fp": 0,
+      "fn": 0,
+      "tn": 20,
+      "unresolved": 0,
+      "routes": 28,
+      "precision": 1,
+      "recall": 1,
+      "precisionOf": 8,
+      "recallOf": 8
     },
     "true": {
       "tp": 4,
-      "fp": 2,
+      "fp": 0,
       "fn": 0,
-      "tn": 3,
+      "tn": 5,
       "unresolved": 2,
       "routes": 11,
-      "precision": 0.6667,
+      "precision": 1,
       "recall": 1,
-      "precisionOf": 6,
+      "precisionOf": 4,
       "recallOf": 4
     }
   },
@@ -300,8 +300,8 @@
         {
           "route": "PUT /notes/:id",
           "label": "safe",
-          "verdict": "violated",
-          "outcome": "fp"
+          "verdict": "satisfied",
+          "outcome": "tn"
         }
       ],
       "unlabelledRoutes": []
@@ -354,8 +354,8 @@
         {
           "route": "DELETE /tasks/:id",
           "label": "safe",
-          "verdict": "violated",
-          "outcome": "fp"
+          "verdict": "satisfied",
+          "outcome": "tn"
         }
       ],
       "unlabelledRoutes": []
@@ -480,8 +480,8 @@
         {
           "route": "DELETE /account/<int:id>",
           "label": "vulnerable",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "violated",
+          "outcome": "tp"
         }
       ],
       "unlabelledRoutes": []
@@ -524,8 +524,8 @@
         {
           "route": "DELETE /admin/users/<int:id>",
           "label": "vulnerable",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "violated",
+          "outcome": "tp"
         }
       ],
       "unlabelledRoutes": []
@@ -540,14 +540,14 @@
         {
           "route": "GET /notes/<int:id>",
           "label": "safe",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "satisfied",
+          "outcome": "tn"
         },
         {
           "route": "PUT /notes/<int:id>",
           "label": "vulnerable",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "violated",
+          "outcome": "tp"
         }
       ],
       "unlabelledRoutes": []
@@ -562,14 +562,14 @@
         {
           "route": "GET /notes/<int:id>",
           "label": "safe",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "satisfied",
+          "outcome": "tn"
         },
         {
           "route": "PUT /notes/<int:id>",
           "label": "safe",
-          "verdict": "not_applicable",
-          "outcome": "unresolved"
+          "verdict": "satisfied",
+          "outcome": "tn"
         }
       ],
       "unlabelledRoutes": []
@@ -590,78 +590,6 @@
       "stack": "express",
       "family": "missing-middleware",
       "route": "GET /api/health",
-      "label": "safe",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "js-own-3",
-      "stack": "express",
-      "family": "ownership",
-      "route": "PUT /notes/:id",
-      "label": "safe",
-      "verdict": "violated",
-      "outcome": "fp"
-    },
-    {
-      "case": "js-ind-1",
-      "stack": "express",
-      "family": "indirect-ownership",
-      "route": "DELETE /tasks/:id",
-      "label": "safe",
-      "verdict": "violated",
-      "outcome": "fp"
-    },
-    {
-      "case": "py-mw-1",
-      "stack": "flask",
-      "family": "missing-middleware",
-      "route": "DELETE /account/<int:id>",
-      "label": "vulnerable",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "py-role-1",
-      "stack": "flask",
-      "family": "function-level-authorization",
-      "route": "DELETE /admin/users/<int:id>",
-      "label": "vulnerable",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "py-own-1",
-      "stack": "flask",
-      "family": "ownership",
-      "route": "GET /notes/<int:id>",
-      "label": "safe",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "py-own-1",
-      "stack": "flask",
-      "family": "ownership",
-      "route": "PUT /notes/<int:id>",
-      "label": "vulnerable",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "py-own-2",
-      "stack": "flask",
-      "family": "ownership",
-      "route": "GET /notes/<int:id>",
-      "label": "safe",
-      "verdict": "not_applicable",
-      "outcome": "unresolved"
-    },
-    {
-      "case": "py-own-2",
-      "stack": "flask",
-      "family": "ownership",
-      "route": "PUT /notes/<int:id>",
       "label": "safe",
       "verdict": "not_applicable",
       "outcome": "unresolved"

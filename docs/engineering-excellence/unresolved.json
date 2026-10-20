@@ -94,7 +94,7 @@
     },
     {
       "id": "U-10",
-      "title": "DCI corpus is synthetic and author-labelled; Flask mostly unresolved; two false positives; router-mounted routes unresolved",
+      "title": "DCI corpus is synthetic and author-labelled; Flask cases cover only the SQLAlchemy data layer; router-mounted routes unresolved",
       "priority": "P1",
       "blocksRelease": false,
       "task": "E4-06",
@@ -187,7 +187,7 @@
   "caveats": [
     "E2 exit gate partially met: One missed real-code vulnerability was recovered with a causal explanation and matched safe controls (basecamp/activerecord-tenanted, GHSA-pmwx-rm49-xv39, Ruby CWE-22): measured localized true positives 6 to 7 with false positives unchanged at 13, on the entries the change can reach. That is 1 of 272 misses. The dataflow and IR work was measured on fixtures; the baseline run already contains it, so its effect on real code has no before measurement.",
     "E3 exit gate partially met: One declared gap still accepts an unsafe fix (1 of 15) and 3 of 8 safe fixes are refused; both are listed in the benchmark.",
-    "E4 exit gate partially met: Measurable and proof-backed, but the cases are synthetic and author-labelled, two safe routes become false positives, and Flask is mostly unresolved.",
+    "E4 exit gate partially met: Measurable and proof-backed, but the cases are synthetic and author-labelled, two routes behind a mounted router are unresolved, and the Flask cases cover only SQLAlchemy.",
     "E6 exit gate partially met: Scans are bounded and containment is measured, but the measured benefit (1.72 times for one changed file) is under the 2 times aspiration and the 829-file class never completes its deep analysis."
   ]
 }

@@ -166,8 +166,14 @@ export function evaluateProtection({ facts, unknowns, omittedWithControls = fals
     const ctl = facts.filter(f => f.category === 'control' && kinds.includes(f.kind));
     // A control whose answer is visibly thrown away (a predicate called as a bare statement) guards nothing.
     const effective = (f) => f.rejectionSeen !== false;
-    const before = ctl.filter(f => effective(f) && (firstSens === null || f.effLine < firstSens || (f.basis === 'query-filter' && f.effLine <= firstSens)));
-    const after = ctl.filter(f => firstSens !== null && f.effLine > firstSens);
+    // Ownership is the one dimension where reading before checking is the ordinary safe shape: load the record by id, refuse unless the
+    // principal owns it, and only then act on it. What an unchecked read can do is bounded by the check that follows before anything is
+    // written, so for ownership and tenant scope the line that must be preceded is the first WRITE. With no write in view the first
+    // sensitive operation of any kind still applies, so a read returned without a check is not excused.
+    const writes = sens.filter(f => f.subkind === 'write' || f.kind === 'filesystem' || f.kind === 'process');
+    const gate = dim === 'ownership' && writes.length ? Math.min(...writes.map(f => f.effLine)) : firstSens;
+    const before = ctl.filter(f => effective(f) && (gate === null || f.effLine < gate || (f.basis === 'query-filter' && f.effLine <= gate)));
+    const after = ctl.filter(f => gate !== null && f.effLine > gate);
     let state; let why;
     if (before.length) { state = 'present'; why = 'a control precedes the first sensitive operation'; }
     else if (after.length) { state = 'evaluated_and_ineffective'; why = 'every control of this kind runs after the first sensitive operation'; }
