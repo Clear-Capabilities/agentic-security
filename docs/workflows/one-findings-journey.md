@@ -25,7 +25,7 @@ Each stage ends with **Evidence created**, the transition into the next stage.
 |---|---|---|---|
 | 1 | Discover | [GA] deterministic, [Preview] agentic | Found by three deterministic analyses. `hunt` could not run (no model endpoint) and said so |
 | 2 | Corroborate | [GA] | Three analyses agree; no blocking control found; scan was `partial` |
-| 3 | Prove | [Preview] | Nothing ran: no reproducer exists and none can be generated for CWE-89 |
+| 3 | Prove | [GA] | Nothing ran: no reproducer exists and none can be generated for CWE-89 |
 | 4 | Learn | [Preview] | Not run for this finding |
 | 5 | Scale | [GA] / [Preview] | Repo sweep seeded elsewhere; fleet not configured |
 | 6 | Observe | [Preview] / [Roadmap] | No telemetry imported: status `unavailable` |

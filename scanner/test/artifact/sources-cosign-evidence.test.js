@@ -122,3 +122,18 @@ test('image evidence bundle: signed, verifiable with only the public key, carrie
   const unchecked = buildArtifactEvidenceBundle(record(), {});
   assert.equal(unchecked.signature.state, 'not-checked');
 });
+
+test('cosign: a signature checked against the wrong key is invalid, not missing, and the transparency log is skipped only on an explicit opt-in that the result says it took', async () => {
+  assert.equal((await cosign('wrong-key')).state, 'invalid', 'cosign words a wrong key as "no matching signatures: invalid signature", which is a rejection');
+  const log = path.join(mkTestTmp('cosign-tlog-'), 'calls.log');
+  const withLog = await cosign('ok-match', {}, { AS_FAKE_COSIGN_LOG: log });
+  assert.equal(withLog.state, 'verified'); assert.equal(withLog.transparencyLog, undefined);
+  const skipped = await cosign('ok-match', { ignoreTlog: true }, { AS_FAKE_COSIGN_LOG: log });
+  assert.equal(skipped.state, 'verified'); assert.equal(skipped.transparencyLog, 'not-checked');
+  const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(calls[0].argv.includes('--insecure-ignore-tlog=true'), false, 'the log is required by default');
+  assert.equal(calls[1].argv.includes('--insecure-ignore-tlog=true'), true);
+  const keyless = await cosign('ok-match', { publicKeyPem: null, certificateIdentity: 'ci@acme.test', certificateOidcIssuer: 'https://issuer.example', ignoreTlog: true }, { AS_FAKE_COSIGN_LOG: log });
+  assert.equal(JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n').pop()).argv.includes('--insecure-ignore-tlog=true'), false, 'keyless verification always needs the log');
+  assert.equal(keyless.transparencyLog, undefined);
+});

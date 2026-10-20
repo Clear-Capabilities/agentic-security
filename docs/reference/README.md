@@ -21,6 +21,7 @@ Deep reference material. Nothing here is a tutorial; start from [docs home](../R
 | [Detection and response](dnr-contract.md) | The detection, hunt and exposure window records |
 | [Strategic metrics](strategic-metrics.md) | Assurance Coverage, Evidence Conversion and Verified Remediation Rate |
 | [Exploit proof](exploit-proof-contract.md) | The proof result, evidence ladder, environments and the fix proof gate |
+| [Artifact provenance](artifact-provenance-contract.md) | Image scan, verify, trace and VEX output, the inputs and the signature states |
 | [Capability registry](../capabilities.yaml) | The single source of truth for GA, Preview, Labs and Roadmap |
 | [Style and terminology](../STYLE-AND-TERMINOLOGY.md) | How these docs talk |
 | [Metrics](../METRICS.md) and [scorecard](../SCORECARD.md) | Measured numbers with the command that produced each |

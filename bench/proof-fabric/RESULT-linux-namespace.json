@@ -1,0 +1,116 @@
+{
+  "schema": "agentic-security/proof-fabric-measurement",
+  "measuredAt": "2026-10-19T20:39:01.654Z",
+  "rounds": 3,
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.21.0",
+    "backend": "namespace"
+  },
+  "environment": {
+    "modes": {
+      "local-confined": 72
+    },
+    "expected": "local-confined"
+  },
+  "classesMeasured": [
+    "auth-bypass",
+    "buffer-overflow",
+    "command-injection",
+    "command-injection-java",
+    "command-injection-python",
+    "insecure-deserialization",
+    "insecure-deserialization-python",
+    "path-traversal",
+    "path-traversal-java",
+    "sql-injection",
+    "sql-injection-python",
+    "unsafe-file-write"
+  ],
+  "classesSkipped": [
+    {
+      "class": "ssrf",
+      "lang": "javascript",
+      "reason": "mediated network is unsupported on the namespace backend"
+    }
+  ],
+  "reproduction": {
+    "runs": 36,
+    "confirmed": 36,
+    "ratePercent": 100,
+    "targetPercent": 90
+  },
+  "falseConfirmations": {
+    "runs": 36,
+    "confirmed": 0,
+    "target": 0
+  },
+  "timeouts": {
+    "runs": 3,
+    "representedAsDegraded": 3,
+    "ratePercent": 100,
+    "targetPercent": 100
+  },
+  "proofTiming": {
+    "medianMs": 786,
+    "maxMs": 6748,
+    "note": "reported by the proof result itself (timing.proofMs), independent of scan time"
+  },
+  "perClass": {
+    "auth-bypass": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "buffer-overflow": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection-java": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "insecure-deserialization": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "insecure-deserialization-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "path-traversal": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "path-traversal-java": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "sql-injection": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "sql-injection-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "unsafe-file-write": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    }
+  },
+  "verdict": {
+    "reproduction": "met",
+    "falseConfirmations": "met",
+    "timeouts": "met",
+    "environment": "met"
+  }
+}

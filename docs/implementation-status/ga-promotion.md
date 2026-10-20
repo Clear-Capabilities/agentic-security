@@ -10,7 +10,7 @@ This page is the promotion record. A capability is promoted only when its row he
 |---|---|---|
 | 0 | The GA bar in the registry and the checker; the bar applied to the twelve capabilities that were already GA; the limits sections they depend on | Done. Tagged as 0.180.0, whose hosted release gate failed on the SCA replay check (see below), so it ships in 0.181.0 |
 | 1 | Wave 1: hardening and measurement promotions that need no new runtime dependency | Three promoted in 0.181.0 (sibling sweep, blast radius, federation); four held with the evidence below |
-| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Not started |
+| 2 | Wave 2: promotions that need a real container engine, registry, signing tool or local model in hosted CI | Three promoted in 0.183.0 (exploit proof, proof-gated fix, source-to-artifact provenance); five held with the evidence below |
 | 3 | Wave 3: Labs to Preview interface freezes, and the strategic metrics reported as product numbers | Five Labs capabilities frozen and moved to Preview in 0.182.0; strategic metrics not yet done |
 
 Phase 0 changed what GA means, not what is GA. Wave 1 is the first set of promotions made against the bar.
@@ -87,6 +87,28 @@ Preview is not GA. Each move below gives the capability a reference page that li
 
 The five stay Preview because each says something is still being hardened: Eval Lab has no SARD integration and small written datasets; fleet is local to one machine with a toy scaling measurement; the rule compiler is text matching and nothing measures learning independently of the compiler's own corpus; release assurance is signed by the holder's own key and is not certified by anyone else; `dnr` has three renderers that were never run against a live product. Learn gets no GA capability from this wave, by design.
 
+## Wave 2: hosted evidence and decisions
+
+Four hosted jobs now run in `ci.yml`, each against the real tool and each failing (never skipping) when the tool is missing: `proof-linux`, `proof-container`, `artifact-real` and `local-model`. The first three are blocking checks, so the release gate's hosted-CI check (`remote-ci-green`) refuses a commit on which they are red. `local-model` stays informational (see below).
+
+### Promoted in 0.183.0
+
+| Capability | Contract | Hosted evidence | What the first real run found |
+|---|---|---|---|
+| Execution-backed exploit proof | [exploit proof contract](../reference/exploit-proof-contract.md) | `proof-linux`: 36 of 36 reproductions, 0 false confirmations, 3 of 3 timeouts degraded. `proof-container` (docker 28.0.4): 36 of 36, 0 false, 3 of 3. macOS: 39 of 39 (committed earlier). All committed under `bench/proof-fabric/` | The container leg's first run confirmed only 30 of 36: Java proofs could not start because the runner replaced the image's `PATH` (`javac: not found`). Fixed, and the container result committed is the corrected one |
+| Proof-gated fix | the same page | The proof gate bench runs on both Linux jobs and matches its baseline: 0 of 15 unsafe fixes applied, 1 of 8 safe fixes applied, 7 refused for want of a reproducer | Generation covers three classes, so the gate applies few fixes by design: it fails closed. The three-class scope is written into the contract |
+| Source-to-artifact provenance | [artifact provenance contract](../reference/artifact-provenance-contract.md) | `artifact-real`: docker 28.0.4, a registry container and cosign 2.4.1; archive, engine and registry inputs agree (10 advisories), the clean image has 3, signed/other key/unsigned give `verified`/`invalid`/`missing`, source patched is flagged (7) and source equal is not (0). `bench/artifact-real/RESULT.json` | Three product defects: a source scan limited to SCA was read as having no advisories, so a source on the same vulnerable version looked fixed; cosign's wrong-key message was classified `missing`; a key-signed image from a registry with no transparency log could not be verified. All fixed with tests, and `--ignore-tlog` added as an explicit opt-in. The guide's stale limits (no engine, no registry, stand-in only) were rewritten |
+
+### Held, and why
+
+| Capability | Held at | Evidence |
+|---|---|---|
+| Local model support | Preview | `local-model` ran a real Ollama server with `qwen3.5:2b` on a 4-CPU hosted runner and every contract check passed (verdicts recorded and never changing severity, a rejected finding listed in the suppression ledger, a non-loopback endpoint refused in 2 seconds and the loopback one used). The model itself is the limit: the validation scan took 389 seconds for 19 findings and produced only `escalate` (6) and `unvalidated` (3), and in the Eval Lab comparison the model arm completed 0 of 5 attempts. A contract that is true but describes a model that cannot finish its work on the hosted runner is not GA material, and the job stays informational |
+| Model-assisted validation | Preview | Same run. The decision logic is tested deterministically, but no recorded-response replay harness exists yet and the live path returned no `accept` or `reject` to measure |
+| Agentic discovery (hunt) | Preview | Same run: 0 of 3 areas hunted, 3 of 3 runs degraded, no candidates. There is no hunt precision to publish because the hosted model produced no usable output; publishing a number would invent one |
+| Runtime corroboration | Preview | Needs fixture packs recorded from real exports of OpenTelemetry, Envoy, Kubernetes audit logs and an HTTP access log. None is recorded yet |
+| Haskell and Nix/NixOS analysis | Preview | Needs unseen-shape targets met and one measurement on a second sealed holdout. A holdout authored for this purpose by the engine's own maintainer cannot be independent, so it is not manufactured here |
+
 ## Reviewed criteria and open gaps
 
 G2 (both-direction tests) was reviewed by reading each contract test's cases on 2026-10-19. Ten of the twelve have cases in both directions for the claims on their pages. Two are weaker than the bar wants, and Phase 1 owes them stronger contract tests:
@@ -98,4 +120,4 @@ G7 (honest degradation) has not yet been audited per capability. The scan health
 
 ## Not done
 
-Wave 2, the strategic metrics from Wave 3, and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.
+The five Wave 2 capabilities and the four Wave 1 capabilities held above. In particular, the hosted CI legs that need a real container engine, a registry, a signing tool and a local model have not been written or run, and the measurements that sit below their own targets (finding provenance accuracy, coverage and overhead; Haskell and Nix unseen shapes) have not moved.

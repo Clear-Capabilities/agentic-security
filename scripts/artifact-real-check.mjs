@@ -103,14 +103,14 @@ check('the registry scan is bound to the registry manifest', scannedRef === push
 check('the revision label is read as the source commit', (g.artifactProvenanceGraph?.nodes || []).some((n) => n.kind === 'gitCommit' && n.sha === COMMIT) || JSON.stringify(g).includes(COMMIT), null);
 
 // ---- verify, in both directions
-const verify = (digest, pub, repository) => { const r = cli(project, ['image', 'verify', digest, '--cosign', '--repository', repository, '--public-key', pub]); let o = null; try { o = JSON.parse(r.stdout); } catch { /* reported below */ } return { status: r.status, state: o?.signature?.state ?? null, reason: o?.signature?.reason ?? String(r.stderr).trim().slice(0, 200) }; };
+const verify = (digest, pub, repository) => { const r = cli(project, ['image', 'verify', digest, '--cosign', '--repository', repository, '--public-key', pub, '--ignore-tlog']); let o = null; try { o = JSON.parse(r.stdout); } catch { /* reported below */ } return { status: r.status, state: o?.signature?.state ?? null, reason: o?.signature?.reason ?? String(r.stderr).trim().slice(0, 200) }; };
 const vOk = verify(vuln.digest, good.pub, vuln.repository);
 const vWrongKey = verify(vuln.digest, other.pub, vuln.repository);
 const vUnsigned = verify(clean.digest, good.pub, clean.repository);
 evidence.verification = { signedWithItsKey: vOk, signedWithAnotherKey: vWrongKey, unsigned: vUnsigned };
 check('the signed image verifies with its own key', vOk.state === 'verified', JSON.stringify(vOk));
-check('the same image does not verify with another key', vWrongKey.state !== 'verified' && vWrongKey.state !== null, JSON.stringify(vWrongKey));
-check('an unsigned image does not verify', vUnsigned.state !== 'verified' && vUnsigned.state !== null, JSON.stringify(vUnsigned));
+check('the same image is INVALID, not merely unverified, with another key', vWrongKey.state === 'invalid', JSON.stringify(vWrongKey));
+check('an unsigned image is reported as having no signature', vUnsigned.state === 'missing', JSON.stringify(vUnsigned));
 
 // ---- the mismatch detector, in both directions
 const source = (name, version) => { const d = path.join(work, name); fs.mkdirSync(d); fs.writeFileSync(path.join(d, 'package.json'), JSON.stringify({ name, version: '1.0.0', dependencies: { lodash: version } })); const s = cli(d, ['scan', '.', '--only', 'sca', '--format', 'json']); if (![0, 1, 2, 3, 4].includes(s.status)) fail(`scanning the ${name} source failed: ${String(s.stderr).trim().slice(0, 300)}`); return d; };

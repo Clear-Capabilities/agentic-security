@@ -43,7 +43,7 @@ function findTool(name, pathEnv = process.env.PATH || '') {
 }
 
 /** @param {{repository: string, digest: string, publicKeyPem?: string, certificateIdentity?: string, certificateOidcIssuer?: string}} o */
-async function verifyWithCosign({ repository, digest, publicKeyPem = null, certificateIdentity = null, certificateOidcIssuer = null, timeoutMs = 60_000, signal, pathEnv = process.env.PATH } = {}) {
+async function verifyWithCosign({ repository, digest, publicKeyPem = null, certificateIdentity = null, certificateOidcIssuer = null, ignoreTlog = false, timeoutMs = 60_000, signal, pathEnv = process.env.PATH } = {}) {
   const na = (reason) => ({ state: 'unavailable', via: 'cosign', reason });
   if (!DIGEST_RE.test(String(digest))) return na('there is no sha256 image digest to verify a signature against');
   if (!REPO_RE.test(String(repository ?? '')) || String(repository).includes('..') || String(repository).startsWith('-')) return na('the repository name is not valid');
@@ -56,6 +56,9 @@ async function verifyWithCosign({ repository, digest, publicKeyPem = null, certi
   try {
     const args = ['verify'];
     if (publicKeyPem) { const kf = node_path__WEBPACK_IMPORTED_MODULE_2__.join(dir, 'key.pub'); node_fs__WEBPACK_IMPORTED_MODULE_0__.writeFileSync(kf, publicKeyPem, { mode: 0o600 }); args.push('--key', kf); } else args.push('--certificate-identity', certificateIdentity, '--certificate-oidc-issuer', certificateOidcIssuer);
+    // cosign requires a transparency-log entry for a key-signed image unless told otherwise. A private registry or an air-gapped build has none, so
+    // this is an explicit opt-in, never the default, and a result that skipped the log says so. Keyless verification always needs the log.
+    if (ignoreTlog && publicKeyPem) args.push('--insecure-ignore-tlog=true');
     args.push(`${repository}@${digest}`);
     const r = await (0,_sandbox_supervise_js__WEBPACK_IMPORTED_MODULE_3__/* .superviseSpawn */ .u)(bin, args, { cwd: dir, env: (0,_sandbox_trust_domains_js__WEBPACK_IMPORTED_MODULE_4__/* .scrubEnv */ .LK)(process.env), timeoutMs, signal, maxOutputBytes: 2 * 1024 * 1024 });
     if (r.spawnError) return na(`could not start cosign: ${r.spawnError}`);
@@ -66,11 +69,11 @@ async function verifyWithCosign({ repository, digest, publicKeyPem = null, certi
       let payloads = [];
       try { const j = JSON.parse(r.stdout); payloads = Array.isArray(j) ? j : [j]; } catch { /* handled below */ }
       const matching = payloads.filter((p) => p?.critical?.image?.['docker-manifest-digest'] === digest);
-      if (matching.length) return { state: 'verified', via: 'cosign', mode: keyless ? 'keyless' : 'key', signatures: matching.length, identity: keyless ? certificateIdentity : null, reason: null };
+      if (matching.length) return { state: 'verified', via: 'cosign', mode: keyless ? 'keyless' : 'key', signatures: matching.length, identity: keyless ? certificateIdentity : null, reason: null, ...(ignoreTlog && !keyless ? { transparencyLog: 'not-checked' } : {}) };
       return { state: 'invalid', via: 'cosign', reason: 'cosign reported success but none of the verified signatures names this image digest' };
     }
-    if (/no signatures found|no matching signatures|no signatures associated|manifest unknown/.test(err)) return { state: 'missing', via: 'cosign', reason: 'no signature exists for this digest' };
     if (/invalid signature|signature verification failed|crypto\/ecdsa|verification failed|certificate identity|none of the expected identities/.test(err)) return { state: 'invalid', via: 'cosign', reason: 'cosign rejected the signature or the identity' };
+    if (/no signatures found|no matching signatures|no signatures associated|manifest unknown/.test(err)) return { state: 'missing', via: 'cosign', reason: 'no signature exists for this digest' };
     return na(`cosign could not complete the check (exit ${r.exitCode}): ${String(r.stderr).trim().split('\n').pop()?.slice(0, 160) ?? ''}`);
   } finally { try { node_fs__WEBPACK_IMPORTED_MODULE_0__.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } }
 }

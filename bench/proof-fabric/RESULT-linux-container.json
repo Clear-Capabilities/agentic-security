@@ -1,0 +1,138 @@
+{
+  "schema": "agentic-security/proof-fabric-measurement",
+  "measuredAt": "2026-10-19T20:40:53.186Z",
+  "rounds": 3,
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.21.0",
+    "backend": "container"
+  },
+  "environment": {
+    "modes": {
+      "container": 72
+    },
+    "engine": {
+      "name": "docker",
+      "serverVersion": "28.0.4"
+    },
+    "images": {
+      "c": {
+        "image": "gcc:latest",
+        "id": "sha256:959ac766250f0fc0178b0af7f4454756bd3c16c6241af7151eae76b6ca54f09d"
+      },
+      "java": {
+        "image": "eclipse-temurin:21",
+        "id": "sha256:ce534911e866c8d12262b743b4dfe7cf8357de30595da12f4a947b80d407581a"
+      },
+      "javascript": {
+        "image": "node:24-slim",
+        "id": "sha256:a797d6440ed0b09e51fb884f30e47ec14cbf58482c5e19db681a0cb8df45b089"
+      },
+      "python": {
+        "image": "python:3-slim",
+        "id": "sha256:87e033f9ac9f2e32dd3b08599d84d509dfcee72e2b2679ec99c135b507947226"
+      }
+    },
+    "expected": "container"
+  },
+  "classesMeasured": [
+    "auth-bypass",
+    "buffer-overflow",
+    "command-injection",
+    "command-injection-java",
+    "command-injection-python",
+    "insecure-deserialization",
+    "insecure-deserialization-python",
+    "path-traversal",
+    "path-traversal-java",
+    "sql-injection",
+    "sql-injection-python",
+    "unsafe-file-write"
+  ],
+  "classesSkipped": [
+    {
+      "class": "ssrf",
+      "lang": "javascript",
+      "reason": "a container has no network, so a reproducer that needs the loopback callback listener cannot run in one"
+    }
+  ],
+  "reproduction": {
+    "runs": 36,
+    "confirmed": 36,
+    "ratePercent": 100,
+    "targetPercent": 90
+  },
+  "falseConfirmations": {
+    "runs": 36,
+    "confirmed": 0,
+    "target": 0
+  },
+  "timeouts": {
+    "runs": 3,
+    "representedAsDegraded": 3,
+    "ratePercent": 100,
+    "targetPercent": 100
+  },
+  "proofTiming": {
+    "medianMs": 1287,
+    "maxMs": 6616,
+    "note": "reported by the proof result itself (timing.proofMs), independent of scan time"
+  },
+  "perClass": {
+    "auth-bypass": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "buffer-overflow": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection-java": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "command-injection-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "insecure-deserialization": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "insecure-deserialization-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "path-traversal": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "path-traversal-java": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "sql-injection": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "sql-injection-python": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    },
+    "unsafe-file-write": {
+      "vulnerableConfirmed": "3/3",
+      "mitigatedConfirmed": "0/3"
+    }
+  },
+  "verdict": {
+    "reproduction": "met",
+    "falseConfirmations": "met",
+    "timeouts": "met",
+    "environment": "met"
+  }
+}

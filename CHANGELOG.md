@@ -9,6 +9,17 @@
 > make the history less accurate, not more.
 
 
+## 0.183.0 - Exploit proof, the proof gate on fixes and source-to-artifact provenance reach GA, measured against the real tools
+
+Each promotion is held to the GA bar and rests on a hosted CI job that runs the real tool and fails, rather than skips, when the tool is missing. Those jobs are now blocking checks, so a release cannot go out on a commit where they are red.
+
+- **Execution-backed exploit proof is GA.** Measured on three hosts and committed: macOS 39 of 39 reproductions; Linux under local confinement 36 of 36 (hosted `proof-linux`); Linux in a real container 36 of 36 (hosted `proof-container`, docker 28.0.4). Each has 0 false confirmations and 3 of 3 hanging reproducers represented as degraded. Generation covers command injection, path-writing traversal and request forgery; the contract says so.
+- **The proof gate on applying a fix is GA, and fails closed.** `fix --apply --require-proof` applied 0 of 15 unsafe fixes and 1 of 8 safe fixes on the fix-verification corpus (7 refused for want of a reproducer). The new bench matches its baseline on both Linux jobs.
+- **Source-to-artifact provenance is GA.** The `artifact-real` job builds images with the real container engine, pushes to a real registry and signs with cosign: archive, engine and registry inputs agree (10 advisories), a signed image verifies, the same image with another key is `invalid`, an unsigned image is `missing`, and a source patched against a still-vulnerable image is flagged while an equal source is not.
+- **The first real-tool runs found real defects, now fixed.** Java proofs could not start in the container (the runner replaced the image's `PATH`; 30 of 36 reproductions until fixed). The mismatch detector read a source scan limited to SCA as having no advisories, so a source on the same vulnerable version looked fixed; a source scan with no dependency data is now refused. cosign's wrong-key message was classified `missing` instead of `invalid`. A key-signed image from a registry with no transparency log could not be verified; `image verify --cosign --ignore-tlog` is an explicit opt-in and the result says the log was not checked.
+- **The artifact guide's limits were stale and are rewritten** (it said no engine input, no registry input and no signing tool was exercised).
+- **Held, with the measured reason on the promotion record:** local model support, model-assisted validation and hunt (a real 2B model on the hosted runner passed every contract check but completed 0 of 5 Eval Lab attempts and hunted 0 of 3 areas), runtime corroboration (no recorded real telemetry packs) and Haskell/Nix (no independent second holdout).
+
 ## 0.182.0 - Five Labs capabilities freeze their interfaces and move to Preview, and the strategic metrics become product numbers
 
 Preview is not GA. Each move below gives a capability a reference page that lists every field, flag and exit code, and a compatibility test that runs the real commands and fails when the output gains or loses a field the page does not list.

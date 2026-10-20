@@ -50,7 +50,7 @@ Code
 The Runtime and Artifact rows are shipped in a bounded form, and the bounds matter:
 
 - **Runtime** is offline import of exported telemetry that matches destinations, not live collection and not function- or identity-level data.
-- **Artifact** reads OCI and Docker archives, a local Docker or Podman engine, or one named registry reference. The engine and registry paths were tested against stand-ins, not a real daemon or registry.
+- **Artifact** reads OCI and Docker archives, a local Docker or Podman engine, or one named registry reference. A hosted job exercises the engine, registry and signing paths against a real container engine, registry and signing tool.
 - **Proven** evidence is stored as a proof record next to the finding. It is not drawn on the graph.
 - Continuous production runtime observation is **Roadmap** and is described in [observe](../observe/README.md).
 

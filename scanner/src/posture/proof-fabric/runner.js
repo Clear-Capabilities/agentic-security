@@ -97,7 +97,11 @@ function localEnv(force) {
 }
 
 function defaultDockerProbe(bin, image) {
-  const info = spawnSync(bin, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  // a daemon that is busy (a runner just finished pulling images) can take longer than a few seconds to answer; one slow
+  // answer must not read as "no daemon", so the first probe is patient and a failed one is tried once more
+  const ask = () => spawnSync(bin, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+  let info = ask();
+  if (info.status !== 0) info = ask();
   if (info.status !== 0) return { ok: false, reason: 'container daemon not responding' };
   const img = spawnSync(bin, ['image', 'inspect', '--format', '{{.Id}}', image], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
   // the image id is the environment's identity: two proofs with the same id ran on the same base
