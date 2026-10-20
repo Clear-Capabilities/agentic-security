@@ -138,10 +138,10 @@
       "kind": "documented-metric",
       "status": "documented-not-remeasured",
       "measuredThisRun": false,
-      "statement": "README.md states coverage maps exist for 5 of the 10 bundled compliance frameworks. Quoted from the document, not re-measured by this ledger.",
+      "statement": "README.md states per-control coverage maps exist for all 10 bundled compliance frameworks. The maps and the count are generated and checked by scripts/compliance-coverage.mjs.",
       "asOf": "undated in the source",
       "file": "README.md",
-      "pattern": "5 of the 10 bundled frameworks",
+      "pattern": "per-control coverage maps for all 10",
       "expect": "present"
     }
   ],
