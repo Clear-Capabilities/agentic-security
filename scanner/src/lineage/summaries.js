@@ -1,5 +1,8 @@
 import { hashState, emptyState, addIdentity } from './field-identity.js';
-import { resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity } from './engine.js';
+import {
+  resolveExprIdentities, residualFlat, analyzeFunctionFieldIdentity,
+  argumentContext, callInvocationId, calleeRecorder,
+} from './engine.js';
 import { accessPathOf } from '../dataflow/access-paths.js';
 import { functionRecord } from '../ir/callgraph.js';
 
@@ -375,11 +378,11 @@ export function entryStateFromCall(paramNames, callArgs, callerState, ctx) {
   // call site) is load-bearing, not stylistic — it means no future second
   // caller of entryStateFromCall can reintroduce the hazard by passing the
   // full ctx through a different path.
-  const argCtx = ctx?.recordHop ? { recordHop: ctx.recordHop } : undefined;
   let entryState = emptyState();
   const n = Math.min(paramNames.length, callArgs.length);
   for (let i = 0; i < n; i++) {
     const paramName = paramNames[i];
+    const argCtx = argumentContext(ctx, i);
     const resolved = resolveExprIdentities(callerState, callArgs[i], argCtx);
     const residual = residualFlat(resolved.flat, resolved.byPath);
     for (const id of residual) entryState = addIdentity(entryState, paramName, id);
@@ -458,6 +461,12 @@ export function createCallSummaryResolver(cache, lookupCallee) {
             fromPath: null, toPath: path, dataElementId: id,
             syntacticPath: null, widenReason: null, lossReason: null,
             peerScope: qid, peerContext: calleeContext,
+            ...(ctx.correlationVersion === 2 ? {
+              callRole: 'bind', invocationId: callInvocationId(ctx),
+              formalPosition: fn.params.indexOf(path.split('.')[0]),
+              relPath: path.includes('.') ? path.slice(path.indexOf('.') + 1) : '',
+              toVersion: 'entry',
+            } : null),
           });
         }
       }
@@ -493,7 +502,11 @@ export function createCallSummaryResolver(cache, lookupCallee) {
       // deepest call always wins). Passing a `context` field here would be
       // silently overwritten and is dead code.
       const calleeCtx = ctx?.recordHop
-        ? { resolveCallSummary, recordHop: ctx.recordHop }
+        ? {
+            resolveCallSummary,
+            recordHop: ctx.correlationVersion === 2 ? calleeRecorder(ctx) : ctx.recordHop,
+            ...(ctx.correlationVersion === 2 ? { correlationVersion: 2 } : null),
+          }
         : { resolveCallSummary };
       const result = analyzeFunctionFieldIdentity(fn, es, calleeCtx);
       return summaryFromAnalysisResult(result);

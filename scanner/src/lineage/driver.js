@@ -1,4 +1,5 @@
 import { emptyState, hashState } from './field-identity.js';
+import { resolveCorrelationVersion } from './correlation.js';
 import { computeScc } from '../graph/scc.js';
 import { solveRecursiveComponent } from './scc-solver.js';
 import { analyzeFunctionFieldIdentity } from './engine.js';
@@ -147,6 +148,9 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     // thread opts.recordHop CONDITIONALLY so a caller that supplies none gets
     // a byte-identical `{ resolveCallSummary }` object (Decision 7.2).
     const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+    // DAG-03: correlation version 2 labels hops with derivation, value-version
+    // and invocation evidence. Off unless asked for; needs a recorder.
+    if (opts.recordHop && resolveCorrelationVersion(opts.correlationVersion) === 2) ctx.correlationVersion = 2;
     // DAG-07: optional per-function iteration ceiling and cooperative stop
     // (engine.js ignores a non-positive-integer ceiling, so this cannot loosen it).
     if (opts.maxIterations !== undefined) ctx.maxIterations = opts.maxIterations;

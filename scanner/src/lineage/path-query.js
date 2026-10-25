@@ -23,6 +23,11 @@
 
 import { pathId } from './ids.js';
 
+// Bound on the call-context stack a version 2 walk tracks. Kept here, not
+// imported from correlation.js, because this module's only import is ids.js
+// (§15.1); correlation.test.js pins the two values equal.
+export const DEFAULT_MAX_CALL_DEPTH = 8;
+
 /**
  * All `opts`-overridable. Two-plus orders of magnitude above what every
  * fixture measured in the design task's PoC needs (§15.11's largest row
@@ -72,6 +77,9 @@ const TERMINAL_ORIGIN = 'origin';
 const TERMINAL_INCOMPLETE = 'incomplete-record';
 const TERMINAL_CYCLE = 'cycle';
 const TERMINAL_DEPTH = 'depth-limit';
+// Version 2 only: every incoming edge of the node would have returned to a
+// call site other than the one this walk entered through.
+const TERMINAL_UNBALANCED = 'unbalanced-call';
 
 /**
  * §15.9's stand-in for Sub-project D's source/sink registry, which does not
@@ -113,6 +121,13 @@ function hopOf(edge) {
     annotations: edge.annotations,
     originated: edge.originated,
     truncated: edge.truncated,
+    // Version 2 edges only; a version 1 hop has exactly the fields it had.
+    ...(edge.correlationVersion ? {
+      correlationVersion: edge.correlationVersion,
+      correlation: edge.correlation,
+      callBoundary: edge.callBoundary,
+      invocationId: edge.invocationId,
+    } : null),
   };
 }
 
@@ -122,7 +137,7 @@ function hopOf(edge) {
  * a flow source -> sink, so the arrays are reversed here, once, at the
  * point a candidate is emitted.
  */
-function materialize(store, nodesRev, edgesRev, terminalReason) {
+function materialize(store, nodesRev, edgesRev, terminalReason, callContext = null) {
   const nodeIds = [...nodesRev].reverse();
   const edges = [...edgesRev].reverse();
   const hops = edges.map((e) => hopOf(e));
@@ -162,6 +177,9 @@ function materialize(store, nodesRev, edgesRev, terminalReason) {
     lossHopCount,
     ambiguousHopCount,
     analysisTruncated,
+    // Correlation version 2 only (absent, not null, in version 1): whether the
+    // walk had to abstract the call context to stay within its bound.
+    ...(callContext ? { callContext } : null),
     // §15.7's diversity signature. `transformation` and `protection` are
     // DELIBERATELY absent — Sub-project D / Milestone 2 own them; using
     // today's widen/loss reasons as a stand-in for either would be
@@ -257,13 +275,32 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
 
   const orphaned = new Set(store.diagnostics().orphanedPeerSources.map((o) => o.nodeId));
 
+  // Correlation version 2 (DAG-03, R03.5): a precise witness is a REALIZABLE
+  // path, so a return edge may only be followed back to the call it returned
+  // to. `path.calls` is the stack of invocations the backward walk has
+  // entered (a return edge pushes its invocation, the matching call edge
+  // pops it). Past `maxCallDepth` the stack is abstracted: further entries
+  // are only counted (`overflow`), a call edge met while any are pending is
+  // accepted without a match, and the path says so in `callContext`.
+  const v2 = typeof store.correlationVersion === 'function' && store.correlationVersion() === 2;
+  const maxCallDepth = Number.isInteger(opts.maxCallDepth) && opts.maxCallDepth >= 1 ? opts.maxCallDepth : DEFAULT_MAX_CALL_DEPTH;
+  const balancing = { enabled: v2, maxCallDepth, unbalancedPruned: 0, prunedEdgeIds: [], contextWidenedPaths: 0 };
+  if (v2) {
+    result.correlationVersion = 2;
+    result.budget.maxCallDepth = maxCallDepth;
+  }
+
   const candidates = [];
   let expansions = 0;
   // DAG-07 R07.6: ONE shared path (arrays + visited set) that is unwound on
   // backtrack, instead of copying both for every frame (which made a chain
   // of depth d cost O(d^2)). A frame is only {nodeId, edge, hops}; visit
   // order and expansion accounting are identical to the copying version.
-  const path = { nodesRev: [startNodeId], edgesRev: [], onPath: new Set([startNodeId]) };
+  const path = {
+    nodesRev: [startNodeId], edgesRev: [], onPath: new Set([startNodeId]),
+    calls: [], overflow: 0, effects: [], widened: 0,
+  };
+  const ctxOf = () => (v2 ? { balanced: path.widened === 0, widened: path.widened > 0, maxCallDepth } : null);
   const stack = [{ nodeId: startNodeId, edge: null, hops: 0 }];
 
   while (stack.length > 0) {
@@ -276,8 +313,28 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     while (path.edgesRev.length > parentLen) {
       path.edgesRev.pop();
       path.onPath.delete(path.nodesRev.pop());
+      if (v2) {
+        const eff = path.effects.pop();
+        if (eff?.push) path.calls.pop();
+        if (eff?.pop) path.calls.push(eff.pop);
+        if (eff?.overflowInc) path.overflow -= 1;
+        if (eff?.overflowDec) path.overflow += 1;
+        if (eff?.widened) path.widened -= 1;
+      }
     }
     if (frame.edge) {
+      if (v2) {
+        const eff = {};
+        const b = frame.edge.callBoundary;
+        if (b === 'return') {
+          if (path.calls.length < maxCallDepth) { path.calls.push(frame.edge.invocationId); eff.push = true; }
+          else { path.overflow += 1; eff.overflowInc = true; eff.widened = true; path.widened += 1; }
+        } else if (b === 'call') {
+          if (path.overflow > 0) { path.overflow -= 1; eff.overflowDec = true; eff.widened = true; path.widened += 1; }
+          else if (path.calls.length > 0) eff.pop = path.calls.pop();
+        }
+        path.effects.push(eff);
+      }
       path.edgesRev.push(frame.edge);
       path.nodesRev.push(frame.nodeId);
       path.onPath.add(frame.nodeId);
@@ -289,7 +346,7 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     if (incoming.length === 0) {
       if (hops > 0) {
         candidates.push(materialize(store, path.nodesRev, path.edgesRev,
-          orphaned.has(frame.nodeId) ? TERMINAL_INCOMPLETE : TERMINAL_ORIGIN));
+          orphaned.has(frame.nodeId) ? TERMINAL_INCOMPLETE : TERMINAL_ORIGIN, ctxOf()));
       }
       continue;
     }
@@ -318,28 +375,50 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // literal zero-hop budget will not get one.
     if (hops >= budget.maxDepth && hops > 0) {
       truncationReasons.add('depth-limit');
-      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_DEPTH));
+      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_DEPTH, ctxOf()));
       continue;
     }
 
     let extended = 0;
     let clipped = 0;
+    let unbalanced = 0;
     for (const e of incoming) {
       expansions += 1;
+      if (v2 && e.callBoundary === 'call' && path.overflow === 0 && path.calls.length > 0
+          && path.calls[path.calls.length - 1] !== e.invocationId) {
+        // The walk entered the callee through another call site, so this
+        // edge belongs to a call/return pair no execution can produce.
+        unbalanced += 1;
+        balancing.unbalancedPruned += 1;
+        if (balancing.prunedEdgeIds.length < 10) balancing.prunedEdgeIds.push(e.id);
+        continue;
+      }
       if (path.onPath.has(e.fromNodeId)) { clipped += 1; continue; }
       extended += 1;
       stack.push({ nodeId: e.fromNodeId, edge: e, hops: hops + 1 });
     }
     result.cyclesClipped += clipped;
+    if (extended === 0 && clipped === 0 && unbalanced > 0 && hops > 0) {
+      // Everything that led here is a mismatched call/return pair. Say so,
+      // as a partial path, instead of letting an empty answer read as
+      // "nothing flows".
+      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_UNBALANCED, ctxOf()));
+      continue;
+    }
     if (extended === 0 && hops > 0) {
       // Every continuation would revisit a node already on this path. The
       // branch ends HERE, and it ends because of a cycle — never silently
       // as if this node were the flow's origin.
-      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_CYCLE));
+      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_CYCLE, ctxOf()));
     }
   }
 
   result.budget.expansionsUsed = expansions;
+  if (v2) {
+    balancing.contextWidenedPaths = candidates.filter((p) => p.callContext?.widened).length;
+    balancing.prunedEdgeIds.sort();
+    result.balancing = balancing;
+  }
   result.enumeratedPathCount = candidates.length;
   // Task 2 review finding 1: this is scoped to EVERY complete path found
   // during enumeration, not just the ones the caps below end up returning

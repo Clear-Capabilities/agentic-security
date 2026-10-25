@@ -442,7 +442,10 @@ export function buildCoverageLedger(built, opts = {}) {
     paths: { enumerated: built.stats.pathsEnumerated, projected: built.stats.pathsProjected, truncatedQueries: built.stats.truncatedQueries },
     budgets: { ...PATH_QUERY_DEFAULTS, ...(opts.budget ?? {}) },
 
-    provenance: { hops: built.hops.length, pnodes: storeStats.nodes, pedges: storeStats.edges },
+    provenance: {
+      hops: built.hops.length, pnodes: storeStats.nodes, pedges: storeStats.edges,
+      ...(storeStats.correlationVersion ? { correlationVersion: storeStats.correlationVersion } : null),
+    },
     // DAG-07: present only when some function stopped early, so a complete
     // run's ledger (and its digest) is unchanged.
     ...(built.analysisCompletion && built.analysisCompletion.status !== 'complete'
