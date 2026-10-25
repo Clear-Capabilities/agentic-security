@@ -9678,9 +9678,18 @@ function _deterministicFileTimings(timings) {
       };
       // DAG-07 R07.7: with AGENTIC_SECURITY_LINEAGE_DEADLINE_MS set, the build runs in an
       // owned worker with a watchdog. Unset: the in-process call, exactly as before.
-      const _lr = _lineageDeadlineMs
+      let _lr = _lineageDeadlineMs
         ? await buildLineageGraphOwned(fileContents, { ..._lineageOpts, onProgress: undefined, perFile: undefined, deadlineMs: _lineageDeadlineMs }).done
         : buildLineageGraph(callGraph, _lineageOpts);
+      // The worker entry is a separate file that the single-file bundle does not ship.
+      // When the worker cannot start, fall back to the in-process build with the
+      // cooperative deadline (no watchdog for a non-polling worker, but the analysis
+      // still stops and reports `cancelled`); never fail the build over it.
+      if (_lineageDeadlineMs && _lr.status === 'failed' && /Cannot find module|ERR_MODULE_NOT_FOUND|owned-worker/i.test(String(_lr.failure || ''))) {
+        // The deadline branch skipped the shared IR (the worker rebuilds its own); build it now.
+        const _ir = _sharedIR || (_sharedIR = await _buildIR());
+        _lr = buildLineageGraph(_ir.callGraph, { ..._lineageOpts, perFile: _ir.perFile, deadline: Date.now() + _lineageDeadlineMs });
+      }
       if (_lr.terminatedByWatchdog) _lineageStatus.failure = _lr.failure;
       if (_lr.status === 'complete') {
         _lineageGraph = _lr.graph;
