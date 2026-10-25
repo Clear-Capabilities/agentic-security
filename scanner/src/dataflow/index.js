@@ -6,11 +6,8 @@ import { applyPathFeasibility, buildConstantFnMap } from './path-feasibility.js'
 import { SummaryCache, entryStateFromCall } from './summaries.js';
 import { rhsReachableFunctions, shouldAnalyzeUnderRhs } from './tabulation.js';
 import { annotateBackwardSlices } from './backward.js';
-import {
-  readIncrementalState, validateIncrementalState, diffFileHashes,
-  hashFileContent, pickReusableSummaries, seedSummaryCache,
-  serializeSummaries, commitIncrementalState,
-} from './incremental.js';
+// DAG-05: dependency-complete incremental analysis (see incremental-session.js).
+import { beginIncrementalSession, engineOptionsFor, finishIncrementalSession } from './incremental-session.js';
 import { buildPointsTo } from './points-to.js';
 import { buildClassHierarchy, annotateRTA } from '../ir/class-hierarchy.js';
 import { annotateSoftTaint } from './soft-taint.js';
@@ -42,62 +39,7 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       opts = { ...opts, _rhsReachable: ctx.reachable, _rhsCheck: shouldAnalyzeUnderRhs };
     }
   }
-  // v0.69 — cross-scan incremental cache (AGENTIC_SECURITY_INCREMENTAL=1).
-  // Read persisted state, seed the SummaryCache with summaries from files
-  // whose content hasn't changed, then hand it to runTaintEngine. After,
-  // serialize the cache and commit to disk.
   const incrementalEnabled = process.env.AGENTIC_SECURITY_INCREMENTAL === '1';
-  let preSeededCache = null;
-  let priorState = null;
-  let currentFileHashes = null;
-  if (incrementalEnabled && opts.scanRoot && opts.fileContents) {
-    priorState = readIncrementalState(opts.scanRoot);
-    const currentVersion = {
-      scanner: opts.scannerVersion || 'unknown',
-      rules: opts.rulesDigest || `catalog:${_catalogSize()}`,
-    };
-    // Compute current file hashes UNCONDITIONALLY — the first scan (and any
-    // scan after a version/rule invalidation) must persist a baseline so the
-    // NEXT scan has something to reuse. This previously lived inside the
-    // valid-state branch, so a cold cache never committed and incremental was
-    // a permanent no-op (the commit guard at the bottom keys on currentFileHashes).
-    currentFileHashes = {};
-    for (const [fp, content] of Object.entries(opts.fileContents)) {
-      currentFileHashes[fp] = hashFileContent(content);
-    }
-    const valid = validateIncrementalState(priorState, currentVersion);
-    if (valid.valid) {
-      const diff = diffFileHashes(priorState.files || {}, currentFileHashes);
-      const changedQids = new Set();
-      // Map a changed file to the qids it owns. perFileIR exposes file→fns.
-      for (const fp of [...diff.changed, ...diff.added, ...diff.removed]) {
-        const ir = perFileIR[fp];
-        if (!ir) continue;
-        for (const fn of (ir.functions || [])) changedQids.add(fn.qid);
-      }
-      const rawPayload = (priorState.summaries && priorState.summaries.summaries) || priorState.summaries || {};
-      // DAG-07 R07.3: only summaries explicitly recorded as EMPTY-entry are
-      // restored. A summary written by an older format has no entry-context
-      // marker and may have been computed under a tainted entry (the old
-      // serializer kept whichever context came last); restoring it as an
-      // empty-entry summary would let a tainted call be answered with it.
-      const persistedPayload = {};
-      let discardedLegacy = 0;
-      for (const [q, v] of Object.entries(rawPayload)) {
-        if (v && v.entryContext === 'empty') persistedPayload[q] = v; else discardedLegacy += 1;
-      }
-      const callerOfQid = (priorState.summaries && priorState.summaries.callers) || {};
-      const { reusable } = pickReusableSummaries(persistedPayload, callerOfQid, changedQids);
-      preSeededCache = new SummaryCache();
-      const seededN = seedSummaryCache(preSeededCache, persistedPayload, reusable);
-      preSeededCache._incrementalSeeded = seededN;
-      preSeededCache._incrementalReusable = reusable.size;
-      preSeededCache._incrementalDiscardedLegacy = discardedLegacy;
-    } else {
-      // Stale → caller should drop; we just don't seed.
-      priorState = null;
-    }
-  }
   // PRD R6/R11 (docs/DETECTION_GAP_REMEDIATION_PRD.md): Class Hierarchy
   // Analysis. Built once per scan (mirrors the points-to graph immediately
   // below) and threaded through opts so the taint engine can (a) narrow
@@ -132,12 +74,18 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // Runs the formal Reps-Horwitz-Sagiv tabulation in parallel with the
   // worklist engine. We MERGE findings — the IFDS solver may catch
   // context-sensitive flows the k=2 cache joined out. Deduped by sink+line.
+  // DAG-05: the session decides warm or cold from content fingerprints (it needs the
+  // call graph and class hierarchy built above) and restores typed contexts.
+  const incrementalSession = beginIncrementalSession({ enabled: incrementalEnabled, opts, perFileIR, callGraph, cha: classHierarchy });
   let findings = runTaintEngine(perFileIR, callGraph, {
     ...opts,
-    summaryCache: preSeededCache || undefined,
+    ...engineOptionsFor(incrementalSession),
     _pointsTo: pointsToGraph || undefined,
     _cha: classHierarchy || undefined,
   });
+  const engineOutput = findings;
+  // DAG-05: provenance + persistence happen right after the engine, on the engine's own array.
+  const incrementalStats = finishIncrementalSession(incrementalSession, engineOutput);
   if (process.env.AGENTIC_SECURITY_IFDS === '1') {
     try {
       const ifdsFindings = runIfdsTaintEngine(perFileIR, callGraph, opts);
@@ -166,29 +114,9 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
     } catch { /* privacy-deep failure should not fail the scan */ }
   }
   for (const f of findings) f._pathFeasibilityPruned = totalPruned;
-  if (preSeededCache) {
-    const reuseNotes = preSeededCache.completionNotes().filter((n) => n.reason === 'incremental-empty-entry-reuse');
-    const truncated = preSeededCache._incrementalFindingsTruncated || 0;
-    const reasons = [];
-    if (reuseNotes.length) reasons.push('incremental-empty-entry-reuse');
-    if (truncated) reasons.push('incremental-findings-truncated');
-    Object.defineProperty(findings, '_incrementalStats', {
-      value: {
-        seeded: preSeededCache._incrementalSeeded || 0,
-        reusable: preSeededCache._incrementalReusable || 0,
-        discardedLegacy: preSeededCache._incrementalDiscardedLegacy || 0,
-        // DAG-07 R07.3: reuse that stood in for a tainted call context, or
-        // replayed a truncated findings list, is partial analysis of those
-        // entries, not completed analysis of them.
-        completion: {
-          status: reasons.length ? 'partial' : 'complete',
-          reasons,
-          emptyEntryReusedForTaintedContexts: reuseNotes.reduce((n, x) => n + x.count, 0),
-          summariesWithTruncatedFindings: truncated,
-        },
-      },
-      enumerable: false,
-    });
+  if (incrementalStats) {
+    Object.defineProperty(findings, '_incrementalStats', { value: incrementalStats, enumerable: false });
+    if (findings !== engineOutput) Object.defineProperty(engineOutput, '_incrementalStats', { value: incrementalStats, enumerable: false });
   }
   if (rhsCompletion) Object.defineProperty(findings, '_rhsCompletion', { value: rhsCompletion, enumerable: false });
   // P1.4 — backward slice (opt-in via AGENTIC_SECURITY_BACKWARD_SLICE=1).
@@ -249,42 +177,6 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
         if (p && typeof p.then === 'function') p.catch(() => {});
       }
     } catch { /* prover failure should not fail the scan */ }
-  }
-  // v0.69 — commit incremental state after a successful scan.
-  if (incrementalEnabled && opts.scanRoot && currentFileHashes) {
-    const cache = findings._summaryCache;
-    const summaries = cache ? serializeSummaries(cache) : {};
-    // Reverse call-graph (qid → callers) — derive from callGraph.
-    const callers = {};
-    if (callGraph && callGraph.functions) {
-      for (const fn of callGraph.functions.values()) {
-        if (!Array.isArray(fn.calls)) continue;
-        for (const c of fn.calls) {
-          // fn.calls entries are objects ({site, callee, args, line}); using one
-          // as an object key stringifies it to "[object Object]" and collapses
-          // every entry into a single bogus bucket. Key by the RESOLVED qid so
-          // this map is queryable by the qids the worklist actually uses.
-          const name = c && typeof c === 'object' ? c.callee : c;
-          if (!name) continue;
-          // resolveKnownCallee (not resolve): a raw fn.calls name may be a
-          // flattened member-call string ("loader.read"); the plain
-          // resolve() would guess via its bare-tail fallback and invent an
-          // edge to an unrelated same-named function. See callgraph.js.
-          const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
-          if (!qid) continue;
-          if (!callers[qid]) callers[qid] = [];
-          callers[qid].push(fn.qid);
-        }
-      }
-    }
-    commitIncrementalState(opts.scanRoot, {
-      files: currentFileHashes,
-      summaries,
-      callers,
-    }, {
-      scanner: opts.scannerVersion || 'unknown',
-      rules: opts.rulesDigest || `catalog:${_catalogSize()}`,
-    });
   }
   return findings;
 }

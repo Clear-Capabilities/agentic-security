@@ -1,0 +1,460 @@
+{
+  "label": "synthetic-300x8",
+  "kind": "generated layered project",
+  "summaryBudget": "100000000",
+  "files": 300,
+  "functions": 3300,
+  "reps": 3,
+  "edits": 8,
+  "runs": {
+    "cold": {
+      "irMs": [
+        461.1,
+        365.4,
+        343.5
+      ],
+      "deepMs": [
+        548.1,
+        510.6,
+        500.7
+      ]
+    },
+    "coldCommit": {
+      "irMs": [
+        352
+      ],
+      "deepMs": [
+        684.5
+      ],
+      "stats": {
+        "mode": "cold",
+        "reason": "no prior state",
+        "provenance": {
+          "reusedFunctions": 0,
+          "recomputedFunctions": 3300,
+          "reusedFindings": 0,
+          "recomputedFindings": 60,
+          "restoredContexts": 0,
+          "contextsRejected": 0
+        },
+        "invalidation": null,
+        "timing": {
+          "fingerprintMs": 164,
+          "readMs": 1,
+          "planMs": 0,
+          "restoreMs": 0
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 164
+        },
+        "persistedMs": 20
+      }
+    },
+    "warmSame": {
+      "irMs": [
+        360.3,
+        413.7,
+        346.4
+      ],
+      "deepMs": [
+        179.8,
+        157.3,
+        139.6
+      ],
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3300,
+          "recomputedFunctions": 0,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6300,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3300,
+          "dirty": 0,
+          "byReason": {}
+        },
+        "timing": {
+          "fingerprintMs": 81,
+          "readMs": 17,
+          "planMs": 7,
+          "restoreMs": 15
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 81
+        },
+        "persistedMs": 17
+      }
+    }
+  },
+  "perEdit": [
+    {
+      "file": "src/m26.js",
+      "deepMs": 172.1,
+      "irMs": 372.9,
+      "deepSpeedup": 3,
+      "endToEndSpeedup": 1.6,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 76,
+          "readMs": 17,
+          "planMs": 11,
+          "restoreMs": 10
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 76
+        },
+        "persistedMs": 17
+      },
+      "parityWithCold": true
+    },
+    {
+      "file": "src/m217.js",
+      "deepMs": 141.7,
+      "irMs": 343.9,
+      "deepSpeedup": 3.6,
+      "endToEndSpeedup": 1.8,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 76,
+          "readMs": 17,
+          "planMs": 7,
+          "restoreMs": 10
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 76
+        },
+        "persistedMs": 14
+      },
+      "parityWithCold": true
+    },
+    {
+      "file": "src/m172.js",
+      "deepMs": 151.2,
+      "irMs": 343.9,
+      "deepSpeedup": 3.4,
+      "endToEndSpeedup": 1.8,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 83,
+          "readMs": 21,
+          "planMs": 8,
+          "restoreMs": 9
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 83
+        },
+        "persistedMs": 16
+      },
+      "parityWithCold": true
+    },
+    {
+      "file": "src/m294.js",
+      "deepMs": 120.8,
+      "irMs": 340.6,
+      "deepSpeedup": 4.2,
+      "endToEndSpeedup": 1.9,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 59,
+          "recomputedFindings": 1,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 65,
+          "readMs": 13,
+          "planMs": 7,
+          "restoreMs": 8
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 65
+        },
+        "persistedMs": 20
+      }
+    },
+    {
+      "file": "src/m24.js",
+      "deepMs": 157.1,
+      "irMs": 350.7,
+      "deepSpeedup": 3.3,
+      "endToEndSpeedup": 1.7,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 59,
+          "recomputedFindings": 1,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 78,
+          "readMs": 17,
+          "planMs": 7,
+          "restoreMs": 10
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 78
+        },
+        "persistedMs": 15
+      }
+    },
+    {
+      "file": "src/m92.js",
+      "deepMs": 137.1,
+      "irMs": 339,
+      "deepSpeedup": 3.7,
+      "endToEndSpeedup": 1.8,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 67,
+          "readMs": 18,
+          "planMs": 5,
+          "restoreMs": 13
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 67
+        },
+        "persistedMs": 14
+      }
+    },
+    {
+      "file": "src/m46.js",
+      "deepMs": 137.2,
+      "irMs": 350.5,
+      "deepSpeedup": 3.7,
+      "endToEndSpeedup": 1.8,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 66,
+          "readMs": 12,
+          "planMs": 11,
+          "restoreMs": 7
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 66
+        },
+        "persistedMs": 15
+      }
+    },
+    {
+      "file": "src/m53.js",
+      "deepMs": 123.8,
+      "irMs": 346.3,
+      "deepSpeedup": 4.1,
+      "endToEndSpeedup": 1.9,
+      "stats": {
+        "mode": "warm",
+        "reason": null,
+        "provenance": {
+          "reusedFunctions": 3296,
+          "recomputedFunctions": 4,
+          "reusedFindings": 60,
+          "recomputedFindings": 0,
+          "restoredContexts": 6292,
+          "contextsRejected": 0
+        },
+        "invalidation": {
+          "clean": 3296,
+          "dirty": 4,
+          "byReason": {
+            "changed-body-or-resolution": 1,
+            "depends-on-changed": 3
+          }
+        },
+        "timing": {
+          "fingerprintMs": 55,
+          "readMs": 12,
+          "planMs": 5,
+          "restoreMs": 7
+        },
+        "model": {
+          "functions": 3300,
+          "edges": 4498,
+          "coupled": 0,
+          "fingerprintMs": 55
+        },
+        "persistedMs": 19
+      }
+    }
+  ],
+  "summary": {
+    "coldDeepMsMedian": 510.6,
+    "coldIrMsMedian": 365.4,
+    "warmSameDeepMsMedian": 157.3,
+    "warmSameDeepSpeedup": 3.2,
+    "warmEditDeepMsMedian": 141.7,
+    "deepSpeedup": {
+      "median": 3.7,
+      "min": 3,
+      "max": 4.2
+    },
+    "endToEndSpeedup": {
+      "median": 1.8,
+      "min": 1.6,
+      "max": 1.9
+    },
+    "targetSpeedup": 3,
+    "editsMeetingTarget": {
+      "deepStage": "8/8",
+      "endToEnd": "0/8"
+    },
+    "metTargetAtMedian": {
+      "deepStage": true,
+      "endToEnd": false
+    },
+    "parity": {
+      "editsChecked": 3,
+      "unchangedRescanEqualsCold": true,
+      "holds": true
+    }
+  },
+  "node": "v24.20.0",
+  "platform": "darwin-arm64",
+  "cpus": 8,
+  "seed": 20260101,
+  "generatedBy": "bench/dag-incremental/run.mjs"
+}
