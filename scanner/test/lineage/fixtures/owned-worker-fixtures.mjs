@@ -13,6 +13,11 @@ export function unresponsive() {
   for (;;) { /* never yields, never polls */ }
 }
 
+/** A lineage-shaped body that never polls: only the watchdog can end it. */
+export function lineageUnresponsive() {
+  for (;;) { /* never yields, never polls */ }
+}
+
 export function quick(x) {
   return { doubled: x * 2 };
 }

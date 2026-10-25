@@ -160,6 +160,89 @@ test('scoring: flow labels match by data element, source kind and file; sink kin
   assert.deepEqual(scoreFlowLabel({ ...l, sourceKind: 'queue-message' }, flows), { reported: false, sinkMatch: false });
 });
 
+// ---- evidence measurements (replay, attribution, call/return) --------------------------------
+
+test('attribution scoring: correct field, sibling field, spurious flow and negative-label hits', async () => {
+  const { scoreFixtureAttribution, scoreRealAttribution } = await import('../../../bench/dag/lib/attribution.mjs');
+  const doc = { labels: [
+    { id: 'p1', type: 'flow', verdict: 'positive', field: 'note', sourceFile: 'a.js', sinkKind: 'queue' },
+    { id: 'p2', type: 'flow', verdict: 'positive', field: 'bio', sourceFile: 'a.js', sinkKind: 'database' },
+    { id: 'n1', type: 'flow', verdict: 'negative', field: 'secret' },
+  ] };
+  const flows = [
+    { fields: ['note'], files: ['a.js'], sinkKind: 'unresolved', sinkSub: 'file' }, // unresolved sink: field only
+    { fields: ['bio'], files: ['a.js'], sinkKind: 'queue', sinkSub: 'queue' }, // right field, wrong known sink
+    { fields: ['other'], files: ['a.js'], sinkKind: 'store', sinkSub: 'database' }, // field no label names
+    { fields: ['x'], files: ['z.js'], sinkKind: 'store', sinkSub: 'database' }, // not examined
+  ];
+  const r = scoreFixtureAttribution(doc, flows);
+  assert.equal(r.examined, 3);
+  assert.equal(r.correct, 1);
+  assert.equal(r.falseAttributions, 2);
+  assert.equal(r.unexamined, 1);
+  assert.equal(r.negativeLabelHits, 0);
+  assert.equal(scoreFixtureAttribution(doc, [{ fields: ['secret'], files: ['q.js'], sinkKind: 'store', sinkSub: 'database' }]).negativeLabelHits, 1);
+
+  const labels = { labels: [
+    { id: 'a', unit: 'u', file: 'f.js', line: 1, field: 'x', expectedField: 'x', verdict: 'correct' },
+    { id: 'b', unit: 'u', file: 'f.js', line: 2, field: 'y', expectedField: 'z', verdict: 'wrong-field' },
+    { id: 'c', unit: 'u', file: 'f.js', line: 3, field: 'w', expectedField: null, verdict: 'no-flow', expectedSourceKind: 'k' },
+  ] };
+  const mk = (field, line, kind = 'k') => ({ fields: [field], sources: [{ field, file: 'f.js', line }], sourceKind: kind });
+  const rr = scoreRealAttribution(labels, 'u', [mk('x', 1), mk('y', 2), mk('w', 3, 'other'), mk('q', 9)]);
+  assert.deepEqual([rr.correct, rr.wrongField, rr.spurious, rr.unlabeled, rr.sourceKindMismatch], [1, 1, 1, 1, 1]);
+});
+
+test('real-flow labels are well formed and point at real lines of the pinned sources when cached', (t) => {
+  const doc = JSON.parse(fs.readFileSync(path.join(DAG, 'labels', 'real-flows.json'), 'utf8'));
+  const ids = new Set();
+  for (const l of doc.labels) {
+    assert.ok(!ids.has(l.id), `duplicate ${l.id}`); ids.add(l.id);
+    assert.ok(doc.verdicts[l.verdict], l.id);
+    assert.ok(l.evidence && l.evidence.length > 10, l.id);
+    assert.equal(l.verdict === 'no-flow', l.expectedField === null, `${l.id}: expectedField is null exactly for no-flow`);
+  }
+  const cache = path.join(DAG, '.cache');
+  if (!fs.existsSync(cache)) { t.skip('bench/dag/.cache not acquired'); return; }
+  for (const l of doc.labels) {
+    const project = l.unit.split('/')[0];
+    const file = path.join(cache, project, l.file);
+    if (!fs.existsSync(path.join(cache, project))) continue;
+    const line = fs.readFileSync(file, 'utf8').split('\n')[l.line - 1] || '';
+    assert.ok(line.includes(l.field), `${l.id}: line ${l.line} does not mention ${l.field}`);
+  }
+});
+
+test('call/return checker: a return through another call site is impossible, a matched pair is not, a witness that starts inside a callee is not', async () => {
+  const { checkCallReturn } = await import('../../../bench/dag/lib/evidence-unit.mjs');
+  const nodes = {
+    arg1: { scope: 'caller', context: 'c' }, arg2: { scope: 'caller', context: 'c' }, param: { scope: 'callee', context: 'k' },
+    ret: { scope: 'callee', context: 'k' }, res1: { scope: 'caller', context: 'c' },
+  };
+  const store = { getNode: (id) => nodes[id] };
+  const hop = (from, to, site) => ({ fromNodeId: from, toNodeId: to, scope: 'caller', context: 'c', siteNodeId: site });
+  const ok = checkCallReturn(store, { hops: [hop('arg1', 'param', 's1'), hop('ret', 'res1', 's1')] });
+  assert.equal(ok.violation, null);
+  assert.deepEqual([ok.calls, ok.returns], [1, 1]);
+  const bad = checkCallReturn(store, { hops: [hop('arg2', 'param', 's2'), hop('ret', 'res1', 's1')] });
+  assert.equal(bad.violation.reason, 'returned-through-another-call-site');
+  const inside = checkCallReturn(store, { hops: [hop('ret', 'res1', 's1')] });
+  assert.equal(inside.violation, null);
+  assert.equal(inside.unmatchedReturns, 1);
+});
+
+test('evidence probe on the call/return fixture: version 1 yields impossible witnesses, version 2 none, and every bundle replays', async () => {
+  const { evidenceProbe } = await import('../../../bench/dag/lib/evidence-unit.mjs');
+  const r = evidenceProbe({ id: 'fixture/callreturn', dir: path.join(DAG, 'fixtures', 'callreturn', 'src'), prefix: '' });
+  assert.equal(r.status, 'ok');
+  assert.ok(r.callReturn.v1.impossible > 0, 'the checker finds the shared-callee mix-up in version 1');
+  assert.equal(r.callReturn.v2.impossible, 0);
+  assert.ok(r.callReturn.v2.balancingPrunedEdges > 0);
+  assert.equal(r.witness.replayed, r.witness.built);
+  assert.ok(r.witness.built > 0);
+  for (const [k, v] of Object.entries(r.witness.tamper)) assert.equal(v.rejected, v.attempted, k);
+});
+
 test('package.json exposes the check script and it is not part of the pre-push gate list', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(DAG, '..', '..', 'scanner', 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['bench:dag:check'], 'node ../bench/dag/run.mjs --check');

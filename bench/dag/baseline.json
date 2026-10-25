@@ -1,6 +1,6 @@
 {
  "note": "Deterministic facts only. Regenerate with: node bench/dag/run.mjs --update-baseline. Timing and memory are never stored here.",
- "recordedAtCommit": "c72f03970f08b538fc870059ec4965414b2293b7",
+ "recordedAtCommit": "511b13012989bab59fe40755bda0e3f62d75d7da",
  "deterministic": {
   "schema": 1,
   "units": {
@@ -329,21 +329,21 @@
   },
   "incremental": {
    "fixture": {
-    "summaryUnits": 12,
-    "restorable": 12,
+    "summaryUnits": 0,
+    "restorable": 0,
     "changedFiles": 1,
-    "changedUnits": 3,
-    "reused": 9,
-    "invalidated": 3,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
     "parityEqual": true
    },
    "fastify/examples": {
-    "summaryUnits": 90,
-    "restorable": 90,
+    "summaryUnits": 0,
+    "restorable": 0,
     "changedFiles": 1,
-    "changedUnits": 5,
-    "reused": 85,
-    "invalidated": 5,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
     "parityEqual": true
    }
   },
@@ -569,6 +569,322 @@
     "verifyScc": true
    }
   },
-  "evidenceReplay": "skipped"
+  "evidenceReplay": "measured",
+  "evidence": {
+   "fixture/multiservice": {
+    "witness": {
+     "sinksWithPaths": 5,
+     "attempted": 5,
+     "buildRefused": 0,
+     "built": 5,
+     "builtCrossScope": 0,
+     "replayed": 5,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "5/5",
+      "edge-altered-unsigned": "5/5",
+      "source-blob-altered": "5/5",
+      "graph-altered": "5/5"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "examined": 3,
+     "correct": 3,
+     "falseAttributions": 0,
+     "negativeLabelHits": 0,
+     "missingPositive": [
+      "ms:F4",
+      "ms:F5",
+      "ms:F6"
+     ]
+    }
+   },
+   "fixture/callreturn": {
+    "witness": {
+     "sinksWithPaths": 7,
+     "attempted": 7,
+     "buildRefused": 0,
+     "built": 7,
+     "builtCrossScope": 7,
+     "replayed": 7,
+     "replayedCrossScope": 7,
+     "replayFailed": 0,
+     "completeBundles": 7,
+     "tamper": {
+      "edge-altered-resigned": "7/7",
+      "edge-altered-unsigned": "7/7",
+      "source-blob-altered": "7/7",
+      "graph-altered": "7/7"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 7,
+      "paths": 24,
+      "pathsWithCallOrReturn": 17,
+      "impossible": 6,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 7,
+      "paths": 8,
+      "pathsWithCallOrReturn": 8,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 4,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": null
+   },
+   "express/lib": {
+    "witness": {
+     "sinksWithPaths": 2,
+     "attempted": 2,
+     "buildRefused": 0,
+     "built": 2,
+     "builtCrossScope": 0,
+     "replayed": 2,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 2,
+     "tamper": {
+      "edge-altered-resigned": "2/2",
+      "edge-altered-unsigned": "2/2",
+      "source-blob-altered": "2/2",
+      "graph-altered": "2/2"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "express/examples": {
+    "witness": {
+     "sinksWithPaths": 31,
+     "attempted": 31,
+     "buildRefused": 0,
+     "built": 31,
+     "builtCrossScope": 0,
+     "replayed": 31,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 31,
+     "tamper": {
+      "edge-altered-resigned": "31/31",
+      "edge-altered-unsigned": "31/31",
+      "source-blob-altered": "31/31",
+      "graph-altered": "31/31"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 31,
+      "paths": 39,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 30,
+      "paths": 38,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 7,
+     "unlabeled": 0,
+     "correct": 6,
+     "wrongField": 0,
+     "spurious": 1,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/lib": {
+    "witness": {
+     "sinksWithPaths": 15,
+     "attempted": 15,
+     "buildRefused": 0,
+     "built": 15,
+     "builtCrossScope": 14,
+     "replayed": 15,
+     "replayedCrossScope": 14,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "15/15",
+      "edge-altered-unsigned": "15/15",
+      "source-blob-altered": "15/15",
+      "graph-altered": "15/15"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 15,
+      "paths": 125,
+      "pathsWithCallOrReturn": 48,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 10
+     },
+     "v2": {
+      "sinks": 15,
+      "paths": 93,
+      "pathsWithCallOrReturn": 56,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 6
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/examples": {
+    "witness": {
+     "sinksWithPaths": 4,
+     "attempted": 4,
+     "buildRefused": 0,
+     "built": 4,
+     "builtCrossScope": 0,
+     "replayed": 4,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 4,
+     "tamper": {
+      "edge-altered-resigned": "4/4",
+      "edge-altered-unsigned": "4/4",
+      "source-blob-altered": "4/4",
+      "graph-altered": "4/4"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 4,
+     "unlabeled": 0,
+     "correct": 4,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 1
+    }
+   }
+  }
  }
 }

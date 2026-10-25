@@ -29,6 +29,7 @@ import { acquire, CACHE } from './acquire.mjs';
 import { FAMILIES } from './synthetic/generate.mjs';
 import { isHeldOut, outcome, scoreSiteLabel, scoreFlowLabel, aggregate } from './lib/labels.mjs';
 import { renderSummary } from './lib/summary.mjs';
+import { scoreFixtureAttribution, scoreRealAttribution } from './lib/attribution.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -50,6 +51,7 @@ if (flag('--child')) {
   try {
     if (spec.kind === 'scan') result = await (await import('./lib/scan-unit.mjs')).runUnit(spec);
     else if (spec.kind === 'incremental') result = await (await import('./lib/incremental.mjs')).incrementalProbe(spec);
+    else if (spec.kind === 'evidence') result = await (await import('./lib/evidence-unit.mjs')).evidenceProbe(spec);
     else if (spec.kind === 'synthetic') result = (await import('./synthetic/measure.mjs')).measureSynthetic(spec);
     else throw new Error(`unknown child kind ${spec.kind}`);
   } catch (e) {
@@ -75,7 +77,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(HERE, 'manifest.json'), 'u
 const realLabels = JSON.parse(fs.readFileSync(path.join(HERE, 'labels', 'real.json'), 'utf8')).labels;
 const fixtureLabelsDoc = JSON.parse(fs.readFileSync(path.join(HERE, 'labels', 'multiservice.json'), 'utf8'));
 const mutantsDoc = JSON.parse(fs.readFileSync(path.join(HERE, 'fixtures', 'mutants.json'), 'utf8'));
+const realFlowLabelsDoc = JSON.parse(fs.readFileSync(path.join(HERE, 'labels', 'real-flows.json'), 'utf8'));
 const FIXTURE_SRC = path.join(HERE, 'fixtures', 'multiservice', 'src');
+const CALLRETURN_SRC = path.join(HERE, 'fixtures', 'callreturn', 'src');
 
 const t0 = Date.now();
 const log = (m) => process.stderr.write(`[dag ${String(Math.round((Date.now() - t0) / 1000)).padStart(4)}s] ${m}\n`);
@@ -124,7 +128,7 @@ for (const p of manifest.projects) {
 }
 
 // ------------------------------------------------------------------- run
-const results = { real: {}, fixture: null, mutants: {}, incremental: {}, synthetic: {} };
+const results = { real: {}, fixture: null, mutants: {}, incremental: {}, synthetic: {}, evidence: {} };
 
 for (const u of realUnits) {
   const pr = ensureProject(u.project);
@@ -179,16 +183,54 @@ for (const family of FAMILIES) {
 }
 
 // ----------------------------------------------------------- evidence replay
-function findWitnessBundle() {
-  const hits = [];
-  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/^witness-bundle\.[cm]?js$/.test(e.name)) hits.push(path.relative(REPO, p)); } };
-  walk(path.join(REPO, 'scanner', 'src'));
-  return hits;
+// Each in-process evidence unit runs in its own child: witness bundles built
+// from the real hop stream and replayed, tamper rejection on a sample, the
+// reported flows (false source attribution), and call/return realizability
+// under correlation versions 1 and 2.
+const evidenceTargets = [
+  { id: 'fixture/multiservice', kind: 'fixture', dir: FIXTURE_SRC, prefix: '' },
+  { id: 'fixture/callreturn', kind: 'fixture', dir: CALLRETURN_SRC, prefix: '' },
+];
+for (const p of manifest.projects) {
+  if (p.language !== 'js') continue;
+  for (const root of p.scanRoots) {
+    if (QUICK && root.tier !== 'quick') continue;
+    if (!ensureProject(p.id).ok) continue;
+    evidenceTargets.push({ id: `${p.id}/${root.path}`, kind: 'real', dir: path.join(CACHE, p.id, root.path), prefix: root.path });
+  }
 }
-const wb = findWitnessBundle();
-const evidenceReplay = wb.length === 0
-  ? { status: 'skipped', reason: 'scanner/src has no witness-bundle module; there is no evidence bundle to replay' }
-  : { status: 'skipped', reason: `witness-bundle module present (${wb.join(', ')}) but bench/dag has no replay adapter yet; refusing to report a replay rate it did not measure` };
+for (const t of evidenceTargets) {
+  if (ONLY && !`evidence/${t.id}`.includes(ONLY) && !t.id.includes(ONLY)) continue;
+  log(`evidence ${t.id}`);
+  results.evidence[t.id] = { ...runChild({ kind: 'evidence', id: t.id, dir: t.dir, prefix: t.prefix }), targetKind: t.kind };
+}
+const evOk = Object.values(results.evidence).filter((r) => r.status === 'ok');
+const sum = (arr, f) => arr.reduce((a, r) => a + f(r), 0);
+const tamperTypes = ['edge-altered-resigned', 'edge-altered-unsigned', 'source-blob-altered', 'graph-altered'];
+const evidenceReplay = {
+  status: evOk.length ? 'measured' : 'skipped',
+  reason: evOk.length ? undefined : 'no evidence unit produced a result',
+  units: evOk.length,
+  sinksWithPaths: sum(evOk, (r) => r.witness.sinksWithPaths),
+  bundlesAttempted: sum(evOk, (r) => r.witness.bundlesAttempted),
+  built: sum(evOk, (r) => r.witness.built),
+  buildRefused: sum(evOk, (r) => r.witness.buildRefused),
+  replayed: sum(evOk, (r) => r.witness.replayed),
+  replayFailed: sum(evOk, (r) => r.witness.replayFailed),
+  builtCrossScope: sum(evOk, (r) => r.witness.builtCrossScope),
+  replayedCrossScope: sum(evOk, (r) => r.witness.replayedCrossScope),
+  completeBundles: sum(evOk, (r) => r.witness.completeBundles),
+  tamper: Object.fromEntries(tamperTypes.map((t) => [t, { attempted: sum(evOk, (r) => r.witness.tamper[t].attempted), rejected: sum(evOk, (r) => r.witness.tamper[t].rejected) }])),
+};
+
+// ------------------------------------------------ false source attribution
+const attribution = { fixture: null, real: {} };
+if (results.evidence['fixture/multiservice'] && results.evidence['fixture/multiservice'].status === 'ok') {
+  attribution.fixture = scoreFixtureAttribution(fixtureLabelsDoc, results.evidence['fixture/multiservice'].flows);
+}
+for (const [id, r] of Object.entries(results.evidence)) {
+  if (r.targetKind === 'real' && r.status === 'ok') attribution.real[id] = scoreRealAttribution(realFlowLabelsDoc, id, r.flows);
+}
 
 // -------------------------------------------------------------- scoring
 const labelRows = [];
@@ -268,7 +310,24 @@ for (const lang of ['js', 'haskell', 'nix']) {
 }
 
 // ------------------------------------------------- deterministic projection
-const det = { schema: 1, units: {}, labels: {}, fixture: {}, mutants: {}, incremental: {}, synthetic: {}, evidenceReplay: evidenceReplay.status };
+const det = { schema: 1, units: {}, labels: {}, fixture: {}, mutants: {}, incremental: {}, synthetic: {}, evidenceReplay: evidenceReplay.status, evidence: {} };
+for (const [id, r] of Object.entries(results.evidence)) {
+  if (r.status !== 'ok') { det.evidence[id] = { status: r.status }; continue; }
+  const w = r.witness;
+  const cr = (x) => ({ sinks: x.sinks, paths: x.paths, pathsWithCallOrReturn: x.pathsWithCallOrReturn, impossible: x.impossible, unmatchedReturnPaths: x.unmatchedReturnPaths, invalidBindingPaths: x.invalidBindingPaths, balancingPrunedEdges: x.balancingPrunedEdges, unbalancedTerminals: x.unbalancedTerminals, contextWidenedPaths: x.contextWidenedPaths, truncatedQueries: x.truncatedQueries });
+  const at = attribution.fixture && id === 'fixture/multiservice' ? attribution.fixture : attribution.real[id];
+  det.evidence[id] = {
+    witness: {
+      sinksWithPaths: w.sinksWithPaths, attempted: w.bundlesAttempted, buildRefused: w.buildRefused, built: w.built, builtCrossScope: w.builtCrossScope,
+      replayed: w.replayed, replayedCrossScope: w.replayedCrossScope, replayFailed: w.replayFailed, completeBundles: w.completeBundles,
+      tamper: Object.fromEntries(Object.entries(w.tamper).map(([k, v]) => [k, `${v.rejected}/${v.attempted}`])),
+    },
+    callReturn: { v1: cr(r.callReturn.v1), v2: cr(r.callReturn.v2) },
+    attribution: !at ? null : (id === 'fixture/multiservice'
+      ? { examined: at.examined, correct: at.correct, falseAttributions: at.falseAttributions, negativeLabelHits: at.negativeLabelHits, missingPositive: at.missingPositive }
+      : { labeled: at.labeled, unlabeled: at.unlabeled, correct: at.correct, wrongField: at.wrongField, spurious: at.spurious, sourceKindMismatch: at.sourceKindMismatch }),
+  };
+}
 for (const [id, r] of Object.entries(results.real)) {
   det.units[id] = r.status !== 'ok' ? { status: r.status } : {
     status: 'ok', files: r.files, findings: r.findings.length,
@@ -291,7 +350,7 @@ const out = {
   schema: 1, commit, worktreeDirty: dirty, generatedAt: new Date().toISOString(), wallClockSeconds: Math.round((Date.now() - t0) / 1000), env,
   manifestPins: manifest.projects.map((p) => ({ id: p.id, commit: p.commit, resolved: !!(acquired.get(p.id) || {}).ok })),
   languages, units: results.real, fixture: results.fixture && { ...results.fixture, findings: undefined, flowsRecorded: results.fixture.graph && results.fixture.graph.flows.length },
-  labelRows, fixtureRows, mutantRows, incremental: results.incremental, synthetic: results.synthetic, evidenceReplay, deterministic: det,
+  labelRows, fixtureRows, mutantRows, incremental: results.incremental, synthetic: results.synthetic, evidenceReplay, evidence: results.evidence, attribution, deterministic: det,
 };
 
 if (!CHECK && !NO_WRITE) {
@@ -328,7 +387,7 @@ if (CHECK) {
   const base = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).deterministic;
   const diffs = [];
   const partial = QUICK || !!ONLY;
-  for (const sec of ['units', 'labels', 'fixture', 'mutants', 'incremental', 'synthetic']) diffObj(det[sec], base[sec] || {}, `${sec}.`, diffs, { subsetOfBase: partial });
+  for (const sec of ['units', 'labels', 'fixture', 'mutants', 'incremental', 'synthetic', 'evidence']) diffObj(det[sec], base[sec] || {}, `${sec}.`, diffs, { subsetOfBase: partial });
   if (det.evidenceReplay !== base.evidenceReplay) diffs.push(`evidenceReplay: now ${det.evidenceReplay}, baseline ${base.evidenceReplay}`);
   const bad = Object.values(results.real).filter((r) => r.status !== 'ok');
   if (bad.length) diffs.push(`non-ok units: ${bad.map((r) => `${r.id}=${r.status}`).join(', ')}`);

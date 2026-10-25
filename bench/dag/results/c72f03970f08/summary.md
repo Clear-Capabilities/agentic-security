@@ -1,6 +1,6 @@
 # bench/dag results
 
-Commit `c72f03970f08` (worktree had uncommitted changes), mode **full**, reps 1, wall clock 304s, darwin-arm64, 8 CPUs, 16 GB, Node v24.20.0. Generated 2026-10-25T15:11:41.919Z.
+Commit `511b13012989` (worktree had uncommitted changes), mode **full**, reps 1, wall clock 234s, darwin-arm64, 8 CPUs, 16 GB, Node v24.20.0. Generated 2026-10-25T18:07:56.971Z.
 
 Timing and memory below are raw measurements from this host and are not part of the equality check. Everything else is deterministic and is what `--check` compares.
 
@@ -8,9 +8,9 @@ Timing and memory below are raw measurements from this host and are not part of 
 
 | Language | Units (ok/total) | Files | Labeled sample | Precision | Recall | Graph completion rate | Truncated query rate | p50 / p95 ms (n) | Peak RSS MB |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| js | 4/4 | 125 | TP 5 FP 20 FN 0 TN 2 (excluded 2) | 20.0% (5/25) | 100.0% (5/5) | 100.0% (4/4) | 0.0% (0/222) | 1069 / 6786 (4) | 347 |
-| haskell | 5/5 | 115 | TP 16 FP 0 FN 0 TN 3 (excluded 3) | 100.0% (16/16) | 100.0% (16/16) | 100.0% (5/5) | 0.0% (0/33) | 1422 / 8612 (5) | 378 |
-| nix | 3/3 | 295 | TP 6 FP 11 FN 0 TN 0 (excluded 1) | 35.3% (6/17) | 100.0% (6/6) | 100.0% (3/3) | n/a (0) | 71639 / 74755 (3) | 638 |
+| js | 4/4 | 125 | TP 5 FP 20 FN 0 TN 2 (excluded 2) | 20.0% (5/25) | 100.0% (5/5) | 100.0% (4/4) | 0.0% (0/222) | 741 / 3969 (4) | 412 |
+| haskell | 5/5 | 115 | TP 16 FP 0 FN 0 TN 3 (excluded 3) | 100.0% (16/16) | 100.0% (16/16) | 100.0% (5/5) | 0.0% (0/33) | 855 / 6377 (5) | 376 |
+| nix | 3/3 | 295 | TP 6 FP 11 FN 0 TN 0 (excluded 1) | 35.3% (6/17) | 100.0% (6/6) | 100.0% (3/3) | n/a (0) | 61563 / 68803 (3) | 789 |
 
 Denominators. Precision = TP / (TP + FP) over labeled sites the scanner reported on. Recall = TP / (TP + FN) over labeled positive sites. Completion rate = units whose lineage graph reports status `complete` over units that produced a graph. Truncated query rate = path queries that hit a budget over call-statement sink sites (the number of path queries the graph builder issues; the builder does not export a separate query count, so this denominator is an approximation, stated here rather than hidden). p95 over a small number of units is close to the maximum; with `--reps` it is over repeated samples of the same units, not over more projects.
 
@@ -95,39 +95,101 @@ Correct after mutation: 66.7% (4/6). Expected flips achieved: 60.0% (3/5). A mut
 
 | Unit | Summary units | Restorable | Changed files | Changed units | Reused | Invalidated | Warm/cold parity | Cold ms | Warm ms | Warm after edit ms | Cold after edit ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| fixture | 12 | 12 | 1 | 3 | 9 | 3 | equal (3 findings) | 389 | 133 | 126 | 128 |
-| fastify/examples | 90 | 90 | 1 | 5 | 85 | 5 | equal (10 findings) | 779 | 245 | 238 | 213 |
+| fixture | 0 | 0 | 1 | 0 | 0 | 0 | equal (3 findings) | 208 | 72 | 70 | 62 |
+| fastify/examples | 0 | 0 | 1 | 0 | 0 | 0 | equal (10 findings) | 311 | 138 | 126 | 118 |
 
 Counts are persisted summary units (functions the taint engine analysed), selected with the engine's own `diffFileHashes` and `pickReusableSummaries`; the edit appends one function to one JS file. Parity compares the findings of an incremental warm scan with a cold scan of the same edited tree.
 
-## Evidence replay
+## Evidence replay (witness bundles)
 
-Status: **skipped**. scanner/src has no witness-bundle module; there is no evidence bundle to replay
+For each sink with a reconstructed witness, up to 60 per unit (sinks in id order, a path that crosses a call boundary preferred), a bundle is built from the real hop stream with `buildWitnessBundle`, signed with an ephemeral Ed25519 key, and replayed offline with `verifyWitness` against the exact artifacts (graph, provenance export, source blobs). Replay success is replayed / built. The bundles are built in-process from `runFieldIdentityAnalysis` with `recordHop`, the same way the witness-bundle tests do; a scan does not persist the hop stream, so there is no `attest --witness` path to measure.
+
+| Unit | Sinks with a path | Bundles attempted | Build refused | Built | Replayed | Replay failed | Built across a call boundary | Replayed across a call boundary | Complete overall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fixture/multiservice | 5 | 5 | 0 | 5 | 100.0% (5/5) | 0 | 0 | n/a (0) | 100.0% (5/5) |
+| fixture/callreturn | 7 | 7 | 0 | 7 | 100.0% (7/7) | 0 | 7 | 100.0% (7/7) | 100.0% (7/7) |
+| express/lib | 2 | 2 | 0 | 2 | 100.0% (2/2) | 0 | 0 | n/a (0) | 100.0% (2/2) |
+| express/examples | 31 | 31 | 0 | 31 | 100.0% (31/31) | 0 | 0 | n/a (0) | 100.0% (31/31) |
+| fastify/lib | 15 | 15 | 0 | 15 | 100.0% (15/15) | 0 | 14 | 100.0% (14/14) | 33.3% (5/15) |
+| fastify/examples | 4 | 4 | 0 | 4 | 100.0% (4/4) | 0 | 0 | n/a (0) | 100.0% (4/4) |
+| **all** | 64 | 64 | 0 | 64 | 100.0% (64/64) | 0 | 21 | 100.0% (21/21) | 84.4% (54/64) |
+
+Replay failure codes: none. Build refusals: none.
+
+Tamper rejection, on the first 40 replayable bundles of each unit. The unmodified bundle replaying (above) is the control for each row.
+
+| Tamper | Rejected |
+| --- | --- |
+| a recorded edge changed and the bundle re-signed (only replay can catch it) | 100.0% (64/64) |
+| a recorded edge changed, signature left alone | 100.0% (64/64) |
+| a bound source file altered | 100.0% (64/64) |
+| the graph artifact replaced by a different graph | 100.0% (64/64) |
+
+A rejection rate is over the tamper kinds listed. It says nothing about tamper kinds not tried (a changed transfer model, a swapped provenance export with a consistent digest).
+
+## False source attribution
+
+A reported flow is a false attribution when the source field it names is not the field the hand label says reaches that sink. Definitions and the labelling method are in `lib/attribution.mjs` and `labels/real-flows.json`. This is not a recall measure: a flow the scanner did not report is not examined.
+
+Controlled multi-service fixture: 3 flows reported, 3 examined (the flow's source file is the source file of a positive flow label), 0 not examined. Correct: 100.0% (3/3). False attributions (sibling or spurious field): 0.0% (0/3). Reported flows matching a negative label (a field that must not reach that sink): 0.0% (0/3) of the negative labels. Positive labels with no matching reported flow: 3 (ms:F4, ms:F5, ms:F6).
+
+Limit: two of the three reported flows end in the same unresolved sink, so the fixture cannot tell the `note` flow from the `qty` flow by sink; it can only catch a field that no positive label for that file names.
+
+| Reported fields | Sink | Source files | Positive-label fields for that source file | Outcome |
+| --- | --- | --- | --- | --- |
+| qty | unresolved/file | api/server.js | bio, note, qty | correct |
+| note | unresolved/file | api/server.js | bio, note, qty | correct |
+| bio | store/database | api/server.js | bio, note, qty | correct |
+
+| Natural unit | Flows reported | Labeled | Unlabeled | Correct field | Wrong (sibling) field | Spurious (no flow) | Source kind differs from label |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| express/lib | 0 | 0 | 0 | n/a (0) | n/a (0) | n/a (0) | n/a (0) |
+| express/examples | 7 | 7 | 0 | 85.7% (6/7) | 0.0% (0/7) | 14.3% (1/7) | 0.0% (0/7) |
+| fastify/lib | 0 | 0 | 0 | n/a (0) | n/a (0) | n/a (0) | n/a (0) |
+| fastify/examples | 4 | 4 | 0 | 100.0% (4/4) | 0.0% (0/4) | 0.0% (0/4) | 25.0% (1/4) |
+| **all** | 11 | 11 | 0 | 90.9% (10/11) | 0.0% (0/11) | 9.1% (1/11) | 9.1% (1/11) |
+
+The two lib roots report no flows, so they contribute no denominator. Eleven flows is a small sample; one spurious flow moves the rate by nine points.
+
+## Call/return realizability of reconstructed witnesses
+
+Every sink with a reconstructed witness is queried in a version 1 store (the default) and a version 2 store (`correlationVersion: 2`) built from the same seeds. Each returned witness is walked source to sink by a checker that does not use invocation ids: a return edge must come back through the call site, caller activation and callee activation last entered. A witness that does not is impossible. A witness that begins inside a callee and returns to its caller has an unmatched return, which is realizable and not counted. Cap: 2000 sinks per store (not reached).
+
+| Unit | Sinks v1 / v2 | Witnesses v1 / v2 | Crossing a call boundary v1 / v2 | Impossible v1 | Impossible v2 | v2 mismatched edges pruned | v2 unbalanced-call terminals | v2 context-widened |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fixture/multiservice | 5 / 5 | 5 / 5 | 0 / 0 | n/a (0) | n/a (0) | 0 | 0 | 0 |
+| fixture/callreturn | 7 / 7 | 24 / 8 | 17 / 8 | 35.3% (6/17) | 0.0% (0/8) | 4 | 0 | 0 |
+| express/lib | 2 / 2 | 2 / 2 | 0 / 0 | n/a (0) | n/a (0) | 0 | 0 | 0 |
+| express/examples | 31 / 30 | 39 / 38 | 0 / 0 | n/a (0) | n/a (0) | 0 | 0 | 0 |
+| fastify/lib | 15 / 15 | 125 / 93 | 48 / 56 | 0.0% (0/48) | 0.0% (0/56) | 0 | 0 | 0 |
+| fastify/examples | 4 / 4 | 4 / 4 | 0 / 0 | n/a (0) | n/a (0) | 0 | 0 | 0 |
+
+All units: impossible witnesses v1 9.2% (6/65), v2 0.0% (0/64) (denominator: witnesses that cross at least one call or return edge). Natural units with a nonzero denominator in either version: fastify/lib; every other natural unit shows n/a (nothing crosses a call boundary), so it says nothing about the versions. The v1 and v2 stores enumerate their sinks independently (version 2 value-versions its nodes), so the sink counts can differ.
 
 ## Synthetic graph families (SCC computation)
 
 | Family / nodes | Edges | SCCs | Largest SCC | Matches construction | verifyScc | SCC ms | Peak RSS MB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| chain/1000 | 999 | 1000 | 1 | yes | ok | 4 | 55 |
-| chain/10000 | 9999 | 10000 | 1 | yes | ok | 33 | 90 |
-| chain/100000 | 99999 | 100000 | 1 | yes | ok | 199 | 341 |
-| chain/1000000 | 999999 | 1000000 | 1 | yes | ok | 2261 | 1415 |
-| ring/1000 | 1000 | 1 | 1000 | yes | ok | 4 | 54 |
-| ring/10000 | 10000 | 1 | 10000 | yes | ok | 24 | 76 |
-| ring/100000 | 100000 | 1 | 100000 | yes | ok | 143 | 212 |
-| ring/1000000 | 1000000 | 1 | 1000000 | yes | ok | 1605 | 1012 |
-| fanin/1000 | 999 | 1000 | 1 | yes | ok | 5 | 55 |
-| fanin/10000 | 9999 | 10000 | 1 | yes | ok | 38 | 91 |
-| fanin/100000 | 99999 | 100000 | 1 | yes | ok | 207 | 332 |
-| fanin/1000000 | 999999 | 1000000 | 1 | yes | ok | 2596 | 1404 |
-| fanout/1000 | 999 | 1000 | 1 | yes | ok | 5 | 55 |
-| fanout/10000 | 9999 | 10000 | 1 | yes | ok | 35 | 86 |
-| fanout/100000 | 99999 | 100000 | 1 | yes | ok | 204 | 291 |
-| fanout/1000000 | 999999 | 1000000 | 1 | yes | ok | 2188 | 1214 |
-| scc-rich/1000 | 1942 | 125 | 8 | yes | ok | 7 | 55 |
-| scc-rich/10000 | 19496 | 1250 | 8 | yes | ok | 38 | 85 |
-| scc-rich/100000 | 195562 | 12500 | 8 | yes | ok | 387 | 298 |
-| scc-rich/1000000 | 1953580 | 125000 | 8 | yes | ok | 3931 | 1272 |
+| chain/1000 | 999 | 1000 | 1 | yes | ok | 2 | 55 |
+| chain/10000 | 9999 | 10000 | 1 | yes | ok | 19 | 90 |
+| chain/100000 | 99999 | 100000 | 1 | yes | ok | 98 | 333 |
+| chain/1000000 | 999999 | 1000000 | 1 | yes | ok | 1251 | 1411 |
+| ring/1000 | 1000 | 1 | 1000 | yes | ok | 1 | 54 |
+| ring/10000 | 10000 | 1 | 10000 | yes | ok | 11 | 78 |
+| ring/100000 | 100000 | 1 | 100000 | yes | ok | 62 | 211 |
+| ring/1000000 | 1000000 | 1 | 1000000 | yes | ok | 887 | 1011 |
+| fanin/1000 | 999 | 1000 | 1 | yes | ok | 2 | 55 |
+| fanin/10000 | 9999 | 10000 | 1 | yes | ok | 19 | 93 |
+| fanin/100000 | 99999 | 100000 | 1 | yes | ok | 98 | 336 |
+| fanin/1000000 | 999999 | 1000000 | 1 | yes | ok | 1295 | 1421 |
+| fanout/1000 | 999 | 1000 | 1 | yes | ok | 2 | 55 |
+| fanout/10000 | 9999 | 10000 | 1 | yes | ok | 19 | 86 |
+| fanout/100000 | 99999 | 100000 | 1 | yes | ok | 105 | 291 |
+| fanout/1000000 | 999999 | 1000000 | 1 | yes | ok | 1192 | 1216 |
+| scc-rich/1000 | 1942 | 125 | 8 | yes | ok | 2 | 55 |
+| scc-rich/10000 | 19496 | 1250 | 8 | yes | ok | 17 | 91 |
+| scc-rich/100000 | 195562 | 12500 | 8 | yes | ok | 112 | 308 |
+| scc-rich/1000000 | 1953580 | 125000 | 8 | yes | ok | 1129 | 1609 |
 
 Seeded generators (seed fixed in run.mjs); every graph carries a SHA-256 digest of its edge list in the baseline. Largest size this run: 1,000,000 nodes (host memory permitting). These measure `src/graph/scc.js` on call-graph-shaped inputs; they do not run the taint engine on a million-node program.
 
@@ -135,18 +197,18 @@ Seeded generators (seed fixed in run.mjs); every graph carries a SHA-256 digest 
 
 | Unit | Language | Status | Files | Findings | Graph nodes / edges / flows | Graph status | ms (median) | Peak RSS MB |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| express/lib | js | ok | 6 | 1 | 5 / 0 / 0 | complete | 746 | 218 |
-| express/examples | js | ok | 70 | 96 | 10 / 7 / 7 | complete | 6786 | 347 |
-| fastify/lib | js | ok | 31 | 10 | 6 / 0 / 0 | complete | 1824 | 344 |
-| fastify/examples | js | ok | 18 | 10 | 5 / 4 / 4 | complete | 1069 | 214 |
-| scotty/Web | haskell | ok | 11 | 2 | 4 / 0 / 0 | complete | 725 | 213 |
-| scotty/examples | haskell | ok | 17 | 12 | 8 / 0 / 0 | complete | 1422 | 216 |
-| yesod/yesod-core | haskell | ok | 44 | 4 | 7 / 0 / 0 | complete | 2549 | 378 |
-| yesod/yesod-form | haskell | ok | 28 | 0 | 3 / 0 / 0 | complete | 706 | 318 |
-| yesod/yesod-auth | haskell | ok | 15 | 4 | 6 / 0 / 0 | complete | 8612 | 350 |
-| home-manager/modules/services | nix | ok | 218 | 47 | 2 / 2 / 2 | complete | 71639 | 638 |
-| nixpkgs-subset/nixos/modules/security | nix | ok | 36 | 50 | 2 / 5 / 5 | complete | 74755 | 335 |
-| nixpkgs-subset/nixos/modules/services/web-servers | nix | ok | 41 | 74 | 3 / 2 / 2 | complete | 71553 | 352 |
+| express/lib | js | ok | 6 | 1 | 5 / 0 / 0 | complete | 438 | 290 |
+| express/examples | js | ok | 70 | 96 | 10 / 7 / 7 | complete | 3969 | 412 |
+| fastify/lib | js | ok | 31 | 10 | 6 / 0 / 0 | complete | 1378 | 380 |
+| fastify/examples | js | ok | 18 | 10 | 5 / 4 / 4 | complete | 741 | 300 |
+| scotty/Web | haskell | ok | 11 | 2 | 4 / 0 / 0 | complete | 552 | 300 |
+| scotty/examples | haskell | ok | 17 | 12 | 8 / 0 / 0 | complete | 855 | 298 |
+| yesod/yesod-core | haskell | ok | 44 | 4 | 7 / 0 / 0 | complete | 1602 | 376 |
+| yesod/yesod-form | haskell | ok | 28 | 0 | 3 / 0 / 0 | complete | 515 | 325 |
+| yesod/yesod-auth | haskell | ok | 15 | 4 | 6 / 0 / 0 | complete | 6377 | 362 |
+| home-manager/modules/services | nix | ok | 218 | 47 | 2 / 2 / 2 | complete | 68803 | 789 |
+| nixpkgs-subset/nixos/modules/security | nix | ok | 36 | 50 | 2 / 5 / 5 | complete | 52788 | 583 |
+| nixpkgs-subset/nixos/modules/services/web-servers | nix | ok | 41 | 74 | 3 / 2 / 2 | complete | 61563 | 500 |
 
 ## Pinned projects
 
@@ -166,8 +228,8 @@ Seeded generators (seed fixed in run.mjs); every graph carries a SHA-256 digest 
 - Natural vulnerable examples are scarce. Most positives are example-app patterns (reflected parameters, Referer redirects) and framework weaknesses (fast hash, non-cryptographic session ids), not exploitable production bugs.
 - Labels were written by one person who saw the scanner output. The held-out subset is a discipline for future tuning, not independent ground truth.
 - Line-less structural findings are credited at file granularity (reported above).
-- Not measured here: false source attribution and impossible call/return witnesses. The graph export does not expose a per-witness field/call-return check, and no label set for them exists yet. They stay open requirements rather than being reported as zero.
-- Evidence replay is skipped while no witness-bundle module exists (see the Evidence replay section).
+- Evidence replay, false source attribution and call/return realizability are measured in the sections above on the JS/TS units, the multi-service fixture and the call/return fixture only. Haskell and Nix units are not part of these measurements.
+- The real-flow attribution labels (labels/real-flows.json) were written after listing the flows the scanner reported, so they judge those flows and are not independent of it.
 - Haskell and Nix are analysed statically and never built or evaluated. Nix selections are bounded subsets (see the manifest for roots and exclusions); the Nix numbers say nothing about the rest of nixpkgs or Home Manager.
 - Single run per unit by default; p50/p95 are over units (or over repeated samples with --reps) on one host. They are not a reference-host performance claim.
 - Synthetic families exercise the SCC computation only. They are not a substitute for a SBOM or conformance program for Haskell or Nix.

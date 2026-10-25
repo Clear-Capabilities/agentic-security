@@ -277,6 +277,9 @@ export function buildLineageGraph(callGraph, opts = {}) {
       observationWindowStart: opts.observationWindowStart,
       observationWindowEnd: opts.observationWindowEnd,
       onProgress: opts.onProgress,
+      // DAG-07 R07.7: cooperative stop, forwarded only when supplied.
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
     });
     const nixFiles = opts.fileContents && Object.keys(opts.fileContents).some((f) => /\.nix$/i.test(f));
     if (nixFiles) contributeNixConfigLineage(built.graph, opts.fileContents, { repository: opts.repository });

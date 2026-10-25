@@ -217,6 +217,7 @@ import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
+import { buildLineageGraphOwned, resolveLineageDeadlineMs } from './lineage/owned-build.js';
 import { completionOfGraph, summarizeForHealth as summarizeCompletionForHealth } from './lineage/completion.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
 import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
@@ -9644,10 +9645,11 @@ function _deterministicFileTimings(timings) {
       // Reuses the SAME _sharedIR memo _deepEnabled's own block above uses —
       // if deep mode already built it, this is free; if not, this is what
       // first triggers the build (the whole reason this gate is independent).
-      const { perFile, callGraph } = _sharedIR || (_sharedIR = await _buildIR());
+      const _lineageDeadlineMs = resolveLineageDeadlineMs();
+      const { perFile, callGraph } = _lineageDeadlineMs ? {} : (_sharedIR || (_sharedIR = await _buildIR()));
       const _lineageT0 = Date.now();
       setProgress({ phase: 'Lineage graph', current: 0, total: 0, file: `starting (budget ${Math.round(_lineageBudgetMs / 1000)}s)` });
-      const _lr = buildLineageGraph(callGraph, {
+      const _lineageOpts = {
         // Live per-function progress from the field-identity driver's own
         // single pass over every function (src/lineage/driver.js).
         onProgress: (p) => setProgress({
@@ -9673,7 +9675,13 @@ function _deterministicFileTimings(timings) {
         deterministic: isDeterministic(),
         perFile,
         fileContents,
-      });
+      };
+      // DAG-07 R07.7: with AGENTIC_SECURITY_LINEAGE_DEADLINE_MS set, the build runs in an
+      // owned worker with a watchdog. Unset: the in-process call, exactly as before.
+      const _lr = _lineageDeadlineMs
+        ? await buildLineageGraphOwned(fileContents, { ..._lineageOpts, onProgress: undefined, perFile: undefined, deadlineMs: _lineageDeadlineMs }).done
+        : buildLineageGraph(callGraph, _lineageOpts);
+      if (_lr.terminatedByWatchdog) _lineageStatus.failure = _lr.failure;
       if (_lr.status === 'complete') {
         _lineageGraph = _lr.graph;
         // DAG-07 R07.2: a graph built from a field analysis that stopped

@@ -31,6 +31,7 @@ All are prefixed `AGENTIC_SECURITY_`. The ones you're most likely to touch:
 | `AGENTIC_SECURITY_OFFLINE` | Skip all network (OSV/registry/EPSS) — same as `--no-network`. |
 | `AGENTIC_SECURITY_LINEAGE_DEEP` | Opt in to building the Data Flow Explorer lineage graph during a scan. Independent of `AGENTIC_SECURITY_DEEP` — see `src/lineage/DESIGN_GRAPH_BUILDER.md` §9.5. |
 | `AGENTIC_SECURITY_LINEAGE_TIMEOUT_MS` | Soft budget (ms) for the lineage graph build; measured, not enforced by interruption — an over-budget build still completes and emits an info finding. Default `300000`. |
+| `AGENTIC_SECURITY_LINEAGE_DEADLINE_MS` | Hard deadline (ms) for the lineage graph build. When set, the build runs in an owned worker thread: the field analysis stops at the next function boundary and the graph reports `scanHealth.status: cancelled`, and a worker that does not stop within 500 ms of the deadline is terminated. Unset (default): the in-process build, unchanged. |
 | `AGENTIC_SECURITY_LINEAGE_MAX_CONTEXTS` | Per-function distinct-context cap for the lineage engine's interprocedural summary cache. Default `16`. |
 
 ### Finding provenance
