@@ -14,6 +14,7 @@
 // (the `agentic-security scan` and `agentic-security ci` commands). This
 // module computes its own content digest instead of reusing either.
 
+import { completionOfGraph } from './completion.js';
 import * as crypto from 'node:crypto';
 import { _redactGraph } from './redact-graph.js';
 
@@ -232,6 +233,10 @@ export function exportGraphJSON(graph, opts = {}) {
     scope: graph?.scope ?? null,
     coverage: graph?.coverage ?? null,
     limitations: graph?.limitations ?? [],
+    // DAG-07 R07.2: the completion envelope, derived from the source graph
+    // so it is the same for any filter/redaction of one scan. Top-level and
+    // additive: the digests above cover `graph`, which is unchanged.
+    completion: completionOfGraph(graph),
     confidential: true,
     graph: body,
   };

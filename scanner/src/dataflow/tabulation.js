@@ -77,8 +77,30 @@ export function enumerateSinks(perFileIR, callGraph) {
  *   maxCallerDepth: bounds reverse-call-graph walk
  */
 export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MAX_CALLER_DEPTH) {
+  return reachabilitySliceWithCompletion(sinks, callGraph, maxCallerDepth).reachable;
+}
+
+/**
+ * Same walk as reachabilitySliceFromSinks, plus a completion record
+ * (DAG-07 R07.1). A function the walk never reached is skipped by
+ * `shouldAnalyzeUnderRhs`, so a walk that stopped at its worklist cap or its
+ * caller-depth ceiling has silently narrowed what is analyzed; the record
+ * says so, with the number of callers left unexplored.
+ *
+ * Returns { reachable: Set<qid>, completion: { status, reasons,
+ * unexploredFrontierCount, visited, limits } }.
+ */
+export function reachabilitySliceWithCompletion(sinks, callGraph, maxCallerDepth = MAX_CALLER_DEPTH) {
   const reachableFns = new Set();
-  if (!Array.isArray(sinks) || !callGraph || !callGraph.functions) return reachableFns;
+  const completion = {
+    status: 'complete', reasons: [], unexploredFrontierCount: 0, visited: 0,
+    limits: { maxWorklist: MAX_WORKLIST, maxCallerDepth },
+  };
+  if (!Array.isArray(sinks) || !callGraph || !callGraph.functions) {
+    completion.status = 'unavailable';
+    completion.reasons = ['no-call-graph'];
+    return { reachable: reachableFns, completion };
+  }
 
   // Build a reverse callgraph: who calls fn-qid?
   const callersOf = new Map();
@@ -103,17 +125,33 @@ export function reachabilitySliceFromSinks(sinks, callGraph, maxCallerDepth = MA
   const work = [];
   for (const s of sinks) work.push({ qid: s.fnQid, depth: 0 });
   let visitedCount = 0;
+  let depthCut = 0;
+  let capped = false;
   while (work.length) {
-    if (++visitedCount > MAX_WORKLIST) break;
+    if (++visitedCount > MAX_WORKLIST) { capped = true; break; }
     const { qid, depth } = work.shift();
     if (reachableFns.has(qid)) continue;
     reachableFns.add(qid);
-    if (depth >= maxCallerDepth) continue;
+    if (depth >= maxCallerDepth) {
+      // Callers of this function exist but are not explored.
+      for (const callerQid of (callersOf.get(qid) || [])) if (!reachableFns.has(callerQid)) depthCut += 1;
+      continue;
+    }
     for (const callerQid of (callersOf.get(qid) || [])) {
       if (!reachableFns.has(callerQid)) work.push({ qid: callerQid, depth: depth + 1 });
     }
   }
-  return reachableFns;
+  completion.visited = visitedCount;
+  if (capped) {
+    completion.reasons.push('worklist-limit');
+    completion.unexploredFrontierCount += work.length;
+  }
+  if (depthCut > 0) {
+    completion.reasons.push('caller-depth-limit');
+    completion.unexploredFrontierCount += depthCut;
+  }
+  if (completion.reasons.length) completion.status = 'partial';
+  return { reachable: reachableFns, completion };
 }
 
 /**
@@ -128,10 +166,12 @@ export function rhsReachableFunctions(perFileIR, callGraph) {
   const sinks = enumerateSinks(perFileIR, callGraph);
   if (!sinks.length) {
     // No sinks → no demand. Return null to signal "analyze all" to caller.
-    return { reachable: null, sinks: [] };
+    // `completion` is an additive property (DAG-07 R07.1); existing callers
+    // destructure only { reachable, sinks }.
+    return { reachable: null, sinks: [], completion: { status: 'complete', reasons: [], unexploredFrontierCount: 0, visited: 0, limits: {}, note: 'no-sinks-analyze-all' } };
   }
-  const reachable = reachabilitySliceFromSinks(sinks, callGraph);
-  return { reachable, sinks };
+  const { reachable, completion } = reachabilitySliceWithCompletion(sinks, callGraph);
+  return { reachable, sinks, completion };
 }
 
 /**

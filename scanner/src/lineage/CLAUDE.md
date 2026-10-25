@@ -1250,6 +1250,17 @@ The digest of an ingested file is over the UTF-8 text that was parsed. Observati
 `agentic-security boundaries` (`boundaries-run.js`, explicit, read-only, off by default), so default output is unchanged. The boundary graph attribute grammar admits credential-shaped values such as `password=x` (it only
 restricts characters); the projection refuses them, but the graph contract itself does not.
 
+## Completeness and bounded execution, part 2 (DAG-07)
+
+| Module | Responsibility |
+|---|---|
+| `completion.js` | The shared completion envelope (status `complete`/`partial`/`cancelled`/`unavailable`/`invalid`, `queryExhausted`, `modelCoverage`, `negativeClaimAllowed`, `reasons`, `limits`, `unexploredFrontierCount`). Pure. `negativeClaimAllowed` is always derived, never taken from a caller: it needs a complete status, an exhausted query, an empty frontier and no reasons, and is scoped to the modeled graph. Adapters: `fromAnalysisCompletion`, `fromQueryResult`, `completionOfGraph` (adds `zero-flows-with-incomplete-analysis`). `exportGraphJSON` carries the envelope top-level (additive; the digests cover `graph` only). The CLI prints it for `explore` and `dataflow export`, scan health lists it under `lineageAnalysis.completion`, and the frontend coverage banner states it. |
+| `owned-worker.js` + `owned-worker-entry.js` | Worker-thread run with an AbortSignal and a deadline. Cancellation is a shared flag the work polls (works inside a synchronous loop); a worker that does not acknowledge within `ackGraceMs` (500 ms) is terminated by the watchdog, so the caller is released inside one second either way. Same `worker_threads`/`terminate()` convention as `pipeline/analyzer-supervisor.js`. |
+| `witness-selection.js` | Display-only diversity ranking (source, sink, data class, trust boundary, control state, ambiguity) and `assessAllPathsProtected`, which looks at every enumerated path (a hidden unprotected path refutes the claim) and refuses outright on a truncated, incomplete or resumed query. |
+| `continuation.js` | Resumable path queries. A token is bound to the exact `PathStore.digest()` and a digest of the query configuration, is one-shot, expires (TTL) and the store is bounded in entries and bytes. A changed graph or configuration is rejected (`invalid`, never a silent restart). A resumed page never licenses a negative claim. |
+
+`path-store.js`: an explicit join above `maxPairingsPerGroup` becomes a typed ambiguous-summary relation (S+O edges through one `summary` node, all marked ambiguous) and the group stays reported in `limitStatus()`. `path-query.js`: `maxMaterializedHops` bounds path output; the result carries `unexploredFrontierCount` and, when a budget stopped the walk, `resumeState`. `source-seeding.js`: `planSeeds` also returns `completion`. Outside this package: `dataflow/tabulation.js` (`reachabilitySliceWithCompletion`, `completion` on `rhsReachableFunctions`), `dataflow/backward.js` (`sliceBackwardWithCompletion`), and `dataflow/incremental.js` (only the empty-entry summary is persisted, keyed by the real qid; a restored summary standing in for a tainted context is reported `incremental-empty-entry-reuse`). Suite: `test/lineage/dag07-completion.test.js`.
+
 ## Conventions
 
 - Every enum here is a single source of truth for its concept. If you add

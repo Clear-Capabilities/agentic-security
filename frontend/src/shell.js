@@ -146,8 +146,18 @@ function buildHeader(graph) {
 }
 
 function buildCoverageBanner(graph) {
-  const status = graph.coverage?.status ?? graph.scanHealth?.status;
-  const banner = el('div', { class: 'shell__coverage-banner' }, `Coverage: ${status ?? 'unknown'} — not a complete assessment`);
+  // DAG-07 R07.2: an analysis that stopped early (iteration budget, cancel,
+  // construction or seeding limit) is stated outright, and stays visible when
+  // zero flows were projected, since an empty view is where it is easiest to
+  // misread the result as "nothing flows".
+  const ac = graph.coverage?.analysisCompletion ?? graph.scanHealth?.analysisCompletion ?? null;
+  const analysisStopped = !!ac && ac.status && ac.status !== 'complete';
+  const status = analysisStopped ? ac.status : (graph.coverage?.status ?? graph.scanHealth?.status);
+  const zeroFlows = Array.isArray(graph.flows) && graph.flows.length === 0;
+  const text = analysisStopped
+    ? `Analysis ${ac.status}${zeroFlows ? ' (no flows shown)' : ''} — absence of a flow here is not evidence that none exists`
+    : `Coverage: ${status ?? 'unknown'} — not a complete assessment`;
+  const banner = el('div', { class: 'shell__coverage-banner' }, text);
   if (status && status !== 'complete') banner.setAttribute('data-visible', 'true');
   return banner;
 }

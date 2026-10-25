@@ -34,8 +34,10 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   // P2.1 — RHS-lite reachability slice. When AGENTIC_SECURITY_RHS=1 the
   // engine narrows analysis to sink-reachable functions. Default OFF
   // because it changes the finding-set composition.
+  let rhsCompletion = null;
   if (process.env.AGENTIC_SECURITY_RHS === '1') {
     const ctx = rhsReachableFunctions(perFileIR, callGraph);
+    rhsCompletion = ctx.completion || null;
     if (ctx.reachable) {
       opts = { ...opts, _rhsReachable: ctx.reachable, _rhsCheck: shouldAnalyzeUnderRhs };
     }
@@ -73,13 +75,24 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
         if (!ir) continue;
         for (const fn of (ir.functions || [])) changedQids.add(fn.qid);
       }
-      const persistedPayload = (priorState.summaries && priorState.summaries.summaries) || priorState.summaries || {};
+      const rawPayload = (priorState.summaries && priorState.summaries.summaries) || priorState.summaries || {};
+      // DAG-07 R07.3: only summaries explicitly recorded as EMPTY-entry are
+      // restored. A summary written by an older format has no entry-context
+      // marker and may have been computed under a tainted entry (the old
+      // serializer kept whichever context came last); restoring it as an
+      // empty-entry summary would let a tainted call be answered with it.
+      const persistedPayload = {};
+      let discardedLegacy = 0;
+      for (const [q, v] of Object.entries(rawPayload)) {
+        if (v && v.entryContext === 'empty') persistedPayload[q] = v; else discardedLegacy += 1;
+      }
       const callerOfQid = (priorState.summaries && priorState.summaries.callers) || {};
       const { reusable } = pickReusableSummaries(persistedPayload, callerOfQid, changedQids);
       preSeededCache = new SummaryCache();
       const seededN = seedSummaryCache(preSeededCache, persistedPayload, reusable);
       preSeededCache._incrementalSeeded = seededN;
       preSeededCache._incrementalReusable = reusable.size;
+      preSeededCache._incrementalDiscardedLegacy = discardedLegacy;
     } else {
       // Stale → caller should drop; we just don't seed.
       priorState = null;
@@ -154,14 +167,30 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   }
   for (const f of findings) f._pathFeasibilityPruned = totalPruned;
   if (preSeededCache) {
+    const reuseNotes = preSeededCache.completionNotes().filter((n) => n.reason === 'incremental-empty-entry-reuse');
+    const truncated = preSeededCache._incrementalFindingsTruncated || 0;
+    const reasons = [];
+    if (reuseNotes.length) reasons.push('incremental-empty-entry-reuse');
+    if (truncated) reasons.push('incremental-findings-truncated');
     Object.defineProperty(findings, '_incrementalStats', {
       value: {
         seeded: preSeededCache._incrementalSeeded || 0,
         reusable: preSeededCache._incrementalReusable || 0,
+        discardedLegacy: preSeededCache._incrementalDiscardedLegacy || 0,
+        // DAG-07 R07.3: reuse that stood in for a tainted call context, or
+        // replayed a truncated findings list, is partial analysis of those
+        // entries, not completed analysis of them.
+        completion: {
+          status: reasons.length ? 'partial' : 'complete',
+          reasons,
+          emptyEntryReusedForTaintedContexts: reuseNotes.reduce((n, x) => n + x.count, 0),
+          summariesWithTruncatedFindings: truncated,
+        },
       },
       enumerable: false,
     });
   }
+  if (rhsCompletion) Object.defineProperty(findings, '_rhsCompletion', { value: rhsCompletion, enumerable: false });
   // P1.4 — backward slice (opt-in via AGENTIC_SECURITY_BACKWARD_SLICE=1).
   // Next-gen taint capability #5 (SMT path-feasibility rebuild): ALSO run
   // this when AGENTIC_SECURITY_SYMEXEC=1 is set, even if the operator never

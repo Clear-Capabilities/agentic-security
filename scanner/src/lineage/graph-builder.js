@@ -438,7 +438,12 @@ const nodeLabel = (kind, category, reason) => (category
  */
 export function buildDataFlowGraph(callGraph, opts = {}) {
   const repository = opts.repository ?? 'repo';
-  const { seeds, unseedable } = planSeeds(callGraph, { repository });
+  const { seeds, unseedable, completion: seedingCompletion } = planSeeds(callGraph, {
+    repository,
+    ...(opts.seeding ?? {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
+  });
   const hops = [];
   const analysis = runFieldIdentityAnalysis(callGraph, {
     recordHop: (h) => hops.push(h),
@@ -460,6 +465,13 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   if (_storeLimits.hit) {
     analysisCompletion.storeLimits = _storeLimits;
     if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
+  }
+  // R07.1: the seeding step's own record. Seeds the planner never reached
+  // mean functions whose sources were never looked for.
+  if (seedingCompletion.status !== 'complete') {
+    analysisCompletion.seeding = seedingCompletion;
+    if (seedingCompletion.status === 'cancelled') analysisCompletion.status = 'cancelled';
+    else if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
   }
   for (const u of analysisCompletion.incomplete) {
     store.markTruncated(u.qid, u.context, u.reasons[0] ?? 'analysis-incomplete');
@@ -1141,6 +1153,8 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     if (analysisCompletion.incomplete.length) parts.push(`field analysis stopped early in ${analysisCompletion.incomplete.length} of ${analysisCompletion.functionsAnalyzed} function(s) (iteration budget)`);
     if (analysisCompletion.status === 'cancelled') parts.push(`analysis was cancelled; ${analysisCompletion.functionsNotAnalyzed} function(s) were never analyzed`);
     if (analysisCompletion.storeLimits) parts.push('provenance construction limits were reached, so some flows were not materialized');
+    if (analysisCompletion.seeding) parts.push(`source seeding stopped early (${analysisCompletion.seeding.reasons.join(', ')}); ${analysisCompletion.seeding.functionsNotScanned} function(s) were not searched for sources`);
+    if (analysisCompletion.incremental) parts.push('a cached summary stood in for a tainted entry context');
     if (analysisCompletion.degraded.length) parts.push(`${analysisCompletion.degraded.length} call context(s) fell back to a coarser summary (context cap or unconverged recursion)`);
     graph.limitations.push(`${parts.join('; ')}; absence of a flow from those functions is not evidence that none exists.`);
   }

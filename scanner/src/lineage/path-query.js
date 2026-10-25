@@ -35,6 +35,9 @@ export const DEFAULTS = {
   maxPaths: 32,
   maxPathsPerTerminal: 8,
   maxCandidatePaths: 256,
+  // R07.5: total hops copied into candidate paths. Each candidate costs its
+  // length, so this bounds output memory independently of the candidate count.
+  maxMaterializedHops: 1000000,
   maxExpansions: 10000,
   maxDepth: 64,
 };
@@ -47,6 +50,7 @@ export const BUDGET_UPPER_BOUNDS = {
   maxPaths: 1e7,
   maxPathsPerTerminal: 1e7,
   maxCandidatePaths: 1e9,
+  maxMaterializedHops: 1e9,
   maxExpansions: 1e9,
   maxDepth: 1e6,
 };
@@ -259,15 +263,37 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
 
   const candidates = [];
   let expansions = 0;
+  let materializedHops = 0;
+  const materializeCounted = (n, e, reason) => { materializedHops += e.length; return materialize(store, n, e, reason); };
   // DAG-07 R07.6: ONE shared path (arrays + visited set) that is unwound on
   // backtrack, instead of copying both for every frame (which made a chain
   // of depth d cost O(d^2)). A frame is only {nodeId, edge, hops}; visit
   // order and expansion accounting are identical to the copying version.
   const path = { nodesRev: [startNodeId], edgesRev: [], onPath: new Set([startNodeId]) };
   const stack = [{ nodeId: startNodeId, edge: null, hops: 0 }];
+  // R07.9: a continuation (continuation.js) hands back the frontier a
+  // previous call stopped at. Shape is checked, never trusted blindly; a
+  // malformed one makes the query invalid rather than silently restarting.
+  if (opts.resumeState !== undefined) {
+    const rs = opts.resumeState;
+    const ok = rs && rs.startNodeId === startNodeId && Array.isArray(rs.nodesRev) && Array.isArray(rs.edgesRev)
+      && Array.isArray(rs.stack) && rs.nodesRev.length === rs.edgesRev.length + 1;
+    if (!ok) {
+      result.status = 'invalid';
+      result.budgetErrors = ['resumeState is malformed or belongs to a different start node'];
+      return result;
+    }
+    path.nodesRev = rs.nodesRev.slice();
+    path.edgesRev = rs.edgesRev.slice();
+    path.onPath = new Set(rs.nodesRev);
+    stack.length = 0;
+    for (const f of rs.stack) stack.push({ ...f });
+    result.resumed = true;
+  }
 
   while (stack.length > 0) {
     if (candidates.length >= budget.maxCandidatePaths) { truncationReasons.add('candidate-cap'); break; }
+    if (materializedHops >= budget.maxMaterializedHops) { truncationReasons.add('materialization-budget'); break; }
     if (expansions >= budget.maxExpansions) { truncationReasons.add('expansion-budget'); break; }
     const frame = stack.pop();
     const hops = frame.hops;
@@ -288,7 +314,7 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
 
     if (incoming.length === 0) {
       if (hops > 0) {
-        candidates.push(materialize(store, path.nodesRev, path.edgesRev,
+        candidates.push(materializeCounted(path.nodesRev, path.edgesRev,
           orphaned.has(frame.nodeId) ? TERMINAL_INCOMPLETE : TERMINAL_ORIGIN));
       }
       continue;
@@ -318,7 +344,7 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // literal zero-hop budget will not get one.
     if (hops >= budget.maxDepth && hops > 0) {
       truncationReasons.add('depth-limit');
-      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_DEPTH));
+      candidates.push(materializeCounted(path.nodesRev, path.edgesRev, TERMINAL_DEPTH));
       continue;
     }
 
@@ -335,11 +361,17 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
       // Every continuation would revisit a node already on this path. The
       // branch ends HERE, and it ends because of a cycle — never silently
       // as if this node were the flow's origin.
-      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_CYCLE));
+      candidates.push(materializeCounted(path.nodesRev, path.edgesRev, TERMINAL_CYCLE));
     }
   }
 
   result.budget.expansionsUsed = expansions;
+  // R07.1: work still queued when a budget stopped the walk (0 when exhausted).
+  result.unexploredFrontierCount = stack.length;
+  if (stack.length > 0) {
+    result.resumeState = { startNodeId, nodesRev: path.nodesRev.slice(), edgesRev: path.edgesRev.slice(), stack: stack.map((f) => ({ ...f })) };
+  }
+  result.budget.materializedHops = materializedHops;
   result.enumeratedPathCount = candidates.length;
   // Task 2 review finding 1: this is scoped to EVERY complete path found
   // during enumeration, not just the ones the caps below end up returning
@@ -449,7 +481,9 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
   result.status = isIncompleteAnswer(result) ? 'partial' : 'complete';
   // "No modeled path" is allowed only for an exhausted query; it is a
   // statement about the modeled graph, never about the software.
-  result.negativeClaimAllowed = result.status === 'complete' && result.paths.length === 0
+  // A resumed page only describes the work done since the continuation, so it
+  // can never license a negative claim about the whole query.
+  result.negativeClaimAllowed = result.status === 'complete' && result.paths.length === 0 && !result.resumed
     && result.noPathReason === 'no-incoming-edges';
   return result;
 }

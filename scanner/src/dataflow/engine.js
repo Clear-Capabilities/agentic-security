@@ -2359,9 +2359,9 @@ function stateEq(a, b) {
 // that runs out used to leave a result that looked complete; now `runTaintEngine`'s return value carries `analysisIncomplete`, and the scan
 // reports it as `deepStatus.incomplete`.
 let _incomplete = new Map();
-function _noteIncomplete(reason, detail) {
+function _noteIncomplete(reason, detail, n = 1) {
   const cur = _incomplete.get(reason);
-  if (cur) cur.count += 1; else _incomplete.set(reason, { reason, count: 1, example: String(detail ?? '').slice(0, 160) });
+  if (cur) cur.count += n; else _incomplete.set(reason, { reason, count: n, example: String(detail ?? '').slice(0, 160) });
 }
 export const INCOMPLETE_REASONS = Object.freeze({
   'summary-budget': 'the interprocedural summary budget ran out; later callees were treated as having no effect',
@@ -2369,6 +2369,10 @@ export const INCOMPLETE_REASONS = Object.freeze({
   'function-limit': 'more functions than the per-scan function limit; the rest were not analysed',
   'higher-order-limit': 'more callback invocations than the per-function limit; the rest were not analysed',
   'analysis-error': 'the analysis of a function threw and its result was discarded',
+  // DAG-07 R07.3
+  'context-cap-fallback': 'a call under a tainted argument shape was answered with the empty-entry summary because the per-function context cap was reached',
+  'recursion-nonconverged': 'a recursive summary was still changing when its refinement rounds ran out',
+  'incremental-empty-entry-reuse': 'a summary restored from a previous scan stood in for a tainted call context',
 });
 
 export function runTaintEngine(perFileIR, callGraph, opts = {}) {
@@ -2934,6 +2938,7 @@ export function runTaintEngine(perFileIR, callGraph, opts = {}) {
   }
   Object.defineProperty(all, '_summaryCache', { value: summaryCache, enumerable: false });
   if (summaryCache._budgetHits) _noteIncomplete('summary-budget', `${summaryCache._budgetHits} summary requests after ${summaryCache._maxIter} computations`);
+  if (typeof summaryCache.completionNotes === 'function') for (const n of summaryCache.completionNotes()) _noteIncomplete(n.reason, n.example, n.count);
   Object.defineProperty(all, 'analysisIncomplete', { value: [..._incomplete.values()].sort((a, b) => (a.reason < b.reason ? -1 : 1)), enumerable: false });
   _collapseNestedHsSinks(all);
   return all;
