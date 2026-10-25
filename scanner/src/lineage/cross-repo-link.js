@@ -127,3 +127,25 @@ export function validateCrossRepoLink(record) {
 
   return { valid: errors.length === 0, errors };
 }
+
+// DAG-08: attributable link evidence. A CrossRepoLink is an operator assertion, so as evidence it is a `manual-assertion`: it is
+// not foreign-graph validation, a digest check, a code mapping or an observed connection, and nothing here can turn it into one.
+// The Haskell/Nix analysis scope declared on either endpoint is carried through unchanged, so a link to static Nix evidence stays
+// static-configuration evidence.
+export function linkEvidence(link) {
+  const scope = {};
+  for (const s of ['local', 'remote']) {
+    const sc = link && link.scope && link.scope[s];
+    if (sc) scope[s] = { target: sc.target ?? null, config: sc.config ?? null, analysis: sc.analysis ?? null, limitations: sc.limitations || [] };
+  }
+  return {
+    kind: 'manual-assertion', declared: true, observed: false, linkId: link && link.id, declaredBy: link && link.declaredBy,
+    declaredAt: link && link.declaredAt, provenance: link && link.provenance, scope,
+    staticConfigurationOnly: Object.values(scope).some((sc) => sc.analysis && sc.analysis.runtime === false),
+  };
+}
+
+/** True only for a structurally valid declared link that does not claim to be observed. */
+export function isDeclaredNotObserved(link) {
+  return !!link && validateCrossRepoLink(link).valid && !(link.evidence && link.evidence.observed === true);
+}

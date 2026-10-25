@@ -2130,6 +2130,8 @@ function _unionAnnotationTaint(fn, entrySet) {
   if (seeds && seeds.size && Array.isArray(fn.params) && _REQ_PARAM.test(fn.params[0] || '')) {
     entrySet = new Set([...entrySet, ...[...seeds].map((f) => `${fn.params[0]}.${f}`)]);
   }
+  // DAG-08: access paths seeded by a bound boundary contract (lineage/boundary-contract.js). Absent unless a contract bound to this function.
+  if (Array.isArray(fn.boundarySeeds) && fn.boundarySeeds.length) entrySet = new Set([...entrySet, ...fn.boundarySeeds]);
   if (!fn.paramAnnotations || !fn.paramAnnotations.length) return entrySet;
   const extra = matchAnnotationParams(fn.paramAnnotations, fn.file);
   if (!extra.size) return entrySet;
