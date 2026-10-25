@@ -1,9 +1,9 @@
 {
  "schema": 1,
- "commit": "c72f03970f08b538fc870059ec4965414b2293b7",
+ "commit": "511b13012989bab59fe40755bda0e3f62d75d7da",
  "worktreeDirty": true,
- "generatedAt": "2026-10-25T15:11:41.919Z",
- "wallClockSeconds": 304,
+ "generatedAt": "2026-10-25T18:07:56.971Z",
+ "wallClockSeconds": 234,
  "env": {
   "node": "v24.20.0",
   "platform": "darwin-arm64",
@@ -58,11 +58,11 @@
    "truncatedQueryRate": 0,
    "timeMs": {
     "samples": 4,
-    "p50": 1069,
-    "p95": 6786,
-    "max": 6786
+    "p50": 741,
+    "p95": 3969,
+    "max": 3969
    },
-   "peakRssMb": 347,
+   "peakRssMb": 412,
    "labels": {
     "TP": 5,
     "FP": 20,
@@ -129,11 +129,11 @@
    "truncatedQueryRate": 0,
    "timeMs": {
     "samples": 5,
-    "p50": 1422,
-    "p95": 8612,
-    "max": 8612
+    "p50": 855,
+    "p95": 6377,
+    "max": 6377
    },
-   "peakRssMb": 378,
+   "peakRssMb": 376,
    "labels": {
     "TP": 16,
     "FP": 0,
@@ -200,11 +200,11 @@
    "truncatedQueryRate": null,
    "timeMs": {
     "samples": 3,
-    "p50": 71639,
-    "p95": 74755,
-    "max": 74755
+    "p50": 61563,
+    "p95": 68803,
+    "max": 68803
    },
-   "peakRssMb": 638,
+   "peakRssMb": 789,
    "labels": {
     "TP": 6,
     "FP": 11,
@@ -263,8 +263,8 @@
  "units": {
   "express/lib": {
    "id": "express/lib",
-   "ms": 746,
-   "peakRssMb": 218,
+   "ms": 438,
+   "peakRssMb": 290,
    "status": "ok",
    "files": 6,
    "lineage": {
@@ -290,13 +290,13 @@
    "language": "js",
    "project": "express",
    "msSamples": [
-    746
+    438
    ]
   },
   "express/examples": {
    "id": "express/examples",
-   "ms": 6786,
-   "peakRssMb": 347,
+   "ms": 3969,
+   "peakRssMb": 412,
    "status": "ok",
    "files": 70,
    "lineage": {
@@ -400,13 +400,13 @@
    "language": "js",
    "project": "express",
    "msSamples": [
-    6786
+    3969
    ]
   },
   "fastify/lib": {
    "id": "fastify/lib",
-   "ms": 1824,
-   "peakRssMb": 344,
+   "ms": 1378,
+   "peakRssMb": 380,
    "status": "ok",
    "files": 31,
    "lineage": {
@@ -432,13 +432,13 @@
    "language": "js",
    "project": "fastify",
    "msSamples": [
-    1824
+    1378
    ]
   },
   "fastify/examples": {
    "id": "fastify/examples",
-   "ms": 1069,
-   "peakRssMb": 214,
+   "ms": 741,
+   "peakRssMb": 300,
    "status": "ok",
    "files": 18,
    "lineage": {
@@ -509,13 +509,13 @@
    "language": "js",
    "project": "fastify",
    "msSamples": [
-    1069
+    741
    ]
   },
   "scotty/Web": {
    "id": "scotty/Web",
-   "ms": 725,
-   "peakRssMb": 213,
+   "ms": 552,
+   "peakRssMb": 300,
    "status": "ok",
    "files": 11,
    "lineage": {
@@ -541,13 +541,13 @@
    "language": "haskell",
    "project": "scotty",
    "msSamples": [
-    725
+    552
    ]
   },
   "scotty/examples": {
    "id": "scotty/examples",
-   "ms": 1422,
-   "peakRssMb": 216,
+   "ms": 855,
+   "peakRssMb": 298,
    "status": "ok",
    "files": 17,
    "lineage": {
@@ -573,13 +573,13 @@
    "language": "haskell",
    "project": "scotty",
    "msSamples": [
-    1422
+    855
    ]
   },
   "yesod/yesod-core": {
    "id": "yesod/yesod-core",
-   "ms": 2549,
-   "peakRssMb": 378,
+   "ms": 1602,
+   "peakRssMb": 376,
    "status": "ok",
    "files": 44,
    "lineage": {
@@ -605,13 +605,13 @@
    "language": "haskell",
    "project": "yesod",
    "msSamples": [
-    2549
+    1602
    ]
   },
   "yesod/yesod-form": {
    "id": "yesod/yesod-form",
-   "ms": 706,
-   "peakRssMb": 318,
+   "ms": 515,
+   "peakRssMb": 325,
    "status": "ok",
    "files": 28,
    "lineage": {
@@ -637,13 +637,13 @@
    "language": "haskell",
    "project": "yesod",
    "msSamples": [
-    706
+    515
    ]
   },
   "yesod/yesod-auth": {
    "id": "yesod/yesod-auth",
-   "ms": 8612,
-   "peakRssMb": 350,
+   "ms": 6377,
+   "peakRssMb": 362,
    "status": "ok",
    "files": 15,
    "lineage": {
@@ -669,13 +669,13 @@
    "language": "haskell",
    "project": "yesod",
    "msSamples": [
-    8612
+    6377
    ]
   },
   "home-manager/modules/services": {
    "id": "home-manager/modules/services",
-   "ms": 71639,
-   "peakRssMb": 638,
+   "ms": 68803,
+   "peakRssMb": 789,
    "status": "ok",
    "files": 218,
    "lineage": {
@@ -724,13 +724,13 @@
    "language": "nix",
    "project": "home-manager",
    "msSamples": [
-    71639
+    68803
    ]
   },
   "nixpkgs-subset/nixos/modules/security": {
    "id": "nixpkgs-subset/nixos/modules/security",
-   "ms": 74755,
-   "peakRssMb": 335,
+   "ms": 52788,
+   "peakRssMb": 583,
    "status": "ok",
    "files": 36,
    "lineage": {
@@ -812,13 +812,13 @@
    "language": "nix",
    "project": "nixpkgs-subset",
    "msSamples": [
-    74755
+    52788
    ]
   },
   "nixpkgs-subset/nixos/modules/services/web-servers": {
    "id": "nixpkgs-subset/nixos/modules/services/web-servers",
-   "ms": 71553,
-   "peakRssMb": 352,
+   "ms": 61563,
+   "peakRssMb": 500,
    "status": "ok",
    "files": 41,
    "lineage": {
@@ -867,14 +867,14 @@
    "language": "nix",
    "project": "nixpkgs-subset",
    "msSamples": [
-    71553
+    61563
    ]
   }
  },
  "fixture": {
   "id": "fixture/multiservice",
-  "ms": 1769,
-  "peakRssMb": 173,
+  "ms": 1233,
+  "peakRssMb": 255,
   "status": "ok",
   "files": 3,
   "lineage": {
@@ -1800,13 +1800,13 @@
    "id": "fixture",
    "status": "ok",
    "editedFile": "api/server.js",
-   "summaryUnits": 12,
-   "restorableEmptyEntryUnits": 12,
+   "summaryUnits": 0,
+   "restorableEmptyEntryUnits": 0,
    "legacyDiscardedUnits": 0,
    "changedFiles": 1,
-   "changedUnits": 3,
-   "reusedUnits": 9,
-   "invalidatedUnits": 3,
+   "changedUnits": 0,
+   "reusedUnits": 0,
+   "invalidatedUnits": 0,
    "engineFileKeysSeen": true,
    "unchangedWarmReusedAll": true,
    "parity": {
@@ -1817,24 +1817,24 @@
     "equal": true
    },
    "timesMs": {
-    "cold": 389,
-    "warm": 133,
-    "warmAfterEdit": 126,
-    "coldAfterEdit": 128
+    "cold": 208,
+    "warm": 72,
+    "warmAfterEdit": 70,
+    "coldAfterEdit": 62
    },
-   "peakRssMb": 198
+   "peakRssMb": 267
   },
   "fastify/examples": {
    "id": "fastify/examples",
    "status": "ok",
    "editedFile": "asyncawait.js",
-   "summaryUnits": 90,
-   "restorableEmptyEntryUnits": 90,
+   "summaryUnits": 0,
+   "restorableEmptyEntryUnits": 0,
    "legacyDiscardedUnits": 0,
    "changedFiles": 1,
-   "changedUnits": 5,
-   "reusedUnits": 85,
-   "invalidatedUnits": 5,
+   "changedUnits": 0,
+   "reusedUnits": 0,
+   "invalidatedUnits": 0,
    "engineFileKeysSeen": true,
    "unchangedWarmReusedAll": true,
    "parity": {
@@ -1845,12 +1845,12 @@
     "equal": true
    },
    "timesMs": {
-    "cold": 779,
-    "warm": 245,
-    "warmAfterEdit": 238,
-    "coldAfterEdit": 213
+    "cold": 311,
+    "warm": 138,
+    "warmAfterEdit": 126,
+    "coldAfterEdit": 118
    },
-   "peakRssMb": 289
+   "peakRssMb": 317
   }
  },
  "synthetic": {
@@ -1874,8 +1874,8 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 2,
-    "scc": 4,
+    "generate": 1,
+    "scc": 2,
     "verify": 1
    },
    "peakRssMb": 55
@@ -1900,9 +1900,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 10,
-    "scc": 33,
-    "verify": 14
+    "generate": 6,
+    "scc": 19,
+    "verify": 8
    },
    "peakRssMb": 90
   },
@@ -1926,11 +1926,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 67,
-    "scc": 199,
-    "verify": 236
+    "generate": 39,
+    "scc": 98,
+    "verify": 89
    },
-   "peakRssMb": 341
+   "peakRssMb": 333
   },
   "chain/1000000": {
    "family": "chain",
@@ -1952,11 +1952,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 461,
-    "scc": 2261,
-    "verify": 3912
+    "generate": 273,
+    "scc": 1251,
+    "verify": 2046
    },
-   "peakRssMb": 1415
+   "peakRssMb": 1411
   },
   "ring/1000": {
    "family": "ring",
@@ -1978,9 +1978,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 3,
-    "scc": 4,
-    "verify": 1
+    "generate": 1,
+    "scc": 1,
+    "verify": 0
    },
    "peakRssMb": 54
   },
@@ -2004,11 +2004,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 12,
-    "scc": 24,
-    "verify": 13
+    "generate": 6,
+    "scc": 11,
+    "verify": 5
    },
-   "peakRssMb": 76
+   "peakRssMb": 78
   },
   "ring/100000": {
    "family": "ring",
@@ -2030,11 +2030,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 80,
-    "scc": 143,
-    "verify": 99
+    "generate": 40,
+    "scc": 62,
+    "verify": 38
    },
-   "peakRssMb": 212
+   "peakRssMb": 211
   },
   "ring/1000000": {
    "family": "ring",
@@ -2056,11 +2056,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 515,
-    "scc": 1605,
-    "verify": 2205
+    "generate": 273,
+    "scc": 887,
+    "verify": 1006
    },
-   "peakRssMb": 1012
+   "peakRssMb": 1011
   },
   "fanin/1000": {
    "family": "fanin",
@@ -2082,9 +2082,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 2,
-    "scc": 5,
-    "verify": 2
+    "generate": 1,
+    "scc": 2,
+    "verify": 1
    },
    "peakRssMb": 55
   },
@@ -2108,11 +2108,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 12,
-    "scc": 38,
-    "verify": 18
+    "generate": 6,
+    "scc": 19,
+    "verify": 12
    },
-   "peakRssMb": 91
+   "peakRssMb": 93
   },
   "fanin/100000": {
    "family": "fanin",
@@ -2134,11 +2134,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 85,
-    "scc": 207,
-    "verify": 213
+    "generate": 40,
+    "scc": 98,
+    "verify": 87
    },
-   "peakRssMb": 332
+   "peakRssMb": 336
   },
   "fanin/1000000": {
    "family": "fanin",
@@ -2160,11 +2160,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 509,
-    "scc": 2596,
-    "verify": 3372
+    "generate": 275,
+    "scc": 1295,
+    "verify": 2072
    },
-   "peakRssMb": 1404
+   "peakRssMb": 1421
   },
   "fanout/1000": {
    "family": "fanout",
@@ -2186,9 +2186,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 3,
-    "scc": 5,
-    "verify": 2
+    "generate": 1,
+    "scc": 2,
+    "verify": 1
    },
    "peakRssMb": 55
   },
@@ -2212,9 +2212,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 12,
-    "scc": 35,
-    "verify": 22
+    "generate": 6,
+    "scc": 19,
+    "verify": 11
    },
    "peakRssMb": 86
   },
@@ -2238,9 +2238,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 83,
-    "scc": 204,
-    "verify": 187
+    "generate": 40,
+    "scc": 105,
+    "verify": 85
    },
    "peakRssMb": 291
   },
@@ -2264,11 +2264,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 517,
-    "scc": 2188,
-    "verify": 7948
+    "generate": 281,
+    "scc": 1192,
+    "verify": 1899
    },
-   "peakRssMb": 1214
+   "peakRssMb": 1216
   },
   "scc-rich/1000": {
    "family": "scc-rich",
@@ -2290,9 +2290,9 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 11,
-    "scc": 7,
-    "verify": 2
+    "generate": 2,
+    "scc": 2,
+    "verify": 1
    },
    "peakRssMb": 55
   },
@@ -2316,11 +2316,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 38,
-    "scc": 38,
-    "verify": 28
+    "generate": 12,
+    "scc": 17,
+    "verify": 8
    },
-   "peakRssMb": 85
+   "peakRssMb": 91
   },
   "scc-rich/100000": {
    "family": "scc-rich",
@@ -2342,11 +2342,11 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 243,
-    "scc": 387,
-    "verify": 412
+    "generate": 82,
+    "scc": 112,
+    "verify": 79
    },
-   "peakRssMb": 298
+   "peakRssMb": 308
   },
   "scc-rich/1000000": {
    "family": "scc-rich",
@@ -2368,16 +2368,1194 @@
    "matchesExpected": true,
    "verifyScc": true,
    "timesMs": {
-    "generate": 2855,
-    "scc": 3931,
-    "verify": 5367
+    "generate": 873,
+    "scc": 1129,
+    "verify": 1658
    },
-   "peakRssMb": 1272
+   "peakRssMb": 1609
   }
  },
  "evidenceReplay": {
-  "status": "skipped",
-  "reason": "scanner/src has no witness-bundle module; there is no evidence bundle to replay"
+  "status": "measured",
+  "units": 6,
+  "sinksWithPaths": 64,
+  "bundlesAttempted": 64,
+  "built": 64,
+  "buildRefused": 0,
+  "replayed": 64,
+  "replayFailed": 0,
+  "builtCrossScope": 21,
+  "replayedCrossScope": 21,
+  "completeBundles": 54,
+  "tamper": {
+   "edge-altered-resigned": {
+    "attempted": 64,
+    "rejected": 64
+   },
+   "edge-altered-unsigned": {
+    "attempted": 64,
+    "rejected": 64
+   },
+   "source-blob-altered": {
+    "attempted": 64,
+    "rejected": 64
+   },
+   "graph-altered": {
+    "attempted": 64,
+    "rejected": 64
+   }
+  }
+ },
+ "evidence": {
+  "fixture/multiservice": {
+   "id": "fixture/multiservice",
+   "status": "ok",
+   "files": 3,
+   "lineageStatus": "complete",
+   "flows": [
+    {
+     "fields": [
+      "qty"
+     ],
+     "sources": [
+      {
+       "field": "qty",
+       "file": "api/server.js",
+       "line": 17,
+       "path": "req.body.qty"
+      }
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    },
+    {
+     "fields": [
+      "note"
+     ],
+     "sources": [
+      {
+       "field": "note",
+       "file": "api/server.js",
+       "line": 16,
+       "path": "req.body.note"
+      }
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    },
+    {
+     "fields": [
+      "bio"
+     ],
+     "sources": [
+      {
+       "field": "bio",
+       "file": "api/server.js",
+       "line": 30,
+       "path": "req.body.bio"
+      }
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "store",
+     "sinkSub": "database"
+    }
+   ],
+   "witness": {
+    "sinks": 5,
+    "sinksWithPaths": 5,
+    "bundlesAttempted": 5,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 5,
+    "builtCrossScope": 0,
+    "replayed": 5,
+    "replayedCrossScope": 0,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 5,
+    "hopStream": 48,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 5,
+      "rejected": 5
+     },
+     "edge-altered-unsigned": {
+      "attempted": 5,
+      "rejected": 5
+     },
+     "source-blob-altered": {
+      "attempted": 5,
+      "rejected": 5
+     },
+     "graph-altered": {
+      "attempted": 5,
+      "rejected": 5
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 5,
+     "sinksCapped": false,
+     "paths": 5,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 5,
+     "sinksCapped": false,
+     "paths": 5,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    }
+   },
+   "ms": 77,
+   "peakRssMb": 226,
+   "targetKind": "fixture"
+  },
+  "fixture/callreturn": {
+   "id": "fixture/callreturn",
+   "status": "ok",
+   "files": 1,
+   "lineageStatus": "complete",
+   "flows": [
+    {
+     "fields": [
+      "name"
+     ],
+     "sources": [
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 16,
+       "path": "req.body.name"
+      },
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 17,
+       "path": "req.body.name"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "email"
+     ],
+     "sources": [
+      {
+       "field": "email",
+       "file": "app.js",
+       "line": 9,
+       "path": "req.body.email"
+      },
+      {
+       "field": "email",
+       "file": "app.js",
+       "line": 10,
+       "path": "req.body.email"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "first"
+     ],
+     "sources": [
+      {
+       "field": "first",
+       "file": "app.js",
+       "line": 23,
+       "path": "req.body.first"
+      },
+      {
+       "field": "first",
+       "file": "app.js",
+       "line": 24,
+       "path": "req.body.first"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "name"
+     ],
+     "sources": [
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 16,
+       "path": "req.body.name"
+      },
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 17,
+       "path": "req.body.name"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "name"
+     ],
+     "sources": [
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 16,
+       "path": "req.body.name"
+      },
+      {
+       "field": "name",
+       "file": "app.js",
+       "line": 17,
+       "path": "req.body.name"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "first"
+     ],
+     "sources": [
+      {
+       "field": "first",
+       "file": "app.js",
+       "line": 23,
+       "path": "req.body.first"
+      },
+      {
+       "field": "first",
+       "file": "app.js",
+       "line": 24,
+       "path": "req.body.first"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "token"
+     ],
+     "sources": [
+      {
+       "field": "token",
+       "file": "app.js",
+       "line": 31,
+       "path": "req.body.token"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "email"
+     ],
+     "sources": [
+      {
+       "field": "email",
+       "file": "app.js",
+       "line": 9,
+       "path": "req.body.email"
+      },
+      {
+       "field": "email",
+       "file": "app.js",
+       "line": 10,
+       "path": "req.body.email"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "token"
+     ],
+     "sources": [
+      {
+       "field": "token",
+       "file": "app.js",
+       "line": 31,
+       "path": "req.body.token"
+      }
+     ],
+     "files": [
+      "app.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    }
+   ],
+   "witness": {
+    "sinks": 7,
+    "sinksWithPaths": 7,
+    "bundlesAttempted": 7,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 7,
+    "builtCrossScope": 7,
+    "replayed": 7,
+    "replayedCrossScope": 7,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 7,
+    "hopStream": 56,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 7,
+      "rejected": 7
+     },
+     "edge-altered-unsigned": {
+      "attempted": 7,
+      "rejected": 7
+     },
+     "source-blob-altered": {
+      "attempted": 7,
+      "rejected": 7
+     },
+     "graph-altered": {
+      "attempted": 7,
+      "rejected": 7
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 7,
+     "sinksCapped": false,
+     "paths": 24,
+     "pathsWithCallOrReturn": 17,
+     "impossible": 6,
+     "impossibleReasons": {
+      "returned-through-another-call-site": 6
+     },
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 7,
+     "sinksCapped": false,
+     "paths": 8,
+     "pathsWithCallOrReturn": 8,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 4,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    }
+   },
+   "ms": 91,
+   "peakRssMb": 244,
+   "targetKind": "fixture"
+  },
+  "express/lib": {
+   "id": "express/lib",
+   "status": "ok",
+   "files": 6,
+   "lineageStatus": "complete",
+   "flows": [],
+   "witness": {
+    "sinks": 2,
+    "sinksWithPaths": 2,
+    "bundlesAttempted": 2,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 2,
+    "builtCrossScope": 0,
+    "replayed": 2,
+    "replayedCrossScope": 0,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 2,
+    "hopStream": 7,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 2,
+      "rejected": 2
+     },
+     "edge-altered-unsigned": {
+      "attempted": 2,
+      "rejected": 2
+     },
+     "source-blob-altered": {
+      "attempted": 2,
+      "rejected": 2
+     },
+     "graph-altered": {
+      "attempted": 2,
+      "rejected": 2
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 2,
+     "sinksCapped": false,
+     "paths": 2,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 2,
+     "sinksCapped": false,
+     "paths": 2,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    }
+   },
+   "ms": 112,
+   "peakRssMb": 245,
+   "targetKind": "real"
+  },
+  "express/examples": {
+   "id": "express/examples",
+   "status": "ok",
+   "files": 43,
+   "lineageStatus": "complete",
+   "flows": [
+    {
+     "fields": [
+      "from"
+     ],
+     "sources": [
+      {
+       "field": "from",
+       "file": "examples/params/index.js",
+       "line": 64,
+       "path": "req.params.from"
+      }
+     ],
+     "files": [
+      "examples/params/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "to"
+     ],
+     "sources": [
+      {
+       "field": "to",
+       "file": "examples/params/index.js",
+       "line": 65,
+       "path": "req.params.to"
+      }
+     ],
+     "files": [
+      "examples/params/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "user_id"
+     ],
+     "sources": [
+      {
+       "field": "user_id",
+       "file": "examples/mvc/controllers/user-pet/index.js",
+       "line": 13,
+       "path": "req.params.user_id"
+      }
+     ],
+     "files": [
+      "examples/mvc/controllers/user-pet/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "pid"
+     ],
+     "sources": [
+      {
+       "field": "pid",
+       "file": "examples/route-map/index.js",
+       "line": 51,
+       "path": "req.params.pid"
+      }
+     ],
+     "files": [
+      "examples/route-map/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "sub"
+     ],
+     "sources": [
+      {
+       "field": "sub",
+       "file": "examples/vhost/index.js",
+       "line": 30,
+       "path": "req.params.sub"
+      }
+     ],
+     "files": [
+      "examples/vhost/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "user"
+     ],
+     "sources": [
+      {
+       "field": "user",
+       "file": "examples/route-separation/user.js",
+       "line": 43,
+       "path": "req.body.user"
+      }
+     ],
+     "files": [
+      "examples/route-separation/user.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    },
+    {
+     "fields": [
+      "uid"
+     ],
+     "sources": [
+      {
+       "field": "uid",
+       "file": "examples/route-map/index.js",
+       "line": 37,
+       "path": "req.params.uid"
+      },
+      {
+       "field": "uid",
+       "file": "examples/route-map/index.js",
+       "line": 47,
+       "path": "req.params.uid"
+      },
+      {
+       "field": "uid",
+       "file": "examples/route-map/index.js",
+       "line": 51,
+       "path": "req.params.uid"
+      }
+     ],
+     "files": [
+      "examples/route-map/index.js"
+     ],
+     "sourceKind": "http-route",
+     "sinkKind": "sink",
+     "sinkSub": "http-response"
+    }
+   ],
+   "witness": {
+    "sinks": 31,
+    "sinksWithPaths": 31,
+    "bundlesAttempted": 31,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 31,
+    "builtCrossScope": 0,
+    "replayed": 31,
+    "replayedCrossScope": 0,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 31,
+    "hopStream": 154,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 31,
+      "rejected": 31
+     },
+     "edge-altered-unsigned": {
+      "attempted": 31,
+      "rejected": 31
+     },
+     "source-blob-altered": {
+      "attempted": 31,
+      "rejected": 31
+     },
+     "graph-altered": {
+      "attempted": 31,
+      "rejected": 31
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 31,
+     "sinksCapped": false,
+     "paths": 39,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 30,
+     "sinksCapped": false,
+     "paths": 38,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    }
+   },
+   "ms": 411,
+   "peakRssMb": 304,
+   "targetKind": "real"
+  },
+  "fastify/lib": {
+   "id": "fastify/lib",
+   "status": "ok",
+   "files": 31,
+   "lineageStatus": "complete",
+   "flows": [],
+   "witness": {
+    "sinks": 15,
+    "sinksWithPaths": 15,
+    "bundlesAttempted": 15,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 15,
+    "builtCrossScope": 14,
+    "replayed": 15,
+    "replayedCrossScope": 14,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 5,
+    "hopStream": 141,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 15,
+      "rejected": 15
+     },
+     "edge-altered-unsigned": {
+      "attempted": 15,
+      "rejected": 15
+     },
+     "source-blob-altered": {
+      "attempted": 15,
+      "rejected": 15
+     },
+     "graph-altered": {
+      "attempted": 15,
+      "rejected": 15
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 15,
+     "sinksCapped": false,
+     "paths": 125,
+     "pathsWithCallOrReturn": 48,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 10
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 15,
+     "sinksCapped": false,
+     "paths": 93,
+     "pathsWithCallOrReturn": 56,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 6
+    }
+   },
+   "ms": 1260,
+   "peakRssMb": 410,
+   "targetKind": "real"
+  },
+  "fastify/examples": {
+   "id": "fastify/examples",
+   "status": "ok",
+   "files": 18,
+   "lineageStatus": "complete",
+   "flows": [
+    {
+     "fields": [
+      "body"
+     ],
+     "sources": [
+      {
+       "field": "body",
+       "file": "examples/benchmark/parser.js",
+       "line": 42,
+       "path": "req.body"
+      }
+     ],
+     "files": [
+      "examples/benchmark/parser.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    },
+    {
+     "fields": [
+      "body"
+     ],
+     "sources": [
+      {
+       "field": "body",
+       "file": "examples/typescript-server.ts",
+       "line": 68,
+       "path": "request.body"
+      }
+     ],
+     "files": [
+      "examples/typescript-server.ts"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    },
+    {
+     "fields": [
+      "body"
+     ],
+     "sources": [
+      {
+       "field": "body",
+       "file": "examples/parser.js",
+       "line": 46,
+       "path": "req.body"
+      }
+     ],
+     "files": [
+      "examples/parser.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    },
+    {
+     "fields": [
+      "params"
+     ],
+     "sources": [
+      {
+       "field": "params",
+       "file": "examples/typescript-server.ts",
+       "line": 66,
+       "path": "request.params"
+      }
+     ],
+     "files": [
+      "examples/typescript-server.ts"
+     ],
+     "sourceKind": "ai-model-output",
+     "sinkKind": "log",
+     "sinkSub": "log"
+    }
+   ],
+   "witness": {
+    "sinks": 4,
+    "sinksWithPaths": 4,
+    "bundlesAttempted": 4,
+    "buildRefused": 0,
+    "buildRefusedReasons": {},
+    "built": 4,
+    "builtCrossScope": 0,
+    "replayed": 4,
+    "replayedCrossScope": 0,
+    "replayFailed": 0,
+    "replayFailureCodes": {},
+    "completeBundles": 4,
+    "hopStream": 8,
+    "bundleCap": 60,
+    "tamper": {
+     "edge-altered-resigned": {
+      "attempted": 4,
+      "rejected": 4
+     },
+     "edge-altered-unsigned": {
+      "attempted": 4,
+      "rejected": 4
+     },
+     "source-blob-altered": {
+      "attempted": 4,
+      "rejected": 4
+     },
+     "graph-altered": {
+      "attempted": 4,
+      "rejected": 4
+     }
+    },
+    "tamperSampleCap": 40
+   },
+   "callReturn": {
+    "v1": {
+     "version": 1,
+     "sinks": 4,
+     "sinksCapped": false,
+     "paths": 4,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    },
+    "v2": {
+     "version": 2,
+     "sinks": 4,
+     "sinksCapped": false,
+     "paths": 4,
+     "pathsWithCallOrReturn": 0,
+     "impossible": 0,
+     "impossibleReasons": {},
+     "unmatchedReturnPaths": 0,
+     "invalidBindingPaths": 0,
+     "balancingPrunedEdges": 0,
+     "unbalancedTerminals": 0,
+     "contextWidenedPaths": 0,
+     "truncatedQueries": 0
+    }
+   },
+   "ms": 90,
+   "peakRssMb": 235,
+   "targetKind": "real"
+  }
+ },
+ "attribution": {
+  "fixture": {
+   "flowsReported": 3,
+   "examined": 3,
+   "unexamined": 0,
+   "correct": 3,
+   "falseAttributions": 0,
+   "negativeLabels": 3,
+   "negativeLabelHits": 0,
+   "missingPositive": [
+    "ms:F4",
+    "ms:F5",
+    "ms:F6"
+   ],
+   "rows": [
+    {
+     "fields": [
+      "qty"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sinkKind": "unresolved",
+     "sinkSub": "file",
+     "outcome": "correct",
+     "expected": [
+      "bio",
+      "note",
+      "qty"
+     ]
+    },
+    {
+     "fields": [
+      "note"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sinkKind": "unresolved",
+     "sinkSub": "file",
+     "outcome": "correct",
+     "expected": [
+      "bio",
+      "note",
+      "qty"
+     ]
+    },
+    {
+     "fields": [
+      "bio"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sinkKind": "store",
+     "sinkSub": "database",
+     "outcome": "correct",
+     "expected": [
+      "bio",
+      "note",
+      "qty"
+     ]
+    }
+   ],
+   "negativeRows": [
+    {
+     "id": "ms:N1",
+     "hit": false
+    },
+    {
+     "id": "ms:N2",
+     "hit": false
+    },
+    {
+     "id": "ms:N3",
+     "hit": false
+    }
+   ]
+  },
+  "real": {
+   "express/lib": {
+    "flowsReported": 0,
+    "labeled": 0,
+    "unlabeled": 0,
+    "correct": 0,
+    "wrongField": 0,
+    "spurious": 0,
+    "sourceKindMismatch": 0,
+    "rows": []
+   },
+   "express/examples": {
+    "flowsReported": 7,
+    "labeled": 7,
+    "unlabeled": 0,
+    "correct": 6,
+    "wrongField": 0,
+    "spurious": 1,
+    "sourceKindMismatch": 0,
+    "rows": [
+     {
+      "id": "rf:express/examples:params:64:from",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     },
+     {
+      "id": "rf:express/examples:params:65:to",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     },
+     {
+      "id": "rf:express/examples:user-pet:13:user_id",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     },
+     {
+      "id": "rf:express/examples:route-map:51:pid",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     },
+     {
+      "id": "rf:express/examples:vhost:30:sub",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     },
+     {
+      "id": "rf:express/examples:route-separation-user:43:user",
+      "outcome": "spurious",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-body"
+     },
+     {
+      "id": "rf:express/examples:route-map:37:uid",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-route"
+     }
+    ]
+   },
+   "fastify/lib": {
+    "flowsReported": 0,
+    "labeled": 0,
+    "unlabeled": 0,
+    "correct": 0,
+    "wrongField": 0,
+    "spurious": 0,
+    "sourceKindMismatch": 0,
+    "rows": []
+   },
+   "fastify/examples": {
+    "flowsReported": 4,
+    "labeled": 4,
+    "unlabeled": 0,
+    "correct": 4,
+    "wrongField": 0,
+    "spurious": 0,
+    "sourceKindMismatch": 1,
+    "rows": [
+     {
+      "id": "rf:fastify/examples:benchmark-parser:42:body",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-body"
+     },
+     {
+      "id": "rf:fastify/examples:typescript-server:68:body",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-body"
+     },
+     {
+      "id": "rf:fastify/examples:parser:46:body",
+      "outcome": "correct",
+      "sourceKindMismatch": false,
+      "reportedSourceKind": "http-body"
+     },
+     {
+      "id": "rf:fastify/examples:typescript-server:66:params",
+      "outcome": "correct",
+      "sourceKindMismatch": true,
+      "reportedSourceKind": "ai-model-output"
+     }
+    ]
+   }
+  }
  },
  "deterministic": {
   "schema": 1,
@@ -2694,21 +3872,21 @@
   },
   "incremental": {
    "fixture": {
-    "summaryUnits": 12,
-    "restorable": 12,
+    "summaryUnits": 0,
+    "restorable": 0,
     "changedFiles": 1,
-    "changedUnits": 3,
-    "reused": 9,
-    "invalidated": 3,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
     "parityEqual": true
    },
    "fastify/examples": {
-    "summaryUnits": 90,
-    "restorable": 90,
+    "summaryUnits": 0,
+    "restorable": 0,
     "changedFiles": 1,
-    "changedUnits": 5,
-    "reused": 85,
-    "invalidated": 5,
+    "changedUnits": 0,
+    "reused": 0,
+    "invalidated": 0,
     "parityEqual": true
    }
   },
@@ -2934,6 +4112,322 @@
     "verifyScc": true
    }
   },
-  "evidenceReplay": "skipped"
+  "evidenceReplay": "measured",
+  "evidence": {
+   "fixture/multiservice": {
+    "witness": {
+     "sinksWithPaths": 5,
+     "attempted": 5,
+     "buildRefused": 0,
+     "built": 5,
+     "builtCrossScope": 0,
+     "replayed": 5,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "5/5",
+      "edge-altered-unsigned": "5/5",
+      "source-blob-altered": "5/5",
+      "graph-altered": "5/5"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 5,
+      "paths": 5,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "examined": 3,
+     "correct": 3,
+     "falseAttributions": 0,
+     "negativeLabelHits": 0,
+     "missingPositive": [
+      "ms:F4",
+      "ms:F5",
+      "ms:F6"
+     ]
+    }
+   },
+   "fixture/callreturn": {
+    "witness": {
+     "sinksWithPaths": 7,
+     "attempted": 7,
+     "buildRefused": 0,
+     "built": 7,
+     "builtCrossScope": 7,
+     "replayed": 7,
+     "replayedCrossScope": 7,
+     "replayFailed": 0,
+     "completeBundles": 7,
+     "tamper": {
+      "edge-altered-resigned": "7/7",
+      "edge-altered-unsigned": "7/7",
+      "source-blob-altered": "7/7",
+      "graph-altered": "7/7"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 7,
+      "paths": 24,
+      "pathsWithCallOrReturn": 17,
+      "impossible": 6,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 7,
+      "paths": 8,
+      "pathsWithCallOrReturn": 8,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 4,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": null
+   },
+   "express/lib": {
+    "witness": {
+     "sinksWithPaths": 2,
+     "attempted": 2,
+     "buildRefused": 0,
+     "built": 2,
+     "builtCrossScope": 0,
+     "replayed": 2,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 2,
+     "tamper": {
+      "edge-altered-resigned": "2/2",
+      "edge-altered-unsigned": "2/2",
+      "source-blob-altered": "2/2",
+      "graph-altered": "2/2"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 2,
+      "paths": 2,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "express/examples": {
+    "witness": {
+     "sinksWithPaths": 31,
+     "attempted": 31,
+     "buildRefused": 0,
+     "built": 31,
+     "builtCrossScope": 0,
+     "replayed": 31,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 31,
+     "tamper": {
+      "edge-altered-resigned": "31/31",
+      "edge-altered-unsigned": "31/31",
+      "source-blob-altered": "31/31",
+      "graph-altered": "31/31"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 31,
+      "paths": 39,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 30,
+      "paths": 38,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 7,
+     "unlabeled": 0,
+     "correct": 6,
+     "wrongField": 0,
+     "spurious": 1,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/lib": {
+    "witness": {
+     "sinksWithPaths": 15,
+     "attempted": 15,
+     "buildRefused": 0,
+     "built": 15,
+     "builtCrossScope": 14,
+     "replayed": 15,
+     "replayedCrossScope": 14,
+     "replayFailed": 0,
+     "completeBundles": 5,
+     "tamper": {
+      "edge-altered-resigned": "15/15",
+      "edge-altered-unsigned": "15/15",
+      "source-blob-altered": "15/15",
+      "graph-altered": "15/15"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 15,
+      "paths": 125,
+      "pathsWithCallOrReturn": 48,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 10
+     },
+     "v2": {
+      "sinks": 15,
+      "paths": 93,
+      "pathsWithCallOrReturn": 56,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 6
+     }
+    },
+    "attribution": {
+     "labeled": 0,
+     "unlabeled": 0,
+     "correct": 0,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 0
+    }
+   },
+   "fastify/examples": {
+    "witness": {
+     "sinksWithPaths": 4,
+     "attempted": 4,
+     "buildRefused": 0,
+     "built": 4,
+     "builtCrossScope": 0,
+     "replayed": 4,
+     "replayedCrossScope": 0,
+     "replayFailed": 0,
+     "completeBundles": 4,
+     "tamper": {
+      "edge-altered-resigned": "4/4",
+      "edge-altered-unsigned": "4/4",
+      "source-blob-altered": "4/4",
+      "graph-altered": "4/4"
+     }
+    },
+    "callReturn": {
+     "v1": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     },
+     "v2": {
+      "sinks": 4,
+      "paths": 4,
+      "pathsWithCallOrReturn": 0,
+      "impossible": 0,
+      "unmatchedReturnPaths": 0,
+      "invalidBindingPaths": 0,
+      "balancingPrunedEdges": 0,
+      "unbalancedTerminals": 0,
+      "contextWidenedPaths": 0,
+      "truncatedQueries": 0
+     }
+    },
+    "attribution": {
+     "labeled": 4,
+     "unlabeled": 0,
+     "correct": 4,
+     "wrongField": 0,
+     "spurious": 0,
+     "sourceKindMismatch": 1
+    }
+   }
+  }
  }
 }

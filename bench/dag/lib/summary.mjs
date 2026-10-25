@@ -103,10 +103,7 @@ export function renderSummary(out, manifest, { realLabels, fixtureLabelsDoc }) {
   } else p('Not run.');
   p();
 
-  p('## Evidence replay');
-  p();
-  p(`Status: **${out.evidenceReplay.status}**. ${out.evidenceReplay.reason}`);
-  p();
+  renderEvidence(out, p);
 
   p('## Synthetic graph families (SCC computation)');
   p();
@@ -138,14 +135,83 @@ export function renderSummary(out, manifest, { realLabels, fixtureLabelsDoc }) {
     'Natural vulnerable examples are scarce. Most positives are example-app patterns (reflected parameters, Referer redirects) and framework weaknesses (fast hash, non-cryptographic session ids), not exploitable production bugs.',
     'Labels were written by one person who saw the scanner output. The held-out subset is a discipline for future tuning, not independent ground truth.',
     'Line-less structural findings are credited at file granularity (reported above).',
-    'Not measured here: false source attribution and impossible call/return witnesses. The graph export does not expose a per-witness field/call-return check, and no label set for them exists yet. They stay open requirements rather than being reported as zero.',
-    'Evidence replay is skipped while no witness-bundle module exists (see the Evidence replay section).',
+    'Evidence replay, false source attribution and call/return realizability are measured in the sections above on the JS/TS units, the multi-service fixture and the call/return fixture only. Haskell and Nix units are not part of these measurements.',
+    'The real-flow attribution labels (labels/real-flows.json) were written after listing the flows the scanner reported, so they judge those flows and are not independent of it.',
     'Haskell and Nix are analysed statically and never built or evaluated. Nix selections are bounded subsets (see the manifest for roots and exclusions); the Nix numbers say nothing about the rest of nixpkgs or Home Manager.',
     'Single run per unit by default; p50/p95 are over units (or over repeated samples with --reps) on one host. They are not a reference-host performance claim.',
     'Synthetic families exercise the SCC computation only. They are not a substitute for a SBOM or conformance program for Haskell or Nix.',
   ]) p(`- ${s}`);
   p();
   return L.join('\n') + '\n';
+}
+
+function renderEvidence(out, p) {
+  const ev = out.evidenceReplay;
+  p('## Evidence replay (witness bundles)');
+  p();
+  if (ev.status !== 'measured') { p(`Status: **${ev.status}**. ${ev.reason || ''}`); p(); return; }
+  p('For each sink with a reconstructed witness, up to 60 per unit (sinks in id order, a path that crosses a call boundary preferred), a bundle is built from the real hop stream with `buildWitnessBundle`, signed with an ephemeral Ed25519 key, and replayed offline with `verifyWitness` against the exact artifacts (graph, provenance export, source blobs). Replay success is replayed / built. The bundles are built in-process from `runFieldIdentityAnalysis` with `recordHop`, the same way the witness-bundle tests do; a scan does not persist the hop stream, so there is no `attest --witness` path to measure.');
+  p();
+  const units = Object.entries(out.evidence).filter(([, r]) => r.status === 'ok');
+  p(table(['Unit', 'Sinks with a path', 'Bundles attempted', 'Build refused', 'Built', 'Replayed', 'Replay failed', 'Built across a call boundary', 'Replayed across a call boundary', 'Complete overall'], units.map(([id, r]) => {
+    const w = r.witness;
+    return [id, w.sinksWithPaths, w.bundlesAttempted, w.buildRefused, w.built, frac(w.replayed, w.built), w.replayFailed, w.builtCrossScope, frac(w.replayedCrossScope, w.builtCrossScope), frac(w.completeBundles, w.built)];
+  }).concat([['**all**', ev.sinksWithPaths, ev.bundlesAttempted, ev.buildRefused, ev.built, frac(ev.replayed, ev.built), ev.replayFailed, ev.builtCrossScope, frac(ev.replayedCrossScope, ev.builtCrossScope), frac(ev.completeBundles, ev.built)]])));
+  p();
+  const failCodes = {};
+  for (const [, r] of units) for (const [c, n] of Object.entries(r.witness.replayFailureCodes)) failCodes[c] = (failCodes[c] || 0) + n;
+  const refused = {};
+  for (const [, r] of units) for (const [c, n] of Object.entries(r.witness.buildRefusedReasons)) refused[c] = (refused[c] || 0) + n;
+  p(`Replay failure codes: ${Object.keys(failCodes).length ? Object.entries(failCodes).map(([c, n]) => `${c} x${n}`).join(', ') : 'none'}. Build refusals: ${Object.keys(refused).length ? Object.entries(refused).map(([c, n]) => `${c} x${n}`).join(', ') : 'none'}.`);
+  p();
+  p('Tamper rejection, on the first 40 replayable bundles of each unit. The unmodified bundle replaying (above) is the control for each row.');
+  p();
+  const names = { 'edge-altered-resigned': 'a recorded edge changed and the bundle re-signed (only replay can catch it)', 'edge-altered-unsigned': 'a recorded edge changed, signature left alone', 'source-blob-altered': 'a bound source file altered', 'graph-altered': 'the graph artifact replaced by a different graph' };
+  p(table(['Tamper', 'Rejected'], Object.entries(ev.tamper).map(([k, v]) => [names[k], frac(v.rejected, v.attempted)])));
+  p();
+  p('A rejection rate is over the tamper kinds listed. It says nothing about tamper kinds not tried (a changed transfer model, a swapped provenance export with a consistent digest).');
+  p();
+
+  p('## False source attribution');
+  p();
+  p('A reported flow is a false attribution when the source field it names is not the field the hand label says reaches that sink. Definitions and the labelling method are in `lib/attribution.mjs` and `labels/real-flows.json`. This is not a recall measure: a flow the scanner did not report is not examined.');
+  p();
+  const fx = out.attribution && out.attribution.fixture;
+  if (fx) {
+    p(`Controlled multi-service fixture: ${fx.flowsReported} flows reported, ${fx.examined} examined (the flow's source file is the source file of a positive flow label), ${fx.unexamined} not examined. Correct: ${frac(fx.correct, fx.examined)}. False attributions (sibling or spurious field): ${frac(fx.falseAttributions, fx.examined)}. Reported flows matching a negative label (a field that must not reach that sink): ${frac(fx.negativeLabelHits, fx.negativeLabels)} of the negative labels. Positive labels with no matching reported flow: ${fx.missingPositive.length}${fx.missingPositive.length ? ` (${fx.missingPositive.join(', ')})` : ''}.`);
+    p();
+    p('Limit: two of the three reported flows end in the same unresolved sink, so the fixture cannot tell the `note` flow from the `qty` flow by sink; it can only catch a field that no positive label for that file names.');
+    p();
+    p(table(['Reported fields', 'Sink', 'Source files', 'Positive-label fields for that source file', 'Outcome'], fx.rows.map((r) => [r.fields.join(', '), `${r.sinkKind}/${r.sinkSub}`, r.files.join(', '), r.expected.join(', '), r.outcome])));
+    p();
+  }
+  const realIds = Object.keys((out.attribution && out.attribution.real) || {});
+  if (realIds.length) {
+    const rr = realIds.map((id) => out.attribution.real[id]);
+    const t = (f) => rr.reduce((a, x) => a + x[f], 0);
+    p(table(['Natural unit', 'Flows reported', 'Labeled', 'Unlabeled', 'Correct field', 'Wrong (sibling) field', 'Spurious (no flow)', 'Source kind differs from label'], realIds.map((id, i) => {
+      const x = rr[i];
+      return [id, x.flowsReported, x.labeled, x.unlabeled, frac(x.correct, x.labeled), frac(x.wrongField, x.labeled), frac(x.spurious, x.labeled), frac(x.sourceKindMismatch, x.labeled)];
+    }).concat([['**all**', t('flowsReported'), t('labeled'), t('unlabeled'), frac(t('correct'), t('labeled')), frac(t('wrongField'), t('labeled')), frac(t('spurious'), t('labeled')), frac(t('sourceKindMismatch'), t('labeled'))]])));
+    p();
+    p('The two lib roots report no flows, so they contribute no denominator. Eleven flows is a small sample; one spurious flow moves the rate by nine points.');
+    p();
+  }
+
+  p('## Call/return realizability of reconstructed witnesses');
+  p();
+  p('Every sink with a reconstructed witness is queried in a version 1 store (the default) and a version 2 store (`correlationVersion: 2`) built from the same seeds. Each returned witness is walked source to sink by a checker that does not use invocation ids: a return edge must come back through the call site, caller activation and callee activation last entered. A witness that does not is impossible. A witness that begins inside a callee and returns to its caller has an unmatched return, which is realizable and not counted. Cap: 2000 sinks per store (not reached).');
+  p();
+  const crUnits = Object.entries(out.evidence).filter(([, r]) => r.status === 'ok');
+  const crRow = (id, r) => {
+    const a = r.callReturn.v1; const b = r.callReturn.v2;
+    return [id, `${a.sinks} / ${b.sinks}`, `${a.paths} / ${b.paths}`, `${a.pathsWithCallOrReturn} / ${b.pathsWithCallOrReturn}`, frac(a.impossible, a.pathsWithCallOrReturn), frac(b.impossible, b.pathsWithCallOrReturn), b.balancingPrunedEdges, b.unbalancedTerminals, b.contextWidenedPaths];
+  };
+  p(table(['Unit', 'Sinks v1 / v2', 'Witnesses v1 / v2', 'Crossing a call boundary v1 / v2', 'Impossible v1', 'Impossible v2', 'v2 mismatched edges pruned', 'v2 unbalanced-call terminals', 'v2 context-widened'], crUnits.map(([id, r]) => crRow(id, r))));
+  p();
+  const tot = (v, f) => crUnits.reduce((a, [, r]) => a + r.callReturn[v][f], 0);
+  p(`All units: impossible witnesses v1 ${frac(tot('v1', 'impossible'), tot('v1', 'pathsWithCallOrReturn'))}, v2 ${frac(tot('v2', 'impossible'), tot('v2', 'pathsWithCallOrReturn'))} (denominator: witnesses that cross at least one call or return edge). Natural units with a nonzero denominator in either version: ${crUnits.filter(([id, r]) => !id.startsWith('fixture/') && (r.callReturn.v1.pathsWithCallOrReturn + r.callReturn.v2.pathsWithCallOrReturn) > 0).map(([id]) => id).join(', ') || 'none'}; every other natural unit shows n/a (nothing crosses a call boundary), so it says nothing about the versions. The v1 and v2 stores enumerate their sinks independently (version 2 value-versions its nodes), so the sink counts can differ.`);
+  p();
 }
 
 function pctMedian(a) {
