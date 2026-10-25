@@ -133,6 +133,8 @@ import { emptyProtection, aggregateVerdicts } from './protection.js';
 import * as ids from './ids.js';
 import { planSeeds, seedEntryStateFactory, exprRoots, walkExpr } from './source-seeding.js';
 import { RECIPIENT_FACT_FIELDS } from './recipient-profile.js';
+import { pathEvidenceEnabled, evaluatePathEvidence, summarizeFlowEvidence } from './path-evidence.js';
+import { sinkFamilyOf } from './control-credit.js';
 
 // =========================================================================
 // §4.2 / §4.3 — registry-backed sink enumeration, multi-candidate resolution
@@ -770,7 +772,7 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
         // key by design and therefore never splits a flow.
         const flowKey = [src.id, snk.id, de.id, p.shape, g.grade, sortedT.join(',')].join('|');
         if (!groupsByFlowKey.has(flowKey)) groupsByFlowKey.set(flowKey, []);
-        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons });
+        groupsByFlowKey.get(flowKey).push({ p, g, src, snk, de, edgeIdStr, sortedT, site, unattributed, truncated: r.truncated, truncationReasons: r.truncationReasons, result: r });
       }
     }
     site.connected = connected;
@@ -779,6 +781,22 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     // reached it. A disconnected sink is a node with no flow, never absent.
     sinkNodeFor(site);
   }
+
+  // DAG-04: opt-in path predicates and control credit (see path-evidence.js).
+  const pathEvidenceOn = pathEvidenceEnabled(opts);
+  const _fnOf = (q) => cfgByQid.get(q)?.fn ?? null;
+  const pathEvidenceFor = (group) => {
+    const paths = group.map((x) => x.p);
+    const family = sinkFamilyOf(group[0].site.entry);
+    const evidences = paths.map((p) => evaluatePathEvidence({ path: p, nodeOf: (id) => store.getNode(id), fnOf: _fnOf, sinkFamily: family }));
+    const results = [...new Set(group.map((x) => x.result))];
+    const merged = {
+      status: results.every((x) => x.status === 'complete') ? 'complete' : 'partial',
+      truncated: results.some((x) => x.truncated), droppedPathCount: results.reduce((n, x) => n + (x.droppedPathCount ?? 0), 0),
+      analysisTruncated: results.some((x) => x.analysisTruncated), resumed: results.some((x) => x.resumed),
+    };
+    return summarizeFlowEvidence({ result: merged, paths, evidences });
+  };
 
   for (const [, group] of [...groupsByFlowKey.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     const { p, g, src, snk, de, edgeIdStr, sortedT, site } = group[0];
@@ -957,7 +975,16 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
       limitations,
       evidenceGrade: g.grade,
       handling: handlingResult,
+      // DAG-04 (default OFF; fields exist only when enabled, so default graphs and digests do not move):
+      // per-path branch conditions, feasibility under the bounded model, and control credit for the sink
+      // family. Alternatives stay distinct; infeasible-under-model paths are listed, not dropped.
+      ...(pathEvidenceOn ? { pathEvidence: pathEvidenceFor(group) } : {}),
     });
+    if (pathEvidenceOn) {
+      const fe = edgesById.get(edgeIdStr);
+      const refs = [...new Set(flowsById.get(fId).pathEvidence.alternatives.flatMap((a) => a.predicateRefs.map((x) => x.ref)))].sort();
+      if (fe && refs.length) fe.predicateRefs = [...new Set([...(fe.predicateRefs ?? []), ...refs])].sort();
+    }
   }
 
   // Milestone 2, Sub-project D, increment 2 (FR-307): appliesToAllPaths.
