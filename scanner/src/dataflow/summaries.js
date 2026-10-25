@@ -70,6 +70,13 @@ export class SummaryCache {
     const envCap = Number(process.env.AGENTIC_SECURITY_KCFA_MAX_CONTEXTS);
     this._maxContextsPerFn = Number.isFinite(envCap) && envCap >= 0 ? envCap : 16;
     this._contextCapHits = 0;
+    // DAG-07 R07.3: append-only record of every place a result is coarser
+    // than a fresh analysis would give: a tainted entry answered with the
+    // empty-entry summary (context cap), a recursion refinement that was still
+    // changing when its rounds ran out, and the subset of cap fallbacks whose
+    // empty-entry summary was restored from a previous scan rather than
+    // computed in this one.
+    this._notes = [];
     // R2 (PRD §5): bounded k=1 call-string sensitivity. OPT-IN (default OFF).
     // When on, the cache key is extended with the immediate caller's qid, so two
     // call paths reaching a helper with the SAME tainted-arg shape get DISTINCT
@@ -156,7 +163,11 @@ export class SummaryCache {
       if (!ctxs.has(stateHash) && ctxs.size >= this._maxContextsPerFn) {
         this._contextCapHits++;
         const base = this._cache.get(this._key(qid, new Set()));
-        if (base && !base._recursive) return base;
+        if (base && !base._recursive) {
+          this._notes.push({ reason: 'context-cap-fallback', qid });
+          if (base._incrementalSeed) this._notes.push({ reason: 'incremental-empty-entry-reuse', qid });
+          return base;
+        }
         // No base summary yet → fall through and compute this one (we need a
         // result), but don't grow the context set.
       } else {
@@ -178,13 +189,15 @@ export class SummaryCache {
       this._cache.set(k, summary);
       if (this._hitRecursion) {
         const FP_MAX = 3;
+        let converged = false;
         for (let fp = 0; fp < FP_MAX; fp++) {
           if (++this._iter > this._maxIter) break;
           const prev = summary;
           summary = analyze(qid, taintedParams);
-          if (_summaryEq(prev, summary)) break;
+          if (_summaryEq(prev, summary)) { converged = true; break; }
           this._cache.set(k, summary);
         }
+        if (!converged) this._notes.push({ reason: 'recursion-nonconverged', qid });
       }
       if (summary._recursive) delete summary._recursive;
       return summary;
@@ -224,7 +237,17 @@ export class SummaryCache {
   }
 
   size() { return this._cache.size; }
-  clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; }
+  clear() { this._cache.clear(); this._iter = 0; this._contextsByQid.clear(); this._contextCapHits = 0; this._notes = []; }
+
+  /** DAG-07 R07.3: [{reason, count, example}] over everything recorded in `_notes`, sorted by reason. */
+  completionNotes() {
+    const byReason = new Map();
+    for (const n of this._notes) {
+      const cur = byReason.get(n.reason);
+      if (cur) cur.count += 1; else byReason.set(n.reason, { reason: n.reason, count: 1, example: String(n.qid ?? '').slice(0, 160) });
+    }
+    return [...byReason.values()].sort((a, b) => (a.reason < b.reason ? -1 : 1));
+  }
 }
 
 // Stage 3 correctness audit (detection depth): this compared mutatedParams

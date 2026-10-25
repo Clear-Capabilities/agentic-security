@@ -163,7 +163,19 @@ export function seedSummaryCache(summaryCache, persisted, reusableQids) {
       mutatedThisFields: new Set(s.mutatedThisFields || []),
       taintedGlobals: new Set(s.taintedGlobals || []),
       findings: Array.isArray(s.findings) ? s.findings : [],
+      // DAG-07 R07.3: provenance of a restored summary. Never serialized
+      // (serializeSummaries copies named fields only), so it cannot leak back
+      // into the persisted state; SummaryCache reads it to tell a restored
+      // empty-entry summary standing in for a tainted context from a computed one.
+      _incrementalSeed: true,
     };
+    if (Number.isInteger(s.findingsTruncated) && s.findingsTruncated > 0) {
+      // Findings beyond the persist cap were dropped when this was saved, so
+      // reuse is a partial replay of what the function reported.
+      summary._findingsTruncated = s.findingsTruncated;
+      if (summaryCache._incrementalFindingsTruncated === undefined) summaryCache._incrementalFindingsTruncated = 0;
+      summaryCache._incrementalFindingsTruncated += 1;
+    }
     // Use the bottom taint-state key — these are summaries that DON'T depend
     // on entry taint state (e.g., pure functions). Higher-fidelity reuse
     // would require persisting the entry-state hash too; deferred.
@@ -198,21 +210,41 @@ export function seedSummaryCache(summaryCache, persisted, reusableQids) {
 export function serializeSummaries(summaryCache) {
   const out = {};
   if (!summaryCache || !summaryCache._cache) return out;
+  // DAG-07 R07.3. The cache key is `<qid>::<entryHash>[@caller][::receiver]`
+  // and a qid itself contains `::`, so the old `key.split('::')[0]` reduced
+  // every key to its FILE and let whichever entry context was written last
+  // stand for the whole file. Only the EMPTY-entry summary is a statement
+  // about what a function does when nothing tainted flows in; a summary
+  // computed under a tainted entry must never be restored as that. Parse the
+  // key from the right, persist the empty-entry summary under the real qid,
+  // and count what was not persisted so reuse can be reported honestly.
+  const EMPTY_SUFFIX = '::empty';
   let count = 0;
+  const skippedContexts = new Map();
   for (const [key, summary] of summaryCache._cache) {
-    if (count >= MAX_PERSISTED_SUMMARIES) break;
     if (!summary || summary._budgetExceeded || summary._recursive) continue;
-    const qid = key.split('::')[0];
+    if (!key.endsWith(EMPTY_SUFFIX)) {
+      const m = /^(.*?::[^:]*@\d+)::/.exec(key);
+      const q = m ? m[1] : key;
+      skippedContexts.set(q, (skippedContexts.get(q) || 0) + 1);
+      continue;
+    }
+    const qid = key.slice(0, -EMPTY_SUFFIX.length);
     if (!qid) continue;
+    if (count >= MAX_PERSISTED_SUMMARIES) break;
+    const findings = Array.isArray(summary.findings) ? summary.findings : [];
     out[qid] = {
       returnTainted: !!summary.returnTainted,
       mutatedParams: [...(summary.mutatedParams || [])],
       mutatedThisFields: [...(summary.mutatedThisFields || [])],
       taintedGlobals: [...(summary.taintedGlobals || [])],
-      findings: Array.isArray(summary.findings) ? summary.findings.slice(0, 50) : [],
+      findings: findings.slice(0, 50),
+      entryContext: 'empty',
+      ...(findings.length > 50 ? { findingsTruncated: findings.length - 50 } : {}),
     };
     count++;
   }
+  for (const [q, n] of skippedContexts) if (out[q]) out[q].contextsNotPersisted = n;
   return out;
 }
 
