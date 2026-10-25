@@ -1,0 +1,8 @@
+{
+  "name": "19-field-attribution",
+  "construct": "a whole object reaches the sink while only one field is tainted; a field-qualified query must not attribute the sibling field",
+  "expect": [
+    { "file": "app.js", "line": 3, "flow": true },
+    { "file": "app.js", "line": 7, "flow": true }
+  ]
+}

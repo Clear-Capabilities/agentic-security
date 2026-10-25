@@ -67,6 +67,36 @@ export function enumerateSinks(perFileIR, callGraph) {
 }
 
 /**
+ * Canonical caller index: callee qid -> [caller qid]. Built from each
+ * function's recorded `calls` (statement-level call nodes) and resolved with
+ * resolveKnownCallee, never the guessing resolve(). The demand selector
+ * (demand-query.js) extends it with the embedded call sites that `fn.calls`
+ * does not record (assignment right-hand sides, return values, nested
+ * arguments, callback registrations).
+ */
+export function buildCallerQidIndex(callGraph) {
+  const callersOf = new Map();
+  if (!callGraph || !callGraph.functions) return callersOf;
+  for (const fn of callGraph.functions.values()) {
+    for (const callee of (fn.calls || [])) {
+      // callee.callee is a SOURCE-LEVEL name ("b.fill"); lookups are by qid,
+      // so keying by the name could never match. Resolve to a qid first.
+      // resolveKnownCallee (not resolve): callee.callee may be a flattened
+      // member-call string ("loader.read"); the plain resolve() would guess
+      // via its bare-tail fallback and invent an edge to an unrelated
+      // same-named function. See callgraph.js.
+      const name = callee && typeof callee === 'object' ? callee.callee : callee;
+      if (!name) continue;
+      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
+      if (!qid) continue;
+      if (!callersOf.has(qid)) callersOf.set(qid, []);
+      callersOf.get(qid).push(fn.qid);
+    }
+  }
+  return callersOf;
+}
+
+/**
  * RHS-lite demand-driven slice. For each sink, walk backward through the
  * intra-procedural CFG via def-use, then ascend via the call graph for
  * each unresolved parameter binding. Returns the set of fn qids that are
@@ -103,24 +133,10 @@ export function reachabilitySliceWithCompletion(sinks, callGraph, maxCallerDepth
   }
 
   // Build a reverse callgraph: who calls fn-qid?
-  const callersOf = new Map();
-  for (const fn of callGraph.functions.values()) {
-    for (const callee of (fn.calls || [])) {
-      // callee.callee is a SOURCE-LEVEL name ("b.fill"); the worklist below
-      // looks this map up by qid, so keying by the name means the lookup can
-      // never match. Resolve to a qid first.
-      const name = callee && typeof callee === 'object' ? callee.callee : callee;
-      if (!name) continue;
-      // resolveKnownCallee (not resolve): callee.callee may be a flattened
-      // member-call string ("loader.read"); the plain resolve() would guess
-      // via its bare-tail fallback and invent an edge to an unrelated
-      // same-named function. See callgraph.js.
-      const qid = callGraph.resolveKnownCallee ? callGraph.resolveKnownCallee(name, fn.file) : null;
-      if (!qid) continue;
-      if (!callersOf.has(qid)) callersOf.set(qid, []);
-      callersOf.get(qid).push(fn.qid);
-    }
-  }
+  // DAG-02: factored into the shared, exported buildCallerQidIndex so the
+  // demand selector (demand-query.js) reuses the same canonical incoming-edge
+  // index. Behaviour is unchanged.
+  const callersOf = buildCallerQidIndex(callGraph);
 
   const work = [];
   for (const s of sinks) work.push({ qid: s.fnQid, depth: 0 });

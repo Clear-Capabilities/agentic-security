@@ -158,6 +158,28 @@ export function backwardSlice(callGraph, finding, opts = {}) {
   return out.reverse(); // source-first
 }
 
+/**
+ * Same walk as backwardSlice, plus a completion record in the shared
+ * vocabulary (DAG-02 R02.5): a chain cut at MAX_SLICE_DEPTH is a prefix of the
+ * real predecessor chain, so it reports `partial` with the depth limit as its
+ * reason and can never license a negative claim. backwardSlice itself is
+ * unchanged.
+ */
+export function backwardSliceWithCompletion(callGraph, finding, opts = {}) {
+  const slice = backwardSlice(callGraph, finding, opts);
+  const capped = slice.some((s) => s && s.reason === 'slice-depth-cap');
+  return {
+    slice,
+    completion: {
+      status: capped ? 'partial' : 'complete',
+      reasons: capped ? ['slice-depth-limit'] : [],
+      unexploredFrontierCount: capped ? 1 : 0,
+      visited: slice.length,
+      limits: { maxDepth: MAX_SLICE_DEPTH },
+    },
+  };
+}
+
 // ── Persistent cross-scan summary cache ────────────────────────────────────
 
 function _cachePath(scanRoot) {

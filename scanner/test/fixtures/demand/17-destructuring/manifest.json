@@ -1,0 +1,16 @@
+{
+  "name": "17-destructuring",
+  "construct": "destructured fields of a tainted object",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": true
+    }
+  ]
+}

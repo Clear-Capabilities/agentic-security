@@ -1,0 +1,16 @@
+{
+  "name": "11-clean-constants",
+  "construct": "no tainted value anywhere",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": false
+    },
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": false
+    }
+  ]
+}

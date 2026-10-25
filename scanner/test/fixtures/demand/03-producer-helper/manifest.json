@@ -1,0 +1,16 @@
+{
+  "name": "03-producer-helper",
+  "construct": "tainted value produced by a helper in another module (callee-generated taint)",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": false
+    }
+  ]
+}

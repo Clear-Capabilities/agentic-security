@@ -8,6 +8,7 @@ import { rhsReachableFunctions, shouldAnalyzeUnderRhs } from './tabulation.js';
 import { annotateBackwardSlices } from './backward.js';
 // DAG-05: dependency-complete incremental analysis (see incremental-session.js).
 import { beginIncrementalSession, engineOptionsFor, finishIncrementalSession } from './incremental-session.js';
+import { demandEnabled, runDemandQueries } from './demand-query.js'; // DAG-02
 import { buildPointsTo } from './points-to.js';
 import { buildClassHierarchy, annotateRTA } from '../ir/class-hierarchy.js';
 import { annotateSoftTaint } from './soft-taint.js';
@@ -113,6 +114,14 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
       }
     } catch { /* privacy-deep failure should not fail the scan */ }
   }
+  // DAG-02 begin (demand-driven sink queries; opt-in, additive, never changes `findings`)
+  if (demandEnabled() && Array.isArray(opts.demandQueries) && opts.demandQueries.length) {
+    try {
+      const demandResults = runDemandQueries(perFileIR, callGraph, opts.demandQueries, { ...(opts.demandOpts || {}), engineOpts: { ...opts, _cha: classHierarchy || undefined, _pointsTo: pointsToGraph || undefined } });
+      Object.defineProperty(findings, '_demandResults', { value: demandResults, enumerable: false });
+    } catch { /* demand queries must never fail the scan */ }
+  }
+  // DAG-02 end
   for (const f of findings) f._pathFeasibilityPruned = totalPruned;
   if (incrementalStats) {
     Object.defineProperty(findings, '_incrementalStats', { value: incrementalStats, enumerable: false });
@@ -181,4 +190,5 @@ export function runDeepAnalysis(perFileIR, callGraph, opts = {}) {
   return findings;
 }
 
+export { demandEnabled, runDemandQueries } from './demand-query.js'; // DAG-02
 export { runTaintEngine, CATALOG, matchSource, matchSinkOrSanitizer, _catalogSize, applyPathFeasibility, buildConstantFnMap, SummaryCache, entryStateFromCall, rhsReachableFunctions, shouldAnalyzeUnderRhs, annotateBackwardSlices };

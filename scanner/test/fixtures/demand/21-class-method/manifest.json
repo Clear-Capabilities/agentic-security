@@ -1,0 +1,17 @@
+{
+  "name": "21-class-method",
+  "construct": "a member call resolved through class-hierarchy analysis to a source-producing method",
+  "cha": true,
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 9,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 11,
+      "flow": false
+    }
+  ]
+}
