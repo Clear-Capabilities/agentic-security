@@ -51,6 +51,13 @@ export class FieldIdentitySummaryCache {
     this._stack = new Set();
     this._contextsByQid = new Map();
     this._maxContextsPerFn = maxContextsPerFn;
+    // DAG-07 R07.3: degradations and unfinished refinements, recorded so a
+    // caller can tell a precise result from one that fell back. Append-only.
+    this._notes = [];
+  }
+
+  completionNotes() {
+    return this._notes.slice();
   }
 
   _key(qid, entryState) {
@@ -130,6 +137,7 @@ export class FieldIdentitySummaryCache {
       // every later reader of the empty-entry context too.
       const base = this._cache.get(this._key(qid, emptyState())) ?? emptyFieldSummary();
       const fallback = { ...base, degradedReason: 'context-cap' };
+      this._notes.push({ qid, reason: 'context-cap' });
       this.set(qid, entryState, fallback);
       return fallback;
     }
@@ -219,12 +227,16 @@ export class FieldIdentitySummaryCache {
       // round) mirrors dataflow/summaries.js's own compute() exactly.
       if (this._hitRecursion) {
         const FP_MAX = 3;
+        let converged = false;
         for (let fp = 0; fp < FP_MAX; fp++) {
           const prev = summary;
           summary = analyzeFn(entryState);
-          if (fieldSummaryEq(prev, summary)) break;
+          if (fieldSummaryEq(prev, summary)) { converged = true; break; }
           this.set(qid, entryState, summary);
         }
+        // R07.3/R01.5: still changing after the last round means the
+        // summary is an under-approximation, not a fixed point.
+        if (!converged) this._notes.push({ qid, reason: 'recursion-nonconverged', rounds: FP_MAX });
       }
       // Defensive strip, mirroring dataflow's own equivalent: analyzeFn's
       // real return shape here never actually carries `_recursive` under

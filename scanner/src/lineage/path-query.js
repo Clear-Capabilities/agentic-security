@@ -39,6 +39,30 @@ export const DEFAULTS = {
   maxDepth: 64,
 };
 
+// DAG-07 R07.4: documented upper bounds. A budget must be a finite,
+// nonnegative integer no larger than its bound; anything else (NaN,
+// Infinity, negative, fractional, a string) makes the query `invalid`
+// rather than silently running unbounded or being coerced.
+export const BUDGET_UPPER_BOUNDS = {
+  maxPaths: 1e7,
+  maxPathsPerTerminal: 1e7,
+  maxCandidatePaths: 1e9,
+  maxExpansions: 1e9,
+  maxDepth: 1e6,
+};
+
+export function validateBudget(opts) {
+  const errors = [];
+  for (const [k, v] of Object.entries(opts ?? {})) {
+    if (!(k in BUDGET_UPPER_BOUNDS)) continue;
+    if (v === undefined) continue;
+    if (!Number.isInteger(v) || v < 0 || v > BUDGET_UPPER_BOUNDS[k]) {
+      errors.push(`${k} must be an integer in [0, ${BUDGET_UPPER_BOUNDS[k]}], got ${typeof v === 'number' ? String(v) : typeof v}`);
+    }
+  }
+  return errors;
+}
+
 // §15.4's terminal-reason vocabulary. Only 'origin' means "this really is
 // where the recorded flow starts" (`complete: true`). 'expansion-budget'
 // and 'candidate-cap' are deliberately NOT terminal reasons — see the loop
@@ -187,6 +211,7 @@ export function comparePaths(a, b) {
  * (§18.4's single most load-bearing constraint).
  */
 export function reconstructPaths(store, startNodeId, opts = {}) {
+  const budgetErrors = validateBudget(opts);
   const budget = { ...DEFAULTS, ...opts };
   const startNode = store.getNode(startNodeId);
   const truncationReasons = new Set();
@@ -206,36 +231,64 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     cyclesClipped: 0,
     terminals: [],
     analysisTruncated: false,
+    status: 'complete',
+    negativeClaimAllowed: false,
     budget: { ...budget, expansionsUsed: 0 },
   };
+  if (budgetErrors.length) {
+    // Invalid input is neither "no path" nor a partial answer.
+    result.status = 'invalid';
+    result.budgetErrors = budgetErrors;
+    result.budget = { ...DEFAULTS, expansionsUsed: 0 };
+    return result;
+  }
   // An id that names no node is NOT "no path exists" — it is "you asked
   // about something that is not in this store". §15.4 keeps the two apart,
   // because collapsing them is §18.4's failure mode wearing a different hat.
-  if (!startNode) return result;
+  if (!startNode) {
+    result.status = 'partial';
+    // A store that refused input may simply not contain the node asked for.
+    if (typeof store.limitStatus === 'function' && store.limitStatus().hit) {
+      result.truncated = true;
+      result.truncationReasons = ['store-limit'];
+    }
+    return result;
+  }
 
   const orphaned = new Set(store.diagnostics().orphanedPeerSources.map((o) => o.nodeId));
 
   const candidates = [];
   let expansions = 0;
-  const stack = [{
-    nodeId: startNodeId,
-    nodesRev: [startNodeId],
-    edgesRev: [],
-    onPath: new Set([startNodeId]),
-  }];
+  // DAG-07 R07.6: ONE shared path (arrays + visited set) that is unwound on
+  // backtrack, instead of copying both for every frame (which made a chain
+  // of depth d cost O(d^2)). A frame is only {nodeId, edge, hops}; visit
+  // order and expansion accounting are identical to the copying version.
+  const path = { nodesRev: [startNodeId], edgesRev: [], onPath: new Set([startNodeId]) };
+  const stack = [{ nodeId: startNodeId, edge: null, hops: 0 }];
 
   while (stack.length > 0) {
     if (candidates.length >= budget.maxCandidatePaths) { truncationReasons.add('candidate-cap'); break; }
     if (expansions >= budget.maxExpansions) { truncationReasons.add('expansion-budget'); break; }
     const frame = stack.pop();
-    const hops = frame.edgesRev.length;
+    const hops = frame.hops;
+    // Unwind to this frame's parent, then step onto the frame.
+    const parentLen = hops === 0 ? 0 : hops - 1;
+    while (path.edgesRev.length > parentLen) {
+      path.edgesRev.pop();
+      path.onPath.delete(path.nodesRev.pop());
+    }
+    if (frame.edge) {
+      path.edgesRev.push(frame.edge);
+      path.nodesRev.push(frame.nodeId);
+      path.onPath.add(frame.nodeId);
+    }
     // `edgesTo` is the traversal primitive; sorted for determinism, since
     // it is backed by a Set and carries no inherent order.
     const incoming = [...store.edgesTo(frame.nodeId)].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 
     if (incoming.length === 0) {
       if (hops > 0) {
-        candidates.push(materialize(store, frame.nodesRev, frame.edgesRev,
+        candidates.push(materialize(store, path.nodesRev, path.edgesRev,
           orphaned.has(frame.nodeId) ? TERMINAL_INCOMPLETE : TERMINAL_ORIGIN));
       }
       continue;
@@ -265,7 +318,7 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // literal zero-hop budget will not get one.
     if (hops >= budget.maxDepth && hops > 0) {
       truncationReasons.add('depth-limit');
-      candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_DEPTH));
+      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_DEPTH));
       continue;
     }
 
@@ -273,21 +326,16 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     let clipped = 0;
     for (const e of incoming) {
       expansions += 1;
-      if (frame.onPath.has(e.fromNodeId)) { clipped += 1; continue; }
+      if (path.onPath.has(e.fromNodeId)) { clipped += 1; continue; }
       extended += 1;
-      stack.push({
-        nodeId: e.fromNodeId,
-        nodesRev: [...frame.nodesRev, e.fromNodeId],
-        edgesRev: [...frame.edgesRev, e],
-        onPath: new Set([...frame.onPath, e.fromNodeId]),
-      });
+      stack.push({ nodeId: e.fromNodeId, edge: e, hops: hops + 1 });
     }
     result.cyclesClipped += clipped;
     if (extended === 0 && hops > 0) {
       // Every continuation would revisit a node already on this path. The
       // branch ends HERE, and it ends because of a cycle — never silently
       // as if this node were the flow's origin.
-      candidates.push(materialize(store, frame.nodesRev, frame.edgesRev, TERMINAL_CYCLE));
+      candidates.push(materialize(store, path.nodesRev, path.edgesRev, TERMINAL_CYCLE));
     }
   }
 
@@ -384,6 +432,9 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
   }
   result.terminals = terminals;
 
+  // R07.5: a store that refused hops/edges or skipped a group is missing
+  // pairings this query cannot see, so it can never prove "no path".
+  if (typeof store.limitStatus === 'function' && store.limitStatus().hit) truncationReasons.add('store-limit');
   result.truncated = truncationReasons.size > 0 || result.droppedPathCount > 0;
   result.truncationReasons = [...truncationReasons].sort();
 
@@ -395,6 +446,11 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
     // `noPathReason` — never a stylistic choice.
     result.noPathReason = orphaned.has(startNodeId) ? TERMINAL_INCOMPLETE : 'no-incoming-edges';
   }
+  result.status = isIncompleteAnswer(result) ? 'partial' : 'complete';
+  // "No modeled path" is allowed only for an exhausted query; it is a
+  // statement about the modeled graph, never about the software.
+  result.negativeClaimAllowed = result.status === 'complete' && result.paths.length === 0
+    && result.noPathReason === 'no-incoming-edges';
   return result;
 }
 
@@ -404,7 +460,7 @@ export function reconstructPaths(store, startNodeId, opts = {}) {
  * term).
  */
 export function isIncompleteAnswer(result) {
-  return result.truncated || result.unknownStartNode || result.analysisTruncated
+  return result.status === 'invalid' || result.truncated || result.unknownStartNode || result.analysisTruncated
     || result.noPathReason === TERMINAL_INCOMPLETE
     || result.paths.some((p) => !p.complete);
 }

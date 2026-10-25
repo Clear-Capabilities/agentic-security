@@ -440,14 +440,30 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
   const repository = opts.repository ?? 'repo';
   const { seeds, unseedable } = planSeeds(callGraph, { repository });
   const hops = [];
-  runFieldIdentityAnalysis(callGraph, {
+  const analysis = runFieldIdentityAnalysis(callGraph, {
     recordHop: (h) => hops.push(h),
     seedEntryState: seedEntryStateFactory(seeds),
     ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
+    ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
   });
   const store = new PathStore();
   store.addHops(hops);
+  // DAG-07 R07.2: an analysis unit that hit its budget has no hop
+  // representation (DESIGN_PATH_PROVENANCE.md section 14.8), so it reaches
+  // the store through the out-of-band channel built for exactly this. Units
+  // that emitted nothing stay visible through `analysisCompletion` below.
+  const analysisCompletion = { ...analysis.completion };
+  const _storeLimits = store.limitStatus();
+  if (_storeLimits.hit) {
+    analysisCompletion.storeLimits = _storeLimits;
+    if (analysisCompletion.status === 'complete') analysisCompletion.status = 'partial';
+  }
+  for (const u of analysisCompletion.incomplete) {
+    store.markTruncated(u.qid, u.context, u.reasons[0] ?? 'analysis-incomplete');
+  }
 
   const cfgByQid = new Map();
   for (const fn of callGraph.functions.values()) cfgByQid.set(fn.qid, { fn, nodes: fn.cfg?.nodes ?? {} });
@@ -1106,14 +1122,29 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     degradedTerminals: degraded.length,
     paths: { enumerated: stats.pathsEnumerated, projected: stats.pathsProjected, truncatedQueries: stats.truncatedQueries },
     provenance: { hops: hops.length, pnodes: store.stats().nodes, pedges: store.stats().edges },
+    ...(analysisCompletion.status === 'complete' ? {} : { analysisCompletion }),
   };
   graph.limitations = [
     'Protection verdicts are not assessed in Milestone 1: every edge carries not_assessed/none on all three dimensions.',
     'Policy verdicts are not evaluated in Milestone 1.',
     'External destinations are not resolved (FR-202 is Milestone 2); protocol.destinationResolution is "unknown" on every edge.',
   ];
-  graph.scanHealth = { status: 'complete', reason: 'lineage-graph-builder' };
+  graph.scanHealth = analysisCompletion.status === 'complete'
+    ? { status: 'complete', reason: 'lineage-graph-builder', analysisCompletion }
+    : {
+        status: analysisCompletion.status === 'cancelled' ? 'cancelled' : 'partial',
+        reason: analysisCompletion.status === 'cancelled' ? 'analysis-cancelled' : 'analysis-incomplete',
+        analysisCompletion,
+      };
+  if (analysisCompletion.status !== 'complete') {
+    const parts = [];
+    if (analysisCompletion.incomplete.length) parts.push(`field analysis stopped early in ${analysisCompletion.incomplete.length} of ${analysisCompletion.functionsAnalyzed} function(s) (iteration budget)`);
+    if (analysisCompletion.status === 'cancelled') parts.push(`analysis was cancelled; ${analysisCompletion.functionsNotAnalyzed} function(s) were never analyzed`);
+    if (analysisCompletion.storeLimits) parts.push('provenance construction limits were reached, so some flows were not materialized');
+    if (analysisCompletion.degraded.length) parts.push(`${analysisCompletion.degraded.length} call context(s) fell back to a coarser summary (context cap or unconverged recursion)`);
+    graph.limitations.push(`${parts.join('; ')}; absence of a flow from those functions is not evidence that none exists.`);
+  }
   graph.taxonomy = { version: '1.0.0', source: 'built-in + CONFIDENTIAL extension' };
 
-  return { graph, store, hops, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId };
+  return { graph, store, hops, analysisCompletion, seeds, unseedable, sites, nonStatementSites, degraded, stats, decisionsByNodeId };
 }
