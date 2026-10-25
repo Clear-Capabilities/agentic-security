@@ -74,6 +74,21 @@ export class FieldIdentitySummaryCache {
   }
 
   compute(qid, entryState, analyzeFn) {
+    // While `qid` is marked by `refreshing()` (SCC solver only, driver.js): re-run `analyzeFn` for an
+    // entry that is ALREADY seeded in the cache, without the recursion-stub
+    // stack and without the bounded refinement loop. A self-call or a call
+    // to another member of the same component inside `analyzeFn` therefore
+    // reads the previous round's cached summary instead of a bottom stub.
+    // Never marked => behavior is byte-identical to before. The mark lives on
+    // the cache (not an argument) so wrappers around compute() stay valid.
+    if (this._refreshing && this._refreshing.get(qid) === hashState(entryState)) {
+      // Consume the mark: a nested call to the same context (a self-call)
+      // must take the normal path and hit the cached previous-round summary.
+      this._refreshing.delete(qid);
+      const refreshed = analyzeFn(entryState);
+      this.set(qid, entryState, refreshed);
+      return refreshed;
+    }
     // Ordering matches dataflow/summaries.js's own compute() exactly:
     // cache-hit checked FIRST, before the `_stack`-based recursion guard.
     // This is load-bearing, not incidental — B5's whole point is that a
@@ -235,6 +250,28 @@ export class FieldIdentitySummaryCache {
       return summary;
     } finally {
       this._stack.delete(qid);
+    }
+  }
+
+  // Marks `qid` as being refreshed by the SCC solver for the duration of `fn`.
+  // Only the exact `entryState` context is refreshed; any other context of
+  // `qid` reached meanwhile (e.g. a call-site argument state) takes the normal
+  // guarded path, so recursion through it still terminates.
+  refreshing(qid, entryState, fn) {
+    (this._refreshing ||= new Map()).set(qid, hashState(entryState));
+    try { return fn(); } finally { this._refreshing.delete(qid); }
+  }
+
+  // Forgets every cached context of `qid` except those whose state hash is in
+  // `keepHashes` (a Set). Used by the SCC solver between rounds so a context
+  // computed against an earlier round's summaries is never reused.
+  dropContexts(qid, keepHashes = new Set()) {
+    const seen = this._contextsByQid.get(qid);
+    if (!seen) return;
+    for (const h of [...seen]) {
+      if (keepHashes.has(h)) continue;
+      this._cache.delete(`${qid}::${h}`);
+      seen.delete(h);
     }
   }
 

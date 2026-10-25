@@ -1,4 +1,6 @@
-import { emptyState } from './field-identity.js';
+import { emptyState, hashState } from './field-identity.js';
+import { computeScc } from '../graph/scc.js';
+import { solveRecursiveComponent } from './scc-solver.js';
 import { analyzeFunctionFieldIdentity } from './engine.js';
 import {
   FieldIdentitySummaryCache,
@@ -31,6 +33,27 @@ import {
 // convergence refinement is increment B5's job; this driver relies
 // entirely on B1's existing `_stack`-based bottom-stub for safety on a
 // recursive/cyclic call graph, exactly as B1-B3 already did.
+//
+// DAG-01 UPDATE (SCC scheduling). Functions are now scheduled over the
+// condensation of the call graph (`graph/scc.js`), callees before callers,
+// ties broken by qid. Call edges come from `callGraph.edges` (caller ->
+// callee qids, as `buildCallGraph` emits) or `opts.calleesOf(fn) -> qid[]`;
+// a hand-built graph with neither has no edges, so every function is its own
+// component and the order is exactly the old sorted-qid order. A component
+// that is a single function with no self-call runs the legacy single-pass
+// step unchanged. A RECURSIVE component (two or more functions, or a
+// self-call) is solved by `scc-solver.js`: re-analyze each member until a
+// full round changes no member summary (see that file for the bounded fact
+// domain, the join/widening policy and what "converged" does and does not
+// mean). Every analysis in a round re-reads the previous round's summaries.
+// The return value gains `convergence`; `results` keeps ascending-qid order.
+//
+// Budgets (all optional, deterministic where possible): `opts.maxRounds`,
+// `opts.maxPathDepth`, `opts.maxFunctionAnalyses` (a work count),
+// `opts.deadlineMs` with `opts.now()` (default Date.now), `opts.signal`.
+// When any of them stops the run, `convergence.converged` is false,
+// `status` is 'partial', and `remainingFrontier` lists the qids that were
+// not finished. A partial result must never be read as a safety proof.
 //
 // `callGraph` must be a real object from
 // `scanner/src/ir/callgraph.js#buildCallGraph` (`{functions,
@@ -66,78 +89,161 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
   const fnList = callGraph && callGraph.functions
     ? [...callGraph.functions.values()].sort((a, b) => (a.qid < b.qid ? -1 : a.qid > b.qid ? 1 : 0))
     : [];
-  // Live progress, additive/opt-in — mirrors dataflow/engine.js's own
-  // `runTaintEngine` onProgress precedent exactly. Unlike that engine, this
-  // driver has only ONE pass over `fnList` (no fixed-point pre-passes), so
-  // every function this driver analyzes is reported, not just a dominant
-  // subset.
+  // Live progress, additive/opt-in. Each function is reported once, the first
+  // time it is analyzed (recursive re-rounds are not re-reported).
   const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
   let _progressN = 0;
+  const reported = new Set();
+  const progress = (fn) => {
+    if (!onProgress || reported.has(fn.qid)) return;
+    reported.add(fn.qid);
+    onProgress({ current: ++_progressN, total: fnList.length });
+  };
 
   const results = new Map();
-  for (const fn of fnList) {
-    if (onProgress) onProgress({ current: ++_progressN, total: fnList.length });
+  const fnByQid = new Map(fnList.map(f => [f.qid, f]));
+
+  // --- Schedule: SCC condensation of the call graph, callees first. -------
+  const edges = [];
+  const edgeSeen = new Set();
+  const addEdge = (caller, callee) => {
+    if (!fnByQid.has(caller) || !fnByQid.has(callee)) return;
+    const k = `${caller}\u0000${callee}`;
+    if (edgeSeen.has(k)) return;
+    edgeSeen.add(k);
+    // Dependency direction: the callee must come before the caller.
+    edges.push([callee, caller]);
+  };
+  if (callGraph && Array.isArray(callGraph.edges)) {
+    for (const e of callGraph.edges) if (e && typeof e.callee === 'string') addEdge(e.caller, e.callee);
+  }
+  if (typeof opts.calleesOf === 'function') {
+    for (const fn of fnList) for (const c of (opts.calleesOf(fn) || [])) addEdge(fn.qid, c);
+  }
+  const scc = computeScc({ nodes: fnList.map(f => f.qid), edges });
+
+  // --- Budget. ------------------------------------------------------------
+  const now = typeof opts.now === 'function' ? opts.now : Date.now;
+  let work = 0;
+  let stopReason = null;
+  const shouldStop = () => {
+    if (stopReason) return stopReason;
+    if (opts.signal && opts.signal.aborted) stopReason = 'aborted';
+    else if (typeof opts.deadlineMs === 'number' && now() >= opts.deadlineMs) stopReason = 'deadline';
+    else if (typeof opts.maxFunctionAnalyses === 'number' && work >= opts.maxFunctionAnalyses) stopReason = 'work-limit';
+    return stopReason;
+  };
+
+  // Sub-project E, increment 1 (DESIGN_GRAPH_BUILDER.md section 3): the
+  // seeding hook. `opts.seedEntryState(fn)` returns the entry state `fn` is
+  // analyzed under; a falsy return means "no seed". With no hook, this IS
+  // `emptyState()` and every output is byte-identical to the pre-hook driver.
+  const entryStateOf = (fn) => (opts.seedEntryState ? (opts.seedEntryState(fn) || emptyState()) : emptyState());
+  const ctxFor = (fn) => {
     const lookupCallee = createCallGraphLookup(callGraph, fn.file);
     const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
-    // Path provenance (Sub-project C, increment 3, §13.7 item 14): thread
-    // opts.recordHop into the per-function ctx CONDITIONALLY, so a caller
-    // that supplies none gets a byte-identical `{ resolveCallSummary }`
-    // object to what this function constructed before this change —
-    // Decision 7.2's "true by construction" property, extended to the
-    // driver.
-    const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
-    // Sub-project E, increment 1 (DESIGN_GRAPH_BUILDER.md §3): the seeding
-    // hook. `opts.seedEntryState(fn)` returns the entry state this function
-    // should be analyzed under — a `field-identity.js` state carrying the
-    // data-element identities a source registry matched at real call sites
-    // INSIDE `fn`. Additive and opt-in, exactly like `opts.recordHop`
-    // above: with no hook supplied, `entryState` is `emptyState()` and both
-    // this call and the `cache.set` below are byte-identical to what this
-    // loop did before the hook existed (Decision 7.2's "true by
-    // construction" property, extended once more). A hook returning a
-    // falsy value is treated as "no seed for this function", so a caller
-    // can seed a subset without special-casing the rest.
-    const entryState = opts.seedEntryState ? (opts.seedEntryState(fn) || emptyState()) : emptyState();
-    const result = analyzeFunctionFieldIdentity(fn, entryState, ctx);
-    results.set(fn.qid, result);
-    // Seed the cache with this function's OWN empty-entry summary directly
-    // (not via cache.compute, which is reserved for a CALL SITE resolving
-    // an as-yet-uncomputed callee) — this is what lets a LATER function in
-    // fnList that calls this one reuse the driver's own result instead of
-    // silently recomputing it a second time.
-    //
-    // This CAN overwrite an entry a callee-triggered lazy compute() already
-    // wrote for the SAME (qid, emptyState()) key earlier in this loop — and
-    // a final whole-branch review proved by direct construction that the
-    // two computations are NOT guaranteed to agree: createCallGraphLookup's
-    // `callerFile` is fixed to the CALLING function's file, so when fn was
-    // first analyzed lazily (as someone else's callee), any bare-identifier
-    // call fn itself makes was resolved preferring THAT CALLER's file, not
-    // fn's own. This loop's own direct call above uses fn.file, the
-    // correct scope, so the overwrite here always uses the more precise of
-    // the two answers, never a worse one — but it is a real overwrite of a
-    // possibly-different prior value, not merely redundant re-computation
-    // of an identical one. Today every entry state is emptyState() (no
-    // source registry yet), so no identity can actually differ between the
-    // two computations and this is unobservable; it becomes load-bearing
-    // the moment entry states carry real identities.
-    //
-    // Sub-project E, increment 1 CLOSED THE SECOND, WORSE HALF of that
-    // hazard, which the paragraph above did not name: the KEY. This line
-    // used to write the summary under `emptyState()` unconditionally, i.e.
-    // under a key that claims "this is what `fn` does when nothing flows
-    // in". Once a seed puts real identities into `entryState`, that claim
-    // is FALSE — a later call site resolving `fn` with clean arguments
-    // builds an empty callee entry state, hits this key, and is handed
-    // return facts that exist only because the DRIVER seeded them. That is
-    // a fabricated identity at a call site nothing tainted, and it is
-    // measurable (see DESIGN_GRAPH_BUILDER.md §3.6: a real two-function
-    // fixture, plus a 27% swing in accepted hops on a 33-file project).
-    // Keying by the state actually analyzed is both the fix and a no-op
-    // when no hook is supplied — `entryState` IS `emptyState()` then, so
-    // this line stays byte-identical for every pre-existing caller.
-    cache.set(fn.qid, entryState, summaryFromAnalysisResult(result));
+    // Path provenance (Sub-project C, increment 3, section 13.7 item 14):
+    // thread opts.recordHop CONDITIONALLY so a caller that supplies none gets
+    // a byte-identical `{ resolveCallSummary }` object (Decision 7.2).
+    return opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+  };
+
+  const convergence = {
+    converged: true,
+    status: 'complete',
+    rounds: 0,
+    changedFacts: [],
+    changedFactsTotal: 0,
+    wideningReasons: [],
+    remainingFrontier: [],
+    stoppedBy: null,
+    components: [],
+  };
+  const wideningReasons = new Set();
+  const frontier = new Set();
+
+  const orderedComponents = scc.order.map(id => scc.components[id]);
+  for (const comp of orderedComponents) {
+    if (!comp.recursive) {
+      const fn = fnByQid.get(comp.members[0]);
+      if (shouldStop()) { frontier.add(fn.qid); continue; }
+      work++;
+      progress(fn);
+      const entryState = entryStateOf(fn);
+      const result = analyzeFunctionFieldIdentity(fn, entryState, ctxFor(fn));
+      results.set(fn.qid, result);
+      // Seed the cache with this function's OWN summary, keyed by the state
+      // actually analyzed. This can overwrite an entry a callee-triggered
+      // lazy compute() wrote for the same key; the overwrite is the more
+      // precise answer (it resolves bare-identifier calls against fn.file).
+      // With the E1 key fix this is a no-op difference when no seed hook is
+      // supplied. See DESIGN_GRAPH_BUILDER.md section 3.6.
+      cache.set(fn.qid, entryState, summaryFromAnalysisResult(result));
+      continue;
+    }
+
+    // Recursive component: solve to a fixed point or report partial.
+    const entryStates = new Map(comp.members.map(q => [q, entryStateOf(fnByQid.get(q))]));
+    const keepHashes = new Map(comp.members.map(q => [q, new Set([hashState(entryStates.get(q))])]));
+    const solved = solveRecursiveComponent({
+      members: comp.members,
+      maxRounds: opts.maxRounds,
+      maxPathDepth: opts.maxPathDepth,
+      maxChangedFacts: opts.maxChangedFacts,
+      shouldStop,
+      beforeRound() {
+        // Contexts reached through call-site argument states were computed
+        // against an earlier round's summaries. Forget them; the seeded
+        // entry context stays and is overwritten by `publish`.
+        for (const q of comp.members) cache.dropContexts(q, keepHashes.get(q));
+      },
+      publish(q, summary) {
+        cache.set(q, entryStates.get(q), summary);
+      },
+      analyze(q) {
+        const fn = fnByQid.get(q);
+        work++;
+        progress(fn);
+        let result;
+        const raw = cache.refreshing(q, entryStates.get(q), () => cache.compute(q, entryStates.get(q), (es) => {
+          result = analyzeFunctionFieldIdentity(fn, es, ctxFor(fn));
+          return summaryFromAnalysisResult(result);
+        }));
+        results.set(q, result);
+        return raw;
+      },
+    });
+    for (const r of solved.wideningReasons) wideningReasons.add(r);
+    convergence.rounds = Math.max(convergence.rounds, solved.rounds);
+    convergence.changedFactsTotal += solved.changedFactsTotal;
+    for (const f of solved.changedFacts) convergence.changedFacts.push({ component: comp.id, ...f });
+    convergence.components.push({
+      id: comp.id,
+      members: comp.members,
+      rounds: solved.rounds,
+      converged: solved.converged,
+      stoppedBy: solved.stoppedBy,
+      changedFacts: solved.changedFactsTotal,
+    });
+    if (!solved.converged) {
+      for (const q of solved.remainingFrontier) frontier.add(q);
+      if (solved.stoppedBy && !convergence.stoppedBy) convergence.stoppedBy = solved.stoppedBy;
+    }
+  }
+  if (stopReason) convergence.stoppedBy = stopReason;
+
+  // Anything never reached because a budget stopped the run is frontier too.
+  if (stopReason) for (const fn of fnList) if (!results.has(fn.qid)) frontier.add(fn.qid);
+  convergence.remainingFrontier = [...frontier].sort();
+  convergence.wideningReasons = [...wideningReasons].sort();
+  if (convergence.stoppedBy || convergence.remainingFrontier.length > 0) {
+    convergence.converged = false;
+    convergence.status = 'partial';
   }
 
-  return { results, cache };
+  // Keep `results` in ascending-qid order regardless of schedule order.
+  const ordered = new Map();
+  for (const fn of fnList) if (results.has(fn.qid)) ordered.set(fn.qid, results.get(fn.qid));
+
+  return { results: ordered, cache, convergence };
 }

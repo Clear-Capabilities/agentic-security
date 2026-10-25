@@ -32,7 +32,7 @@ both are settled here:
 1. **Seeding** (§3) — how a real call site becomes a field-identity entry
    state. Today the shipped driver hardcodes `emptyState()` and produces
    **exactly zero hops** on real code. Measured, twice, in `E1/1`.
-2. **Projection** (§6) — how a provenance DAG that is *variable*-granular
+2. **Projection** (§6) — how a provenance graph that is *variable*-granular
    (494 pnodes for a 33-file project) becomes a `DataFlowGraph v1` document
    that is *system*-granular (14 nodes for a whole synthetic platform).
 
