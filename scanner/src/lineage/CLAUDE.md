@@ -291,6 +291,23 @@ Terminology, binding for active docs: the raw hop structure (`path-store.js`, an
 
 Tests: `test/lineage/scc.test.js`, `test/lineage/scc-solver.test.js`, plus the existing `driver.test.js` and `summaries.test.js`.
 
+## Provenance correlation version 2 (DAG-03)
+
+Version 1 pairs the two halves of a hop at the join key `(scope, nodeId, dataElementId, context)` and marks what it cannot tell apart as `ambiguousCorrelation`. Version 2 adds evidence the engine had when it emitted each half, so halves pair only when that evidence proves them compatible. **It is OFF by default.** Enable with the `correlationVersion: 2` option (`buildDataFlowGraph`, `runFieldIdentityAnalysis`, `new PathStore({}, {correlationVersion: 2})`) or `AGENTIC_SECURITY_LINEAGE_CORRELATION=2`; an explicit option wins over the environment. With it off, no hop, id, digest or output field changes (pinned against digests captured before the change, from a fresh process, in `test/lineage/correlation-v2.test.js`).
+
+| Module | Responsibility |
+|---|---|
+| `correlation.js` | Pure vocabulary: `V2_HOP_FIELDS`, `resolveCorrelationVersion`, derivation helpers (`deriveChild`, `derivationCovers`, `scopeForSubPath`, `relPathOf`), `invocationIdOf`, `pairCompatibility` (the one pairing rule) and `buildCrosswalk`. |
+| `value-versions.js` | Reaching definitions over one function's CFG. A definition id is the writing `assign` node, or `entry`. A merge keeps both alternatives, a strong write kills the path and everything under it even when the written value is clean, a computed-key write is weak. Purely structural: it labels hops and never touches the identity state. |
+| `engine.js` (extended) | When `ctx.correlationVersion === 2` and a recorder is attached, every sub-expression gets a derivation segment (`sub`), in-halves carry `derivationId`/`relPath`/`fromVersions`, out-halves carry `derivationScope`/`relPath`/`toVersion`, a resolved call carries `invocationId` and `callRole: 'return'`. `rawRecordHop` is the recorder below the derivation wrappers, which is what a callee's analysis is handed so it does not inherit the caller's expression stamps. |
+| `summaries.js` (extended) | Argument reads are stamped `callRole: 'arg'` with the invocation and actual position (`argumentContext`); the parameter binding is `callRole: 'bind'` with the formal position and `toVersion: 'entry'`. |
+| `path-store.js` (extended) | Version 2 builds value-versioned path nodes (one source node per reaching definition), pairs through `pairCompatibility`, and gives every edge `correlation` (`proven` or `legacy-unknown`), `invocationId` and `callBoundary` (`call` or `return`). A source node whose definition never wrote the data element is a phantom alternative and is dropped and counted (`diagnostics().versionPruned`). `crosswalk()` returns the v1 to v2 id map. Annotations are sorted so graph content does not depend on hop delivery order. |
+| `path-query.js` (extended) | Balanced call/return traversal: walking back through a return edge pushes its invocation, the matching call edge pops it, a mismatched call edge is not followed and is counted (`result.balancing.unbalancedPruned`, with edge ids). Past `maxCallDepth` (default 8) the stack is abstracted: the path says so in `callContext.widened`. If every way out of a node was a mismatched pairing the branch ends as a partial path with terminal `unbalanced-call`, never as an empty "no flow". |
+
+**What is never pruned.** A hop without version 2 evidence (hand-built streams, an expression kind that carries none) pairs exactly as in version 1 and the edge says `legacy-unknown`; an edge marked ambiguous stays marked. Evidence only removes pairings it proves incompatible. A container-level field path (`''`) never disagrees with a field path, because pruning on it would drop a real edge.
+
+**Limits, stated.** The engine copies values on assignment, so an alias write after `o2 = o1` does not reach `o1`; version 2 labels that faithfully and does not model aliasing the engine does not. A write through a callee is not applied to the caller's state (`applyAtCallSite` is not wired into the engine). The receiver of an unresolved method call is stamped `receiver: true` and still pairs. Reaching definitions treat `entry` as an alternative only when the entry state carried that identity at that path. Recursion is handled by the per-path visited set plus the call-depth bound, not by a context-sensitive summary. Flow ids, node ids and edge ids of `DataFlowGraph v1` are unchanged in both modes; only `pnode:`/`pedge:` ids differ. Suite: `test/lineage/correlation-v2.test.js`.
+
 ## Milestone 1 exit-gate status
 
 The PRD's own Milestone 1 exit gate (§26, line 1796): *"AC-01, AC-02, AC-07,

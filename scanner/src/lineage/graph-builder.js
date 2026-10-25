@@ -450,11 +450,13 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     seedEntryState: seedEntryStateFactory(seeds),
     ...(opts.maxContextsPerFn === undefined ? {} : { maxContextsPerFn: opts.maxContextsPerFn }),
     ...(opts.maxIterations === undefined ? {} : { maxIterations: opts.maxIterations }),
+    // DAG-03: provenance correlation version 2 (off unless requested).
+    ...(opts.correlationVersion === undefined ? {} : { correlationVersion: opts.correlationVersion }),
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.deadline === undefined ? {} : { deadline: opts.deadline }),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
   });
-  const store = new PathStore();
+  const store = new PathStore({}, { correlationVersion: opts.correlationVersion });
   store.addHops(hops);
   // DAG-07 R07.2: an analysis unit that hit its budget has no hop
   // representation (DESIGN_PATH_PROVENANCE.md section 14.8), so it reaches
@@ -1133,7 +1135,10 @@ export function buildDataFlowGraph(callGraph, opts = {}) {
     },
     degradedTerminals: degraded.length,
     paths: { enumerated: stats.pathsEnumerated, projected: stats.pathsProjected, truncatedQueries: stats.truncatedQueries },
-    provenance: { hops: hops.length, pnodes: store.stats().nodes, pedges: store.stats().edges },
+    provenance: {
+      hops: hops.length, pnodes: store.stats().nodes, pedges: store.stats().edges,
+      ...(store.correlationVersion() === 2 ? { correlationVersion: 2 } : null),
+    },
     ...(analysisCompletion.status === 'complete' ? {} : { analysisCompletion }),
   };
   graph.limitations = [

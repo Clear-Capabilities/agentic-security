@@ -1,4 +1,8 @@
 import { accessPathOf, pathIsCoveredByPrefix } from '../dataflow/access-paths.js';
+import {
+  CORRELATION_VERSION_2, deriveChild, relPathOf, invocationIdOf, scopeForSubPath,
+} from './correlation.js';
+import { computeReachingDefinitions, ENTRY_VERSION } from './value-versions.js';
 import { identitiesAt, emptyState, removeIdentitiesAt, addIdentity, joinStates, statesEqual, hashState } from './field-identity.js';
 
 function noIdentity() {
@@ -55,6 +59,68 @@ function definitePrefixBeforeWildcard(path) {
 
 function pathHasWildcard(path) {
   return path.split('.').includes('*');
+}
+
+// --- Correlation version 2 (DAG-03) -------------------------------------
+// Everything below is inert unless the caller set `ctx.correlationVersion`
+// to 2 AND attached a recorder. With either missing, `sub` returns the ctx it
+// was given (the same reference), no field is added to any hop, and the
+// analysis result and the hop stream are byte-identical to version 1.
+function isV2(ctx) {
+  return ctx?.correlationVersion === CORRELATION_VERSION_2 && typeof ctx.recordHop === 'function';
+}
+
+// Enters one sub-expression: every hop emitted at or below it is stamped with
+// the derivation path of the level that emitted it (the innermost stamp
+// wins, because an inner wrapper's fields are already on the hop when the
+// outer wrapper sees it).
+function sub(ctx, seg, stamp) {
+  if (!isV2(ctx)) return ctx;
+  const derivation = deriveChild(ctx.derivation, seg);
+  const base = ctx.recordHop;
+  return { ...ctx, derivation, recordHop: (h) => base({ derivationId: derivation, ...stamp, ...h }) };
+}
+
+// The invocation id of the call expression currently being resolved.
+function currentInvocation(ctx) {
+  const site = ctx?.siteInfo;
+  return invocationIdOf({ scope: site?.scope, nodeId: site?.nodeId, context: site?.context, derivation: ctx?.derivation });
+}
+
+// Recorder-only context for resolving the `position`-th ACTUAL argument of a
+// call during parameter binding (summaries.js). Version 1: exactly the
+// recorder-only derivation it always was. Version 2: the argument subtree is
+// stamped with the invocation, its actual position and its derivation, so an
+// argument read can pair only with the binding of the same invocation and
+// formal position.
+export function argumentContext(ctx, position) {
+  if (!ctx?.recordHop) return undefined;
+  if (!isV2(ctx)) return { recordHop: ctx.recordHop };
+  const base = {
+    recordHop: ctx.recordHop, correlationVersion: ctx.correlationVersion,
+    derivation: ctx.derivation, siteInfo: ctx.siteInfo,
+  };
+  return sub(base, `arg${position}`, { callRole: 'arg', invocationId: currentInvocation(ctx), argPosition: position });
+}
+
+/** The invocation id of the call expression a call-level ctx is resolving (version 2). */
+export function callInvocationId(ctx) {
+  return isV2(ctx) ? currentInvocation(ctx) : null;
+}
+
+/** The recorder a callee's own analysis must be handed (see `rawRecordHop`). */
+export function calleeRecorder(ctx) {
+  return ctx?.rawRecordHop ?? ctx?.recordHop;
+}
+
+// The out-half correlation stamp for a write of byPath entry `subPath` of the
+// value built by `source` (rooted at derivation `root`).
+function outStamp(ctx, source, subPath, root) {
+  if (!isV2(ctx)) return null;
+  const { scope, rest } = scopeForSubPath(source, subPath, root);
+  const allocKind = source?.kind === 'object' ? 'object'
+    : (source?.kind === 'ident' || source?.kind === 'member') ? 'alias' : null;
+  return { derivationScope: scope, relPath: rest, allocKind };
 }
 
 // --- Path provenance hop recording (Sub-project C, increment 1) ---------
@@ -132,6 +198,7 @@ export function resolveExprIdentities(state, expr, ctx) {
               fromPath: key, toPath: null, dataElementId: id,
               syntacticPath: key === path ? null : path,
               widenReason: null, lossReason: null,
+              ...(isV2(ctx) ? { relPath: relPathOf(key, path) } : null),
             });
           }
         }
@@ -199,6 +266,7 @@ export function resolveExprIdentities(state, expr, ctx) {
                 fromPath: key, toPath: null, dataElementId: id,
                 syntacticPath: key === path ? null : path,
                 widenReason: null, lossReason: null,
+                ...(isV2(ctx) ? { relPath: relPathOf(key, path) } : null),
               });
             }
           }
@@ -218,7 +286,7 @@ export function resolveExprIdentities(state, expr, ctx) {
       // `assign`/`object` already use) — a coarse/ancestor-level fact on the
       // base conservatively applies to every field read off it, same
       // reasoning as `identitiesAt`'s ancestor coverage for state-backed reads.
-      const base = resolveExprIdentities(state, expr.object, ctx);
+      const base = resolveExprIdentities(state, expr.object, sub(ctx, 'base'));
       if (expr.prop === '*') {
         // Same reasoning as the path-succeeds branch above: unknown key on a
         // non-path base — conservatively use everything the base carries
@@ -282,7 +350,7 @@ export function resolveExprIdentities(state, expr, ctx) {
       const flat = new Set();
       const byPath = new Map();
       for (const prop of expr.props) {
-        const r = resolveExprIdentities(state, prop.value, ctx);
+        const r = resolveExprIdentities(state, prop.value, sub(ctx, prop.spread ? 'sp' : `p:${prop.key}`));
         for (const id of r.flat) flat.add(id);
         // Path provenance (Sub-project C, increment 1, Task 2 instrumented
         // site 2 of 4): one production/object in-half per id this property
@@ -358,8 +426,10 @@ export function resolveExprIdentities(state, expr, ctx) {
 
     case 'array': {
       const flat = new Set();
+      let ei = 0;
       for (const el of expr.elements) {
-        const r = resolveExprIdentities(state, el, ctx);
+        ei += 1;
+        const r = resolveExprIdentities(state, el, sub(ctx, `e${ei}`));
         for (const id of r.flat) flat.add(id);
       }
       // Path provenance (§10.1 `array` row): structure-flattening by
@@ -380,8 +450,10 @@ export function resolveExprIdentities(state, expr, ctx) {
 
     case 'tpl': {
       const flat = new Set();
+      let pi = 0;
       for (const part of expr.parts) {
-        const r = resolveExprIdentities(state, part, ctx);
+        pi += 1;
+        const r = resolveExprIdentities(state, part, sub(ctx, `t${pi}`));
         for (const id of r.flat) flat.add(id);
       }
       // Path provenance (§10.1 `tpl` row): transformation-bearing — the
@@ -404,8 +476,8 @@ export function resolveExprIdentities(state, expr, ctx) {
       // structure-flattening by design, not a gap. See
       // DESIGN_INTRAPROCEDURAL.md §4's "structure-preserving vs.
       // structure-flattening" invariant.
-      const left = resolveExprIdentities(state, expr.left, ctx);
-      const right = resolveExprIdentities(state, expr.right, ctx);
+      const left = resolveExprIdentities(state, expr.left, sub(ctx, 'l'));
+      const right = resolveExprIdentities(state, expr.right, sub(ctx, 'r'));
       const flat = new Set([...left.flat, ...right.flat]);
       // Path provenance (§10.1 `binary` row): same as `tpl` — deliberately
       // a separate case (not shared) per ADR §4, but the hop shape agrees.
@@ -428,8 +500,8 @@ export function resolveExprIdentities(state, expr, ctx) {
       // byPath, merged per sub-path across both operands, the same way
       // `union` merges per sub-path across branches. See
       // DESIGN_INTRAPROCEDURAL.md §4.
-      const left = resolveExprIdentities(state, expr.left, ctx);
-      const right = resolveExprIdentities(state, expr.right, ctx);
+      const left = resolveExprIdentities(state, expr.left, sub(ctx, 'l'));
+      const right = resolveExprIdentities(state, expr.right, sub(ctx, 'r'));
       const flat = new Set([...left.flat, ...right.flat]);
       const byPath = new Map();
       for (const r of [left, right]) {
@@ -461,8 +533,10 @@ export function resolveExprIdentities(state, expr, ctx) {
       // collapse into one coarse flat blob. See DESIGN_INTRAPROCEDURAL.md §4.
       const flat = new Set();
       const byPath = new Map();
+      let bi = 0;
       for (const branch of expr.branches) {
-        const r = resolveExprIdentities(state, branch, ctx);
+        bi += 1;
+        const r = resolveExprIdentities(state, branch, sub(ctx, `b${bi}`));
         for (const id of r.flat) flat.add(id);
         for (const [subPath, ids] of r.byPath) {
           const existing = byPath.get(subPath) ?? new Set();
@@ -529,6 +603,7 @@ export function resolveExprIdentities(state, expr, ctx) {
                 fromPath: null, toPath: null, dataElementId: id,
                 syntacticPath: null, widenReason: null, lossReason: null,
                 peerScope: summary.resolvedQid ?? null, peerContext: summary.resolvedContext ?? null,
+                ...(isV2(ctx) ? { callRole: 'return', invocationId: currentInvocation(ctx), relPath: '' } : null),
               });
             }
           }
@@ -577,11 +652,13 @@ export function resolveExprIdentities(state, expr, ctx) {
           for (const id of identitiesAt(state, receiverPath)) flat.add(id);
         }
       } else if (expr.callee?.kind === 'member' && expr.callee.object) {
-        const receiver = resolveExprIdentities(state, expr.callee.object, ctx);
+        const receiver = resolveExprIdentities(state, expr.callee.object, sub(ctx, 'recv', { receiver: true }));
         for (const id of receiver.flat) flat.add(id);
       }
+      let ai = 0;
       for (const arg of expr.args ?? []) {
-        const r = resolveExprIdentities(state, arg, ctx);
+        const r = resolveExprIdentities(state, arg, sub(ctx, `a${ai}`));
+        ai += 1;
         for (const id of r.flat) flat.add(id);
       }
       // Path provenance (§10.1 `call` unresolved row): an unresolved call's
@@ -608,7 +685,7 @@ export function resolveExprIdentities(state, expr, ctx) {
       // A simple pass-through of whatever the assignment's source resolves
       // to (structure-preserving), so its byPath is forwarded directly, not
       // dropped. See DESIGN_INTRAPROCEDURAL.md §4.
-      const r = resolveExprIdentities(state, expr.source, ctx);
+      const r = resolveExprIdentities(state, expr.source, sub(ctx, 'v'));
       // Path provenance (§10.1 `assign-expr` row): pure pass-through — the
       // source's own recursion already emitted its own in-halves; this hop
       // forwards the source's `widened` flag, so it forwards an approximate
@@ -694,7 +771,7 @@ function step(node, stateIn, widenings, ctx) {
         // `ctx?.recordHop` — mirroring Decision 1's own "extra computation
         // is fine to skip, but only when it is genuinely side-effect-free"
         // intent, which this call never actually satisfied.
-        const resolved = resolveExprIdentities(stateIn, node.source, ctx);
+        const resolved = resolveExprIdentities(stateIn, node.source, sub(ctx, 'src'));
         if (ctx?.recordHop) {
           const allIds = new Set([...residualFlat(resolved.flat, resolved.byPath), ...[...resolved.byPath.values()].flatMap((s) => [...s])]);
           for (const id of allIds) {
@@ -707,7 +784,7 @@ function step(node, stateIn, widenings, ctx) {
         }
         return { state: stateIn, returnFact: null };
       }
-      const resolved = resolveExprIdentities(stateIn, node.source, ctx);
+      const resolved = resolveExprIdentities(stateIn, node.source, sub(ctx, 'src'));
       if (pathHasWildcard(node.target)) {
         // A computed-key write (`obj[k] = ...`) must be a WEAK update (add to
         // whatever the container already carries, never clear it first) — a
@@ -739,6 +816,7 @@ function step(node, stateIn, widenings, ctx) {
                 kind: 'write-out', subKind: 'assign-weak',
                 fromPath: null, toPath: containerPath, dataElementId: id,
                 syntacticPath: node.target, widenReason: 'dynamic-property-key', lossReason: null,
+                ...outStamp(ctx, node.source, '', '/src'),
               });
             }
           }
@@ -783,6 +861,7 @@ function step(node, stateIn, widenings, ctx) {
             kind: 'write-out', subKind: 'assign',
             fromPath: null, toPath: node.target, dataElementId: id,
             syntacticPath: null, widenReason: assignWidenReason, lossReason: null,
+            ...outStamp(ctx, node.source, '', '/src'),
           });
         }
       }
@@ -795,6 +874,7 @@ function step(node, stateIn, widenings, ctx) {
               kind: 'write-out', subKind: 'assign',
               fromPath: null, toPath, dataElementId: id,
               syntacticPath: null, widenReason: assignWidenReason, lossReason: null,
+              ...outStamp(ctx, node.source, subPath, '/src'),
             });
           }
         }
@@ -819,8 +899,10 @@ function step(node, stateIn, widenings, ctx) {
       // itself does with the result (still only checks `r.flat` for a
       // widening event) — it only lets a nested `call` sub-expression
       // resolve precisely when `ctx` makes that possible.
+      let argIdx = -1;
       for (const arg of node.args ?? []) {
-        const r = resolveExprIdentities(stateIn, arg, ctx);
+        argIdx += 1;
+        const r = resolveExprIdentities(stateIn, arg, sub(ctx, `a${argIdx}`));
         if (r.flat.size > 0) {
           widenings.push({ atPath: null, dataElementIds: [...r.flat], reason: 'unresolved-call-arg', line: node.line });
         }
@@ -836,6 +918,7 @@ function step(node, stateIn, widenings, ctx) {
               kind: 'write-out', subKind: 'call-arg',
               fromPath: null, toPath: null, dataElementId: id,
               syntacticPath: null, widenReason: null, lossReason: null,
+              ...(isV2(ctx) ? { derivationScope: `/a${argIdx}`, relPath: '' } : null),
             });
           }
         }
@@ -844,7 +927,7 @@ function step(node, stateIn, widenings, ctx) {
     }
 
     case 'return': {
-      const resolved = node.value ? resolveExprIdentities(stateIn, node.value, ctx) : { flat: new Set(), widened: false };
+      const resolved = node.value ? resolveExprIdentities(stateIn, node.value, sub(ctx, 'val')) : { flat: new Set(), widened: false };
       if (resolved.widened && resolved.flat.size > 0) {
         widenings.push({ atPath: null, dataElementIds: [...resolved.flat], reason: 'unresolved-call', line: node.line });
       }
@@ -863,6 +946,7 @@ function step(node, stateIn, widenings, ctx) {
             kind: 'write-out', subKind: 'return',
             fromPath: null, toPath: null, dataElementId: id,
             syntacticPath: null, widenReason: returnWidenReason, lossReason: null,
+            ...(isV2(ctx) ? { derivationScope: '/val', relPath: '' } : null),
           });
         }
       }
@@ -891,6 +975,26 @@ function step(node, stateIn, widenings, ctx) {
 // malformed/generated CFG, matching the real engine's documented posture,
 // not a load-bearing part of the termination proof.
 const ITER_BUDGET = 5000;
+
+// Version 2 labels for one hop: the definitions reaching a read, and the
+// definition a local write creates. A write into another function's
+// namespace (a call-arg-bind) is labelled by the resolver instead.
+function versionStamp(reaching, nid, h, entryState) {
+  const out = {};
+  if (typeof h.fromPath === 'string') {
+    let vs = reaching.versionsAt(nid, h.fromPath);
+    // The entry value is an alternative only if the entry state really
+    // carried this id at this path; a merge with an unwritten branch must
+    // not invent an origin for it.
+    if (vs.includes(ENTRY_VERSION) && !entryState.get(h.fromPath)?.has(h.dataElementId)) {
+      const rest = vs.filter((v) => v !== ENTRY_VERSION);
+      if (rest.length > 0) vs = rest;
+    }
+    out.fromVersions = vs;
+  }
+  if (h.kind === 'write-out' && typeof h.toPath === 'string' && h.peerScope == null) out.toVersion = nid;
+  return out;
+}
 
 export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   const nodes = fn.cfg.nodes;
@@ -922,6 +1026,11 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   // two hops share a `context` iff the cache would consider them the same
   // context.
   const context = ctx?.recordHop ? hashState(entryState) : null;
+  // Correlation version 2 (DAG-03): one reaching-definitions pass per
+  // analysis run; hops are labelled with the definitions their read paths
+  // see and the definition their write creates.
+  const v2 = ctx?.correlationVersion === CORRELATION_VERSION_2 && typeof ctx.recordHop === 'function';
+  const reaching = v2 ? computeReachingDefinitions(fn) : null;
 
   while (work.length) {
     if (++iterations > maxIterations) { budgetExhausted = true; break; }
@@ -940,12 +1049,24 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
     // both). With no recorder present, `stepCtx` is the SAME `ctx` reference
     // — no allocation, nothing for a backward-compatibility test to catch
     // (Decision 7.2's "true by construction" point).
-    const stepCtx = ctx?.recordHop
-      ? { ...ctx, recordHop: (h) => ctx.recordHop({
+    const stepRecord = ctx?.recordHop
+      ? (h) => ctx.recordHop({
           scope, nodeId: nid, line: node.line ?? null,
           context, peerScope: null, peerContext: null,
+          ...(v2 ? versionStamp(reaching, nid, h, entryState) : null),
           ...h,
-        }) }
+        })
+      : null;
+    // `rawRecordHop` (version 2 only) is this level's recorder BELOW the
+    // per-expression derivation wrappers, which is what a callee's analysis
+    // must be handed: the callee's hops carry their own derivation ids and
+    // must not inherit the caller's expression-tree stamps.
+    const stepCtx = stepRecord
+      ? {
+          ...ctx,
+          ...(v2 ? { siteInfo: { scope, nodeId: nid, context }, rawRecordHop: stepRecord } : null),
+          recordHop: stepRecord,
+        }
       : ctx;
     const { state: out, returnFact } = step(node, incoming, widenings, stepCtx);
     if (returnFact && returnFact.size > 0) {
