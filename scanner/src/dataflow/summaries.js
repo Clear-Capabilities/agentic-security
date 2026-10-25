@@ -52,12 +52,22 @@ function _hashState(taintedParams) {
   return crypto.createHash('sha256').update(sorted).digest('hex').slice(0, 12);
 }
 
+// DAG-05 R05.3: the canonical entry list a key was derived from, so a persisted
+// context can carry its COMPLETE key (qid, entry state, receiver) and be checked
+// on reload rather than trusted by hash alone.
+function entryListOf(taintedParams) {
+  if (!taintedParams || taintedParams.size === 0) return [];
+  return [...canonicalizeAccessSet(taintedParams)].sort();
+}
+
 export class SummaryCache {
   constructor() {
     this._cache = new Map(); // qid::hash → summary
     this._stack = new Set(); // qids currently being analyzed (recursion guard)
     this._iter = 0;
-    this._maxIter = 5000;
+    // Computation budget for one scan. AGENTIC_SECURITY_SUMMARY_BUDGET raises (or lowers) it; the default is unchanged.
+    const envBudget = Number(process.env.AGENTIC_SECURITY_SUMMARY_BUDGET);
+    this._maxIter = Number.isFinite(envBudget) && envBudget > 0 ? Math.floor(envBudget) : 5000;
     // FR-SEM-2 (roadmap #2): the engine computes a distinct summary per
     // entry-taint-state (value-context sensitivity), computed lazily at call
     // sites. To stop that from blowing up when a hot helper is reached under
@@ -85,6 +95,9 @@ export class SummaryCache {
     // before, so no behavior change for the shipped engine.
     this._callString = process.env.AGENTIC_SECURITY_KCFA_CALLSTRING === '1';
     this._callerCtx = null;
+    // DAG-05 R05.3: key -> { qid, entry:[...], stateHash, recv } for every key this
+    // cache has produced, so cross-scan persistence can store typed contexts.
+    this._meta = new Map();
   }
 
   // Set the immediate-caller qid for call-string keying; returns the previous
@@ -118,8 +131,38 @@ export class SummaryCache {
     // caller dimension there only ever narrows an already-isolated lookup,
     // never disconnects a shared one.
     if (this._callString && this._callerCtx && stateHash !== 'empty') base = `${base}@${this._callerCtx}`;
-    if (!receiverType) return base;
-    return `${base}::${hashReceiverType(receiverType)}`;
+    const finalKey = receiverType ? `${base}::${hashReceiverType(receiverType)}` : base;
+    if (!this._meta.has(finalKey)) {
+      this._meta.set(finalKey, {
+        qid, entry: entryListOf(taintedParams), stateHash,
+        recv: receiverType ? hashReceiverType(receiverType) : null,
+      });
+    }
+    return finalKey;
+  }
+
+  /**
+   * DAG-05 R05.3: restore a persisted context under its REAL key. Never writes
+   * the empty-entry slot on behalf of a tainted context: the key is rebuilt from
+   * the persisted entry list and refused unless it reproduces the persisted hash.
+   * Returns false (nothing stored) on any mismatch.
+   */
+  restoreContext(qid, entryList, recv, stateHash, summary) {
+    if (!qid || !Array.isArray(entryList) || !summary) return false;
+    const entry = new Set(entryList);
+    const h = _hashState(entry);
+    if (h !== stateHash) return false;
+    if (this._callString && h !== 'empty') return false;
+    const base = `${qid}::${h}`;
+    const key = recv ? `${base}::${recv}` : base;
+    this._cache.set(key, summary);
+    this._meta.set(key, { qid, entry: entryListOf(entry), stateHash: h, recv: recv || null });
+    if (h !== 'empty') {
+      let ctxs = this._contextsByQid.get(qid);
+      if (!ctxs) { ctxs = new Set(); this._contextsByQid.set(qid, ctxs); }
+      ctxs.add(h);
+    }
+    return true;
   }
 
   get(qid, taintedParams, receiverType) {

@@ -9504,6 +9504,7 @@ function _deterministicFileTimings(timings) {
   let _deepCallGraph = null;
   let _deepFailure = null;
   let _deepIncomplete = null;
+  let _deepIncremental = null; // DAG-05 R05.7: cache provenance of the deep pass, when AGENTIC_SECURITY_INCREMENTAL=1
   if (_deepEnabled) {
     const budgetMs = parseInt(process.env.AGENTIC_SECURITY_DEEP_TIMEOUT_MS || '300000', 10);
     const t0 = Date.now();
@@ -9548,6 +9549,10 @@ function _deterministicFileTimings(timings) {
         });
       }
       if (Array.isArray(irFindings.analysisIncomplete) && irFindings.analysisIncomplete.length) _deepIncomplete = irFindings.analysisIncomplete;
+      if (irFindings._incrementalStats) {
+        const st = irFindings._incrementalStats;
+        _deepIncremental = { mode: st.mode, reason: st.reason, priorGeneration: st.priorGeneration, provenance: st.provenance, invalidation: st.invalidation, files: st.files, persisted: st.persisted && { committed: st.persisted.committed, error: st.persisted.error }, completion: st.completion };
+      }
       for (const f of irFindings) {
         f.unvalidated = true;
         f.validator_verdict = 'unvalidated';
@@ -9578,6 +9583,21 @@ function _deterministicFileTimings(timings) {
   // the finding-based notice above does not: deep mode never explicitly
   // requested at all (the common default-unset-in-CI case), which previously
   // produced no signal of any kind that assurance had quietly narrowed.
+  // DAG-05: when the cache was asked for, say what it did for this scan. Languages whose analyzers keep
+  // no cross-scan state (Nix: there is no taint IR to key a cache on) are analysed in full every time and named.
+  if (process.env.AGENTIC_SECURITY_INCREMENTAL === '1') {
+    const noHook = Object.keys(fc).some((f) => /\.nix$/i.test(f)) ? ['nix'] : [];
+    if (!_deepIncremental) {
+      _deepIncremental = { mode: 'cold', reason: _deepEnabled ? 'the deep pass recorded no incremental state' : 'deep analysis did not run, so the cross-scan cache is not used' };
+    }
+    if (noHook.length) {
+      _deepIncremental = {
+        ..._deepIncremental, languagesWithoutIncrementalHook: noHook,
+        languages: Object.fromEntries(noHook.map((l) => [l, { incremental: false, mode: 'cold', reason: 'its analysers keep no cross-scan state and run in full on every scan' }])),
+        note: `${noHook.join(', ')} analysers keep no cross-scan state and run in full on every scan`,
+      };
+    }
+  }
   const _deepStatus = {
     requested: _deepRequested,
     enabled: _deepEnabled,
@@ -9591,6 +9611,8 @@ function _deterministicFileTimings(timings) {
     failure: _deepFailure,
     // E2-05: where the deep analysis stopped short (budget, deadline, function limit, a thrown analysis). Present only when something did.
     ...(_deepIncomplete ? { incomplete: _deepIncomplete } : {}),
+    // DAG-05 R05.7: which facts were reused from the cache and which were analysed afresh, and why a run was cold.
+    ...(_deepIncremental ? { incremental: _deepIncremental } : {}),
   };
   // Sub-project E, increment 5 — Data Flow Explorer lineage graph.
   // DELIBERATELY INDEPENDENT of AGENTIC_SECURITY_DEEP/_deepEnabled above

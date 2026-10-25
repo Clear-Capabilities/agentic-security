@@ -149,6 +149,8 @@ export function computeScanHealth({ scanMeta = null, annotatorErrors = [], engin
           reason: deepStatus.reason ?? null,
           failure: deepStatus.failure ?? null,
           ...(Array.isArray(deepStatus.incomplete) && deepStatus.incomplete.length ? { incomplete: deepStatus.incomplete } : {}),
+          // DAG-05 R05.7: present only when the cross-scan cache was requested; says what was reused, what was recomputed, and why a run was cold.
+          ...(deepStatus.incremental ? { incremental: deepStatus.incremental } : {}),
         }
       : null,
     lineageAnalysis: lineageStatus
