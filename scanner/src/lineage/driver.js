@@ -1,4 +1,4 @@
-import { emptyState } from './field-identity.js';
+import { emptyState, hashState } from './field-identity.js';
 import { analyzeFunctionFieldIdentity } from './engine.js';
 import {
   FieldIdentitySummaryCache,
@@ -75,7 +75,20 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
   let _progressN = 0;
 
   const results = new Map();
+  // Completion roll-up (DAG-07 R07.1): one record per analysis unit that
+  // did NOT finish, plus the denominator, so a caller can tell "every
+  // function analyzed" from "some functions were cut short" even when the
+  // cut-short ones emitted no hops at all.
+  const incomplete = [];
+  // R07.7: `opts.signal` (AbortSignal) and `opts.deadline` (epoch ms) stop
+  // the run cooperatively; unanalyzed functions are counted, not hidden.
+  const shouldStop = () => !!(opts.signal && opts.signal.aborted)
+    || (Number.isFinite(opts.deadline) && Date.now() > opts.deadline);
+  let cancelled = false;
+  let notAnalyzed = 0;
+  const notesFrom = cache.completionNotes().length;
   for (const fn of fnList) {
+    if (cancelled || shouldStop()) { cancelled = true; notAnalyzed += 1; continue; }
     if (onProgress) onProgress({ current: ++_progressN, total: fnList.length });
     const lookupCallee = createCallGraphLookup(callGraph, fn.file);
     const resolveCallSummary = createCallSummaryResolver(cache, lookupCallee);
@@ -86,6 +99,10 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     // Decision 7.2's "true by construction" property, extended to the
     // driver.
     const ctx = opts.recordHop ? { resolveCallSummary, recordHop: opts.recordHop } : { resolveCallSummary };
+    // DAG-07: optional per-function iteration ceiling (engine.js ignores a
+    // non-positive-integer value, so this cannot loosen the default).
+    if (opts.maxIterations !== undefined) ctx.maxIterations = opts.maxIterations;
+    if (opts.signal || opts.deadline !== undefined) ctx.shouldStop = shouldStop;
     // Sub-project E, increment 1 (DESIGN_GRAPH_BUILDER.md §3): the seeding
     // hook. `opts.seedEntryState(fn)` returns the entry state this function
     // should be analyzed under — a `field-identity.js` state carrying the
@@ -100,6 +117,17 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     const entryState = opts.seedEntryState ? (opts.seedEntryState(fn) || emptyState()) : emptyState();
     const result = analyzeFunctionFieldIdentity(fn, entryState, ctx);
     results.set(fn.qid, result);
+    if (result.completion && result.completion.status === 'cancelled') cancelled = true;
+    if (result.completion && result.completion.status !== 'complete') {
+      incomplete.push({
+        qid: fn.qid,
+        context: hashState(entryState),
+        reasons: result.completion.reasons,
+        iterations: result.completion.iterations,
+        maxIterations: result.completion.maxIterations,
+        unfinishedWork: result.completion.unfinishedWork,
+      });
+    }
     // Seed the cache with this function's OWN empty-entry summary directly
     // (not via cache.compute, which is reserved for a CALL SITE resolving
     // an as-yet-uncomputed callee) — this is what lets a LATER function in
@@ -139,5 +167,21 @@ export function runFieldIdentityAnalysis(callGraph, opts = {}) {
     cache.set(fn.qid, entryState, summaryFromAnalysisResult(result));
   }
 
-  return { results, cache };
+  // R07.3: context-cap fallbacks and nonconverged recursion are also
+  // incompleteness, even though every function's own worklist finished.
+  const seen = new Set();
+  const degraded = cache.completionNotes().slice(notesFrom).filter((n) => {
+    const k = `${n.qid}:${n.reason}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const completion = {
+    status: cancelled ? 'cancelled' : incomplete.length === 0 && degraded.length === 0 ? 'complete' : 'partial',
+    functionsAnalyzed: fnList.length - notAnalyzed,
+    functionsNotAnalyzed: notAnalyzed,
+    incomplete,
+    degraded,
+  };
+  return { results, cache, completion };
 }

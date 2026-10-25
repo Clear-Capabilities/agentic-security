@@ -149,8 +149,23 @@ export function classifyOut(h) {
   return { role: 'unclassified', crossScope: false, node: null };
 }
 
+// DAG-07 R07.5: construction bounds. Hitting one never throws and never
+// silently drops: it is recorded in diagnostics().limits and makes every
+// reconstruction over this store report `store-limit` truncation.
+export const STORE_LIMIT_DEFAULTS = {
+  maxHops: 2000000,
+  maxPairingsPerGroup: 10000,
+  maxEdges: 5000000,
+};
+
 export class PathStore {
-  constructor() {
+  constructor(limits = {}) {
+    this._limits = { ...STORE_LIMIT_DEFAULTS };
+    for (const k of Object.keys(STORE_LIMIT_DEFAULTS)) {
+      const v = limits?.[k];
+      if (Number.isInteger(v) && v >= 0) this._limits[k] = v;
+    }
+    this._limitHits = { hopsRefused: 0, groupsSkipped: [], edgesRefused: 0 };
     this._groups = new Map();
     this._seen = new Set();
     this._truncations = new Map();
@@ -180,6 +195,10 @@ export class PathStore {
     }
     const k = hopDedupeKey(hop);
     if (this._seen.has(k)) return false;
+    if (this._stats.hopsAccepted >= this._limits.maxHops) {
+      this._limitHits.hopsRefused += 1;
+      return false;
+    }
     this._seen.add(k);
     this._stats.hopsAccepted += 1;
 
@@ -233,6 +252,7 @@ export class PathStore {
 
   _build() {
     if (this._built) return this._built;
+    this._limitHits = { hopsRefused: this._limitHits.hopsRefused, groupsSkipped: [], edgesRefused: 0 };
     const nodes = new Map();
     const edges = new Map();
     const outIndex = new Map();
@@ -304,6 +324,15 @@ export class PathStore {
         peerScope: a.peerScope ?? null, peerContext: a.peerContext ?? null,
       }));
 
+      // R07.5: an explicit cross product above the cap is not materialized;
+      // the group is reported instead of being silently pruned.
+      if (sources.length * g.out.length > this._limits.maxPairingsPerGroup) {
+        this._limitHits.groupsSkipped.push({
+          scope: g.scope, nodeId: g.nodeId, dataElementId: g.dataElementId,
+          pairings: sources.length * g.out.length,
+        });
+        continue;
+      }
       for (const s of sources) {
         for (const o of g.out) {
           // §14.3: an edge with BOTH endpoints in the peer's namespace is
@@ -328,7 +357,9 @@ export class PathStore {
             widenReasons, lossReasons,
           };
           const id = provenanceEdgeId(desc);
-          if (!edges.has(id)) {
+          if (!edges.has(id) && edges.size >= this._limits.maxEdges) {
+            this._limitHits.edgesRefused += 1;
+          } else if (!edges.has(id)) {
             edges.set(id, {
               id, ...desc, line: g.line,
               crossScope: s.crossScope || o.crossScope,
@@ -379,6 +410,18 @@ export class PathStore {
   edgesFrom(nodeId) { return [...(this._build().outIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   edgesTo(nodeId) { return [...(this._build().inIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   hasEdge(fromId, toId) { return this.edgesFrom(fromId).some((e) => e.toNodeId === toId); }
+  /** R07.5: has any construction bound been hit? Forces the build so the join-time counters are current. */
+  limitStatus() {
+    this._build();
+    const h = this._limitHits;
+    return {
+      hit: h.hopsRefused > 0 || h.groupsSkipped.length > 0 || h.edgesRefused > 0,
+      hopsRefused: h.hopsRefused,
+      groupsSkipped: h.groupsSkipped.slice(),
+      edgesRefused: h.edgesRefused,
+      limits: { ...this._limits },
+    };
+  }
   stats() { return { ...this._stats, groups: this._groups.size, nodes: this._build().nodes.size, edges: this._build().edges.size }; }
 
   /**
@@ -395,6 +438,7 @@ export class PathStore {
       unclassified: this._unclassified,
       truncations: [...this._truncations.entries()],
       orphanedPeerSources: this._build().orphanedPeerSources,
+      limits: this.limitStatus(),
     };
   }
 }

@@ -900,6 +900,16 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   const widenings = [];
   const returnFactsByNode = new Map();
   let iterations = 0;
+  // Completion record (DAG-07 R07.1): a budget-exhausted run used to fall
+  // out of the loop with a bare `break` and return an empty exit state that
+  // was indistinguishable from "analyzed, nothing flows". `maxIterations`
+  // is overridable through ctx so the limit is testable without building a
+  // 5,000-node CFG; a non-integer or non-positive override is ignored.
+  const maxIterations = Number.isInteger(ctx?.maxIterations) && ctx.maxIterations > 0
+    ? ctx.maxIterations : ITER_BUDGET;
+  let budgetExhausted = false;
+  let cancelled = false;
+  const shouldStop = typeof ctx?.shouldStop === 'function' ? ctx.shouldStop : null;
   // Path provenance (Sub-project C, increment 1, Decision 7.2): stamped
   // once for the whole analysis, since resolveExprIdentities never sees the
   // enclosing function.
@@ -914,7 +924,10 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
   const context = ctx?.recordHop ? hashState(entryState) : null;
 
   while (work.length) {
-    if (++iterations > ITER_BUDGET) break;
+    if (++iterations > maxIterations) { budgetExhausted = true; break; }
+    // R07.7: cooperative cancellation, polled every 64 iterations so a
+    // deadline costs next to nothing on the common path.
+    if (shouldStop && (iterations & 63) === 1 && shouldStop()) { cancelled = true; break; }
     const nid = work.shift();
     const node = nodes[nid];
     if (!node) continue;
@@ -988,5 +1001,16 @@ export function analyzeFunctionFieldIdentity(fn, entryState, ctx) {
     if (ids.size > 0) mutatedParams.set(param, ids);
   }
 
-  return { exitState, returnFacts, mutatedParams, widenings };
+  const completion = (budgetExhausted || cancelled)
+    ? {
+        status: cancelled ? 'cancelled' : 'partial',
+        reasons: [cancelled ? 'cancelled' : 'analysis-iteration-budget'],
+        iterations: maxIterations,
+        maxIterations,
+        unfinishedWork: work.length,
+        exitReached: outStates.has(fn.cfg.exit),
+      }
+    : { status: 'complete', reasons: [], iterations, maxIterations, unfinishedWork: 0, exitReached: outStates.has(fn.cfg.exit) };
+
+  return { exitState, returnFacts, mutatedParams, widenings, completion };
 }

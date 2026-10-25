@@ -9642,6 +9642,10 @@ function _deterministicFileTimings(timings) {
       });
       if (_lr.status === 'complete') {
         _lineageGraph = _lr.graph;
+        // DAG-07 R07.2: a graph built from a field analysis that stopped
+        // early must reach scan health, not only the graph body.
+        const _ac = _lr.graph?.coverage?.analysisCompletion;
+        if (_ac && _ac.status !== 'complete') { _lineageStatus.incomplete = _ac.incomplete; _lineageStatus.degraded = _ac.degraded; }
         if (_lr.elapsedMs > _lineageBudgetMs) {
           // Same "measured, not truly interrupted" disclosure _deepEnabled's
           // own elapsed > budgetMs branch already makes for IR-taint — see
