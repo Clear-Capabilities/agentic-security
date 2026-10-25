@@ -3388,6 +3388,34 @@ async function cmdVerifyAttestation(args) {
     return 0;
   }
 
+  // DAG-10: a replayable path witness (schema: agentic-security/path-witness@1). The signature alone proves
+  // integrity; `--witness-artifacts <file.json>` ({graph, provenance, sources?, config?}) additionally replays
+  // the recorded path offline against the artifacts it names. Building a witness is a module API
+  // (posture/witness-bundle.js buildWitnessBundle): the hop stream it needs is not persisted by a scan.
+  const { WITNESS_SCHEMA, verifyWitness } = await import('../src/posture/witness-bundle.js');
+  if (bundle.schema === WITNESS_SCHEMA) {
+    let artifacts = null;
+    if (args.flags['witness-artifacts']) {
+      try { artifacts = JSON.parse(fs.readFileSync(path.resolve(args.flags['witness-artifacts']), 'utf8')); }
+      catch (e) { console.error(`Could not read witness artifacts: ${e.message}`); return 2; }
+    }
+    const w = verifyWitness(bundle, publicKeyPem, artifacts);
+    if (!w.signature.ok) { console.error(`✗ INVALID — ${w.signature.reason}`); return 1; }
+    if (w.replay.performed && !w.replay.ok) {
+      console.error('✗ INVALID — the signature holds but replay against the supplied artifacts failed:');
+      for (const x of w.replay.failures) console.error(`  - ${x.code}: ${x.detail}`);
+      return 1;
+    }
+    console.log(w.replay.performed
+      ? '✓ VALID — signature holds and the recorded path replays against the supplied artifacts.'
+      : '✓ SIGNATURE VALID (integrity only) — replay was not attempted; pass --witness-artifacts <file.json> to replay.');
+    console.log(`  completion: ${bundle.completion?.overall}   evidence: ${Object.entries(bundle.evidence || {}).map(([k, v]) => `${k}=${v.status}`).join('  ')}`);
+    console.log(`  proves:        ${w.statement.proves}`);
+    console.log(`  does NOT prove: ${w.statement.doesNotProve}`);
+    console.log(`  trust basis:   ${w.signature.trustBasis}`);
+    return 0;
+  }
+
   const r = verifyEvidenceBundle(bundle, publicKeyPem);
   if (!r.ok) {
     console.error(`✗ INVALID — ${r.reason}`);

@@ -77,7 +77,7 @@ export function keyFingerprint(publicKeyPem) {
 }
 
 /** Issuance block for a locally generated key. */
-function buildLocalIssuance(publicKeyPem) {
+export function buildLocalIssuance(publicKeyPem) {
   const fp = keyFingerprint(publicKeyPem);
   return {
     issuer: { id: `local-install:${fp.slice(0, 16)}`, kind: 'local-install', keyFingerprint: fp },
