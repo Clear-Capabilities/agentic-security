@@ -103,6 +103,10 @@ argument 2) and `c.Redirect(code, url)` (argument 1) are sinks. Laravel `$reques
 request-named variable). `cs-aspnet-implicit-action-param` and `java-spring-implicit-mapped-param` are annotation sources fed by `ir/implicit-handler-params.js`.
 Tests: `test/evaluation/engine-mechanisms.test.js`.
 
+## Boundary-contract consumer seeding (DAG-08)
+
+`cross-service-taint.js` still only ANNOTATES findings for `consumes` declarations. The separate `runBoundaryTaint(perFileIR, callGraph, contracts)` seeds bound boundary contracts (see `../lineage/boundary-contract.js`): it sets `fn.boundarySeeds` (access paths such as `evt.customerId`, read by `_unionAnnotationTaint`) for one seed per engine run and always removes it afterwards. Findings new relative to an unseeded baseline carry `boundary` evidence (`modeledInput: true`, `observed: false`) and the consumer field that reached them. A contract that does not bind yields a coverage gap, no finding. Cost is one `runTaintEngine` pass per seed, capped by `maxRuns` (default 64, reported as a `budget` gap when hit).
+
 ## Entry points
 
 - `runTaintEngine(perFileIR, callGraph, opts)` — the public entry. Runs from `engine.js` when `AGENTIC_SECURITY_DEEP=1`. **R1 (PRD §5):** the CLI entry (`bin/agentic-security.js#cmdScan`) sets that env var by default for local/interactive scans (not in CI, and not when `--no-deep`/`AGENTIC_SECURITY_DEEP=0`), so the default `/scan --all` runs deep. In-process callers (tests, the cve-replay corpus) invoke `runScan()` directly without the CLI default and therefore stay deep-off unless they set the env var themselves (e.g. `test/deep-taint.test.js`).

@@ -317,3 +317,62 @@ export function adaptCallGraphForLineage(callGraph) {
   const resolveKnownCallee = callGraph.resolveKnownCallee ? (...a) => swap(callGraph.resolveKnownCallee(...a)) : undefined;
   return { ...callGraph, functions, ...(resolve ? { resolve } : {}), ...(resolveKnownCallee ? { resolveKnownCallee } : {}), lineageView: { haskell: true, functions: clones.size } };
 }
+
+// ── DAG-08: boundary view (record and monadic bindings, unresolved higher-order constructs) ──────────────────────────────
+// A boundary contract that names a Haskell consumer (a function and one of its parameters) is bound by
+// lineage/boundary-contract.js against the same parser-resolved functions this view clones. These helpers add what a consumer
+// binding needs from this layer and must not hide:
+//   * the ORIGINAL source location of the bound function next to the lineage-view clone's location (both kept, neither invented);
+//   * every higher-order construct (`mapM_ f xs`, `forM_ xs k`, `traverse_`, `>>=` with a function value) whose function
+//     argument the Haskell resolver could not resolve to a project function. Taint through such a construct is not followed, so it
+//     is listed instead of being treated as resolved.
+const HIGHER_ORDER_VIA = /^(?:mapM_?|forM_?|traverse_?|for_|foldM_?|foldr|foldl'?|fmap|<\$>|>>=|=<<|bracket_?|handle|catch|forever|when|unless|zipWithM_?)$/;
+
+/**
+ * @param {object} callGraph the Haskell call graph (original or lineage-adapted)
+ * @returns {{functions: object[], unresolvedHigherOrder: object[], notInlined: object[]}}
+ */
+export function describeHaskellBoundaries(callGraph) {
+  const out = { functions: [], unresolvedHigherOrder: [], notInlined: [] };
+  if (!callGraph || typeof callGraph.functions?.values !== 'function') return out;
+  for (const fn of callGraph.functions.values()) {
+    if (!isHsFile(fn.file) || !fn.cfg) continue;
+    out.functions.push({
+      qid: fn.qid, name: fn.name, file: fn.file, line: fn.line,
+      view: fn.hs && fn.hs.lineageView ? { adapted: true, inlinedCalls: fn.hs.lineageInlinedCalls || 0 } : { adapted: false },
+      recordParams: ((fn.hs && fn.hs.recordParams) || []).map((r) => ({ name: r.name, type: r.type, fields: [...(r.fields || [])] })),
+    });
+    for (const s of (fn.hs && fn.hs.lineageNotInlined) || []) out.notInlined.push({ function: fn.qid, file: fn.file, line: fn.line, callee: s.callee, reason: s.reason });
+    for (const n of Object.values(fn.cfg.nodes)) {
+      const call = n.kind === 'call' ? n : (n.kind === 'assign' && n.source && n.source.kind === 'call' ? n.source : null);
+      if (!call || !call.hs) continue;
+      const via = call.hs.via;
+      if (!via || !HIGHER_ORDER_VIA.test(via)) continue;
+      if (call.hs.status === 'resolved' && call.hs.target) continue;
+      out.unresolvedHigherOrder.push({
+        function: fn.qid, file: fn.file, line: n.line ?? call.line ?? fn.line, via, status: call.hs.status || 'unknown',
+        callee: typeof call.callee === 'string' ? call.callee : null,
+        reason: call.hs.status === 'param' ? 'the function argument is a parameter of the enclosing function' : 'the function argument was not resolved to a project function',
+      });
+    }
+  }
+  const key = (a) => `${a.file}:${String(a.line).padStart(8, '0')}:${a.via}`;
+  out.unresolvedHigherOrder.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  return out;
+}
+
+/**
+ * The original and lineage-view locations of a bound Haskell consumer. `adapted` is the result of adaptCallGraphForLineage.
+ * Both refer to the same source file and line: the view clones the function but never moves or renames it.
+ */
+export function haskellConsumerLocations(adapted, binding) {
+  if (!binding || !adapted || typeof adapted.functions?.get !== 'function') return null;
+  const clone = adapted.functions.get(binding.qid);
+  if (!clone) return null;
+  const orig = binding.originalLocation || { file: binding.file, line: binding.line };
+  return {
+    original: { file: orig.file, line: orig.line },
+    view: { file: clone.file, line: clone.line, view: 'haskell-lineage', adapted: !!(clone.hs && clone.hs.lineageView), inlinedCalls: (clone.hs && clone.hs.lineageInlinedCalls) || 0 },
+    notInlined: (clone.hs && clone.hs.lineageNotInlined) || [],
+  };
+}
