@@ -24,7 +24,7 @@ The ten stages: [Discover](discover/README.md) · [Corroborate](corroborate/READ
 ## The security graph
 
 - **[Code Boundaries](security-graph/code-boundaries.md)**: the security graph underneath Agentic Security
-- **[Data flow](security-graph/data-flow.md)**, **[blast radius](security-graph/blast-radius.md)** and **[provenance](security-graph/provenance.md)**
+- **[Data flow](security-graph/data-flow.md)**, **[blast radius](security-graph/blast-radius.md)** and **[provenance](security-graph/provenance.md)** and **[graph precision and completeness](security-graph/graph-precision.md)**
 
 ## Trust
 

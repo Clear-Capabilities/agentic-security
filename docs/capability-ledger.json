@@ -785,7 +785,8 @@
         "docs/security-graph/code-boundaries.md",
         "docs/security-graph/data-flow.md",
         "docs/security-graph/blast-radius.md",
-        "docs/security-graph/provenance.md"
+        "docs/security-graph/provenance.md",
+        "docs/security-graph/graph-precision.md"
       ],
       "haskell": {
         "applicability": "applicable",
@@ -829,7 +830,8 @@
         "docs/security-graph/code-boundaries.md",
         "docs/security-graph/data-flow.md",
         "docs/security-graph/blast-radius.md",
-        "docs/security-graph/provenance.md"
+        "docs/security-graph/provenance.md",
+        "docs/security-graph/graph-precision.md"
       ]
     },
     {
@@ -1223,6 +1225,7 @@
         "docs/DOCS-MIGRATION.md",
         "docs/implementation-status/autonomous-assurance-docs-repositioning.md",
         "docs/implementation-status/ga-promotion.md",
+        "docs/implementation-status/dag-improvements.md",
         "docs/reference/root-cause-sweep.md",
         "docs/reference/federation.md",
         "docs/reference/fleet-contract.md",
@@ -1304,7 +1307,8 @@
         "docs/STYLE-AND-TERMINOLOGY.md",
         "docs/DOCS-MIGRATION.md",
         "docs/implementation-status/autonomous-assurance-docs-repositioning.md",
-        "docs/implementation-status/ga-promotion.md"
+        "docs/implementation-status/ga-promotion.md",
+        "docs/implementation-status/dag-improvements.md"
       ]
     },
     {
