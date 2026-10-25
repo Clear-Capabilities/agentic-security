@@ -1,0 +1,129 @@
+{
+  "manifestVersion": 1,
+  "purpose": "Pinned real-code projects for the graph/taint validation programme (PRD sections 8.3 and 8.4). These are DATA: the projects are analysed statically; nothing is built or executed.",
+  "acquiredAt": "2026-10-25",
+  "acquiredBy": "bench/dag/acquire.mjs (git fetch --depth 1 of the pinned commit; HEAD is verified equal to the pin)",
+  "toolchain": {
+    "node": "v24.20.0",
+    "git": "2.54.0",
+    "ghc": "9.14.1 (present on the acquisition host, NOT used: no Haskell project is compiled)",
+    "cabal": "3.18.1.0 (present on the acquisition host, NOT used)",
+    "nix": "not installed on the acquisition host; Nix files are parsed statically, never evaluated",
+    "note": "The scanner is the only tool that reads these trees. The pins below, not the host toolchain, define the input."
+  },
+  "projects": [
+    {
+      "id": "express",
+      "language": "js",
+      "role": "JS/TS HTTP server framework with a large examples/ tree of small apps",
+      "url": "https://github.com/expressjs/express.git",
+      "commit": "1c6f1b0fe4000977b9a7b4f34097e4d527dd9824",
+      "commitDate": "2026-10-23T16:21:08-05:00",
+      "versionAtPin": "5.3.0 (package.json)",
+      "license": "MIT",
+      "licenseFile": "LICENSE",
+      "buildConfig": "package.json engines.node >= 18; no build step, no install performed",
+      "scanRoots": [
+        { "path": "lib", "tier": "quick", "why": "framework core (6 files)" },
+        { "path": "examples", "tier": "quick", "why": "70-file corpus of runnable server apps: the natural source of HTTP sources and response/redirect/download sinks" }
+      ],
+      "excluded": "test/, benchmarks/, docs and CI files: tests intentionally exercise bad input; they would dominate findings without representing application code"
+    },
+    {
+      "id": "fastify",
+      "language": "js",
+      "role": "JS/TS HTTP server framework with TypeScript type tests and examples",
+      "url": "https://github.com/fastify/fastify.git",
+      "commit": "d40c30d2a68051a35c2ded4d4b2db114784e2d6c",
+      "commitDate": "2026-10-25T13:39:21+01:00",
+      "versionAtPin": "6.0.0-alpha.5 (package.json)",
+      "license": "MIT",
+      "licenseFile": "LICENSE",
+      "buildConfig": "package.json; no build step, no install performed",
+      "scanRoots": [
+        { "path": "lib", "tier": "quick", "why": "framework core (31 files)" },
+        { "path": "examples", "tier": "quick", "why": "18 example servers" }
+      ],
+      "excluded": "test/, types/, docs/, build/, benchmark/ (benchmark/ is not under a scan root), and CI files"
+    },
+    {
+      "id": "scotty",
+      "language": "haskell",
+      "role": "Haskell web micro-framework (library plus example applications)",
+      "url": "https://github.com/scotty-web/scotty.git",
+      "commit": "b5f4dfbdbd6c94f3d21492ac7925e699c3b54e87",
+      "commitDate": "2026-06-26T12:50:49+02:00",
+      "versionAtPin": "see scotty.cabal at the pinned commit (0.30 line)",
+      "license": "BSD-3-Clause",
+      "licenseFile": "LICENSE",
+      "buildConfig": "scotty.cabal and cabal.project (tested-with GHC 8.10.7 per the cabal file); not built",
+      "scanRoots": [
+        { "path": "Web", "tier": "quick", "why": "library modules (11 files)" },
+        { "path": "examples", "tier": "quick", "why": "14 Haskell example apps plus 1 JS asset; the only place request data meets html/text/redirect/file sinks" }
+      ],
+      "excluded": "test/, bench/, doctest/"
+    },
+    {
+      "id": "yesod",
+      "language": "haskell",
+      "role": "Haskell web framework monorepo (library packages, TemplateHaskell routing)",
+      "url": "https://github.com/yesodweb/yesod.git",
+      "commit": "4d3fcc460fabc0b1f85ee4cc705cc79c5753ccfc",
+      "commitDate": "2026-07-29T17:57:04+02:00",
+      "versionAtPin": "yesod-core 1.7.0.1 (yesod-core.cabal)",
+      "license": "MIT",
+      "licenseFile": "LICENSE",
+      "buildConfig": "stack.yaml resolver lts-23.10, cabal.project; not built",
+      "scanRoots": [
+        { "path": "yesod-core", "tier": "quick", "why": "core handler, cookie and session code (44 files)" },
+        { "path": "yesod-form", "tier": "full", "why": "form input handling (28 files)" },
+        { "path": "yesod-auth", "tier": "full", "why": "authentication, hashing, redirects (15 files)" }
+      ],
+      "excluded": "yesod-bin, yesod-test, yesod-static, yesod-persistent, yesod-sitemap, yesod-newsfeed, yesod-eventsource, yesod-websockets, yesod-auth-oauth, yesod-form-multi, demo/"
+    },
+    {
+      "id": "home-manager",
+      "language": "nix",
+      "role": "Nix user-environment configuration module collection",
+      "url": "https://github.com/nix-community/home-manager.git",
+      "commit": "c216bf5a1f173b0481bd5c8c489ebe5595ecc68c",
+      "commitDate": "2026-10-24T21:54:26-05:00",
+      "versionAtPin": "see release.json at the pinned commit",
+      "license": "MIT",
+      "licenseFile": "LICENSE",
+      "buildConfig": "flake.nix/default.nix; never evaluated (no nix on host); static parse only",
+      "scanRoots": [
+        { "path": "modules/services", "tier": "full", "why": "user-level service modules: scripts, secrets and systemd units (218 files)" }
+      ],
+      "excluded": "modules/programs, modules/misc (635 files, option plumbing, 30s scan with 6 findings), modules/files, tests/, docs/, lib/, nix-darwin/, nixos/ (module glue)"
+    },
+    {
+      "id": "nixpkgs-subset",
+      "language": "nix",
+      "role": "NixOS system module subset (bounded sparse checkout of the nixpkgs repository)",
+      "url": "https://github.com/NixOS/nixpkgs.git",
+      "commit": "728418d220a2e8ccce9edd9a4ccd86980a4b6b3a",
+      "commitDate": "2026-10-25T14:08:19Z",
+      "versionAtPin": "nixpkgs master at the pin (no tag claimed)",
+      "license": "MIT",
+      "licenseFile": "COPYING",
+      "buildConfig": "sparse checkout; never evaluated; pkgs/ is deliberately absent",
+      "sparse": ["nixos/modules/services/web-servers", "nixos/modules/services/networking/ssh", "nixos/modules/security"],
+      "scanRoots": [
+        { "path": "nixos/modules/security", "tier": "full", "why": "PAM, sudo/doas, wrappers, auditing: privilege-sensitive modules (36 files scanned)" },
+        { "path": "nixos/modules/services/web-servers", "tier": "full", "why": "HTTP server modules: scripts, certificates, secrets (41 files scanned)" }
+      ],
+      "excluded": "everything outside the two roots, including pkgs/ (not fetched), nixos/modules/services/networking/ssh (fetched but not scanned: kept for a future selection), and the cone-mode ancestor-level files (hundreds of unrelated services/networking modules that the sparse checkout materialises as a side effect and which are NOT in a scan root)"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "multiservice",
+      "language": "js",
+      "path": "bench/dag/fixtures/multiservice/src",
+      "labels": "bench/dag/labels/multiservice.json",
+      "mutants": "bench/dag/fixtures/mutants.json",
+      "note": "Authored for this benchmark. Three services (HTTP api, queue worker, HTTP reporting) joined by an SQS-style queue and a MongoDB-style store."
+    }
+  ]
+}
