@@ -558,7 +558,9 @@ test('DAG-03/R03.6: version 1 mode emits no version 2 field anywhere and its out
   assert.equal(out.hops, 'cccd4cc4164597ca');
   assert.equal(out.nodes, '4bf8c28dc4a7917c');
   assert.equal(out.edges, 'e1bbb29d908ba793');
-  assert.equal(out.diagnostics, '03b4708b0d4e97c0');
+  // diagnostics() gained limits.ambiguousSummaries (DAG-07 part 2); hops, nodes,
+  // edges and recon digests above are still the pre-DAG-03 values.
+  assert.equal(out.diagnostics, '721eb090addae09d');
   assert.equal(out.recon, '376c19e4e8d5e25a');
   assert.equal(out.graph, '9e85c3fb98f2efc7');
   assert.deepEqual(out.stats, { hopsOffered: 51, hopsAccepted: 45, groups: 15, nodes: 24, edges: 26 });
