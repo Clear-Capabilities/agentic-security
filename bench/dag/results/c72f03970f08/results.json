@@ -1,0 +1,2939 @@
+{
+ "schema": 1,
+ "commit": "c72f03970f08b538fc870059ec4965414b2293b7",
+ "worktreeDirty": true,
+ "generatedAt": "2026-10-25T15:11:41.919Z",
+ "wallClockSeconds": 304,
+ "env": {
+  "node": "v24.20.0",
+  "platform": "darwin-arm64",
+  "cpus": 8,
+  "memGb": 16,
+  "mode": "full",
+  "reps": 1,
+  "syntheticMaxNodes": 1000000
+ },
+ "manifestPins": [
+  {
+   "id": "express",
+   "commit": "1c6f1b0fe4000977b9a7b4f34097e4d527dd9824",
+   "resolved": true
+  },
+  {
+   "id": "fastify",
+   "commit": "d40c30d2a68051a35c2ded4d4b2db114784e2d6c",
+   "resolved": true
+  },
+  {
+   "id": "scotty",
+   "commit": "b5f4dfbdbd6c94f3d21492ac7925e699c3b54e87",
+   "resolved": true
+  },
+  {
+   "id": "yesod",
+   "commit": "4d3fcc460fabc0b1f85ee4cc705cc79c5753ccfc",
+   "resolved": true
+  },
+  {
+   "id": "home-manager",
+   "commit": "c216bf5a1f173b0481bd5c8c489ebe5595ecc68c",
+   "resolved": true
+  },
+  {
+   "id": "nixpkgs-subset",
+   "commit": "728418d220a2e8ccce9edd9a4ccd86980a4b6b3a",
+   "resolved": true
+  }
+ ],
+ "languages": {
+  "js": {
+   "units": 4,
+   "unitsOk": 4,
+   "unitsNotOk": 0,
+   "unitsWithGraph": 4,
+   "unitsGraphComplete": 4,
+   "completionRate": 1,
+   "truncatedQueries": 0,
+   "queryDenominator": 222,
+   "truncatedQueryRate": 0,
+   "timeMs": {
+    "samples": 4,
+    "p50": 1069,
+    "p95": 6786,
+    "max": 6786
+   },
+   "peakRssMb": 347,
+   "labels": {
+    "TP": 5,
+    "FP": 20,
+    "FN": 0,
+    "TN": 2,
+    "excluded": 2,
+    "fileLevelCredits": 17,
+    "labeled": 27,
+    "precision": 0.2,
+    "precisionDenominator": 25,
+    "recall": 1,
+    "recallDenominator": 5
+   },
+   "labelsHeldOut": {
+    "TP": 2,
+    "FP": 7,
+    "FN": 0,
+    "TN": 0,
+    "excluded": 0,
+    "fileLevelCredits": 5,
+    "labeled": 9,
+    "precision": 0.2222,
+    "precisionDenominator": 9,
+    "recall": 1,
+    "recallDenominator": 2
+   },
+   "labelsDevelopment": {
+    "TP": 3,
+    "FP": 13,
+    "FN": 0,
+    "TN": 2,
+    "excluded": 2,
+    "fileLevelCredits": 12,
+    "labeled": 18,
+    "precision": 0.1875,
+    "precisionDenominator": 16,
+    "recall": 1,
+    "recallDenominator": 3
+   },
+   "labelsLineOnly": {
+    "TP": 1,
+    "FP": 7,
+    "FN": 4,
+    "TN": 15,
+    "excluded": 2,
+    "fileLevelCredits": 0,
+    "labeled": 27,
+    "precision": 0.125,
+    "precisionDenominator": 8,
+    "recall": 0.2,
+    "recallDenominator": 5
+   },
+   "files": 125
+  },
+  "haskell": {
+   "units": 5,
+   "unitsOk": 5,
+   "unitsNotOk": 0,
+   "unitsWithGraph": 5,
+   "unitsGraphComplete": 5,
+   "completionRate": 1,
+   "truncatedQueries": 0,
+   "queryDenominator": 33,
+   "truncatedQueryRate": 0,
+   "timeMs": {
+    "samples": 5,
+    "p50": 1422,
+    "p95": 8612,
+    "max": 8612
+   },
+   "peakRssMb": 378,
+   "labels": {
+    "TP": 16,
+    "FP": 0,
+    "FN": 0,
+    "TN": 3,
+    "excluded": 3,
+    "fileLevelCredits": 0,
+    "labeled": 19,
+    "precision": 1,
+    "precisionDenominator": 16,
+    "recall": 1,
+    "recallDenominator": 16
+   },
+   "labelsHeldOut": {
+    "TP": 5,
+    "FP": 0,
+    "FN": 0,
+    "TN": 1,
+    "excluded": 0,
+    "fileLevelCredits": 0,
+    "labeled": 6,
+    "precision": 1,
+    "precisionDenominator": 5,
+    "recall": 1,
+    "recallDenominator": 5
+   },
+   "labelsDevelopment": {
+    "TP": 11,
+    "FP": 0,
+    "FN": 0,
+    "TN": 2,
+    "excluded": 3,
+    "fileLevelCredits": 0,
+    "labeled": 13,
+    "precision": 1,
+    "precisionDenominator": 11,
+    "recall": 1,
+    "recallDenominator": 11
+   },
+   "labelsLineOnly": {
+    "TP": 16,
+    "FP": 0,
+    "FN": 0,
+    "TN": 3,
+    "excluded": 3,
+    "fileLevelCredits": 0,
+    "labeled": 19,
+    "precision": 1,
+    "precisionDenominator": 16,
+    "recall": 1,
+    "recallDenominator": 16
+   },
+   "files": 115
+  },
+  "nix": {
+   "units": 3,
+   "unitsOk": 3,
+   "unitsNotOk": 0,
+   "unitsWithGraph": 3,
+   "unitsGraphComplete": 3,
+   "completionRate": 1,
+   "truncatedQueries": 0,
+   "queryDenominator": 0,
+   "truncatedQueryRate": null,
+   "timeMs": {
+    "samples": 3,
+    "p50": 71639,
+    "p95": 74755,
+    "max": 74755
+   },
+   "peakRssMb": 638,
+   "labels": {
+    "TP": 6,
+    "FP": 11,
+    "FN": 0,
+    "TN": 0,
+    "excluded": 1,
+    "fileLevelCredits": 0,
+    "labeled": 17,
+    "precision": 0.3529,
+    "precisionDenominator": 17,
+    "recall": 1,
+    "recallDenominator": 6
+   },
+   "labelsHeldOut": {
+    "TP": 1,
+    "FP": 3,
+    "FN": 0,
+    "TN": 0,
+    "excluded": 0,
+    "fileLevelCredits": 0,
+    "labeled": 4,
+    "precision": 0.25,
+    "precisionDenominator": 4,
+    "recall": 1,
+    "recallDenominator": 1
+   },
+   "labelsDevelopment": {
+    "TP": 5,
+    "FP": 8,
+    "FN": 0,
+    "TN": 0,
+    "excluded": 1,
+    "fileLevelCredits": 0,
+    "labeled": 13,
+    "precision": 0.3846,
+    "precisionDenominator": 13,
+    "recall": 1,
+    "recallDenominator": 5
+   },
+   "labelsLineOnly": {
+    "TP": 6,
+    "FP": 11,
+    "FN": 0,
+    "TN": 0,
+    "excluded": 1,
+    "fileLevelCredits": 0,
+    "labeled": 17,
+    "precision": 0.3529,
+    "precisionDenominator": 17,
+    "recall": 1,
+    "recallDenominator": 6
+   },
+   "files": 295
+  }
+ },
+ "units": {
+  "express/lib": {
+   "id": "express/lib",
+   "ms": 746,
+   "peakRssMb": 218,
+   "status": "ok",
+   "files": 6,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 5,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 9,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "js",
+   "project": "express",
+   "msSamples": [
+    746
+   ]
+  },
+  "express/examples": {
+   "id": "express/examples",
+   "ms": 6786,
+   "peakRssMb": 347,
+   "status": "ok",
+   "files": 70,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 10,
+    "edges": 7,
+    "flowCount": 7,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 109,
+    "connectedSinkSites": 7,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 11,
+    "flows": [
+     {
+      "fields": [
+       "uid"
+      ],
+      "files": [
+       "examples/route-map/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "pid"
+      ],
+      "files": [
+       "examples/route-map/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "sub"
+      ],
+      "files": [
+       "examples/vhost/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "to"
+      ],
+      "files": [
+       "examples/params/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "user"
+      ],
+      "files": [
+       "examples/route-separation/user.js"
+      ],
+      "sourceKind": "http-body",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "user_id"
+      ],
+      "files": [
+       "examples/mvc/controllers/user-pet/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     },
+     {
+      "fields": [
+       "from"
+      ],
+      "files": [
+       "examples/params/index.js"
+      ],
+      "sourceKind": "http-route",
+      "sinkKind": "sink",
+      "sinkSub": "http-response"
+     }
+    ]
+   },
+   "language": "js",
+   "project": "express",
+   "msSamples": [
+    6786
+   ]
+  },
+  "fastify/lib": {
+   "id": "fastify/lib",
+   "ms": 1824,
+   "peakRssMb": 344,
+   "status": "ok",
+   "files": 31,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 6,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 63,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "js",
+   "project": "fastify",
+   "msSamples": [
+    1824
+   ]
+  },
+  "fastify/examples": {
+   "id": "fastify/examples",
+   "ms": 1069,
+   "peakRssMb": 214,
+   "status": "ok",
+   "files": 18,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 5,
+    "edges": 4,
+    "flowCount": 4,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 41,
+    "connectedSinkSites": 4,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 4,
+    "flows": [
+     {
+      "fields": [
+       "body"
+      ],
+      "files": [
+       "examples/parser.js"
+      ],
+      "sourceKind": "http-body",
+      "sinkKind": "unresolved",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "body"
+      ],
+      "files": [
+       "examples/typescript-server.ts"
+      ],
+      "sourceKind": "http-body",
+      "sinkKind": "log",
+      "sinkSub": "log"
+     },
+     {
+      "fields": [
+       "params"
+      ],
+      "files": [
+       "examples/typescript-server.ts"
+      ],
+      "sourceKind": "ai-model-output",
+      "sinkKind": "log",
+      "sinkSub": "log"
+     },
+     {
+      "fields": [
+       "body"
+      ],
+      "files": [
+       "examples/benchmark/parser.js"
+      ],
+      "sourceKind": "http-body",
+      "sinkKind": "unresolved",
+      "sinkSub": "file"
+     }
+    ]
+   },
+   "language": "js",
+   "project": "fastify",
+   "msSamples": [
+    1069
+   ]
+  },
+  "scotty/Web": {
+   "id": "scotty/Web",
+   "ms": 725,
+   "peakRssMb": 213,
+   "status": "ok",
+   "files": 11,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 4,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 0,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "haskell",
+   "project": "scotty",
+   "msSamples": [
+    725
+   ]
+  },
+  "scotty/examples": {
+   "id": "scotty/examples",
+   "ms": 1422,
+   "peakRssMb": 216,
+   "status": "ok",
+   "files": 17,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 8,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 29,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "haskell",
+   "project": "scotty",
+   "msSamples": [
+    1422
+   ]
+  },
+  "yesod/yesod-core": {
+   "id": "yesod/yesod-core",
+   "ms": 2549,
+   "peakRssMb": 378,
+   "status": "ok",
+   "files": 44,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 7,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 1,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "haskell",
+   "project": "yesod",
+   "msSamples": [
+    2549
+   ]
+  },
+  "yesod/yesod-form": {
+   "id": "yesod/yesod-form",
+   "ms": 706,
+   "peakRssMb": 318,
+   "status": "ok",
+   "files": 28,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 3,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 1,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "haskell",
+   "project": "yesod",
+   "msSamples": [
+    706
+   ]
+  },
+  "yesod/yesod-auth": {
+   "id": "yesod/yesod-auth",
+   "ms": 8612,
+   "peakRssMb": 350,
+   "status": "ok",
+   "files": 15,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 6,
+    "edges": 0,
+    "flowCount": 0,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 2,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": []
+   },
+   "language": "haskell",
+   "project": "yesod",
+   "msSamples": [
+    8612
+   ]
+  },
+  "home-manager/modules/services": {
+   "id": "home-manager/modules/services",
+   "ms": 71639,
+   "peakRssMb": 638,
+   "status": "ok",
+   "files": 218,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 2,
+    "edges": 2,
+    "flowCount": 2,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 0,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": [
+     {
+      "fields": [
+       "pass-secret-service"
+      ],
+      "files": [
+       "modules/services/pass-secret-service.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "secret"
+      ],
+      "files": [
+       "modules/services/rescrobbled.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     }
+    ]
+   },
+   "language": "nix",
+   "project": "home-manager",
+   "msSamples": [
+    71639
+   ]
+  },
+  "nixpkgs-subset/nixos/modules/security": {
+   "id": "nixpkgs-subset/nixos/modules/security",
+   "ms": 74755,
+   "peakRssMb": 335,
+   "status": "ok",
+   "files": 36,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 2,
+    "edges": 5,
+    "flowCount": 5,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 0,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": [
+     {
+      "fields": [
+       "forwardPass"
+      ],
+      "files": [
+       "nixos/modules/security/pam.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "wheelNeedsPassword"
+      ],
+      "files": [
+       "nixos/modules/security/please.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "offlinePasswords"
+      ],
+      "files": [
+       "nixos/modules/security/ipa.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "email"
+      ],
+      "files": [
+       "nixos/modules/security/acme/default.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "cacheCredentials"
+      ],
+      "files": [
+       "nixos/modules/security/ipa.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     }
+    ]
+   },
+   "language": "nix",
+   "project": "nixpkgs-subset",
+   "msSamples": [
+    74755
+   ]
+  },
+  "nixpkgs-subset/nixos/modules/services/web-servers": {
+   "id": "nixpkgs-subset/nixos/modules/services/web-servers",
+   "ms": 71553,
+   "peakRssMb": 352,
+   "status": "ok",
+   "files": 41,
+   "lineage": {
+    "enabled": true,
+    "failure": null
+   },
+   "graph": {
+    "nodes": 3,
+    "edges": 2,
+    "flowCount": 2,
+    "completion": {
+     "status": "complete",
+     "queryExhausted": true,
+     "modelCoverage": "complete",
+     "reasons": []
+    },
+    "callStatementSites": 0,
+    "connectedSinkSites": 0,
+    "truncatedQueries": 0,
+    "pathsEnumerated": 0,
+    "flows": [
+     {
+      "fields": [
+       "secretScript"
+      ],
+      "files": [
+       "nixos/modules/services/web-servers/keter/default.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "store",
+      "sinkSub": "file"
+     },
+     {
+      "fields": [
+       "secretScript"
+      ],
+      "files": [
+       "nixos/modules/services/web-servers/keter/default.nix"
+      ],
+      "sourceKind": "declared",
+      "sinkKind": "log",
+      "sinkSub": "log"
+     }
+    ]
+   },
+   "language": "nix",
+   "project": "nixpkgs-subset",
+   "msSamples": [
+    71553
+   ]
+  }
+ },
+ "fixture": {
+  "id": "fixture/multiservice",
+  "ms": 1769,
+  "peakRssMb": 173,
+  "status": "ok",
+  "files": 3,
+  "lineage": {
+   "enabled": true,
+   "failure": null
+  },
+  "graph": {
+   "nodes": 6,
+   "edges": 3,
+   "flowCount": 3,
+   "completion": {
+    "status": "complete",
+    "queryExhausted": true,
+    "modelCoverage": "complete",
+    "reasons": []
+   },
+   "callStatementSites": 17,
+   "connectedSinkSites": 2,
+   "truncatedQueries": 0,
+   "pathsEnumerated": 3,
+   "flows": [
+    {
+     "fields": [
+      "bio"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "store",
+     "sinkSub": "database"
+    },
+    {
+     "fields": [
+      "qty"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    },
+    {
+     "fields": [
+      "note"
+     ],
+     "files": [
+      "api/server.js"
+     ],
+     "sourceKind": "http-body",
+     "sinkKind": "unresolved",
+     "sinkSub": "file"
+    }
+   ]
+  },
+  "flowsRecorded": 3
+ },
+ "labelRows": [
+  {
+   "id": "express:examples/vhost/index.js:30:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/cookies/index.js:36:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": true,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/cookies/index.js:46:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/route-separation/user.js:46:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/auth/index.js:119:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/mvc/controllers/user-pet/index.js:21:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/mvc/controllers/user/index.js:40:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/mvc/controllers/pet/index.js:30:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/vhost/index.js:39:open-redirect",
+   "project": "express",
+   "language": "js",
+   "class": "open-redirect",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/route-map/index.js:37:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/route-map/index.js:47:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/route-map/index.js:51:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/search/index.js:55:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/params/index.js:56:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/route-middleware/index.js:75:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": true
+  },
+  {
+   "id": "express:examples/session/index.js:30:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/cookie-sessions/index.js:18:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/web-service/index.js:76:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/resource/index.js:64:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/downloads/index.js:27:path-traversal",
+   "project": "express",
+   "language": "js",
+   "class": "path-traversal",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "express:examples/hello-world/index.js:8:xss",
+   "project": "express",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "TN",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/simple-stream.js:19:privacy-log",
+   "project": "fastify",
+   "language": "js",
+   "class": "privacy-log",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "fastify:examples/typescript-server.ts:78:privacy-log",
+   "project": "fastify",
+   "language": "js",
+   "class": "privacy-log",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/benchmark/webstream.js:26:privacy-log",
+   "project": "fastify",
+   "language": "js",
+   "class": "privacy-log",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/http2.js:8:sync-io",
+   "project": "fastify",
+   "language": "js",
+   "class": "sync-io",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": true
+  },
+  {
+   "id": "fastify:examples/https.js:7:sync-io",
+   "project": "fastify",
+   "language": "js",
+   "class": "sync-io",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": true,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/parser.js:46:xss",
+   "project": "fastify",
+   "language": "js",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "TN",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/hooks.js:83:csrf",
+   "project": "fastify",
+   "language": "js",
+   "class": "csrf",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "fastify:examples/parser.js:44:csrf",
+   "project": "fastify",
+   "language": "js",
+   "class": "csrf",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/basic.hs:42:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "scotty:examples/basic.hs:47:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "scotty:examples/basic.hs:52:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/basic.hs:78:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/nested.hs:27:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/nested.hs:31:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "scotty:examples/nested.hs:55:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/nested.hs:38:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "scotty:examples/nested.hs:23:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "TN",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/nested.hs:51:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "TN",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/basic.hs:106:xss",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "xss",
+   "verdict": "negative",
+   "outcome": "TN",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "scotty:examples/basic.hs:106:unbounded-body",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "unbounded-body",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/bodyecho.hs:19:unbounded-body",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "unbounded-body",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:examples/middleware.hs:68:unbounded-body",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "unbounded-body",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:Web/Scotty/Session.hs:187:weak-rng",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "weak-rng",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "scotty:Web/Scotty/Cookie.hs:132:cookie-flags",
+   "project": "scotty",
+   "language": "haskell",
+   "class": "cookie-flags",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "yesod:yesod-auth/Yesod/Auth/Email.hs:959:weak-hash",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "weak-hash",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "yesod:yesod-auth/Yesod/Auth/Email.hs:998:unsafe-boundary",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "unsafe-boundary",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "yesod:yesod-auth/Yesod/Auth/GoogleEmail2.hs:615:unsafe-boundary",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "unsafe-boundary",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "yesod:yesod-auth/Yesod/Auth/OpenId.hs:77:open-redirect",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "open-redirect",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "yesod:yesod-core/src/Yesod/Core/Class/Yesod.hs:888:cookie-flags",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "cookie-flags",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "yesod:yesod-core/src/Yesod/Core/Handler.hs:1604:cookie-flags",
+   "project": "yesod",
+   "language": "haskell",
+   "class": "cookie-flags",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/ipa.nix:288:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/ipa.nix:289:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/pam.nix:1337:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/please.nix:85:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/doas.nix:267:pam-empty-password",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "pam-empty-password",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/duosec.nix:215:nix-script",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-script",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/lock-kernel-modules.nix:56:nix-script",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-script",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/tpm2.nix:356:nix-script",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-script",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/wrappers/default.nix:341:nix-script",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-script",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/apparmor.nix:246:root-service",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "root-service",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/audit.nix:124:root-service",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "root-service",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/auditd.nix:271:root-service",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "root-service",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/security/isolate.nix:134:root-service",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "root-service",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:150:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:152:nix-secret",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "ambiguous",
+   "outcome": "excluded",
+   "fileLevel": false,
+   "heldOut": false
+  },
+  {
+   "id": "nixpkgs-subset:nixos/modules/services/web-servers/apache-httpd/default.nix:1075:root-service",
+   "project": "nixpkgs-subset",
+   "language": "nix",
+   "class": "root-service",
+   "verdict": "positive",
+   "outcome": "TP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "home-manager:modules/services/rescrobbled.nix:28:nix-secret",
+   "project": "home-manager",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": true
+  },
+  {
+   "id": "home-manager:modules/services/pass-secret-service.nix:53:nix-secret",
+   "project": "home-manager",
+   "language": "nix",
+   "class": "nix-secret",
+   "verdict": "negative",
+   "outcome": "FP",
+   "fileLevel": false,
+   "heldOut": false
+  }
+ ],
+ "fixtureRows": [
+  {
+   "id": "ms:F1",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "TP",
+   "sinkMatch": false,
+   "construct": "http -> queue"
+  },
+  {
+   "id": "ms:F2",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "TP",
+   "sinkMatch": false,
+   "construct": "http -> queue (numeric coercion keeps the data flow)"
+  },
+  {
+   "id": "ms:F3",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "TP",
+   "sinkMatch": true,
+   "construct": "http -> storage"
+  },
+  {
+   "id": "ms:F4",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "FN",
+   "sinkMatch": false,
+   "construct": "queue -> storage (cross-service boundary)"
+  },
+  {
+   "id": "ms:F5",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "FN",
+   "sinkMatch": false,
+   "construct": "storage -> http response"
+  },
+  {
+   "id": "ms:F6",
+   "type": "flow",
+   "verdict": "positive",
+   "outcome": "FN",
+   "sinkMatch": false,
+   "construct": "storage -> http response"
+  },
+  {
+   "id": "ms:N1",
+   "type": "flow",
+   "verdict": "negative",
+   "outcome": "TN",
+   "sinkMatch": false,
+   "construct": "no request data: Date.now() timestamp"
+  },
+  {
+   "id": "ms:N2",
+   "type": "flow",
+   "verdict": "negative",
+   "outcome": "TN",
+   "sinkMatch": false,
+   "construct": "configuration value is not request data"
+  },
+  {
+   "id": "ms:N3",
+   "type": "flow",
+   "verdict": "negative",
+   "outcome": "TN",
+   "sinkMatch": false,
+   "construct": "wrong topic: the audit queue carries only a constant, so no request field reaches audit.line"
+  },
+  {
+   "id": "ms:S1",
+   "type": "site",
+   "verdict": "positive",
+   "outcome": "FN",
+   "construct": "stored value into html via concat"
+  },
+  {
+   "id": "ms:S2",
+   "type": "site",
+   "verdict": "negative",
+   "outcome": "TN",
+   "construct": "escapeHtml applied to the stored value"
+  },
+  {
+   "id": "ms:S3",
+   "type": "site",
+   "verdict": "negative",
+   "outcome": "TN",
+   "construct": "audit lines are a constant string end to end"
+  },
+  {
+   "id": "ms:S4",
+   "type": "site",
+   "verdict": "positive",
+   "outcome": "FN",
+   "construct": "stored profile bio into html"
+  }
+ ],
+ "mutantRows": [
+  {
+   "id": "mut:remove-sanitizer",
+   "kind": "remove-sanitizer",
+   "status": "ok",
+   "baseReported": false,
+   "afterReported": false,
+   "expectedReported": true,
+   "correct": false,
+   "flipped": false,
+   "flipExpected": true
+  },
+  {
+   "id": "mut:wrong-sanitizer-family",
+   "kind": "wrong-sanitizer",
+   "status": "ok",
+   "baseReported": false,
+   "afterReported": false,
+   "expectedReported": true,
+   "correct": false,
+   "flipped": false,
+   "flipExpected": true
+  },
+  {
+   "id": "mut:add-sanitizer",
+   "kind": "add-sanitizer",
+   "status": "ok",
+   "baseReported": false,
+   "afterReported": false,
+   "expectedReported": false,
+   "correct": true,
+   "flipped": false,
+   "flipExpected": false
+  },
+  {
+   "id": "mut:inject-site",
+   "kind": "inject-flow",
+   "status": "ok",
+   "baseReported": false,
+   "afterReported": true,
+   "expectedReported": true,
+   "correct": true,
+   "flipped": true,
+   "flipExpected": true
+  },
+  {
+   "id": "mut:inject-flow",
+   "kind": "inject-flow",
+   "status": "ok",
+   "baseReported": false,
+   "afterReported": true,
+   "expectedReported": true,
+   "correct": true,
+   "flipped": true,
+   "flipExpected": true
+  },
+  {
+   "id": "mut:break-flow",
+   "kind": "break-flow",
+   "status": "ok",
+   "baseReported": true,
+   "afterReported": false,
+   "expectedReported": false,
+   "correct": true,
+   "flipped": true,
+   "flipExpected": true
+  }
+ ],
+ "incremental": {
+  "fixture": {
+   "id": "fixture",
+   "status": "ok",
+   "editedFile": "api/server.js",
+   "summaryUnits": 12,
+   "restorableEmptyEntryUnits": 12,
+   "legacyDiscardedUnits": 0,
+   "changedFiles": 1,
+   "changedUnits": 3,
+   "reusedUnits": 9,
+   "invalidatedUnits": 3,
+   "engineFileKeysSeen": true,
+   "unchangedWarmReusedAll": true,
+   "parity": {
+    "warmFindings": 3,
+    "coldFindings": 3,
+    "onlyWarm": 0,
+    "onlyCold": 0,
+    "equal": true
+   },
+   "timesMs": {
+    "cold": 389,
+    "warm": 133,
+    "warmAfterEdit": 126,
+    "coldAfterEdit": 128
+   },
+   "peakRssMb": 198
+  },
+  "fastify/examples": {
+   "id": "fastify/examples",
+   "status": "ok",
+   "editedFile": "asyncawait.js",
+   "summaryUnits": 90,
+   "restorableEmptyEntryUnits": 90,
+   "legacyDiscardedUnits": 0,
+   "changedFiles": 1,
+   "changedUnits": 5,
+   "reusedUnits": 85,
+   "invalidatedUnits": 5,
+   "engineFileKeysSeen": true,
+   "unchangedWarmReusedAll": true,
+   "parity": {
+    "warmFindings": 10,
+    "coldFindings": 10,
+    "onlyWarm": 0,
+    "onlyCold": 0,
+    "equal": true
+   },
+   "timesMs": {
+    "cold": 779,
+    "warm": 245,
+    "warmAfterEdit": 238,
+    "coldAfterEdit": 213
+   },
+   "peakRssMb": 289
+  }
+ },
+ "synthetic": {
+  "chain/1000": {
+   "family": "chain",
+   "n": 1000,
+   "seed": 20261025,
+   "digest": "37a6fb14a9f44b39a22d78d2af4e05b33e80d0e8b7db7950d16b2f5b999374d7",
+   "expected": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "observed": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 2,
+    "scc": 4,
+    "verify": 1
+   },
+   "peakRssMb": 55
+  },
+  "chain/10000": {
+   "family": "chain",
+   "n": 10000,
+   "seed": 20261025,
+   "digest": "eacfabb68ad5c5ee321ddd99ae973ca59193f2e4c81c8b0082fb086ff82603a0",
+   "expected": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "observed": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 10,
+    "scc": 33,
+    "verify": 14
+   },
+   "peakRssMb": 90
+  },
+  "chain/100000": {
+   "family": "chain",
+   "n": 100000,
+   "seed": 20261025,
+   "digest": "6d78c870ec21f28ae5c4d0a473f95e01485e2ee97117ffeef459c7eb88a1af3e",
+   "expected": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "observed": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 67,
+    "scc": 199,
+    "verify": 236
+   },
+   "peakRssMb": 341
+  },
+  "chain/1000000": {
+   "family": "chain",
+   "n": 1000000,
+   "seed": 20261025,
+   "digest": "95d8a499a8c67108ab231a8e1d79729616bd3df083e24f0a32147e1bc7433355",
+   "expected": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "observed": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 461,
+    "scc": 2261,
+    "verify": 3912
+   },
+   "peakRssMb": 1415
+  },
+  "ring/1000": {
+   "family": "ring",
+   "n": 1000,
+   "seed": 20261025,
+   "digest": "93565c591b333ca86688cba1311e83a43c6f3fe550fc7d73dba4e8911c3745aa",
+   "expected": {
+    "sccCount": 1,
+    "largestScc": 1000,
+    "recursiveComponents": 1,
+    "edgeCount": 1000
+   },
+   "observed": {
+    "sccCount": 1,
+    "largestScc": 1000,
+    "recursiveComponents": 1,
+    "edgeCount": 1000
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 3,
+    "scc": 4,
+    "verify": 1
+   },
+   "peakRssMb": 54
+  },
+  "ring/10000": {
+   "family": "ring",
+   "n": 10000,
+   "seed": 20261025,
+   "digest": "5a0bed3528cf8db410bab37cca7cf21f6d05a27de3c15b65981faa2857c2cda7",
+   "expected": {
+    "sccCount": 1,
+    "largestScc": 10000,
+    "recursiveComponents": 1,
+    "edgeCount": 10000
+   },
+   "observed": {
+    "sccCount": 1,
+    "largestScc": 10000,
+    "recursiveComponents": 1,
+    "edgeCount": 10000
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 12,
+    "scc": 24,
+    "verify": 13
+   },
+   "peakRssMb": 76
+  },
+  "ring/100000": {
+   "family": "ring",
+   "n": 100000,
+   "seed": 20261025,
+   "digest": "b194b87a166e3b7f649aab919596e31e79055a4dfa626f2d930fb153f755dfd5",
+   "expected": {
+    "sccCount": 1,
+    "largestScc": 100000,
+    "recursiveComponents": 1,
+    "edgeCount": 100000
+   },
+   "observed": {
+    "sccCount": 1,
+    "largestScc": 100000,
+    "recursiveComponents": 1,
+    "edgeCount": 100000
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 80,
+    "scc": 143,
+    "verify": 99
+   },
+   "peakRssMb": 212
+  },
+  "ring/1000000": {
+   "family": "ring",
+   "n": 1000000,
+   "seed": 20261025,
+   "digest": "f7ea91296d18512300199584eb34d91e0ee07ab645b718b03ccb20729117230d",
+   "expected": {
+    "sccCount": 1,
+    "largestScc": 1000000,
+    "recursiveComponents": 1,
+    "edgeCount": 1000000
+   },
+   "observed": {
+    "sccCount": 1,
+    "largestScc": 1000000,
+    "recursiveComponents": 1,
+    "edgeCount": 1000000
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 515,
+    "scc": 1605,
+    "verify": 2205
+   },
+   "peakRssMb": 1012
+  },
+  "fanin/1000": {
+   "family": "fanin",
+   "n": 1000,
+   "seed": 20261025,
+   "digest": "4be7172995e32d7589428d173d373d3f189fa8f94bae906f9f872755193ba83a",
+   "expected": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "observed": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 2,
+    "scc": 5,
+    "verify": 2
+   },
+   "peakRssMb": 55
+  },
+  "fanin/10000": {
+   "family": "fanin",
+   "n": 10000,
+   "seed": 20261025,
+   "digest": "5120e973a37d2a8ebd4023e2a8a42605bd59ee8dd613cad78600386a532ddb31",
+   "expected": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "observed": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 12,
+    "scc": 38,
+    "verify": 18
+   },
+   "peakRssMb": 91
+  },
+  "fanin/100000": {
+   "family": "fanin",
+   "n": 100000,
+   "seed": 20261025,
+   "digest": "0d67876db6adfa8abc8296c255ae68dcb65fbdc0e923c377962aa0ddd00b1f99",
+   "expected": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "observed": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 85,
+    "scc": 207,
+    "verify": 213
+   },
+   "peakRssMb": 332
+  },
+  "fanin/1000000": {
+   "family": "fanin",
+   "n": 1000000,
+   "seed": 20261025,
+   "digest": "b273ad5bee2b1d4d4fb5cb4b949e8ec02d8ce1e962661a5b1b1634b6db3416b1",
+   "expected": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "observed": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 509,
+    "scc": 2596,
+    "verify": 3372
+   },
+   "peakRssMb": 1404
+  },
+  "fanout/1000": {
+   "family": "fanout",
+   "n": 1000,
+   "seed": 20261025,
+   "digest": "92ec746beced51c5f4df8f6c086ffbd663ea6014a2b9a88e1bec853691121063",
+   "expected": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "observed": {
+    "sccCount": 1000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 3,
+    "scc": 5,
+    "verify": 2
+   },
+   "peakRssMb": 55
+  },
+  "fanout/10000": {
+   "family": "fanout",
+   "n": 10000,
+   "seed": 20261025,
+   "digest": "d61baf14a882e4ac9be2b5da42c8cc83ffbc54726d347a2343e40ecfd7ed1132",
+   "expected": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "observed": {
+    "sccCount": 10000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 9999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 12,
+    "scc": 35,
+    "verify": 22
+   },
+   "peakRssMb": 86
+  },
+  "fanout/100000": {
+   "family": "fanout",
+   "n": 100000,
+   "seed": 20261025,
+   "digest": "591a8eb4dc7e981e9399dd435981d565b0a6bcc1907aaf16cafd4420bad435d3",
+   "expected": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "observed": {
+    "sccCount": 100000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 99999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 83,
+    "scc": 204,
+    "verify": 187
+   },
+   "peakRssMb": 291
+  },
+  "fanout/1000000": {
+   "family": "fanout",
+   "n": 1000000,
+   "seed": 20261025,
+   "digest": "42892be0443b7ca514450d561443cf83b75467fb0371dc3fe0894721a452be14",
+   "expected": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "observed": {
+    "sccCount": 1000000,
+    "largestScc": 1,
+    "recursiveComponents": 0,
+    "edgeCount": 999999
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 517,
+    "scc": 2188,
+    "verify": 7948
+   },
+   "peakRssMb": 1214
+  },
+  "scc-rich/1000": {
+   "family": "scc-rich",
+   "n": 1000,
+   "seed": 20261025,
+   "digest": "9da05c9f238941d895b3da02f1f8aaa6649ced7960a34e792366546b9f6a625d",
+   "expected": {
+    "sccCount": 125,
+    "largestScc": 8,
+    "recursiveComponents": 125,
+    "edgeCount": 1942
+   },
+   "observed": {
+    "sccCount": 125,
+    "largestScc": 8,
+    "recursiveComponents": 125,
+    "edgeCount": 1942
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 11,
+    "scc": 7,
+    "verify": 2
+   },
+   "peakRssMb": 55
+  },
+  "scc-rich/10000": {
+   "family": "scc-rich",
+   "n": 10000,
+   "seed": 20261025,
+   "digest": "6792dc94b838e5730e21cb9ec0acafe8fb31473a6190db1649d18c29e8d5d16b",
+   "expected": {
+    "sccCount": 1250,
+    "largestScc": 8,
+    "recursiveComponents": 1250,
+    "edgeCount": 19496
+   },
+   "observed": {
+    "sccCount": 1250,
+    "largestScc": 8,
+    "recursiveComponents": 1250,
+    "edgeCount": 19496
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 38,
+    "scc": 38,
+    "verify": 28
+   },
+   "peakRssMb": 85
+  },
+  "scc-rich/100000": {
+   "family": "scc-rich",
+   "n": 100000,
+   "seed": 20261025,
+   "digest": "f78db80b61030b9ab6d68c1fb335cad2f7e1d985cb76efaa0e29ff9f40b3be62",
+   "expected": {
+    "sccCount": 12500,
+    "largestScc": 8,
+    "recursiveComponents": 12500,
+    "edgeCount": 195562
+   },
+   "observed": {
+    "sccCount": 12500,
+    "largestScc": 8,
+    "recursiveComponents": 12500,
+    "edgeCount": 195562
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 243,
+    "scc": 387,
+    "verify": 412
+   },
+   "peakRssMb": 298
+  },
+  "scc-rich/1000000": {
+   "family": "scc-rich",
+   "n": 1000000,
+   "seed": 20261025,
+   "digest": "80b58414e03f77f91e688b71595d79751e802fe17fb74a78dc2af69d2a6e768a",
+   "expected": {
+    "sccCount": 125000,
+    "largestScc": 8,
+    "recursiveComponents": 125000,
+    "edgeCount": 1953580
+   },
+   "observed": {
+    "sccCount": 125000,
+    "largestScc": 8,
+    "recursiveComponents": 125000,
+    "edgeCount": 1953580
+   },
+   "matchesExpected": true,
+   "verifyScc": true,
+   "timesMs": {
+    "generate": 2855,
+    "scc": 3931,
+    "verify": 5367
+   },
+   "peakRssMb": 1272
+  }
+ },
+ "evidenceReplay": {
+  "status": "skipped",
+  "reason": "scanner/src has no witness-bundle module; there is no evidence bundle to replay"
+ },
+ "deterministic": {
+  "schema": 1,
+  "units": {
+   "express/lib": {
+    "status": "ok",
+    "files": 6,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 5,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 9,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "express/examples": {
+    "status": "ok",
+    "files": 70,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 10,
+     "edges": 7,
+     "flows": 7,
+     "callStatementSites": 109,
+     "connectedSinkSites": 7,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 11
+    }
+   },
+   "fastify/lib": {
+    "status": "ok",
+    "files": 31,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 63,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "fastify/examples": {
+    "status": "ok",
+    "files": 18,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 5,
+     "edges": 4,
+     "flows": 4,
+     "callStatementSites": 41,
+     "connectedSinkSites": 4,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 4
+    }
+   },
+   "scotty/Web": {
+    "status": "ok",
+    "files": 11,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 4,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "scotty/examples": {
+    "status": "ok",
+    "files": 17,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 8,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 29,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-core": {
+    "status": "ok",
+    "files": 44,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 7,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 1,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-form": {
+    "status": "ok",
+    "files": 28,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 3,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 1,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "yesod/yesod-auth": {
+    "status": "ok",
+    "files": 15,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 0,
+     "flows": 0,
+     "callStatementSites": 2,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "home-manager/modules/services": {
+    "status": "ok",
+    "files": 218,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 2,
+     "edges": 2,
+     "flows": 2,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "nixpkgs-subset/nixos/modules/security": {
+    "status": "ok",
+    "files": 36,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 2,
+     "edges": 5,
+     "flows": 5,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "nixpkgs-subset/nixos/modules/services/web-servers": {
+    "status": "ok",
+    "files": 41,
+    "lineageFailure": null,
+    "graph": {
+     "status": "complete",
+     "nodes": 3,
+     "edges": 2,
+     "flows": 2,
+     "callStatementSites": 0,
+     "connectedSinkSites": 0,
+     "truncatedQueries": 0,
+     "pathsEnumerated": 0
+    }
+   },
+   "fixture/multiservice": {
+    "status": "ok",
+    "files": 3,
+    "graph": {
+     "status": "complete",
+     "nodes": 6,
+     "edges": 3,
+     "flows": 3,
+     "truncatedQueries": 0
+    }
+   }
+  },
+  "labels": {
+   "express:examples/vhost/index.js:30:xss": "TP",
+   "express:examples/cookies/index.js:36:open-redirect": "TP",
+   "express:examples/cookies/index.js:46:open-redirect": "TP",
+   "express:examples/route-separation/user.js:46:open-redirect": "TP",
+   "express:examples/auth/index.js:119:open-redirect": "TP",
+   "express:examples/mvc/controllers/user-pet/index.js:21:open-redirect": "FP",
+   "express:examples/mvc/controllers/user/index.js:40:open-redirect": "FP",
+   "express:examples/mvc/controllers/pet/index.js:30:open-redirect": "FP",
+   "express:examples/vhost/index.js:39:open-redirect": "FP",
+   "express:examples/route-map/index.js:37:xss": "FP",
+   "express:examples/route-map/index.js:47:xss": "FP",
+   "express:examples/route-map/index.js:51:xss": "FP",
+   "express:examples/search/index.js:55:xss": "FP",
+   "express:examples/params/index.js:56:xss": "FP",
+   "express:examples/route-middleware/index.js:75:xss": "FP",
+   "express:examples/session/index.js:30:xss": "FP",
+   "express:examples/cookie-sessions/index.js:18:xss": "FP",
+   "express:examples/web-service/index.js:76:xss": "FP",
+   "express:examples/resource/index.js:64:xss": "FP",
+   "express:examples/downloads/index.js:27:path-traversal": "FP",
+   "express:examples/hello-world/index.js:8:xss": "TN",
+   "fastify:examples/simple-stream.js:19:privacy-log": "FP",
+   "fastify:examples/typescript-server.ts:78:privacy-log": "FP",
+   "fastify:examples/benchmark/webstream.js:26:privacy-log": "FP",
+   "fastify:examples/http2.js:8:sync-io": "FP",
+   "fastify:examples/https.js:7:sync-io": "FP",
+   "fastify:examples/parser.js:46:xss": "TN",
+   "fastify:examples/hooks.js:83:csrf": "excluded",
+   "fastify:examples/parser.js:44:csrf": "excluded",
+   "scotty:examples/basic.hs:42:xss": "TP",
+   "scotty:examples/basic.hs:47:xss": "TP",
+   "scotty:examples/basic.hs:52:xss": "TP",
+   "scotty:examples/basic.hs:78:xss": "TP",
+   "scotty:examples/nested.hs:27:xss": "TP",
+   "scotty:examples/nested.hs:31:xss": "TP",
+   "scotty:examples/nested.hs:55:xss": "TP",
+   "scotty:examples/nested.hs:38:xss": "TP",
+   "scotty:examples/nested.hs:23:xss": "TN",
+   "scotty:examples/nested.hs:51:xss": "TN",
+   "scotty:examples/basic.hs:106:xss": "TN",
+   "scotty:examples/basic.hs:106:unbounded-body": "TP",
+   "scotty:examples/bodyecho.hs:19:unbounded-body": "TP",
+   "scotty:examples/middleware.hs:68:unbounded-body": "TP",
+   "scotty:Web/Scotty/Session.hs:187:weak-rng": "TP",
+   "scotty:Web/Scotty/Cookie.hs:132:cookie-flags": "TP",
+   "yesod:yesod-auth/Yesod/Auth/Email.hs:959:weak-hash": "TP",
+   "yesod:yesod-auth/Yesod/Auth/Email.hs:998:unsafe-boundary": "TP",
+   "yesod:yesod-auth/Yesod/Auth/GoogleEmail2.hs:615:unsafe-boundary": "TP",
+   "yesod:yesod-auth/Yesod/Auth/OpenId.hs:77:open-redirect": "excluded",
+   "yesod:yesod-core/src/Yesod/Core/Class/Yesod.hs:888:cookie-flags": "excluded",
+   "yesod:yesod-core/src/Yesod/Core/Handler.hs:1604:cookie-flags": "excluded",
+   "nixpkgs-subset:nixos/modules/security/ipa.nix:288:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/ipa.nix:289:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/pam.nix:1337:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/please.nix:85:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/security/doas.nix:267:pam-empty-password": "TP",
+   "nixpkgs-subset:nixos/modules/security/duosec.nix:215:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/lock-kernel-modules.nix:56:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/tpm2.nix:356:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/wrappers/default.nix:341:nix-script": "FP",
+   "nixpkgs-subset:nixos/modules/security/apparmor.nix:246:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/audit.nix:124:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/auditd.nix:271:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/security/isolate.nix:134:root-service": "TP",
+   "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:150:nix-secret": "FP",
+   "nixpkgs-subset:nixos/modules/services/web-servers/keter/default.nix:152:nix-secret": "excluded",
+   "nixpkgs-subset:nixos/modules/services/web-servers/apache-httpd/default.nix:1075:root-service": "TP",
+   "home-manager:modules/services/rescrobbled.nix:28:nix-secret": "FP",
+   "home-manager:modules/services/pass-secret-service.nix:53:nix-secret": "FP"
+  },
+  "fixture": {
+   "ms:F1": "TP-sink",
+   "ms:F2": "TP-sink",
+   "ms:F3": "TP+sink",
+   "ms:F4": "FN",
+   "ms:F5": "FN",
+   "ms:F6": "FN",
+   "ms:N1": "TN",
+   "ms:N2": "TN",
+   "ms:N3": "TN",
+   "ms:S1": "FN",
+   "ms:S2": "TN",
+   "ms:S3": "TN",
+   "ms:S4": "FN"
+  },
+  "mutants": {
+   "mut:remove-sanitizer": {
+    "base": false,
+    "after": false,
+    "correct": false
+   },
+   "mut:wrong-sanitizer-family": {
+    "base": false,
+    "after": false,
+    "correct": false
+   },
+   "mut:add-sanitizer": {
+    "base": false,
+    "after": false,
+    "correct": true
+   },
+   "mut:inject-site": {
+    "base": false,
+    "after": true,
+    "correct": true
+   },
+   "mut:inject-flow": {
+    "base": false,
+    "after": true,
+    "correct": true
+   },
+   "mut:break-flow": {
+    "base": true,
+    "after": false,
+    "correct": true
+   }
+  },
+  "incremental": {
+   "fixture": {
+    "summaryUnits": 12,
+    "restorable": 12,
+    "changedFiles": 1,
+    "changedUnits": 3,
+    "reused": 9,
+    "invalidated": 3,
+    "parityEqual": true
+   },
+   "fastify/examples": {
+    "summaryUnits": 90,
+    "restorable": 90,
+    "changedFiles": 1,
+    "changedUnits": 5,
+    "reused": 85,
+    "invalidated": 5,
+    "parityEqual": true
+   }
+  },
+  "synthetic": {
+   "chain/1000": {
+    "digest": "37a6fb14a9f44b39a22d78d2af4e05b33e80d0e8b7db7950d16b2f5b999374d7",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/10000": {
+    "digest": "eacfabb68ad5c5ee321ddd99ae973ca59193f2e4c81c8b0082fb086ff82603a0",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/100000": {
+    "digest": "6d78c870ec21f28ae5c4d0a473f95e01485e2ee97117ffeef459c7eb88a1af3e",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "chain/1000000": {
+    "digest": "95d8a499a8c67108ab231a8e1d79729616bd3df083e24f0a32147e1bc7433355",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/1000": {
+    "digest": "93565c591b333ca86688cba1311e83a43c6f3fe550fc7d73dba4e8911c3745aa",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 1000,
+     "recursiveComponents": 1,
+     "edgeCount": 1000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/10000": {
+    "digest": "5a0bed3528cf8db410bab37cca7cf21f6d05a27de3c15b65981faa2857c2cda7",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 10000,
+     "recursiveComponents": 1,
+     "edgeCount": 10000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/100000": {
+    "digest": "b194b87a166e3b7f649aab919596e31e79055a4dfa626f2d930fb153f755dfd5",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 100000,
+     "recursiveComponents": 1,
+     "edgeCount": 100000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "ring/1000000": {
+    "digest": "f7ea91296d18512300199584eb34d91e0ee07ab645b718b03ccb20729117230d",
+    "observed": {
+     "sccCount": 1,
+     "largestScc": 1000000,
+     "recursiveComponents": 1,
+     "edgeCount": 1000000
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/1000": {
+    "digest": "4be7172995e32d7589428d173d373d3f189fa8f94bae906f9f872755193ba83a",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/10000": {
+    "digest": "5120e973a37d2a8ebd4023e2a8a42605bd59ee8dd613cad78600386a532ddb31",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/100000": {
+    "digest": "0d67876db6adfa8abc8296c255ae68dcb65fbdc0e923c377962aa0ddd00b1f99",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanin/1000000": {
+    "digest": "b273ad5bee2b1d4d4fb5cb4b949e8ec02d8ce1e962661a5b1b1634b6db3416b1",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/1000": {
+    "digest": "92ec746beced51c5f4df8f6c086ffbd663ea6014a2b9a88e1bec853691121063",
+    "observed": {
+     "sccCount": 1000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/10000": {
+    "digest": "d61baf14a882e4ac9be2b5da42c8cc83ffbc54726d347a2343e40ecfd7ed1132",
+    "observed": {
+     "sccCount": 10000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 9999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/100000": {
+    "digest": "591a8eb4dc7e981e9399dd435981d565b0a6bcc1907aaf16cafd4420bad435d3",
+    "observed": {
+     "sccCount": 100000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 99999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "fanout/1000000": {
+    "digest": "42892be0443b7ca514450d561443cf83b75467fb0371dc3fe0894721a452be14",
+    "observed": {
+     "sccCount": 1000000,
+     "largestScc": 1,
+     "recursiveComponents": 0,
+     "edgeCount": 999999
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/1000": {
+    "digest": "9da05c9f238941d895b3da02f1f8aaa6649ced7960a34e792366546b9f6a625d",
+    "observed": {
+     "sccCount": 125,
+     "largestScc": 8,
+     "recursiveComponents": 125,
+     "edgeCount": 1942
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/10000": {
+    "digest": "6792dc94b838e5730e21cb9ec0acafe8fb31473a6190db1649d18c29e8d5d16b",
+    "observed": {
+     "sccCount": 1250,
+     "largestScc": 8,
+     "recursiveComponents": 1250,
+     "edgeCount": 19496
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/100000": {
+    "digest": "f78db80b61030b9ab6d68c1fb335cad2f7e1d985cb76efaa0e29ff9f40b3be62",
+    "observed": {
+     "sccCount": 12500,
+     "largestScc": 8,
+     "recursiveComponents": 12500,
+     "edgeCount": 195562
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   },
+   "scc-rich/1000000": {
+    "digest": "80b58414e03f77f91e688b71595d79751e802fe17fb74a78dc2af69d2a6e768a",
+    "observed": {
+     "sccCount": 125000,
+     "largestScc": 8,
+     "recursiveComponents": 125000,
+     "edgeCount": 1953580
+    },
+    "matchesExpected": true,
+    "verifyScc": true
+   }
+  },
+  "evidenceReplay": "skipped"
+ }
+}
