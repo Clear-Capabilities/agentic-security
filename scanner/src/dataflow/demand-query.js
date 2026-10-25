@@ -35,10 +35,10 @@ import { runTaintEngine } from './engine.js';
 import { buildCallerQidIndex, reachabilitySliceWithCompletion } from './tabulation.js';
 import { makeCompletion } from '../lineage/completion.js';
 
-export const DEMAND_SCHEMA_VERSION = '1.0.0';
-export const DEMAND_CONTEXTS = Object.freeze(['whole-program']);
-export const DEFAULT_MAX_CALLER_DEPTH = 64;
-export const DEFAULT_MAX_WORK = 50000;
+const DEMAND_SCHEMA_VERSION = '1.0.0';
+const DEMAND_CONTEXTS = Object.freeze(['whole-program']);
+const DEFAULT_MAX_CALLER_DEPTH = 64;
+const DEFAULT_MAX_WORK = 50000;
 const MAX_PATH_SEGMENTS = 6;
 
 /** Demand mode is opt-in: this env flag AND an explicit API/query list. */
