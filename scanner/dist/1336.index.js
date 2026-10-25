@@ -967,6 +967,8 @@ function createApi(Z3, em) {
                 case low_level_1.Z3_sort_kind.Z3_INT_SORT:
                 case low_level_1.Z3_sort_kind.Z3_REAL_SORT:
                     return new ArithSortImpl(ast);
+                case low_level_1.Z3_sort_kind.Z3_COMPLEX_SORT:
+                    return new ComplexSortImpl(ast);
                 case low_level_1.Z3_sort_kind.Z3_BV_SORT:
                     return new BitVecSortImpl(ast);
                 case low_level_1.Z3_sort_kind.Z3_FLOATING_POINT_SORT:
@@ -1008,6 +1010,8 @@ function createApi(Z3, em) {
                         return new RatNumImpl(ast);
                     }
                     return new ArithImpl(ast);
+                case low_level_1.Z3_sort_kind.Z3_COMPLEX_SORT:
+                    return new ComplexImpl(ast);
                 case low_level_1.Z3_sort_kind.Z3_BV_SORT:
                     if (kind === low_level_1.Z3_ast_kind.Z3_NUMERAL_AST) {
                         return new BitVecNumImpl(ast);
@@ -1171,6 +1175,18 @@ function createApi(Z3, em) {
         }
         function isReal(obj) {
             return isArith(obj) && isRealSort(obj.sort);
+        }
+        function isComplex(obj) {
+            const result = obj instanceof ComplexImpl;
+            if (result)
+                _assertContext(obj);
+            return result;
+        }
+        function isComplexSort(obj) {
+            const result = obj instanceof ComplexSortImpl;
+            if (result)
+                _assertContext(obj);
+            return result;
         }
         function isRealVal(obj) {
             const r = obj instanceof RatNumImpl;
@@ -1456,6 +1472,28 @@ function createApi(Z3, em) {
                     value = `${value.numerator}/${value.denominator}`;
                 }
                 return new RatNumImpl(Z3.mk_numeral(contextPtr, value.toString(), Real.sort().ptr));
+            },
+        };
+        const Complex = {
+            sort: () => new ComplexSortImpl(check(Z3.mk_complex_sort(contextPtr))),
+            const: (name) => new ComplexImpl(check(Z3.mk_const(contextPtr, _toSymbol(name), Complex.sort().ptr))),
+            consts: (names) => (typeof names === 'string' ? names.split(' ') : names).map(name => Complex.const(name)),
+            vector: (prefix, count) => {
+                const result = [];
+                for (let i = 0; i < count; i++)
+                    result.push(Complex.const(`${prefix}__${i}`));
+                return result;
+            },
+            fresh: (prefix = 'z') => new ComplexImpl(check(Z3.mk_fresh_const(contextPtr, prefix, Complex.sort().ptr))),
+            val: (real, imag = 0) => {
+                for (const component of [real, imag]) {
+                    if (typeof component === 'object' && !isCoercibleRational(component))
+                        _assertContext(component);
+                }
+                const re = Real.sort().cast(real);
+                const im = Real.sort().cast(imag);
+                _assertContext(re, im);
+                return new ComplexImpl(check(Z3.mk_complex(contextPtr, re.ast, im.ast)));
             },
         };
         const RCFNum = Object.assign((value) => new RCFNumImpl(value), {
@@ -2401,7 +2439,7 @@ function createApi(Z3, em) {
                 const n = Z3.ast_vector_size(contextPtr, trailVec);
                 return check(Z3.solver_get_levels(contextPtr, this.ptr, trailVec, n));
             }
-            async cube(vars, cutoff = 0xFFFFFFFF) {
+            async cube(vars, cutoff = 0xffffffff) {
                 const tempVars = vars ?? new AstVectorImpl();
                 const result = await runAsync(() => check(Z3.solver_cube(contextPtr, this.ptr, tempVars.ptr, cutoff)));
                 return new AstVectorImpl(result);
@@ -3038,7 +3076,8 @@ function createApi(Z3, em) {
         }
         class SortImpl extends AstImpl {
             get ast() {
-                return Z3.sort_to_ast(contextPtr, this.ptr);
+                // Z3_sort_to_ast is a pointer cast in C, so skip the round trip into wasm.
+                return this.ptr;
             }
             kind() {
                 return Z3.get_sort_kind(contextPtr, this.ptr);
@@ -3049,7 +3088,7 @@ function createApi(Z3, em) {
             }
             cast(expr) {
                 _assertContext(expr);
-                (0, utils_1.assert)(expr.sort.eqIdentity(expr.sort), 'Sort mismatch');
+                (0, utils_1.assert)(this.eqIdentity(expr.sort), 'Sort mismatch');
                 return expr;
             }
             name() {
@@ -3065,7 +3104,8 @@ function createApi(Z3, em) {
         }
         class FuncDeclImpl extends AstImpl {
             get ast() {
-                return Z3.func_decl_to_ast(contextPtr, this.ptr);
+                // Z3_func_decl_to_ast is a pointer cast in C, so skip the round trip into wasm.
+                return this.ptr;
             }
             name() {
                 return _fromSymbol(Z3.get_decl_name(contextPtr, this.ptr));
@@ -3474,7 +3514,6 @@ function createApi(Z3, em) {
         }
         class ArithSortImpl extends SortImpl {
             cast(other) {
-                const sortTypeStr = isIntSort(this) ? 'IntSort' : 'RealSort';
                 if (isExpr(other)) {
                     const otherS = other.sort;
                     if (isArith(other)) {
@@ -3494,7 +3533,7 @@ function createApi(Z3, em) {
                             return ToReal(If(other, 1, 0));
                         }
                     }
-                    (0, utils_1.assert)(false, `Can't cast expression to ${sortTypeStr}`);
+                    (0, utils_1.assert)(false, `Can't cast expression to ${isIntSort(this) ? 'IntSort' : 'RealSort'}`);
                 }
                 else {
                     if (typeof other !== 'boolean') {
@@ -3504,11 +3543,51 @@ function createApi(Z3, em) {
                         }
                         return Real.val(other);
                     }
-                    (0, utils_1.assert)(false, `Can't cast primitive to ${sortTypeStr}`);
+                    (0, utils_1.assert)(false, `Can't cast primitive to ${isIntSort(this) ? 'IntSort' : 'RealSort'}`);
                 }
             }
         }
+        class ComplexSortImpl extends SortImpl {
+            cast(other) {
+                if (isExpr(other)) {
+                    _assertContext(other);
+                    if (isComplex(other))
+                        return other;
+                    (0, utils_1.assert)(isArith(other), 'Int, Real, or Complex expression expected');
+                }
+                (0, utils_1.assert)(typeof other !== 'boolean', 'Int, Real, or Complex value expected');
+                return Complex.val(other);
+            }
+        }
+        class ComplexImpl extends ExprImpl {
+            add(other) {
+                return new ComplexImpl(check(Z3.mk_add(contextPtr, [this.ast, this.sort.cast(other).ast])));
+            }
+            sub(other) {
+                return new ComplexImpl(check(Z3.mk_sub(contextPtr, [this.ast, this.sort.cast(other).ast])));
+            }
+            mul(other) {
+                return new ComplexImpl(check(Z3.mk_mul(contextPtr, [this.ast, this.sort.cast(other).ast])));
+            }
+            div(other) {
+                return new ComplexImpl(check(Z3.mk_div(contextPtr, this.ast, this.sort.cast(other).ast)));
+            }
+            neg() {
+                return new ComplexImpl(check(Z3.mk_unary_minus(contextPtr, this.ast)));
+            }
+            realPart() {
+                return new ArithImpl(check(Z3.mk_real_part(contextPtr, this.ast)));
+            }
+            imagPart() {
+                return new ArithImpl(check(Z3.mk_imag_part(contextPtr, this.ast)));
+            }
+        }
         function Sum(arg0, ...args) {
+            if (arg0 instanceof ComplexImpl || args.some(arg => isComplex(arg))) {
+                const sort = Complex.sort();
+                const first = sort.cast(arg0);
+                return new ComplexImpl(check(Z3.mk_add(contextPtr, [first.ast, ...args.map(arg => sort.cast(arg).ast)])));
+            }
             if (arg0 instanceof BitVecImpl) {
                 // Assert only 2
                 if (args.length !== 1) {
@@ -3518,10 +3597,16 @@ function createApi(Z3, em) {
             }
             else {
                 (0, utils_1.assert)(arg0 instanceof ArithImpl);
-                return new ArithImpl(check(Z3.mk_add(contextPtr, [arg0.ast].concat(args.map(arg => arg0.sort.cast(arg).ast)))));
+                const sort = arg0.sort;
+                return new ArithImpl(check(Z3.mk_add(contextPtr, [arg0.ast].concat(args.map(arg => sort.cast(arg).ast)))));
             }
         }
         function Sub(arg0, ...args) {
+            if (arg0 instanceof ComplexImpl || args.some(arg => isComplex(arg))) {
+                const sort = Complex.sort();
+                const first = sort.cast(arg0);
+                return new ComplexImpl(check(Z3.mk_sub(contextPtr, [first.ast, ...args.map(arg => sort.cast(arg).ast)])));
+            }
             if (arg0 instanceof BitVecImpl) {
                 // Assert only 2
                 if (args.length !== 1) {
@@ -3531,10 +3616,16 @@ function createApi(Z3, em) {
             }
             else {
                 (0, utils_1.assert)(arg0 instanceof ArithImpl);
-                return new ArithImpl(check(Z3.mk_sub(contextPtr, [arg0.ast].concat(args.map(arg => arg0.sort.cast(arg).ast)))));
+                const sort = arg0.sort;
+                return new ArithImpl(check(Z3.mk_sub(contextPtr, [arg0.ast].concat(args.map(arg => sort.cast(arg).ast)))));
             }
         }
         function Product(arg0, ...args) {
+            if (arg0 instanceof ComplexImpl || args.some(arg => isComplex(arg))) {
+                const sort = Complex.sort();
+                const first = sort.cast(arg0);
+                return new ComplexImpl(check(Z3.mk_mul(contextPtr, [first.ast, ...args.map(arg => sort.cast(arg).ast)])));
+            }
             if (arg0 instanceof BitVecImpl) {
                 // Assert only 2
                 if (args.length !== 1) {
@@ -3544,10 +3635,13 @@ function createApi(Z3, em) {
             }
             else {
                 (0, utils_1.assert)(arg0 instanceof ArithImpl);
-                return new ArithImpl(check(Z3.mk_mul(contextPtr, [arg0.ast].concat(args.map(arg => arg0.sort.cast(arg).ast)))));
+                const sort = arg0.sort;
+                return new ArithImpl(check(Z3.mk_mul(contextPtr, [arg0.ast].concat(args.map(arg => sort.cast(arg).ast)))));
             }
         }
         function Div(arg0, arg1) {
+            if (arg0 instanceof ComplexImpl || isComplex(arg1))
+                return Complex.sort().cast(arg0).div(Complex.sort().cast(arg1));
             if (arg0 instanceof BitVecImpl) {
                 return new BitVecImpl(check(Z3.mk_bvsdiv(contextPtr, arg0.ast, arg0.sort.cast(arg1).ast)));
             }
@@ -3560,6 +3654,8 @@ function createApi(Z3, em) {
             return new BitVecImpl(check(Z3.mk_bvudiv(contextPtr, arg0.ast, arg0.sort.cast(arg1).ast)));
         }
         function Neg(a) {
+            if (a instanceof ComplexImpl)
+                return a.neg();
             if (a instanceof BitVecImpl) {
                 return new BitVecImpl(check(Z3.mk_bvneg(contextPtr, a.ast)));
             }
@@ -3579,18 +3675,26 @@ function createApi(Z3, em) {
         }
         class ArithImpl extends ExprImpl {
             add(other) {
+                if (isComplex(other))
+                    return Complex.sort().cast(this).add(other);
                 return Sum(this, other);
             }
             mul(other) {
+                if (isComplex(other))
+                    return Complex.sort().cast(this).mul(other);
                 return Product(this, other);
             }
             sub(other) {
+                if (isComplex(other))
+                    return Complex.sort().cast(this).sub(other);
                 return Sub(this, other);
             }
             pow(exponent) {
                 return new ArithImpl(check(Z3.mk_power(contextPtr, this.ast, this.sort.cast(exponent).ast)));
             }
             div(other) {
+                if (isComplex(other))
+                    return Complex.sort().cast(this).div(other);
                 return Div(this, other);
             }
             mod(other) {
@@ -4796,6 +4900,8 @@ function createApi(Z3, em) {
             isReal,
             isRealVal,
             isRealSort,
+            isComplex,
+            isComplexSort,
             isRCFNum,
             isBitVecSort,
             isBitVec,
@@ -4831,6 +4937,7 @@ function createApi(Z3, em) {
             Bool,
             Int,
             Real,
+            Complex,
             RCFNum,
             BitVec,
             Float,
@@ -5230,6 +5337,7 @@ var Z3_sort_kind;
     Z3_sort_kind[Z3_sort_kind["Z3_CHAR_SORT"] = 13] = "Z3_CHAR_SORT";
     Z3_sort_kind[Z3_sort_kind["Z3_TYPE_VAR"] = 14] = "Z3_TYPE_VAR";
     Z3_sort_kind[Z3_sort_kind["Z3_FINITE_FIELD_SORT"] = 15] = "Z3_FINITE_FIELD_SORT";
+    Z3_sort_kind[Z3_sort_kind["Z3_COMPLEX_SORT"] = 16] = "Z3_COMPLEX_SORT";
     Z3_sort_kind[Z3_sort_kind["Z3_UNKNOWN_SORT"] = 1000] = "Z3_UNKNOWN_SORT";
 })(Z3_sort_kind || (exports.Z3_sort_kind = Z3_sort_kind = {}));
 var Z3_ast_kind;
@@ -5275,6 +5383,9 @@ var Z3_decl_kind;
     Z3_decl_kind[Z3_decl_kind["Z3_OP_IS_INT"] = 528] = "Z3_OP_IS_INT";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_POWER"] = 529] = "Z3_OP_POWER";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_ABS"] = 530] = "Z3_OP_ABS";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_COMPLEX"] = 531] = "Z3_OP_COMPLEX";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_REAL_PART"] = 532] = "Z3_OP_REAL_PART";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_IMAG_PART"] = 533] = "Z3_OP_IMAG_PART";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_STORE"] = 768] = "Z3_OP_STORE";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_SELECT"] = 769] = "Z3_OP_SELECT";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_CONST_ARRAY"] = 770] = "Z3_OP_CONST_ARRAY";
@@ -5348,6 +5459,7 @@ var Z3_decl_kind;
     Z3_decl_kind[Z3_decl_kind["Z3_OP_BSREM_I"] = 1082] = "Z3_OP_BSREM_I";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_BUREM_I"] = 1083] = "Z3_OP_BUREM_I";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_BSMOD_I"] = 1084] = "Z3_OP_BSMOD_I";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_MKBV"] = 1085] = "Z3_OP_MKBV";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_UNDEF"] = 1280] = "Z3_OP_PR_UNDEF";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_TRUE"] = 1281] = "Z3_OP_PR_TRUE";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_ASSERTED"] = 1282] = "Z3_OP_PR_ASSERTED";
@@ -5390,6 +5502,8 @@ var Z3_decl_kind;
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_MODUS_PONENS_OEQ"] = 1319] = "Z3_OP_PR_MODUS_PONENS_OEQ";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_TH_LEMMA"] = 1320] = "Z3_OP_PR_TH_LEMMA";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_HYPER_RESOLVE"] = 1321] = "Z3_OP_PR_HYPER_RESOLVE";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_TH_ASSUMPTION_ADD"] = 1322] = "Z3_OP_PR_TH_ASSUMPTION_ADD";
+    Z3_decl_kind[Z3_decl_kind["Z3_OP_PR_TH_LEMMA_ADD"] = 1323] = "Z3_OP_PR_TH_LEMMA_ADD";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_RA_STORE"] = 1536] = "Z3_OP_RA_STORE";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_RA_EMPTY"] = 1537] = "Z3_OP_RA_EMPTY";
     Z3_decl_kind[Z3_decl_kind["Z3_OP_RA_IS_EMPTY"] = 1538] = "Z3_OP_RA_IS_EMPTY";
@@ -5688,6 +5802,10 @@ async function init(initModule, moduleOverrides = {}) {
             mk_bool_sort: Mod._Z3_mk_bool_sort,
             mk_int_sort: Mod._Z3_mk_int_sort,
             mk_real_sort: Mod._Z3_mk_real_sort,
+            mk_complex_sort: Mod._Z3_mk_complex_sort,
+            mk_complex: Mod._Z3_mk_complex,
+            mk_real_part: Mod._Z3_mk_real_part,
+            mk_imag_part: Mod._Z3_mk_imag_part,
             mk_bv_sort: Mod._Z3_mk_bv_sort,
             mk_finite_domain_sort: Mod._Z3_mk_finite_domain_sort,
             mk_finite_field_sort: function (c, prime) {
@@ -7860,7 +7978,7 @@ var readyPromise = new Promise((resolve, reject) => {
   readyPromiseResolve = resolve;
   readyPromiseReject = reject;
 });
-["_malloc","_free","_set_throwy_error_handler","_set_noop_error_handler","_async_Z3_eval_smtlib2_string","_async_Z3_simplify","_async_Z3_simplify_ex","_async_Z3_solver_check","_async_Z3_solver_check_assumptions","_async_Z3_solver_cube","_async_Z3_solver_get_consequences","_async_Z3_tactic_apply","_async_Z3_tactic_apply_ex","_async_Z3_optimize_check","_async_Z3_algebraic_roots","_async_Z3_algebraic_eval","_async_Z3_fixedpoint_query","_async_Z3_fixedpoint_query_relations","_async_Z3_fixedpoint_query_from_lvl","_async_Z3_polynomial_subresultants","_Z3_global_param_set","_Z3_global_param_reset_all","_Z3_global_param_get","_Z3_mk_config","_Z3_del_config","_Z3_set_param_value","_Z3_mk_context","_Z3_mk_context_rc","_Z3_del_context","_Z3_inc_ref","_Z3_dec_ref","_Z3_update_param_value","_Z3_get_global_param_descrs","_Z3_interrupt","_Z3_enable_concurrent_dec_ref","_Z3_mk_params","_Z3_params_inc_ref","_Z3_params_dec_ref","_Z3_params_set_bool","_Z3_params_set_uint","_Z3_params_set_double","_Z3_params_set_symbol","_Z3_params_to_string","_Z3_params_validate","_Z3_param_descrs_inc_ref","_Z3_param_descrs_dec_ref","_Z3_param_descrs_get_kind","_Z3_param_descrs_size","_Z3_param_descrs_get_name","_Z3_param_descrs_get_documentation","_Z3_param_descrs_to_string","_Z3_mk_int_symbol","_Z3_mk_string_symbol","_Z3_mk_uninterpreted_sort","_Z3_mk_type_variable","_Z3_mk_bool_sort","_Z3_mk_int_sort","_Z3_mk_real_sort","_Z3_mk_bv_sort","_Z3_mk_finite_domain_sort","_Z3_mk_finite_field_sort","_Z3_get_finite_field_sort_size","_Z3_mk_ff_add","_Z3_mk_ff_mul","_Z3_mk_ff_neg","_Z3_mk_ff_bitsum","_Z3_mk_array_sort","_Z3_mk_array_sort_n","_Z3_mk_tuple_sort","_Z3_mk_enumeration_sort","_Z3_mk_list_sort","_Z3_mk_constructor","_Z3_constructor_num_fields","_Z3_del_constructor","_Z3_mk_datatype","_Z3_mk_polymorphic_datatype","_Z3_mk_datatype_sort","_Z3_mk_constructor_list","_Z3_del_constructor_list","_Z3_mk_datatypes","_Z3_query_constructor","_Z3_mk_func_decl","_Z3_mk_app","_Z3_mk_const","_Z3_mk_fresh_func_decl","_Z3_mk_fresh_const","_Z3_mk_rec_func_decl","_Z3_add_rec_def","_Z3_mk_true","_Z3_mk_false","_Z3_mk_eq","_Z3_mk_distinct","_Z3_mk_not","_Z3_mk_ite","_Z3_mk_iff","_Z3_mk_implies","_Z3_mk_xor","_Z3_mk_and","_Z3_mk_or","_Z3_mk_add","_Z3_mk_mul","_Z3_mk_sub","_Z3_mk_unary_minus","_Z3_mk_div","_Z3_mk_mod","_Z3_mk_rem","_Z3_mk_power","_Z3_mk_abs","_Z3_mk_lt","_Z3_mk_le","_Z3_mk_gt","_Z3_mk_ge","_Z3_mk_divides","_Z3_mk_int2real","_Z3_mk_real2int","_Z3_mk_is_int","_Z3_mk_bvnot","_Z3_mk_bvredand","_Z3_mk_bvredor","_Z3_mk_bvand","_Z3_mk_bvor","_Z3_mk_bvxor","_Z3_mk_bvnand","_Z3_mk_bvnor","_Z3_mk_bvxnor","_Z3_mk_bvneg","_Z3_mk_bvadd","_Z3_mk_bvsub","_Z3_mk_bvmul","_Z3_mk_bvudiv","_Z3_mk_bvsdiv","_Z3_mk_bvurem","_Z3_mk_bvsrem","_Z3_mk_bvsmod","_Z3_mk_bvult","_Z3_mk_bvslt","_Z3_mk_bvule","_Z3_mk_bvsle","_Z3_mk_bvuge","_Z3_mk_bvsge","_Z3_mk_bvugt","_Z3_mk_bvsgt","_Z3_mk_concat","_Z3_mk_extract","_Z3_mk_sign_ext","_Z3_mk_zero_ext","_Z3_mk_repeat","_Z3_mk_bit2bool","_Z3_mk_bvshl","_Z3_mk_bvlshr","_Z3_mk_bvashr","_Z3_mk_rotate_left","_Z3_mk_rotate_right","_Z3_mk_ext_rotate_left","_Z3_mk_ext_rotate_right","_Z3_mk_int2bv","_Z3_mk_bv2int","_Z3_mk_bvadd_no_overflow","_Z3_mk_bvadd_no_underflow","_Z3_mk_bvsub_no_overflow","_Z3_mk_bvsub_no_underflow","_Z3_mk_bvsdiv_no_overflow","_Z3_mk_bvneg_no_overflow","_Z3_mk_bvmul_no_overflow","_Z3_mk_bvmul_no_underflow","_Z3_mk_select","_Z3_mk_select_n","_Z3_mk_store","_Z3_mk_store_n","_Z3_mk_const_array","_Z3_mk_map","_Z3_mk_array_default","_Z3_mk_as_array","_Z3_mk_set_sort","_Z3_mk_empty_set","_Z3_mk_full_set","_Z3_mk_set_add","_Z3_mk_set_del","_Z3_mk_set_union","_Z3_mk_set_intersect","_Z3_mk_set_difference","_Z3_mk_set_complement","_Z3_mk_set_member","_Z3_mk_set_subset","_Z3_mk_array_ext","_Z3_mk_finite_set_sort","_Z3_is_finite_set_sort","_Z3_get_finite_set_sort_basis","_Z3_mk_finite_set_empty","_Z3_mk_finite_set_singleton","_Z3_mk_finite_set_union","_Z3_mk_finite_set_intersect","_Z3_mk_finite_set_difference","_Z3_mk_finite_set_member","_Z3_mk_finite_set_size","_Z3_mk_finite_set_subset","_Z3_mk_finite_set_map","_Z3_mk_finite_set_filter","_Z3_mk_finite_set_range","_Z3_mk_numeral","_Z3_mk_real","_Z3_mk_real_int64","_Z3_mk_int","_Z3_mk_unsigned_int","_Z3_mk_int64","_Z3_mk_unsigned_int64","_Z3_mk_bv_numeral","_Z3_mk_seq_sort","_Z3_is_seq_sort","_Z3_get_seq_sort_basis","_Z3_mk_re_sort","_Z3_is_re_sort","_Z3_get_re_sort_basis","_Z3_mk_string_sort","_Z3_mk_char_sort","_Z3_is_string_sort","_Z3_is_char_sort","_Z3_mk_string","_Z3_mk_lstring","_Z3_mk_u32string","_Z3_is_string","_Z3_get_string","_Z3_get_lstring","_Z3_get_string_length","_Z3_get_string_contents","_Z3_mk_seq_empty","_Z3_mk_seq_unit","_Z3_mk_seq_concat","_Z3_mk_seq_prefix","_Z3_mk_seq_suffix","_Z3_mk_seq_contains","_Z3_mk_str_lt","_Z3_mk_str_le","_Z3_mk_seq_extract","_Z3_mk_seq_replace","_Z3_mk_seq_replace_all","_Z3_mk_seq_replace_re","_Z3_mk_seq_replace_re_all","_Z3_mk_seq_at","_Z3_mk_seq_nth","_Z3_mk_seq_power","_Z3_mk_seq_length","_Z3_mk_seq_index","_Z3_mk_seq_last_index","_Z3_mk_seq_map","_Z3_mk_seq_mapi","_Z3_mk_seq_foldl","_Z3_mk_seq_foldli","_Z3_mk_str_to_int","_Z3_mk_int_to_str","_Z3_mk_string_to_code","_Z3_mk_string_from_code","_Z3_mk_ubv_to_str","_Z3_mk_sbv_to_str","_Z3_mk_seq_to_re","_Z3_mk_seq_in_re","_Z3_mk_re_plus","_Z3_mk_re_star","_Z3_mk_re_option","_Z3_mk_re_union","_Z3_mk_re_concat","_Z3_mk_re_range","_Z3_mk_re_allchar","_Z3_mk_re_loop","_Z3_mk_re_power","_Z3_mk_re_intersect","_Z3_mk_re_complement","_Z3_mk_re_diff","_Z3_mk_re_empty","_Z3_mk_re_full","_Z3_mk_char","_Z3_mk_char_le","_Z3_mk_char_to_int","_Z3_mk_char_to_bv","_Z3_mk_char_from_bv","_Z3_mk_char_is_digit","_Z3_mk_linear_order","_Z3_mk_partial_order","_Z3_mk_piecewise_linear_order","_Z3_mk_tree_order","_Z3_mk_transitive_closure","_Z3_mk_pattern","_Z3_mk_bound","_Z3_mk_forall","_Z3_mk_exists","_Z3_mk_quantifier","_Z3_mk_quantifier_ex","_Z3_mk_forall_const","_Z3_mk_exists_const","_Z3_mk_quantifier_const","_Z3_mk_quantifier_const_ex","_Z3_mk_lambda","_Z3_mk_lambda_const","_Z3_get_symbol_kind","_Z3_get_symbol_int","_Z3_get_symbol_string","_Z3_get_sort_name","_Z3_get_sort_id","_Z3_sort_to_ast","_Z3_is_eq_sort","_Z3_get_sort_kind","_Z3_get_bv_sort_size","_Z3_get_finite_domain_sort_size","_Z3_get_array_arity","_Z3_get_array_sort_domain","_Z3_get_array_sort_domain_n","_Z3_get_array_sort_range","_Z3_get_tuple_sort_mk_decl","_Z3_get_tuple_sort_num_fields","_Z3_get_tuple_sort_field_decl","_Z3_is_recursive_datatype_sort","_Z3_get_datatype_sort_num_constructors","_Z3_get_datatype_sort_constructor","_Z3_get_datatype_sort_recognizer","_Z3_get_datatype_sort_constructor_accessor","_Z3_datatype_update_field","_Z3_get_relation_arity","_Z3_get_relation_column","_Z3_mk_atmost","_Z3_mk_atleast","_Z3_mk_pble","_Z3_mk_pbge","_Z3_mk_pbeq","_Z3_func_decl_to_ast","_Z3_is_eq_func_decl","_Z3_get_func_decl_id","_Z3_get_decl_name","_Z3_get_decl_kind","_Z3_get_domain_size","_Z3_get_arity","_Z3_get_domain","_Z3_get_range","_Z3_get_decl_num_parameters","_Z3_get_decl_parameter_kind","_Z3_get_decl_int_parameter","_Z3_get_decl_double_parameter","_Z3_get_decl_symbol_parameter","_Z3_get_decl_sort_parameter","_Z3_get_decl_ast_parameter","_Z3_get_decl_func_decl_parameter","_Z3_get_decl_rational_parameter","_Z3_app_to_ast","_Z3_get_app_decl","_Z3_get_app_num_args","_Z3_get_app_arg","_Z3_is_eq_ast","_Z3_get_ast_id","_Z3_get_ast_hash","_Z3_get_sort","_Z3_is_well_sorted","_Z3_get_bool_value","_Z3_get_ast_kind","_Z3_is_app","_Z3_is_ground","_Z3_get_depth","_Z3_is_numeral_ast","_Z3_is_algebraic_number","_Z3_to_app","_Z3_to_func_decl","_Z3_get_numeral_string","_Z3_get_numeral_binary_string","_Z3_get_numeral_decimal_string","_Z3_get_numeral_double","_Z3_get_numerator","_Z3_get_denominator","_Z3_get_numeral_small","_Z3_get_numeral_int","_Z3_get_numeral_uint","_Z3_get_numeral_uint64","_Z3_get_numeral_int64","_Z3_get_numeral_rational_int64","_Z3_get_algebraic_number_lower","_Z3_get_algebraic_number_upper","_Z3_pattern_to_ast","_Z3_get_pattern_num_terms","_Z3_get_pattern","_Z3_get_index_value","_Z3_is_quantifier_forall","_Z3_is_quantifier_exists","_Z3_is_lambda","_Z3_get_quantifier_weight","_Z3_get_quantifier_skolem_id","_Z3_get_quantifier_id","_Z3_get_quantifier_num_patterns","_Z3_get_quantifier_pattern_ast","_Z3_get_quantifier_num_no_patterns","_Z3_get_quantifier_no_pattern_ast","_Z3_get_quantifier_num_bound","_Z3_get_quantifier_bound_name","_Z3_get_quantifier_bound_sort","_Z3_get_quantifier_body","_Z3_simplify","_Z3_simplify_ex","_Z3_simplify_get_help","_Z3_simplify_get_param_descrs","_Z3_update_term","_Z3_substitute","_Z3_substitute_vars","_Z3_substitute_funs","_Z3_translate","_Z3_mk_model","_Z3_model_inc_ref","_Z3_model_dec_ref","_Z3_model_eval","_Z3_model_get_const_interp","_Z3_model_has_interp","_Z3_model_get_func_interp","_Z3_model_get_num_consts","_Z3_model_get_const_decl","_Z3_model_get_num_funcs","_Z3_model_get_func_decl","_Z3_model_get_num_sorts","_Z3_model_get_sort","_Z3_model_get_sort_universe","_Z3_model_translate","_Z3_is_as_array","_Z3_get_as_array_func_decl","_Z3_add_func_interp","_Z3_add_const_interp","_Z3_func_interp_inc_ref","_Z3_func_interp_dec_ref","_Z3_func_interp_get_num_entries","_Z3_func_interp_get_entry","_Z3_func_interp_get_else","_Z3_func_interp_set_else","_Z3_func_interp_get_arity","_Z3_func_interp_add_entry","_Z3_func_entry_inc_ref","_Z3_func_entry_dec_ref","_Z3_func_entry_get_value","_Z3_func_entry_get_num_args","_Z3_func_entry_get_arg","_Z3_open_log","_Z3_append_log","_Z3_close_log","_Z3_toggle_warning_messages","_Z3_set_ast_print_mode","_Z3_ast_to_string","_Z3_pattern_to_string","_Z3_sort_to_string","_Z3_func_decl_to_string","_Z3_model_to_string","_Z3_benchmark_to_smtlib_string","_Z3_parse_smtlib2_string","_Z3_parse_smtlib2_file","_Z3_eval_smtlib2_string","_Z3_mk_parser_context","_Z3_parser_context_inc_ref","_Z3_parser_context_dec_ref","_Z3_parser_context_add_sort","_Z3_parser_context_add_decl","_Z3_parser_context_from_string","_Z3_get_error_code","_Z3_set_error","_Z3_get_error_msg","_Z3_get_version","_Z3_get_full_version","_Z3_enable_trace","_Z3_disable_trace","_Z3_reset_memory","_Z3_finalize_memory","_Z3_mk_goal","_Z3_goal_inc_ref","_Z3_goal_dec_ref","_Z3_goal_precision","_Z3_goal_assert","_Z3_goal_inconsistent","_Z3_goal_depth","_Z3_goal_reset","_Z3_goal_size","_Z3_goal_formula","_Z3_goal_num_exprs","_Z3_goal_is_decided_sat","_Z3_goal_is_decided_unsat","_Z3_goal_translate","_Z3_goal_convert_model","_Z3_goal_to_string","_Z3_goal_to_dimacs_string","_Z3_mk_tactic","_Z3_tactic_inc_ref","_Z3_tactic_dec_ref","_Z3_mk_probe","_Z3_probe_inc_ref","_Z3_probe_dec_ref","_Z3_tactic_and_then","_Z3_tactic_or_else","_Z3_tactic_par_or","_Z3_tactic_par_and_then","_Z3_tactic_try_for","_Z3_tactic_when","_Z3_tactic_cond","_Z3_tactic_repeat","_Z3_tactic_skip","_Z3_tactic_fail","_Z3_tactic_fail_if","_Z3_tactic_fail_if_not_decided","_Z3_tactic_using_params","_Z3_mk_simplifier","_Z3_simplifier_inc_ref","_Z3_simplifier_dec_ref","_Z3_solver_add_simplifier","_Z3_simplifier_and_then","_Z3_simplifier_using_params","_Z3_get_num_simplifiers","_Z3_get_simplifier_name","_Z3_simplifier_get_help","_Z3_simplifier_get_param_descrs","_Z3_simplifier_get_descr","_Z3_probe_const","_Z3_probe_lt","_Z3_probe_gt","_Z3_probe_le","_Z3_probe_ge","_Z3_probe_eq","_Z3_probe_and","_Z3_probe_or","_Z3_probe_not","_Z3_get_num_tactics","_Z3_get_tactic_name","_Z3_get_num_probes","_Z3_get_probe_name","_Z3_tactic_get_help","_Z3_tactic_get_param_descrs","_Z3_tactic_get_descr","_Z3_probe_get_descr","_Z3_probe_apply","_Z3_tactic_apply","_Z3_tactic_apply_ex","_Z3_apply_result_inc_ref","_Z3_apply_result_dec_ref","_Z3_apply_result_to_string","_Z3_apply_result_get_num_subgoals","_Z3_apply_result_get_subgoal","_Z3_mk_solver","_Z3_mk_simple_solver","_Z3_mk_solver_for_logic","_Z3_mk_solver_from_tactic","_Z3_solver_translate","_Z3_solver_import_model_converter","_Z3_solver_get_help","_Z3_solver_get_param_descrs","_Z3_solver_set_params","_Z3_solver_inc_ref","_Z3_solver_dec_ref","_Z3_solver_interrupt","_Z3_solver_push","_Z3_solver_pop","_Z3_solver_reset","_Z3_solver_get_num_scopes","_Z3_solver_assert","_Z3_solver_assert_and_track","_Z3_solver_from_file","_Z3_solver_from_string","_Z3_solver_get_assertions","_Z3_solver_get_units","_Z3_solver_get_trail","_Z3_solver_get_non_units","_Z3_solver_get_levels","_Z3_solver_congruence_root","_Z3_solver_congruence_next","_Z3_solver_congruence_explain","_Z3_solver_solve_for","_Z3_solver_register_on_clause","_Z3_solver_propagate_init","_Z3_solver_propagate_fixed","_Z3_solver_propagate_final","_Z3_solver_propagate_eq","_Z3_solver_propagate_diseq","_Z3_solver_propagate_created","_Z3_solver_propagate_decide","_Z3_solver_propagate_on_binding","_Z3_solver_next_split","_Z3_solver_propagate_declare","_Z3_solver_propagate_register","_Z3_solver_propagate_register_cb","_Z3_solver_propagate_consequence","_Z3_solver_set_initial_value","_Z3_solver_check","_Z3_solver_check_assumptions","_Z3_get_implied_equalities","_Z3_solver_get_consequences","_Z3_solver_cube","_Z3_solver_get_model","_Z3_solver_get_proof","_Z3_solver_get_unsat_core","_Z3_solver_get_reason_unknown","_Z3_solver_get_statistics","_Z3_solver_to_string","_Z3_solver_to_dimacs_string","_Z3_stats_to_string","_Z3_stats_inc_ref","_Z3_stats_dec_ref","_Z3_stats_size","_Z3_stats_get_key","_Z3_stats_is_uint","_Z3_stats_is_double","_Z3_stats_get_uint_value","_Z3_stats_get_double_value","_Z3_get_estimated_alloc_size","_Z3_algebraic_is_value","_Z3_algebraic_is_pos","_Z3_algebraic_is_neg","_Z3_algebraic_is_zero","_Z3_algebraic_sign","_Z3_algebraic_add","_Z3_algebraic_sub","_Z3_algebraic_mul","_Z3_algebraic_div","_Z3_algebraic_root","_Z3_algebraic_power","_Z3_algebraic_lt","_Z3_algebraic_gt","_Z3_algebraic_le","_Z3_algebraic_ge","_Z3_algebraic_eq","_Z3_algebraic_neq","_Z3_algebraic_roots","_Z3_algebraic_eval","_Z3_algebraic_get_poly","_Z3_algebraic_get_i","_Z3_mk_ast_vector","_Z3_ast_vector_inc_ref","_Z3_ast_vector_dec_ref","_Z3_ast_vector_size","_Z3_ast_vector_get","_Z3_ast_vector_set","_Z3_ast_vector_resize","_Z3_ast_vector_push","_Z3_ast_vector_translate","_Z3_ast_vector_to_string","_Z3_mk_ast_map","_Z3_ast_map_inc_ref","_Z3_ast_map_dec_ref","_Z3_ast_map_contains","_Z3_ast_map_find","_Z3_ast_map_insert","_Z3_ast_map_erase","_Z3_ast_map_reset","_Z3_ast_map_size","_Z3_ast_map_keys","_Z3_ast_map_to_string","_Z3_mk_fixedpoint","_Z3_fixedpoint_inc_ref","_Z3_fixedpoint_dec_ref","_Z3_fixedpoint_add_rule","_Z3_fixedpoint_add_fact","_Z3_fixedpoint_assert","_Z3_fixedpoint_query","_Z3_fixedpoint_query_relations","_Z3_fixedpoint_get_answer","_Z3_fixedpoint_get_reason_unknown","_Z3_fixedpoint_update_rule","_Z3_fixedpoint_get_num_levels","_Z3_fixedpoint_get_cover_delta","_Z3_fixedpoint_add_cover","_Z3_fixedpoint_get_statistics","_Z3_fixedpoint_register_relation","_Z3_fixedpoint_set_predicate_representation","_Z3_fixedpoint_get_rules","_Z3_fixedpoint_get_assertions","_Z3_fixedpoint_set_params","_Z3_fixedpoint_get_help","_Z3_fixedpoint_get_param_descrs","_Z3_fixedpoint_to_string","_Z3_fixedpoint_from_string","_Z3_fixedpoint_from_file","_Z3_mk_fpa_rounding_mode_sort","_Z3_mk_fpa_round_nearest_ties_to_even","_Z3_mk_fpa_rne","_Z3_mk_fpa_round_nearest_ties_to_away","_Z3_mk_fpa_rna","_Z3_mk_fpa_round_toward_positive","_Z3_mk_fpa_rtp","_Z3_mk_fpa_round_toward_negative","_Z3_mk_fpa_rtn","_Z3_mk_fpa_round_toward_zero","_Z3_mk_fpa_rtz","_Z3_mk_fpa_sort","_Z3_mk_fpa_sort_half","_Z3_mk_fpa_sort_16","_Z3_mk_fpa_sort_single","_Z3_mk_fpa_sort_32","_Z3_mk_fpa_sort_double","_Z3_mk_fpa_sort_64","_Z3_mk_fpa_sort_quadruple","_Z3_mk_fpa_sort_128","_Z3_mk_fpa_nan","_Z3_mk_fpa_inf","_Z3_mk_fpa_zero","_Z3_mk_fpa_fp","_Z3_mk_fpa_numeral_float","_Z3_mk_fpa_numeral_double","_Z3_mk_fpa_numeral_int","_Z3_mk_fpa_numeral_int_uint","_Z3_mk_fpa_numeral_int64_uint64","_Z3_mk_fpa_abs","_Z3_mk_fpa_neg","_Z3_mk_fpa_add","_Z3_mk_fpa_sub","_Z3_mk_fpa_mul","_Z3_mk_fpa_div","_Z3_mk_fpa_fma","_Z3_mk_fpa_sqrt","_Z3_mk_fpa_rem","_Z3_mk_fpa_round_to_integral","_Z3_mk_fpa_min","_Z3_mk_fpa_max","_Z3_mk_fpa_leq","_Z3_mk_fpa_lt","_Z3_mk_fpa_geq","_Z3_mk_fpa_gt","_Z3_mk_fpa_eq","_Z3_mk_fpa_is_normal","_Z3_mk_fpa_is_subnormal","_Z3_mk_fpa_is_zero","_Z3_mk_fpa_is_infinite","_Z3_mk_fpa_is_nan","_Z3_mk_fpa_is_negative","_Z3_mk_fpa_is_positive","_Z3_mk_fpa_to_fp_bv","_Z3_mk_fpa_to_fp_float","_Z3_mk_fpa_to_fp_real","_Z3_mk_fpa_to_fp_signed","_Z3_mk_fpa_to_fp_unsigned","_Z3_mk_fpa_to_ubv","_Z3_mk_fpa_to_sbv","_Z3_mk_fpa_to_real","_Z3_fpa_get_ebits","_Z3_fpa_get_sbits","_Z3_fpa_is_numeral","_Z3_fpa_is_numeral_nan","_Z3_fpa_is_numeral_inf","_Z3_fpa_is_numeral_zero","_Z3_fpa_is_numeral_normal","_Z3_fpa_is_numeral_subnormal","_Z3_fpa_is_numeral_positive","_Z3_fpa_is_numeral_negative","_Z3_fpa_get_numeral_sign_bv","_Z3_fpa_get_numeral_significand_bv","_Z3_fpa_get_numeral_sign","_Z3_fpa_get_numeral_significand_string","_Z3_fpa_get_numeral_significand_uint64","_Z3_fpa_get_numeral_exponent_string","_Z3_fpa_get_numeral_exponent_int64","_Z3_fpa_get_numeral_exponent_bv","_Z3_mk_fpa_to_ieee_bv","_Z3_mk_fpa_to_fp_int_real","_Z3_mk_optimize","_Z3_optimize_inc_ref","_Z3_optimize_dec_ref","_Z3_optimize_assert","_Z3_optimize_assert_and_track","_Z3_optimize_assert_soft","_Z3_optimize_maximize","_Z3_optimize_minimize","_Z3_optimize_push","_Z3_optimize_pop","_Z3_optimize_set_initial_value","_Z3_optimize_check","_Z3_optimize_get_reason_unknown","_Z3_optimize_get_model","_Z3_optimize_get_unsat_core","_Z3_optimize_set_params","_Z3_optimize_get_param_descrs","_Z3_optimize_get_lower","_Z3_optimize_get_upper","_Z3_optimize_get_lower_as_vector","_Z3_optimize_get_upper_as_vector","_Z3_optimize_to_string","_Z3_optimize_from_string","_Z3_optimize_from_file","_Z3_optimize_get_help","_Z3_optimize_get_statistics","_Z3_optimize_get_assertions","_Z3_optimize_get_objectives","_Z3_optimize_translate","_Z3_polynomial_subresultants","_Z3_rcf_del","_Z3_rcf_mk_rational","_Z3_rcf_mk_small_int","_Z3_rcf_mk_pi","_Z3_rcf_mk_e","_Z3_rcf_mk_infinitesimal","_Z3_rcf_mk_roots","_Z3_rcf_add","_Z3_rcf_sub","_Z3_rcf_mul","_Z3_rcf_div","_Z3_rcf_neg","_Z3_rcf_inv","_Z3_rcf_power","_Z3_rcf_lt","_Z3_rcf_gt","_Z3_rcf_le","_Z3_rcf_ge","_Z3_rcf_eq","_Z3_rcf_neq","_Z3_rcf_num_to_string","_Z3_rcf_num_to_decimal_string","_Z3_rcf_get_numerator_denominator","_Z3_rcf_is_rational","_Z3_rcf_is_algebraic","_Z3_rcf_is_infinitesimal","_Z3_rcf_is_transcendental","_Z3_rcf_extension_index","_Z3_rcf_transcendental_name","_Z3_rcf_infinitesimal_name","_Z3_rcf_num_coefficients","_Z3_rcf_coefficient","_Z3_rcf_interval","_Z3_rcf_num_sign_conditions","_Z3_rcf_sign_condition_sign","_Z3_rcf_num_sign_condition_coefficients","_Z3_rcf_sign_condition_coefficient","_Z3_fixedpoint_query_from_lvl","_Z3_fixedpoint_get_ground_sat_answer","_Z3_fixedpoint_get_rules_along_trace","_Z3_fixedpoint_get_rule_names_along_trace","_Z3_fixedpoint_add_invariant","_Z3_fixedpoint_get_reachable","_Z3_qe_model_project","_Z3_qe_model_project_skolem","_Z3_qe_model_project_with_witness","_Z3_model_extrapolate","_Z3_qe_lite","getExceptionMessage","incrementExceptionRefcount","decrementExceptionRefcount","___indirect_function_table","onRuntimeInitialized"].forEach((prop) => {
+["_malloc","_free","_set_throwy_error_handler","_set_noop_error_handler","_async_Z3_eval_smtlib2_string","_async_Z3_simplify","_async_Z3_simplify_ex","_async_Z3_solver_check","_async_Z3_solver_check_assumptions","_async_Z3_solver_cube","_async_Z3_solver_get_consequences","_async_Z3_tactic_apply","_async_Z3_tactic_apply_ex","_async_Z3_optimize_check","_async_Z3_algebraic_roots","_async_Z3_algebraic_eval","_async_Z3_fixedpoint_query","_async_Z3_fixedpoint_query_relations","_async_Z3_fixedpoint_query_from_lvl","_async_Z3_polynomial_subresultants","_Z3_global_param_set","_Z3_global_param_reset_all","_Z3_global_param_get","_Z3_mk_config","_Z3_del_config","_Z3_set_param_value","_Z3_mk_context","_Z3_mk_context_rc","_Z3_del_context","_Z3_set_proof_check_callback","_Z3_inc_ref","_Z3_dec_ref","_Z3_update_param_value","_Z3_get_global_param_descrs","_Z3_interrupt","_Z3_enable_concurrent_dec_ref","_Z3_mk_params","_Z3_params_inc_ref","_Z3_params_dec_ref","_Z3_params_set_bool","_Z3_params_set_uint","_Z3_params_set_double","_Z3_params_set_symbol","_Z3_params_to_string","_Z3_params_validate","_Z3_param_descrs_inc_ref","_Z3_param_descrs_dec_ref","_Z3_param_descrs_get_kind","_Z3_param_descrs_size","_Z3_param_descrs_get_name","_Z3_param_descrs_get_documentation","_Z3_param_descrs_to_string","_Z3_mk_int_symbol","_Z3_mk_string_symbol","_Z3_mk_uninterpreted_sort","_Z3_mk_type_variable","_Z3_mk_bool_sort","_Z3_mk_int_sort","_Z3_mk_real_sort","_Z3_mk_complex_sort","_Z3_mk_complex","_Z3_mk_real_part","_Z3_mk_imag_part","_Z3_mk_bv_sort","_Z3_mk_finite_domain_sort","_Z3_mk_finite_field_sort","_Z3_get_finite_field_sort_size","_Z3_mk_ff_add","_Z3_mk_ff_mul","_Z3_mk_ff_neg","_Z3_mk_ff_bitsum","_Z3_mk_array_sort","_Z3_mk_array_sort_n","_Z3_mk_tuple_sort","_Z3_mk_enumeration_sort","_Z3_mk_list_sort","_Z3_mk_constructor","_Z3_constructor_num_fields","_Z3_del_constructor","_Z3_mk_datatype","_Z3_mk_polymorphic_datatype","_Z3_mk_datatype_sort","_Z3_mk_constructor_list","_Z3_del_constructor_list","_Z3_mk_datatypes","_Z3_query_constructor","_Z3_mk_func_decl","_Z3_mk_app","_Z3_mk_const","_Z3_mk_fresh_func_decl","_Z3_mk_fresh_const","_Z3_mk_rec_func_decl","_Z3_add_rec_def","_Z3_mk_true","_Z3_mk_false","_Z3_mk_eq","_Z3_mk_distinct","_Z3_mk_not","_Z3_mk_ite","_Z3_mk_iff","_Z3_mk_implies","_Z3_mk_xor","_Z3_mk_and","_Z3_mk_or","_Z3_mk_add","_Z3_mk_mul","_Z3_mk_sub","_Z3_mk_unary_minus","_Z3_mk_div","_Z3_mk_mod","_Z3_mk_rem","_Z3_mk_power","_Z3_mk_abs","_Z3_mk_lt","_Z3_mk_le","_Z3_mk_gt","_Z3_mk_ge","_Z3_mk_divides","_Z3_mk_int2real","_Z3_mk_real2int","_Z3_mk_is_int","_Z3_mk_bvnot","_Z3_mk_bvredand","_Z3_mk_bvredor","_Z3_mk_bvand","_Z3_mk_bvor","_Z3_mk_bvxor","_Z3_mk_bvnand","_Z3_mk_bvnor","_Z3_mk_bvxnor","_Z3_mk_bvneg","_Z3_mk_bvadd","_Z3_mk_bvsub","_Z3_mk_bvmul","_Z3_mk_bvudiv","_Z3_mk_bvsdiv","_Z3_mk_bvurem","_Z3_mk_bvsrem","_Z3_mk_bvsmod","_Z3_mk_bvult","_Z3_mk_bvslt","_Z3_mk_bvule","_Z3_mk_bvsle","_Z3_mk_bvuge","_Z3_mk_bvsge","_Z3_mk_bvugt","_Z3_mk_bvsgt","_Z3_mk_concat","_Z3_mk_extract","_Z3_mk_sign_ext","_Z3_mk_zero_ext","_Z3_mk_repeat","_Z3_mk_bit2bool","_Z3_mk_bvshl","_Z3_mk_bvlshr","_Z3_mk_bvashr","_Z3_mk_rotate_left","_Z3_mk_rotate_right","_Z3_mk_ext_rotate_left","_Z3_mk_ext_rotate_right","_Z3_mk_int2bv","_Z3_mk_bv2int","_Z3_mk_bvadd_no_overflow","_Z3_mk_bvadd_no_underflow","_Z3_mk_bvsub_no_overflow","_Z3_mk_bvsub_no_underflow","_Z3_mk_bvsdiv_no_overflow","_Z3_mk_bvneg_no_overflow","_Z3_mk_bvmul_no_overflow","_Z3_mk_bvmul_no_underflow","_Z3_mk_select","_Z3_mk_select_n","_Z3_mk_store","_Z3_mk_store_n","_Z3_mk_const_array","_Z3_mk_map","_Z3_mk_array_default","_Z3_mk_as_array","_Z3_mk_set_sort","_Z3_mk_empty_set","_Z3_mk_full_set","_Z3_mk_set_add","_Z3_mk_set_del","_Z3_mk_set_union","_Z3_mk_set_intersect","_Z3_mk_set_difference","_Z3_mk_set_complement","_Z3_mk_set_member","_Z3_mk_set_subset","_Z3_mk_array_ext","_Z3_mk_finite_set_sort","_Z3_is_finite_set_sort","_Z3_get_finite_set_sort_basis","_Z3_mk_finite_set_empty","_Z3_mk_finite_set_singleton","_Z3_mk_finite_set_union","_Z3_mk_finite_set_intersect","_Z3_mk_finite_set_difference","_Z3_mk_finite_set_member","_Z3_mk_finite_set_size","_Z3_mk_finite_set_subset","_Z3_mk_finite_set_map","_Z3_mk_finite_set_filter","_Z3_mk_finite_set_range","_Z3_mk_numeral","_Z3_mk_real","_Z3_mk_real_int64","_Z3_mk_int","_Z3_mk_unsigned_int","_Z3_mk_int64","_Z3_mk_unsigned_int64","_Z3_mk_bv_numeral","_Z3_mk_seq_sort","_Z3_is_seq_sort","_Z3_get_seq_sort_basis","_Z3_mk_re_sort","_Z3_is_re_sort","_Z3_get_re_sort_basis","_Z3_mk_string_sort","_Z3_mk_char_sort","_Z3_is_string_sort","_Z3_is_char_sort","_Z3_mk_string","_Z3_mk_lstring","_Z3_mk_u32string","_Z3_is_string","_Z3_get_string","_Z3_get_lstring","_Z3_get_string_length","_Z3_get_string_contents","_Z3_mk_seq_empty","_Z3_mk_seq_unit","_Z3_mk_seq_concat","_Z3_mk_seq_prefix","_Z3_mk_seq_suffix","_Z3_mk_seq_contains","_Z3_mk_str_lt","_Z3_mk_str_le","_Z3_mk_seq_extract","_Z3_mk_seq_replace","_Z3_mk_seq_replace_all","_Z3_mk_seq_replace_re","_Z3_mk_seq_replace_re_all","_Z3_mk_seq_at","_Z3_mk_seq_nth","_Z3_mk_seq_power","_Z3_mk_seq_length","_Z3_mk_seq_index","_Z3_mk_seq_last_index","_Z3_mk_seq_map","_Z3_mk_seq_mapi","_Z3_mk_seq_foldl","_Z3_mk_seq_foldli","_Z3_mk_str_to_int","_Z3_mk_int_to_str","_Z3_mk_string_to_code","_Z3_mk_string_from_code","_Z3_mk_ubv_to_str","_Z3_mk_sbv_to_str","_Z3_mk_seq_to_re","_Z3_mk_seq_in_re","_Z3_mk_re_plus","_Z3_mk_re_star","_Z3_mk_re_option","_Z3_mk_re_union","_Z3_mk_re_concat","_Z3_mk_re_range","_Z3_mk_re_allchar","_Z3_mk_re_loop","_Z3_mk_re_power","_Z3_mk_re_intersect","_Z3_mk_re_complement","_Z3_mk_re_diff","_Z3_mk_re_empty","_Z3_mk_re_full","_Z3_mk_char","_Z3_mk_char_le","_Z3_mk_char_to_int","_Z3_mk_char_to_bv","_Z3_mk_char_from_bv","_Z3_mk_char_is_digit","_Z3_mk_linear_order","_Z3_mk_partial_order","_Z3_mk_piecewise_linear_order","_Z3_mk_tree_order","_Z3_mk_transitive_closure","_Z3_mk_pattern","_Z3_mk_bound","_Z3_mk_forall","_Z3_mk_exists","_Z3_mk_quantifier","_Z3_mk_quantifier_ex","_Z3_mk_forall_const","_Z3_mk_exists_const","_Z3_mk_quantifier_const","_Z3_mk_quantifier_const_ex","_Z3_mk_lambda","_Z3_mk_lambda_const","_Z3_get_symbol_kind","_Z3_get_symbol_int","_Z3_get_symbol_string","_Z3_get_sort_name","_Z3_get_sort_id","_Z3_sort_to_ast","_Z3_is_eq_sort","_Z3_get_sort_kind","_Z3_get_bv_sort_size","_Z3_get_finite_domain_sort_size","_Z3_get_array_arity","_Z3_get_array_sort_domain","_Z3_get_array_sort_domain_n","_Z3_get_array_sort_range","_Z3_get_tuple_sort_mk_decl","_Z3_get_tuple_sort_num_fields","_Z3_get_tuple_sort_field_decl","_Z3_is_recursive_datatype_sort","_Z3_get_datatype_sort_num_constructors","_Z3_get_datatype_sort_constructor","_Z3_get_datatype_sort_recognizer","_Z3_get_datatype_sort_constructor_accessor","_Z3_datatype_update_field","_Z3_get_relation_arity","_Z3_get_relation_column","_Z3_mk_atmost","_Z3_mk_atleast","_Z3_mk_pble","_Z3_mk_pbge","_Z3_mk_pbeq","_Z3_func_decl_to_ast","_Z3_is_eq_func_decl","_Z3_get_func_decl_id","_Z3_get_decl_name","_Z3_get_decl_kind","_Z3_get_domain_size","_Z3_get_arity","_Z3_get_domain","_Z3_get_range","_Z3_get_decl_num_parameters","_Z3_get_decl_parameter_kind","_Z3_get_decl_int_parameter","_Z3_get_decl_double_parameter","_Z3_get_decl_symbol_parameter","_Z3_get_decl_sort_parameter","_Z3_get_decl_ast_parameter","_Z3_get_decl_func_decl_parameter","_Z3_get_decl_rational_parameter","_Z3_app_to_ast","_Z3_get_app_decl","_Z3_get_app_num_args","_Z3_get_app_arg","_Z3_is_eq_ast","_Z3_get_ast_id","_Z3_get_ast_hash","_Z3_get_sort","_Z3_is_well_sorted","_Z3_get_bool_value","_Z3_get_ast_kind","_Z3_is_app","_Z3_is_ground","_Z3_get_depth","_Z3_is_numeral_ast","_Z3_is_algebraic_number","_Z3_to_app","_Z3_to_func_decl","_Z3_get_numeral_string","_Z3_get_numeral_binary_string","_Z3_get_numeral_decimal_string","_Z3_get_numeral_double","_Z3_get_numerator","_Z3_get_denominator","_Z3_get_numeral_small","_Z3_get_numeral_int","_Z3_get_numeral_uint","_Z3_get_numeral_uint64","_Z3_get_numeral_int64","_Z3_get_numeral_rational_int64","_Z3_get_algebraic_number_lower","_Z3_get_algebraic_number_upper","_Z3_pattern_to_ast","_Z3_get_pattern_num_terms","_Z3_get_pattern","_Z3_get_index_value","_Z3_is_quantifier_forall","_Z3_is_quantifier_exists","_Z3_is_lambda","_Z3_get_quantifier_weight","_Z3_get_quantifier_skolem_id","_Z3_get_quantifier_id","_Z3_get_quantifier_num_patterns","_Z3_get_quantifier_pattern_ast","_Z3_get_quantifier_num_no_patterns","_Z3_get_quantifier_no_pattern_ast","_Z3_get_quantifier_num_bound","_Z3_get_quantifier_bound_name","_Z3_get_quantifier_bound_sort","_Z3_get_quantifier_body","_Z3_simplify","_Z3_simplify_ex","_Z3_simplify_get_help","_Z3_simplify_get_param_descrs","_Z3_update_term","_Z3_substitute","_Z3_substitute_vars","_Z3_substitute_funs","_Z3_translate","_Z3_mk_model","_Z3_model_inc_ref","_Z3_model_dec_ref","_Z3_model_eval","_Z3_model_get_const_interp","_Z3_model_has_interp","_Z3_model_get_func_interp","_Z3_model_get_num_consts","_Z3_model_get_const_decl","_Z3_model_get_num_funcs","_Z3_model_get_func_decl","_Z3_model_get_num_sorts","_Z3_model_get_sort","_Z3_model_get_sort_universe","_Z3_model_translate","_Z3_is_as_array","_Z3_get_as_array_func_decl","_Z3_add_func_interp","_Z3_add_const_interp","_Z3_func_interp_inc_ref","_Z3_func_interp_dec_ref","_Z3_func_interp_get_num_entries","_Z3_func_interp_get_entry","_Z3_func_interp_get_else","_Z3_func_interp_set_else","_Z3_func_interp_get_arity","_Z3_func_interp_add_entry","_Z3_func_entry_inc_ref","_Z3_func_entry_dec_ref","_Z3_func_entry_get_value","_Z3_func_entry_get_num_args","_Z3_func_entry_get_arg","_Z3_open_log","_Z3_append_log","_Z3_close_log","_Z3_toggle_warning_messages","_Z3_set_ast_print_mode","_Z3_ast_to_string","_Z3_pattern_to_string","_Z3_sort_to_string","_Z3_func_decl_to_string","_Z3_model_to_string","_Z3_benchmark_to_smtlib_string","_Z3_parse_smtlib2_string","_Z3_parse_smtlib2_file","_Z3_eval_smtlib2_string","_Z3_mk_parser_context","_Z3_parser_context_inc_ref","_Z3_parser_context_dec_ref","_Z3_parser_context_add_sort","_Z3_parser_context_add_decl","_Z3_parser_context_from_string","_Z3_get_error_code","_Z3_set_error","_Z3_get_error_msg","_Z3_get_version","_Z3_get_full_version","_Z3_enable_trace","_Z3_disable_trace","_Z3_reset_memory","_Z3_finalize_memory","_Z3_mk_goal","_Z3_goal_inc_ref","_Z3_goal_dec_ref","_Z3_goal_precision","_Z3_goal_assert","_Z3_goal_inconsistent","_Z3_goal_depth","_Z3_goal_reset","_Z3_goal_size","_Z3_goal_formula","_Z3_goal_num_exprs","_Z3_goal_is_decided_sat","_Z3_goal_is_decided_unsat","_Z3_goal_translate","_Z3_goal_convert_model","_Z3_goal_to_string","_Z3_goal_to_dimacs_string","_Z3_mk_tactic","_Z3_tactic_inc_ref","_Z3_tactic_dec_ref","_Z3_mk_probe","_Z3_probe_inc_ref","_Z3_probe_dec_ref","_Z3_tactic_and_then","_Z3_tactic_or_else","_Z3_tactic_par_or","_Z3_tactic_par_and_then","_Z3_tactic_try_for","_Z3_tactic_when","_Z3_tactic_cond","_Z3_tactic_repeat","_Z3_tactic_skip","_Z3_tactic_fail","_Z3_tactic_fail_if","_Z3_tactic_fail_if_not_decided","_Z3_tactic_using_params","_Z3_mk_simplifier","_Z3_simplifier_inc_ref","_Z3_simplifier_dec_ref","_Z3_solver_add_simplifier","_Z3_simplifier_and_then","_Z3_simplifier_using_params","_Z3_get_num_simplifiers","_Z3_get_simplifier_name","_Z3_simplifier_get_help","_Z3_simplifier_get_param_descrs","_Z3_simplifier_get_descr","_Z3_probe_const","_Z3_probe_lt","_Z3_probe_gt","_Z3_probe_le","_Z3_probe_ge","_Z3_probe_eq","_Z3_probe_and","_Z3_probe_or","_Z3_probe_not","_Z3_get_num_tactics","_Z3_get_tactic_name","_Z3_get_num_probes","_Z3_get_probe_name","_Z3_tactic_get_help","_Z3_tactic_get_param_descrs","_Z3_tactic_get_descr","_Z3_probe_get_descr","_Z3_probe_apply","_Z3_tactic_apply","_Z3_tactic_apply_ex","_Z3_apply_result_inc_ref","_Z3_apply_result_dec_ref","_Z3_apply_result_to_string","_Z3_apply_result_get_num_subgoals","_Z3_apply_result_get_subgoal","_Z3_mk_solver","_Z3_mk_simple_solver","_Z3_mk_solver_for_logic","_Z3_mk_solver_from_tactic","_Z3_solver_translate","_Z3_solver_import_model_converter","_Z3_solver_get_help","_Z3_solver_get_param_descrs","_Z3_solver_set_params","_Z3_solver_inc_ref","_Z3_solver_dec_ref","_Z3_solver_interrupt","_Z3_solver_push","_Z3_solver_pop","_Z3_solver_reset","_Z3_solver_get_num_scopes","_Z3_solver_assert","_Z3_solver_assert_and_track","_Z3_solver_from_file","_Z3_solver_from_string","_Z3_solver_get_assertions","_Z3_solver_get_units","_Z3_solver_get_trail","_Z3_solver_get_non_units","_Z3_solver_get_levels","_Z3_solver_congruence_root","_Z3_solver_congruence_next","_Z3_solver_congruence_explain","_Z3_solver_solve_for","_Z3_solver_register_on_clause","_Z3_solver_propagate_init","_Z3_solver_propagate_fixed","_Z3_solver_propagate_final","_Z3_solver_propagate_eq","_Z3_solver_propagate_diseq","_Z3_solver_propagate_created","_Z3_solver_propagate_decide","_Z3_solver_propagate_on_binding","_Z3_solver_next_split","_Z3_solver_propagate_declare","_Z3_solver_propagate_register","_Z3_solver_propagate_register_cb","_Z3_solver_propagate_consequence","_Z3_solver_set_initial_value","_Z3_solver_check","_Z3_solver_check_assumptions","_Z3_get_implied_equalities","_Z3_solver_get_consequences","_Z3_solver_cube","_Z3_solver_get_model","_Z3_solver_get_proof","_Z3_solver_get_unsat_core","_Z3_solver_get_reason_unknown","_Z3_solver_get_statistics","_Z3_solver_to_string","_Z3_solver_to_dimacs_string","_Z3_stats_to_string","_Z3_stats_inc_ref","_Z3_stats_dec_ref","_Z3_stats_size","_Z3_stats_get_key","_Z3_stats_is_uint","_Z3_stats_is_double","_Z3_stats_get_uint_value","_Z3_stats_get_double_value","_Z3_get_estimated_alloc_size","_Z3_algebraic_is_value","_Z3_algebraic_is_pos","_Z3_algebraic_is_neg","_Z3_algebraic_is_zero","_Z3_algebraic_sign","_Z3_algebraic_add","_Z3_algebraic_sub","_Z3_algebraic_mul","_Z3_algebraic_div","_Z3_algebraic_root","_Z3_algebraic_power","_Z3_algebraic_lt","_Z3_algebraic_gt","_Z3_algebraic_le","_Z3_algebraic_ge","_Z3_algebraic_eq","_Z3_algebraic_neq","_Z3_algebraic_roots","_Z3_algebraic_eval","_Z3_algebraic_get_poly","_Z3_algebraic_get_i","_Z3_mk_ast_vector","_Z3_ast_vector_inc_ref","_Z3_ast_vector_dec_ref","_Z3_ast_vector_size","_Z3_ast_vector_get","_Z3_ast_vector_set","_Z3_ast_vector_resize","_Z3_ast_vector_push","_Z3_ast_vector_translate","_Z3_ast_vector_to_string","_Z3_mk_ast_map","_Z3_ast_map_inc_ref","_Z3_ast_map_dec_ref","_Z3_ast_map_contains","_Z3_ast_map_find","_Z3_ast_map_insert","_Z3_ast_map_erase","_Z3_ast_map_reset","_Z3_ast_map_size","_Z3_ast_map_keys","_Z3_ast_map_to_string","_Z3_mk_fixedpoint","_Z3_fixedpoint_inc_ref","_Z3_fixedpoint_dec_ref","_Z3_fixedpoint_add_rule","_Z3_fixedpoint_add_fact","_Z3_fixedpoint_assert","_Z3_fixedpoint_query","_Z3_fixedpoint_query_relations","_Z3_fixedpoint_get_answer","_Z3_fixedpoint_get_reason_unknown","_Z3_fixedpoint_update_rule","_Z3_fixedpoint_get_num_levels","_Z3_fixedpoint_get_cover_delta","_Z3_fixedpoint_add_cover","_Z3_fixedpoint_get_statistics","_Z3_fixedpoint_register_relation","_Z3_fixedpoint_set_predicate_representation","_Z3_fixedpoint_get_rules","_Z3_fixedpoint_get_assertions","_Z3_fixedpoint_set_params","_Z3_fixedpoint_get_help","_Z3_fixedpoint_get_param_descrs","_Z3_fixedpoint_to_string","_Z3_fixedpoint_from_string","_Z3_fixedpoint_from_file","_Z3_mk_fpa_rounding_mode_sort","_Z3_mk_fpa_round_nearest_ties_to_even","_Z3_mk_fpa_rne","_Z3_mk_fpa_round_nearest_ties_to_away","_Z3_mk_fpa_rna","_Z3_mk_fpa_round_toward_positive","_Z3_mk_fpa_rtp","_Z3_mk_fpa_round_toward_negative","_Z3_mk_fpa_rtn","_Z3_mk_fpa_round_toward_zero","_Z3_mk_fpa_rtz","_Z3_mk_fpa_sort","_Z3_mk_fpa_sort_half","_Z3_mk_fpa_sort_16","_Z3_mk_fpa_sort_single","_Z3_mk_fpa_sort_32","_Z3_mk_fpa_sort_double","_Z3_mk_fpa_sort_64","_Z3_mk_fpa_sort_quadruple","_Z3_mk_fpa_sort_128","_Z3_mk_fpa_nan","_Z3_mk_fpa_inf","_Z3_mk_fpa_zero","_Z3_mk_fpa_fp","_Z3_mk_fpa_numeral_float","_Z3_mk_fpa_numeral_double","_Z3_mk_fpa_numeral_int","_Z3_mk_fpa_numeral_int_uint","_Z3_mk_fpa_numeral_int64_uint64","_Z3_mk_fpa_abs","_Z3_mk_fpa_neg","_Z3_mk_fpa_add","_Z3_mk_fpa_sub","_Z3_mk_fpa_mul","_Z3_mk_fpa_div","_Z3_mk_fpa_fma","_Z3_mk_fpa_sqrt","_Z3_mk_fpa_rem","_Z3_mk_fpa_round_to_integral","_Z3_mk_fpa_min","_Z3_mk_fpa_max","_Z3_mk_fpa_leq","_Z3_mk_fpa_lt","_Z3_mk_fpa_geq","_Z3_mk_fpa_gt","_Z3_mk_fpa_eq","_Z3_mk_fpa_is_normal","_Z3_mk_fpa_is_subnormal","_Z3_mk_fpa_is_zero","_Z3_mk_fpa_is_infinite","_Z3_mk_fpa_is_nan","_Z3_mk_fpa_is_negative","_Z3_mk_fpa_is_positive","_Z3_mk_fpa_to_fp_bv","_Z3_mk_fpa_to_fp_float","_Z3_mk_fpa_to_fp_real","_Z3_mk_fpa_to_fp_signed","_Z3_mk_fpa_to_fp_unsigned","_Z3_mk_fpa_to_ubv","_Z3_mk_fpa_to_sbv","_Z3_mk_fpa_to_real","_Z3_fpa_get_ebits","_Z3_fpa_get_sbits","_Z3_fpa_is_numeral","_Z3_fpa_is_numeral_nan","_Z3_fpa_is_numeral_inf","_Z3_fpa_is_numeral_zero","_Z3_fpa_is_numeral_normal","_Z3_fpa_is_numeral_subnormal","_Z3_fpa_is_numeral_positive","_Z3_fpa_is_numeral_negative","_Z3_fpa_get_numeral_sign_bv","_Z3_fpa_get_numeral_significand_bv","_Z3_fpa_get_numeral_sign","_Z3_fpa_get_numeral_significand_string","_Z3_fpa_get_numeral_significand_uint64","_Z3_fpa_get_numeral_exponent_string","_Z3_fpa_get_numeral_exponent_int64","_Z3_fpa_get_numeral_exponent_bv","_Z3_mk_fpa_to_ieee_bv","_Z3_mk_fpa_to_fp_int_real","_Z3_mk_optimize","_Z3_optimize_inc_ref","_Z3_optimize_dec_ref","_Z3_optimize_assert","_Z3_optimize_assert_and_track","_Z3_optimize_assert_soft","_Z3_optimize_maximize","_Z3_optimize_minimize","_Z3_optimize_push","_Z3_optimize_pop","_Z3_optimize_set_initial_value","_Z3_optimize_check","_Z3_optimize_get_reason_unknown","_Z3_optimize_get_model","_Z3_optimize_get_unsat_core","_Z3_optimize_set_params","_Z3_optimize_get_param_descrs","_Z3_optimize_get_lower","_Z3_optimize_get_upper","_Z3_optimize_get_lower_as_vector","_Z3_optimize_get_upper_as_vector","_Z3_optimize_to_string","_Z3_optimize_from_string","_Z3_optimize_from_file","_Z3_optimize_get_help","_Z3_optimize_get_statistics","_Z3_optimize_get_assertions","_Z3_optimize_get_objectives","_Z3_optimize_translate","_Z3_polynomial_subresultants","_Z3_rcf_del","_Z3_rcf_mk_rational","_Z3_rcf_mk_small_int","_Z3_rcf_mk_pi","_Z3_rcf_mk_e","_Z3_rcf_mk_infinitesimal","_Z3_rcf_mk_roots","_Z3_rcf_add","_Z3_rcf_sub","_Z3_rcf_mul","_Z3_rcf_div","_Z3_rcf_neg","_Z3_rcf_inv","_Z3_rcf_power","_Z3_rcf_lt","_Z3_rcf_gt","_Z3_rcf_le","_Z3_rcf_ge","_Z3_rcf_eq","_Z3_rcf_neq","_Z3_rcf_num_to_string","_Z3_rcf_num_to_decimal_string","_Z3_rcf_get_numerator_denominator","_Z3_rcf_is_rational","_Z3_rcf_is_algebraic","_Z3_rcf_is_infinitesimal","_Z3_rcf_is_transcendental","_Z3_rcf_extension_index","_Z3_rcf_transcendental_name","_Z3_rcf_infinitesimal_name","_Z3_rcf_num_coefficients","_Z3_rcf_coefficient","_Z3_rcf_interval","_Z3_rcf_num_sign_conditions","_Z3_rcf_sign_condition_sign","_Z3_rcf_num_sign_condition_coefficients","_Z3_rcf_sign_condition_coefficient","_Z3_fixedpoint_query_from_lvl","_Z3_fixedpoint_get_ground_sat_answer","_Z3_fixedpoint_get_rules_along_trace","_Z3_fixedpoint_get_rule_names_along_trace","_Z3_fixedpoint_add_invariant","_Z3_fixedpoint_get_reachable","_Z3_qe_model_project","_Z3_qe_model_project_skolem","_Z3_qe_model_project_with_witness","_Z3_model_extrapolate","_Z3_qe_lite","getExceptionMessage","incrementExceptionRefcount","decrementExceptionRefcount","___indirect_function_table","onRuntimeInitialized"].forEach((prop) => {
   if (!Object.getOwnPropertyDescriptor(readyPromise, prop)) {
     Object.defineProperty(readyPromise, prop, {
       get: () => abort('You are getting ' + prop + ' on the Promise object, instead of the instance. Use .then() to get called back with the instance, see the MODULARIZE docs in src/settings.js'),
@@ -9069,107 +9187,107 @@ function dbg(...args) {
 // === Body ===
 
 var ASM_CONSTS = {
-  21603560: () => { return current_async_call_id; },  
- 21603594: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
- 21603655: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21603710: () => { return current_async_call_id; },  
- 21603744: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
- 21603805: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21603860: () => { return current_async_call_id; },  
- 21603894: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
- 21603955: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21604010: () => { return current_async_call_id; },  
- 21604044: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
- 21604105: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21604160: () => { return current_async_call_id; },  
- 21604194: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
- 21604255: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21604310: ($0, $1) => { resolve_async($1, $0); },  
- 21604337: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21604403: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21604454: () => { clearTimeout(threadTimeouts.shift()); },  
- 21604496: ($0, $1) => { resolve_async($1, $0); },  
- 21604523: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21604589: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21604640: () => { clearTimeout(threadTimeouts.shift()); },  
- 21604682: ($0, $1) => { resolve_async($1, $0); },  
- 21604709: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21604775: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21604826: () => { clearTimeout(threadTimeouts.shift()); },  
- 21604868: ($0, $1) => { resolve_async($1, $0); },  
- 21604895: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21604961: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21605012: () => { clearTimeout(threadTimeouts.shift()); },  
- 21605054: ($0, $1) => { resolve_async($1, $0); },  
- 21605081: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21605147: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21605198: () => { clearTimeout(threadTimeouts.shift()); },  
- 21605240: () => { return current_async_call_id; },  
- 21605274: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21605329: ($0, $1) => { resolve_async($1, UTF8ToString($0)); },  
- 21605370: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21605436: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21605487: () => { clearTimeout(threadTimeouts.shift()); },  
- 21605529: () => { return current_async_call_id; },  
- 21605563: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21605618: ($0, $1) => { resolve_async($1, $0); },  
- 21605645: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21605711: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21605762: () => { clearTimeout(threadTimeouts.shift()); },  
- 21605804: () => { return current_async_call_id; },  
- 21605838: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21605893: ($0, $1) => { resolve_async($1, $0); },  
- 21605920: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21605986: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21606037: () => { clearTimeout(threadTimeouts.shift()); },  
- 21606079: () => { return current_async_call_id; },  
- 21606113: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21606168: ($0, $1) => { resolve_async($1, $0); },  
- 21606195: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21606261: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21606312: () => { clearTimeout(threadTimeouts.shift()); },  
- 21606354: () => { return current_async_call_id; },  
- 21606388: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21606443: ($0, $1) => { resolve_async($1, $0); },  
- 21606470: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21606536: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21606587: () => { clearTimeout(threadTimeouts.shift()); },  
- 21606629: () => { return current_async_call_id; },  
- 21606663: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21606718: ($0, $1) => { resolve_async($1, $0); },  
- 21606745: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21606811: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21606862: () => { clearTimeout(threadTimeouts.shift()); },  
- 21606904: () => { return current_async_call_id; },  
- 21606938: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21606993: ($0, $1) => { resolve_async($1, $0); },  
- 21607020: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21607086: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21607137: () => { clearTimeout(threadTimeouts.shift()); },  
- 21607179: () => { return current_async_call_id; },  
- 21607213: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21607268: ($0, $1) => { resolve_async($1, $0); },  
- 21607295: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21607361: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21607412: () => { clearTimeout(threadTimeouts.shift()); },  
- 21607454: () => { return current_async_call_id; },  
- 21607488: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21607543: ($0, $1) => { resolve_async($1, $0); },  
- 21607570: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21607636: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21607687: () => { clearTimeout(threadTimeouts.shift()); },  
- 21607729: () => { return current_async_call_id; },  
- 21607763: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21607818: ($0, $1) => { resolve_async($1, $0); },  
- 21607845: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21607911: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21607962: () => { clearTimeout(threadTimeouts.shift()); },  
- 21608004: () => { return current_async_call_id; },  
- 21608038: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
- 21608093: ($0, $1) => { resolve_async($1, $0); },  
- 21608120: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
- 21608186: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
- 21608237: () => { clearTimeout(threadTimeouts.shift()); }
+  21612216: () => { return current_async_call_id; },  
+ 21612250: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21612311: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21612366: () => { return current_async_call_id; },  
+ 21612400: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21612461: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21612516: () => { return current_async_call_id; },  
+ 21612550: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21612611: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21612666: () => { return current_async_call_id; },  
+ 21612700: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21612761: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21612816: () => { return current_async_call_id; },  
+ 21612850: ($0) => { reject_async($0, new Error("Memory allocation failed")); },  
+ 21612911: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21612966: ($0, $1) => { resolve_async($1, $0); },  
+ 21612993: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21613059: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21613110: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21613152: ($0, $1) => { resolve_async($1, $0); },  
+ 21613179: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21613245: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21613296: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21613338: ($0, $1) => { resolve_async($1, $0); },  
+ 21613365: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21613431: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21613482: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21613524: ($0, $1) => { resolve_async($1, $0); },  
+ 21613551: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21613617: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21613668: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21613710: ($0, $1) => { resolve_async($1, $0); },  
+ 21613737: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21613803: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21613854: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21613896: () => { return current_async_call_id; },  
+ 21613930: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21613985: ($0, $1) => { resolve_async($1, UTF8ToString($0)); },  
+ 21614026: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21614092: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21614143: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21614185: () => { return current_async_call_id; },  
+ 21614219: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21614274: ($0, $1) => { resolve_async($1, $0); },  
+ 21614301: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21614367: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21614418: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21614460: () => { return current_async_call_id; },  
+ 21614494: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21614549: ($0, $1) => { resolve_async($1, $0); },  
+ 21614576: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21614642: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21614693: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21614735: () => { return current_async_call_id; },  
+ 21614769: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21614824: ($0, $1) => { resolve_async($1, $0); },  
+ 21614851: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21614917: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21614968: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21615010: () => { return current_async_call_id; },  
+ 21615044: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21615099: ($0, $1) => { resolve_async($1, $0); },  
+ 21615126: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21615192: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21615243: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21615285: () => { return current_async_call_id; },  
+ 21615319: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21615374: ($0, $1) => { resolve_async($1, $0); },  
+ 21615401: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21615467: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21615518: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21615560: () => { return current_async_call_id; },  
+ 21615594: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21615649: ($0, $1) => { resolve_async($1, $0); },  
+ 21615676: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21615742: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21615793: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21615835: () => { return current_async_call_id; },  
+ 21615869: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21615924: ($0, $1) => { resolve_async($1, $0); },  
+ 21615951: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21616017: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21616068: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21616110: () => { return current_async_call_id; },  
+ 21616144: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21616199: ($0, $1) => { resolve_async($1, $0); },  
+ 21616226: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21616292: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21616343: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21616385: () => { return current_async_call_id; },  
+ 21616419: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21616474: ($0, $1) => { resolve_async($1, $0); },  
+ 21616501: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21616567: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21616618: () => { clearTimeout(threadTimeouts.shift()); },  
+ 21616660: () => { return current_async_call_id; },  
+ 21616694: () => { threadTimeouts.push(setTimeout(() => {}, 600000)); },  
+ 21616749: ($0, $1) => { resolve_async($1, $0); },  
+ 21616776: ($0) => { reject_async($0, new Error('failed with unknown exception')); },  
+ 21616842: ($0, $1) => { reject_async($1, new Error(UTF8ToString($0))); },  
+ 21616893: () => { clearTimeout(threadTimeouts.shift()); }
 };
 
 // end include: preamble.js
@@ -13901,7 +14019,11 @@ function assignWasmImports() {
     /** @export */
     invoke_iiiiij,
     /** @export */
+    invoke_iiiiji,
+    /** @export */
     invoke_iiij,
+    /** @export */
+    invoke_iiiji,
     /** @export */
     invoke_iij,
     /** @export */
@@ -14058,10 +14180,14 @@ var _Z3_is_algebraic_number = Module['_Z3_is_algebraic_number'] = createExportWr
 var _Z3_algebraic_get_i = Module['_Z3_algebraic_get_i'] = createExportWrapper('Z3_algebraic_get_i', 2);
 var _Z3_mk_int_sort = Module['_Z3_mk_int_sort'] = createExportWrapper('Z3_mk_int_sort', 1);
 var _Z3_mk_real_sort = Module['_Z3_mk_real_sort'] = createExportWrapper('Z3_mk_real_sort', 1);
+var _Z3_mk_complex_sort = Module['_Z3_mk_complex_sort'] = createExportWrapper('Z3_mk_complex_sort', 1);
 var _Z3_mk_real_int64 = Module['_Z3_mk_real_int64'] = createExportWrapper('Z3_mk_real_int64', 3);
 var _Z3_mk_real = Module['_Z3_mk_real'] = createExportWrapper('Z3_mk_real', 3);
 var _Z3_mk_add = Module['_Z3_mk_add'] = createExportWrapper('Z3_mk_add', 3);
 var _Z3_mk_mul = Module['_Z3_mk_mul'] = createExportWrapper('Z3_mk_mul', 3);
+var _Z3_mk_complex = Module['_Z3_mk_complex'] = createExportWrapper('Z3_mk_complex', 3);
+var _Z3_mk_real_part = Module['_Z3_mk_real_part'] = createExportWrapper('Z3_mk_real_part', 2);
+var _Z3_mk_imag_part = Module['_Z3_mk_imag_part'] = createExportWrapper('Z3_mk_imag_part', 2);
 var _Z3_mk_power = Module['_Z3_mk_power'] = createExportWrapper('Z3_mk_power', 3);
 var _Z3_mk_mod = Module['_Z3_mk_mod'] = createExportWrapper('Z3_mk_mod', 3);
 var _Z3_mk_rem = Module['_Z3_mk_rem'] = createExportWrapper('Z3_mk_rem', 3);
@@ -14267,6 +14393,7 @@ var _Z3_update_param_value = Module['_Z3_update_param_value'] = createExportWrap
 var _Z3_mk_context = Module['_Z3_mk_context'] = createExportWrapper('Z3_mk_context', 1);
 var _Z3_mk_context_rc = Module['_Z3_mk_context_rc'] = createExportWrapper('Z3_mk_context_rc', 1);
 var _Z3_del_context = Module['_Z3_del_context'] = createExportWrapper('Z3_del_context', 1);
+var _Z3_set_proof_check_callback = Module['_Z3_set_proof_check_callback'] = createExportWrapper('Z3_set_proof_check_callback', 3);
 var _Z3_interrupt = Module['_Z3_interrupt'] = createExportWrapper('Z3_interrupt', 1);
 var _Z3_enable_concurrent_dec_ref = Module['_Z3_enable_concurrent_dec_ref'] = createExportWrapper('Z3_enable_concurrent_dec_ref', 1);
 var _Z3_toggle_warning_messages = Module['_Z3_toggle_warning_messages'] = createExportWrapper('Z3_toggle_warning_messages', 1);
@@ -15487,6 +15614,28 @@ function invoke_di(index,a1) {
   var sp = stackSave();
   try {
     return getWasmTableEntry(index)(a1);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiiiji(index,a1,a2,a3,a4,a5) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4,a5);
+  } catch(e) {
+    stackRestore(sp);
+    if (!(e instanceof EmscriptenEH)) throw e;
+    _setThrew(1, 0);
+  }
+}
+
+function invoke_iiiji(index,a1,a2,a3,a4) {
+  var sp = stackSave();
+  try {
+    return getWasmTableEntry(index)(a1,a2,a3,a4);
   } catch(e) {
     stackRestore(sp);
     if (!(e instanceof EmscriptenEH)) throw e;

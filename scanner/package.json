@@ -40,7 +40,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@babel/core": "^8.0.5",
+    "@babel/core": "^8.0.9",
     "@babel/preset-react": "^8.0.1",
     "@babel/preset-typescript": "^8.0.1",
     "js-yaml": "^5.5.0",
@@ -49,7 +49,7 @@
   "optionalDependencies": {
     "tree-sitter-wasms": "0.1.13",
     "web-tree-sitter": "0.20.8",
-    "z3-solver": "^5.3.1"
+    "z3-solver": "^5.3.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -182,7 +182,19 @@
     "bench:self-scan": "node ../bench/self-scan/measure.mjs",
     "bench:self-scan:check": "node ../bench/self-scan/check.mjs",
     "bench:nist-800-171-labels:check": "node ../bench/nist-800-171-labels/check.mjs",
-    "bench:dci-real-app": "node ../bench/dci-real-app/runner.mjs", "bench:dci-real-app:check": "node ../bench/dci-real-app/runner.mjs --check", "ee:perf-budget": "node ../scripts/engineering-excellence/perf-budget.mjs", "ee:perf-budget:check": "node ../scripts/engineering-excellence/perf-budget.mjs --check", "ee:e2e-demo": "node ../scripts/engineering-excellence/e2e-demo.mjs", "ee:e2e-demo:check": "node ../scripts/engineering-excellence/e2e-demo.mjs --check", "ee:doc-captures": "node ../scripts/engineering-excellence/doc-captures.mjs", "ee:doc-captures:check": "node ../scripts/engineering-excellence/doc-captures.mjs --check", "ee:regression-report": "node ../scripts/engineering-excellence/regression-report.mjs", "ee:regression-report:check": "node ../scripts/engineering-excellence/regression-report.mjs --check", "ee:final-report": "node ../scripts/engineering-excellence/final-report.mjs", "ee:final-report:check": "node ../scripts/engineering-excellence/final-report.mjs --check", "bench:mutation:check": "node ../bench/mutation/runner.mjs",
+    "bench:dci-real-app": "node ../bench/dci-real-app/runner.mjs",
+    "bench:dci-real-app:check": "node ../bench/dci-real-app/runner.mjs --check",
+    "ee:perf-budget": "node ../scripts/engineering-excellence/perf-budget.mjs",
+    "ee:perf-budget:check": "node ../scripts/engineering-excellence/perf-budget.mjs --check",
+    "ee:e2e-demo": "node ../scripts/engineering-excellence/e2e-demo.mjs",
+    "ee:e2e-demo:check": "node ../scripts/engineering-excellence/e2e-demo.mjs --check",
+    "ee:doc-captures": "node ../scripts/engineering-excellence/doc-captures.mjs",
+    "ee:doc-captures:check": "node ../scripts/engineering-excellence/doc-captures.mjs --check",
+    "ee:regression-report": "node ../scripts/engineering-excellence/regression-report.mjs",
+    "ee:regression-report:check": "node ../scripts/engineering-excellence/regression-report.mjs --check",
+    "ee:final-report": "node ../scripts/engineering-excellence/final-report.mjs",
+    "ee:final-report:check": "node ../scripts/engineering-excellence/final-report.mjs --check",
+    "bench:mutation:check": "node ../bench/mutation/runner.mjs",
     "baseline:capture": "node ../scripts/baseline-capture.mjs",
     "bench:protection-verdict:check": "node ../bench/protection-verdict/runner.mjs",
     "bench:independent:forensics": "node ../bench/independent/forensics.mjs",
