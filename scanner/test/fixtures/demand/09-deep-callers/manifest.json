@@ -1,0 +1,11 @@
+{
+  "name": "09-deep-callers",
+  "construct": "twenty-level caller chain",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 3,
+      "flow": true
+    }
+  ]
+}

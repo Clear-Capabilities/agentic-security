@@ -1,0 +1,11 @@
+{
+  "name": "20-closure",
+  "construct": "a nested function reads a variable captured from its enclosing function",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": true
+    }
+  ]
+}

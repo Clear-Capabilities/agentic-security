@@ -50,6 +50,15 @@ function _reverseEdges(cfg) {
 }
 
 /**
+ * CFG reverse-edge index (node id -> predecessor ids), exported so the demand
+ * selector (demand-query.js) and this slicer share one definition of the
+ * incoming-edge relation instead of each deriving its own.
+ */
+export function reverseEdgesOf(cfg) {
+  return _reverseEdges(cfg);
+}
+
+/**
  * Build a backward slice from a finding's sink site to its source(s).
  *
  *   fn:        the function the sink lives in

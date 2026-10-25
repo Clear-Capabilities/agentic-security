@@ -1,0 +1,21 @@
+{
+  "name": "10-alias-and-overwrite",
+  "construct": "alias, overwrite with a constant, string concatenation",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 10,
+      "flow": false
+    },
+    {
+      "file": "app.js",
+      "line": 14,
+      "flow": true
+    }
+  ]
+}

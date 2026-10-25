@@ -1,0 +1,27 @@
+{
+  "name": "18-unrelated-cluster",
+  "construct": "two modules with unrelated sink clusters",
+  "expect": [
+    {
+      "file": "billing.js",
+      "line": 2,
+      "flow": true
+    },
+    {
+      "file": "billing.js",
+      "line": 4,
+      "flow": true
+    },
+    {
+      "file": "reports.js",
+      "line": 4,
+      "flow": false
+    },
+    {
+      "file": "reports.js",
+      "line": 2,
+      "flow": false
+    }
+  ],
+  "maxRegion": 3
+}

@@ -1,0 +1,26 @@
+{
+  "name": "04-nested-sinks",
+  "construct": "sink nested in a return expression, an assignment and another call argument",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 4,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 11,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 14,
+      "flow": false
+    }
+  ]
+}

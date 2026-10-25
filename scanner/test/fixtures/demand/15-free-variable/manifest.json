@@ -1,0 +1,11 @@
+{
+  "name": "15-free-variable",
+  "construct": "module-level variable assigned in one function and read in another (engine reports no flow; parity still required)",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": false
+    }
+  ]
+}

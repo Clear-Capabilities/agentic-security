@@ -1,0 +1,11 @@
+{
+  "name": "14-recursion",
+  "construct": "self-recursive helper carrying a parameter",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 3,
+      "flow": true
+    }
+  ]
+}

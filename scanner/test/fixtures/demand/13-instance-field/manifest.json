@@ -1,0 +1,12 @@
+{
+  "name": "13-instance-field",
+  "construct": "instance field written in one method and read in another (selector cannot follow; expands to full)",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": false
+    }
+  ],
+  "expectFallback": "unsupported:instance-field"
+}

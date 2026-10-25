@@ -1,0 +1,11 @@
+{
+  "name": "16-request-field",
+  "construct": "middleware writes a request field that a handler reads",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 6,
+      "flow": true
+    }
+  ]
+}

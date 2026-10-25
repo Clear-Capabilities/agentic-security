@@ -1,0 +1,17 @@
+{
+  "name": "08-unresolved-calls",
+  "construct": "an unresolved library call between source and sink",
+  "expect": [
+    {
+      "file": "app.js",
+      "line": 5,
+      "flow": true
+    },
+    {
+      "file": "app.js",
+      "line": 7,
+      "flow": false
+    }
+  ],
+  "expectUnresolved": true
+}
