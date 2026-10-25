@@ -21,6 +21,7 @@
 // C5's job and C5's alone.
 //
 
+import { createHash } from 'node:crypto';
 import { provenanceNodeId, provenanceEdgeId } from './ids.js';
 
 // §3 + §13.0's exact 14-field hop shape, in a FIXED order. Never derive a
@@ -165,7 +166,7 @@ export class PathStore {
       const v = limits?.[k];
       if (Number.isInteger(v) && v >= 0) this._limits[k] = v;
     }
-    this._limitHits = { hopsRefused: 0, groupsSkipped: [], edgesRefused: 0 };
+    this._limitHits = { hopsRefused: 0, groupsSkipped: [], edgesRefused: 0, summarizedGroups: 0 };
     this._groups = new Map();
     this._seen = new Set();
     this._truncations = new Map();
@@ -252,7 +253,7 @@ export class PathStore {
 
   _build() {
     if (this._built) return this._built;
-    this._limitHits = { hopsRefused: this._limitHits.hopsRefused, groupsSkipped: [], edgesRefused: 0 };
+    this._limitHits = { hopsRefused: this._limitHits.hopsRefused, groupsSkipped: [], edgesRefused: 0, summarizedGroups: 0 };
     const nodes = new Map();
     const edges = new Map();
     const outIndex = new Map();
@@ -331,6 +332,40 @@ export class PathStore {
           scope: g.scope, nodeId: g.nodeId, dataElementId: g.dataElementId,
           pairings: sources.length * g.out.length,
         });
+        // R07.5: the explicit cross product (S x O edges) is replaced by a
+        // typed ambiguous-summary relation: every source reaches one summary
+        // node and that node reaches every target (S + O edges). Which
+        // source feeds which target is deliberately not claimed, so every
+        // such edge is marked ambiguous; reachability is kept, nothing is
+        // silently dropped, and the group stays reported above.
+        const hub = intern({ kind: 'summary', scope: g.scope, context: g.context, path: null, siteNodeId: g.nodeId, dataElementId: g.dataElementId });
+        this._limitHits.summarizedGroups += 1;
+        const addSummaryEdge = (fromN, toN, inHop, outHop, crossScope) => {
+          const widenReasons = [...new Set([inHop.widenReason, outHop.widenReason].filter((r) => r != null))].sort();
+          const lossReasons = [...new Set([inHop.lossReason, outHop.lossReason].filter((r) => r != null))].sort();
+          const desc = {
+            fromNodeId: fromN.id, toNodeId: toN.id, dataElementId: g.dataElementId,
+            scope: g.scope, context: g.context, siteNodeId: g.nodeId,
+            inKind: inHop.kind, inSubKind: inHop.subKind,
+            outKind: outHop.kind, outSubKind: outHop.subKind,
+            widenReasons, lossReasons,
+          };
+          const eid = provenanceEdgeId(desc);
+          if (edges.has(eid)) return;
+          if (edges.size >= this._limits.maxEdges) { this._limitHits.edgesRefused += 1; return; }
+          edges.set(eid, {
+            id: eid, ...desc, line: g.line, crossScope, originated,
+            ambiguousCorrelation: true, ambiguousSummary: true, annotations,
+            truncated: this._truncations.has(scopeKeyOf(g.scope, g.context)),
+          });
+          if (!outIndex.has(fromN.id)) outIndex.set(fromN.id, new Set());
+          if (!inIndex.has(toN.id)) inIndex.set(toN.id, new Set());
+          outIndex.get(fromN.id).add(eid);
+          inIndex.get(toN.id).add(eid);
+        };
+        const summaryHop = { kind: 'summary', subKind: 'ambiguous-summary', widenReason: null, lossReason: null };
+        for (const s of sources) addSummaryEdge(intern(s.node), hub, s.hop, summaryHop, s.crossScope);
+        for (const o of g.out) addSummaryEdge(hub, intern(o.node), summaryHop, o.hop, o.crossScope);
         continue;
       }
       for (const s of sources) {
@@ -410,6 +445,17 @@ export class PathStore {
   edgesFrom(nodeId) { return [...(this._build().outIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   edgesTo(nodeId) { return [...(this._build().inIndex.get(nodeId) ?? [])].map((e) => this._build().edges.get(e)); }
   hasEdge(fromId, toId) { return this.edgesFrom(fromId).some((e) => e.toNodeId === toId); }
+  /**
+   * R07.9: content digest of the built graph (sorted node and edge ids plus
+   * the construction-limit outcome). Two stores with equal digests answer
+   * every query identically; a continuation is bound to it.
+   */
+  digest() {
+    const b = this._build();
+    const h = createHash('sha256');
+    h.update(JSON.stringify([[...b.nodes.keys()].sort(), [...b.edges.keys()].sort(), this.limitStatus().hit]));
+    return h.digest('hex');
+  }
   /** R07.5: has any construction bound been hit? Forces the build so the join-time counters are current. */
   limitStatus() {
     this._build();
@@ -419,6 +465,7 @@ export class PathStore {
       hopsRefused: h.hopsRefused,
       groupsSkipped: h.groupsSkipped.slice(),
       edgesRefused: h.edgesRefused,
+      ambiguousSummaries: h.summarizedGroups,
       limits: { ...this._limits },
     };
   }

@@ -148,7 +148,10 @@ test('DAG07/12: a fan-in x fan-out group above the cap is skipped, reported, and
   const st = new PathStore({ maxPairingsPerGroup: 4 });
   for (const p of ['a', 'b', 'c']) st.addHop(hop({ fromPath: p }));
   for (const p of ['x', 'y', 'z']) st.addHop(outHop({ toPath: p }));
-  assert.equal(st.edges().length, 0, 'no explicit edges materialized');
+  // R07.5: S+O typed summary edges instead of S*O pairings, none silently lost.
+  assert.equal(st.edges().length, 6, 'three sources + three targets through one summary node');
+  assert.ok(st.edges().every((e) => e.ambiguousSummary === true && e.ambiguousCorrelation === true));
+  assert.equal(st.limitStatus().ambiguousSummaries, 1);
   const lim = st.limitStatus();
   assert.equal(lim.hit, true);
   assert.equal(lim.groupsSkipped[0].pairings, 9);

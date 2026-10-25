@@ -217,6 +217,7 @@ import { createStringMemo } from './util/string-memo.js';
 import { collectIrStats, irStatsTarget, writeIrStats } from './ir/ir-stats.js';
 import { runDeepAnalysis } from './dataflow/index.js';
 import { buildLineageGraph } from './lineage/index.js';
+import { completionOfGraph, summarizeForHealth as summarizeCompletionForHealth } from './lineage/completion.js';
 // v3 next-gen — Pillars 1, 4, 5, 6, 8, 9.
 import { annotateCloneClusters, findCloneOutliers } from './posture/semantic-clone.js';
 import { annotateAiProvenance } from './posture/ai-code-fingerprint.js';
@@ -9657,6 +9658,10 @@ function _deterministicFileTimings(timings) {
         // early must reach scan health, not only the graph body.
         const _ac = _lr.graph?.coverage?.analysisCompletion;
         if (_ac && _ac.status !== 'complete') { _lineageStatus.incomplete = _ac.incomplete; _lineageStatus.degraded = _ac.degraded; }
+        // R07.2: the whole envelope (cancelled, construction limits, seeding
+        // limits and zero-flow results included), not only the iteration
+        // and degraded-context lists above.
+        { const _env = completionOfGraph(_lr.graph); if (_env.status !== 'complete') _lineageStatus.completion = summarizeCompletionForHealth(_env); }
         if (_lr.elapsedMs > _lineageBudgetMs) {
           // Same "measured, not truly interrupted" disclosure _deepEnabled's
           // own elapsed > budgetMs branch already makes for IR-taint — see

@@ -4086,6 +4086,16 @@ async function cmdBoundaries(args) {
 // itself closes (idle-timeout auto-stop, or an external kill) — matching
 // every other cmdX(args) function's "resolves to an exit code" contract
 // while keeping the process alive for as long as the server is listening.
+// DAG-07 R07.2: show the graph's completion state wherever a graph is
+// loaded for display or export. Silent for a complete graph; for anything
+// else it says so on stderr, including when zero flows were projected.
+async function _printGraphCompletion(graph, who) {
+  try {
+    const { completionOfGraph, describeCompletion } = await import('../src/lineage/completion.js');
+    for (const line of describeCompletion(completionOfGraph(graph))) process.stderr.write(`${who}: ${line}\n`);
+  } catch { /* disclosure must never break the command */ }
+}
+
 async function cmdExplore(args) {
   // `explore . --runtime`: the runtime views are one static, script-free page, not a route on the hardened local server.
   if (args.flags.runtime) return cmdRuntimeExplorer(args, args._[1] || '.');
@@ -4098,6 +4108,7 @@ async function cmdExplore(args) {
     process.stderr.write(`agentic-security explore: ${loaded.message}\n`);
     return 1;
   }
+  await _printGraphCompletion(loaded.graph, 'agentic-security explore');
 
   let port = 0;
   if (args.flags.port !== undefined) {
@@ -4358,6 +4369,7 @@ async function cmdDataflowExport(args) {
     return 1;
   }
   const graph = loaded.graph;
+  await _printGraphCompletion(graph, 'agentic-security dataflow export');
   // Task-3 review finding (non-blocking, fixed): emitGraphDpiaArtifact's
   // own opts.generatedAt fallback is `new Date()` — omitting it here made
   // dpia/ropa the only two formats whose content reflects EXPORT-time
