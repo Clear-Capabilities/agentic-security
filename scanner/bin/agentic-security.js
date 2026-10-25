@@ -203,6 +203,9 @@ Commands:
                                --filter <path.json>   {nodeIds,edgeIds} to scope the export (no-op + warning for csv/coverage)
                                --audience board|ciso|privacy|compliance|regulator|technical
                                                       (default: technical; briefing only — wording/verbosity, never facts)
+  dataflow plan-cuts [path] --candidates <file.json> --output <file> [--query <file.json>] [--format json|markdown]
+                               Plan a minimum-cost, hypothetical control placement (graph cut) over the
+                               already-scanned lineage graph. Never verifies a remediation.
   dataflow scenario apply [path] --operations <file.json> --output <file> [--format json|markdown]
                                Simulate a hypothetical architecture change against the
                                already-scanned lineage graph — never mutates the real scan.
@@ -5094,6 +5097,49 @@ async function cmdDataflowScenarioApply(args) {
   return 0;
 }
 
+// agentic-security dataflow plan-cuts [path] --candidates <file.json>
+// --output <file> [--query <file.json>] [--format json|markdown] — DAG-09.
+// Plans a minimum-cost control placement over the already-scanned,
+// already-signed graph. HYPOTHETICAL: never writes remediation state or
+// the scan artifact. Exit codes: 0 success, 1 graph-load failure, 2
+// argument problem.
+async function cmdDataflowPlanCuts(args) {
+  const targetAbs = path.resolve(args._[2] || '.');
+  const candFlag = args.flags.candidates;
+  const outputPath = args.flags.output;
+  const format = args.flags.format || 'json';
+  if (!candFlag || typeof candFlag !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --candidates <file> is required.\n'); return 2; }
+  if (!outputPath || typeof outputPath !== 'string') { process.stderr.write('agentic-security dataflow plan-cuts: --output <file> is required.\n'); return 2; }
+  if (format !== 'json' && format !== 'markdown') { process.stderr.write('agentic-security dataflow plan-cuts: --format must be one of json|markdown.\n'); return 2; }
+  let candidates; let query = {};
+  try {
+    candidates = JSON.parse(await fsp.readFile(path.resolve(candFlag), 'utf8'));
+    if (typeof args.flags.query === 'string') query = JSON.parse(await fsp.readFile(path.resolve(args.flags.query), 'utf8'));
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not read/parse input: ${e.message}\n`); return 2; }
+  if (!Array.isArray(candidates)) { process.stderr.write('agentic-security dataflow plan-cuts: --candidates must be a JSON array.\n'); return 2; }
+  const { loadSignedGraph } = await import('../src/server/graph-loader.js');
+  const loaded = loadSignedGraph(targetAbs);
+  if (!loaded.ok) { process.stderr.write(`agentic-security dataflow plan-cuts: ${loaded.message}\n`); return 1; }
+  const { planCuts } = await import('../src/lineage/cut-planner.js');
+  const plan = planCuts(loaded.graph, query, candidates);
+  let data;
+  if (format === 'json') data = JSON.stringify(plan, null, 2);
+  else {
+    const lines = ['# Control placement plan (hypothetical)', '', `Status: ${plan.status}. Total coverage: ${plan.completeness.totalCoverage}. Not verified.`, '', '## Proposed controls', ''];
+    for (const c of plan.cut.controls) lines.push(`- ${c.location.type} \`${c.location.id}\` (${c.semantics}, owner ${c.owner}, cost ${c.cost})`);
+    lines.push('', '## Residual bypass paths', '');
+    for (const r of plan.validation?.residualPaths ?? []) lines.push(`- to \`${r.sink}\` via ${r.nodes.map((n) => `\`${n}\``).join(' -> ')}`);
+    lines.push('', '## Limitations', '');
+    for (const l of plan.limitations) lines.push(`- ${l}`);
+    data = lines.join('\n') + '\n';
+  }
+  try {
+    await fsp.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
+    await fsp.writeFile(path.resolve(outputPath), data);
+  } catch (e) { process.stderr.write(`agentic-security dataflow plan-cuts: could not write --output: ${e.message}\n`); return 2; }
+  return 0;
+}
+
 // agentic-security dataflow impact assess [path] --target <canonical-id>
 // --output <file> [--format json|markdown] — M5 deliverable #4
 // (FR-507). Loads the already-scanned, already-signed graph via
@@ -7966,6 +8012,7 @@ async function main() {
           }
           break;
         }
+        else if (sub === 'plan-cuts') { process.exit(await cmdDataflowPlanCuts(args)); }
         else if (sub === 'impact') {
           const impactSub = args._[2];
           if (impactSub === 'assess') { process.exit(await cmdDataflowImpactAssess(args)); }
